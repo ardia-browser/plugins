@@ -1,0 +1,12 @@
+{
+  "name": "compact-command-bar",
+  "title": "Compact command bar",
+  "description": "⌘T stops listing your pinned tabs and Top Apps, and shows at most 5 open tabs before you type. Typing still finds every tab.",
+  "requires": "0.2.46-nightly.4",
+  "settings": {
+    "commandBarStart": { "openTabs": { "hidePinned": true, "hideTopApps": true, "limit": 5 } }
+  },
+  "reset": {
+    "commandBarStart": {}
+  }
+}
