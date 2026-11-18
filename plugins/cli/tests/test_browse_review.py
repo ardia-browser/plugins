@@ -1,4 +1,5 @@
 import asyncio
+import io
 import json
 import os
 import shutil
@@ -13,7 +14,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ardia_cli import redact
-from ardia_cli.browse import actions, capture, client, commands, daemon, inputs, paths, snapshot
+from ardia_cli.browse import actions, capture, cli, client, commands, daemon, inputs, paths, snapshot
 from ardia_cli.browse.errors import BrowseError, CdpError, CdpTimeout, ConnectionLost, Gated, OutcomeUnknown, StaleRef, Unreachable
 from ardia_cli.browse.page import Page
 from ardia_cli.browse.state import State
@@ -226,6 +227,27 @@ class TokenNeverPrinted(unittest.TestCase):
         self.assertNotIn(secret, err)
         _, out, _ = daemon.render({}, result=commands.Result({}, "ws://h/devtools/browser/x?token=zzzzzzzzzzzzzzzzz"))
         self.assertNotIn("zzzzzzzzzzzzzzzzz", out)
+
+    def test_json_output_stays_valid_when_a_masked_value_ends_at_an_escaped_quote(self):
+        data = {"html": '<a href="/n?page_token=abc123">next</a>', "note": 'x token=abc123" y'}
+        _, out, _ = daemon.render({"json": True}, result=commands.Result(data, ""))
+        self.assertEqual(json.loads(out)["data"], {"html": '<a href="/n?page_token=***">next</a>', "note": 'x token=***" y'})
+
+    def test_script_text_output_stays_valid_json_when_a_masked_value_ends_at_an_escaped_quote(self):
+        data = {"html": '<a href="/n?page_token=abc123">next</a>'}
+        _, out, _ = daemon.render({}, result=commands.Result(data, commands.render_json(data)))
+        self.assertEqual(json.loads(out), {"html": '<a href="/n?page_token=***">next</a>'})
+
+    def test_client_write_keeps_json_valid(self):
+        stream = io.StringIO()
+        cli.write(json.dumps({"html": '<a href="/n?page_token=abc123">next</a>'}), stream)
+        self.assertEqual(json.loads(stream.getvalue()), {"html": '<a href="/n?page_token=***">next</a>'})
+
+    def test_redact_keeps_json_escapes_whole_and_gives_the_same_text_when_repeated(self):
+        for value in ('x token=abc" y', "a\ntoken=abc\nb", 'token=abc"', 'token=abc\\"'):
+            once = redact.redact(json.dumps({"a": value}))
+            self.assertEqual(redact.redact(once), once)
+            self.assertEqual(json.loads(once)["a"], value.replace("abc", "***"))
 
 
 class FakeInputPage:
