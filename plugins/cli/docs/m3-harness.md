@@ -192,8 +192,29 @@ commands from their own files and import them in `all.ts`; a name registered twi
 
 | What | How it's run |
 |---|---|
-| Scenarios `core/*` | `live 'core/*' --a python --b ts`, `replay 'core/*' --impl ts` (`core/open_title` waits for D4's `snapshot` and D5's change report), `cancel core/frames_worlds --impl ts --kind interrupt\|error\|drop` |
+| Scenarios `core/*` | `live 'core/*' --a python --b ts`, `replay 'core/*' --impl ts` (`core/open_title` waits for D5's change report on `open`; its `get title` and `snapshot -i` match live), `cancel core/frames_worlds --impl ts --kind interrupt\|error\|drop` |
 | Designed divergences | `tests/m3/divergences.py`: each entry names its ardia#2812 row; a scenario lists the ones it needs in `divergences`, and only the named request form is rewritten, on both sides. `drop` and `stop` fault runs add `busy-probe-isolated`, since an unanswered call is what sends the probe. Every TS run (live, replay, fault) also fails on `Runtime.enable`, `Debugger.enable` or `Console.enable` on a page session and on a main-world busy probe |
 | Racy steps | `racy_steps` in a scenario: only the exit status is compared, for a step where Chromium decides which of two errors one request gets |
-| Human tier | `python -m tests.m3.human_core --pages <plugins#13 tests/human> --chrome <Chrome for Testing> [--impl ts\|python]`: rows 7 to 11 through `ardia browse`, with a full Chrome for Testing in `--headless=new` (chrome-headless-shell is old-mode headless and sets `navigator.webdriver`). Clicks D5 doesn't serve yet are made by the tier and named in the row's notes |
+| Human tier | `python -m tests.m3.human_core --pages <plugins#13 tests/human> --chrome <Chrome for Testing> [--impl ts\|python]`: rows 7 to 13 through `ardia browse`, with a full Chrome for Testing in `--headless=new` (chrome-headless-shell is old-mode headless and sets `navigator.webdriver`). Clicks D5 doesn't serve yet are made by the tier and named in the row's notes |
 | Unit tests | `ts/tests/m3/core.test.ts` (attach order, publish after the frame refresh, busy probe world, worlds per document, re-homing, crash and detach, setup restore, the probe rules, refs, the table) and `core-ported.test.ts` (`test_browse_crash` and `test_browse_detach`, same names) |
+
+## The read side (slice D4)
+
+`ts/src/browse/snapshot/collect.ts` and `take.ts` build snapshots on P2's tree and render, and set `Refs.snapshots`.
+`ts/src/browse/read/` holds `read`: `pages.ts` (several pages in reader tabs, `--links`, rendering under the shared cap),
+`scroll.ts` (`--scroll`), `pagedata.ts` (`--data`), `pdftext.ts` (osascript), `fetch.ts` and `charset.ts`
+(`--http`, decoded with Python's codec registry from `codecs.gen.json`, which `ts/scripts/gen-codecs.py` writes),
+`settle.ts` (settling, and the same-document navigation `navigate` uses) and `frames.ts` (out-of-process frame text).
+`ts/src/browse/state/oopif.ts` attaches out-of-process iframes (`page.frameSessions`, `page.oopifs`, `page.sessionFor`)
+and `pierce.ts` searches shadow roots. The commands are in `commands/read.ts`, `read-page.ts`, `find.ts` and
+`storage.ts`, with `shared.ts` holding what D5 also uses (`resolve`, `currentOrNew`, `refuseOnBorrowed`).
+
+| What | How it's run |
+|---|---|
+| Scenarios `d4/*` | `live 'd4/*' --a python --b ts`, `record 'd4/*'`, `replay 'd4/*' --impl ts`; three are copies of H's `read/*` with `open --no-changes` and without their `eval` step (D5, D7). `d4/find_missing` and the two scroll scenarios are live-only |
+| Always-on divergences | `oopif-auto-attach` (row 13), `shadow-pierce` (row 12), `temp-tab-marker` (D2's decision). Replay answers `Target.setAutoAttach` with `{}` and a pierced `DOM.getDocument` with an empty document, and matches a marked reader tab's `createTarget` against the recorded `about:blank` |
+| Elastic probes | `(s) => ardiaBrowse.query(s)` repeats as often as a 3 s wait for an element polls |
+| Read stamps | the `read-stamp` rule also masks the time in a page header's `(HTTP 200, read …)` and `(read …)` |
+| Human tier | rows 12 (closed shadow roots: `get text` and `snapshot`) and 13 (each out-of-process frame's secret through `read` and `snapshot`; passes on the page's `readOk`, since clicks are D5's) |
+| Unit tests | `ts/tests/m3/read.test.ts` ports `test_browse_read`'s PagesCap and ScrollRows, `test_browse_pages`' Links, HashRoutes, SameDocumentRead, Urls, Rendering and ReadingTabs, and `test_browse`'s ReadTest and CookieFileTest (same names). `read-net.test.ts` checks charset decoding against CPython (every codec name in several spellings on random bytes, broken UTF sequences), fetch against a local server (charset, redirects, HTTP errors, timeouts, refusal, cancellation, a self-signed TLS server), shadow-root discovery and the OOPIF session bookkeeping |
+

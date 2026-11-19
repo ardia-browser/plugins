@@ -98,7 +98,7 @@ class Divergences(unittest.TestCase):
               ("out", message(id=8, method="Runtime.callFunctionOn", sessionId="SESSION-B", params={**call, "objectId": "HANDLE-XYZ"})),
               ("in", message(id=8, result={})), ("out", message(id=9, method="DOM.describeNode", sessionId="SESSION-B", params={"objectId": "NODE-2"}))]
         names = divergences.names_for({})
-        self.assertEqual(names, ["world-handle"])
+        self.assertEqual(names, ["world-handle", "oopif-auto-attach", "temp-tab-marker", "shadow-pierce"])
         self.assertTrue(compare.compared(self.shaped(python, []), self.shaped(ts, []), compare.LIVE))
         self.assertEqual(compare.compared(self.shaped(python, names), self.shaped(ts, names), compare.LIVE), [])
 

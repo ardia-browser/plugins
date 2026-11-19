@@ -87,17 +87,6 @@
    "argv": [
     "find",
     "role",
-    "button",
-    "--name",
-    "Nope",
-    "text"
-   ],
-   "session": "d4"
-  },
-  {
-   "argv": [
-    "find",
-    "role",
     "link",
     "text"
    ],
