@@ -252,6 +252,15 @@ class JsonAndStdin(LongDataDirs):
         self.addCleanup(daemon.close)
         return daemon
 
+    def wait_for_client(self, router: int) -> None:
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            children = subprocess.run(["pgrep", "-P", str(router)], capture_output=True, text=True).stdout.split()
+            if children:
+                return
+            time.sleep(0.05)
+        self.fail("the router never started the TypeScript client")
+
     def start(self, argv: list, env: dict, **extra) -> subprocess.Popen:
         return subprocess.Popen([str(self.install.root / "bin" / "ardia"), *argv], env=env, cwd=self.box / "tmp", stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, start_new_session=True, **extra)
@@ -304,7 +313,8 @@ class JsonAndStdin(LongDataDirs):
         reader, writer = os.pipe()
         process = self.start(["browse", "eval", "--stdin"], self.plain_env(), stdin=reader)
         os.close(reader)
-        time.sleep(2)
+        self.wait_for_client(process.pid)
+        time.sleep(1.5)
         daemon.close()
         for path in (self.long / "Browse").glob("*.sock"):
             path.unlink()
@@ -323,7 +333,8 @@ class JsonAndStdin(LongDataDirs):
         self.addCleanup(os.close, writer)
         process = self.start(["browse", "--json", "eval", "--stdin"], self.plain_env(), stdin=reader)
         os.close(reader)
-        time.sleep(2)
+        self.wait_for_client(process.pid)
+        time.sleep(1.5)
         os.killpg(process.pid, signal.SIGINT)
         out, err = process.communicate(timeout=30)
         self.assertEqual(process.returncode, 130, err)
