@@ -486,15 +486,29 @@ class RawCdp(unittest.TestCase):
                 return list(state.target_infos.values())
 
             state.refresh_targets = refresh_targets
+            probing = {"now": 0, "peak": 0}
+            probe = state.probe
+
+            async def counted(target_id):
+                probing["now"] += 1
+                probing["peak"] = max(probing["peak"], probing["now"])
+                try:
+                    return await probe(target_id)
+                finally:
+                    probing["now"] -= 1
+
+            state.probe = counted
             with mock.patch.object(browse_state, "PROBE_TIMEOUT", 0.02):
                 shown = await state.shown_target()
             sent = len(sock.methods("Target.attachToTarget"))
             await state.browser.close()
-            return shown, sent
+            return shown, sent, probing["peak"]
 
-        shown, sent = asyncio.run(run())
+        shown, sent, peak = asyncio.run(run())
         self.assertIsNone(shown)
         self.assertLessEqual(sent, connection.MAX_LATE_ATTACHES)
+        self.assertLessEqual(peak, 8)
+        self.assertGreater(peak, 1)
 
     def test_an_attach_answered_at_the_cap_frees_its_slot_at_once(self):
         from ardia_cli.browse import connection
