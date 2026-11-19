@@ -365,8 +365,8 @@ async def with_connection(data_dir: str | None, work):
         await connection.close()
 
 
-def call(data_dir: str | None, method: str, params=None, timeout: float | None = CALL_TIMEOUT):
-    return asyncio.run(with_connection(data_dir, lambda connection: connection.call(method, params, timeout)))
+def call(data_dir: str | None, method: str, params=None, timeout: float | None = CALL_TIMEOUT, require_outcome: bool = False):
+    return asyncio.run(with_connection(data_dir, lambda connection: connection.call(method, params, timeout, require_outcome)))
 
 
 async def announce(path: Path, caller: Caller) -> None:

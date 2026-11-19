@@ -93,7 +93,7 @@ def read_params_stdin(stdin=None) -> str:
         raise ParamsError(f"--params from stdin isn't UTF-8 (byte 0x{raw[error.start]:02x} at offset {error.start})") from None
 
 
-def strict_json(text: str, what: str):
+def strict_json(text: str, what: str, depth: int = 0):
     def unique(pairs):
         found = {}
         for key, value in pairs:
@@ -127,12 +127,12 @@ def strict_json(text: str, what: str):
         raise ParamsError(f"{what} is nested deeper than {MAX_PARAMS_DEPTH} levels") from None
     except ValueError as error:
         raise ParamsError(f"{what} isn't valid JSON ({error})") from None
-    checked(value, what)
+    checked(value, what, depth)
     return value
 
 
-def checked(value, what: str) -> None:
-    stack = [(value, 0)]
+def checked(value, what: str, depth: int = 0) -> None:
+    stack = [(value, depth)]
     while stack:
         item, depth = stack.pop()
         if isinstance(item, (dict, list)):
@@ -173,7 +173,7 @@ def build_params(raw: str | None, pairs: list[str], stdin=None) -> dict | None:
         if key.endswith(":"):
             key = key[:-1]
             plain_text(key, f"-p {key}")
-            params[key] = strict_json(value, f"-p {key}: the value after :=")
+            params[key] = strict_json(value, f"-p {key}: the value after :=", depth=1)
         else:
             plain_text(key, f"-p {key}")
             plain_text(value, f"-p {key}")
@@ -352,7 +352,11 @@ def cmd_methods(args) -> int:
     from ardia_cli import telemetry
 
     try:
-        catalog = control.call(args.data_dir, "methods")
+        catalog = control.call(args.data_dir, "methods", require_outcome=True)
+    except control.InvalidAnswer as error:
+        error.noted()
+        complain(f"ardia methods: {error}")
+        return 2
     except Unreachable as error:
         return unreachable_exit(error)
     except MethodError as error:

@@ -186,6 +186,19 @@ class Call(CallBase):
             self.assertNotIn("Traceback", err)
         self.assertEqual(server.requests, [])
 
+    def test_a_typed_param_counts_the_object_around_it(self):
+        server = self.serve_methods()
+        inner = "[" * 64 + "]" * 64
+        self.assertEqual(self.run_cli("call", "history.search", "--params", '{"a": ' + inner + "}")[0], 2)
+        for flag in ("-p", "--param"):
+            status, out, err = self.run_cli("call", "history.search", flag, "a:=" + inner)
+            self.assertEqual((status, out), (2, ""), flag)
+            self.assertIn("nested deeper than 64", err)
+        self.assertEqual(server.requests, [])
+        fits = "[" * 63 + "]" * 63
+        self.assertEqual(self.run_cli("call", "history.search", "--params", '{"a": ' + fits + "}")[0], 0)
+        self.assertEqual(self.run_cli("call", "history.search", "-p", "a:=" + fits)[0], 0)
+
     def test_stdin_must_be_utf8_and_is_limited_in_bytes(self):
         server = self.serve_methods()
         status, _, err = self.piped(b'{"q": "\xff"}')
@@ -276,6 +289,17 @@ class Methods(CallBase):
         self.assertEqual((status, out), (1, ""))
         self.assertIn("this Ardia is too old to list its methods", err)
         self.assertIn("update Ardia", err)
+
+
+    def test_an_answer_with_neither_result_nor_error_is_an_unknown_outcome(self):
+        server = self.serve_methods()
+        for reply in ({}, {"ok": True}):
+            server.replies["methods"] = lambda params, reply=reply: reply
+            for argv in (["methods"], ["methods", "--json"], ["methods", "tabs.close"], ["methods", "tabs.close", "--json"]):
+                status, out, err = self.run_cli(*argv)
+                self.assertEqual((status, out), (2, ""), argv)
+                self.assertIn("neither a result nor an error", err, argv)
+                self.assertNotIn("has no method", err, argv)
 
 
 class Telemetry(CallBase):
