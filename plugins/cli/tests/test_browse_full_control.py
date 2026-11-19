@@ -493,6 +493,17 @@ class LargeResults(unittest.TestCase):
             other = json.loads(daemon.encode_answer(0, "z" * 2000, "", name="snapshot"))
             self.assertIn("snapshot -s", other["err"])
 
+    @unittest.expectedFailure
+    def test_a_redacted_token_keeps_the_result_valid_json(self):
+        from ardia_cli.browse import daemon
+
+        state = FakeState({"Runtime.evaluate": {"result": {"type": "string", "value": 'https://example.test/?token=abc"tail'}}})
+        result = cdp(state, "Runtime.evaluate")
+        for options in ({}, {"json": True}):
+            code, out, err = daemon.render(options, result=result, name="cdp")
+            self.assertEqual(code, 0)
+            json.loads(out)
+
     def test_json_callers_get_result_too_large_as_an_error_object(self):
         import contextlib
         import io
