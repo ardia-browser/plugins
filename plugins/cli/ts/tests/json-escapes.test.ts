@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { parseText } from "../src/json.ts";
 
-const JSON_MODULE = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "src", "json.ts");
+const JSON_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "json.ts");
 const PARSE_BOUND_MS = 400;
 const ESCAPE_KINDS = ["\\n", "\\u0001", "\\\"", "\\ud83d\\ude00", "\\u00e9", "\\/"];
 
