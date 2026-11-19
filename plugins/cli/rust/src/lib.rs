@@ -5,6 +5,7 @@ pub mod caller;
 pub mod clock;
 pub mod commands;
 pub mod control;
+pub mod detached;
 pub mod endpoint;
 pub mod help;
 pub mod json;

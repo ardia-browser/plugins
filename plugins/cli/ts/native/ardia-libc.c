@@ -9,12 +9,10 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 #include <time.h>
 #include <sys/file.h>
-#include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -502,60 +500,6 @@ static napi_value write_some(napi_env env, napi_callback_info info) {
   return number(env, (double)result);
 }
 
-#if defined(__linux__)
-#define OPEN_DESCRIPTORS "/proc/self/fd"
-#else
-#define OPEN_DESCRIPTORS "/dev/fd"
-#endif
-#define DESCRIPTOR_SCAN_CAP (1 << 20)
-
-static bool mark_close_on_exec(int fd) {
-  int flags = fcntl(fd, F_GETFD);
-  if (flags < 0 || (flags & FD_CLOEXEC) != 0) return false;
-  return fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == 0;
-}
-
-static int mark_listed(int from) {
-  DIR *listing = opendir(OPEN_DESCRIPTORS);
-  if (listing == NULL) return -1;
-  int seen = 0, marked = 0;
-  for (;;) {
-    struct dirent *entry = readdir(listing);
-    if (entry == NULL) break;
-    char *end = NULL;
-    long fd = strtol(entry->d_name, &end, 10);
-    if (end == entry->d_name || *end != 0 || fd < 0 || fd > INT_MAX) continue;
-    seen += 1;
-    if (fd >= from && fd != dirfd(listing) && mark_close_on_exec((int)fd)) marked += 1;
-  }
-  closedir(listing);
-  return seen > 0 ? marked : -1;
-}
-
-static int mark_scanned(int from) {
-  struct rlimit limit;
-  int highest = DESCRIPTOR_SCAN_CAP;
-  if (getrlimit(RLIMIT_NOFILE, &limit) == 0 && limit.rlim_max != RLIM_INFINITY && limit.rlim_max < (rlim_t)DESCRIPTOR_SCAN_CAP) highest = (int)limit.rlim_max;
-  int marked = 0;
-  for (int fd = from; fd < highest; fd += 1) {
-    if (mark_close_on_exec(fd)) marked += 1;
-  }
-  return marked;
-}
-
-static napi_value close_on_exec_from(napi_env env, napi_callback_info info) {
-  Call call;
-  int32_t from;
-  if (!take_args(env, info, 1, &call)) return status(env, -EINVAL);
-  if (!int_arg(&call, 0, &from)) return NULL;
-  if (from < 3) {
-    napi_throw_range_error(env, NULL, "ardia-libc: closeOnExecFrom starts at 3 or above");
-    return NULL;
-  }
-  int marked = mark_listed(from);
-  return status(env, marked >= 0 ? marked : mark_scanned(from));
-}
-
 static void *watch_lifeline_thread(void *argument) {
   int fd = (int)(intptr_t)argument;
   char sink[64];
@@ -605,7 +549,6 @@ __attribute__((visibility("default"))) napi_value napi_register_module_v1(napi_e
       && define(env, exports, "lock", lock)
       && define(env, exports, "watchLifeline", watch_lifeline)
       && define(env, exports, "writeSome", write_some)
-      && define(env, exports, "closeOnExecFrom", close_on_exec_from)
       && define(env, exports, "strerror", error_text);
   return ok ? exports : NULL;
 }
