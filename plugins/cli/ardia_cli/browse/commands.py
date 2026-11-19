@@ -1970,6 +1970,13 @@ CDP_USAGE = "cdp <Domain.method> [--params <json>|-] [--param k=v | k:=json] [--
 CDP_FLAGS = {"--params": "value", "--param": "multi", "--target": "value", "--timeout": "value"}
 
 
+def cdp_target(options: dict) -> str | None:
+    target = options.get("target")
+    if target is not None and not target.strip():
+        raise Usage("cdp --target is empty; name a tab (like t2) or browser, or leave --target out for this session's tab")
+    return target
+
+
 def refuse_raw_on_borrowed(ctx: Ctx, page, method: str):
     borrowed = borrowed_tab(ctx.state)
     if borrowed and borrowed == page.target_id:
@@ -1996,7 +2003,7 @@ async def cmd_cdp(ctx: Ctx, argv):
         raise Usage(f"{method} isn't a DevTools method name; give Domain.method, like Page.getLayoutMetrics")
     params = cdp_params(options.get("params"), options.get("param") or [], ctx.stdin)
     timeout = parse_timeout(options["timeout"]) if options.get("timeout") else 30
-    target = options.get("target")
+    target = cdp_target(options)
     state = ctx.state
     try:
         if target == rawcdp.BROWSER:
@@ -2008,9 +2015,8 @@ async def cmd_cdp(ctx: Ctx, argv):
             await state.refresh_targets()
             target_id = await state.find_tab(target)
             with state.registry.holding(state.instance, target_id):
-                page = await state.page(target_id)
-                result, session = await rawcdp.send(state, page.target_id, method, params, timeout)
-            where = state.tab_id(page.target_id)
+                result, session = await rawcdp.send(state, target_id, method, params, timeout)
+            where = state.tab_id(target_id)
         else:
             page = await state.page()
             refuse_raw_on_borrowed(ctx, page, method)

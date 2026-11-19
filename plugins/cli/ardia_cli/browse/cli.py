@@ -367,10 +367,11 @@ def read_cdp_stdin() -> str:
 
 
 def check_cdp(args: list[str], stdin: str | None) -> None:
-    from ardia_cli.browse.commands import CDP_FLAGS, parse
+    from ardia_cli.browse.commands import CDP_FLAGS, cdp_target, parse
     from ardia_cli.browse.script import parse_timeout
 
     options, _ = parse(args, CDP_FLAGS)
+    cdp_target(options)
     if options.get("timeout") is not None:
         parse_timeout(options["timeout"])
     cdp_params(options.get("params"), options.get("param") or [], stdin)

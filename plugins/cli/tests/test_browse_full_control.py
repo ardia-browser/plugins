@@ -66,6 +66,7 @@ class FakeState:
                 return answer
 
         self.attaches = 0
+        self.page_calls = []
         self.browser = Browser()
         self.current = "T1"
         self.extras = {}
@@ -81,6 +82,7 @@ class FakeState:
         return []
 
     async def page(self, target_id=None):
+        self.page_calls.append(target_id)
         return self.pages[target_id or "T1"]
 
     async def find_tab(self, ref):
@@ -231,6 +233,24 @@ class RawCdp(unittest.TestCase):
         self.assertEqual(raw_sent(state)[-1][2], None)
         self.assertEqual(cdp(state, "Browser.getVersion", "--target", "browser").data["session"], "shared")
 
+    def test_an_empty_target_is_refused_not_sent_to_the_current_tab(self):
+        for value in ("", " ", "\t"):
+            state = FakeState()
+            with self.assertRaises(Usage) as caught:
+                cdp(state, "Runtime.evaluate", f"--target={value}")
+            self.assertIn("--target", caught.exception.message)
+            self.assertEqual(state.browser_sent, [])
+            with self.assertRaises(Usage):
+                cdp(state, "Runtime.evaluate", "--target", value)
+            self.assertEqual(state.browser_sent, [])
+
+    def test_a_named_tab_gets_only_the_raw_session(self):
+        state = FakeState()
+        cdp(state, "Runtime.evaluate", "--target", "t2")
+        self.assertNotIn("T2", state.page_calls)
+        self.assertEqual(state.pages["T2"].sent, [])
+        self.assertEqual([row[0] for row in state.browser_sent], ["Target.attachToTarget", "Runtime.evaluate"])
+
     def test_cdp_is_a_known_mutating_command(self):
         self.assertIn("cdp", commands.MUTATING)
         self.assertIn("cdp", browse_help.COMMANDS)
@@ -274,6 +294,12 @@ class CheckedBeforeConnecting(unittest.TestCase):
             self.assertEqual(status, 1, argv)
             self.assertIn(said, err, argv)
             self.assertNotIn("Traceback", err)
+
+    def test_an_empty_target_fails_before_connecting(self):
+        for argv in (["--target="], ["--target", ""], ["--target", "  "]):
+            status, err = self.browse("cdp", "Runtime.evaluate", *argv)
+            self.assertEqual(status, 1, argv)
+            self.assertIn("--target", err)
 
     def test_a_huge_timeout_never_overflows_the_client_deadline(self):
         import math
@@ -457,7 +483,7 @@ class PlainDevToolsServer(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        for session in ("warm", "warm-again", "up", "dl", "raw", "ui", "fw", "fk", "bo", "bb", "ho", "hc", "rs", "big"):
+        for session in ("warm", "warm-again", "up", "dl", "raw", "ui", "fw", "fk", "bo", "bb", "ho", "hc", "rs", "big", "da", "db"):
             cls.browse("close", session=session, check=False)
         cls.chromium.terminate()
         try:
@@ -560,6 +586,23 @@ class PlainDevToolsServer(unittest.TestCase):
         done = self.browse("cdp", "Runtime.evaluate", "--param", "expression='x'.repeat(20000)", "--param", "returnByValue:=true", session="big")
         self.assertNotIn("output capped", done.stdout + done.stderr)
         self.assertEqual(json.loads(done.stdout)["result"]["value"], "x" * 20000)
+
+    def test_a_named_tab_keeps_its_owners_dialog_setting(self):
+        self.browse("--no-auto-dialog", "open", self.url + "?dialogs", session="da")
+        tab = next(row["tabId"] for row in json.loads(self.browse("tab", "list", "--json", session="da").stdout)["data"]["tabs"]
+                   if row["url"] == self.url + "?dialogs")
+        self.browse("cdp", "Runtime.evaluate", "--param", "expression=setTimeout(() => alert('late'), 1500)", "--target", tab, session="db")
+        deadline = time.monotonic() + 15
+        status = {}
+        while time.monotonic() < deadline:
+            status = json.loads(self.browse("dialog", "status", "--json", session="da").stdout)["data"]
+            if status.get("hasDialog"):
+                break
+            time.sleep(0.3)
+        self.assertEqual(status.get("message"), "late")
+        time.sleep(1.5)
+        self.assertTrue(json.loads(self.browse("dialog", "status", "--json", session="da").stdout)["data"]["hasDialog"])
+        self.browse("dialog", "accept", session="da")
 
     def test_webui_tab_is_listed(self):
         self.browse("tab", "new", "chrome://version", session="ui")
