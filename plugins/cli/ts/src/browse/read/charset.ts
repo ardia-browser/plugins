@@ -91,8 +91,12 @@ function bom(bytes: Uint8Array, ...marks: number[]): boolean {
   return marks.every((mark, index) => bytes[index] === mark);
 }
 
+export const APPROXIMATE = new Set([...Object.keys(WHATWG), "unicode-escape", "punycode"]);
+
 export function decode(bytes: Uint8Array, charset: string): string {
   const codec = codecOf(charset);
+  if (codec === "idna") throw pyError("UnicodeError", "Unsupported error handling: replace");
+  if (codec === "undefined") throw pyError("UnicodeError", "undefined encoding");
   const table = REGISTRY.tables[codec];
   if (table !== undefined) return decodeTable(bytes, table);
   if (codec === "utf-8") return textDecoder("utf-8", { ignoreBOM: true }).decode(bytes);

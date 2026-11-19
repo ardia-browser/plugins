@@ -368,12 +368,13 @@ export class Page {
   }
 
   async send(method: string, params: CdpResult | null = null, options: SendOptions = {}): Promise<CdpResult> {
-    const session = options.session ?? this.session;
-    if (session === null || this.session === null) throw new BrowseError(DETACHED, null, "tab_detached");
+    const top = this.session;
+    const session = options.session ?? top;
+    if (session === null || top === null) throw new BrowseError(DETACHED, null, "tab_detached");
     if (this.crashed && !CRASH_SAFE.has(method)) throw new BrowseError(CRASHED, null, "tab_crashed");
     if (this.unansweredAt && monotonic() - this.unansweredAt < BUSY_MEMORY) await this.stillBusy(method);
     options.guard?.();
-    if (this.session !== session) throw new BrowseError(DETACHED, null, "tab_detached");
+    if (this.session !== top || (session !== top && !this.oopifs.has(session))) throw new BrowseError(DETACHED, null, "tab_detached");
     const timeout = options.timeout ?? 30;
     const dropped = new AbortController();
     this.calls.add(dropped);
