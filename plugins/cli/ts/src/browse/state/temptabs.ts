@@ -1,5 +1,6 @@
 import { type Browser } from "../cdp/browser.ts";
-import { Cancelled, currentSignal, sleep, withSignal } from "../cdp/cancel.ts";
+import { Cancelled, currentSignal, sleep, untilCancelled, withSignal } from "../cdp/cancel.ts";
+import { log } from "../daemon/log.ts";
 import { BrowseError, Gated } from "../daemon-errors.ts";
 import { type Instance, type Registry } from "./registry.ts";
 
@@ -21,9 +22,11 @@ export type TempTabState = {
 };
 
 export const SHIELD_DEADLINE = 10.0;
+export const limits = { shield: SHIELD_DEADLINE };
+export const counters = { lateCreatesClosed: 0 };
 
 export async function settleThenCancel<T>(run: () => Promise<T>, signal: AbortSignal | null = currentSignal()): Promise<T> {
-  const result = await withSignal(AbortSignal.timeout(SHIELD_DEADLINE * 1000), run);
+  const result = await withSignal(AbortSignal.timeout(limits.shield * 1000), run);
   if (signal?.aborted) throw new Cancelled();
   return result;
 }
@@ -40,9 +43,21 @@ export async function create(state: TempTabState, owned: string[]): Promise<stri
   const slot = registry.reserveTemporary(state.instance);
   return settleThenCancel(async () => {
     let result: Record<string, unknown>;
+    const sending = (state.browser as Browser).send("Target.createTarget", { url: "about:blank", background: true }, { signal: null });
     try {
-      result = await (state.browser as Browser).send("Target.createTarget", { url: "about:blank", background: true });
+      result = await untilCancelled(sending);
     } catch (error) {
+      if (error instanceof Cancelled) {
+        sending.then(
+          (late) => {
+            counters.lateCreatesClosed += 1;
+            log.warning(`a temporary tab arrived after its command gave up; closing it (${counters.lateCreatesClosed} so far)`);
+            mustClose(state, String(late["targetId"]));
+          },
+          () => {},
+        ).finally(() => giveBack(state, slot));
+        throw error;
+      }
       giveBack(state, slot);
       if (error instanceof Gated) throw new BrowseError(`Ardia's policy refused to open a tab for the ardia command (${error.refusal})`);
       throw error;

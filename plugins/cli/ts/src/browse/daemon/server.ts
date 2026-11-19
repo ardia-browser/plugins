@@ -1,23 +1,22 @@
-import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { type Value } from "../../json.ts";
-import { peerUid, renameAt } from "../../libc.ts";
-import { uid } from "../../paths.ts";
+import { armWatchdog, disarmWatchdog, peerUid, removeDirAt, renameExclusiveAt } from "../../libc.ts";
+import { codeOf, uid } from "../../paths.ts";
 import { formatG, roundHalfEven } from "../../pylib/format.ts";
 import { Cancelled, currentSignal, withSignal } from "../cdp/cancel.ts";
 import { BrowseError, ConnectionLost, Unreachable, Usage } from "../daemon-errors.ts";
 import { type Endpoint, EndpointError, resolve } from "../endpoint.ts";
 import { BEHIND_SCRIPT_WAIT, commandLimit, QUEUE_WAIT, queueWait } from "../limits.ts";
 import { answerFields, begin, flag, type Metrics } from "../metrics.ts";
-import { browseDir, closeFd, PathError, sameSocket, type SocketId, socketIsOurs, takeLock, unlinkQuietly, writePrivateJson } from "../paths.ts";
+import { browseDir, closeFd, listNames, openPrivateDirAt, PathError, sameSocket, type SocketId, socketIsOurs, takeLock, unlinkQuietly, writePrivateJson } from "../paths.ts";
 import * as temptabs from "../state/temptabs.ts";
 import { wallSeconds } from "../tokens.ts";
 import { release as releaseClaims } from "./claims.ts";
 import { type DaemonConfig } from "./config.ts";
 import { FifoLock } from "./lock.ts";
-import { parseCaller } from "./announce.ts";
+import { type Caller, parseCaller } from "./announce.ts";
 import { log } from "./log.ts";
 import { canonical, SKIPPED } from "./names.ts";
 import { type Answer, encodeAnswer, joinedBatch, MAX_REQUEST, type Options, render, Result, timedOut } from "./render.ts";
@@ -84,7 +83,12 @@ export class Daemon {
   settleTimeout = SETTLE_TIMEOUT;
   cleanupTimeout = CLEANUP_TIMEOUT;
   closeTimeout = CLEANUP_TIMEOUT;
-  exit: (code: number) => void = (code) => process.exit(code);
+  closeWait = BEHIND_SCRIPT_WAIT;
+  watchdog: { arm(dir: number, name: string, dev: bigint, ino: bigint, ms: number, code: number): number; disarm(): number } = {
+    arm: armWatchdog,
+    disarm: disarmWatchdog,
+  };
+  private watchdogArmed = false;
   private stopNow: () => void = () => {};
   private readonly stopped: Promise<void>;
   private server: net.Server | null = null;
@@ -135,18 +139,47 @@ export class Daemon {
     if (here.dev !== held.dev || here.ino !== held.ino) throw new PathError("the Browse folder changed while the daemon started");
   }
 
+  private bindFolder(): number {
+    const name = `.${this.key}.bind`;
+    let stale: number | null = null;
+    try {
+      stale = openPrivateDirAt(this.dirFd, name, false);
+    } catch (error) {
+      if (codeOf(error) !== "ENOENT") throw error;
+    }
+    if (stale !== null) {
+      try {
+        for (const entry of listNames(stale)) unlinkQuietly(entry, stale);
+      } finally {
+        closeFd(stale);
+      }
+      removeDirAt(this.dirFd, name);
+    }
+    return openPrivateDirAt(this.dirFd, name, true);
+  }
+
   private listen(): Promise<net.Server> {
-    const bound = `.${this.key}.${process.pid}.${randomBytes(6).toString("hex")}.sock`;
+    const folder = `.${this.key}.bind`;
+    const bindFd = this.bindFolder();
     const previous = process.umask(0o177);
     return new Promise<net.Server>((resolve, reject) => {
       const server = net.createServer({ allowHalfOpen: true }, (socket) => {
         this.handle(socket).catch((error: unknown) => log.exception("request failed", error));
       });
       server.once("error", reject);
-      server.listen(bound, () => {
+      server.listen(`${folder}/s`, () => {
         server.off("error", reject);
         try {
-          renameAt(this.dirFd, bound, this.sock);
+          const bound = socketIsOurs("s", bindFd);
+          if (bound === null) throw new PathError("the daemon's socket vanished before it was published");
+          try {
+            renameExclusiveAt(bindFd, "s", this.dirFd, this.sock);
+          } catch (error) {
+            if (codeOf(error) === "EEXIST") throw new PathError(`${this.sock} appeared while the daemon started`);
+            throw error;
+          }
+          if (!sameSocket(socketIsOurs(this.sock, this.dirFd), bound)) throw new PathError(`${this.sock} changed while the daemon published it`);
+          this.sockId = bound;
         } catch (error) {
           server.close();
           reject(error);
@@ -157,7 +190,11 @@ export class Daemon {
     }).finally(() => {
       process.umask(previous);
       try {
-        unlinkQuietly(bound, this.dirFd);
+        unlinkQuietly("s", bindFd);
+      } catch {}
+      closeFd(bindFd);
+      try {
+        removeDirAt(this.dirFd, folder);
       } catch {}
     });
   }
@@ -168,16 +205,11 @@ export class Daemon {
     } catch {}
   }
 
-  private armWatchdog(): () => void {
-    const timer = setTimeout(() => {
-      log.warning("shutdown ran past its deadline; exiting");
-      this.dropSocket();
-      try {
-        unlinkQuietly(`${this.key}.json`, this.dirFd);
-      } catch {}
-      this.exit(1);
-    }, (this.settleTimeout + this.cleanupTimeout) * 1000);
-    return () => clearTimeout(timer);
+  private armWatchdog(): void {
+    if (this.watchdogArmed) return;
+    this.watchdogArmed = true;
+    const id = this.sockId ?? { dev: 0n, ino: 0n };
+    this.watchdog.arm(this.dirFd, this.sock, id.dev, id.ino, (this.settleTimeout + this.cleanupTimeout) * 1000, 1);
   }
 
   async run(): Promise<number> {
@@ -185,7 +217,6 @@ export class Daemon {
     this.enterFolder();
     if (socketIsOurs(this.sock, this.dirFd)) unlinkQuietly(this.sock, this.dirFd);
     this.server = await this.listen();
-    this.sockId = socketIsOurs(this.sock, this.dirFd);
     if (this.plugin === null) writePrivateJson(
       `${this.key}.json`,
       this.dirFd,
@@ -214,13 +245,13 @@ export class Daemon {
       await this.stopped;
     } finally {
       this.stopping = true;
-      const disarm = this.armWatchdog();
+      this.armWatchdog();
       this.server.close();
       clearInterval(idle);
       clearInterval(watch);
       await this.settle();
       await this.cleanup();
-      disarm();
+      if (this.watchdogArmed) this.watchdog.disarm();
       for (const signal of ["SIGTERM", "SIGHUP", "SIGINT"] as const) process.off(signal, onSignal);
     }
     return 0;
@@ -228,6 +259,7 @@ export class Daemon {
 
   beginStop(): void {
     this.stopping = true;
+    if (this.server !== null) this.armWatchdog();
     this.stopNow();
   }
 
@@ -384,13 +416,13 @@ export class Daemon {
     const name = argv.length > 0 ? canonical(String(argv[0])) : "";
     const cwd = typeof request["cwd"] === "string" && request["cwd"] ? request["cwd"] : (process.env["HOME"] ?? "/");
     const ctx = new Ctx(this.state, options, cwd, record(request["env"]), typeof request["stdin"] === "string" ? request["stdin"] : null, name);
-    this.state.caller = parseCaller(request["caller"]) ?? this.state.caller;
+    const caller = parseCaller(request["caller"]);
     if (options["no_auto_dialog"]) this.state.autoDialog = false;
     if (options["pin_tab"] !== undefined && options["pin_tab"] !== null) this.state.pinTab = Boolean(options["pin_tab"]);
     if (this.stopping) return this.refuseClosing(options, name);
     const refused = this.refusedCredential(request);
     if (refused !== null) return render(options, null, refused, name);
-    if (name === "close") return this.close(ctx);
+    if (name === "close") return this.close(ctx, caller);
     if (request["beside_if_busy"] && this.lock.locked) {
       request["busy_elsewhere"] = true;
       return render(options, null, this.busyError(false), name);
@@ -405,6 +437,7 @@ export class Daemon {
     }
     const signal = currentSignal();
     if (!(await this.lock.acquire(patience, signal))) return render(options, null, this.busyError(patience), name);
+    this.state.caller = caller ?? this.state.caller;
     let answer: Answer;
     let closeAfter = false;
     try {
@@ -428,7 +461,7 @@ export class Daemon {
       this.lock.release();
     }
     if (closeAfter) {
-      const [closedCode, closedOut, closedErr] = await this.close(ctx);
+      const [closedCode, closedOut, closedErr] = await this.close(ctx, null);
       return [Math.max(answer[0], closedCode), joinedBatch(answer[1], closedOut, options), answer[2] + closedErr];
     }
     return answer;
@@ -517,10 +550,10 @@ export class Daemon {
     return handler(ctx, argv);
   }
 
-  private async lockForClose(): Promise<void> {
+  private async lockForClose(): Promise<boolean> {
     this.closing += 1;
     try {
-      await this.lock.acquire(null, currentSignal());
+      return await this.lock.acquire(this.closeWait, currentSignal());
     } finally {
       this.closing -= 1;
     }
@@ -537,7 +570,7 @@ export class Daemon {
     return null;
   }
 
-  async close(ctx: Ctx): Promise<Answer> {
+  async close(ctx: Ctx, caller: Caller | null): Promise<Answer> {
     if (this.plugin !== null) {
       await this.lockForClose();
       try {
@@ -551,7 +584,8 @@ export class Daemon {
     }
     const state = this.state;
     const tally = { closed: 0, kept: [] as string[] };
-    await this.lockForClose();
+    if (!(await this.lockForClose())) return render(ctx.options, null, this.busyError(this.closeWait), "close");
+    state.caller = caller ?? state.caller;
     try {
       if (this.stopping) return this.refuseClosing(ctx.options, "close");
       this.stopping = true;

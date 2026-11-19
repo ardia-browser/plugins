@@ -22,6 +22,7 @@ import {
   start,
   tsChoice,
   until,
+  sessionMeta,
 } from "./daemon-helpers.ts";
 
 setDefaultTimeout(60_000);
@@ -61,7 +62,7 @@ describe("spawn from the TS client", () => {
     const answer = await ask(found.data, key, ["session"]);
     expect(answer).toMatchObject({ exit: 0, out: "spawned\n", err: "" });
     expect(String(answer["daemon"])).toMatch(/^ts\//u);
-    const meta = JSON.parse(fs.readFileSync(path.join(found.browse, `${key}.json`), "utf8"));
+    const meta = await sessionMeta(found.data, key);
     expect(meta).toMatchObject({ session: "spawned", namespace: "", endpoint: "--port 9", pid });
     expect(fs.statSync(socketFile(found.data, key)).mode & 0o777).toBe(0o600);
     expect(fs.statSync(path.join(found.browse, `${key}.log`)).mode & 0o777).toBe(0o600);

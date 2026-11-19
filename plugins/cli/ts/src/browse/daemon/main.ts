@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { isatty } from "node:tty";
-import { LIBC_UNAVAILABLE, LibcUnavailable, loadLibc } from "../../libc.ts";
+import { LIBC_UNAVAILABLE, LibcUnavailable, loadLibc, nonBlocking } from "../../libc.ts";
 import { reportException } from "../../telemetry.ts";
 import { registerUrlSecrets } from "../endpoint.ts";
 import { PathError } from "../paths.ts";
@@ -78,6 +78,11 @@ export async function daemonMain(argv: string[]): Promise<number> {
     return 2;
   }
   process.stdin.destroy();
+  for (const fd of [1, 2]) {
+    try {
+      nonBlocking(fd);
+    } catch {}
+  }
   if (config.ws) registerUrlSecrets(config.ws);
   seedTokens(config.harnessSeed);
   log.configure(config.debug);

@@ -107,7 +107,9 @@ export function raw(file: string, payload: Buffer | string, options: { end?: boo
     });
     socket.once("error", (error) => {
       clearTimeout(timer);
-      if (chunks.length === 0 && (error as NodeJS.ErrnoException).code !== "EPIPE" && (error as NodeJS.ErrnoException).code !== "ECONNRESET") reject(error);
+      const code = (error as NodeJS.ErrnoException).code;
+      if (chunks.length === 0 && code !== "EPIPE" && code !== "ECONNRESET") reject(error);
+      else resolve({ text: Buffer.concat(chunks).toString("utf8"), closed: true });
     });
     socket.once("connect", () => {
       socket.write(payload);
@@ -155,4 +157,10 @@ export async function lockHolder(file: string): Promise<{ release(): void }> {
 
 export function staleSocket(file: string): void {
   spawnSync(PYTHON, ["-c", "import socket,sys,os; os.umask(0o177); s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()", file]);
+}
+
+export async function sessionMeta(data: string, key: string, timeoutMs = 5000): Promise<Record<string, unknown>> {
+  const file = path.join(data, "Browse", `${key}.json`);
+  if (!(await until(() => fs.existsSync(file), timeoutMs))) throw new Error(`${key}.json never appeared`);
+  return JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>;
 }

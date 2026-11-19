@@ -23,7 +23,7 @@ folder the user owns with mode 0700 (`fstat`), and every file in it is opened re
 | File | Who writes it | What it holds |
 |---|---|---|
 | `<key>.lock` | daemon, `flock` exclusive for its whole life | nothing; a held lock means a live daemon |
-| `<key>.sock` | daemon, bound by relative name after entering the folder, umask 0177 (mode 0600) | the Unix socket; unlinked when stale only under the lock, and at exit only if its device and inode are still the ones bound |
+| `<key>.sock` | daemon, bound inside the private `.<key>.bind/` folder (umask 0177, mode 0600) and moved into place with an exclusive rename | the Unix socket; unlinked when stale only under the lock, and at exit only if its device and inode are still the ones bound |
 | `<key>.json` | daemon, written atomically | `{"session", "namespace", "endpoint", "pid", "started"}` (Python's `json.dumps` spacing) |
 | `<key>.log` | client creates it (0600, truncated), the daemon writes it as stdout and stderr | redacted log lines |
 | `claims/<sha256(target)[:24]>.json` | daemon, under `claims/.lock` | `{"owner": <key>, "session", "target", "kinds": [...]}` |

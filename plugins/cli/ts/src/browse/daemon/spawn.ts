@@ -3,6 +3,7 @@ import fs from "node:fs";
 import { dumps, type JsonObject } from "../../json.ts";
 import { utf8 } from "../../pystr.ts";
 import { servedTable, type ServingSide } from "../../served.ts";
+import { EndpointError, envEndpoint } from "../endpoint.ts";
 import { closeFd, lockHeld, O_CREAT, O_RDONLY, O_TRUNC, O_WRONLY, openPrivateFile } from "../paths.ts";
 
 export const START_TIMEOUT_MS = 15_000;
@@ -21,24 +22,25 @@ export const PLUGIN_ENV = ["ARDIA_PLUGIN_CREDENTIAL_FD", "ARDIA_PLUGIN_ENDPOINT"
 
 export function daemonEnvironment(config: JsonObject, env: NodeJS.ProcessEnv = process.env): { config: JsonObject; env: NodeJS.ProcessEnv } {
   const folded = new Map(config);
-  const given = (name: string) => {
-    const value = env[name];
-    return value === undefined || value === "" ? null : value;
-  };
-  const unset = (field: string) => folded.get(field) === undefined || folded.get(field) === null;
-  if (unset("ws") && unset("port")) {
-    const ws = given("ARDIA_WS");
-    const port = given("ARDIA_PORT");
-    const cdp = given("ARDIA_CDP_URL");
-    if (ws !== null) folded.set("ws", ws);
-    else if (port !== null && /^[0-9]{1,5}$/u.test(port.trim()) && Number(port) > 0 && Number(port) < 65536) folded.set("port", BigInt(Number(port)));
-    else if (cdp !== null) folded.set("ws", cdp);
-  }
   const dropped: readonly string[] = typeof folded.get("plugin") === "string" ? [...ENDPOINT_ENV, ...PLUGIN_ENV] : ENDPOINT_ENV;
   const kept: NodeJS.ProcessEnv = {};
   for (const [name, value] of Object.entries(env)) {
     if (!dropped.includes(name)) kept[name] = value;
   }
+  const unset = (field: string) => folded.get(field) === undefined || folded.get(field) === null;
+  if (!unset("ws") || !unset("port")) return { config: folded, env: kept };
+  let found;
+  try {
+    found = envEndpoint(env);
+  } catch (error) {
+    if (!(error instanceof EndpointError)) throw error;
+    kept["ARDIA_PORT"] = env["ARDIA_PORT"];
+    return { config: folded, env: kept };
+  }
+  if (found === null) return { config: folded, env: kept };
+  if (found.kind === "ws") folded.set("ws", found.url);
+  else if (found.port > 0 && found.port < 65536) folded.set("port", BigInt(found.port));
+  else kept["ARDIA_PORT"] = env["ARDIA_PORT"];
   return { config: folded, env: kept };
 }
 

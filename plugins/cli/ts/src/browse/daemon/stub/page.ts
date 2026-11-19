@@ -1,7 +1,7 @@
 import { formatG } from "../../../pylib/format.ts";
 import { type Browser, type CdpResult, DETACH_WAIT, isMutation } from "../../cdp/browser.ts";
 import { Cancelled, sleep } from "../../cdp/cancel.ts";
-import { BrowseError, CdpError, CdpTimeout, Gated, OutcomeUnknown, PageBusy } from "../../daemon-errors.ts";
+import { BrowseError, CdpError, CdpTimeout, ConnectionLost, Gated, OutcomeUnknown, PageBusy } from "../../daemon-errors.ts";
 import { LIBRARY } from "../../js/index.ts";
 import { flag } from "../../metrics.ts";
 import type { StubState } from "./state.ts";
@@ -40,6 +40,10 @@ function frameOf(frame: Record<string, unknown>, parent: string | null): Frame {
     name: typeof frame["name"] === "string" && frame["name"] ? frame["name"] : "",
     origin: typeof frame["securityOrigin"] === "string" && frame["securityOrigin"] ? frame["securityOrigin"] : "",
   };
+}
+
+function ignorable(error: unknown): boolean {
+  return error instanceof BrowseError && !(error instanceof ConnectionLost) && error.code !== "tab_detached" && error.code !== "tab_crashed";
 }
 
 export class StubPage {
@@ -96,6 +100,7 @@ export class StubPage {
         else if (!(error instanceof BrowseError)) throw error;
       }
       if (!this.crashed) await this.enablePage();
+      if (this.attaching !== session) throw new BrowseError(DETACHED, null, "tab_detached");
     } catch (error) {
       this.attaching = null;
       this.state.sessions.delete(session);
@@ -115,7 +120,7 @@ export class StubPage {
     try {
       await this.send("Page.getLayoutMetrics");
     } catch (error) {
-      if (!(error instanceof BrowseError)) throw error;
+      if (!ignorable(error)) throw error;
     }
     this.needsEnable = false;
   }
@@ -126,7 +131,7 @@ export class StubPage {
     try {
       await this.send("Emulation.setFocusEmulationEnabled", { enabled: true });
     } catch (error) {
-      if (error instanceof BrowseError) return;
+      if (ignorable(error)) return;
       throw error;
     }
     this.awake = true;
