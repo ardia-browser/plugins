@@ -2005,11 +2005,14 @@ async def cmd_cdp(ctx: Ctx, argv):
             if target:
                 await ctx.state.connect()
                 await ctx.state.refresh_targets()
-                page = await ctx.state.page(await ctx.state.find_tab(target))
+                target_id = await ctx.state.find_tab(target)
+                with ctx.state.registry.holding(ctx.state.instance, target_id):
+                    page = await ctx.state.page(target_id)
+                    result = await page.send(method, params, timeout=timeout, mutation=True)
             else:
                 page = await ctx.state.page()
                 refuse_raw_on_borrowed(ctx, page, method)
-            result = await page.send(method, params, timeout=timeout, mutation=True)
+                result = await page.send(method, params, timeout=timeout, mutation=True)
             where = ctx.state.tab_id(page.target_id)
     except Gated as error:
         raise error.during("cdp") from None

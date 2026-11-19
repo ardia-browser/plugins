@@ -59,6 +59,10 @@ class FakeState:
         self.browser = Browser()
         self.current = "T1"
         self.extras = {}
+        from ardia_cli.browse.tabs import Registry
+
+        self.registry = Registry(None, "k", "fake")
+        self.instance = None
 
     async def connect(self):
         pass
@@ -198,6 +202,81 @@ class CheckedBeforeConnecting(unittest.TestCase):
             self.assertTrue(math.isfinite(limits.answer_deadline({"argv": argv})), argv)
             self.assertLess(limits.answer_deadline({"argv": argv}), 10 ** 7)
 
+
+class TargetHold(unittest.TestCase):
+    def registries(self):
+        from ardia_cli.browse import paths
+        from ardia_cli.browse.tabs import Registry
+
+        folder = Path(tempfile.mkdtemp(prefix="hold"))
+        self.addCleanup(shutil.rmtree, folder, True)
+        fd = paths.browse_dir(folder)
+        self.addCleanup(os.close, fd)
+        for key in ("ka", "kb"):
+            self.addCleanup(os.close, paths.take_lock(f"{key}.lock", fd))
+        return Registry(fd, "ka", "one"), Registry(fd, "kb", "two")
+
+    def test_a_held_tab_cant_be_closed_by_its_owner_until_the_call_ends(self):
+        one, two = self.registries()
+        one.note_opened("I", "A")
+        two.note_using("I", "B")
+        with two.holding("I", "A"):
+            self.assertFalse(one.reserve_close("I", "A"))
+            self.assertEqual(one.others("I")[1], {"B": ["two"], "A": ["two"]})
+            self.assertEqual(two.others("I")[1], {})
+        self.assertEqual(one.others("I")[1], {"B": ["two"]})
+        self.assertTrue(one.reserve_close("I", "A"))
+
+    def test_a_tab_being_closed_cant_be_held(self):
+        from ardia_cli.browse.errors import BrowseError
+
+        one, two = self.registries()
+        one.note_opened("I", "A")
+        self.assertTrue(one.reserve_close("I", "A"))
+        with self.assertRaises(BrowseError) as caught:
+            with two.holding("I", "A"):
+                pass
+        self.assertEqual(caught.exception.code, "tab_closing")
+
+    def test_forget_drops_holds_left_behind(self):
+        one, two = self.registries()
+        one.note_opened("I", "A")
+        hold = two.holding("I", "A")
+        hold.__enter__()
+        two.forget()
+        self.assertTrue(one.reserve_close("I", "A"))
+
+    def test_cdp_holds_a_target_tab_for_the_call(self):
+        state = FakeState()
+        held = []
+
+        class Registry:
+            def holding(self, instance, target):
+                import contextlib
+
+                @contextlib.contextmanager
+                def hold():
+                    held.append(("on", target))
+                    yield
+                    held.append(("off", target))
+
+                return hold()
+
+        state.registry = Registry()
+        state.instance = "I"
+        original = state.pages["T2"].send
+
+        async def send(*args, **kwargs):
+            held.append(("send", "T2"))
+            return await original(*args, **kwargs)
+
+        state.pages["T2"].send = send
+        cdp(state, "Runtime.evaluate", "--target", "t2")
+        self.assertEqual(held, [("on", "T2"), ("send", "T2"), ("off", "T2")])
+        held.clear()
+        cdp(state, "Runtime.evaluate")
+        self.assertEqual(held, [])
+
 class OlderEngine(unittest.TestCase):
     def test_upload_and_download_say_update_ardia(self):
         for method, command in (("DOM.setFileInputFiles", "upload"), ("Browser.setDownloadBehavior", "download"),
@@ -266,7 +345,7 @@ class PlainDevToolsServer(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        for session in ("warm", "warm-again", "up", "dl", "raw", "ui", "fw", "fk", "bo", "bb"):
+        for session in ("warm", "warm-again", "up", "dl", "raw", "ui", "fw", "fk", "bo", "bb", "ho", "hc"):
             cls.browse("close", session=session, check=False)
         cls.chromium.terminate()
         try:
@@ -333,6 +412,25 @@ class PlainDevToolsServer(unittest.TestCase):
         named = self.browse("cdp", "Runtime.evaluate", "--param", "expression=location.href", "--param", "returnByValue:=true",
                             "--target", mine, session="bb")
         self.assertEqual(json.loads(named.stdout)["result"]["value"], before)
+
+    def test_a_tab_named_by_target_stays_open_for_the_call(self):
+        opened = json.loads(self.browse("tab", "new", self.url + "?held", "--json", session="ho").stdout)["data"]["tabId"]
+        slow = subprocess.Popen([sys.executable, "-m", "ardia_cli", "browse", "--port", str(self.port), "--session", "hc", "cdp", "Runtime.evaluate",
+                                 "--param", "expression=new Promise(r => setTimeout(() => r(7), 4000))", "--param", "awaitPromise:=true",
+                                 "--param", "returnByValue:=true", "--target", opened], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=self.env)
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline:
+            rows = json.loads(self.browse("tab", "list", "--json", session="ho").stdout)["data"]["tabs"]
+            if any(row["tabId"] == opened and "hc" in row.get("usedBy", []) for row in rows):
+                break
+            time.sleep(0.2)
+        refused = self.browse("tab", "close", opened, "--json", check=False, session="ho")
+        out, err = slow.communicate(timeout=60)
+        self.assertEqual(slow.returncode, 0, err)
+        self.assertEqual(json.loads(out)["result"]["value"], 7)
+        self.assertEqual(refused.returncode, 1, refused.stdout)
+        self.assertEqual(json.loads(refused.stdout)["code"], "tab_in_use")
+        self.browse("tab", "close", opened, session="ho")
 
     def test_webui_tab_is_listed(self):
         self.browse("tab", "new", "chrome://version", session="ui")

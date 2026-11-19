@@ -979,7 +979,9 @@ DevTools server, and nothing in the command changes.
 `ardia browse cdp <Domain.method> [--params <json>|-] [--param k=v]… [--param k:=json]… [--target browser|<tab>]
 [--timeout 30s]` (above 0 and up to 10m, checked before the daemon starts) sends one DevTools method and prints its result as JSON (`--json`: `{method, target, result}` in
 `data`), or `✓ <method>` for an empty result. It goes to the session's tab, to the tab `--target` names (`t1`,
-`tab-…`, a label or a targetId, as `tab` takes them; attached without becoming the session's tab), or with
+`tab-…`, a label or a targetId, as `tab` takes them; attached without becoming the session's tab, and held for the
+call as a tab in use: `tab list` shows the session under `usedBy`, and the owner's `tab close` says `tab_in_use` until
+the call ends), or with
 `--target browser` to the browser connection itself (`Browser.*`, `Target.*`, `Storage.*`, `SystemInfo.*`). Params
 work as in `ardia call`, with `--param` for `-p` (agent-browser's `-p` is its provider flag), and are checked the same
 way before the daemon starts; `--params -` reads stdin, up to 1 MB in bytes, and the encoded params are at most 1 MB.
