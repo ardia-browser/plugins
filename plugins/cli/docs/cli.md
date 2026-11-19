@@ -1892,6 +1892,26 @@ These are intentional: Python behaves the other way, and the TypeScript daemon f
   endpoint label without any query, fragment or user info, whatever the client sent.
 - A request line may be 16 MiB including its newline; one byte more is dropped unanswered.
 
+Its page core (slice D3: `browse/state/page.ts`, `state.ts`, `refs.ts`, `apptabs.ts` and the command table in
+`browse/commands/`) follows `page.py`, `state.py` and `tabs.py`, except for these, each covered by
+`ts/tests/m3/core*.test.ts`, the `core/*` harness scenarios or the human tier (`tests/m3/human_core.py`):
+
+- It never sends `Runtime.enable` or `Debugger.enable` on a page session (ardia#2812 row 8). Python doesn't either
+  unless console capture asks for it; in TypeScript that is the one opt-in path left (`Page.enableRuntime`, for slice
+  D6), and the harness fails any TS run that sends either on a page session.
+- The busy probe, sent before any command on a tab whose page stopped answering in the last 120 s, evaluates `1` in the
+  `ardia-browse` isolated world (made first with `Page.createIsolatedWorld` when the document has none yet) instead of
+  the page's main world, within the same 3 s. The harness compares it through the `busy-probe-isolated` divergence.
+- Setup that a cancelled or failed command cut short after the session was published (`keepAwake`, the layout metrics,
+  a setup restore) is done again on the tab's next use, `Page.enable` first. Python marks the tab ready and never
+  finishes it; after a Ctrl-C during attach, its next `open --show` can time out on that half-made session.
+- `tab active`'s fallback probe follows plugins#11: at most 8 probes at a time, a probe the attach cap refuses counts as
+  not probed rather than inactive and is tried again in up to three passes (0.25 s, then 0.5 s apart), and tabs still
+  unprobed after that end the command with `attaches_unanswered` instead of `no_tab`. Python on this branch probes all
+  tabs at once and reads a refusal as inactive.
+- Ardia's tab list (`windows`, for the app tab ids and following a replaced page) is asked over the control socket in
+  one exchange with a 6 s deadline; Python allows 3 s to connect and 3 s for the answer.
+
 ## Linux
 
 The same CLI, with these differences:

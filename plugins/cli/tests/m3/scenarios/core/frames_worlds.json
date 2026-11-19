@@ -1,0 +1,12 @@
+{
+ "steps": [
+  {"argv": ["open", "{fixture}/framejobs.html", "--no-changes"], "session": "frames"},
+  {"argv": ["get", "title"], "session": "frames"},
+  {"argv": ["wait", "--text", "Careers"], "session": "frames"},
+  {"argv": ["get", "url"], "session": "frames"},
+  {"argv": ["open", "{fixture}/login.html", "--no-changes"], "session": "frames"},
+  {"argv": ["wait", "--text", "Log in"], "session": "frames"},
+  {"argv": ["get", "title"], "session": "frames"},
+  {"argv": ["session", "info"], "session": "frames"}
+ ]
+}

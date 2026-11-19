@@ -179,3 +179,21 @@ later slices. `daemon/stub/` holds the minimum page core the D2 scenarios need (
 The Python seeded client starts the TS daemon when `ARDIA_BROWSE_DAEMON=ts` and appends each spawn config to
 `$HOME/spawn-config.jsonl` and each full request to `answers.jsonl` (`wire`), which is what the protocol check reads.
 Recordings must be made on the default ports (`ARDIA_M3_PORTS=9400-9419`): the fixture URL in them carries the port.
+
+## The page core (slice D3)
+
+`ts/src/browse/state/` is the page core: `page.ts` (attach, frames, isolated worlds, `call`, crash and detach, setup
+restore, the busy probe), `state.ts` (connection, targets, tab ids, the lost-tab follow, `tab active`'s probes),
+`refs.ts` (refs and their staleness), `apptabs.ts` (Ardia's tab list over the control socket) and `records.ts` (console,
+error and network records for D6). `ts/src/browse/commands/` holds the command table (`index.ts`: every Python command,
+its owning slice, `register()`, `dispatch()` and its hooks), the parser (`parse.ts`), `Ctx` (`ctx.ts`) and the commands
+D3 serves (`core.ts`: `open` without change reports, `get title|url`, `wait`, `session`). Later slices register their
+commands from their own files and import them in `all.ts`; a name registered twice, or one outside the table, throws.
+
+| What | How it's run |
+|---|---|
+| Scenarios `core/*` | `live 'core/*' --a python --b ts`, `replay 'core/*' --impl ts` (`core/open_title` waits for D4's `snapshot` and D5's change report), `cancel core/frames_worlds --impl ts --kind interrupt\|error\|drop` |
+| Designed divergences | `tests/m3/divergences.py`: each entry names its ardia#2812 row; a scenario lists the ones it needs in `divergences`, and only the named request form is rewritten, on both sides. Every TS run (live, replay, fault) also fails on `Runtime.enable`, `Debugger.enable` or `Console.enable` on a page session and on a main-world busy probe |
+| Racy steps | `racy_steps` in a scenario: only the exit status is compared, for a step where Chromium decides which of two errors one request gets |
+| Human tier | `python -m tests.m3.human_core --pages <plugins#13 tests/human> --chrome <Chrome for Testing> [--impl ts\|python]`: rows 7 to 11 through `ardia browse`, with a full Chrome for Testing in `--headless=new` (chrome-headless-shell is old-mode headless and sets `navigator.webdriver`). Clicks D5 doesn't serve yet are made by the tier and named in the row's notes |
+| Unit tests | `ts/tests/m3/core.test.ts` (attach order, publish after the frame refresh, busy probe world, worlds per document, re-homing, crash and detach, setup restore, the probe rules, refs, the table) and `core-ported.test.ts` (`test_browse_crash` and `test_browse_detach`, same names) |

@@ -33,6 +33,8 @@ RULES = {
     "replay-repeats": "replay lets the read-only probes listed in tests/m3/elastic.json repeat or be skipped, since their count follows the daemon's sleeps",
     "unstable-steps": "live mode compares only exit and stderr of the steps a scenario lists in `unstable_steps`, with the reason in the scenario",
     "metrics": "of an answer's `metrics` only the key set is compared, never values",
+    "racy-steps": "every mode compares only the exit status of the steps a scenario lists in `racy_steps`, where Chromium decides which of two errors the same request gets (the reason is in the scenario)",
+    "divergences": "a scenario's `divergences` name designed TS differences from tests/m3/divergences.py; each rewrites only the request form it names, on both sides",
 }
 
 
@@ -197,7 +199,7 @@ def files(found: dict, subs: Subs, ids: Ids, keys: dict) -> dict:
     return dict(sorted(shaped.items()))
 
 
-def run(result, unstable: list[int] | None = None) -> dict:
+def run(result, unstable: list[int] | None = None, racy: list[int] | None = None) -> dict:
     subs = Subs(result.subs)
     requests, ids = transcript(load(result.transcript), subs)
     keys = session_keys(result.files)
@@ -205,6 +207,9 @@ def run(result, unstable: list[int] | None = None) -> dict:
     for index in unstable or []:
         if index < len(answers):
             answers[index] = {"exit": answers[index]["exit"], "err": answers[index]["err"], "out": "<unstable>", "answers": "<unstable>"}
+    for index in racy or []:
+        if index < len(answers):
+            answers[index] = {"exit": answers[index]["exit"], "err": "<racy>", "out": "<racy>", "answers": "<racy>"}
     return {
         "answers": answers,
         "files": files(result.files, subs, ids, keys),

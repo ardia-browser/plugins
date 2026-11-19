@@ -10,7 +10,7 @@ from pathlib import Path
 CLI = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CLI))
 
-from tests.m3 import compare, infra, linkrun, normalize, protocol, runner
+from tests.m3 import compare, divergences, infra, linkrun, normalize, protocol, runner
 
 
 def message(**fields) -> str:
@@ -61,8 +61,51 @@ class Normalizer(unittest.TestCase):
 
     def test_every_rule_is_named(self):
         for rule in ("browser-ids", "message-id", "concurrency", "scratch", "ports", "ids-in-answers", "session-key", "tabs-file", "file-times",
-                     "read-stamp", "metrics"):
+                     "read-stamp", "metrics", "racy-steps", "divergences"):
             self.assertIn(rule, normalize.RULES)
+
+    def test_racy_steps_keep_only_the_exit_status(self):
+        steps = [{"exit": 1, "out": "", "err": "✗ one\n", "answers": [{"answer": {"code": "navigation_failed", "exit": 1}}]},
+                 {"exit": 0, "out": "x\n", "err": "", "answers": []}]
+        result = runner.Run(root=Path("/tmp/none"), transcript=Path("/dev/null"), steps=steps, files={}, subs={})
+        shaped = normalize.run(result, None, [0])
+        self.assertEqual(shaped["answers"][0], {"exit": 1, "err": "<racy>", "out": "<racy>", "answers": "<racy>"})
+        self.assertEqual(shaped["answers"][1]["out"], "x\n")
+
+
+class Divergences(unittest.TestCase):
+    def shaped(self, items):
+        return normalize.transcript(entries(*items), normalize.Subs({}))[0]
+
+    def test_the_busy_probe_compares_equal_across_worlds_only_when_the_scenario_names_it(self):
+        python = self.shaped([("mark", 3), ("out", message(id=1, method="Runtime.evaluate", sessionId="S", params={"expression": "1", "returnByValue": True}))])
+        ts = self.shaped([("mark", 3), ("out", message(id=4, method="Runtime.evaluate", sessionId="S", params={"expression": "1", "contextId": 2, "returnByValue": True}))])
+        self.assertTrue(compare.compared(python, ts, compare.LIVE))
+        named = ["busy-probe-isolated"]
+        self.assertEqual(compare.compared(divergences.apply(copy.deepcopy(python), named), divergences.apply(copy.deepcopy(ts), named), compare.LIVE), [])
+        other = self.shaped([("mark", 3), ("out", message(id=4, method="Runtime.evaluate", sessionId="S", params={"expression": "2", "contextId": 2}))])
+        self.assertTrue(compare.compared(divergences.apply(copy.deepcopy(python), named), divergences.apply(other, named), compare.LIVE))
+        with self.assertRaises(ValueError):
+            divergences.apply(copy.deepcopy(python), ["no-such-divergence"])
+
+    def test_every_divergence_names_its_row(self):
+        for name, entry in divergences.DIVERGENCES.items():
+            self.assertIsInstance(entry.get("row"), int, name)
+
+    def test_the_transcript_check_finds_page_session_enables_and_a_main_world_probe(self):
+        folder = Path(tempfile.mkdtemp(prefix="ardia-m3-div-"))
+        try:
+            path = folder / "t.jsonl"
+            lines = [{"k": "out", "m": message(id=1, method="Runtime.enable", sessionId="S")},
+                     {"k": "out", "m": message(id=2, method="Runtime.enable")},
+                     {"k": "out", "m": message(id=3, method="Debugger.enable", sessionId="S")},
+                     {"k": "out", "m": message(id=4, method="Runtime.evaluate", sessionId="S", params={"expression": "1"})},
+                     {"k": "out", "m": message(id=5, method="Runtime.evaluate", sessionId="S", params={"expression": "1", "contextId": 3})}]
+            path.write_text("".join(json.dumps(line) + "\n" for line in lines))
+            self.assertEqual(divergences.checks(path), ["row 8: Debugger.enable sent on a page session", "row 8: Runtime.enable sent on a page session",
+                                                        "row 8: the busy probe ran in the page's main world"])
+        finally:
+            shutil.rmtree(folder, ignore_errors=True)
 
 
 def replayable() -> list[Path]:
@@ -99,6 +142,9 @@ class Replay(unittest.TestCase):
         self.assertTrue(any("tap: unexpected request" in line or "answers" in line for line in result["differences"]), result["differences"])
 
 
+LATER_SLICES = {"core/open_title": "its `open` reports changes (D5) and it runs `snapshot` (D4)"}
+
+
 def ts_program() -> str | None:
     found = os.environ.get("ARDIA_M3_TS_PROGRAM") or str(Path(__file__).resolve().parents[1] / "ts" / "dist" / "ardia-ts")
     return found if Path(found).exists() else None
@@ -118,8 +164,8 @@ class DaemonReplay(unittest.TestCase):
         cls.harness.__exit__(None, None, None)
 
     def test_every_daemon_recording_replays_identically_against_the_ts_daemon(self):
-        paths = [path for path in replayable() if runner.name_of(path).startswith("daemon/")]
-        self.assertGreaterEqual(len(paths), 4)
+        paths = [path for path in replayable() if runner.name_of(path).startswith(("daemon/", "core/")) and runner.name_of(path) not in LATER_SLICES]
+        self.assertGreaterEqual(len(paths), 7)
         failed = [result for result in (self.harness.replay(runner.load(path), "ts") for path in paths) if not result["ok"]]
         self.assertEqual(failed, [], "\n".join(f"{result['name']}: {result['differences'][:3]}" for result in failed))
 
