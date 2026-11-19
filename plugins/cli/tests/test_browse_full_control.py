@@ -251,6 +251,84 @@ class RawCdp(unittest.TestCase):
         self.assertEqual(state.pages["T2"].sent, [])
         self.assertEqual([row[0] for row in state.browser_sent], ["Target.attachToTarget", "Runtime.evaluate"])
 
+    def test_ardias_own_stale_session_error_is_replaced_once(self):
+        from ardia_cli.browse.errors import CdpError
+
+        stale = (CdpError("Runtime.evaluate", "ardia: no attached session has that sessionId"),
+                 CdpError("Runtime.evaluate", "No session with given id"),
+                 failure("Runtime.evaluate", SimpleNamespace(detail="gone", code=-32001)))
+        for error in stale:
+            state = FakeState()
+            cdp(state, "Runtime.enable")
+            state.answers["Runtime.evaluate"] = error
+            original = state.browser.send
+
+            async def send(method, params=None, session=None, timeout=30, mutation=False, original=original, state=state):
+                if method == "Runtime.evaluate" and session == "S-T1-2":
+                    state.browser_sent.append((method, params, session, timeout, mutation))
+                    return {"value": 1}
+                return await original(method, params, session, timeout, mutation)
+
+            state.browser.send = send
+            result = cdp(state, "Runtime.evaluate")
+            self.assertEqual((result.data["session"], result.data["result"]), ("reattached", {"value": 1}), error.cdp_message)
+        state = FakeState({"Runtime.evaluate": CdpError("Runtime.evaluate", "Invalid parameters")})
+        with self.assertRaises(CdpError):
+            cdp(state, "Runtime.evaluate")
+        self.assertEqual(state.attaches, 1)
+
+    def test_a_session_created_after_the_attach_was_given_up_is_detached(self):
+        from unittest import mock
+
+        from ardia_cli.browse import rawcdp
+        from ardia_cli.browse.errors import CdpTimeout
+
+        def slow_state():
+            state = FakeState()
+            state.replies = []
+            original = state.browser.send
+
+            async def send(method, params=None, session=None, timeout=30, mutation=False):
+                if method == "Target.attachToTarget":
+                    state.browser_sent.append((method, params, session, timeout, mutation))
+                    reply = asyncio.get_running_loop().create_future()
+                    state.replies.append(reply)
+                    await asyncio.wait_for(asyncio.shield(reply), timeout)
+                    return {"sessionId": "S-late"}
+                return await original(method, params, session, timeout, mutation)
+
+            state.browser.send = send
+            return state
+
+        async def cancelled():
+            state = slow_state()
+            call = asyncio.ensure_future(commands.COMMANDS["cdp"](ctx(state), ["Runtime.evaluate"]))
+            while not state.replies:
+                await asyncio.sleep(0)
+            call.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await call
+            state.replies[0].set_result(None)
+            for _ in range(20):
+                await asyncio.sleep(0)
+            return state
+
+        async def timed_out():
+            state = slow_state()
+            with mock.patch.object(rawcdp, "ATTACH_TIMEOUT", 0.05):
+                with self.assertRaises(CdpTimeout):
+                    await commands.COMMANDS["cdp"](ctx(state), ["Runtime.evaluate"])
+            state.replies[0].set_result(None)
+            for _ in range(20):
+                await asyncio.sleep(0)
+            return state
+
+        for run in (cancelled, timed_out):
+            state = asyncio.run(run())
+            cached = "S-late" in rawcdp.of(state).sessions.values()
+            detached = ("Target.detachFromTarget", {"sessionId": "S-late"}) in [row[:2] for row in state.browser_sent]
+            self.assertTrue(cached or detached, (run.__name__, state.browser_sent))
+
     def test_cdp_is_a_known_mutating_command(self):
         self.assertIn("cdp", commands.MUTATING)
         self.assertIn("cdp", browse_help.COMMANDS)

@@ -60,7 +60,7 @@ def failure(method: str, error) -> Exception:
     text = f"{method}: {detail} (code {error.code})"
     if POLICY_REFUSAL in text:
         return Gated(method, reason=refusal_reason(text, method))
-    return CdpError(method, detail)
+    return CdpError(method, detail, error.code)
 
 
 class Browser:

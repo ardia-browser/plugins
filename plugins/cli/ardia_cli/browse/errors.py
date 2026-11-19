@@ -71,10 +71,11 @@ class Gated(BrowseError):
 
 
 class CdpError(BrowseError):
-    def __init__(self, method: str, message: str):
+    def __init__(self, method: str, message: str, cdp_code: int | None = None):
         super().__init__(f"{method}: {message}")
         self.method = method
         self.cdp_message = message
+        self.cdp_code = cdp_code
 
 
 class NotFocusable(CdpError):
