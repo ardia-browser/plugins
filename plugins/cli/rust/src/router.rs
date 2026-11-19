@@ -209,13 +209,15 @@ pub fn run_child(program: &Path, marker: &str, argv: &[OsString]) -> Ended {
     let blocked = signal_set(&[libc::SIGINT, FORWARDED[0], FORWARDED[1]]);
     let mut original: libc::sigset_t = unsafe { std::mem::zeroed() };
     unsafe { libc::sigprocmask(libc::SIG_BLOCK, &blocked, &mut original) };
+    let children = set_handler(libc::SIGCHLD, libc::SIG_DFL);
     let Some(pid) = spawn(&words, &original) else {
+        restore(&[children]);
         unsafe { libc::sigprocmask(libc::SIG_SETMASK, &original, std::ptr::null_mut()) };
         return Ended::NotStarted;
     };
     CHILD.store(pid, Ordering::SeqCst);
     let handler: extern "C" fn(libc::c_int) = forward;
-    let mut saved = vec![set_handler(libc::SIGINT, libc::SIG_IGN)];
+    let mut saved = vec![children, set_handler(libc::SIGINT, libc::SIG_IGN)];
     for signal in FORWARDED {
         if disposition(signal) == libc::SIG_DFL {
             saved.push(set_handler(signal, handler as libc::sighandler_t));

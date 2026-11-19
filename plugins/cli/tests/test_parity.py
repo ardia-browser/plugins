@@ -715,6 +715,24 @@ class TsProcess(EntryProcess, unittest.TestCase):
         self.assertTrue(done.stdout.startswith(b"ardia "))
         self.assertIn(b"--version".hex(), log.read_text())
 
+    def test_an_ignored_sigchld_neither_loses_the_status_nor_reaches_the_child(self):
+        reports = (f'#!/bin/sh\nexec "{self.python}" -I -c "import signal, sys; print(signal.getsignal(signal.SIGCHLD) == signal.SIG_IGN)"\n')
+        bare = self.bare_install(reports, with_ts=False, served="windows ts\n")
+        (bare / "libexec").mkdir()
+        child = bare / "libexec" / "ardia-ts"
+        child.write_text(f'#!/bin/sh\nexec "{self.python}" -I -c "import os, signal, sys; sys.exit(int(os.environ[\'CODE\']) if signal.getsignal(signal.SIGCHLD) == signal.SIG_DFL else 9)"\n')
+        child.chmod(0o755)
+        for ignored in (False, True):
+            for code, expected in (("253", (0, f"{ignored}\n".encode())), ("7", (7, b""))):
+                with self.subTest(ignored=ignored, code=code):
+                    def prepare():
+                        if ignored:
+                            signal.signal(signal.SIGCHLD, signal.SIG_IGN)
+
+                    done = subprocess.run([str(bare / "bin" / "ardia"), "windows"], env=self.environment({"CODE": code}), capture_output=True,
+                                          preexec_fn=prepare, timeout=30)
+                    self.assertEqual((done.returncode, done.stdout), expected, done.stderr)
+
     def test_the_typescript_program_refuses_to_run_without_the_router(self):
         program = self.root / "libexec" / "ardia-ts.bin"
         for argv in ([], ["windows"], ["--ardia-routed=1:2:7b7d", "windows"], ["--ardia-routed=1:0:7b7d", "windows"], ["--ardia-routed=1:0:zz", "windows"],
