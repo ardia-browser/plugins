@@ -4,12 +4,13 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { BUILT_LIBC } from "./libc-loaded.ts";
 import { dlopenReason, errnoError, flock, interruptsIgnored, LibcUnavailable, listAt, loadLibc, mkdirAt, openAt, peerUid, sizeAt as rawSizeAt, strerror, unlinkAt, watchLifeline } from "../src/libc.ts";
 import { close, closeDir, listDir, openPrivate, openPrivateFile, PathError, readPrivate, renameIn, sizeAt, takeLock, unlinkQuietly, writePrivate } from "../src/privatefs.ts";
 
-const CLI = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const CLI = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PYTHON = process.env.ARDIA_TEST_PYTHON ?? "python3";
 const scratch = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "ardia-libc-")));
 const { O_RDONLY, O_RDWR, O_CREAT } = fs.constants;

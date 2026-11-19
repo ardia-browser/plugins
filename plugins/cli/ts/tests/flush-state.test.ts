@@ -3,13 +3,14 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import "./libc-loaded.ts";
 import { openPrivate } from "../src/privatefs.ts";
 import { sleepMs } from "../src/printable.ts";
 import { startFlush } from "../src/spool.ts";
 
-const CLI = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const CLI = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PYTHON = process.env.ARDIA_TEST_PYTHON ?? "python3";
 const NOW_SLACK_S = 5;
 const SPAWN_WAIT_MS = 3000;
