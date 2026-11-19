@@ -34,6 +34,8 @@ LAUNCH_HINTS = {
 VALUE_FLAGS -= set(LAUNCH_HINTS)
 COMMAND_OWNS = {"stream": {"--port"}, "screenshot": {"--annotate", "--full"}, "diff": {"--full"}}
 LOCAL_AUTH = {"save", "list", "show", "delete"}
+PLUGIN_MODE = "ARDIA_BROWSE_FOR_PLUGIN"
+PLUGIN_REFUSED = 77
 
 
 def truthy(value) -> bool:
@@ -462,6 +464,9 @@ def run(argv: list[str]) -> int:
     from ardia_cli.browse import client, help as helptext
 
     env = dict(os.environ)
+    if env.get(PLUGIN_MODE):
+        sys.stderr.write(f"✗ ardia browse for a plugin ({PLUGIN_MODE}=1) runs only on the TypeScript client; nothing was sent\n")
+        return PLUGIN_REFUSED
     try:
         found, rest = split_globals(argv)
     except Usage as error:

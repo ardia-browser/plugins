@@ -4,7 +4,7 @@ use std::os::unix::ffi::OsStrExt;
 
 pub const LABEL: &str = "browse";
 pub const PLUGIN_MODE: &str = "ARDIA_BROWSE_FOR_PLUGIN";
-pub const REFUSED: i32 = 2;
+pub const REFUSED: i32 = 77;
 const SHARED_VALUE_FLAGS: [&[u8]; 4] = [b"--port", b"--ws", b"--data-dir", b"--timeout"];
 
 pub fn invoked(raw: &[OsString]) -> bool {
@@ -32,7 +32,7 @@ pub fn for_plugin() -> bool {
 pub fn refuse(why: &str) -> i32 {
     let _ = writeln!(
         std::io::stderr(),
-        "✗ ardia browse for a plugin ({PLUGIN_MODE} is set) runs only on the TypeScript client, and {why}; nothing was sent"
+        "✗ ardia browse for a plugin ({PLUGIN_MODE}=1) runs only on the TypeScript client, and {why}; nothing was sent"
     );
     REFUSED
 }
