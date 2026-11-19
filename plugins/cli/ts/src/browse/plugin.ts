@@ -3,6 +3,7 @@ import { closeSync, fstatSync, read } from "node:fs";
 import { isatty } from "node:tty";
 import { PLUGIN_MODE } from "./route.ts";
 import { raceInterrupt } from "./stdio.ts";
+import type { Found } from "./args.ts";
 import { pluginVerdict } from "./plugin-grammar.ts";
 import { VALUE_FLAGS } from "./tables.ts";
 
@@ -145,25 +146,39 @@ function afterCommand(argv: readonly string[]): string[] {
   return [];
 }
 
-export function checkRequest(argv: readonly string[], values: Map<string, string>, rest: readonly string[]): void {
+const GLOBAL_VALUES = ["session", "expect_loader", "max_output", "timeout"];
+const GLOBAL_FLAGS = ["json", "humanize", "no_humanize", "full", "no_changes", "no_text"];
+
+function globalRefusal(found: Found): string | undefined {
+  const value = [...found.values.keys()].find((key) => !GLOBAL_VALUES.includes(key));
+  if (value !== undefined) return `--${value.replaceAll("_", "-")}`;
+  const flag = [...found.flags.keys()].find((key) => !GLOBAL_FLAGS.includes(key));
+  if (flag !== undefined) return `--${flag.replaceAll("_", "-")}`;
+  if (found.enable !== undefined) return "--enable";
+  if (found.initScript !== undefined) return "--init-script";
+  return undefined;
+}
+
+export function checkRequest(argv: readonly string[], found: Found, rest: readonly string[]): void {
   const command = rest[0] ?? "";
-  const own = afterCommand(argv);
   if (LOCAL_COMMANDS.includes(command) || (command === "close" && rest.slice(1).includes("--all"))) {
     throw new PluginRefusal(`can't run \`${command}\` for a plugin, only page steps`);
   }
+  for (const token of afterCommand(argv)) {
+    const name = token.split("=")[0] as string;
+    if (SESSION_FLAGS.includes(name)) throw new PluginRefusal(`doesn't take ${name} after the command`);
+  }
+  const flag = ENDPOINT_FLAGS.find((key) => found.values.has(key));
+  if (flag !== undefined) throw new PluginRefusal(`reaches the browser only through the activity's credential, so it doesn't take --${flag}`);
+  const variable = ENDPOINT_ENV.find((name) => process.env[name]);
+  if (variable !== undefined) throw new PluginRefusal(`reaches the browser only through the activity's credential, so ${variable} must be unset`);
+  const global = globalRefusal(found);
+  if (global !== undefined) throw new PluginRefusal(`takes its data folder and session settings only from Ardia, so it doesn't take ${global}`);
   const verdict = pluginVerdict(rest);
   if (!verdict.allowed && verdict.nested) {
     throw new PluginRefusal(`can't run ${verdict.why}: it runs other commands inside the daemon, which doesn't check the plugin rules on them yet, so send each step on its own`, NESTED_CODE);
   }
   if (!verdict.allowed) throw new PluginRefusal(`can't run ${verdict.why} for a plugin, only page steps`);
-  for (const token of own) {
-    const name = token.split("=")[0] as string;
-    if (SESSION_FLAGS.includes(name)) throw new PluginRefusal(`doesn't take ${name} after the command`);
-  }
-  const flag = ENDPOINT_FLAGS.find((key) => values.has(key));
-  if (flag !== undefined) throw new PluginRefusal(`reaches the browser only through the activity's credential, so it doesn't take --${flag}`);
-  const variable = ENDPOINT_ENV.find((name) => process.env[name]);
-  if (variable !== undefined) throw new PluginRefusal(`reaches the browser only through the activity's credential, so ${variable} must be unset`);
 }
 
 export function accessEndpointKey(access: Access): string {

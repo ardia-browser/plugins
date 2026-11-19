@@ -1120,7 +1120,13 @@ it relies on is `tests/parity/cases/ai-plugin-contract.json` (one case per item)
   `upload`, `download`, `wait --download`, `screenshot`, `pdf`, `state`, `--out`) and the client's own `--out`; the
   contract lists none of those. The guard reads the command's argv with the daemon's own grammar (`plugin-grammar.ts`,
   the flags and aliases each command function in `commands.py` passes to `parse()`, and a port of `parse()` itself:
-  a value flag takes the next token even when it is `--`), so a flag the daemon would see is never hidden from it.
+  a value flag takes the next token even when it is `--`, and a negative number is `-` and any Unicode decimal digit,
+  as Python's `\d`), so a flag the daemon would see is never hidden from it. The guard fails closed: an argv it can't
+  read exactly (an unknown flag, a value flag with no value) is refused with 77, never sent for the daemon to reject.
+- Global options have their own allowlist: `--session`, `--json`, `--expect-loader`, `--max-output`, `--timeout`,
+  `--humanize`/`--no-humanize`, `--full`, `--no-changes` and `--no-text`. Anything else, wherever it appears (before
+  `browse` or after it), is refused with 77: `--data-dir`, `--namespace`, `--idle-timeout`, `--debug`, `--enable`,
+  `--init-script` and the rest. The data folder comes only from the environment Ardia starts the plugin with.
   `tests/plugin_grammar.py` reads that grammar from the real functions, and `plugin-grammar.test.ts` checks the table
   and runs every case's argv through both parsers. One daemon-side write stays: an answer over the output cap is also
   saved to a private file in the daemon's temp folder (`spill`), which M3 F1 must turn off for a plugin session.

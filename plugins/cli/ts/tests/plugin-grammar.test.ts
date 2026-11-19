@@ -46,6 +46,12 @@ const BYPASSES = [
   ["key", "Enter"],
   ["fill", "@e2", "-", "--"],
   ["is", "visible", "--", "-x"],
+  ["wait", "-\u0663", "--download", "x"],
+  ["click", "-\u0661", "--new-tab", "@e1"],
+  ["snapshot", "-\u{1d7d9}", "-i"],
+  ["scroll", "-\u0966\u0967", "down"],
+  ["fill", "-\uff11", "x"],
+  ["get", "-\u00b2", "title"],
 ];
 
 function caseArgvs(): string[][] {
@@ -103,4 +109,13 @@ test("flags hidden behind a value that is -- are still refused", () => {
   assert.equal(pluginVerdict(["snapshot", "-c"]).allowed, true);
   assert.equal(pluginVerdict(["diff", "snapshot", "--baseline", "/etc/hosts"]).allowed, false);
   assert.equal(pluginVerdict(["upload", "@e1", "/etc/hosts"]).allowed, false);
+});
+
+test("a token Python reads as a negative number never hides a flag, and anything the guard can't parse is refused", () => {
+  assert.equal(pluginVerdict(["wait", "-\u0663", "--download", "x"]).allowed, false);
+  assert.equal(pluginVerdict(["click", "-\u0661", "--new-tab", "@e1"]).allowed, false);
+  assert.equal(pluginVerdict(["snapshot", "-\u{1d7d9}", "-i"]).allowed, true);
+  for (const rest of [["snapshot", "-x"], ["snapshot", "--depth"], ["click", "--nope", "@e1"], ["get", "-\u00b2", "title"]]) {
+    assert.equal(pluginVerdict(rest).allowed, false, JSON.stringify(rest));
+  }
 });

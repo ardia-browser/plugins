@@ -186,7 +186,7 @@ async function pluginAccess(browse: string[], call: Call, python: string | null)
       if (!(error instanceof Usage)) throw error;
       return access;
     }
-    checkRequest(browse, parsed.found.values, parsed.rest);
+    checkRequest(browse, parsed.found, parsed.rest);
     return access;
   } catch (error) {
     if (error instanceof PluginRefusal) return refuse(browse, error.message, call, python, error.code);

@@ -44,7 +44,7 @@ export const PLUGIN_FLAGS: Readonly<Record<string, readonly string[]>> = {
 
 const GET_KINDS = ["text", "html", "value", "attr", "title", "url", "count", "box", "styles"];
 const TAB_ACTIONS = ["new", "close", "active"];
-const NEGATIVE_NUMBER = /^-\d/;
+const NEGATIVE_NUMBER = /^-\p{Nd}/u;
 
 function keyOf(name: string): string {
   return name.replace(/^-+/, "").replaceAll("-", "_");
@@ -119,7 +119,7 @@ export function pluginVerdict(rest: readonly string[]): Verdict {
   const grammar = DAEMON_GRAMMAR[name];
   if (allowed === undefined || grammar === undefined) return { allowed: false, why: `\`${command}\``, nested: false };
   const parsed = daemonParse(argv, grammar);
-  if ("usage" in parsed) return { allowed: true };
+  if ("usage" in parsed) return { allowed: false, why: `\`${command}\` with arguments the plugin guard can't read (${parsed.usage})`, nested: false };
   for (const key of parsed.options.keys()) {
     const flag = Object.keys(grammar.flags).find((candidate) => keyOf(candidate) === key) as string;
     if (!allowed.includes(flag)) return { allowed: false, why: `\`${command} ${flag}\``, nested: false };
