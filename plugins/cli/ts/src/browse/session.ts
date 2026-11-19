@@ -1,14 +1,15 @@
-import { lstatSync, type Stats } from "node:fs";
+import { constants as fsConstants, lstatSync, type Stats } from "node:fs";
 import { constants } from "node:os";
 import { codeOf, errnoOf, join, uid } from "../paths.ts";
 import { type Dir, openPrivate, PathError } from "../privatefs.ts";
 import { BrowseError, PythonCrash } from "./errors.ts";
 import { osCrash } from "../crash.ts";
 import { pythonOsError } from "../printable.ts";
-import { strerror } from "../libc.ts";
+import { socketInfoAt, strerror } from "../libc.ts";
 
 export const DIR_NAME = "Browse";
 const { ELOOP, ENOTDIR, ENOENT } = constants.errno;
+const { S_IFMT, S_IFSOCK } = fsConstants;
 
 export class NoDaemon extends Error {}
 
@@ -58,20 +59,16 @@ export function openBrowseDir(root: string): Dir {
   }
 }
 
-export function socketPath(root: string, key: string): string {
-  return join(root, DIR_NAME, `${key}.sock`);
-}
-
-export function checkSocket(path: string, name: string): void {
-  let info: Stats;
+export function checkSocket(dir: Dir, name: string): void {
+  let info: { mode: number; uid: number };
   try {
-    info = lstatSync(path);
+    info = socketInfoAt(dir.fd, name);
   } catch (error) {
     if (errnoOf(error) === ENOENT) throw new NoDaemon("no socket");
     throw osFailure(error);
   }
   let why: string | undefined;
-  if (!info.isSocket()) why = `${name} isn't a socket`;
+  if ((info.mode & S_IFMT) !== S_IFSOCK) why = `${name} isn't a socket`;
   else if (info.uid !== uid()) why = `${name} belongs to another user`;
   else if ((info.mode & 0o077) !== 0) why = `${name} must be mode 0600`;
   if (why !== undefined) throw new BrowseError(`Refusing the session socket: ${why}`, 1, undefined, "socket_refused");

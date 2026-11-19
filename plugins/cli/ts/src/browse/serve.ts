@@ -15,7 +15,7 @@ import type { Secrets } from "./redact.ts";
 import { agentEnv, endpointChoice, endpointKey, namespaceName, optionsFrom, rootOf, sessionKey, sessionName, urlsWithSecrets } from "./request.ts";
 import { lockHeld, startDaemon } from "./spawn.ts";
 import { closeDir } from "../privatefs.ts";
-import { checkSocket, NoDaemon, openBrowseDir, osFailure, socketPath } from "./session.ts";
+import { checkSocket, NoDaemon, openBrowseDir, osFailure } from "./session.ts";
 import { decodeStdin, pythonStdioErrors, readStdin, stdinState } from "./stdio.ts";
 import { TAKES_OUT } from "./tables.ts";
 
@@ -65,7 +65,7 @@ function checkIdle(found: Found): void {
 async function openSession(root: string, key: string): Promise<Link> {
   const dir = openBrowseDir(root);
   try {
-    checkSocket(socketPath(root, key), `${key}.sock`);
+    checkSocket(dir, `${key}.sock`);
     return await connect(dir, `${key}.sock`);
   } catch (error) {
     if (error instanceof Absent) throw new NoDaemon("the socket refused the connection");
@@ -78,7 +78,7 @@ async function openSession(root: string, key: string): Promise<Link> {
 function checkLive(root: string, key: string): void {
   const dir = openBrowseDir(root);
   try {
-    checkSocket(socketPath(root, key), `${key}.sock`);
+    checkSocket(dir, `${key}.sock`);
     if (!lockHeld(dir, key)) throw new NoDaemon("no daemon holds the session's lock");
   } finally {
     closeDir(dir);

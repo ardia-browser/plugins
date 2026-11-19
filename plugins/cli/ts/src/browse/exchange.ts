@@ -7,6 +7,7 @@ import { BrowseError, formatG, gone, stalled, unreachable } from "./errors.ts";
 export const MAX_RESPONSE = 256 * 1024 * 1024;
 const POLL_MS = 100;
 const ABSENT = new Set(["ECONNREFUSED", "ENOENT"]);
+export const CONNECT_WAIT_MS = 15_000;
 
 export class Interrupted extends Error {}
 
@@ -90,7 +91,7 @@ function wait(link: Link | undefined, until: number): Promise<void> {
 
 function connectedFd(dir: Dir, name: string): number {
   try {
-    return connectAt(dir.fd, name);
+    return connectAt(dir.fd, name, CONNECT_WAIT_MS);
   } catch (error) {
     if (ABSENT.has(codeOf(error) ?? "")) throw new Absent();
     throw error;

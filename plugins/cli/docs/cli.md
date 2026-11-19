@@ -1090,11 +1090,17 @@ it relies on is `tests/parity/cases/ai-plugin-contract.json` (one case per item)
   the page before repeating it. …" (both modes; intentional cases). **M3 F1's daemon must tell them apart**: keep
   `document_changed` for the before-check (nothing ran) and answer `document_changed_after` when the step ran and the
   document changed during or after it; the client then passes both through and drops the rewording.
-- An engine refusal arrives as a CDP error whose text holds `ardia: <code>`. Under `--json` the client gives
-  `ardia: tab_out_of_scope` (the tab left the credential's window or profile) the code `tab_out_of_scope` and the act
-  lease's `ardia: document_changed` the code `document_changed`, in place of a missing code, `command_failed` or
-  `policy_refused`; a code the daemon gave otherwise stays. A tab that is out of scope before the step isn't in the
-  engine's filtered target list, so `tab <id>` still answers `tab_not_found`.
+- An engine refusal arrives as a CDP error whose own message starts `ardia: <code>`. The daemon's CDP layer
+  (`connection.failure`) gives `ardia: tab_out_of_scope` (the tab left the credential's window or profile) the code
+  `tab_out_of_scope` and the act lease's `ardia: document_changed` the code `document_changed`; the client passes the
+  reply's code on and never reads codes out of message text, so page or selector text that quotes one keeps its own
+  code. A tab that is out of scope before the step isn't in the engine's filtered target list, so `tab <id>` still
+  answers `tab_not_found`.
+- The client checks the session socket and connects to it through the one `Browse` folder descriptor it opened and
+  verified: `fstatat` without following links for the socket's type, owner and mode, then a connect by its bare name
+  (`connectAt` refuses anything with a `/`, `.` or `..`). On macOS the connect runs with the calling thread's working
+  directory set to that folder; on Linux it goes through `/proc/self/fd/<n>/<name>`, non-blocking, polled within the
+  CLI's 15 s start deadline (CI's Ubuntu job runs that path; it isn't run on a Mac).
 - Refused with status 77 and one line (JSON with code `plugin_refused` under `--json`), before anything is sent:
   `ARDIA_BROWSE_FOR_PLUGIN` other than `1`; a missing, non-numeric, closed, terminal or unreadable descriptor; anything
   but a well-formed credential (a trailing newline included); no read within 2 s (Ctrl-C ends the wait with status
