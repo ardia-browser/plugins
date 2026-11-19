@@ -1673,8 +1673,8 @@ sandboxes, and `--report` prints the table as JSON (per command: cases, passing,
 
 The Rust entry stays `bin/ardia` and routes. A command whose row in `served.txt` says `rust` it serves itself; one that
 says `ts` it runs as a child, `<root>/libexec/ardia-ts`, whose first argument `--ardia-routed=2:<sigint>:<fd>:<hex caller>`
-carries whether SIGINT was ignored when ardia started, the lifeline descriptor and the caller's hello JSON, since Bun can
-learn none of them. The lifeline is the read end of a pipe whose write end only the router holds: the child sees EOF on it
+carries whether SIGINT was ignored when ardia started, the lifeline descriptor and the caller's hello JSON, since Bun by
+itself can learn none of them. The lifeline is the read end of a pipe whose write end only the router holds: the child sees EOF on it
 only if the router dies, and then kills itself, so a killed ardia never leaves its child writing to the caller's output
 or talking to Ardia. The child starts with ardia's own signal mask and SIGINT disposition, SIGCHLD at its default (the
 router has to reap it) and the same descriptors plus the lifeline; while it runs the router passes SIGINT, SIGTERM and
@@ -1688,6 +1688,37 @@ command. Without `libexec/ardia-ts` everything goes where it would without the r
 `--entry rust` installs the shipped layout, the TypeScript program included when a built-in row says `ts` and it is
 built. Which side served a call comes from markers keyed by session id, so a Python started as anyone's child still
 counts as Python.
+
+The TypeScript program does the few libc calls Bun lacks in-process, through a Node-API addon built from one C file
+(`ts/native/ardia-libc.c`) that ships as `<root>/libexec/ardia-libc.so` beside `libexec/ardia-ts`. `ts/scripts/build.sh`
+builds both for one architecture (`--target bun-darwin-arm64` or `bun-darwin-x64`; a separate addon per architecture,
+`-O2 -bundle -undefined dynamic_lookup -arch …` with clang on macOS, `-shared -fPIC` on Linux) and, given
+`--node-headers`, checks the addon's own Node-API declarations against Node's official headers. The `.so` name puts it
+under the plugin signing rule for libraries, which signs it with the app's Developer ID and `--options runtime` whatever
+its mode; the hardened runtime's library validation then loads it only into a program signed by the same team.
+`ts/src/libc.ts` is the only module that touches it:
+
+| Export | C call(s) | Why Bun can't | Used by |
+| --- | --- | --- | --- |
+| `peerUid` | `getsockopt` `LOCAL_PEERCRED` (`struct xucred`) on macOS, `SO_PEERCRED` on Linux | no socket credential API | `control.ts`: refuse a control socket served by another user |
+| `interruptsIgnored` | `sigaction(SIGINT, NULL, …)` | can read no signal disposition | `main.ts`: leave an inherited ignored SIGINT ignored |
+| `openAt` | `openat` (always `O_CLOEXEC`) | `fs` opens by path only | `privatefs.ts`: folders and private files under an open folder |
+| `mkdirAt` | `mkdirat` | path only | `privatefs.ts`: create `Telemetry`, `Local` and the usage folder |
+| `renameAt` | `renameat` | path only | `privatefs.ts`: the temp-then-rename writes |
+| `unlinkAt` | `unlinkat` | path only | `privatefs.ts`: drop the spool and pruned copies |
+| `sizeAt` | `fstatat(…, AT_SYMLINK_NOFOLLOW)` | path only | `privatefs.ts`: spool and local-copy sizes |
+| `listAt` | `fcntl(F_DUPFD_CLOEXEC)`, `fdopendir`, `readdir` | no directory listing from a descriptor | `privatefs.ts`: prune the local copies |
+| `lock` | `flock` | no `flock`; `O_EXLOCK` is Darwin-only | `privatefs.ts`: the same lock Python's `fcntl.flock` takes, on macOS and Linux |
+
+So nothing changes the working directory and no helper process runs: the private-file code follows Python's `dir_fd`
+code call for call. The caller still comes from the router's marker, which already walked the process ancestry. The
+program loads the addon from beside its own resolved path before it serves anything, `--version` included; if it is
+missing, isn't a loadable library for this architecture, fails library validation or lacks an export, it prints
+`ardia: can't load <file> (<reason>); reinstall ardia` on stderr and exits 252, never handing the call to Python and
+never skipping the peer check. The parity harness signs both ad hoc with the hardened runtime, the program with only
+`com.apple.security.cs.disable-library-validation`, since an ad hoc pair has no team for library validation to match;
+`ProductionSigning` in `tests/test_parity.py`, run only where the Developer ID identity is in the keychain, signs both
+with it, no entitlements, and lists windows through the pair.
 
 `python -m tests.parity.record` seeds `tests/parity/cases/seeded/` from the Python tests: it runs them with the entry
 points and the control client wrapped and keeps each in-process call whose replay in the sandbox gives the test's own

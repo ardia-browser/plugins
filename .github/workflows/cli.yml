@@ -70,13 +70,18 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
           bun-version: 1.3.14
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.2
       - run: bun install --frozen-lockfile --ignore-scripts
       - name: Type check (tsrs)
         run: ./node_modules/.bin/tsrs --noEmit -p .
-      - run: sh scripts/build.sh
+      - name: Build the program and its libc addon, the addon checked against Node's own Node-API headers
+        run: sh scripts/build.sh --node-headers "$(dirname "$(dirname "$(realpath "$(command -v node)")")")/include/node"
       - name: Size
         run: |
           echo "ardia-ts binary: $(wc -c < dist/ardia-ts) bytes" >> "$GITHUB_STEP_SUMMARY"
+          echo "ardia-libc.so addon: $(wc -c < dist/ardia-libc.so) bytes" >> "$GITHUB_STEP_SUMMARY"
       - name: Rust
         run: |
           command -v rustup >/dev/null || curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
