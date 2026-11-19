@@ -4,3 +4,46 @@ tabs
 groups
 windows
 commands
+browse addinitscript
+browse back
+browse batch
+browse check
+browse click
+browse close
+browse cookies
+browse dblclick
+browse dialog
+browse diff
+browse download
+browse drag
+browse eval
+browse fill
+browse find
+browse focus
+browse forward
+browse frame
+browse get
+browse goto
+browse highlight
+browse hover
+browse is
+browse keyboard
+browse mouse
+browse open
+browse other
+browse press
+browse reload
+browse screenshot
+browse scroll
+browse scrollintoview
+browse select
+browse set
+browse snapshot
+browse storage
+browse tab
+browse type
+browse uncheck
+browse upload
+browse version
+browse vitals
+browse wait

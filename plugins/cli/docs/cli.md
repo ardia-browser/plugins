@@ -1655,7 +1655,13 @@ Any Chromium works for `--port`: `chromium --headless=new --remote-debugging-por
 
 The command is moving from Python to Rust one command at a time (ardia-browser/ardia#2703). The Rust entry serves a
 command only when `rust/served.txt` lists it, and lists it only when every parity case for it passes and at least one
-of them ran natively; anything else, and any input the Rust code can't mirror exactly, goes to the bundled Python. A
+of them ran natively; anything else, and any input the Rust code can't mirror exactly, goes to the bundled Python.
+`ardia browse` labels its calls `browse <command>` (`browse other` for a name telemetry doesn't keep), and Rust serves the
+round trip to an already running daemon (`rust/src/browse`): it decides before it sends anything, so `help`, `--out`,
+`read`, `script`, `session`, `notes`, `auth`, `plugin`, `flow`, `close --all`, stdin that isn't UTF-8, a number or URL
+it doesn't read the way Python does, and a session whose daemon isn't running yet (Python starts it) all go to Python
+with the same stdin. `rust/src/browse/tables.rs` copies Python's flag, alias, metric and task tables;
+`tests/test_rust_browse_tables.py` fails when they drift and prints how to regenerate it. A
 case (`tests/parity/cases/*.json`, one row each) gives argv, stdin, environment, the starting files, the control
 socket's replies (or no socket), consent and helper stubs; it may only name paths inside its sandbox and can't touch the
 sandbox's own variables. `python -m tests.parity` runs each case on both sides in the same throwaway HOME, CLI home and

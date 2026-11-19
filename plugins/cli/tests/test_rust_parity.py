@@ -336,6 +336,30 @@ class RustProcess(unittest.TestCase):
             listing.communicate()
             fake.close()
 
+    def test_ctrl_c_while_the_browse_daemon_works_says_interrupted_on_both_sides(self):
+        command = {"rust": [str(self.root / "bin" / "ardia")], "python": [str(self.python), "-I", "-m", "ardia_cli"]}
+        seen = {}
+        for side, argv in command.items():
+            data = self.case / side / "data"
+            data.mkdir(parents=True)
+            daemon = harness.FakeDaemon(data, {"replies": [{"hang": 30}]})
+            try:
+                env = self.environment({"ARDIA_DATA_DIR": str(data), "ARDIA_CLI_HOME": str(self.case / side / "cli-home"), "ARDIA_TELEMETRY": "off"})
+                browse = subprocess.Popen(argv + ["browse", "click", "@e1"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                deadline = time.monotonic() + 20
+                while not daemon.requests and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                self.assertTrue(daemon.requests, f"{side} never sent the command")
+                browse.send_signal(signal.SIGINT)
+                stdout, stderr = browse.communicate(timeout=10)
+                seen[side] = (browse.returncode, stdout, stderr)
+            finally:
+                if browse.poll() is None:
+                    browse.kill()
+                daemon.close()
+        self.assertEqual(seen["rust"], seen["python"])
+        self.assertEqual(seen["rust"], (130, b"", "✗ interrupted\n".encode()))
+
     def test_paths_that_are_not_utf8_go_to_python(self):
         lossy = self.case / "data-\ufffd"
         lossy.mkdir()

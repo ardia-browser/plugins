@@ -218,7 +218,7 @@
  },
  {
   "id": "browse--ws-secret-masked",
-  "command": "browse",
+  "command": "browse get",
   "argv": [
    "browse",
    "--ws",
@@ -313,6 +313,12 @@
    "endpoint": "token",
    "session": "default",
    "namespace": ""
+  },
+  "diverges": {
+   "why": "Python's client crashes with a traceback when the daemon's answer isn't JSON; Rust has already sent the command, so it reports the broken answer instead",
+   "python_crash": "JSONDecodeError",
+   "rust_stderr": "\u2717 the ardia browse daemon's answer couldn't be read (it isn't a JSON object); see the session log\n",
+   "rust_error_code": "malformed_answer"
   }
  },
  {
@@ -410,7 +416,7 @@
  },
  {
   "id": "browse--port-flag",
-  "command": "browse",
+  "command": "browse get",
   "argv": [
    "browse",
    "--port",
@@ -435,7 +441,7 @@
  },
  {
   "id": "browse--port-hoisted",
-  "command": "browse",
+  "command": "browse get",
   "argv": [
    "--port",
    "9333",
@@ -460,7 +466,7 @@
  },
  {
   "id": "browse--port-env",
-  "command": "browse",
+  "command": "browse get",
   "argv": [
    "browse",
    "get",
@@ -486,7 +492,7 @@
  },
  {
   "id": "browse--port-not-number",
-  "command": "browse",
+  "command": "browse get",
   "argv": [
    "browse",
    "--port",
@@ -509,7 +515,7 @@
  },
  {
   "id": "browse--cdp-env-number",
-  "command": "browse",
+  "command": "browse get",
   "argv": [
    "browse",
    "get",
@@ -702,7 +708,8 @@
    "endpoint": "token",
    "session": "default",
    "namespace": ""
-  }
+  },
+  "fallback": true
  },
  {
   "id": "browse--version",
