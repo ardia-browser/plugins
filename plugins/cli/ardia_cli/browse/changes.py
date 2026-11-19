@@ -1011,17 +1011,27 @@ async def frame_of(page, element) -> str | None:
     return child if child and child in page.frames else None
 
 
-def arrival_notes(state, before: View | None, after: View) -> str | None:
+def local_annotations(state, url: str | None) -> tuple[str | None, str | None, str | None]:
     from pathlib import Path
 
     from ardia_cli import notes
     from ardia_cli.browse import flows
 
-    root = state.config.get("data_root") if isinstance(getattr(state, "config", None), dict) else None
-    if not root or (before is not None and notes.page_site(before.url) == notes.page_site(after.url)):
+    config = state.config if isinstance(getattr(state, "config", None), dict) else {}
+    root = config.get("data_root")
+    if not root or config.get("for_plugin"):
+        return None, None, None
+    site, header = notes.header(Path(root), url)
+    return site, header, flows.hint(state, url)
+
+
+def arrival_notes(state, before: View | None, after: View) -> str | None:
+    from ardia_cli import notes
+
+    if before is not None and notes.page_site(before.url) == notes.page_site(after.url):
         return None
-    lines = [notes.header(Path(root), after.url)[1], flows.hint(state, after.url)]
-    return "\n".join(line for line in lines if line) or None
+    _, header, saved = local_annotations(state, after.url)
+    return "\n".join(line for line in (header, saved) if line) or None
 
 
 def attach(result, report):

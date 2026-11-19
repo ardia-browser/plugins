@@ -31,8 +31,8 @@ def check_name(kind: str, name: str) -> str:
     return name
 
 
-def session_key(namespace: str, endpoint_key: str, session: str) -> str:
-    raw = f"{namespace}\0{endpoint_key}\0{session}".encode()
+def session_key(namespace: str, endpoint_key: str, session: str, for_plugin: bool = False) -> str:
+    raw = f"{namespace}\0{endpoint_key}\0{session}{chr(0) + 'plugin' if for_plugin else ''}".encode()
     return hashlib.sha256(raw).hexdigest()[:24]
 
 

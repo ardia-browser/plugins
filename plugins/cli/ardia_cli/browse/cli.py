@@ -12,6 +12,7 @@ from ardia_cli.browse.errors import BrowseError, Usage
 VALUE_FLAGS = {
     "--session", "--namespace", "--data-dir", "--port", "--ws", "--cdp", "--max-output", "--screenshot-dir", "--screenshot-format",
     "--screenshot-quality", "--idle-timeout", "--init-script", "--enable", "--headers", "--color-scheme", "--download-path",
+    "--expect-loader",
 }
 BOOL_FLAGS = {
     "--json", "--no-humanize", "--humanize", "--content-boundaries", "--annotate", "--no-auto-dialog", "--pin-tab", "--no-pin-tab",
@@ -34,8 +35,6 @@ LAUNCH_HINTS = {
 VALUE_FLAGS -= set(LAUNCH_HINTS)
 COMMAND_OWNS = {"stream": {"--port"}, "screenshot": {"--annotate", "--full"}, "diff": {"--full"}}
 LOCAL_AUTH = {"save", "list", "show", "delete"}
-PLUGIN_MODE = "ARDIA_BROWSE_FOR_PLUGIN"
-PLUGIN_REFUSED = 77
 
 
 def truthy(value) -> bool:
@@ -119,6 +118,7 @@ def options_from(found: dict, env: dict) -> dict:
         "humanize": humanize,
         "timeout_ms": env.get("AGENT_BROWSER_DEFAULT_TIMEOUT") or 25000,
         "max_output": max_output,
+        "expect_loader": found.get("expect_loader"),
         "full": bool(found.get("full")),
         "no_changes": bool(found.get("no_changes")),
         "no_text": bool(found.get("no_text")),
@@ -432,9 +432,51 @@ def script_source(args: list[str], cwd: str) -> str:
     return source
 
 
-def main(argv: list[str]) -> int:
-    from ardia_cli.browse import outfile
+PLUGIN = None
 
+
+def refuse_plugin(argv: list[str], why: str) -> int:
+    from ardia_cli import telemetry
+    from ardia_cli.browse import plugin_access
+
+    try:
+        found, _ = split_globals(argv)
+        as_json = bool(found.get("json") or truthy(os.environ.get("AGENT_BROWSER_JSON")))
+    except Usage:
+        as_json = False
+    telemetry.note_error_code(plugin_access.CODE)
+    text = plugin_access.message(why)
+    if as_json:
+        payload = {"success": False, "data": None, "error": text, "code": plugin_access.CODE}
+        sys.stdout.write(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n")
+    else:
+        sys.stderr.write(f"✗ {text}\n")
+    return plugin_access.REFUSED
+
+
+def take_plugin(argv: list[str]) -> int | None:
+    global PLUGIN
+    from ardia_cli.browse import plugin_access
+
+    try:
+        PLUGIN = plugin_access.take(os.environ)
+        try:
+            found, rest = split_globals(argv)
+        except Usage:
+            return None
+        plugin_access.check_request(argv, found, rest, os.environ, VALUE_FLAGS)
+    except plugin_access.Refused as error:
+        return refuse_plugin(argv, str(error))
+    return None
+
+
+def main(argv: list[str]) -> int:
+    from ardia_cli.browse import outfile, plugin_access
+
+    if plugin_access.wanted(os.environ):
+        refused = take_plugin(argv)
+        if refused is not None:
+            return refused
     try:
         try:
             _, rest = split_globals(argv)
@@ -464,9 +506,6 @@ def run(argv: list[str]) -> int:
     from ardia_cli.browse import client, help as helptext
 
     env = dict(os.environ)
-    if env.get(PLUGIN_MODE):
-        sys.stderr.write(f"✗ ardia browse for a plugin ({PLUGIN_MODE}=1) runs only on the TypeScript client; nothing was sent\n")
-        return PLUGIN_REFUSED
     try:
         found, rest = split_globals(argv)
     except Usage as error:
@@ -492,10 +531,12 @@ def run(argv: list[str]) -> int:
         if namespace:
             paths.check_name("A namespace", namespace)
         ws, port, data_dir = endpoint_choice(found, env)
+        if PLUGIN is not None:
+            ws, port = PLUGIN.ws, None
         register_secrets(ws, env)
         root = endpoints.data_root(data_dir)
-        endpoint_key, endpoint_label = client.endpoint_key(ws, port, root)
-        key = paths.session_key(namespace, endpoint_key, session)
+        endpoint_key, endpoint_label = (PLUGIN.endpoint_key, PLUGIN.label) if PLUGIN is not None else client.endpoint_key(ws, port, root)
+        key = paths.session_key(namespace, endpoint_key, session, for_plugin=env.get("ARDIA_BROWSE_FOR_PLUGIN") == "1")
         options["_session"] = session
         command = rest[0]
         args = rest[1:]
@@ -526,7 +567,7 @@ def run(argv: list[str]) -> int:
         config = {
             "session": session, "namespace": namespace, "key": key, "data_root": str(root), "ws": ws, "port": port, "data_dir": data_dir,
             "endpoint_label": endpoint_label, "idle_timeout_ms": parse_duration(idle) if idle else None, "debug": bool(found.get("debug")),
-            "no_auto_dialog": options["no_auto_dialog"], "pin_tab": options.get("pin_tab"),
+            "no_auto_dialog": options["no_auto_dialog"], "pin_tab": options.get("pin_tab"), "for_plugin": env.get("ARDIA_BROWSE_FOR_PLUGIN") == "1",
         }
         dir_fd = dir_fd_factory()
         try:

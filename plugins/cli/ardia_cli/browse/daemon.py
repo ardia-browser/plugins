@@ -112,6 +112,14 @@ def redact_text(text: str) -> str:
     return redact(text)
 
 
+async def check_document(state, expected: str) -> None:
+    page = await state.page()
+    await page.refresh_frames()
+    loader = (page.frames.get(page.main_frame) or {}).get("loader")
+    if loader != expected:
+        raise BrowseError("The page loaded a new document, so this step didn't count. Ardia checks it again for the next step", code="document_changed")
+
+
 def render(options: dict, result=None, error: BrowseError | None = None, name: str = "") -> tuple[int, str, str]:
     from ardia_cli.redact import redact
 
@@ -455,10 +463,17 @@ class Daemon:
             self.state.extras["top_command"] = name
             self.state.extras["running"] = {"name": name, "since": time.monotonic()}
             limit = command_limit(name, argv[1:], ctx.timeout)
+            expected = options.get("expect_loader") if self.state.config.get("for_plugin") else None
             try:
+                if expected:
+                    await check_document(self.state, expected)
                 code, out, err = await asyncio.wait_for(self.answer(ctx, name, argv, options), limit)
+                if expected:
+                    await check_document(self.state, expected)
             except asyncio.TimeoutError:
                 code, out, err = render(options, error=timed_out(name, limit), name=name)
+            except BrowseError as error:
+                code, out, err = render(options, error=error, name=name)
             await self.restore_metrics()
             notice = self.state.extras.pop("notice", None)
             err = (redact_text(notice) + "\n" if notice else "") + err
