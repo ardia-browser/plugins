@@ -34,9 +34,13 @@ pub fn for_plugin() -> bool {
 pub const REFUSED_CODE: &str = "plugin_refused";
 const COMMAND_LAUNCH_NAMES: [(&str, &str); 1] = [("wait", "--state")];
 
+fn python_space(character: char) -> bool {
+    character.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&character)
+}
+
 fn truthy(value: &[u8]) -> bool {
     let text = String::from_utf8_lossy(value);
-    !matches!(text.trim().to_lowercase().as_str(), "" | "0" | "false" | "no" | "off")
+    !matches!(text.trim_matches(python_space).to_lowercase().as_str(), "" | "0" | "false" | "no" | "off")
 }
 
 fn browse_json(tokens: &[&[u8]]) -> Option<bool> {
@@ -187,6 +191,9 @@ mod tests {
         assert!(json_requested(&words(&["--json", "browse", "get", "--", "--json=0"])));
         assert!(json_requested(&words(&["browse", "wait", "--state", "visible", "--json", "#x"])));
         assert!(!json_requested(&words(&["browse", "get", "--state", "x", "--json"])));
+        assert!(!json_requested(&words(&["browse", "--json=\u{1c}false\u{1f}", "get"])));
+        assert!(!json_requested(&words(&["browse", "--json=\u{85}off\u{3000}", "get"])));
+        assert!(json_requested(&words(&["browse", "--json=\u{1c}yes", "get"])));
         assert_eq!(
             refusal_line("it \"broke\"\n", true),
             "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) runs only on the \

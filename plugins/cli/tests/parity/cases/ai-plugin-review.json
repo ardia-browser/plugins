@@ -3798,5 +3798,60 @@
    "namespace": ""
   },
   "note": "round 4: a succeeding batch is left alone"
+ },
+ {
+  "id": "review5--3-router-json-false-padded",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json=\u001cfalse\u001c",
+   "get",
+   "--",
+   "ti�tle"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 5: false padded with U+001C is false for the router as for the client and Python",
+  "intentional": {
+   "why": "the router refuses a plugin call its TypeScript client handed back, in text since --json is false",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) runs only on the TypeScript client, and its TypeScript client asked for Python; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": null,
+   "files": {}
+  }
  }
 ]
