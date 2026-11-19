@@ -1,9 +1,10 @@
 import { lstatSync } from "node:fs";
 import { createConnection, type Socket } from "node:net";
 import { peerUid } from "./facts.ts";
-import { dumps, field, object, parse, same, type Value } from "./json.ts";
+import { Connection, Stop } from "./connection.ts";
+import { field, object, same, type Value } from "./json.ts";
 import { baseName, errnoOf, join, LINUX, purePath, envSet, expandUser, home, strerror, uid } from "./paths.ts";
-import { MAX_LINE_BYTES, MIN_APP_PROTOCOL, PROTOCOL, SOCKET_FILE } from "./protocol.ts";
+import { MIN_APP_PROTOCOL, PROTOCOL, SOCKET_FILE } from "./protocol.ts";
 import { strOf, truthy, Unsupported } from "./py.ts";
 import { routedCaller } from "./routed.ts";
 
@@ -126,108 +127,19 @@ export function catchInterrupts(): () => void {
   };
 }
 
-const POLL_MS = 100;
-
-class Connection {
-  private buffer: Buffer = Buffer.alloc(0);
-  private nextId = 0n;
-  private lost: string | undefined;
-  private ended = false;
-  private broken: number | undefined;
-  private wake: (() => void) | undefined;
-
-  constructor(readonly socket: Socket) {
-    socket.on("data", (chunk: Buffer) => {
-      this.buffer = this.buffer.length === 0 ? chunk : Buffer.concat([this.buffer, chunk]);
-      this.notify();
-    });
-    socket.on("end", () => {
-      this.ended = true;
-      this.notify();
-    });
-    socket.on("error", (error) => {
-      this.broken = errnoOf(error);
-      this.notify();
-    });
-    socket.on("close", () => {
-      this.ended = true;
-      this.notify();
-    });
+async function callOn(connection: Connection, method: string, params: Value | undefined, timeout: number): Promise<Value> {
+  let reply: Value;
+  try {
+    reply = await connection.request(method, params, timeout);
+  } catch (error) {
+    if (!(error instanceof Stop)) throw error;
+    if (error.kind === "interrupted") throw new ControlFailure({ kind: "interrupted" });
+    if (error.kind === "too_long") throw new ControlFailure({ kind: "method", code: "bad_request", message: error.reason });
+    throw new ControlFailure({ kind: "unreachable", message: `${NOT_REACHABLE} (${error.reason})`, sent: error.kind !== "closed" });
   }
-
-  private notify(): void {
-    const wake = this.wake;
-    this.wake = undefined;
-    wake?.();
-  }
-
-  private lose(reason: string): ControlFailure {
-    this.lost = reason;
-    return unreachable(reason);
-  }
-
-  private takeLine(): Buffer | undefined {
-    const end = this.buffer.indexOf(0x0a);
-    if (end < 0) return undefined;
-    const line = this.buffer.subarray(0, end + 1);
-    this.buffer = this.buffer.subarray(end + 1);
-    return line;
-  }
-
-  private async readReply(ident: bigint, method: string, timeout: number): Promise<Value> {
-    const deadline = performance.now() + timeout * 1000;
-    for (;;) {
-      for (let line = this.takeLine(); line !== undefined; line = this.takeLine()) {
-        if (line.length > MAX_LINE_BYTES + 1) throw this.lose("Ardia sent a line longer than 1 MB");
-        const message = parse(line);
-        if (message === undefined) throw this.lose("Ardia sent a line that isn't JSON");
-        const id = field(message, "id");
-        if (typeof id === "bigint" && id === ident) return message;
-      }
-      if (this.buffer.length > MAX_LINE_BYTES + 2) throw this.lose("Ardia sent a line longer than 1 MB");
-      if (interrupted()) throw new ControlFailure({ kind: "interrupted" });
-      const left = deadline - performance.now();
-      if (left <= 0) throw unreachable(`Ardia didn't answer ${method} in ${seconds(timeout)} s`);
-      if (this.broken !== undefined) throw this.lose(`the connection broke (${strerror(this.broken)})`);
-      if (this.ended) throw this.lose("Ardia closed the connection");
-      await new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, Math.max(1, Math.min(left, POLL_MS)));
-        const done = () => {
-          clearTimeout(timer);
-          resolve();
-        };
-        this.wake = done;
-        wakeAll = done;
-      });
-      this.wake = undefined;
-      wakeAll = undefined;
-    }
-  }
-
-  async call(method: string, params: Value | undefined, timeout: number): Promise<Value> {
-    if (this.lost !== undefined) throw unreachable(this.lost);
-    this.nextId += 1n;
-    const ident = this.nextId;
-    const request = object([
-      ["id", ident],
-      ["method", method],
-    ]);
-    if (params !== undefined) request.set("params", params);
-    const line = Buffer.from(`${dumps(request, "compact")}\n`, "utf8");
-    if (line.length > MAX_LINE_BYTES) {
-      throw new ControlFailure({ kind: "method", code: "bad_request", message: "the request is longer than 1 MB" });
-    }
-    this.socket.write(line);
-    let reply: Value;
-    try {
-      reply = await this.readReply(ident, method, timeout);
-    } catch (error) {
-      throw marked(error, true);
-    }
-    const error = field(reply, "error");
-    if (error !== undefined) throw new ControlFailure(methodFailure(error));
-    return field(reply, "result") ?? null;
-  }
+  const error = field(reply, "error");
+  if (error !== undefined) throw new ControlFailure(methodFailure(error));
+  return field(reply, "result") ?? null;
 }
 
 function methodFailure(error: Value): Failure {
@@ -249,7 +161,7 @@ function spokenProtocol(info: Value): string {
 async function hello(connection: Connection, name: string, callerWire: Value): Promise<void> {
   let info: Value;
   try {
-    info = await connection.call("hello", object([["caller", callerWire], ["protocol", BigInt(PROTOCOL)]]), CONNECT_TIMEOUT);
+    info = await callOn(connection, "hello", object([["caller", callerWire], ["protocol", BigInt(PROTOCOL)]]), CONNECT_TIMEOUT);
   } catch (error) {
     if (!(error instanceof ControlFailure)) throw error;
     const failure = error.failure;
@@ -279,16 +191,20 @@ export async function call(dataDir: string | undefined, method: string, params: 
   checkSocket(path);
   const socket = await connectSocket(path, CONNECT_TIMEOUT);
   const name = baseName(path);
+  let connection: Connection | undefined;
   try {
     const fd = (socket as unknown as { _handle?: { fd?: number } })._handle?.fd;
     const peer = typeof fd === "number" ? await peerUid(python, fd) : undefined;
     if (interrupted()) throw new ControlFailure({ kind: "interrupted" });
-    if (peer === undefined) throw unreachable(`${name} couldn't check who serves it`);
+    if (peer === undefined || typeof fd !== "number") throw unreachable(`${name} couldn't check who serves it`);
     if (peer !== uid()) throw unreachable(`${name} is served by another user`);
-    const connection = new Connection(socket);
+    connection = new Connection(socket, fd, interrupted, (wake) => {
+      wakeAll = wake;
+    });
     await hello(connection, name, routedCaller());
-    return await connection.call(method, params, CALL_TIMEOUT);
+    return await callOn(connection, method, params, CALL_TIMEOUT);
   } finally {
+    connection?.close();
     socket.destroy();
   }
 }

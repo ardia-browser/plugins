@@ -708,5 +708,141 @@
    }
   },
   "note": "Python reads integers up to 4,300 digits, not counting the sign"
+ },
+ {
+  "id": "protocol--early-reply-before-its-request-is-ignored",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "hello": {
+    "raw": "{\"id\":1,\"result\":{\"app\":\"Ardia\",\"version\":\"1.0\"}}\n{\"id\":2,\"result\":[{\"id\":7,\"kind\":\"early\",\"tabs\":[]}]}\n"
+   },
+   "replies": {
+    "windows": {
+     "result": [
+      {
+       "id": 1,
+       "kind": "normal",
+       "focused": true,
+       "profileName": "Personal",
+       "tabs": [
+        {
+         "id": 11,
+         "title": "Real",
+         "url": "https://example.com/"
+        }
+       ]
+      }
+     ]
+    }
+   }
+  },
+  "note": "a reply for id 2 arrives with hello's, before the listing is asked: it is dropped and the real reply is used"
+ },
+ {
+  "id": "protocol--early-reply-before-its-request-is-ignored-json",
+  "command": "windows",
+  "argv": [
+   "windows",
+   "--json"
+  ],
+  "control": {
+   "hello": {
+    "raw": "{\"id\":1,\"result\":{\"app\":\"Ardia\",\"version\":\"1.0\"}}\n{\"id\":2,\"result\":[{\"id\":7,\"kind\":\"early\",\"tabs\":[]}]}\n"
+   },
+   "replies": {
+    "windows": {
+     "result": [
+      {
+       "id": 1,
+       "kind": "normal",
+       "focused": true,
+       "profileName": "Personal",
+       "tabs": [
+        {
+         "id": 11,
+         "title": "Real",
+         "url": "https://example.com/"
+        }
+       ]
+      }
+     ]
+    }
+   }
+  },
+  "note": "a reply for id 2 arrives with hello's, before the listing is asked: it is dropped and the real reply is used"
+ },
+ {
+  "id": "protocol--duplicate-replies-keep-the-first",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "hello": {
+    "raw": "{\"id\":1,\"result\":{\"app\":\"Ardia\",\"version\":\"1.0\"}}\n{\"id\":1,\"result\":{\"app\":\"Ardia\",\"version\":\"1.0\"}}\n"
+   },
+   "replies": {
+    "windows": {
+     "raw": "{\"id\":2,\"result\":[{\"id\":3,\"tabs\":[]}]}\n{\"id\":2,\"result\":[{\"id\":4,\"tabs\":[]}]}\n{\"event\":\"tab.opened\",\"data\":{}}\n{\"decide\":\"x\"}\n[1]\n"
+    }
+   }
+  },
+  "note": "a second hello reply, a second listing reply, an event, a decide and a non-object line are all ignored"
+ },
+ {
+  "id": "protocol--line-that-is-not-json-right-after-hello",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "hello": {
+    "raw": "{\"id\":1,\"result\":{\"app\":\"Ardia\",\"version\":\"1.0\"}}\nnot json\n"
+   },
+   "replies": {
+    "windows": {
+     "result": [
+      {
+       "id": 1,
+       "kind": "normal",
+       "focused": true,
+       "profileName": "Personal",
+       "tabs": [
+        {
+         "id": 11,
+         "title": "Real",
+         "url": "https://example.com/"
+        }
+       ]
+      }
+     ]
+    }
+   }
+  },
+  "note": "the reader stops at the bad line before the listing is sent: the listing is never asked"
+ },
+ {
+  "id": "protocol--line-that-is-not-json-right-after-hello-json",
+  "command": "tabs",
+  "argv": [
+   "tabs",
+   "--json"
+  ],
+  "control": {
+   "hello": {
+    "raw": {
+     "base64": "eyJpZCI6MSwicmVzdWx0Ijp7ImFwcCI6IkFyZGlhIiwidmVyc2lvbiI6IjEuMCJ9fQp7ImlkIjoyLCJyZXN1bHQiOltdfQr/Cg=="
+    }
+   },
+   "replies": {
+    "workspace": {
+     "result": []
+    }
+   }
+  },
+  "note": "an early reply and then bytes that aren't UTF-8: the reader stops, nothing more is sent"
  }
 ]
