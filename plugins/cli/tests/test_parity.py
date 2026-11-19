@@ -222,7 +222,10 @@ class HarnessRules(unittest.TestCase):
     def test_detached_children_of_the_installation_are_reaped_whatever_their_environment(self):
         install = harness.Installation(binary())
         try:
-            child = subprocess.Popen([str(install.python), "-c", "import time; time.sleep(30)"], env={}, start_new_session=True)
+            sleeper = install.root / "bin" / "parity-sleep"
+            sleeper.write_text("#!/bin/sh\nwhile :; do /bin/sleep 1; done\n")
+            sleeper.chmod(0o755)
+            child = subprocess.Popen([str(sleeper)], env={}, start_new_session=True)
             listed = lambda: str(install.scratch).encode() in subprocess.run(["/bin/ps", "-x", "-ww", "-o", "command="], capture_output=True).stdout
             self.assertTrue(sys.platform != "darwin" or harness.wait_until(listed, 5))
         finally:
@@ -536,6 +539,7 @@ class EntryProcess:
                 done = subprocess.run([str(bare / "bin" / "ardia"), *argv], env=self.environment({}), capture_output=True, timeout=30)
                 self.assertEqual((done.returncode, done.stdout.split(b" ")[:4]), (9, [b"shell-ran", b"-I", b"-m", b"ardia_cli"]))
 
+    @unittest.skipUnless(sys.platform == "darwin", "the size rule it checks is macOS's; Linux caps each string at 128 KB, so ardia itself would not start")
     def test_an_argument_list_too_long_for_python_is_reported_and_the_lease_dropped(self):
         for argv in (["config", "path"], ["nosuch-\udcff"]):
             with self.subTest(argv=argv):
