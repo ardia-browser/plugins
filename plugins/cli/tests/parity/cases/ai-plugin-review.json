@@ -436,7 +436,7 @@
   "daemon": {
    "replies": [
     {
-     "out": "{\"success\":false,\"data\":null,\"error\":\"Input.insertText: ardia: tab_out_of_scope: the tab moved to another window\"}\n",
+     "out": "{\"success\":false,\"data\":null,\"error\":\"Input.insertText: ardia: tab_out_of_scope: the tab moved to another window\",\"code\":\"tab_out_of_scope\"}\n",
      "err": "",
      "exit": 1
     }
@@ -447,67 +447,7 @@
    "session": "plugin-ai",
    "namespace": ""
   },
-  "note": "finding 4: an engine scope refusal on input is tab_out_of_scope",
-  "intentional": {
-   "why": "json errors carry the engine's stable code (AI plugin contract §6, §9)",
-   "stdout": {
-    "text": "{\"success\":false,\"data\":null,\"error\":\"Input.insertText: ardia: tab_out_of_scope: the tab moved to another window\",\"code\":\"tab_out_of_scope\"}\n"
-   },
-   "stderr": {
-    "text": ""
-   }
-  }
- },
- {
-  "id": "review--4-scope-gated",
-  "command": "browse press",
-  "argv": [
-   "browse",
-   "--session",
-   "plugin-ai",
-   "press",
-   "--json",
-   "--",
-   "Enter"
-  ],
-  "env": {
-   "ARDIA_BROWSE_FOR_PLUGIN": "1",
-   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
-   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
-   "ARDIA_TELEMETRY": "0",
-   "NO_COLOR": "1",
-   "LANG": "en_US.UTF-8"
-  },
-  "credential": {
-   "fd": 4,
-   "bytes": {
-    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
-   }
-  },
-  "daemon": {
-   "replies": [
-    {
-     "out": "{\"success\":false,\"data\":null,\"error\":\"Input.dispatchKeyEvent ardia: tab_out_of_scope isn't allowed for the ardia command\",\"code\":\"policy_refused\"}\n",
-     "err": "",
-     "exit": 1
-    }
-   ],
-   "endpoint": {
-    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
-   },
-   "session": "plugin-ai",
-   "namespace": ""
-  },
-  "note": "finding 4: the scope refusal wins over policy_refused",
-  "intentional": {
-   "why": "json errors carry the engine's stable code (AI plugin contract §6, §9)",
-   "stdout": {
-    "text": "{\"success\":false,\"data\":null,\"error\":\"Input.dispatchKeyEvent ardia: tab_out_of_scope isn't allowed for the ardia command\",\"code\":\"tab_out_of_scope\"}\n"
-   },
-   "stderr": {
-    "text": ""
-   }
-  }
+  "note": "round 2: the daemon's CDP layer codes the engine's refusal; the client passes it on"
  },
  {
   "id": "review--4-lease-cdp-error",
@@ -538,7 +478,7 @@
   "daemon": {
    "replies": [
     {
-     "out": "{\"success\":false,\"data\":null,\"error\":\"Input.dispatchMouseEvent: ardia: document_changed: no act lease covers this document\"}\n",
+     "out": "{\"success\":false,\"data\":null,\"error\":\"Input.dispatchMouseEvent: ardia: document_changed: no act lease covers this document\",\"code\":\"document_changed\"}\n",
      "err": "",
      "exit": 1
     }
@@ -549,11 +489,95 @@
    "session": "plugin-ai",
    "namespace": ""
   },
-  "note": "finding 4: the act lease's refusal is document_changed (§6, §10)",
+  "note": "round 2: the act lease's refusal, coded by the daemon"
+ },
+ {
+  "id": "review--4-scope-text-in-page-error",
+  "command": "browse snapshot",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "snapshot",
+   "--json",
+   "-s",
+   "main"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":false,\"data\":null,\"error\":\"Selector main failed: Error: ardia: tab_out_of_scope\",\"code\":\"page_script_error\"}\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: page text naming a code keeps the daemon's code"
+ },
+ {
+  "id": "review--4-scope-text-without-code",
+  "command": "browse press",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "press",
+   "--json",
+   "--",
+   "Enter"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":false,\"data\":null,\"error\":\"Input.dispatchKeyEvent ardia: tab_out_of_scope isn't allowed for the ardia command\"}\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: free text never becomes an engine code",
   "intentional": {
-   "why": "json errors carry the engine's stable code (AI plugin contract §6, §9)",
+   "why": "json errors always carry a code (AI plugin contract)",
    "stdout": {
-    "text": "{\"success\":false,\"data\":null,\"error\":\"Input.dispatchMouseEvent: ardia: document_changed: no act lease covers this document\",\"code\":\"document_changed\"}\n"
+    "text": "{\"success\":false,\"data\":null,\"error\":\"Input.dispatchKeyEvent ardia: tab_out_of_scope isn't allowed for the ardia command\",\"code\":\"command_failed\"}\n"
    },
    "stderr": {
     "text": ""
@@ -2166,5 +2190,151 @@
    "namespace": ""
   },
   "note": "round 2: help is the client's own"
+ },
+ {
+  "id": "review2--4-notice-before-document-changed",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "click",
+   "--expect-loader",
+   "L",
+   "--",
+   "@e4"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "Ardia restarted its control server; this session reconnected\n✗ The page loaded a new document, so this step didn't count. Ardia checks it again for the next step\n",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: a notice the daemon puts first doesn't stop the rewording",
+  "intentional": {
+   "why": "the daemon answers the same document_changed whether its check failed before the step (nothing ran) or after it (the step ran), so the client says it may or may not have run; the M3 F1 daemon answers document_changed_after for the second",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "Ardia restarted its control server; this session reconnected\n✗ The page loaded a new document before, during or after this step, so it may or may not have run; check the page before repeating it. Ardia checks it again for the next step\n"
+   }
+  }
+ },
+ {
+  "id": "review2--4-notice-json",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "click",
+   "--expect-loader",
+   "L",
+   "--json",
+   "--",
+   "@e4"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":false,\"data\":null,\"error\":\"The page loaded a new document, so this step didn't count. Ardia checks it again for the next step\",\"code\":\"document_changed\"}\n",
+     "err": "Ardia restarted its control server; this session reconnected\n",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: under --json the notice stays on stderr",
+  "intentional": {
+   "why": "the daemon answers the same document_changed whether its check failed before the step (nothing ran) or after it (the step ran), so the client says it may or may not have run; the M3 F1 daemon answers document_changed_after for the second",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"The page loaded a new document before, during or after this step, so it may or may not have run; check the page before repeating it. Ardia checks it again for the next step\",\"code\":\"document_changed\"}\n"
+   },
+   "stderr": {
+    "text": "Ardia restarted its control server; this session reconnected\n"
+   }
+  }
+ },
+ {
+  "id": "review2--4-quoted-message-mid-line",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "click",
+   "--",
+   "@e4"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "✗ step said: The page loaded a new document, so this step didn't count. Ardia checks it again for the next step\n",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: only a whole line is reworded"
  }
 ]

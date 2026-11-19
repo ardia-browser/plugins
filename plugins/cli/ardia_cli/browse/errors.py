@@ -75,8 +75,8 @@ class Gated(BrowseError):
 
 
 class CdpError(BrowseError):
-    def __init__(self, method: str, message: str):
-        super().__init__(f"{method}: {message}")
+    def __init__(self, method: str, message: str, code: str | None = None):
+        super().__init__(f"{method}: {message}", code=code)
         self.method = method
         self.cdp_message = message
 

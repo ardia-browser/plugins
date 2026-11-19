@@ -55,8 +55,22 @@ def is_mutation(method: str) -> bool:
     return method in MUTATING_METHODS or method.startswith(("Input.", "Emulation."))
 
 
+ENGINE_CODES = ("tab_out_of_scope", "document_changed")
+
+
+def engine_code(detail: str) -> str | None:
+    for code in ENGINE_CODES:
+        prefix = f"ardia: {code}"
+        if detail == prefix or detail.startswith(prefix + ":") or detail.startswith(prefix + " "):
+            return code
+    return None
+
+
 def failure(method: str, error) -> Exception:
     detail = error.detail or "The browser rejected the command"
+    code = engine_code(detail)
+    if code is not None:
+        return CdpError(method, detail, code=code)
     text = f"{method}: {detail} (code {error.code})"
     if POLICY_REFUSAL in text:
         return Gated(method, reason=refusal_reason(text, method))
