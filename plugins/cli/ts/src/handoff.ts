@@ -1,6 +1,5 @@
 import { closeSync, existsSync, openSync, realpathSync, statSync, unlinkSync, writeSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { DARWIN_ERRORS } from "./errnos.ts";
 
 export function installRoot(): string | null {
   try {
@@ -63,6 +62,7 @@ export async function handOff(argv: string[], python: string | null = bundledPyt
     process.execve?.(python, [python, "-I", "-m", "ardia_cli", ...argv], process.env);
   } catch (error) {
     const errno = Math.abs((error as NodeJS.ErrnoException).errno ?? 0);
+    const { DARWIN_ERRORS } = await import("./errnos.ts");
     complain(`ardia: couldn't run ${python}: ${DARWIN_ERRORS[errno] ?? (error instanceof Error ? error.message : String(error))}\n`);
   }
   return 127;
