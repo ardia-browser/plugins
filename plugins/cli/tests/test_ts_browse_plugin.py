@@ -109,7 +109,7 @@ class PluginCredentialProcesses(unittest.TestCase):
                 "ARDIA_PLUGIN_ENDPOINT": f"ws://127.0.0.1:{port}/devtools/browser/{BROWSER}", "PYTHONPATH": str(harness.CLI)}
 
     def test_plugin_mode_runs_only_browse_and_never_python(self):
-        for words in (["tabs"], ["--session", "x", "browse", "get", "title"], ["--timeout", "5", "browse", "get", "title"]):
+        for words in (["tabs"], ["--session", "x", "browse", "get", "title"], ["--timeout", "5", "browse", "get", "title"], ["--version"]):
             process = subprocess.Popen([str(self.install.root / "bin" / "ardia"), *words], env=self.env(9), cwd=self.box / "tmp",
                                        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
             out, err = process.communicate(timeout=60)

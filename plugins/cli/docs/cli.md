@@ -1079,7 +1079,7 @@ no `callFunctionOn`, no isolated worlds), and the Python daemon reads and acts o
 steps are served by a TypeScript plugin daemon (F1-early, on M3's D1 and D2) that uses DOM, AX and Input only. Until it
 lands, a plugin step that passes every check below answers status 77 and code `plugin_daemon_unavailable` ("has no
 plugin daemon yet…"), and nothing is sent anywhere: no daemon is started or contacted and the token server never hears
-from it. Help and `--version` are still answered by the client. The Python daemon has no plugin mode; the Python
+from it. `browse` help and `browse --version` are still answered by the client; `ardia --version` and every other non-browse call answer 77 `plugin_refused`. The Python daemon has no plugin mode; the Python
 client's plugin mode (`plugin_access.py`) stays only as the parity reference for the refusals. The cases that expected
 a daemon's plugin answers are kept for F1-early in `tests/parity/pending/f1-early.json` (outside the parity table);
 their places in the table now expect `plugin_daemon_unavailable`.

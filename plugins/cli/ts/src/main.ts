@@ -93,7 +93,7 @@ async function main(words: string[]): Promise<number> {
   if (!interruptsIgnored()) catchInterrupts();
   const argv = routed.argv;
   if (argv.some((word) => word.includes(LOSSY))) return HAND_BACK;
-  if (asksForVersion(argv) && servesNatively("--version")) {
+  if (asksForVersion(argv) && servesNatively("--version") && !process.env.ARDIA_BROWSE_FOR_PLUGIN) {
     try {
       writeWhole(1, Buffer.from(`ardia ${cliVersion()}\n`));
     } catch (error) {
