@@ -800,6 +800,30 @@ class TsProcess(EntryProcess, unittest.TestCase):
                 words = [os.fsencode(word).hex() for word in ["-I", "-m", "ardia_cli", *argv]]
                 self.assertEqual(log.read_text(), "\n".join(words) + "\nnote=" + b"n\xfe\n".hex() + "\n")
 
+    def test_bun_and_node_variables_neither_reach_the_typescript_program_nor_leave_python(self):
+        planted = {"BUN_BE_BUN": "1", "BUN_OPTIONS": "--print 7", "NODE_OPTIONS": "--require /nonexistent.js",
+                   "BUN_JSC_useJIT": "0", "JSC_useJIT": "0", "NODE_CHANNEL_FD": "0", "UV_THREADPOOL_SIZE": "1", "BUN_ODD": "x\udcfe"}
+        data = self.case / "data"
+        data.mkdir()
+        fake = FakeArdia(data / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "windows": {"result": []}})
+        try:
+            for argv in (["--version"], ["windows", "--json"]):
+                with self.subTest(argv=argv):
+                    plain = subprocess.run([str(self.root / "bin" / "ardia"), *argv], env=self.environment({}), capture_output=True, timeout=30)
+                    with_bun = subprocess.run([str(self.root / "bin" / "ardia"), *argv], env=self.environment(planted), capture_output=True, timeout=30)
+                    self.assertEqual((with_bun.returncode, with_bun.stdout, with_bun.stderr), (plain.returncode, plain.stdout, plain.stderr))
+                    self.assertEqual(plain.returncode, 0)
+        finally:
+            fake.close()
+        log = self.case / "env.log"
+        bare = self.bare_install(f'#!/bin/sh\n/usr/bin/env > "{log}"\nexec "{self.python}" "$@"\n')
+        done = subprocess.run([str(bare / "bin" / "ardia"), "--data-dir", str(self.case / "d-\ufffd"), "windows"], env=self.environment(planted),
+                              capture_output=True, timeout=30)
+        self.assertTrue((bare / "ts-ran").exists(), done.stderr)
+        lines = log.read_bytes().split(b"\n")
+        for name, value in planted.items():
+            self.assertIn(os.fsencode(f"{name}={value}"), lines)
+
     def test_without_the_typescript_program_python_serves(self):
         log = self.case / "exec.log"
         bare = self.bare_install(self.logging_python(log))

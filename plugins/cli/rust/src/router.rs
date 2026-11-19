@@ -14,6 +14,7 @@ const LIFELINE_FLOOR: libc::c_int = 3;
 const COMPILED: &str = include_str!("../../served.txt");
 const TABLE_LIMIT: u64 = 64 * 1024;
 const FORWARDED: [libc::c_int; 3] = [libc::SIGINT, libc::SIGTERM, libc::SIGHUP];
+const RUNTIME_PREFIXES: [&[u8]; 5] = [b"BUN_", b"JSC_", b"NODE_", b"UV_", b"MIMALLOC_"];
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Side {
@@ -179,6 +180,30 @@ fn environment() -> *const *mut libc::c_char {
     unsafe { environ }
 }
 
+fn read_by_runtime(entry: &[u8]) -> bool {
+    let name = entry.split(|byte| *byte == b'=').next().unwrap_or(entry);
+    RUNTIME_PREFIXES.iter().any(|prefix| name.starts_with(prefix))
+}
+
+fn child_environment() -> Vec<*mut libc::c_char> {
+    let mut kept = Vec::new();
+    let mut at = environment();
+    if !at.is_null() {
+        loop {
+            let entry = unsafe { *at };
+            if entry.is_null() {
+                break;
+            }
+            if !read_by_runtime(unsafe { std::ffi::CStr::from_ptr(entry) }.to_bytes()) {
+                kept.push(entry);
+            }
+            at = unsafe { at.add(1) };
+        }
+    }
+    kept.push(std::ptr::null_mut());
+    kept
+}
+
 fn words(program: &Path, marker: &str, argv: &[OsString]) -> Option<Vec<CString>> {
     let mut words = vec![CString::new(program.as_os_str().as_bytes()).ok()?, CString::new(marker).ok()?];
     for word in argv {
@@ -197,11 +222,12 @@ fn spawn(words: &[CString], mask: &libc::sigset_t) -> Option<libc::pid_t> {
     }
     let flags = (libc::POSIX_SPAWN_SETSIGMASK | libc::POSIX_SPAWN_SETSIGDEF) as libc::c_short;
     let mut pid: libc::pid_t = 0;
+    let environment = child_environment();
     let spawned = unsafe {
         libc::posix_spawnattr_setsigmask(&mut attributes, mask) == 0
             && libc::posix_spawnattr_setsigdefault(&mut attributes, &defaults) == 0
             && libc::posix_spawnattr_setflags(&mut attributes, flags) == 0
-            && libc::posix_spawn(&mut pid, pointers[0], std::ptr::null(), &attributes, pointers.as_ptr(), environment()) == 0
+            && libc::posix_spawn(&mut pid, pointers[0], std::ptr::null(), &attributes, pointers.as_ptr(), environment.as_ptr()) == 0
     };
     unsafe { libc::posix_spawnattr_destroy(&mut attributes) };
     spawned.then_some(pid)
@@ -274,6 +300,31 @@ pub fn die_by(signal: libc::c_int) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_runtime_variables_are_kept_from_the_child() {
+        for entry in [
+            &b"BUN_BE_BUN=1"[..],
+            b"BUN_OPTIONS=--print 7",
+            b"NODE_OPTIONS=",
+            b"JSC_useJIT=0",
+            b"UV_THREADPOOL_SIZE=1",
+            b"MIMALLOC_VERBOSE=1",
+            b"BUN_",
+        ] {
+            assert!(read_by_runtime(entry), "{entry:?}");
+        }
+        for entry in [
+            &b"HOME=/x"[..],
+            b"ARDIA_DATA_DIR=BUN_X",
+            b"XBUN_BE_BUN=1",
+            b"bun_be_bun=1",
+            b"PATH=/bin",
+            b"NODE",
+        ] {
+            assert!(!read_by_runtime(entry), "{entry:?}");
+        }
+    }
 
     #[test]
     fn reads_the_table_strictly() {

@@ -1678,11 +1678,14 @@ itself can learn none of them. The lifeline is the read end of a pipe whose writ
 only if the router dies, and then kills itself with SIGKILL from a thread of the addon's (`watchLifeline`), so it ends
 even while its JavaScript is blocked in a system call (opening a FIFO, say), and a killed ardia never leaves its child writing to the caller's output
 or talking to Ardia. The child starts with ardia's own signal mask and SIGINT disposition, SIGCHLD at its default (the
-router has to reap it) and the same descriptors plus the lifeline; while it runs the router passes SIGINT, SIGTERM and
+router has to reap it), ardia's environment minus every variable named `BUN_*`, `JSC_*`, `NODE_*`, `UV_*` or `MIMALLOC_*`
+(Bun, its JavaScriptCore, its Node layer, libuv and mimalloc read those at startup, and `BUN_BE_BUN` or `BUN_OPTIONS` alone
+would turn the program into the Bun CLI or change what it runs; the Python flusher it may start reads none of them), and
+the same descriptors plus the lifeline; while it runs the router passes SIGINT, SIGTERM and
 SIGHUP on unless they were ignored (a Ctrl-C to the whole group reaches the child twice, which its sticky interrupt flag
 turns into one), holds the lease, and then ends by the child's signal or with its status. Status 253 means the
 TypeScript program couldn't serve the call exactly (it may only have asked read-only questions): the router then restores
-every disposition it changed and execs the bundled Python with the original argv and environment, as for any other
+every disposition it changed and execs the bundled Python with the original argv and environment, byte for byte, as for any other
 command. Without `libexec/ardia-ts` everything goes where it would without the row. The router reads
 `<root>/served.txt` when it is a regular file (not a link) of at most 64 KiB and valid, else the table built into it.
 `--entry ts` installs the router, the TypeScript program behind a probe, and a `served.txt` naming `ts` for every row;
