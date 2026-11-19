@@ -1068,6 +1068,56 @@ agent-browser's `agent-browser.plugin.v1` protocol (one JSON request on stdin: `
 `request`; one reply on stdout: `protocol`, `success`, `data` or `error`), with `ARDIA_*` and `AGENT_BROWSER_*` removed
 from their environment and a 60 s limit.
 
+### Plugin mode
+
+The app's AI plugin runs `ardia browse --session plugin-<name> <step>` with `ARDIA_BROWSE_FOR_PLUGIN=1`. The contract
+it relies on is `tests/parity/cases/ai-plugin-contract.json` (one case per item); the credential handoff is ardia#2808's
+`docs/cli.md` › Plugin credentials.
+
+- The credential comes only on the inherited descriptor `ARDIA_PLUGIN_CREDENTIAL_FD` names (the app uses 4): read to EOF,
+  at most 256 bytes, exactly `p.` and 43 base64url characters, then closed before anything is spawned. The token server
+  is `ARDIA_PLUGIN_ENDPOINT` (`ws://127.0.0.1:<port>/devtools/browser/<id>`; empty means control is off). The session
+  daemon gets `<endpoint>?token=<credential>` on its stdin config and connects with no `Origin` header; the credential
+  is never in argv, the environment, a file or a log, and `ArdiaControl.json` is never read.
+- The session key ends in `\0plugin` and its endpoint part is `plugin:` and a SHA-256 prefix of the credential, so a
+  plugin never shares a daemon with the person's session of the same name, with an older CLI, or with another activity.
+- `--expect-loader <loaderId>` goes to the daemon as `options.expect_loader`; it checks the main frame's loader before
+  and after the step and answers `document_changed` (exit 1). `tab <id> --json` carries `data.loader`. A step whose
+  picked tab is gone answers `tab_gone`; lost-tab recovery and the notes and saved-flow hints are off.
+- Refused with status 77 and one line (JSON with code `plugin_refused` under `--json`), before anything is sent:
+  `ARDIA_BROWSE_FOR_PLUGIN` other than `1`; a missing, non-numeric, closed, terminal or unreadable descriptor; anything
+  but a well-formed credential (a trailing newline included); no read within 2 s; a missing, empty or non-loopback
+  endpoint; `--ws`, `--port`, `--cdp`, `ARDIA_WS`, `ARDIA_PORT`, `ARDIA_CDP_URL` or `AGENT_BROWSER_CDP`; a session flag
+  after the command (`--session --namespace --data-dir --port --ws --cdp --screenshot-* --idle-timeout --init-script
+  --enable --headers --color-scheme --download-path --annotate --no-auto-dialog --pin-tab --no-pin-tab --debug
+  --capture-console --show --content-boundaries --out --stdin`); and `auth`, `notes`, `flow`, `plugin`, `read`,
+  `session`, `script`, `cdp` and `close --all`. The router sends a plugin's browse call only to the TypeScript client and
+  refuses (77) rather than hand it to Python.
+- `cli_command` carries `plugin_mode: true` from the TypeScript client.
+
+### JSON error codes
+
+Under `--json` the TypeScript client prints every browse error as one JSON line with a `code` (the AI plugin contract;
+text mode is unchanged). A code the daemon or Python gives is kept (`document_changed`, `tab_gone`, `tab_not_found`,
+`unknown_ref`, `connection_lost`, `outcome_unknown`, `timeout`, `tab_in_use`, `session_busy`, `policy_refused`, …). Where
+Python has none:
+
+| code | when |
+|---|---|
+| `usage_error` | an option or flag the client can't read (`--max-output lots`, a value flag with no value) |
+| `invalid_name` | a session name or namespace that isn't 1 to 64 letters, digits, `.`, `_` or `-` |
+| `unsafe_path` | the data dir or its `Browse` folder is missing, a link, another user's or not private |
+| `socket_refused` | the session socket isn't a socket of yours with mode 0600, or another user serves it |
+| `daemon_unreachable` | the daemon closed the connection, didn't take the command, or didn't start |
+| `daemon_timeout` | the daemon didn't answer a read in time (a mutating step answers `outcome_unknown`) |
+| `answer_too_large` | the daemon's answer was over 256 MB |
+| `unknown_command` | the daemon's `Unknown command: …` |
+| `command_failed` | any other daemon error line without a code |
+| `plugin_refused` | a plugin-mode refusal (status 77) |
+
+Telemetry's `error_code` stays Python's. Each such case in the parity table is marked `intentional`, holds the output
+the TypeScript client must print instead of Python's, and is counted apart in the report.
+
 ### Testing it
 
 `python -m unittest discover -s plugins/cli/tests` runs the unit tests (`test_browse.py`). The end-to-end test needs a
@@ -1791,6 +1841,19 @@ parity harness rather than stripped wholesale:
   KeyboardInterrupt, then blocks again flushing stdout as it exits, so only a second signal ends it, and it prints
   `KeyboardInterrupt` and an `Exception ignored on flushing sys.stdout` block. The native side dies by SIGINT at once and
   prints nothing more. A listing still ends as Python's does, with `ardia <command>: interrupted` and status 130.
+- `ardia browse`: a command that reads stdin (`eval`/`addinitscript --stdin`, `eval` with no code, `batch` with no
+  steps) connects to its session before reading stdin, so a stale socket still hands the call to Python with stdin
+  unread. An interrupted or undecodable stdin therefore leaves the daemon one empty connection that Python's order
+  wouldn't open.
+- `ardia browse`: a daemon answer whose exit is 253 ends with status 1: 253 is the router's hand-back status, and
+  exiting with it would run the step a second time on Python. A real daemon never answers 253.
+- `ardia browse`: a daemon that asks a non-`read` command to run beside a busy session (`busy_elsewhere`) whose side
+  daemon isn't running gets an error (exit 2) where Python would start one; only `read`, which is handed to Python,
+  asks that.
+- `ardia browse`: an answer that starts with a UTF-16 or UTF-32 byte order mark or a NUL byte is read as UTF-8, so a
+  malformed one of those ends with a different exception line than Python's.
+- `ardia browse` under `--json`: errors carry a code where Python's have none (see "JSON error codes"); these are the
+  parity cases marked `intentional`.
 
 ## Linux
 
