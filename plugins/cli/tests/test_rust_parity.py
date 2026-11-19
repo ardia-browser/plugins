@@ -70,7 +70,9 @@ class HarnessRules(unittest.TestCase):
         for row in ({"files": {"../x": "y"}}, {"files": {"data/../../x": "y"}}, {"files": {"/etc/x": "y"}}, {"files": {"elsewhere/x": "y"}},
                     {"argv": ["windows", "--data-dir", "/d"]}, {"argv": ["windows", "--data-dir=/d"]}, {"argv": ["windows", "--data-dir", "{data}/../../x"]},
                     {"argv": ["config", "path", "~/x"]}, {"argv": ["plugins", "install", "../../x"]}, {"argv": ["plugins", "install", "{cli}/../x"]}, {"env": {"HOME": None}}, {"env": {"ARDIA_CLI_HOME": "/x"}}, {"env": {"PATH": "/bin"}},
-                    {"env": {"ARDIA_DATA_DIR": "/Users/someone/Ardia"}}, {"helpers": {"../launchctl": {}}}, {"helpers": {"/bin/sh": {}}}):
+                    {"env": {"ARDIA_DATA_DIR": "/Users/someone/Ardia"}}, {"helpers": {"../launchctl": {}}}, {"helpers": {"/bin/sh": {}}},
+                    {"env": {"ARDIA_CONFIG_HOME": "{box}/../sibling"}}, {"env": {"XDG_CONFIG_HOME": "/elsewhere"}}, {"env": {"XDG_DATA_HOME": "../.."}},
+                    {"env": {"ARDIA_CONFIG_HOME": "{cli}/x"}}, {"env": {"SOME_DIR": "/elsewhere"}}):
             with self.subTest(row=row), self.assertRaises(harness.UnsafeCase):
                 self.case(**row)
         self.case(argv=["windows", "--data-dir", "{box}/elsewhere"], env={"ARDIA_DATA_DIR": None, "COLUMNS": "80"})
@@ -78,12 +80,11 @@ class HarnessRules(unittest.TestCase):
         self.case(argv=["plugins", "call", "x", '{"who": "you/../me"}'])
 
     def test_a_fallback_may_only_ask_read_only_questions_first(self):
-        python = [[(1, "hello", {"protocol": 4}), (2, "apply", {"ops": []})]]
-        read_first = [[(1, "hello", {"protocol": 4}), (2, "workspace", harness.ABSENT)]] + python
-        mutate_first = [[(1, "hello", {"protocol": 4}), (2, "apply", {"ops": []})]] + python
+        python = [[{"id": 1, "method": "hello", "params": {"protocol": 4}}, {"id": 2, "method": "apply", "params": {"ops": []}}]]
+        read_first = [[{"id": 1, "method": "hello", "params": {"protocol": 4}}, {"id": 2, "method": "workspace"}]] + python
+        mutate_first = [[{"id": 1, "method": "hello", "params": {"protocol": 4}}, {"id": 2, "method": "apply", "params": {"ops": []}}]] + python
         self.assertEqual(harness.fallback_requests(read_first, python), python)
         self.assertEqual(harness.fallback_requests(mutate_first, python), mutate_first)
-        self.assertNotEqual([[(2, "windows", None)]], [[(2, "windows", harness.ABSENT)]])
 
     def test_times_are_scrubbed_only_when_they_are_now(self):
         window = (1_763_500_000.0, 1_763_500_001.0)
@@ -93,7 +94,9 @@ class HarnessRules(unittest.TestCase):
                                     "count": 5, "later_at": 9_999_999_999.0, "earlier_at": 1_700_000_000})
 
     def test_comparisons_keep_json_types(self):
-        self.assertNotEqual(harness.exact([[(True, "hello", harness.ABSENT)]]), harness.exact([[(1, "hello", harness.ABSENT)]]))
+        self.assertNotEqual(harness.exact([[{"id": True, "method": "hello"}]]), harness.exact([[{"id": 1, "method": "hello"}]]))
+        self.assertNotEqual(harness.exact([{"id": 2, "method": "windows"}]), harness.exact([{"id": 2, "method": "windows", "params": "<absent>"}]))
+        self.assertNotEqual(harness.exact([{"id": 2, "method": "windows"}]), harness.exact([{"id": 2, "method": "windows", "extra": 1}]))
         self.assertNotEqual(harness.exact({"usage": True}), harness.exact({"usage": 1}))
         self.assertNotEqual(harness.exact({"n": 1.0}), harness.exact({"n": 1}))
 
@@ -109,15 +112,35 @@ class HarnessRules(unittest.TestCase):
             shutil.rmtree(outside, True)
             shutil.rmtree(box.parent, True)
 
+    def test_a_data_dir_through_a_fixture_link_is_refused(self):
+        box = Path(tempfile.mkdtemp(prefix="arpbox", dir="/tmp")).resolve() / "c1"
+        outside = Path(tempfile.mkdtemp(prefix="arpout", dir="/tmp")).resolve()
+        install = harness.Installation(binary() or Path(sys.executable))
+        try:
+            case = self.case(argv=["config", "init", "--data-dir", "{data}/away"], files={"data/away": {"link": str(outside)}})
+            with self.assertRaises(harness.UnsafeCase):
+                harness.run_side(install, "python", case, box)
+            self.assertEqual(list(outside.iterdir()), [])
+        finally:
+            install.close()
+            shutil.rmtree(outside, True)
+            shutil.rmtree(box.parent, True)
+
+    def test_flush_deadlines_compare_as_offsets(self):
+        window = (1_763_500_000.0, 1_763_500_001.0)
+        self.assertNotEqual(harness.scrub_times({"next_at": 1_763_500_002.0}, window), harness.scrub_times({"next_at": 1_763_500_101.0}, window))
+        self.assertEqual(harness.scrub_times({"next_at": 1_763_500_061.2}, window), harness.scrub_times({"next_at": 1_763_500_060.9}, (1_763_499_999.8, 1_763_500_000.8)))
+
     def test_helpers_log_each_argument_whole(self):
         scratch = Path(tempfile.mkdtemp(prefix="arpstub", dir="/tmp"))
         try:
             log = scratch / "log"
             harness.write_stub(scratch, "tool", {}, log)
-            subprocess.run([str(scratch / "tool"), "a b"], check=True, capture_output=True)
-            subprocess.run([str(scratch / "tool"), "a", "b"], check=True, capture_output=True)
-            first, second = log.read_text().splitlines()
-            self.assertNotEqual(first, second)
+            for argv in (["a b"], ["a", "b"], ["x\ny"], ["x\ry"], [""], []):
+                subprocess.run([str(scratch / "tool"), *argv], check=True, capture_output=True)
+            lines = log.read_text().splitlines()
+            self.assertEqual(len(lines), 6)
+            self.assertEqual(len(set(lines)), 6)
         finally:
             shutil.rmtree(scratch, True)
 
@@ -170,6 +193,10 @@ class HarnessCatches(unittest.TestCase):
         recorder = record.Recorder()
         recorder.baseline = {"ARDIA_WS": "ws://127.0.0.1:9/devtools/browser/x?token=parity-secret-1234567890"}
         case = {"argv": ["windows"], "env": {}, "files": {"data/blob": {"base64": base64.b64encode(b"\x00\xff" + recorder.baseline["ARDIA_WS"].encode()).decode()}}}
+        with self.assertRaises(record.Skip):
+            recorder.check_private(case)
+        recorder.baseline = {"ARDIA_NOTE": "café-parity-marker-0123"}
+        case = {"argv": ["windows"], "env": {}, "files": {"data/blob": {"base64": base64.b64encode(b"\x00\xff" + "café-parity-marker-0123".encode()).decode()}}}
         with self.assertRaises(record.Skip):
             recorder.check_private(case)
     def test_a_binary_that_hands_everything_to_python_proves_nothing(self):

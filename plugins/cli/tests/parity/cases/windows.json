@@ -233,5 +233,35 @@
   },
   "note": "a shape Rust can't mirror",
   "fallback": true
+ },
+ {
+  "id": "windows--stray-replies-ignored",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": "{\"id\":null,\"error\":{\"code\":\"bad_request\",\"message\":\"no id\"}}\n{\"id\":99,\"result\":\"not yours\"}\n{\"id\":\"2\",\"result\":\"a string id\"}\n{\"event\":\"tab.opened\",\"data\":{}}\n{\"id\":2,\"result\":[{\"id\": 1, \"kind\": \"normal\", \"focused\": true, \"profileName\": \"Personal\", \"tabs\": []}]}\n"
+    }
+   }
+  },
+  "note": "Ardia sends lines that aren't this call's reply (null, unknown and string ids, an event) before the reply"
+ },
+ {
+  "id": "windows--stray-replies-ignored-json",
+  "command": "windows",
+  "argv": [
+   "windows",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": "{\"id\":null,\"error\":{\"code\":\"bad_request\",\"message\":\"no id\"}}\n{\"id\":99,\"result\":\"not yours\"}\n{\"id\":\"2\",\"result\":\"a string id\"}\n{\"event\":\"tab.opened\",\"data\":{}}\n{\"id\":2,\"result\":[{\"id\": 1, \"kind\": \"normal\", \"focused\": true, \"profileName\": \"Personal\", \"tabs\": []}]}\n"
+    }
+   }
+  }
  }
 ]

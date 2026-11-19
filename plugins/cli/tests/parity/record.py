@@ -126,8 +126,7 @@ class Recorder:
         self.exchanges = None
         self.blobs = {}
         self.baseline = dict(os.environ)
-        self.lines_in = 0
-        self.replies_in = 0
+        self.stray_lines = 0
 
     def calling_test(self) -> str:
         frame = sys._getframe()
@@ -209,12 +208,12 @@ class Recorder:
         elif isinstance(sys.stdin, io.TextIOWrapper) and isinstance(getattr(sys.stdin, "buffer", None), io.BytesIO):
             stdin = sys.stdin.buffer.getvalue().decode("utf-8", "replace")
         self.exchanges = []
-        self.lines_in = self.replies_in = 0
+        self.stray_lines = 0
         return {"argv": argv, "env": env, "roots": roots, "files": files, "stdin": stdin, "test": self.calling_test(), "label": label}
 
     def finish(self, start: dict):
         exchanges, self.exchanges = self.exchanges, None
-        if self.lines_in > self.replies_in:
+        if self.stray_lines:
             self.dropped.append((start["test"], start["argv"], "the test's server sent lines that aren't replies, which a replay can't reproduce"))
             return
         try:
@@ -279,24 +278,24 @@ class Recorder:
         def leaves(value):
             if isinstance(value, dict):
                 if "base64" in value:
-                    yield base64.b64decode(value["base64"]).decode("latin-1")
+                    yield base64.b64decode(value["base64"])
                 for key, child in value.items():
-                    yield str(key)
+                    yield str(key).encode("utf-8", "surrogatepass")
                     yield from leaves(child)
             elif isinstance(value, list):
                 for child in value:
                     yield from leaves(child)
             elif isinstance(value, str):
-                yield value
+                yield value.encode("utf-8", "surrogatepass")
 
-        text = "\n".join(leaves(case))
+        text = b"\n".join(leaves(case))
         user = os.environ.get("USER") or os.environ.get("LOGNAME") or ""
         markers = [str(REAL_HOME), socket.gethostname()]
         if len(user) >= 3:
             markers.append(f"/{user}/")
         markers += [value for key, value in self.baseline.items() if len(value) >= 16 and not key.endswith("PATH")]
         for marker in markers:
-            if marker and len(marker) >= 4 and marker in text:
+            if marker and len(marker) >= 4 and marker.encode("utf-8", "surrogatepass") in text:
                 raise Skip("it would carry something from this machine (a local path, the host name or an inherited variable)")
 
     def blob(self, entry: dict):
@@ -382,7 +381,6 @@ def install(recorder: Recorder):
         try:
             value = await original_connection_call(self, method, params, timeout)
         except control.MethodError as error:
-            recorder.replies_in += 1
             if method == "hello" and error.code == "unsupported_protocol":
                 recorder.note("hello", params, ("incompatible", error.message))
             else:
@@ -391,7 +389,6 @@ def install(recorder: Recorder):
         except control.Unreachable as error:
             recorder.note(method, params, ("unreachable", (str(error), bool(getattr(error, "sent", False)))))
             raise
-        recorder.replies_in += 1
         recorder.note(method, params, ("result", value))
         return value
 
@@ -415,7 +412,14 @@ def install(recorder: Recorder):
         async def readuntil(separator=b"\n"):
             line = await original_readuntil(separator)
             if recorder.exchanges is not None:
-                recorder.lines_in += 1
+                try:
+                    message = json.loads(line)
+                except ValueError:
+                    message = None
+                ident = message.get("id") if isinstance(message, dict) else None
+                answers = isinstance(ident, int) and not isinstance(ident, bool) and ident in getattr(self, "_pending", {})
+                if not answers:
+                    recorder.stray_lines += 1
             return line
 
         reader.readuntil = readuntil

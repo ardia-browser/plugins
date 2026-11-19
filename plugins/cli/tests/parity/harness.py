@@ -43,9 +43,11 @@ PLACES = ("box", "home", "cli_home", "data", "cwd", "tmp", "outside", "cli")
 HARNESS_FILES = ("helpers.log", "route.log", "stubs")
 CONTENT_APART = ("data/Telemetry/local", "data/Telemetry/cli-queue.jsonl", "data/Telemetry/cli-flush.json", "cli-home/Usage/usage.json")
 READ_ONLY_METHODS = frozenset({"hello", "workspace", "windows", "commands"})
-ABSENT = "<absent>"
+PATH_ENV = frozenset({"ARDIA_DATA_DIR", "ARDIA_CONFIG_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME",
+                      "XDG_RUNTIME_DIR"})
 TIME_KEYS = re.compile(r"(_at|At|_ms|time|Time)$")
 TIME_SLACK = 120
+NOW_SLACK = 2
 SIDES = ("rust", "python")
 TIMEOUT = 60
 DRAIN_TIMEOUT = 5
@@ -182,9 +184,9 @@ def contained_path(text: str, writable: bool = False) -> bool:
     import posixpath
 
     for name, sketch in SKETCH.items():
-        if writable and name == "cli":
-            continue
         mark = "{" + name + "}"
+        if writable and name == "cli" and (text == mark or text.startswith(mark + "/")):
+            return False
         if text == mark or text.startswith(mark + "/"):
             root = "/CLI" if name == "cli" else "/BOX"
             resolved = posixpath.normpath(sketch + text[len(mark):])
@@ -207,8 +209,11 @@ def check_case_is_contained(case: Case) -> None:
     for key, value in case.env.items():
         if key in PROTECTED_ENV:
             raise UnsafeCase(f"{where}: ${key} belongs to the sandbox and can't be set or removed by a case")
-        if key == "ARDIA_DATA_DIR" and value is not None and not contained_path(value, writable=True):
-            raise UnsafeCase(f"{where}: $ARDIA_DATA_DIR must be unset or a {{box}} path, not {value!r}")
+        if value is not None and not isinstance(value, str):
+            raise UnsafeCase(f"{where}: ${key} must be text or null")
+        pathlike = key in PATH_ENV or (value or "").startswith(("/", "~", ".", "{"))
+        if value and pathlike and not contained_path(value, writable=True):
+            raise UnsafeCase(f"{where}: ${key} must be a path inside the sandbox, not {value!r}")
     for index, token in enumerate(case.argv):
         if token == "--data-dir" and index + 1 < len(case.argv) and not contained_path(str(case.argv[index + 1]), writable=True) \
                 or isinstance(token, str) and token.startswith("--data-dir=") and not contained_path(token.split("=", 1)[1], writable=True):
@@ -253,32 +258,37 @@ class FakeArdia:
         self.server.listen(16)
         self.server.settimeout(0.1)
         self.stopped = threading.Event()
+        self.closing = threading.Event()
+        self.complete = True
         self.thread = threading.Thread(target=self.accept, daemon=True)
         self.thread.start()
 
     @property
     def requests(self) -> list:
         with self.lock:
-            return [(method, params) for transcript in self.connections for _, method, params in transcript]
+            return [(request.get("method"), request.get("params")) for transcript in self.connections for request in transcript]
 
     def transcript(self) -> list:
         with self.lock:
             return [list(transcript) for transcript in self.connections]
 
     def accept(self):
-        while not self.stopped.is_set():
+        while not self.closing.is_set():
             try:
                 connection, _ = self.server.accept()
             except socket.timeout:
                 continue
             except OSError:
                 return
-            with self.lock:
-                transcript = []
-                self.connections.append(transcript)
-                talker = threading.Thread(target=self.talk, args=(connection, transcript), daemon=True)
-                self.talkers.append(talker)
-            talker.start()
+            self.serve(connection)
+
+    def serve(self, connection):
+        with self.lock:
+            transcript = []
+            self.connections.append(transcript)
+            talker = threading.Thread(target=self.talk, args=(connection, transcript), daemon=True)
+            self.talkers.append(talker)
+        talker.start()
 
     def next_reply(self, method):
         if method == "hello":
@@ -297,16 +307,14 @@ class FakeArdia:
                     try:
                         request = json.loads(line)
                     except ValueError:
-                        with self.lock:
-                            transcript.append((None, "<not json>", line.decode("utf-8", "backslashreplace")))
-                        continue
+                        request = None
                     if not isinstance(request, dict):
                         with self.lock:
-                            transcript.append((None, "<not an object>", request))
+                            transcript.append({"<raw line>": base64.b64encode(line).decode()})
                         continue
                     method = request.get("method")
                     with self.lock:
-                        transcript.append((request.get("id", ABSENT), method, request.get("params", ABSENT)))
+                        transcript.append(request)
                     reply = self.next_reply(method)
                     if reply == "close":
                         return
@@ -324,13 +332,23 @@ class FakeArdia:
             pass
 
     def close(self):
-        self.server.close()
+        self.closing.set()
         self.thread.join(2)
+        self.server.setblocking(False)
+        while True:
+            try:
+                connection, _ = self.server.accept()
+            except (BlockingIOError, OSError):
+                break
+            connection.setblocking(True)
+            self.serve(connection)
+        self.server.close()
         deadline = time.monotonic() + DRAIN_TIMEOUT
         with self.lock:
             talkers = list(self.talkers)
         for talker in talkers:
             talker.join(max(0.0, deadline - time.monotonic()))
+        self.complete = not any(talker.is_alive() for talker in talkers)
         self.stopped.set()
 
 
@@ -349,6 +367,7 @@ class Observed:
     flush: object = None
     route: str = "rust"
     timed_out: bool = False
+    transcript_complete: bool = True
 
 
 def tree(root: Path) -> dict:
@@ -401,7 +420,10 @@ def time_marker(value, window: tuple[float, float]):
     start, end = window
     for scale, unit in ((1, "s"), (1000, "ms")):
         if (start - TIME_SLACK) * scale <= value <= (end + TIME_SLACK) * scale:
-            return f"<now {type(value).__name__} {unit}>"
+            if start * scale - NOW_SLACK * scale <= value <= end * scale + NOW_SLACK * scale:
+                return f"<now {type(value).__name__} {unit}>"
+            offset = round(value / scale - (end if value / scale > end else start))
+            return f"<now{offset:+d}s {type(value).__name__} {unit}>"
     return value
 
 
@@ -476,9 +498,9 @@ def write_stub(directory: Path, name: str, spec: dict, log: Path):
     status = int(spec.get("exit", 0))
     script = (
         "#!/bin/sh\n"
-        f"printf '%s' \"{name}\" >> '{log}'\n"
-        f"for a in \"$@\"; do printf ' %s:%s' \"$(printf '%s' \"$a\" | /usr/bin/wc -c | /usr/bin/tr -d ' ')\" \"$a\" >> '{log}'; done\n"
-        f"printf '\\n' >> '{log}'\n"
+        f"line='{name}'\n"
+        "for a in \"$@\"; do line=\"$line =$(printf '%s' \"$a\" | /usr/bin/base64 | /usr/bin/tr -d '\\n')\"; done\n"
+        f"printf '%s\\n' \"$line\" >> '{log}'\n"
         f"printf '%s' '{stdout}' | /usr/bin/base64 -d 2>/dev/null || printf '%s' '{stdout}' | /usr/bin/base64 -D\n"
         f"exit {status}\n"
     )
@@ -511,6 +533,21 @@ def make_parents(box: Path, path: Path) -> None:
             raise UnsafeCase(f"{path.relative_to(box)} would be written through a link")
         if not current.exists():
             current.mkdir()
+
+
+def check_effective_paths(box: Path, case: Case, env: dict, argv: list, cwd: str) -> None:
+    values = [env[key] for key in PATH_ENV if env.get(key)]
+    values += [value for key, value in env.items() if key not in PATH_ENV and isinstance(value, str) and value.startswith("/")
+               and key not in ("PATH", "SHELL")]
+    for index, token in enumerate(argv):
+        if token == "--data-dir" and index + 1 < len(argv):
+            values.append(argv[index + 1])
+        elif token.startswith("--data-dir="):
+            values.append(token.split("=", 1)[1])
+    for value in values:
+        path = Path(value) if os.path.isabs(value) else Path(cwd) / value
+        if not inside(box, path):
+            raise UnsafeCase(f"case {case.id!r}: {value} leaves the sandbox once its links are followed")
 
 
 def read_inside(box: Path, path: Path) -> str | None:
@@ -636,9 +673,17 @@ def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[O
     started = time.time()
     stdin = decode_blob(expand(case.stdin, places) if isinstance(case.stdin, str) else case.stdin)
     timed_out = False
+    env = environment(box, places, case)
+    argv = expand(list(case.argv), places)
     try:
-        process = subprocess.Popen(install.confined(install.command(side) + expand(list(case.argv), places), box), cwd=places["cwd"],
-                                   env=environment(box, places, case), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        check_effective_paths(box, case, env, argv, places["cwd"])
+    except UnsafeCase:
+        if fake:
+            fake.close()
+        raise
+    try:
+        process = subprocess.Popen(install.confined(install.command(side) + argv, box), cwd=places["cwd"],
+                                   env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE, start_new_session=True)
         try:
             stdout, stderr = process.communicate(stdin, timeout=TIMEOUT)
@@ -656,9 +701,9 @@ def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[O
         except (ProcessLookupError, PermissionError):
             pass
     finally:
+        reap(str(box))
         if fake:
             fake.close()
-        reap(str(box))
     window = (started, time.time())
     after = tree(box)
     records, queued, served, labels = read_telemetry(box, box / "data")
@@ -671,7 +716,7 @@ def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[O
     route_log = box / "route.log"
     route = "python" if route_log.exists() and route_log.read_text().strip() else "rust"
     observed = Observed(stdout, stderr, process.returncode, fake.transcript() if fake else [], records, queued, served, usage,
-                        file_changes(before, after), helpers, flush, route, timed_out)
+                        file_changes(before, after), helpers, flush, route, timed_out, fake.complete if fake else True)
     return apply_normalizers(observed, case, places), labels
 
 
@@ -712,7 +757,7 @@ FIELDS = ("status", "stdout", "stderr", "requests", "telemetry", "queued", "usag
 
 
 def read_only(connection: list) -> bool:
-    return bool(connection) and all(method in READ_ONLY_METHODS for _, method, _ in connection)
+    return bool(connection) and all(request.get("method") in READ_ONLY_METHODS for request in connection)
 
 
 def fallback_requests(rust: list, python: list) -> list:
@@ -795,6 +840,9 @@ def check_case(install: Installation, case: Case, served: set[str], keep: bool =
         problems.append(f"telemetry says {rust.served_by[-1]} served it, but {rust.route} did")
     if python.timed_out:
         problems.append(f"Python didn't finish in {TIMEOUT} s")
+    for side, seen in (("rust", rust), ("python", python)):
+        if not seen.transcript_complete:
+            problems.append(f"the {side} side left a control connection open past the drain deadline, so its transcript may be cut short")
     return Outcome(case, compare(rust, python, case.fallback), rust.route, labels, problems)
 
 
