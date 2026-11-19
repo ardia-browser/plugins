@@ -221,44 +221,167 @@ fn peer_uid(stream: &UnixStream) -> Option<u32> {
     Some(credentials.uid)
 }
 
+const HIGH_WATER: usize = 64 * 1024;
+const LOW_WATER: usize = 16 * 1024;
+
 pub struct Connection {
     stream: UnixStream,
     buffer: Vec<u8>,
     next_id: i64,
     lost: Option<String>,
+    reader_stopped: bool,
+    pending: Option<i64>,
+    reply: Option<Value>,
+    unsent: Vec<u8>,
+    write_failure: Option<String>,
     pub info: Value,
 }
 
+fn broke(error: &std::io::Error) -> String {
+    format!("the connection broke ({})", paths::strerror(error.raw_os_error().unwrap_or(0)))
+}
+
 impl Connection {
-    fn lose(&mut self, reason: &str) -> Failure {
-        self.lost = Some(reason.to_string());
-        unreachable(Some(reason))
+    fn new(stream: UnixStream) -> Connection {
+        let _ = stream.set_nonblocking(true);
+        Connection {
+            stream,
+            buffer: Vec::new(),
+            next_id: 0,
+            lost: None,
+            reader_stopped: false,
+            pending: None,
+            reply: None,
+            unsent: Vec::new(),
+            write_failure: None,
+            info: Value::Null,
+        }
     }
 
-    fn take_line(&mut self) -> Option<Vec<u8>> {
-        let end = self.buffer.iter().position(|byte| *byte == b'\n')?;
-        let line: Vec<u8> = self.buffer.drain(..=end).collect();
-        Some(line)
+    fn lose(&mut self, reason: &str) {
+        if self.lost.is_none() && !self.reader_stopped {
+            self.lost = Some(reason.to_string());
+        }
     }
 
-    fn read_reply(&mut self, ident: i64, method: &str, timeout: Option<f64>) -> Result<Value, Failure> {
-        let deadline = timeout.map(|seconds| Instant::now() + Duration::from_secs_f64(seconds));
-        loop {
-            while let Some(line) = self.take_line() {
-                if line.len() > MAX_LINE + 1 {
-                    return Err(self.lose("Ardia sent a line longer than 1 MB"));
+    fn receive(&mut self) {
+        while let Some(end) = self.buffer.iter().position(|byte| *byte == b'\n') {
+            let line: Vec<u8> = self.buffer.drain(..=end).collect();
+            if line.len() > MAX_LINE + 1 {
+                return self.lose("Ardia sent a line longer than 1 MB");
+            }
+            let message = match json::parse_limited(&line, json::CONTROL_DEPTH) {
+                Ok(Some(message)) => message,
+                Ok(None) => return self.lose("Ardia sent a line that isn't JSON"),
+                Err(json::TooDeep) => {
+                    self.reader_stopped = true;
+                    self.buffer.clear();
+                    return;
                 }
-                let Some(message) = json::parse(&line) else {
-                    return Err(self.lose("Ardia sent a line that isn't JSON"));
-                };
-                if let Some(Value::Int(id)) = message.get("id") {
-                    if *id == i128::from(ident) {
-                        return Ok(message);
-                    }
+            };
+            if let (Some(Value::Int(id)), Some(ident)) = (message.get("id"), self.pending) {
+                if *id == i128::from(ident) {
+                    self.pending = None;
+                    self.reply = Some(message);
                 }
             }
-            if self.buffer.len() > MAX_LINE + 2 {
-                return Err(self.lose("Ardia sent a line longer than 1 MB"));
+        }
+        if self.buffer.len() > MAX_LINE + 2 {
+            self.lose("Ardia sent a line longer than 1 MB");
+        }
+    }
+
+    fn read_some(&mut self) {
+        let mut chunk = [0u8; 65536];
+        loop {
+            match self.stream.read(&mut chunk) {
+                Ok(0) => return self.lose("Ardia closed the connection"),
+                Ok(count) => {
+                    self.buffer.extend_from_slice(&chunk[..count]);
+                    self.receive();
+                    if self.lost.is_some() || self.reader_stopped {
+                        return;
+                    }
+                }
+                Err(error) if error.kind() == ErrorKind::Interrupted => {}
+                Err(error) if error.kind() == ErrorKind::WouldBlock => return,
+                Err(error) => return self.lose(&broke(&error)),
+            }
+        }
+    }
+
+    fn write_some(&mut self) {
+        while !self.unsent.is_empty() && self.write_failure.is_none() {
+            match self.stream.write(&self.unsent) {
+                Ok(count) => {
+                    self.unsent.drain(..count);
+                }
+                Err(error) if error.kind() == ErrorKind::Interrupted => {}
+                Err(error) if error.kind() == ErrorKind::WouldBlock => return,
+                Err(error) => {
+                    let reason = broke(&error);
+                    self.unsent.clear();
+                    self.lose(&reason);
+                    self.write_failure = Some(reason);
+                }
+            }
+        }
+    }
+
+    fn wait(&mut self, wait: Duration) {
+        let reading = self.lost.is_none() && !self.reader_stopped;
+        let writing = !self.unsent.is_empty() && self.write_failure.is_none();
+        let mut events = 0;
+        if reading {
+            events |= libc::POLLIN;
+        }
+        if writing {
+            events |= libc::POLLOUT;
+        }
+        let mut poll = libc::pollfd {
+            fd: self.stream.as_raw_fd(),
+            events,
+            revents: 0,
+        };
+        let millis = wait.as_millis().clamp(1, POLL.as_millis()) as libc::c_int;
+        if unsafe { libc::poll(&mut poll, 1, millis) } <= 0 {
+            return;
+        }
+        if writing && poll.revents & (libc::POLLOUT | libc::POLLERR | libc::POLLHUP) != 0 {
+            self.write_some();
+        }
+        if reading && poll.revents & (libc::POLLIN | libc::POLLERR | libc::POLLHUP) != 0 {
+            self.read_some();
+        }
+    }
+
+    fn drain(&mut self) -> Result<(), Failure> {
+        if self.write_failure.is_some() {
+            return Err(sent(unreachable(Some("the connection broke (Connection lost)"))));
+        }
+        if self.unsent.len() <= HIGH_WATER {
+            return Ok(());
+        }
+        while self.unsent.len() > LOW_WATER {
+            if let Some(reason) = &self.write_failure {
+                return Err(sent(unreachable(Some(reason))));
+            }
+            if interrupted() {
+                return Err(Failure::Interrupted);
+            }
+            self.wait(POLL);
+        }
+        Ok(())
+    }
+
+    fn await_reply(&mut self, method: &str, timeout: Option<f64>) -> Result<Value, Failure> {
+        let deadline = timeout.map(|seconds| Instant::now() + Duration::from_secs_f64(seconds));
+        loop {
+            if let Some(reply) = self.reply.take() {
+                return Ok(reply);
+            }
+            if let Some(reason) = &self.lost {
+                return Err(unreachable(Some(reason)));
             }
             if interrupted() {
                 return Err(Failure::Interrupted);
@@ -267,6 +390,7 @@ impl Connection {
                 Some(deadline) => {
                     let now = Instant::now();
                     if now >= deadline {
+                        self.pending = None;
                         let seconds = timeout.unwrap_or_default();
                         return Err(unreachable(Some(&format!("Ardia didn't answer {method} in {} s", g(seconds)))));
                     }
@@ -274,17 +398,7 @@ impl Connection {
                 }
                 None => POLL,
             };
-            let _ = self.stream.set_read_timeout(Some(wait.max(Duration::from_millis(1))));
-            let mut chunk = [0u8; 65536];
-            match self.stream.read(&mut chunk) {
-                Ok(0) => return Err(self.lose("Ardia closed the connection")),
-                Ok(count) => self.buffer.extend_from_slice(&chunk[..count]),
-                Err(error) if matches!(error.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut | ErrorKind::Interrupted) => {}
-                Err(error) => {
-                    let reason = format!("the connection broke ({})", paths::strerror(error.raw_os_error().unwrap_or(0)));
-                    return Err(self.lose(&reason));
-                }
-            }
+            self.wait(wait);
         }
     }
 
@@ -306,12 +420,15 @@ impl Connection {
                 message: "the request is longer than 1 MB".into(),
             });
         }
-        let _ = self.stream.set_write_timeout(None);
-        if let Err(error) = self.stream.write_all(&line) {
-            let reason = format!("the connection broke ({})", paths::strerror(error.raw_os_error().unwrap_or(0)));
-            return Err(sent(unreachable(Some(&reason))));
+        self.pending = Some(ident);
+        self.reply = None;
+        self.unsent.extend_from_slice(&line);
+        self.write_some();
+        if let Err(failure) = self.drain() {
+            self.pending = None;
+            return Err(failure);
         }
-        let reply = self.read_reply(ident, method, timeout).map_err(sent)?;
+        let reply = self.await_reply(method, timeout).map_err(sent)?;
         if let Some(error) = reply.get("error") {
             let code = error.get("code").filter(|code| py::truthy(code)).map_or(Ok("failed".to_string()), py::str_of);
             let message = error
@@ -336,13 +453,7 @@ pub fn connect(path: &Path, timeout: f64, caller: &Caller) -> Result<Connection,
         Some(_) => return Err(unreachable(Some(&format!("{name} is served by another user")))),
         None => return Err(unreachable(Some(&format!("{name} couldn't check who serves it")))),
     }
-    let mut connection = Connection {
-        stream,
-        buffer: Vec::new(),
-        next_id: 0,
-        lost: None,
-        info: Value::Null,
-    };
+    let mut connection = Connection::new(stream);
     let hello = Value::object(vec![("caller", caller.wire()), ("protocol", Value::Int(PROTOCOL))]);
     match connection.call("hello", Some(hello), Some(timeout)) {
         Ok(info) => {
