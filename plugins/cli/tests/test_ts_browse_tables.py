@@ -82,7 +82,32 @@ def ts_help() -> str:
             f"export const COMMANDS: Readonly<Record<string, string>> = {{\n{rows}}};\n")
 
 
+RUST_TABLES = CLI / "rust" / "src" / "browse_tables.rs"
+REGENERATE_RUST = "python -c 'from tests.test_ts_browse_tables import rust_tables; print(rust_tables(), end=\"\")' > rust/src/browse_tables.rs"
+
+
+def rust_words(name: str, values) -> str:
+    return f"pub const {name}: &[&str] = &[{', '.join(json.dumps(value) for value in sorted(values))}];\n"
+
+
+def rust_tables() -> str:
+    if str(CLI) not in sys.path:
+        sys.path.insert(0, str(CLI))
+    from ardia_cli.browse import cli as browse_cli
+
+    owns = ", ".join(f"({json.dumps(name)}, &[{', '.join(json.dumps(flag) for flag in sorted(flags))}])"
+                     for name, flags in sorted(browse_cli.COMMAND_OWNS.items()))
+    return (
+        rust_words("VALUE_FLAGS", browse_cli.VALUE_FLAGS)
+        + rust_words("LAUNCH_STOPS", set(browse_cli.LAUNCH_ONLY) | set(browse_cli.LAUNCH_HINTS))
+        + f"pub const COMMAND_OWNS: &[(&str, &[&str])] = &[{owns}];\n"
+    )
+
+
 class TsBrowseTables(unittest.TestCase):
+    def test_rust_router_tables_match_python(self):
+        self.assertEqual(RUST_TABLES.read_text(), rust_tables(), f"rust/src/browse_tables.rs is stale; regenerate it: {REGENERATE_RUST}")
+
     def test_help_matches_python(self):
         self.assertEqual(HELP.read_text(), ts_help(), "ts/src/browse/help-text.ts is stale; regenerate it: "
                          "python -c 'from tests.test_ts_browse_tables import ts_help; print(ts_help(), end=\"\")' > ts/src/browse/help-text.ts")

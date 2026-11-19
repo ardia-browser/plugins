@@ -1,4 +1,6 @@
 pub mod browse_route;
+#[rustfmt::skip]
+pub mod browse_tables;
 pub mod caller;
 pub mod clock;
 pub mod commands;

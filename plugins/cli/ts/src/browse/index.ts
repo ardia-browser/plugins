@@ -3,7 +3,7 @@ import { abandonWork } from "../printable.ts";
 import { Call, finish } from "../telemetry.ts";
 import { cliVersion } from "../version.ts";
 import { cleanMetrics, exitOf, outputChars, processStatus, textOf } from "./answer.ts";
-import { allowedFlags, commandName, hoist, hoistFailure, splitGlobals, truthy, Usage } from "./args.ts";
+import { allowedFlags, commandName, hoist, hoistFailure, jsonIntent, jsonIntentOfArgv, splitGlobals, truthy, Usage } from "./args.ts";
 import { codedLine, honestText } from "./codes.ts";
 import { BrowseError, PythonCrash } from "./errors.ts";
 import { Interrupted } from "./exchange.ts";
@@ -49,19 +49,6 @@ function sayCrash(printer: Printer, crash: PythonCrash, asJson: boolean): number
   return printer.stopped ? printer.sayCrash(crash) : 1;
 }
 
-export function jsonRequested(browse: readonly string[]): boolean {
-  let wanted = truthy(process.env.AGENT_BROWSER_JSON);
-  let flagged = false;
-  for (const token of browse) {
-    if (token === "--") break;
-    if (token === "--json") flagged = true;
-    else if (token.startsWith("--json=")) flagged = truthy(token.slice("--json=".length));
-    else continue;
-    wanted = flagged || truthy(process.env.AGENT_BROWSER_JSON);
-  }
-  return wanted;
-}
-
 function invalidReply(answer: Map<string, Value>, secrets: Secrets): PythonCrash | undefined {
   for (const key of ["out", "err"]) {
     const text = textOf(answer.get(key), secrets.known());
@@ -102,7 +89,7 @@ async function run(browse: string[], printer: Printer, call: Call, plugin: Acces
     parsed = splitGlobals(browse);
   } catch (error) {
     if (!(error instanceof Usage)) throw error;
-    printError(new BrowseError(error.message, 1, undefined, "usage_error"), jsonRequested(browse), new Secrets(), printer, call);
+    printError(new BrowseError(error.message, 1, undefined, "usage_error"), jsonIntent(browse), new Secrets(), printer, call);
     return { status: 1 };
   }
   const { found, rest } = parsed;
@@ -137,9 +124,8 @@ async function run(browse: string[], printer: Printer, call: Call, plugin: Acces
   }
 }
 
-function refuse(tokens: readonly string[], why: string, call: Call, python: string | null, code = CODE): number {
+function refuse(asJson: boolean, why: string, call: Call, python: string | null, code = CODE): number {
   const printer = new Printer("strict");
-  const asJson = jsonRequested(tokens);
   call.noteErrorCode(code);
   if (asJson) {
     const payload = object([["success", false], ["data", null], ["error", message(why)], ["code", code]]);
@@ -163,14 +149,14 @@ function browseCall(argv: string[], browse: readonly string[] | undefined): Call
 export function refuseOrHandBack(argv: string[], python: string | null): number | undefined {
   if (!pluginMode()) return undefined;
   dropCredential();
-  return refuse(argv, "needs text paths and readable telemetry consent", browseCall(argv, undefined), python);
+  return refuse(jsonIntentOfArgv(argv), "needs text paths and readable telemetry consent", browseCall(argv, undefined), python);
 }
 
 function topLevelError(argv: string[], python: string | null): number {
   const failure = hoistFailure(argv);
   const call = new Call(argv);
   const printer = new Printer("strict");
-  if (jsonRequested(argv)) printer.out(renderError(new BrowseError(failure.text.replace(/\n$/, ""), failure.status, "usage_error"), true, new Secrets()).out);
+  if (jsonIntentOfArgv(argv)) printer.out(renderError(new BrowseError(failure.text.replace(/\n$/, ""), failure.status, "usage_error"), true, new Secrets()).out);
   else printer.err(failure.text);
   finish(call, failure.status, python);
   return failure.status;
@@ -189,10 +175,10 @@ async function pluginAccess(browse: string[], call: Call, python: string | null)
     checkRequest(browse, parsed.found, parsed.rest);
     return access;
   } catch (error) {
-    if (error instanceof PluginRefusal) return refuse(browse, error.message, call, python, error.code);
+    if (error instanceof PluginRefusal) return refuse(jsonIntent(browse), error.message, call, python, error.code);
     if (error instanceof Interrupted) {
       abandonWork();
-      sayInterrupted(new Printer("strict"), jsonRequested(browse));
+      sayInterrupted(new Printer("strict"), jsonIntent(browse));
       finish(call, INTERRUPTED, python);
       return INTERRUPTED;
     }
@@ -215,9 +201,9 @@ export async function serveBrowse(argv: string[], python: string | null): Promis
     if (typeof taken === "number") return taken;
     access = taken;
   }
-  if (!environmentIsText()) return plugin ? refuse(browse, "needs text environment variables", call, python) : undefined;
+  if (!environmentIsText()) return plugin ? refuse(jsonIntent(browse), "needs text environment variables", call, python) : undefined;
   const errors = pythonStdioErrors();
-  if (errors === undefined) return plugin ? refuse(browse, "needs a UTF-8 locale", call, python) : undefined;
+  if (errors === undefined) return plugin ? refuse(jsonIntent(browse), "needs a UTF-8 locale", call, python) : undefined;
   const printer = new Printer(errors);
   let outcome: Outcome | undefined;
   try {
@@ -225,11 +211,11 @@ export async function serveBrowse(argv: string[], python: string | null): Promis
   } catch (error) {
     const reason = handBackReason(error);
     if (reason === undefined) throw error;
-    return plugin ? refuse(browse, `can't run this here (${reason})`, call, python) : undefined;
+    return plugin ? refuse(jsonIntent(browse), `can't run this here (${reason})`, call, python) : undefined;
   }
-  if (outcome === undefined) return plugin ? refuse(browse, "can't run this here", call, python) : undefined;
+  if (outcome === undefined) return plugin ? refuse(jsonIntent(browse), "can't run this here", call, python) : undefined;
   let exit = typeof outcome.status === "bigint" ? processStatus(outcome.status) : outcome.status;
-  if (outcome.crash !== undefined) exit = sayCrash(printer, outcome.crash, jsonRequested(browse));
+  if (outcome.crash !== undefined) exit = sayCrash(printer, outcome.crash, jsonIntent(browse));
   finish(call, outcome.status, python, outcome.crash?.crash);
   return exit === RESERVED_STATUS ? 1 : exit;
 }

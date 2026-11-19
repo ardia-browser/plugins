@@ -8,7 +8,14 @@ const SESSION_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const COMMAND_PATTERN = new RegExp(COMMAND_NAME);
 const PY_INT_MAX_STR_DIGITS = 4300;
 
-export class Usage extends Error {}
+export class Usage extends Error {
+  constructor(
+    message: string,
+    readonly found?: Found,
+  ) {
+    super(message);
+  }
+}
 
 export class Found {
   readonly values = new Map<string, string>();
@@ -55,7 +62,7 @@ export function splitGlobals(argv: readonly string[]): { found: Found; rest: str
     const owned = (COMMAND_OWNS[command ?? ""] ?? []).includes(name);
     if (VALUE_FLAGS.includes(name) && !owned) {
       if (inline === undefined) {
-        if (index >= argv.length) throw new Usage(`${name} needs a value`);
+        if (index >= argv.length) throw new Usage(`${name} needs a value`, found);
         inline = argv[index] as string;
         index += 1;
       }
@@ -69,14 +76,42 @@ export function splitGlobals(argv: readonly string[]): { found: Found; rest: str
       continue;
     }
     const hint = LAUNCH_HINTS[name];
-    if (hint !== undefined) throw new Usage(`${name} is a launch option agent-browser applies when it starts its own browser; ${hint}`);
+    if (hint !== undefined) throw new Usage(`${name} is a launch option agent-browser applies when it starts its own browser; ${hint}`, found);
     if (LAUNCH_ONLY.includes(name)) {
-      throw new Usage(`${name} doesn't apply to Ardia: ardia browse drives the browser you're running, so launch options have no effect`);
+      throw new Usage(`${name} doesn't apply to Ardia: ardia browse drives the browser you're running, so launch options have no effect`, found);
     }
     if (command === undefined && !token.startsWith("-")) command = token;
     rest.push(token);
   }
   return { found, rest };
+}
+
+export function jsonIntent(browse: readonly string[]): boolean {
+  let found: Found | undefined;
+  try {
+    found = splitGlobals(browse).found;
+  } catch (error) {
+    if (!(error instanceof Usage)) throw error;
+    found = error.found;
+  }
+  return Boolean(found?.flag("json")) || truthy(process.env.AGENT_BROWSER_JSON);
+}
+
+export function jsonIntentOfArgv(argv: readonly string[]): boolean {
+  let leading = false;
+  let index = 0;
+  while (index < argv.length) {
+    const token = argv[index] as string;
+    if (SHARED_VALUE_FLAGS.includes(token.split("=")[0] as string)) {
+      index += token.includes("=") ? 1 : 2;
+      continue;
+    }
+    if (token !== "--json") break;
+    leading = true;
+    index += 1;
+  }
+  if (argv[index] !== "browse") return leading || truthy(process.env.AGENT_BROWSER_JSON);
+  return leading || jsonIntent(argv.slice(index + 1));
 }
 
 export function hoist(argv: readonly string[]): string[] | undefined {

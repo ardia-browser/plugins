@@ -3032,5 +3032,78 @@
    "namespace": ""
   },
   "note": "round 3: both clients reject wait --state as a launch option (Python's bug, kept for parity: plugins#18)"
+ },
+ {
+  "id": "review3--4-json-as-a-value",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--session",
+   "--json",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 3: --json is --session's value here, so the refusal is text"
+ },
+ {
+  "id": "review3--4-dashdash-as-a-value",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--max-output",
+   "--",
+   "--json",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 3: -- is --max-output's value, so --json still counts"
  }
 ]
