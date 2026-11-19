@@ -28,6 +28,7 @@ import { StubState } from "./stub/state.ts";
 import { reportException } from "../../telemetry.ts";
 import { cliVersion } from "../../version.ts";
 import { runPluginCommand } from "../plugin/commands.ts";
+import { ALL_PLUGIN_COMMANDS } from "../plugin/commands2.ts";
 import { sameCredential } from "../plugin/key.ts";
 import { PluginRefused, PluginSession } from "../plugin/session.ts";
 
@@ -502,7 +503,7 @@ export class Daemon {
   }
 
   async dispatch(ctx: Ctx, name: string, argv: string[]): Promise<Result> {
-    if (this.plugin !== null) return runPluginCommand(this.plugin, ctx.options, name, argv);
+    if (this.plugin !== null) return runPluginCommand(this.plugin, ctx.options, name, argv, ALL_PLUGIN_COMMANDS);
     if (name === "auth") {
       if (argv[0] !== "login") throw new Usage("auth save|list|show|delete run without the daemon");
       throw new BrowseError(`\`auth login\` ${LATER_SLICE}`, null, "unsupported");

@@ -1,11 +1,11 @@
 #!/usr/bin/env bun
 import fs from "node:fs";
 import { pluginViolations } from "./plugin-rules.ts";
-import { addDaemon, CHROME, entries, startWorld, step, stopWorld, tap, type World } from "./plugin-world.ts";
+import { addDaemon, CHROME, CONTRACT, entries, pageTarget, resetPage, startWorld, step, stopWorld, tap, type World } from "./plugin-world.ts";
 
 type Reply = { out: string; err: string; exit: number };
 type Case = { id: string; argv: string[]; daemon: { replies: Reply[] }; intentional?: unknown; cdp_rules?: unknown };
-type Outcome = { id: string; verdict: "pass" | "fail" | "ran" | "n/a"; why: string; got?: Reply & { code?: string } };
+type Outcome = { id: string; verdict: "pass" | "fail" | "ran" | "designed" | "n/a"; why: string; got?: Reply & { code?: string } };
 
 const PHASES: Record<string, Set<string>> = {
   "1": new Set(["tab", "snapshot", "click", "fill", "press", "key"]),
@@ -21,6 +21,18 @@ const CLIENT_ONLY: Record<string, string> = {
   "review2--4-quoted-message-mid-line": "a client rewording case: the reply is staged text",
   "review--5-same-words-other-code": "a client rewording case: the reply is staged text",
   "review--7-port-highest": "a client endpoint case: the reply is staged text",
+};
+const AFTER = "the step ran and then the page loaded a new document: F1-early answers document_changed_after (data.ran true), the case's own intentional note";
+const DESIGNED: Record<string, { exit: number; code?: string; err?: string; why: string }> = {
+  "contract--6-after-check-json": { exit: 1, code: "document_changed_after", why: AFTER },
+  "review--5-after-check-text": { exit: 1, code: "document_changed_after", why: AFTER },
+  "contract--1-snapshot-flags": { exit: 1, err: "✗ snapshot --diff compares the whole page, so it takes no -s or -d\n", why: "a client grammar case: --diff with -s and -d is the same usage error Python's daemon gives" },
+  "review2--1-click-button-inline": { exit: 1, err: "✗ --button takes left or right in plugin mode, not --new-tab\n", why: "a client grammar case: --new-tab reached the daemon as --button's value, and plugin mode clicks only left or right" },
+  "review2--1-wait-text-takes-fn": { exit: 1, code: "timeout", err: '✗ Timed out after 25000ms waiting for text "--fn"\n', why: "a client grammar case: -t took --fn as its text, which the page never shows, so the wait times out as Python's would" },
+  "review2--1-snapshot-select-dashdash": { exit: 1, code: "not_found", err: "✗ Element not found: --. Verify the selector, role, or name is correct and the element exists in the DOM.\n", why: "a client grammar case: -s took -- as its value (the selector), and no element matches it" },
+};
+const SETUP: Record<string, string[][]> = {
+  "contract--1-wait": [["click", "--", "@e3"]],
 };
 const ENGINE_FAULTS: Record<string, [string, string]> = {
   "review--4-scope-cdp-error": ["Input.insertText", "ardia: tab_out_of_scope: the tab moved to another window"],
@@ -59,31 +71,16 @@ function commandOf(argv: string[]): string {
   return argv.find((token) => !token.startsWith("-")) ?? "";
 }
 
-async function newTab(world: World): Promise<string> {
-  const response = await fetch(`http://127.0.0.1:${world.chromePort}/json/new?http://127.0.0.1:${world.sitePort}/contract`, { method: "PUT" });
-  const tab = (await response.json()) as { id: string };
-  const deadline = performance.now() + 10_000;
-  while (performance.now() < deadline) {
-    const list = (await (await fetch(`http://127.0.0.1:${world.chromePort}/json/list`)).json()) as { id: string; title: string }[];
-    if (list.some((item) => item.id === tab.id && item.title === "Form page")) break;
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  return tab.id;
-}
-
-async function closeTab(world: World, id: string): Promise<void> {
-  await fetch(`http://127.0.0.1:${world.chromePort}/json/close/${id}`).catch(() => undefined);
-}
-
-async function run(world: World, item: Case, index: number): Promise<Outcome> {
+async function run(world: World, target: string, item: Case, index: number): Promise<Outcome> {
   if (Object.hasOwn(CLIENT_ONLY, item.id)) return { id: item.id, verdict: "n/a", why: CLIENT_ONLY[item.id] as string };
   const { command, json, expect } = split(item.argv);
-  const target = await newTab(world);
+  await resetPage(world, target);
   const { key } = await addDaemon(world, `pending-${index}`);
   try {
     const picked = await step(world, ["tab", target], { json: true }, undefined, key);
     const loader = String((JSON.parse(picked.out) as { data: { loader: string } }).data.loader);
     await step(world, ["snapshot", "-c"], {}, undefined, key);
+    for (const argv of SETUP[item.id] ?? []) await step(world, argv, {}, undefined, key);
     const live = (text: string) => text.replaceAll(RECORDED_TARGET, target).replaceAll(RECORDED_LOADER, loader).replaceAll(RECORDED_PORT, String(world.sitePort));
     const argv = command.map(live);
     const fault = ENGINE_FAULTS[item.id];
@@ -94,13 +91,17 @@ async function run(world: World, item: Case, index: number): Promise<Outcome> {
     const wanted = { out: live(want.out), err: live(want.err), exit: want.exit };
     const same = got.exit === wanted.exit && got.out === wanted.out && got.err === wanted.err;
     if (same) return { id: item.id, verdict: "pass", why: "the answer equals the recorded reply", got };
+    const designed = DESIGNED[item.id];
+    if (designed !== undefined) {
+      const matches = got.exit === designed.exit && (designed.code === undefined || got.code === designed.code) && (designed.err === undefined || got.err === designed.err);
+      return { id: item.id, verdict: matches ? "designed" : "fail", why: designed.why, got };
+    }
     if (want.out === PLACEHOLDER && want.err === "" && want.exit === 0) {
       return { id: item.id, verdict: got.exit === 0 ? "ran" : "fail", why: `the recorded reply is the placeholder ✓ Done; the daemon answered exit ${got.exit}${got.code ? ` (${got.code})` : ""}`, got };
     }
     return { id: item.id, verdict: "fail", why: `wanted ${JSON.stringify(wanted)}`, got };
   } finally {
     await step(world, ["close"], {}, undefined, key).catch(() => undefined);
-    await closeTab(world, target);
   }
 }
 
@@ -112,11 +113,12 @@ async function main(): Promise<number> {
   }
   const phase = PHASES[option("--phase", "1")] as Set<string>;
   const cases = (JSON.parse(fs.readFileSync(file, "utf8")) as Case[]).filter((item) => phase.has(commandOf(split(item.argv).command)));
-  const world = await startWorld(Number(option("--ports", "9670")));
+  const world = await startWorld(Number(option("--ports", "9670")), undefined, undefined, CONTRACT);
   const outcomes: Outcome[] = [];
   try {
+    const target = await pageTarget(world);
     for (const [index, item] of cases.entries()) {
-      const outcome = await run(world, item, index);
+      const outcome = await run(world, target, item, index);
       outcomes.push(outcome);
       process.stdout.write(`${outcome.verdict.padEnd(4)} ${outcome.id}: ${outcome.why}${outcome.verdict === "fail" ? `\n     got ${JSON.stringify(outcome.got)}` : ""}\n`);
     }
@@ -124,7 +126,7 @@ async function main(): Promise<number> {
     process.stdout.write(`tap: ${violations.length} rule violations${violations.length ? ` ${JSON.stringify(violations.slice(0, 5))}` : ""}\n`);
     const out = option("--out", "");
     if (out) fs.writeFileSync(out, JSON.stringify({ outcomes, violations }, null, 1));
-    const counts = Object.fromEntries(["pass", "ran", "fail", "n/a"].map((verdict) => [verdict, outcomes.filter((item) => item.verdict === verdict).length]));
+    const counts = Object.fromEntries(["pass", "designed", "ran", "fail", "n/a"].map((verdict) => [verdict, outcomes.filter((item) => item.verdict === verdict).length]));
     process.stdout.write(`${JSON.stringify(counts)} of ${outcomes.length}\n`);
     return counts["fail"] || violations.length ? 1 : 0;
   } finally {

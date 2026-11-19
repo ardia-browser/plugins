@@ -1,4 +1,5 @@
 import { BrowseError, Usage } from "../daemon-errors.ts";
+import { DEFAULT_TIMEOUT_MS } from "../limits.ts";
 import { flag } from "../metrics.ts";
 import { Result, type Options } from "../daemon/render.ts";
 import { need, parse } from "../daemon/stub/commands.ts";
@@ -8,7 +9,7 @@ import { asData, renderReport } from "../changes/text.ts";
 import { type Node, walk } from "../snapshot/tree.ts";
 import { type PluginPage } from "./page.ts";
 import { attach, collect, keepRefs, noteShown, observe, onlyTheFieldChanged, previous, remember } from "./ax.ts";
-import { center, describe, editable, focus, locate, notEditable } from "./dom.ts";
+import { center, describe, editable, type Element, focus, locate, notEditable } from "./dom.ts";
 import { buttonOf, clearField, clickAt, comboEvents, pressCombo, typeText } from "./input.ts";
 import { type PluginSession, PluginRefused } from "./session.ts";
 
@@ -28,6 +29,10 @@ export class PluginCtx {
 
   get humanize(): boolean {
     return Boolean(this.options["humanize"]);
+  }
+
+  get timeout(): number {
+    return Number(this.options["timeout_ms"] || DEFAULT_TIMEOUT_MS) / 1000;
   }
 }
 
@@ -123,20 +128,25 @@ async function cmdClick(ctx: PluginCtx, argv: string[]): Promise<Result> {
   if (options["new_tab"]) throw new PluginRefused("`click --new-tab` isn't available to plugins");
   need(args, 1, "click <selector> [--new-tab]");
   const button = buttonOf(options["button"]);
-  const element = await locate(ctx.session, args[0] as string);
+  return clickElement(ctx, await locate(ctx.session, args[0] as string), button, args[0]);
+}
+
+export async function clickElement(ctx: PluginCtx, element: Element, button = "left", shown = element.label): Promise<Result> {
   const [, report] = await observe(ctx.session, element.page, ctx.options, async () => {
     const [x, y] = await center(element);
     await clickAt(element.page, x, y, button);
   });
-  return attach(new Result({ clicked: args[0] }), report);
+  return attach(new Result({ clicked: shown }), report);
 }
 
 async function cmdFill(ctx: PluginCtx, argv: string[]): Promise<Result> {
   const [options, args] = parse(argv, { "--no-humanize": "bool" });
   need(args, 2, "fill <selector> <text>");
   const element = await locate(ctx.session, args[0] as string);
-  const text = args.slice(1).join(" ");
-  const humanize = ctx.humanize && !options["no_humanize"];
+  return fillElement(ctx, element, args.slice(1).join(" "), ctx.humanize && !options["no_humanize"], args[0]);
+}
+
+export async function fillElement(ctx: PluginCtx, element: Element, text: string, humanize: boolean, shown = element.label): Promise<Result> {
   const described = await describe(element);
   if (!editable(described)) throw new BrowseError(notEditable(element, described), null, "not_editable");
   const [, report] = await observe(ctx.session, element.page, ctx.options, async () => {
@@ -149,7 +159,7 @@ async function cmdFill(ctx: PluginCtx, argv: string[]): Promise<Result> {
       await element.page.send("Input.insertText", { text });
     }
   });
-  let result = attach(new Result({ filled: args[0] }), report);
+  let result = attach(new Result({ filled: shown }), report);
   const type = (described.attributes.get("type") || "text").toLowerCase();
   if (text && described.tag === "input" && PLAIN_INPUTS.has(type) && onlyTheFieldChanged(report)) {
     flag("fill_no_reaction_hint", true);
@@ -164,19 +174,22 @@ async function cmdPress(ctx: PluginCtx, argv: string[]): Promise<Result> {
   if (args.length >= 2) {
     const key = args[1] as string;
     comboEvents(key);
-    const element = await locate(ctx.session, args[0] as string);
-    flag("press_targeted", true);
-    const [, report] = await observe(ctx.session, element.page, ctx.options, async () => {
-      await focus(element);
-      await pressCombo(element.page, key);
-    });
-    return attach(new Result({ pressed: key, in: args[0] }), report);
+    return pressIn(ctx, await locate(ctx.session, args[0] as string), key, args[0]);
   }
   const key = args[0] as string;
   comboEvents(key);
   const page = await ctx.session.page();
   const [, report] = await observe(ctx.session, page, ctx.options, () => pressCombo(page, key));
   return attach(new Result({ pressed: key }), report);
+}
+
+export async function pressIn(ctx: PluginCtx, element: Element, key: string, shown = element.label): Promise<Result> {
+  flag("press_targeted", true);
+  const [, report] = await observe(ctx.session, element.page, ctx.options, async () => {
+    await focus(element);
+    await pressCombo(element.page, key);
+  });
+  return attach(new Result({ pressed: key, in: shown }), report);
 }
 
 export const PLUGIN_COMMANDS: Record<string, PluginHandler> = {

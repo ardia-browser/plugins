@@ -9,6 +9,7 @@ import { PluginLink } from "./link.ts";
 import { PluginPage } from "./page.ts";
 
 export const PAGE_SCHEMES = ["http:", "https:", "about:", "data:", "blob:", "file:"];
+export const LOADING_EVENTS = ["Page.frameStartedLoading", "Page.frameStoppedLoading"];
 export const NO_TAB = "This plugin session has no tab yet: pick one first with `ardia browse tab <targetId>`";
 
 export type Ref = { id: string; target: string; frame: string; loader: string; backend: number; role: string; name: string };
@@ -86,6 +87,7 @@ export class PluginSession {
       await shield(() => browser.close());
       throw error;
     }
+    for (const name of LOADING_EVENTS) browser.link?.on(name, (method, params, session) => this.onEvent(method, params, session));
     this.browser = browser;
     this.link = new PluginLink(browser);
     this.instance = this.config.endpoint;

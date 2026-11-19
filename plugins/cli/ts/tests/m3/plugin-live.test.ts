@@ -116,7 +116,7 @@ describe.skipIf(!CHROME)("plugin mode against headless Chrome for Testing, throu
     expect(await tap(world, "release")).toMatchObject({ released: true });
     await tap(world, "fault", {});
     await new Promise((resolve) => setTimeout(resolve, 300));
-    expect((await step(world, ["press", "--", "Escape"], { no_changes: true })).exit).toBe(0);
+    expect((await marked("after release", ["press", "--", "Escape"], { no_changes: true })).exit).toBe(0);
   });
 
   test("a step without the activity's credential, or with another one, is refused before anything is sent", async () => {

@@ -179,3 +179,20 @@ later slices. `daemon/stub/` holds the minimum page core the D2 scenarios need (
 The Python seeded client starts the TS daemon when `ARDIA_BROWSE_DAEMON=ts` and appends each spawn config to
 `$HOME/spawn-config.jsonl` and each full request to `answers.jsonl` (`wire`), which is what the protocol check reads.
 Recordings must be made on the default ports (`ARDIA_M3_PORTS=9400-9419`): the fixture URL in them carries the port.
+
+## Plugin mode (F1-early)
+
+Plugin mode has no Python twin, so its scenarios run the TypeScript plugin daemon alone, on headless Chrome for
+Testing through the tap, and check the transcript instead of comparing two sides. The engine's plugin policy
+(ardia#2808) isn't in stock Chrome, so the rules it enforces are asserted on the tap.
+
+| Piece | File | What it does |
+|---|---|---|
+| World | `ts/tests/m3/plugin-world.ts` | One Chrome, one tap, a fixture site and any number of plugin daemons, each spawned through `spawn.ts` with a `plugin` config and given the credential only in requests. Ports `ARDIA_F1_PORTS` (default 9660) up to +7. |
+| Rules | `ts/tests/m3/plugin-rules.ts` | `pluginViolations(transcript)`: (a) a forbidden method (`Runtime.*`, `DOM.resolveNode`, `DOM.performSearch`, `Page.createIsolatedWorld`, drags) or any method off the plugin list; (b) an `Input.dispatch*`/`Input.insertText` sent while an earlier one on that connection is unanswered; key events with `nativeVirtualKeyCode`, `isSystemKey` or a command off the editing allowlist; a press released elsewhere. `plugin-rules.test.ts` shows each check failing on a made-up transcript. |
+| Scenarios | `ts/tests/m3/plugin-live.test.ts`, `plugin-live2.test.ts` | Every verb, the document check before and after, engine refusals injected as CDP errors (`/tap/fault` with `message`), a held input event that must hold back the next one, credential refusals, the files left in `Browse/`, then (a) and (b) on the whole transcript. Skipped without `ARDIA_M3_CHROME`. |
+| Pending cases | `ts/tests/m3/plugin-pending.ts <f1-early.json> [--phase 1\|2]` | Runs M1's pending F1-early cases against a fresh plugin daemon each and compares the answer with the recorded reply: `pass` (equal), `designed` (a listed difference, with its reason), `ran` (the reply was a placeholder and the step ran), `n/a` (client-only), `fail`. |
+
+`ARDIA_M3_TS_PROGRAM` names the built program the daemons run; `ARDIA_F1_SENT=<file>` writes the methods each marked
+step sent.
+

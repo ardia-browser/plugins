@@ -16,7 +16,7 @@ export const OTHER_CREDENTIAL = "p.Zz9_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w";
 
 export const FORM = `<!doctype html><title>Form page</title>
 <h1>Sign up</h1>
-<label>Name <input></label>
+<label>Name <input placeholder="Your name"></label>
 <button onclick="document.title='Pressed'; document.getElementById('status').textContent='Saved'">Save</button>
 <a href="/done">Next</a>
 <p id="status"></p>
@@ -25,8 +25,9 @@ export const FORM = `<!doctype html><title>Form page</title>
 export const CONTRACT = `<!doctype html><title>Form page</title>
 <h1>Sign up</h1>
 <label>Name <input></label>
-<button onclick="document.title='Pressed'">Save</button>
-<a href="/done">Next</a>`;
+<button onclick="document.title='Pressed'; document.body.insertAdjacentHTML('beforeend', '<p>Saved</p>')">Save</button>
+<a href="/done">Next</a>
+<div id="list" style="height:40px;overflow:auto"><div style="height:200px"></div></div>`;
 export const DONE = `<!doctype html><title>Done</title><h1>All done</h1>`;
 
 function answers(port: number): Promise<boolean> {
@@ -63,12 +64,12 @@ export type World = {
   site: http.Server;
 };
 
-export async function startWorld(base: number, credential = CREDENTIAL, session = "plugin-ai"): Promise<World> {
+export async function startWorld(base: number, credential = CREDENTIAL, session = "plugin-ai", form = FORM): Promise<World> {
   const found = scratch();
   const [chromePort, tapPort, sitePort] = [base, base + 1, base + 2];
   const children: ChildProcess[] = [];
   const site = http.createServer((request, response) => {
-    const body = request.url === "/done" ? DONE : request.url === "/contract" ? CONTRACT : FORM;
+    const body = request.url === "/done" ? DONE : request.url === "/contract" ? CONTRACT : form;
     response.writeHead(200, { "content-type": "text/html" });
     response.end(body);
   });
@@ -136,6 +137,25 @@ export async function step(world: World, argv: string[], options: Record<string,
 export async function tap(world: World, route: string, body: unknown = {}): Promise<Record<string, unknown>> {
   const response = await fetch(`http://127.0.0.1:${world.tapPort}/tap/${route}`, { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
   return (await response.json()) as Record<string, unknown>;
+}
+
+export async function resetPage(world: World, target: string, url = `http://127.0.0.1:${world.sitePort}/form`): Promise<void> {
+  const socket = new WebSocket(`ws://127.0.0.1:${world.chromePort}/devtools/page/${target}`);
+  await new Promise<void>((resolve, reject) => {
+    socket.onopen = () => socket.send(JSON.stringify({ id: 1, method: "Page.navigate", params: { url } }));
+    socket.onmessage = (event) => {
+      if ((JSON.parse(String(event.data)) as { id?: number }).id === 1) resolve();
+    };
+    socket.onerror = () => reject(new Error("the harness couldn't reach the page to reset it"));
+  });
+  socket.close();
+  const deadline = performance.now() + 10_000;
+  while (performance.now() < deadline) {
+    const list = (await (await fetch(`http://127.0.0.1:${world.chromePort}/json/list`)).json()) as { id: string; url: string; title: string }[];
+    if (list.some((item) => item.id === target && item.url === url && item.title === "Form page")) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error("the page didn't reset");
 }
 
 export function entries(world: World): Entry[] {
