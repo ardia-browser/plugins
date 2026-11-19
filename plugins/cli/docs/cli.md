@@ -1691,7 +1691,8 @@ sandboxes, and `--report` prints the table as JSON (per command: cases, passing,
 The Rust entry stays `bin/ardia` and routes. A call whose stdout or stderr is open read-only or non-blocking goes to Python
 whatever its row says, since Python's failure there is an unhandled exception native code can't reproduce, and so does
 a call started with fd 0, 1 or 2 closed (noted by a constructor that runs before Rust's runtime reopens them on
-`/dev/null`; Python then gets them closed again). A listing whose stdout later fails with anything but EPIPE ends as
+`/dev/null`; Python then gets them closed again), and so does a call with fd 0, 1 or 2 open on a directory, which CPython's
+`init_sys_streams` refuses at startup (`<stdin> is a directory, cannot continue`, status 1). A listing whose stdout later fails with anything but EPIPE ends as
 Python's would after its traceback. Each line is written as CPython 3.13's `BufferedWriter` writes it (its buffer is
 stdout's `st_blksize`): straight to the descriptor while what is left is at least one buffer long, then the shorter rest
 through the buffer. A failure while writing straight leaves nothing behind, so the call prints the exception line and

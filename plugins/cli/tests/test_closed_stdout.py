@@ -173,6 +173,18 @@ def crash_recorded_while_stderr_blocks(command: list[str], home: Path) -> tuple:
     return early, process.returncode, telemetry_of(home)
 
 
+THREAD_ADDRESS = re.compile(rb"0x[0-9a-f]+")
+
+
+def run_with_directory_stdin(command: list[str], home: Path) -> tuple:
+    stdin = os.open(home, os.O_RDONLY)
+    try:
+        process = subprocess.run(command, stdin=stdin, capture_output=True, env=environment(home, telemetry=True), timeout=60)
+    finally:
+        os.close(stdin)
+    return process.returncode, process.stdout, THREAD_ADDRESS.sub(b"0x", process.stderr), telemetry_of(home)
+
+
 def run_limited(command: list[str], home: Path, limit: int, ignored: bool, telemetry: bool) -> tuple:
     out = home / "out"
     stdout = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -307,6 +319,26 @@ class ClosedStdout:
                             python = crash_recorded_while_stderr_blocks([sys.executable, "-m", "ardia_cli", *argv], home)
                             new = crash_recorded_while_stderr_blocks([*install.command("new"), *argv], home)
                             self.assertTrue(python[0])
+                            self.assertEqual(new, python)
+                finally:
+                    fake.close()
+        finally:
+            install.close()
+
+    def test_a_directory_as_stdin_stops_the_call_as_python_does_at_startup(self):
+        install = harness.Installation(harness.entry_binary(self.entry), entry=self.entry)
+        try:
+            with tempfile.TemporaryDirectory() as scratch:
+                home = Path(scratch)
+                (home / "data").mkdir()
+                fake = FakeArdia(home / "data" / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "windows": {"result": [{"id": "w-1"}]},
+                                 "workspace": {"result": {"windows": [{"id": "w-1", "spaces": [{"profile": "p", "tabs": TABS[:2]}]}]}}})
+                try:
+                    for argv in (*CALLS, *LISTINGS):
+                        with self.subTest(argv=argv):
+                            python = run_with_directory_stdin([sys.executable, "-m", "ardia_cli", *argv], home)
+                            new = run_with_directory_stdin([*install.command("new"), *argv], home)
+                            self.assertEqual(python[0], 1)
                             self.assertEqual(new, python)
                 finally:
                     fake.close()

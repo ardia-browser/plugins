@@ -368,7 +368,7 @@ fn handle(root: Option<&Path>, raw: &[OsString], python: Option<&Path>) -> Handl
     let Some(label) = route.label() else {
         return Handled::Python;
     };
-    if standard_fds::any_closed_at_start() || printable::stdout_unusable() || printable::stderr_unusable() {
+    if standard_fds::any_closed_at_start() || standard_fds::any_is_a_directory() || printable::stdout_unusable() || printable::stderr_unusable() {
         return Handled::Python;
     }
     match router::Table::load(root).side(label) {
