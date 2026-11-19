@@ -19,7 +19,7 @@ import { checkSocket, NoDaemon, openBrowseDir, osFailure, socketPath } from "./s
 import { decodeStdin, pythonStdioErrors, readStdin, stdinState } from "./stdio.ts";
 import { TAKES_OUT } from "./tables.ts";
 
-export const ANSWER_JSON_DEPTH = 9991;
+export const ANSWER_JSON_DEPTH = 9995;
 const HAND_BACK_COMMANDS = ["auth", "notes", "flow", "plugin", "read", "session", "script"];
 const BESIDE_PREFIX = 59;
 
