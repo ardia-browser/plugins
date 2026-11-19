@@ -1945,6 +1945,11 @@ parity harness rather than stripped wholesale:
   sent: the client answers what Python's client reports when the daemon drops it ("closed the connection before taking
   the command", exit 2) without waiting for the writer to finish. Stdin is passed
   as read: Python 3.13 reads it with `newline="\n"` on macOS, so CR and CRLF reach the daemon unchanged on both sides.
+- `ardia browse`: stdin over the daemon's 16 MiB request limit, or a request line the envelope pushes over it, fails
+  before the client connects; Python's client connects, sends, and reports the daemon dropping it. Both answer "closed
+  the connection before taking the command" with exit 2, but only Python's leaves the daemon a dropped connection
+  (`test_ts_browse_plugin.JsonAndStdin.test_stdin_over_the_daemons_request_limit_stops_the_read_and_sends_nothing` and
+  `test_a_request_the_envelope_pushes_over_the_limit_is_refused_before_connecting`).
 - `ardia browse`: a daemon answer whose exit is 253 ends with status 1: 253 is the router's hand-back status, and
   exiting with it would run the step a second time on Python. A real daemon never answers 253.
 - `ardia browse`: a daemon that asks a non-`read` command to run beside a busy session (`busy_elsewhere`) whose side
