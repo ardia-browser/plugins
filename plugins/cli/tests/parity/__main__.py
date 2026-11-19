@@ -1,6 +1,6 @@
 """Usage: python -m tests.parity [--entry rust|ts] [--program BIN] [--command NAME]... [--case ID]... [--jobs N] [--keep] [--report]
 
-Runs every parity case (tests/parity/cases) on the new ardia (the Rust entry, or the TypeScript one with --entry ts) and on the Python one in identical throwaway
+Runs every parity case (tests/parity/cases) on the new ardia (the Rust entry, or with --entry ts the Rust router running the TypeScript program as its child) and on the Python one in identical throwaway
 environments and compares stdout, stderr, exit code, control-socket requests, telemetry, usage, files written and
 helper programs started. Prints a diff for each mismatch. --report prints the machine-readable state instead: for each
 command its cases, how many pass, and whether served.txt lists it. Exits 1 when a case fails or served.txt
@@ -21,7 +21,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(prog="python -m tests.parity", description=__doc__.split("\n\n", 1)[1], formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--entry", choices=harness.ENTRIES, default="rust", help="which program runs as bin/ardia (default: rust)")
     parser.add_argument("--program", type=Path, default=None, help="that program (default: $ARDIA_RUST_CLI, else rust/target/{release,debug}/ardia; "
-                        "for ts $ARDIA_TS_CLI, else ts/dist/ardia-ts)")
+                        "for ts $ARDIA_TS_CLI, else ts/dist/ardia-ts, behind the Rust router)")
     parser.add_argument("--command", action="append", default=[], help="only this command's cases (repeatable)")
     parser.add_argument("--case", action="append", default=[], help="only this case (repeatable)")
     parser.add_argument("--jobs", type=int, default=6)
