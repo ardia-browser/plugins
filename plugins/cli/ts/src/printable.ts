@@ -1,5 +1,6 @@
 import { write, writeSync } from "node:fs";
 import { interrupted as interruptRequested } from "./control.ts";
+import { codeOf, errnoOf, strerror } from "./paths.ts";
 
 function escaped(text: string, escape: (code: number) => boolean): string {
   let out = "";
@@ -106,4 +107,28 @@ export class Output {
       writeAll(2, `${inert(text)}\n`);
     } catch {}
   }
+}
+
+const PYTHON_OS_ERRORS: Record<string, string> = {
+  EPIPE: "BrokenPipeError",
+  ESHUTDOWN: "BrokenPipeError",
+  ECONNRESET: "ConnectionResetError",
+  ECONNABORTED: "ConnectionAbortedError",
+  ECONNREFUSED: "ConnectionRefusedError",
+  EACCES: "PermissionError",
+  EPERM: "PermissionError",
+  ETIMEDOUT: "TimeoutError",
+  ENOENT: "FileNotFoundError",
+  EISDIR: "IsADirectoryError",
+  ENOTDIR: "NotADirectoryError",
+};
+
+export function stdoutFlushFailed(error: unknown): number {
+  const code = codeOf(error) ?? "";
+  if (code === "EBADF") return 0;
+  const errno = errnoOf(error);
+  try {
+    writeAll(2, `Exception ignored on flushing sys.stdout:\n${PYTHON_OS_ERRORS[code] ?? "OSError"}: [Errno ${errno}] ${strerror(errno)}\n`);
+  } catch {}
+  return 120;
 }

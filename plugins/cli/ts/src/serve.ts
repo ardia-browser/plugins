@@ -3,7 +3,7 @@ import { render as renderHelp } from "./help.ts";
 import type { Value } from "./json.ts";
 import { failed, type Kind, type Listing, methodFailed, methodOf, paramsOf, type Rendered } from "./listing.ts";
 import { NeedsPython } from "./paths.ts";
-import { inert, Output, writeAll } from "./printable.ts";
+import { inert, Output, stdoutFlushFailed, writeAll } from "./printable.ts";
 import { Unsupported } from "./py.ts";
 import { render } from "./render.ts";
 import { Call, finish } from "./telemetry.ts";
@@ -19,16 +19,18 @@ export function serveHelp(argv: string[], python: string | null): number | undef
   const call = new Call(argv);
   call.allowedFlags = TOP_FLAGS;
   let status = 0;
+  let exit = 0;
   try {
     writeAll(1, inert(text));
-  } catch {
+  } catch (error) {
     if (argv.length === 0) {
       call.noteErrorCode("stdout_closed");
       status = 141;
-    }
+      exit = 141;
+    } else exit = stdoutFlushFailed(error);
   }
   finish(call, status, python);
-  return status;
+  return exit;
 }
 
 function allowedFor(kind: Kind): string[] {
