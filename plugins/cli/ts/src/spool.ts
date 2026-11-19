@@ -1,0 +1,329 @@
+import { spawn } from "node:child_process";
+import { lstatSync } from "node:fs";
+import { now, utcDay } from "./clock.ts";
+import { dumps, Float, I128_MAX, I128_MIN, type JsonObject, object, parse, type Value } from "./json.ts";
+import { join } from "./paths.ts";
+import {
+  close,
+  closeDir,
+  type Dir,
+  listDir,
+  O_APPEND,
+  O_CREAT,
+  O_RDONLY,
+  O_WRONLY,
+  openChildDir,
+  openPrivate,
+  openPrivateFile,
+  notFound,
+  readFd,
+  readPrivate,
+  sizeAt,
+  takeLock,
+  takeLockRetrying,
+  unlinkQuietly,
+  writeFd,
+  writePrivate,
+} from "./privatefs.ts";
+import type { Target } from "./telemetry.ts";
+
+const FOLDER = "Telemetry";
+const SPOOL = "cli-queue.jsonl";
+const SPOOL_LOCK = "cli-queue.lock";
+const FLUSH_CLAIM_LOCK = "cli-flush-claim.lock";
+const FLUSH_STATE = "cli-flush.json";
+const LOCAL_FOLDER = "local";
+const LOCAL_PREFIX = "cli-";
+const LOCAL_LOCK = "cli-local.lock";
+const LOCAL_DAYS = 7;
+const MAX_LOCAL_BYTES = 4 * 1024 * 1024;
+const MAX_SPOOL_BYTES = 256 * 1024;
+const COUNT_CHECK_BYTES = 64 * 1024;
+const MAX_EVENTS = 500;
+const MAX_LINE_BYTES = 32 * 1024;
+const FLUSH_INTERVAL_S = 60;
+const NEWLINE = 0x0a;
+
+function openFolder(root: string, create: boolean): Dir {
+  return openPrivate(root, [FOLDER], create);
+}
+
+function lineOf(record: Value): Buffer {
+  return Buffer.from(`${dumps(record, "compact")}\n`, "utf8");
+}
+
+export function keepLocalCopy(root: string, record: JsonObject, sent: boolean): boolean {
+  const data = lineOf(new Map([...record, ["sent", sent]]));
+  if (data.length > MAX_LOCAL_BYTES) return false;
+  let local: Dir | undefined;
+  let lock: number | undefined;
+  try {
+    const telemetry = openFolder(root, true);
+    try {
+      local = openChildDir(telemetry, LOCAL_FOLDER, true);
+    } finally {
+      closeDir(telemetry);
+    }
+    lock = takeLockRetrying(LOCAL_LOCK, local);
+    if (lock === undefined) return false;
+    const at = now();
+    const fd = openPrivateFile(localName(at), local, O_WRONLY | O_CREAT | O_APPEND);
+    try {
+      writeFd(fd, data);
+    } finally {
+      close(fd);
+    }
+    pruneLocal(local, at);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    close(lock);
+    closeDir(local);
+  }
+}
+
+function localName(at: number): string {
+  return `${LOCAL_PREFIX}${utcDay(at)}.jsonl`;
+}
+
+function isLocalFile(name: string): boolean {
+  return /^cli-[0-9]{4}-[0-9]{2}-[0-9]{2}\.jsonl$/.test(name);
+}
+
+function byteOrder(a: string, b: string): number {
+  return Buffer.compare(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
+}
+
+function pruneLocal(dir: Dir, at: number): void {
+  const oldestKept = localName(at - (LOCAL_DAYS - 1) * 86_400);
+  const files: [string, number][] = [];
+  for (const name of listDir(dir).filter(isLocalFile).sort(byteOrder)) {
+    let size: number;
+    try {
+      size = sizeAt(dir, name);
+    } catch {
+      continue;
+    }
+    if (byteOrder(name, oldestKept) < 0) unlinkQuietly(name, dir);
+    else files.push([name, size]);
+  }
+  let excess = files.reduce((total, [, size]) => total + size, 0) - MAX_LOCAL_BYTES;
+  for (const [name, size] of files) {
+    if (excess <= 0) break;
+    excess -= dropOldestLines(dir, name, size, excess);
+  }
+}
+
+function dropOldestLines(dir: Dir, name: string, size: number, excess: number): number {
+  const fd = openPrivateFile(name, dir, O_RDONLY);
+  let raw: Buffer;
+  try {
+    raw = readFd(fd, size);
+  } finally {
+    close(fd);
+  }
+  const from = Math.min(Math.max(excess - 1, 0), raw.length);
+  const cut = raw.indexOf(NEWLINE, from);
+  const rest = cut < 0 ? Buffer.alloc(0) : raw.subarray(cut + 1);
+  if (rest.length === 0) {
+    unlinkQuietly(name, dir);
+    return size;
+  }
+  writePrivate(name, dir, rest);
+  return size - rest.length;
+}
+
+function isAsciiSpace(byte: number): boolean {
+  return byte === 0x20 || byte === 0x09 || byte === 0x0a || byte === 0x0c || byte === 0x0d;
+}
+
+function readLines(dir: Dir): Buffer[] {
+  let fd: number;
+  try {
+    fd = openPrivateFile(SPOOL, dir, O_RDONLY);
+  } catch (error) {
+    if (notFound(error)) return [];
+    throw error;
+  }
+  let raw: Buffer;
+  try {
+    raw = readFd(fd, MAX_SPOOL_BYTES * 2);
+  } finally {
+    close(fd);
+  }
+  const lines: Buffer[] = [];
+  let start = 0;
+  for (;;) {
+    const end = raw.indexOf(NEWLINE, start);
+    const line = raw.subarray(start, end < 0 ? raw.length : end);
+    if (line.some((byte) => !isAsciiSpace(byte))) lines.push(Buffer.concat([line, Buffer.from([NEWLINE])]));
+    if (end < 0) break;
+    start = end + 1;
+  }
+  return lines;
+}
+
+function newest(lines: Buffer[]): Buffer[] {
+  const kept: Buffer[] = [];
+  let size = 0;
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index] ?? Buffer.alloc(0);
+    if (kept.length >= MAX_EVENTS || size + line.length > MAX_SPOOL_BYTES) break;
+    size += line.length;
+    kept.push(line);
+  }
+  return kept.reverse();
+}
+
+function writeLines(dir: Dir, lines: Buffer[]): void {
+  if (lines.length === 0) unlinkQuietly(SPOOL, dir);
+  else writePrivate(SPOOL, dir, Buffer.concat(lines));
+}
+
+export function appendToSpool(root: string, record: JsonObject): Dir | undefined {
+  const line = lineOf(record);
+  const data = line.length <= MAX_LINE_BYTES ? line : Buffer.alloc(0);
+  let dir: Dir;
+  try {
+    dir = openFolder(root, true);
+  } catch {
+    return undefined;
+  }
+  let lock: number | undefined;
+  try {
+    lock = takeLockRetrying(SPOOL_LOCK, dir);
+  } catch {
+    lock = undefined;
+  }
+  if (lock === undefined) {
+    closeDir(dir);
+    return undefined;
+  }
+  let written = true;
+  try {
+    let size = 0;
+    try {
+      size = sizeAt(dir, SPOOL);
+    } catch {
+      size = 0;
+    }
+    if (size + data.length <= COUNT_CHECK_BYTES) {
+      const fd = openPrivateFile(SPOOL, dir, O_WRONLY | O_CREAT | O_APPEND);
+      try {
+        writeFd(fd, data);
+      } finally {
+        close(fd);
+      }
+    } else {
+      const lines = readLines(dir);
+      if (data.length > 0) lines.push(data);
+      writeLines(dir, newest(lines));
+    }
+  } catch {
+    written = false;
+  } finally {
+    close(lock);
+  }
+  if (!written) {
+    closeDir(dir);
+    return undefined;
+  }
+  return dir;
+}
+
+export function discardSpool(root: string): void {
+  try {
+    lstatSync(join(root, FOLDER, SPOOL));
+  } catch {
+    return;
+  }
+  let dir: Dir;
+  try {
+    dir = openFolder(root, false);
+  } catch {
+    return;
+  }
+  try {
+    const lock = takeLockRetrying(SPOOL_LOCK, dir);
+    if (lock !== undefined) {
+      unlinkQuietly(SPOOL, dir);
+      close(lock);
+    }
+  } catch {
+  } finally {
+    closeDir(dir);
+  }
+}
+
+function numberIn(value: Value | undefined): number {
+  if (typeof value === "bigint") return Number(value);
+  if (value instanceof Float) return value.value;
+  return 0;
+}
+
+function saturatingInt(value: number): bigint {
+  if (Number.isNaN(value)) return 0n;
+  if (value >= Number(I128_MAX)) return I128_MAX;
+  if (value <= Number(I128_MIN)) return I128_MIN;
+  return BigInt(Math.trunc(value));
+}
+
+export function startFlush(dir: Dir, target: Target, python: string | null): void {
+  let claim: number | undefined;
+  try {
+    claim = takeLock(FLUSH_CLAIM_LOCK, dir);
+  } catch {
+    claim = undefined;
+  }
+  if (claim === undefined) {
+    closeDir(dir);
+    return;
+  }
+  try {
+    let raw: Buffer | undefined;
+    try {
+      raw = readPrivate(FLUSH_STATE, dir, 64 * 1024);
+    } catch {
+      raw = undefined;
+    }
+    const parsed = raw === undefined ? undefined : parse(raw);
+    const state: JsonObject = parsed instanceof Map ? parsed : new Map();
+    const at = now();
+    if (numberIn(state.get("next_at")) > at) return;
+    const written = object([
+      ["failures", saturatingInt(Math.trunc(numberIn(state.get("failures"))))],
+      ["next_at", new Float(at + FLUSH_INTERVAL_S)],
+    ]);
+    try {
+      writePrivate(FLUSH_STATE, dir, Buffer.from(dumps(written, "spaced"), "utf8"));
+    } catch {
+      return;
+    }
+    close(claim);
+    claim = undefined;
+    if (python !== null) spawnFlusher(python, target);
+  } finally {
+    close(claim);
+    closeDir(dir);
+  }
+}
+
+function spawnFlusher(python: string, target: Target): void {
+  const config = object([
+    ["data_root", target.root],
+    ["url", target.url],
+    ["environment", target.environment],
+  ]);
+  try {
+    const child = spawn(python, ["-I", "-c", "from ardia_cli import telemetry; telemetry.flush_main()"], {
+      stdio: ["pipe", "ignore", "ignore"],
+      cwd: "/",
+      detached: true,
+    });
+    child.on("error", () => {});
+    child.stdin?.on("error", () => {});
+    child.stdin?.end(dumps(config, "spaced", true));
+    child.unref();
+  } catch {}
+}
