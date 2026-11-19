@@ -93,12 +93,17 @@ class FakeState:
 
 
 class LinkSocket:
-    def __init__(self):
+    def __init__(self, answer=None):
         self.sent = []
         self.inbox = asyncio.Queue()
+        self.answer = answer
 
     async def send(self, text):
-        self.sent.append(json.loads(text))
+        message = json.loads(text)
+        self.sent.append(message)
+        reply = self.answer(message) if self.answer else None
+        if reply is not None:
+            self.inbox.put_nowait({"id": message["id"], "result": reply})
 
     def __aiter__(self):
         return self
@@ -116,13 +121,13 @@ class LinkSocket:
         return [message for message in self.sent if message["method"] == name]
 
 
-def linked_browser():
+def linked_browser(answer=None):
     from ardia_cli.browse.connection import Browser
     from ardia_cli.cdp import Connection
 
     browser = Browser(None, lambda *event: None)
     browser.link = Connection("ws://fake")
-    browser.link.socket = LinkSocket()
+    browser.link.socket = LinkSocket(answer)
     browser.link.reader = asyncio.ensure_future(browser.link._read())
     return browser, browser.link.socket
 
@@ -428,6 +433,41 @@ class RawCdp(unittest.TestCase):
             detached, sessions, session = asyncio.run(late(give_up))
             self.assertEqual(detached, [{"sessionId": "S-page-late"}], give_up)
             self.assertEqual((sessions, session), ({}, None), give_up)
+
+    def test_attaches_that_never_answer_are_bounded_per_connection(self):
+        from unittest import mock
+
+        from ardia_cli.browse import connection, rawcdp
+        from ardia_cli.browse.errors import BrowseError, CdpTimeout
+
+        def answer(message):
+            return None if message["method"] == "Target.attachToTarget" else {"ok": True}
+
+        async def run():
+            state = FakeState()
+            state.browser, sock = linked_browser(answer)
+            with mock.patch.object(rawcdp, "ATTACH_TIMEOUT", 0.01):
+                for _ in range(16):
+                    with self.assertRaises(CdpTimeout):
+                        await commands.COMMANDS["cdp"](ctx(state), ["Runtime.evaluate", "--target", "t2"])
+                self.assertEqual(await state.browser.send("Browser.getVersion"), {"ok": True})
+                with self.assertRaises(BrowseError) as refused:
+                    await commands.COMMANDS["cdp"](ctx(state), ["Runtime.evaluate", "--target", "t2"])
+                attaches = sock.methods("Target.attachToTarget")
+                sock.inbox.put_nowait({"id": attaches[0]["id"], "result": {"sessionId": "S-late"}})
+                await settle()
+                with self.assertRaises(CdpTimeout):
+                    await commands.COMMANDS["cdp"](ctx(state), ["Runtime.evaluate", "--target", "t2"])
+            sent = len(sock.methods("Target.attachToTarget"))
+            await state.browser.close()
+            return refused.exception, len(attaches), sent
+
+        refused, before, after = asyncio.run(run())
+        self.assertNotIsInstance(refused, CdpTimeout)
+        self.assertEqual(refused.code, "attaches_unanswered")
+        self.assertIn("never answered", refused.message)
+        self.assertEqual((before, after), (16, 17))
+        self.assertEqual(connection.MAX_LATE_ATTACHES, 16)
 
     def test_the_notice_says_whether_the_connection_or_only_the_session_changed(self):
         from ardia_cli.browse import rawcdp
