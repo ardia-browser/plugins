@@ -1,5 +1,6 @@
 import { Float, type JsonObject, type Value } from "../json.ts";
-import { charCount, reprStr, truthy } from "../py.ts";
+import { reprStr, truthy } from "../py.ts";
+import { codePointCount } from "../pystr.ts";
 import { pythonInt } from "./args.ts";
 import { builtinCrash, type PythonCrash } from "./errors.ts";
 import { METRIC_COUNTS, METRIC_DURATIONS, METRIC_FLAGS, METRIC_MAX_COUNT, METRIC_MAX_MS } from "./tables.ts";
@@ -51,7 +52,7 @@ export function outputChars(answer: JsonObject): bigint {
   for (const key of ["out", "err"]) {
     const value = answer.get(key);
     const given = truthy(value) ? value : "";
-    if (typeof given === "string") total += charCount(given);
+    if (typeof given === "string") total += codePointCount(given);
   }
   return BigInt(total);
 }

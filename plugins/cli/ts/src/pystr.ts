@@ -49,6 +49,19 @@ export function codePoints(text: string): string[] {
   return out;
 }
 
+export function codePointCount(text: string): number {
+  let count = text.length;
+  for (let at = 0; at < text.length - 1; at += 1) {
+    if (!isHigh(text.charCodeAt(at))) continue;
+    const next = text.charCodeAt(at + 1);
+    if (next === SPLIT || isLow(next)) {
+      count -= 1;
+      at += 1;
+    }
+  }
+  return count;
+}
+
 export function plain(text: string): string {
   return text.includes(SPLIT_TEXT) ? text.replace(SPLIT_AFTER_HIGH, "$1") : text;
 }

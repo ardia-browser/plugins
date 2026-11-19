@@ -9,6 +9,7 @@ import type { Errors } from "./stdio.ts";
 
 const PYTHON_DEFAULT_BUFFER = 8192;
 const CLOSED = new Set(["EPIPE", "ESHUTDOWN"]);
+const SURROGATES = /[\ud800-\udfff]/;
 
 function surrogate(point: string): boolean {
   if (point.length !== 1) return false;
@@ -76,6 +77,10 @@ export class Printer {
   out(text: string): void {
     if (this.stopped || text === "") return;
     const cleaned = jsonSafe(text);
+    if (!SURROGATES.test(cleaned)) {
+      this.write(utf8(cleaned));
+      return;
+    }
     const points = codePoints(cleaned);
     const escapable = this.errors === "surrogateescape";
     const refused = encodeError(points, escapable);
@@ -83,7 +88,10 @@ export class Printer {
       this.crash = refused;
       return;
     }
-    const bytes = escapable ? escaped(points) : utf8(cleaned);
+    this.write(escapable ? escaped(points) : utf8(cleaned));
+  }
+
+  private write(bytes: Uint8Array): void {
     try {
       writeAll(1, bytes);
     } catch (error) {
