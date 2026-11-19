@@ -309,6 +309,7 @@ class HarnessCatches(unittest.TestCase):
             impostor = scratch / "ardia-ts"
             impostor.write_text('#!/bin/sh\nhere=$(cd "$(dirname "$0")/.." && pwd)\nshift\n"$here/python/bin/python3" -I -m ardia_cli "$@"\nexit $?\n')
             impostor.chmod(0o755)
+            shutil.copy2(harness.ts_libc(harness.ts_binary()), scratch / harness.TS_LIBC)
             cases = [case for case in harness.load_cases() if case.id in ("version--version", "windows--windows")]
             self.assertTrue(cases)
             outcomes, install = harness.run_all(cases, impostor, entry="ts")
@@ -334,6 +335,7 @@ class HarnessCatches(unittest.TestCase):
             impostor = scratch / "ardia"
             impostor.write_text('#!/bin/sh\nhere=$(cd "$(dirname "$0")/.." && pwd)\nexec ' + prefix + '"$here/python/bin/python3" ' + launch + '\n')
             impostor.chmod(0o755)
+            shutil.copy2(harness.ts_libc(harness.ts_binary()), scratch / harness.TS_LIBC)
             cases = [case for case in harness.load_cases() if case.id in ("version--version", "windows--windows") or case.id.startswith("tabs--tabs-json")]
             self.assertTrue(cases)
             for entry in harness.ENTRIES:
