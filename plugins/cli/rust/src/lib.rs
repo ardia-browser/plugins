@@ -9,6 +9,7 @@ pub mod paths;
 pub mod plist;
 pub mod printable;
 pub mod py;
+pub mod router;
 pub mod telemetry;
 pub mod usage;
 
@@ -58,13 +59,8 @@ fn value_of<'a>(argv: &'a [String], index: &mut usize, name: &str) -> Option<&'a
     Some(value)
 }
 
-const SERVED: &str = include_str!("../../served.txt");
-
 pub fn serves(label: &str) -> bool {
-    SERVED.lines().any(|line| {
-        let mut words = line.split_whitespace();
-        words.next() == Some(label) && words.next() == Some("rust") && words.next().is_none()
-    })
+    router::Table::compiled().side(label) == Some(router::Side::Rust)
 }
 
 impl Route {
@@ -85,7 +81,7 @@ pub fn route(argv: &[String]) -> Route {
     }
 }
 
-fn parse_route(argv: &[String]) -> Route {
+pub fn parse_route(argv: &[String]) -> Route {
     if argv == ["--version"] {
         return Route::Version;
     }
@@ -283,30 +279,67 @@ fn serve_listing(kind: Kind, listing: &Listing, argv: &[String], python: Option<
     Some(status as i32)
 }
 
-pub fn run() -> i32 {
-    let raw: Vec<OsString> = std::env::args_os().skip(1).collect();
-    let root = install_root();
-    let python = root.as_ref().map(|root| root.join("python").join("bin").join("python3"));
-    let _lease = Lease::take(root.as_deref());
-    let Some(argv) = raw.iter().map(|arg| arg.to_str().map(str::to_string)).collect::<Option<Vec<String>>>() else {
-        return pass_through(python.as_deref(), &raw);
-    };
-    let route = route(&argv);
-    if route == Route::Python || (route != Route::Version && (!paths::paths_are_text() || telemetry::consent_unreadable(&argv))) {
-        return pass_through(python.as_deref(), &raw);
+enum Handled {
+    Status(i32),
+    Signaled(libc::c_int),
+    Python,
+}
+
+fn run_ts(program: &Path, raw: &[OsString]) -> Handled {
+    let marker = router::marker(router::interrupts_ignored(), &caller::current());
+    match router::run_child(program, &marker, raw) {
+        router::Ended::NotStarted | router::Ended::Exited(router::HAND_BACK) => Handled::Python,
+        router::Ended::Exited(status) => Handled::Status(status),
+        router::Ended::Signaled(signal) => Handled::Signaled(signal),
+    }
+}
+
+fn run_rust(route: Route, argv: &[String], python: Option<&Path>) -> Handled {
+    if route != Route::Version && (!paths::paths_are_text() || telemetry::consent_unreadable(argv)) {
+        return Handled::Python;
     }
     let served = match route {
         Route::Version => {
             let _ = writeln!(std::io::stdout(), "ardia {}", telemetry::version());
             Some(0)
         }
-        Route::Help => serve_help(&argv, python.as_deref()),
-        Route::Listing(kind, listing) => serve_listing(kind, &listing, &argv, python.as_deref()),
+        Route::Help => serve_help(argv, python),
+        Route::Listing(kind, listing) => serve_listing(kind, &listing, argv, python),
         Route::Python => None,
     };
-    match served {
-        Some(status) => status,
-        None => pass_through(python.as_deref(), &raw),
+    served.map_or(Handled::Python, Handled::Status)
+}
+
+fn handle(root: Option<&Path>, raw: &[OsString], python: Option<&Path>) -> Handled {
+    let Some(argv) = raw.iter().map(|arg| arg.to_str().map(str::to_string)).collect::<Option<Vec<String>>>() else {
+        return Handled::Python;
+    };
+    let route = parse_route(&argv);
+    let Some(label) = route.label() else {
+        return Handled::Python;
+    };
+    match router::Table::load(root).side(label) {
+        Some(router::Side::Rust) => run_rust(route, &argv, python),
+        Some(router::Side::Ts) => match router::ts_program(root) {
+            Some(program) => run_ts(&program, raw),
+            None => Handled::Python,
+        },
+        None => Handled::Python,
+    }
+}
+
+pub fn run() -> i32 {
+    let raw: Vec<OsString> = std::env::args_os().skip(1).collect();
+    let root = install_root();
+    let python = root.as_ref().map(|root| root.join("python").join("bin").join("python3"));
+    let lease = Lease::take(root.as_deref());
+    match handle(root.as_deref(), &raw, python.as_deref()) {
+        Handled::Status(status) => status,
+        Handled::Python => pass_through(python.as_deref(), &raw),
+        Handled::Signaled(signal) => {
+            drop(lease);
+            router::die_by(signal)
+        }
     }
 }
 
@@ -366,7 +399,6 @@ mod tests {
         }
         assert!(!serves("tabs open"));
         assert!(!serves(""));
-        assert!(SERVED.lines().all(|line| line == line.trim() && !line.is_empty()));
     }
 
     #[test]
