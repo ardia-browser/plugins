@@ -189,7 +189,7 @@ Testing through the tap, and check the transcript instead of comparing two sides
 | Piece | File | What it does |
 |---|---|---|
 | World | `ts/tests/m3/plugin-world.ts` | One Chrome, one tap, a fixture site and any number of plugin daemons, each spawned through `spawn.ts` with a `plugin` config and given the credential only in requests. Ports `ARDIA_F1_PORTS` (default 9660) up to +7. |
-| Rules | `ts/tests/m3/plugin-rules.ts` | `pluginViolations(transcript)`: (a) a forbidden method (`Runtime.*`, `DOM.resolveNode`, `DOM.performSearch`, `Page.createIsolatedWorld`, drags, and `Input.dispatchMouseEvent` as a press, a release or with any button) or any method off the plugin list; (b) an input command (`Input.dispatch*`, `Input.insertText`, `Ardia.dispatchClick`) sent while an earlier one on that connection is unanswered; key events with `nativeVirtualKeyCode`, `isSystemKey` or a command off the editing allowlist; a lease-gated method (`DOM.scrollIntoViewIfNeeded`, `Emulation.setFocusEmulationEnabled`) during a step that doesn't act. Every harness step posts a tap mark carrying its argv, and the checker classifies it with the daemon's own `find` grammar. `plugin-rules.test.ts` shows each check failing on a made-up transcript. |
+| Rules | `ts/tests/m3/plugin-rules.ts` | `pluginViolations(transcript)`: (a) a forbidden method (`Runtime.*`, `DOM.resolveNode`, `DOM.performSearch`, `Page.createIsolatedWorld`, `DOM.focus`, `Page.captureScreenshot`, `DOM.scrollIntoViewIfNeeded`, `Emulation.setFocusEmulationEnabled`, drags, and `Input.dispatchMouseEvent` as a press, a release or with any button) or any method off the plugin list; (b) an input command (`Input.dispatch*`, `Input.insertText`, `Ardia.dispatchClick`) sent while an earlier one on that connection is unanswered; key events with `nativeVirtualKeyCode`, `isSystemKey` or a command off the editing allowlist; (c) an input command on any session but a page target's own (one the daemon attached with `Target.attachToTarget` to a target reported as `type: "page"` with no subtype; iframe, prerender and auto-attached sessions and the browser session fail). Every harness step posts a tap mark carrying its argv, and the checker classifies it with the daemon's own `find` grammar. `plugin-rules.test.ts` shows each check failing on a made-up transcript. |
 | Scenarios | `ts/tests/m3/plugin-live.test.ts`, `plugin-live2.test.ts` | Every verb, the document check before and after, engine refusals injected as CDP errors (`/tap/fault` with `message`), a held input event that must hold back the next one, credential refusals, the files left in `Browse/`, then (a) and (b) on the whole transcript. Skipped without `ARDIA_M3_CHROME`. |
 | Pending cases | `ts/tests/m3/plugin-pending.ts <f1-early.json> [--phase 1\|2]` | Runs M1's pending F1-early cases against a fresh plugin daemon each and compares the answer with the recorded reply: `pass` (equal), `designed` (a listed difference, with its reason), `ran` (the reply was a placeholder and the step ran), `n/a` (client-only), `fail`. |
 
@@ -201,4 +201,15 @@ a real plugin engine the flag stays off.
 
 `ARDIA_M3_TS_PROGRAM` names the built program the daemons run; `ARDIA_F1_SENT=<file>` writes the methods each marked
 step sent.
+
+### Acceptance case (d): an act on a hidden tab
+
+`ts/tests/m3/plugin-background.ts` (run with Bun; `ARDIA_F1_CHROME` names a full Chrome for Testing, run
+`--headless=new`, since chrome-headless-shell never hides a tab) opens a form in a background tab
+(`Target.createTarget {background: true}`) behind a visible one and acts on it the plugin's way over raw CDP: a click
+(a buttoned press and release stands in for `Ardia.dispatchClick` on stock Chrome), `Input.insertText`, Enter, and a
+wheel to bring a lower area into view. It reads the results through DOM and the AX tree (no Runtime on the plugin's
+session), reads `visibilityState` through a separate owner session, and prints a JSON report, including whether hit
+testing found the field and whether the field had focus before the insert. Rerun it against the ardia#2808 build
+(engine/next) when it exists, where `Ardia.dispatchClick` is real.
 

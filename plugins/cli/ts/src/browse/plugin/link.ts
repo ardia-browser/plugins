@@ -3,7 +3,7 @@ import { type Browser, type CdpResult } from "../cdp/browser.ts";
 import { Cancelled, checkCancelled, currentSignal, later, untilCancelled } from "../cdp/cancel.ts";
 import { BrowseError, CdpError, OutcomeUnknown } from "../daemon-errors.ts";
 import { flag } from "../metrics.ts";
-import { checkRequest, INPUT_METHODS } from "./policy.ts";
+import { checkRequest, INPUT_METHODS, PAGE_SESSION_ONLY, PluginPolicy } from "./policy.ts";
 
 export const INPUT_ANSWER_WAIT = 10;
 export const EARLIER_INPUT_WAIT = 10;
@@ -38,6 +38,7 @@ function within<T>(work: Promise<T>, seconds: number, late: () => Error): Promis
 export class PluginLink {
   private earlierInput: Promise<void> = Promise.resolve();
   private inputOutstanding = false;
+  readonly pageSessions = new Set<string>();
 
   constructor(readonly browser: Browser) {}
 
@@ -47,6 +48,9 @@ export class PluginLink {
 
   async send(method: string, params: CdpResult = {}, session: string | null = null, timeout = 30): Promise<CdpResult> {
     checkRequest(method, params);
+    if (PAGE_SESSION_ONLY.has(method) && (session === null || !this.pageSessions.has(session))) {
+      throw new PluginPolicy(`plugin mode sends ${method} only on a page target's own session`);
+    }
     if (INPUT_METHODS.has(method)) return this.input(method, params, session);
     try {
       return await this.browser.send(method, params, { session, timeout });

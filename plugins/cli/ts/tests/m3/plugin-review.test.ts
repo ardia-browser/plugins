@@ -30,13 +30,13 @@ describe.skipIf(!CHROME)("plugins#21 review round 1, against headless Chrome for
     if (world) await stopWorld(world);
   });
 
-  test("1. a ref from another tab is refused and nothing acts on that tab [tap emulates Ardia.dispatchClick]", async () => {
+  test("1. a ref from another tab is stale (exit 1) and nothing acts on that tab [tap emulates Ardia.dispatchClick]", async () => {
     const loaderA = await pick(first);
     expect((await step(world, ["snapshot", "-i"], { expect_loader: loaderA })).exit).toBe(0);
     const second = await openTab(world);
     const loaderB = await pick(second);
     const crossed = await marked("cross-tab ref", ["click", "--", "@e3"], { expect_loader: loaderB, json: true });
-    expect(crossed).toMatchObject({ exit: 77, code: "stale_ref" });
+    expect(crossed).toMatchObject({ exit: 1, code: "stale_ref" });
     const sent = sentIn("cross-tab ref");
     expect(sent.filter((method) => method.startsWith("Input.") || method === "Ardia.dispatchClick" || method.startsWith("DOM.") || method === "Target.attachToTarget")).toEqual([]);
     await pick(first);
@@ -79,7 +79,27 @@ describe.skipIf(!CHROME)("plugins#21 review round 1, against headless Chrome for
     expect(JSON.parse(waited.out)).toMatchObject({ data: { ran: true } });
   });
 
-  test("the tap: (a) and (b) still hold", () => {
+  test("round 14: an element below the fold is wheeled into view, then clicked, with no scrollIntoViewIfNeeded [tap emulates Ardia.dispatchClick]", async () => {
+    await resetPage(world, first, `http://127.0.0.1:${world.sitePort}/far`);
+    const loader = await pick(first);
+    const shot = await step(world, ["snapshot", "-i"], { expect_loader: loader });
+    const far = /button "Far" \[ref=(e\d+)\]/u.exec(shot.out)?.[1] as string;
+    const stuck = /button "Stuck" \[ref=(e\d+)\]/u.exec(shot.out)?.[1] as string;
+    const clicked = await marked("wheel into view", ["click", "--", `@${far}`], { expect_loader: loader, no_changes: true });
+    expect(clicked.exit).toBe(0);
+    expect((await step(world, ["get", "title"])).out).toBe("Far pressed\n");
+    const sent = sentIn("wheel into view");
+    expect(sent).not.toContain("DOM.scrollIntoViewIfNeeded");
+    expect(sent.indexOf("Input.dispatchMouseEvent")).toBeGreaterThan(-1);
+    expect(sent.indexOf("Input.dispatchMouseEvent")).toBeLessThan(sent.indexOf("Ardia.dispatchClick"));
+    const refused = await marked("never in view", ["click", "--", `@${stuck}`], { expect_loader: loader, no_changes: true, json: true });
+    expect(refused).toMatchObject({ exit: 1, code: "outside_viewport" });
+    const wheels = sentIn("never in view").filter((method) => method === "Input.dispatchMouseEvent").length;
+    expect(wheels).toBe(4);
+    expect(sentIn("never in view")).not.toContain("Ardia.dispatchClick");
+  });
+
+  test("the tap: (a), (b) and (c) still hold", () => {
     expect(pluginViolations(entries(world))).toEqual([]);
   });
 });

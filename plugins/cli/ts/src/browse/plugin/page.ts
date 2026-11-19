@@ -51,6 +51,7 @@ export class PluginPage {
     const sessionId = text(attached["sessionId"]);
     if (!sessionId) throw new BrowseError("Ardia didn't attach that tab", { targetId: this.targetId }, "tab_detached");
     this.staged = [];
+    link.pageSessions.add(sessionId);
     route(sessionId, this);
     let ready = false;
     try {
@@ -64,6 +65,7 @@ export class PluginPage {
     } finally {
       if (!ready) {
         this.staged = null;
+        link.pageSessions.delete(sessionId);
         route(sessionId, null);
         void shield(() => link.send("Target.detachFromTarget", { sessionId }, null, 5)).catch(() => {});
       }

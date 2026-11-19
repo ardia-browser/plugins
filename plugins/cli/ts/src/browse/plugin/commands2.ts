@@ -451,7 +451,9 @@ async function cmdFind(ctx: PluginCtx, argv: string[]): Promise<Result> {
     return pressIn(ctx, element, key);
   }
   if (action === "focus") {
-    const [, report] = await observe(ctx.session, page, ctx.options, () => focus(element));
+    const [, report] = await observe(ctx.session, page, ctx.options, async () => {
+      await focus(element);
+    });
     return attach(new Result({ focused: element.label }), report);
   }
   const text = await elementText(element);

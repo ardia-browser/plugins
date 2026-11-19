@@ -1,22 +1,32 @@
 import { type Entry, type Message } from "./canon.ts";
-import { canonical } from "../../src/browse/daemon/names.ts";
-import { findAction } from "../../src/browse/plugin/commands2.ts";
-import { forbidden, INPUT_METHODS, KEY_COMMANDS, LEASE_GATED, mouseViolation, SENT_METHODS } from "../../src/browse/plugin/policy.ts";
+import { forbidden, INPUT_METHODS, KEY_COMMANDS, mouseViolation, PAGE_SESSION_ONLY, SENT_METHODS } from "../../src/browse/plugin/policy.ts";
 
-export type Violation = { rule: "forbidden" | "unlisted" | "pipelined" | "key_params" | "lease"; at: number; method: string; detail: string };
+export type Violation = { rule: "forbidden" | "unlisted" | "pipelined" | "key_params" | "session"; at: number; method: string; detail: string };
 
-const ACTING = new Set(["click", "fill", "type", "press", "scroll"]);
+type Wire = { asked: Map<number, Message>; pageTargets: Set<string>; pageSessions: Set<string> };
 
-export function actingStep(argv: readonly string[]): boolean {
-  const name = canonical(String(argv[0] ?? ""));
-  if (ACTING.has(name)) return true;
-  if (name !== "find") return false;
-  try {
-    return findAction(argv.slice(1).map(String)) !== "text";
-  } catch {
-    return true;
+function noteTargets(wire: Wire, infos: unknown): void {
+  for (const info of Array.isArray(infos) ? infos : [infos]) {
+    if (info === null || typeof info !== "object") continue;
+    const { targetId, type, subtype } = info as Record<string, unknown>;
+    if (typeof targetId !== "string") continue;
+    if (type === "page" && (subtype === undefined || subtype === "")) wire.pageTargets.add(targetId);
+    else wire.pageTargets.delete(targetId);
   }
 }
+
+function noteAnswer(wire: Wire, message: Message): void {
+  const asked = wire.asked.get(message.id as number);
+  wire.asked.delete(message.id as number);
+  const result = (message.result ?? {}) as Record<string, unknown>;
+  if (asked?.method === "Target.getTargets") noteTargets(wire, result["targetInfos"]);
+  else if (asked?.method === "Target.getTargetInfo") noteTargets(wire, result["targetInfo"]);
+  else if (asked?.method === "Target.attachToTarget" && typeof result["sessionId"] === "string") {
+    const target = (asked.params as Record<string, unknown> | undefined)?.["targetId"];
+    if (typeof target === "string" && wire.pageTargets.has(target)) wire.pageSessions.add(result["sessionId"]);
+  }
+}
+
 
 function parsed(text: string | undefined): Message | null {
   if (text === undefined) return null;
@@ -39,28 +49,33 @@ function keyViolation(params: Record<string, unknown>): string | null {
 export function pluginViolations(entries: readonly Entry[]): Violation[] {
   const found: Violation[] = [];
   const outstanding = new Map<number, Map<number, string>>();
-  let acting: boolean | null = null;
-  let stepName = "";
+  const wires = new Map<number, Wire>();
   entries.forEach((entry, at) => {
-    if (entry.k === "mark") {
-      stepName = String(entry.step ?? "");
-      acting = Array.isArray(entry["argv"]) ? actingStep(entry["argv"] as string[]) : null;
-      return;
-    }
+    if (entry.k === "mark") return;
     const conn = entry.c ?? 0;
     const message = parsed(entry.m);
     if (message === null) return;
     const waiting = outstanding.get(conn) ?? new Map<number, string>();
     outstanding.set(conn, waiting);
+    const wire = wires.get(conn) ?? { asked: new Map(), pageTargets: new Set(), pageSessions: new Set() };
+    wires.set(conn, wire);
     if (entry.k === "emulated") return;
     if (entry.k === "in" && typeof message.id === "number") {
       waiting.delete(message.id);
+      noteAnswer(wire, message);
+      return;
+    }
+    if (entry.k === "in" && message.method === "Target.detachedFromTarget") {
+      wire.pageSessions.delete(String((message.params as Record<string, unknown> | undefined)?.["sessionId"]));
       return;
     }
     if (entry.k !== "out" || typeof message.method !== "string") return;
     const method = message.method;
     const params = (message.params ?? {}) as Record<string, unknown>;
-    if (LEASE_GATED.has(method) && acting !== true) found.push({ rule: "lease", at, method, detail: `sent during ${acting === false ? "a read" : "a step the harness didn't classify"} (${stepName || "before any step"}); it needs a live act lease, so only acting steps send it` });
+    if (typeof message.id === "number") wire.asked.set(message.id, message);
+    if (PAGE_SESSION_ONLY.has(method) && (message.sessionId === undefined || !wire.pageSessions.has(message.sessionId))) {
+      found.push({ rule: "session", at, method, detail: message.sessionId === undefined ? "sent on the browser session, not a page target's own" : `sent on session ${message.sessionId}, which isn't a page target's own` });
+    }
     if (forbidden(method)) found.push({ rule: "forbidden", at, method, detail: "never sent in plugin mode" });
     else if (!SENT_METHODS.has(method)) found.push({ rule: "unlisted", at, method, detail: "not on the plugin daemon's method list" });
     if (!INPUT_METHODS.has(method)) return;

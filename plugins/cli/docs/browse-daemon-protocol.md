@@ -152,18 +152,26 @@ and never by Python's or by the person's own session. The TypeScript daemon only
 - **Commands.** Only `tab <id>` (the pick) and `tab`/`tab list`, `snapshot`, `click`, `fill`, `press`/`key`, `type`,
   `scroll`, `wait`, `find`, `is` and `get`; anything else (and `close`'s tab closing) answers 77 `plugin_refused`.
   They read pages through DOM, accessibility and Input only: no `Runtime`, `DOM.resolveNode`, `DOM.performSearch`,
-  `Page.createIsolatedWorld`, `DOM.focus`, `Page.captureScreenshot` or drag method is ever sent (the daemon checks every outgoing method against its list, and
+  `Page.createIsolatedWorld`, `DOM.focus`, `Page.captureScreenshot`, `DOM.scrollIntoViewIfNeeded`,
+  `Emulation.setFocusEmulationEnabled` or drag method is ever sent (the daemon checks every outgoing method against its list, and
   the harness checks the transcript). A click is one `Ardia.dispatchClick {x, y, button, clickCount, modifiers}`, which
   the engine presses and releases in one browser task; `Input.dispatchMouseEvent` is only ever a buttonless
   `mouseMoved` or a `mouseWheel`, never a press, a release or a held button. At most one input command
   (`Input.dispatch*`, `Input.insertText` or `Ardia.dispatchClick`) is outstanding: each is sent
   only after the previous one was answered, and one left unanswered (10 s, `outcome_unknown`) holds back the next step's
   input for up to 10 s more (`input_unanswered`).
-- **Focus and the act lease.** `fill`, `type`, `press <selector> <key>` and `find … focus` focus their element by
-  clicking it (`Ardia.dispatchClick` at its first content quad's centre). `DOM.scrollIntoViewIfNeeded` (and
-  `Emulation.setFocusEmulationEnabled`, which the daemon doesn't use) need a live act lease, so only acting steps send
-  them: `click`, `fill`, `type`, `press`, `scroll` and `find` with an action other than `text`; `snapshot`, `get`, `is`,
-  `wait` and `find … text` never do.
+- **Page session only.** An act lease names the tab, the DevTools page target of its primary main frame and that
+  frame's document, and the engine refuses input on any other session. So every input command (`Input.*`,
+  `Ardia.dispatchClick`) goes out on the page target's own session, the one the daemon attached to that tab with
+  `Target.attachToTarget`: never on an iframe target's, a prerender target's or an auto-attached session, and never on
+  the browser session. The daemon refuses to send one anywhere else, and the harness checks it as acceptance check (c).
+- **Focus and scrolling.** Focus comes only from clicks: `fill`, `type`, `press <selector> <key>` and `find … focus`
+  click their element (`Ardia.dispatchClick` at its first content quad's centre), which focuses the page the way a
+  person's click does; moves and wheels never focus. To bring an element into view the daemon does what a person does:
+  it reads the element's content quad and the layout viewport (`Page.getLayoutMetrics`), and while the quad's middle is
+  outside the viewport it sends one buttonless `mouseWheel` at the viewport's centre with the delta that would centre
+  it, up to 4 times; if it's still outside, the step answers code `outside_viewport` and nothing is clicked. The owner
+  session keeps `DOM.scrollIntoViewIfNeeded`.
 - **Keys.** Key events follow ardia#2808's key policy, whose key table the daemon carries as generated data
   (`ts/scripts/plugin-key-table.ts`, checked against the engine's compiled validator by `plugin-keys.test.ts`). A
   `press` the engine would refuse (Meta+C, Meta+V, Meta+Z, Shift+Delete, a character no key types) answers 77
@@ -174,7 +182,8 @@ and never by Python's or by the person's own session. The TypeScript daemon only
   same-site with the top document (same scheme and registrable domain, approximated as the host's last two labels).
   Cross-site frames (out-of-process iframes) aren't read; when any frame is skipped the snapshot ends with one line,
   `N embedded frame(s) not read`, and `--json` carries `framesNotRead`. Refs inside a read frame work like any other.
-- **Refs.** A step acts only on the picked tab: a ref taken on another tab answers 77 `stale_ref` and nothing is sent.
+- **Refs.** A step acts only on the picked tab: a ref taken on another tab is stale, answering exit 1 `stale_ref` like
+  any other stale ref, and nothing is sent.
 - **Document check.** With `options.expect_loader`, the daemon compares the picked tab's main-frame loader before the
   step (a mismatch answers code `document_changed`, exit 1, and nothing ran) and after it, even when the step failed (a
   mismatch answers code `document_changed_after`, exit 1, `data.ran: true`, in place of the step's own answer). The

@@ -28,6 +28,9 @@ export const CONTRACT = `<!doctype html><title>Form page</title>
 <button onclick="document.title='Pressed'; document.body.insertAdjacentHTML('beforeend', '<p>Saved</p>')">Save</button>
 <a href="/done">Next</a>
 <div id="list" style="height:40px;overflow:auto"><div style="height:200px"></div></div>`;
+export const FAR = `<!doctype html><title>Form page</title><h1>Far</h1><div style="height:2500px"></div>
+<button onclick="document.title='Far pressed'">Far</button>
+<button style="position:fixed;left:10px;top:5000px">Stuck</button>`;
 export const CHILD = `<!doctype html><title>Child</title><button onclick="parent.document.title='Child pressed'">Inner</button>`;
 export function framesPage(port: number): string {
   return `<!doctype html><title>Form page</title><h1>Frames</h1><iframe src="/child"></iframe><iframe src="http://localhost:${port}/child"></iframe>`;
@@ -73,7 +76,7 @@ export async function startWorld(base: number, credential = CREDENTIAL, session 
   const [chromePort, tapPort, sitePort] = [base, base + 1, base + 2];
   const children: ChildProcess[] = [];
   const site = http.createServer((request, response) => {
-    const body = request.url === "/done" ? DONE : request.url === "/contract" ? CONTRACT : request.url === "/frames" ? framesPage(sitePort) : request.url === "/child" ? CHILD : form;
+    const body = request.url === "/done" ? DONE : request.url === "/contract" ? CONTRACT : request.url === "/frames" ? framesPage(sitePort) : request.url === "/child" ? CHILD : request.url === "/far" ? FAR : form;
     response.writeHead(200, { "content-type": "text/html" });
     response.end(body);
   });

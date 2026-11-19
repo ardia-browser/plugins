@@ -1,5 +1,5 @@
 import { BrowseError } from "../daemon-errors.ts";
-import { clickAt } from "./input.ts";
+import { clickAt, wheelAt } from "./input.ts";
 import { unavailable } from "./link.ts";
 import { type PluginPage } from "./page.ts";
 import { type PluginSession } from "./session.ts";
@@ -90,14 +90,42 @@ export async function quads(element: Element): Promise<number[][]> {
   return (Array.isArray(raw) ? raw : []).filter((quad): quad is number[] => Array.isArray(quad) && quad.length === 8 && quadArea(quad as number[]) > 1);
 }
 
-export async function center(element: Element): Promise<[number, number]> {
-  await element.page.send("DOM.scrollIntoViewIfNeeded", { backendNodeId: element.backend });
-  const found = await quads(element);
-  const quad = found[0];
-  if (quad === undefined) throw new BrowseError(`${element.label} has no box on the page (it's hidden, collapsed or not rendered)`, null, "not_visible");
+export const SCROLL_TRIES = 4;
+const VIEW_MARGIN = 2;
+
+async function viewport(page: Element["page"]): Promise<{ width: number; height: number }> {
+  const metrics = await page.send("Page.getLayoutMetrics");
+  const view = (metrics["cssLayoutViewport"] ?? metrics["layoutViewport"]) as Record<string, unknown> | undefined;
+  return { width: Number(view?.["clientWidth"]) || 0, height: Number(view?.["clientHeight"]) || 0 };
+}
+
+function middleOf(quad: number[]): [number, number] {
   const xs = [quad[0], quad[2], quad[4], quad[6]] as number[];
   const ys = [quad[1], quad[3], quad[5], quad[7]] as number[];
   return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
+}
+
+export async function center(element: Element): Promise<[number, number]> {
+  let point: [number, number] | null = null;
+  let view = { width: 0, height: 0 };
+  for (let attempt = 0; attempt <= SCROLL_TRIES; attempt += 1) {
+    const quad = (await quads(element))[0];
+    if (quad === undefined) throw new BrowseError(`${element.label} has no box on the page (it's hidden, collapsed or not rendered)`, null, "not_visible");
+    point = middleOf(quad);
+    view = await viewport(element.page);
+    const [x, y] = point;
+    const inside = view.width > 0 && view.height > 0 && x >= VIEW_MARGIN && y >= VIEW_MARGIN && x <= view.width - VIEW_MARGIN && y <= view.height - VIEW_MARGIN;
+    if (inside) return point;
+    if (attempt === SCROLL_TRIES) break;
+    await wheelAt(element.page, view.width / 2, view.height / 2, x - view.width / 2, y - view.height / 2);
+  }
+  const [x, y] = point as [number, number];
+  throw new BrowseError(
+    `Element ${element.label} is outside the visible page (its middle is at ${Math.round(x)},${Math.round(y)} in a ${Math.round(view.width)}×${Math.round(view.height)} viewport), ` +
+      "so a click there would land on nothing, and wheeling the page didn't bring it into view. Snapshot again if the page moved",
+    { point: [x, y], viewport: [view.width, view.height] },
+    "outside_viewport",
+  );
 }
 
 export async function boxOf(element: Element): Promise<Box | null> {

@@ -186,7 +186,9 @@ async function cmdPress(ctx: PluginCtx, argv: string[]): Promise<Result> {
   const key = args[0] as string;
   comboEvents(key);
   const page = await ctx.session.page();
-  const [, report] = await observe(ctx.session, page, ctx.options, () => pressCombo(page, key));
+  const [, report] = await observe(ctx.session, page, ctx.options, async () => {
+    await pressCombo(page, key);
+  });
   return attach(new Result({ pressed: key }), report);
 }
 

@@ -16,8 +16,6 @@ export type Ref = { id: string; target: string; frame: string; loader: string; b
 export type PluginConfig = { session: string; endpoint: string; credentialId: string; autoDialog: boolean };
 
 export class ForeignRef extends BrowseError {
-  override readonly exitCode: number = 77;
-
   constructor(id: string) {
     super(`@${id} is from another tab: a plugin step acts only on the tab it picked, so nothing was sent. Snapshot this tab and use its refs`, null, "stale_ref");
   }
@@ -132,6 +130,7 @@ export class PluginSession {
     else if (method === "Target.detachedFromTarget") {
       const page = this.routes.get(String(params["sessionId"]));
       this.routes.delete(String(params["sessionId"]));
+      this.link?.pageSessions.delete(String(params["sessionId"]));
       page?.detach();
     }
   }
