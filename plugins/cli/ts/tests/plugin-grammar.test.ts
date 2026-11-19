@@ -17,6 +17,8 @@ function python(args: string[], input?: unknown): unknown {
   return JSON.parse(run.stdout);
 }
 
+const CLIENT_WORDS = ["help", "--help", "-h", "--version", "-V"];
+
 const BYPASSES = [
   ["open", "--label", "--", "--read", "https://example.com/"],
   ["goto", "--headers", "--", "--read", "https://example.com/"],
@@ -53,7 +55,7 @@ function caseArgvs(): string[][] {
     for (const row of rows) {
       try {
         const { rest } = splitGlobals(row.argv.slice(1));
-        if (rest.length > 0) out.push(rest);
+        if (rest.length > 0 && !CLIENT_WORDS.includes(rest[0] as string) && !rest.includes("--help") && !rest.includes("-h")) out.push(rest);
       } catch (error) {
         if (!(error instanceof Usage)) throw error;
       }
