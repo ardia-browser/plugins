@@ -1,4 +1,4 @@
-# Tabs and groups, commands, windows, events and hooks
+# Tabs and groups, commands, windows, events, hooks and any method
 
 ## Tabs and groups
 
@@ -94,3 +94,24 @@ without their query and fragment unless the hook says `"fullUrls": true` (`--ful
 `run` is argv, not a shell line; use `["/bin/sh", "-c", "…"]` when you need one, and never paste event values
 into it. `ardia hooks list` checks the file, `ardia hooks install` (ask first) runs the hooks at every login, and
 their output goes to `~/Library/Logs/Ardia/hooks.log` (on Linux `${XDG_STATE_HOME:-~/.local/state}/ardia/hooks.log`).
+
+## Any method: `ardia methods` and `ardia call`
+
+Ardia's control socket reaches the whole browser and every data point in the profile, not only what the commands
+above wrap. Discover before you guess a name:
+
+```sh
+ardia methods                      # name, reads or changes, description
+ardia methods <name>               # its description, params schema and result
+ardia methods --json               # the whole catalog
+ardia call <name> -p key=value -p limit:=20 --json   # -p k=v is a string, k:=json any JSON value
+ardia call <name> --params '{"ids": ["tab-1"]}'      # or --params - to read the JSON from stdin
+```
+
+- `ardia call` prints Ardia's result (JSON with `--json`), exits 1 with Ardia's message when it refuses, and 2 when
+  Ardia can't be reached or the connection dropped after sending (then the method may or may not have run: check
+  before retrying one that `changes`).
+- Ask before calling a method marked `changes` that the user didn't ask for, as for any unasked step.
+- "this Ardia is too old to list its methods": ask the user to update Ardia; the commands above still work.
+- On a page, `ardia browse cdp <Domain.method> [--param k=v] [--param k:=json] [--target browser|t<N>]` sends any Chrome
+  DevTools Protocol method to your session's tab, another tab, or the browser, and prints the result as JSON.

@@ -30,8 +30,8 @@ Core Commands:
   check <sel> / uncheck <sel>  Set a checkbox
   select <sel> <val...>      Pick option(s): a <select>, or a combobox/typeahead (types, picks the match)
   drag <src> <dst>           Drag onto dst's far half, taking its place [--before|--after]
-  upload <sel> <files...>    Upload files                        (gated, see below)
-  download <sel> <path>      Download by clicking element        (gated)
+  upload <sel> <files...>    Set a file input's files
+  download <sel> <path>      Click element, save the download it starts to path
   scroll [dir] [px]          Scroll (up/down/left/right, default down 300) [-s <sel>]
   scrollintoview <sel>       Scroll element into view
   wait <sel|ms>              Wait for element or time; --text, --url, --load, --fn, --state
@@ -51,13 +51,13 @@ Find:        find role|text|label|placeholder|alt|title|testid|first|last|nth <v
              find role <role> <action> --name <name>: exact name first, several matches list refs
 Mouse:       mouse move <x> <y> | down [btn] | up [btn] | wheel <dy> [dx]
 Settings:    set viewport <w> <h> [scale] | reset                 (this session's own hidden tab, off-screen)
-             set device|geo|offline|headers|credentials|media    (gated)
+             set device|geo|offline|headers|credentials|media
 Network:     network requests [--reload --filter --type --method --status --clear] | request <id>
              network har start [--content text|all|none] | har stop [path]
-             network route <url> [--abort|--body <json>] | unroute [url]  (gated)
+             network route <url> [--abort|--body <json>] | unroute [url]
 Storage:     storage local|session [get [key] | set <k> <v> | clear]
-             cookies [get|set|clear]                                     (gated)
-             state save|load <path>                                      (gated)
+             cookies [get|set|clear]
+             state save|load <path>
 Tabs:        tab [list] | tab new [--label name] [url] | tab <t1|tab-…|label|targetId> | tab active
              tab close [tab] (only tabs this session opened) | window new [url]
              (t1 ids are the same in every session; tab-… ids are the ones `ardia windows` prints)
@@ -65,10 +65,11 @@ Frames:      frame <sel|@ref|name|url> | frame main
 Dialogs:     dialog status | accept [text] | dismiss
 Diff:        diff snapshot [--baseline f] | diff screenshot --baseline f | diff url <u1> <u2>
 Debug:       console [--clear], errors [--clear]   (turn on Runtime for the tab on first use)
-             highlight <sel>, clipboard read|write|copy|paste            (gated)
-             trace start|stop [path], profiler start|stop [path]         (gated)
-             record start <path.webm> [url] | stop | restart             (gated; needs ffmpeg)
-Streaming:   stream enable [--port n] [--input] | disable | status       (gated)
+             highlight <sel>, clipboard read|write|copy|paste
+             trace start|stop [path], profiler start|stop [path]
+             record start <path.webm> [url] | stop | restart             (needs ffmpeg)
+Streaming:   stream enable [--port n] [--input] | disable | status
+Raw CDP:     cdp <Domain.method> [--params json|-] [--param k=v|k:=json] [--target browser|<tab>]
 React:       react tree | inspect <id> | renders start|stop | suspense [--only-dynamic]
              (needs `open --enable react-devtools <url>`)
 Performance: vitals [url]
@@ -110,9 +111,10 @@ Options:
   --pin-tab, --no-pin-tab Fail with tab_gone instead of falling back when the session's tab closes
   --idle-timeout <time>   End an idle session after 10s, 3m, 1h or raw ms (default 1h)
 
-Gated: Ardia's ardia-command policy (the engine's token server) doesn't yet allow the CDP
-methods these need, so over the real connection they fail naming the refused method; they
-work against a plain --port test server.
+Older Ardia: an engine from before full control refuses some DevTools methods (cookies, state,
+set device|geo|offline|headers|credentials|media, network route, upload, download, highlight,
+clipboard, trace, profiler, record, stream, and any `cdp` method off its list). Those fail with
+policy_refused naming the method and saying to update Ardia.
 
 Not here: connect, inspect, install, upgrade, doctor, dashboard, chat (no AI), mcp, profiles,
 confirm/deny, iOS (-p ios, swipe, tap), cloud providers, and launch options (--headed,
@@ -240,8 +242,8 @@ COMMANDS = {
     "network": "ardia browse network requests [--reload] [--filter p] [--type t] [--method m] [--status 2xx] [--clear] | request <id>\n"
                "  --reload starts recording and reloads the page, so its own loads are listed (--type xhr,fetch: its data calls)\n"
                "  | har start [--content text|all|none] | har stop [path] | route <url> [--abort|--body json] | unroute [url]\n\n"
-               "route needs Fetch.enable, which Ardia's policy doesn't allow yet. On the real connection Ardia strips\n"
-               "Cookie, Set-Cookie and Authorization headers from what the command sees.",
+               "route needs Fetch.enable. An older Ardia refuses it and strips Cookie, Set-Cookie and Authorization\n"
+               "headers from what the command sees; update Ardia for both.",
     "auth": "ardia browse auth save <name> --url <https url> [--origin <url>]... --username <u> [--password-stdin]\n"
             "  [--username-selector s] [--password-selector s] [--submit-selector s]\n"
             "ardia browse auth login <name> | list | show <name> | delete <name>\n\n"
@@ -324,7 +326,7 @@ COMMANDS = {
               "  EOF",
     "close": "ardia browse close [--all]\n\nCloses only the tabs this session opened (never the browser) and ends the session; a tab another\n"
              "session is using stays open and the answer says so. --all does it for every session.",
-    "record": "ardia browse record start <path.webm> [url] | stop | restart <path.webm> [url]\n\nNeeds Page.startScreencast (not allowed by Ardia's policy yet) and ffmpeg on PATH.",
+    "record": "ardia browse record start <path.webm> [url] | stop | restart <path.webm> [url]\n\nNeeds Page.startScreencast and ffmpeg on PATH.",
     "stream": "ardia browse stream enable [--port n] [--input] | disable | status\n\nBinds 127.0.0.1 only, with its own random token in the URL; view only unless --input. Needs Page.startScreencast.",
     "react": "ardia browse react tree | inspect <id> | renders start | renders stop | suspense [--only-dynamic]\n\nNeeds `ardia browse open --enable react-devtools <url>`.",
     "plugin": "ardia browse plugin add <npm-name[@version] | owner/repo[#ref]> [--name n] [--capability c]... | list | show <name>\n"
@@ -362,22 +364,34 @@ COMMANDS = {
              "Raw mouse input at viewport coordinates; a held button stays down until `mouse up`.",
     "keydown": "ardia browse keydown <key> | keyup <key>\n\nHolds a key down until keyup (keys and modifiers as press).",
     "keyup": "ardia browse keyup <key>\n\nReleases a key held with keydown.",
-    "upload": "ardia browse upload <sel> <files...>\n\nSets the files of a file input (gated: DOM.setFileInputFiles).",
-    "download": "ardia browse download <sel> <path>\n\nClicks the element and saves the download it starts to path (gated).",
+    "upload": "ardia browse upload <sel> <files...>\n\nSets the files of a file input (DOM.setFileInputFiles) and prints what changed. Paths are\n"
+              "relative to the current directory; each must be a file.",
+    "download": "ardia browse download <sel> <path>\n\nClicks the element and saves the download it starts to path (Browser.setDownloadBehavior).\n"
+                "`wait --download [path]` waits for the next download that starts, without clicking.",
+    "cdp": "ardia browse cdp <Domain.method> [--params <json>|-] [--param k=v]... [--param k:=json]... [--target browser|<tab>]\n"
+           "  [--timeout 30s]\n\n"
+           "Sends one Chrome DevTools Protocol method and prints its result as JSON. It goes to this session's tab, to the\n"
+           "tab --target names (t1, tab-…, a label or a targetId, as `tab` takes), or with --target browser to the browser\n"
+           "itself (Browser.*, Target.*, Storage.*, SystemInfo.*). --params - reads the params from stdin. Events aren't\n"
+           "printed; enabling a domain stays on for the tab until the session ends.\n\n"
+           "Examples:\n"
+           "  ardia browse cdp Page.getLayoutMetrics\n"
+           "  ardia browse cdp Storage.getCookies --target browser\n"
+           "  ardia browse cdp Runtime.evaluate --param expression=document.title --param returnByValue:=true",
     "cookies": "ardia browse cookies [get] | set <name> <value> [--url u] [--domain d] [--path p] [--httpOnly] [--secure]\n"
                "  [--sameSite Strict|Lax|None] [--expires epoch] | set --curl <file> | clear\n\n"
-               "Gated by Ardia's policy; works against a plain --port test server.",
+               "Reads and changes the browser's cookies (Network.getCookies, setCookie, clearBrowserCookies).",
     "set": "ardia browse set viewport <w> <h> [scale] | viewport reset | device <name> | geo <lat> <lng> | offline [on|off] | headers <json>\n"
            "  | credentials <user> <pass> | media [dark|light|no-preference] [reduced-motion]\n\nset viewport sizes the page of a tab this session opened and never showed, for responsive checks. Ardia first takes\n"
            "the tab off-screen (it leaves the sidebar), so an emulated page is never on screen; screenshots, snapshots and\n"
            "clicks work there at that size. To see the page, `tab <id> --show` (or `set viewport reset`, in the background):\n"
-           "the viewport ends and the page is reloaded in a new tab of its own size. The other settings are gated by Ardia's\n"
-           "policy; they work against a plain --port test server.",
-    "state": "ardia browse state save|load <path>\n\nSaves or loads cookies and storage (gated).",
+           "the viewport ends and the page is reloaded in a new tab of its own size. The other settings apply to the session's\n"
+           "tab where it is (an older Ardia refuses them: update it).",
+    "state": "ardia browse state save|load <path>\n\nSaves or loads cookies and storage.",
     "dialog": "ardia browse dialog status | accept [text] | dismiss\n\nAnswers the page's open alert, confirm or prompt.",
     "diff": "ardia browse diff snapshot [-b baseline] [-s sel] [-i] [-c] [-d n] | screenshot --baseline <png> | url <u1> <u2>\n\n"
             "snapshot compares with a file, else with this session's last snapshot.",
-    "clipboard": "ardia browse clipboard read | write <text> | copy | paste\n\nGated by Ardia's policy.",
+    "clipboard": "ardia browse clipboard read | write <text> | copy | paste\n\nReads or writes the clipboard through the page, or sends copy or paste to it.",
     "addinitscript": "ardia browse addinitscript <js> [--stdin]\n\nRegisters a script that runs in the page's main world before its own scripts, and prints its id.",
 }
 

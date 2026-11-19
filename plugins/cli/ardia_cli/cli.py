@@ -21,6 +21,8 @@ Examples:
   ardia windows --json
   ardia tabs --json
   ardia groups create tab-1 tab-2 --name Work --icon 🚀
+  ardia methods
+  ardia call run -p command=newTab
 """
 SKILLS_DESCRIPTION = """\
 Install the ardia agent skill (SKILL.md and its references) so coding agents know how to drive Ardia.
@@ -214,6 +216,10 @@ def build_parser():
 
     workspace_cli.add_parsers(commands, argparse.RawDescriptionHelpFormatter)
 
+    from ardia_cli import call_cli
+
+    call_cli.add_parsers(commands, argparse.RawDescriptionHelpFormatter)
+
     from ardia_cli import plugins_cli
 
     plugins_cli.add_parsers(commands, argparse.RawDescriptionHelpFormatter)
@@ -342,6 +348,10 @@ def run(argv: list[str]) -> int:
         from ardia_cli import workspace_cli
 
         return workspace_cli.run(args, parser)
+    if args.command in ("call", "methods"):
+        from ardia_cli import call_cli
+
+        return call_cli.run(args)
     if args.command == "plugins":
         from ardia_cli import plugins_cli
 

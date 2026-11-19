@@ -12,7 +12,7 @@ from ardia_cli.browse.tabs import Registry
 
 NTH_SUFFIX = re.compile(r">>\s*nth=-?\d+\s*$")
 
-PAGE_SCHEMES = ("http:", "https:", "about:", "data:", "blob:", "file:")
+PAGE_SCHEMES = ("http:", "https:", "about:", "data:", "blob:", "file:", "chrome:", "chrome-extension:", "chrome-untrusted:", "devtools:", "view-source:")
 ACTIVE_TIMEOUT = 3.0
 APPEAR_POLL = 0.15
 PROBE_TIMEOUT = 3.0

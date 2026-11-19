@@ -336,6 +336,13 @@ def eval_code_given(args: list[str]) -> bool:
     return False
 
 
+MAX_CDP_STDIN = 1024 * 1024
+
+
+def params_from_stdin(args: list[str]) -> bool:
+    return "--params=-" in args or any(a == "--params" and b == "-" for a, b in zip(args, args[1:]))
+
+
 def read_stdin_text() -> str:
     from ardia_cli import notes
 
@@ -511,6 +518,10 @@ def run(argv: list[str]) -> int:
         elif (command in ("eval", "addinitscript") and "--stdin" in args) or (command == "eval" and not eval_code_given(args) and not sys.stdin.isatty()) \
                 or (command == "batch" and not [a for a in args if not a.startswith("--")] and not sys.stdin.isatty()):
             stdin = sys.stdin.read()
+        elif command == "cdp" and params_from_stdin(args):
+            stdin = sys.stdin.read(MAX_CDP_STDIN + 1)
+            if len(stdin) > MAX_CDP_STDIN:
+                raise Usage("--params from stdin is over 1 MB")
         elif command == "read":
             stdin = read_stdin_urls(args)
         elif command == "script":

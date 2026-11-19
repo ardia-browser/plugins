@@ -117,6 +117,20 @@ you bump a pin.
   or a batch stopped at a failing operation, 2 Ardia can't be reached or the connection dropped after sending. Human
   output shows control characters in page text, titles and names as `\u00NN` (`ardia_cli/printable.py`), so a page
   title can't drive the terminal (an OSC 52 clipboard write, say): see Terminal output.
+- `ardia call METHOD [--params JSON|-] [-p key=value]… [-p key:=json]… [--timeout S] [--json] [--data-dir DIR]` sends
+  any method to `<data dir>/ArdiaControl.sock` (`hello` first, as every control command does) and prints the result:
+  JSON with `--json`, otherwise a readable `key: value` / `- item` outline with control characters escaped, or
+  `✓ METHOD` for a null result. `--params` is a JSON object (`-` reads it from stdin, up to 1 MB); `-p key=value`
+  sets a string and `-p key:=json` any JSON value, and `-p` wins over `--params` for the same key. A refusal prints
+  `ardia call: <Ardia's message>` and exits 1; an unknown method adds the closest name from `methods`, or, on an Ardia
+  without `methods`, says to update Ardia. Exit 2 when Ardia can't be reached, or when the connection dropped after
+  the request went out (the method may or may not have run). `ardia_cli/call_cli.py`; the protocol number is unchanged.
+- `ardia methods [NAME] [--json]` lists what the running Ardia offers over the control socket, from its `methods`
+  method: one line per method with `reads` or `changes` and its description; with NAME, that method's description,
+  params schema and result. It takes the catalog as a list of `{name, description, params, result, mutates}`, a
+  `{methods: …}` object, or an object keyed by name. An Ardia without `methods` (`unknown_method`) gets
+  `this Ardia is too old to list its methods …: update Ardia` and exit 1. Agents discover with `ardia methods` and act
+  with `ardia call`.
 - `ardia events [EVENT…]` streams browser events (see `docs/automation.md`).
 - `ardia on EVENT[,EVENT…] -- PROGRAM` runs a program for each event (see `docs/automation.md`). PROGRAM's output goes
   to the terminal untouched; event data such as `ARDIA_TITLE` and `ARDIA_URL` comes from pages, so a program that
@@ -134,7 +148,7 @@ you bump a pin.
   Feedback and the star nudge). Exit 0 starred or the page opened, 1 neither worked.
 - `ardia --version`, `ardia --help`, `ardia browse --help`, `ardia scripts <command> --help`,
   `ardia config <command> --help`, `ardia theme <command> --help`, `ardia hooks <command> --help` and `--help` on
-  each of `pinned`, `history`, `run`, `commands`, `windows`, `events`, `on`, `apply`, and `tabs` and `groups` and
+  each of `pinned`, `history`, `run`, `commands`, `windows`, `call`, `methods`, `events`, `on`, `apply`, and `tabs` and `groups` and
   their commands. `ardia browse <command> --help` (or `ardia browse help <command>`) prints that command's entry; a
   command without one prints its line from the overview and `flags: none`, never the whole overview.
 
@@ -924,12 +938,13 @@ can't be saved (`flow_not_get`), and GraphQL over GET works only when its URL va
 - **`flow list [site]`, `flow show <name> [--site s]`, `flow rm <name> [--site s]`** run without the browser; a name
   saved for several sites needs `--site`.
 
-### Gated by the token policy
+### Older engines
 
-The engine's ardia-command policy (`ac_cli_token_policy_methods.cc`) refuses these methods, so on the real connection
-these commands fail with exit 1, naming the method and the command (`code: "policy_refused"`, `data.method`, and
-`data.reason` empty). Each is implemented and works against a plain `--port` test server, so allowing the method is the
-only change needed.
+An engine from before full control (the ardia command's token policy, `ac_cli_token_policy_methods.cc`) refuses
+the methods below, so on such an Ardia these commands fail with exit 1, naming the method and the command
+(`code: "policy_refused"`, `data.method`, `data.reason` empty) and saying `this Ardia's engine doesn't allow it yet
+(…): update Ardia`. An engine with full control allows every method, so they work as they do against a plain `--port`
+DevTools server, and nothing in the command changes.
 
 | Command | Needs |
 | --- | --- |
@@ -938,17 +953,36 @@ only change needed.
 | `set device\|geo\|media` | `Emulation.setTouchEmulationEnabled`, `Emulation.setUserAgentOverride`, `Emulation.setGeolocationOverride`, `Emulation.setEmulatedMedia` |
 | `set offline`, `set headers` | `Network.emulateNetworkConditions`, `Network.setExtraHTTPHeaders` |
 | `set credentials`, `network route\|unroute` | `Fetch.enable` (and `Fetch.fulfillRequest`, `failRequest`, `continueRequest`) |
-| `upload` | `DOM.setFileInputFiles` |
-| `download <sel> <path>`, `wait --download [path]` | `Browser.setDownloadBehavior` (`wait --download` waits for the next download that starts after it; `download` clicks and saves) |
+| `upload` | `DOM.setFileInputFiles` (the paths are resolved against the current directory and must be files) |
+| `download <sel> <path>`, `wait --download [path]` | `Browser.setDownloadBehavior` with `allowAndName` into the destination's folder and `eventsEnabled`, then `default` again (`wait --download` waits for the next download that starts after it; `download` clicks and saves) |
 | `highlight` | `Overlay.enable`, `Overlay.highlightNode` |
 | `clipboard copy\|paste` | `Input.dispatchKeyEvent` with the `copy`/`paste` editing commands |
 | `clipboard read\|write` | `Browser.grantPermissions` |
 | `trace start\|stop`, `profiler start\|stop` | `Tracing.start`, `Tracing.end` |
 | `record start\|stop\|restart` | `Page.startScreencast` (and ffmpeg on PATH for the WebM) |
 | `stream enable` | `Page.startScreencast` |
+| `cdp <method>` | the method itself |
 
-On the token path Ardia also strips `Cookie`, `Set-Cookie` and `Authorization` from network events, so
-`network requests` and HAR files never contain them.
+### Raw CDP
+
+`ardia browse cdp <Domain.method> [--params <json>|-] [--param k=v]… [--param k:=json]… [--target browser|<tab>]
+[--timeout 30s]` sends one DevTools method and prints its result as JSON (`--json`: `{method, target, result}` in
+`data`), or `✓ <method>` for an empty result. It goes to the session's tab, to the tab `--target` names (`t1`,
+`tab-…`, a label or a targetId, as `tab` takes them; attached without becoming the session's tab), or with
+`--target browser` to the browser connection itself (`Browser.*`, `Target.*`, `Storage.*`, `SystemInfo.*`). Params
+work as in `ardia call`, with `--param` for `-p` (agent-browser's `-p` is its provider flag); `--params -` reads stdin,
+up to 1 MB. Every call counts as a mutation, so a timeout or a dropped connection reports the outcome as unknown and
+a `batch` stops there. Events aren't printed, and a domain it enables stays on for the tab until the session ends. A
+method name that isn't `Domain.method` is a usage error. Its result is page content (`--content-boundaries` wraps it)
+and goes through the output cap. Telemetry: the browse command event's `subcommand` `cdp`, with `error_code`
+`policy_refused` from an older engine.
+
+WebUI pages are tabs too: `tab list`, `tab <id>` and `open` take `chrome://`, `chrome-extension://`,
+`chrome-untrusted://` and `devtools://` pages (`PAGE_SCHEMES` in `state.py`), which an older engine refuses to attach
+to (`to that target`).
+
+On the token path an older engine also strips `Cookie`, `Set-Cookie` and `Authorization` from network events, so
+`network requests` and HAR files from it never contain them.
 
 The policy also refuses some uses of methods it allows (`ac_cli_token_policy.cc`), and says which in its reply:
 `ardia: <method> <reason> isn't allowed for the ardia command`. The command keeps that reason (`data.reason`, same
@@ -1076,6 +1110,11 @@ built app (never `/Applications`):
 ```sh
 ARDIA_BROWSE_E2E_APP=<build>/Ardia.app python -m unittest plugins/cli/tests/test_browse_e2e.py
 ```
+
+`test_browse_full_control.py` drives `upload`, `download`, `wait --download`, `cdp` and a `chrome://` tab against a
+plain DevTools server: a headless Chromium it starts on a throwaway profile, named by `ARDIA_BROWSE_CHROMIUM`
+(`ARDIA_BROWSE_CHROMIUM=/Applications/Helium.app/Contents/MacOS/Helium`, or any Chrome); without it that class is
+skipped.
 
 A Debug build takes its JavaScript from Metro, and the token instance has no DevTools port to find it by, so name it:
 `ARDIA_BROWSE_E2E_JS=localhost:8081`. Without it that instance never turns control on and `BrowseTokenPath` times out
@@ -1294,7 +1333,10 @@ from a checkout), `$geoip_disable`, `$process_person_profile: false` and `$sessi
 
 - `cli_command`, one per run: `command` (the first command word; `unknown` for a word it doesn't know, `none` for
   bare `ardia` and `--help`), `subcommand` (the second word; for `browse`, the browse command, or `other` when it
-  isn't one), `exit_code`, `error_code` (browse's `code`, such as `stale_ref`, `element_replaced` or
+  isn't one; for `call`, the method's family, the part before the first dot from a fixed list (`FAMILIES` in
+  `call_cli.py`: `windows`, `tabs`, `history`, `cookies`, …) or `other`, never the method or its params; `error_code` is
+  Ardia's error code, such as `unknown_method` or `bad_request`, or `bad_params`; `methods` on an Ardia without it is
+  `methods_unsupported`), `exit_code`, `error_code` (browse's `code`, such as `stale_ref`, `element_replaced` or
   `connection_lost`, or `unhandled_exception`), and `flags`, the option names given, comma-separated, only names the
   command's parser knows. Then times in whole ms and counts, each capped (an hour, 100 million): `total_ms` (process
   start to exit) and `startup_ms` (process start until the command runs); for browse, `daemon_spawned` and

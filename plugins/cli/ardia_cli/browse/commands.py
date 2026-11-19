@@ -23,9 +23,9 @@ ALIASES = {
 MUTATING = {
     "open", "click", "dblclick", "type", "fill", "press", "keyboard", "keydown", "keyup", "hover", "check", "uncheck",
     "select", "drag", "upload", "download", "scroll", "scrollintoview", "mouse", "back", "forward", "reload", "tab",
-    "find", "auth", "pushstate", "eval", "dialog", "batch", "storage", "cookies", "set", "state", "clipboard", "close", "script", "flow",
+    "find", "auth", "pushstate", "eval", "dialog", "batch", "storage", "cookies", "set", "state", "clipboard", "close", "script", "flow", "cdp",
 }
-KNOWN_SCHEMES = ("http", "https", "about", "data", "file", "blob", "chrome", "view-source")
+KNOWN_SCHEMES = ("http", "https", "about", "data", "file", "blob", "chrome", "chrome-extension", "chrome-untrusted", "devtools", "view-source")
 LOOPBACK = re.compile(r"^(localhost|127\.\d+\.\d+\.\d+|\[::1\])(:\d+)?(/|$)")
 
 
@@ -1962,6 +1962,50 @@ async def cmd_clipboard(ctx: Ctx, argv):
         detail = f"the {action} editing command" if action in ("copy", "paste") else None
         raise error.during(f"clipboard {action}", detail) from None
     raise Usage(f"Unknown clipboard operation: {action}")
+
+
+CDP_METHOD = re.compile(r"^[A-Z][A-Za-z0-9]*\.[a-z][A-Za-z0-9]*$")
+CDP_USAGE = "cdp <Domain.method> [--params <json>|-] [--param k=v | k:=json] [--target browser|<tab>] [--timeout 30s]"
+
+
+@command("cdp")
+async def cmd_cdp(ctx: Ctx, argv):
+    import io
+
+    from ardia_cli.browse.script import parse_timeout
+    from ardia_cli.call_cli import ParamsError, build_params
+
+    options, args = parse(argv, {"--params": "value", "--param": "multi", "--target": "value", "--timeout": "value"})
+    need(args, 1, CDP_USAGE)
+    if len(args) > 1:
+        raise Usage(f"Usage: ardia browse {CDP_USAGE} (params go in --params or --param)")
+    method = args[0]
+    if not CDP_METHOD.match(method):
+        raise Usage(f"{method} isn't a DevTools method name; give Domain.method, like Page.getLayoutMetrics")
+    try:
+        params = build_params(options.get("params"), options.get("param") or [], io.StringIO(ctx.stdin or "")) or {}
+    except ParamsError as error:
+        raise Usage(str(error).replace("-p ", "--param ")) from None
+    timeout = parse_timeout(options["timeout"]) if options.get("timeout") else 30
+    target = options.get("target")
+    try:
+        if target == "browser":
+            await ctx.state.connect()
+            result = await ctx.state.browser.send(method, params, timeout=timeout, mutation=True)
+            where = "browser"
+        else:
+            if target:
+                await ctx.state.connect()
+                await ctx.state.refresh_targets()
+                page = await ctx.state.page(await ctx.state.find_tab(target))
+            else:
+                page = await ctx.state.page()
+            result = await page.send(method, params, timeout=timeout, mutation=True)
+            where = ctx.state.tab_id(page.target_id)
+    except Gated as error:
+        raise error.during("cdp") from None
+    text = json.dumps(result, indent=2, ensure_ascii=False) if result else f"✓ {method}"
+    return Result({"method": method, "target": where, "result": result}, text, page_content=bool(result))
 
 
 @command("addinitscript")

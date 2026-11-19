@@ -63,11 +63,7 @@ class Gated(BrowseError):
             hint = REFUSAL_HINTS.get(self.reason)
             message = f"{what}, which Ardia allows for the ardia command, but not {self.reason} ({self.refusal})" + (f": {hint}" if hint else "")
         else:
-            message = (
-                f"{what}, which Ardia's ardia-command policy refuses ({self.refusal}). "
-                "It works once the engine's token policy allows it; until then only a plain DevTools test "
-                "server (--port) accepts it"
-            )
+            message = f"{what}, and this Ardia's engine doesn't allow it yet ({self.refusal}): update Ardia"
         super().__init__(message + (f" ({detail})" if detail else ""), data={"method": method, "reason": self.reason}, code="policy_refused")
 
     def during(self, command: str | None, detail: str | None = None) -> "Gated":

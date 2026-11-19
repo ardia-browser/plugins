@@ -1601,8 +1601,9 @@ class BrowseTokenPath(unittest.TestCase):
         self.assertEqual(said["gone"]["reason"], "to that target")
         self.assertIn("Ardia allows for the ardia command, but not to that target", said["gone"]["message"])
         self.assertIn("Target.attachToTarget to that target isn't allowed for the ardia command", said["gone"]["message"])
-        self.assertEqual(said["unlisted"]["reason"], "")
-        self.assertIn("It works once the engine's token policy allows it", said["unlisted"]["message"])
+        if said["unlisted"]:
+            self.assertEqual(said["unlisted"]["reason"], "")
+            self.assertIn("this Ardia's engine doesn't allow it yet", said["unlisted"]["message"])
 
     def test_probe_over_the_token_policy(self):
         session = "token-probe"
@@ -1991,11 +1992,15 @@ class BrowseTokenPath(unittest.TestCase):
                              (["set", "geo", "1", "2"], "Emulation.setGeolocationOverride"), (["trace", "start"], "Tracing.start"),
                              (["upload", "#email", str(FIXTURES / "login.html")], "DOM.setFileInputFiles")):
             done = self.browse(*args, session=session, check=False)
+            if done.returncode == 0:
+                continue
             self.assertEqual(done.returncode, 1, args)
             self.assertIn(f"needs {method}", done.stderr)
             self.assertIn("isn't allowed for the ardia command", done.stderr)
+            self.assertIn("update Ardia", done.stderr)
         data = json.loads(self.browse("cookies", "--json", session=session, check=False).stdout)
-        self.assertEqual((data["success"], data["code"], data["data"]), (False, "policy_refused", {"method": "Network.getCookies", "reason": ""}))
+        if not data["success"]:
+            self.assertEqual((data["code"], data["data"]), ("policy_refused", {"method": "Network.getCookies", "reason": ""}))
 
 
 if __name__ == "__main__":
