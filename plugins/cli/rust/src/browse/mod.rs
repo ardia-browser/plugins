@@ -361,6 +361,7 @@ pub fn serve(plan: &Plan, argv: &[String], python: Option<&std::path::Path>) -> 
             let flow = round_trip(&found, &rest, &mut secrets, &mut stdin);
             drop(interrupts);
             match flow {
+                Flow::Python if control::interrupted() => printer.interrupted(),
                 Flow::Python => return Served::Python(stdin),
                 Flow::Interrupted => printer.interrupted(),
                 Flow::Error(error) => printer.error(&error, as_json, &secrets, &mut call),
