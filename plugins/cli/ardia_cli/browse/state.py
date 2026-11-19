@@ -170,9 +170,6 @@ class State:
         for target_id in list(self.pages) + ([self.current] if self.current else []):
             if target_id not in self.target_infos:
                 self.forget_target(target_id)
-        if self.config.get("for_plugin"):
-            self.tab_ids.update(self.registry.numbers(self.instance, self.target_infos))
-            return pages
         every_target = {info["targetId"] for info in infos if info.get("targetId")}
         self.tab_ids.update(self.registry.numbers(self.instance, self.target_infos, present=every_target, taken_at=taken_at))
         return pages
@@ -258,8 +255,6 @@ class State:
         started = command_metrics.clock()
         explicit = target_id is not None
         target_id = target_id or self.current
-        if target_id is None and self.config.get("for_plugin"):
-            raise BrowseError("The tab this plugin picked is gone; Ardia picks it again for the next step", code="tab_gone")
         if target_id is None:
             if self.pin_tab and self.extras.get("pinned_target"):
                 raise BrowseError(
@@ -274,7 +269,7 @@ class State:
             await self.refresh_targets()
             if target_id not in self.target_infos:
                 self.forget_target(target_id)
-                if not explicit and not self.config.get("for_plugin") and target_id == self.extras.get("lost_tab", {}).get("target"):
+                if not explicit and target_id == self.extras.get("lost_tab", {}).get("target"):
                     return await self.page()
                 raise BrowseError("That tab was closed", data={"targetId": target_id}, code="tab_gone")
         page = self.pages.get(target_id)

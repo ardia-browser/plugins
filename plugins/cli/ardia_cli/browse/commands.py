@@ -594,6 +594,9 @@ async def cmd_pushstate(ctx: Ctx, argv):
 
 @command("snapshot")
 async def cmd_snapshot(ctx: Ctx, argv):
+    from ardia_cli import notes
+    from ardia_cli.browse import flows
+
     options, args = parse(
         argv,
         {"--interactive": "bool", "--compact": "bool", "--depth": "value", "--selector": "value", "--urls": "bool", "--cursor": "bool", "--diff": "bool"},
@@ -618,7 +621,9 @@ async def cmd_snapshot(ctx: Ctx, argv):
             report = changes.diff(before, ctx.state.extras["views"][page.target_id])
             data["changes"] = changes.as_data(report)
             body = changes.render(report)
-    site, header, saved = changes.local_annotations(ctx.state, page.url)
+    root = ctx.state.config.get("data_root")
+    site, header = notes.header(Path(root), page.url) if root else (None, None)
+    saved = flows.hint(ctx.state, page.url)
     if saved:
         data["flows"] = saved
         body = saved + "\n" + body
@@ -1528,9 +1533,6 @@ async def cmd_tab(ctx: Ctx, argv):
 
     await tab_registry.app_tab_map(state)
     data = {"tabId": state.tab_id(target_id), "appTabId": state.app_tabs.get(target_id), "targetId": target_id, "title": title, "url": page.url}
-    if state.config.get("for_plugin"):
-        await page.refresh_frames()
-        data["loader"] = (page.frames.get(page.main_frame) or {}).get("loader")
     return Result(data, f"✓ {title}\n  {page.url}" + offscreen_note(state))
 
 
