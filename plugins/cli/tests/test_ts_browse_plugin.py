@@ -1,5 +1,6 @@
 import fcntl
 import json
+import select
 import os
 import shutil
 import signal
@@ -252,14 +253,12 @@ class JsonAndStdin(LongDataDirs):
         self.addCleanup(daemon.close)
         return daemon
 
-    def wait_for_client(self, router: int) -> None:
-        deadline = time.monotonic() + 30
-        while time.monotonic() < deadline:
-            children = subprocess.run(["pgrep", "-P", str(router)], capture_output=True, text=True).stdout.split()
-            if children:
-                return
-            time.sleep(0.05)
-        self.fail("the router never started the TypeScript client")
+    def wait_until_reading(self, ready: int) -> None:
+        try:
+            got, _, _ = select.select([ready], [], [], 30)
+            self.assertTrue(got and os.read(ready, 1) == b"r", "the client never said it had started reading stdin")
+        finally:
+            os.close(ready)
 
     def start(self, argv: list, env: dict, **extra) -> subprocess.Popen:
         return subprocess.Popen([str(self.install.root / "bin" / "ardia"), *argv], env=env, cwd=self.box / "tmp", stdout=subprocess.PIPE,
@@ -311,10 +310,12 @@ class JsonAndStdin(LongDataDirs):
     def test_a_daemon_gone_while_stdin_was_read_says_the_input_was_used(self):
         daemon = self.live_daemon()
         reader, writer = os.pipe()
-        process = self.start(["browse", "eval", "--stdin"], self.plain_env(), stdin=reader)
+        ready, signal_end = os.pipe()
+        env = {**self.plain_env(), "ARDIA_TEST_STDIN_READY_FD": str(signal_end)}
+        process = self.start(["browse", "eval", "--stdin"], env, stdin=reader, pass_fds=(signal_end,))
         os.close(reader)
-        self.wait_for_client(process.pid)
-        time.sleep(1.5)
+        os.close(signal_end)
+        self.wait_until_reading(ready)
         daemon.close()
         for path in (self.long / "Browse").glob("*.sock"):
             path.unlink()
@@ -331,10 +332,12 @@ class JsonAndStdin(LongDataDirs):
         self.live_daemon()
         reader, writer = os.pipe()
         self.addCleanup(os.close, writer)
-        process = self.start(["browse", "--json", "eval", "--stdin"], self.plain_env(), stdin=reader)
+        ready, signal_end = os.pipe()
+        env = {**self.plain_env(), "ARDIA_TEST_STDIN_READY_FD": str(signal_end)}
+        process = self.start(["browse", "--json", "eval", "--stdin"], env, stdin=reader, pass_fds=(signal_end,))
         os.close(reader)
-        self.wait_for_client(process.pid)
-        time.sleep(1.5)
+        os.close(signal_end)
+        self.wait_until_reading(ready)
         os.killpg(process.pid, signal.SIGINT)
         out, err = process.communicate(timeout=30)
         self.assertEqual(process.returncode, 130, err)

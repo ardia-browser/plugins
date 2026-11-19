@@ -1,3 +1,4 @@
+import { closeSync, writeSync } from "node:fs";
 import { dumps, type JsonObject, object, type Value } from "../json.ts";
 import { truthy as pyTruthy } from "../py.ts";
 import { codePoints, joinCodePoints } from "../pystr.ts";
@@ -94,6 +95,17 @@ async function openAfterStdin(root: string, key: string, stdinRead: boolean): Pr
   }
 }
 
+const STDIN_READY_FD = "ARDIA_TEST_STDIN_READY_FD";
+
+function sayReadingStdin(): void {
+  const named = process.env[STDIN_READY_FD] ?? "";
+  if (!/^[0-9]{1,5}$/.test(named) || Number(named) < 3) return;
+  try {
+    writeSync(Number(named), "r");
+    closeSync(Number(named));
+  } catch {}
+}
+
 function oversizedRequest(): BrowseError {
   return unreachable("the ardia browse daemon closed the connection before taking the command (see the session log)");
 }
@@ -181,6 +193,7 @@ export async function roundTrip(found: Found, rest: string[], secrets: Secrets, 
   let stdin: Value = null;
   if (stdinWanted) checkLive(root, key);
   if (stdinWanted) {
+    sayReadingStdin();
     const raw = await readStdin(MAX_REQUEST);
     if (!(raw instanceof Buffer)) throw osFailure(raw);
     if (raw.length > MAX_REQUEST) throw oversizedRequest();

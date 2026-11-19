@@ -1238,6 +1238,11 @@ the TypeScript client must print instead of Python's, and is counted apart in th
 ### Testing it
 
 `python -m unittest discover -s plugins/cli/tests` runs the unit tests (`test_browse.py`). The end-to-end test needs a
+
+`ARDIA_TEST_STDIN_READY_FD=<n>` (tests only) makes the TypeScript client write one byte, `r`, to inherited descriptor
+`n` and close it once it has checked the session's daemon and is about to read stdin, so a process test can act at
+that moment instead of sleeping. Nothing else reads it.
+
 built app (never `/Applications`):
 
 ```sh
