@@ -911,18 +911,20 @@ class PlainDevToolsServer(unittest.TestCase):
         self.browse("--no-auto-dialog", "open", self.url + "?dialogs", session="da")
         tab = next(row["tabId"] for row in json.loads(self.browse("tab", "list", "--json", session="da").stdout)["data"]["tabs"]
                    if row["url"] == self.url + "?dialogs")
-        self.browse("cdp", "Runtime.evaluate", "--param", "expression=setTimeout(() => alert('late'), 1500)", "--target", tab, session="db")
+        self.browse("cdp", "Runtime.evaluate", "--param", "expression=setTimeout(() => alert('late'), 0)", "--target", tab, session="db")
+        self.assertEqual(self.dialog_once_open("da").get("message"), "late")
+        accepted = self.browse("dialog", "accept", "--json", check=False, session="da")
+        self.assertEqual(accepted.returncode, 0, accepted.stdout + accepted.stderr)
+        self.assertFalse(json.loads(self.browse("dialog", "status", "--json", session="da").stdout)["data"]["hasDialog"])
+
+    def dialog_once_open(self, session):
         deadline = time.monotonic() + 15
-        status = {}
         while time.monotonic() < deadline:
-            status = json.loads(self.browse("dialog", "status", "--json", session="da").stdout)["data"]
+            status = json.loads(self.browse("dialog", "status", "--json", session=session).stdout)["data"]
             if status.get("hasDialog"):
-                break
-            time.sleep(0.3)
-        self.assertEqual(status.get("message"), "late")
-        time.sleep(1.5)
-        self.assertTrue(json.loads(self.browse("dialog", "status", "--json", session="da").stdout)["data"]["hasDialog"])
-        self.browse("dialog", "accept", session="da")
+                return status
+            time.sleep(0.2)
+        self.fail(f"{session} never saw the dialog open")
 
     def test_webui_tab_is_listed(self):
         self.browse("tab", "new", "chrome://version", session="ui")
