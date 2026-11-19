@@ -1671,7 +1671,11 @@ case marked `fallback` is one Rust must hand to Python; before handing off, Rust
 (`hello`, `workspace`, `windows`, `commands`). `--command NAME` and `--case ID` narrow a run, `--keep` keeps both
 sandboxes, and `--report` prints the table as JSON (per command: cases, passing, native, served) for a given commit.
 
-The Rust entry stays `bin/ardia` and routes. A command whose row in `served.txt` says `rust` it serves itself; one that
+The Rust entry stays `bin/ardia` and routes. A call whose stdout is closed, open read-only or non-blocking goes to Python
+whatever its row says, since Python's failure there is an unhandled exception native code can't reproduce; a listing
+whose stdout later fails with anything but EPIPE ends as Python's would after its traceback: the exception line, then,
+when the failed line fit Python's stdout buffer (`st_blksize`), `Exception ignored on flushing sys.stdout:` and status
+120, else status 1. A command whose row in `served.txt` says `rust` it serves itself; one that
 says `ts` it runs as a child, `<root>/libexec/ardia-ts`, whose first argument `--ardia-routed=2:<sigint>:<fd>:<hex caller>`
 carries whether SIGINT was ignored when ardia started, the lifeline descriptor and the caller's hello JSON, since Bun by
 itself can learn none of them. The lifeline is the read end of a pipe whose write end only the router holds: the child sees EOF on it

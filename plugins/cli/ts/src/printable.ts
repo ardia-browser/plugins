@@ -1,7 +1,8 @@
-import { write, writeSync } from "node:fs";
+import { fstatSync, write, writeSync } from "node:fs";
 import { interrupted as interruptRequested } from "./control.ts";
 import { codeOf, errnoOf, strerror } from "./paths.ts";
 import { utf8 } from "./pystr.ts";
+import { constants } from "node:os";
 
 function escaped(text: string, controls: RegExp): string {
   return text.replace(controls, (found) => `\\u${found.charCodeAt(0).toString(16).padStart(4, "0")}`);
@@ -72,9 +73,30 @@ async function raceWithTick<T>(settled: Promise<T>, ms: number): Promise<T | und
   }
 }
 
+const PYTHON_DEFAULT_BUFFER = 8192;
+
+function lineAt(ends: number[], offset: number): number {
+  let start = 0;
+  for (const end of ends) {
+    if (offset < end) return end - start;
+    start = end;
+  }
+  return 0;
+}
+
+function pythonStdoutBuffer(): number {
+  try {
+    const size = fstatSync(1).blksize;
+    return size > 1 ? size : PYTHON_DEFAULT_BUFFER;
+  } catch {
+    return PYTHON_DEFAULT_BUFFER;
+  }
+}
+
 export class Output {
   closed = false;
   interrupted = false;
+  failed: { errno: number; line: number } | undefined;
   private pending: string[] = [];
   constructor(readonly json: boolean) {}
 
@@ -82,11 +104,26 @@ export class Output {
     if (!this.closed) this.pending.push(`${this.json ? jsonSafe(text) : inert(text)}\n`);
   }
 
+  pythonCrash(): number | undefined {
+    if (this.failed === undefined) return undefined;
+    const { errno, line } = this.failed;
+    const exception = `${pythonOsError(errno)}: [Errno ${errno}] ${strerror(errno)}\n`;
+    const crashed = line > pythonStdoutBuffer();
+    try {
+      writeAll(2, crashed ? exception : `${exception}Exception ignored on flushing sys.stdout:\n${exception}`);
+    } catch {}
+    return crashed ? 1 : 120;
+  }
+
   async flush(stopped: () => boolean = interruptRequested): Promise<void> {
-    const bytes = utf8(this.pending.join(""));
+    const lines = this.pending.map((line) => utf8(line));
+    const ends: number[] = [];
+    let total = 0;
+    for (const line of lines) ends.push((total += line.length));
+    const bytes = Buffer.concat(lines);
     this.pending = [];
     let offset = 0;
-    while (offset < bytes.length && !this.closed) {
+    while (offset < bytes.length && !this.closed && this.failed === undefined) {
       if (stopped()) {
         this.interrupted = true;
         return;
@@ -105,9 +142,13 @@ export class Output {
       }
       if ("written" in outcome) offset += outcome.written;
       else {
-        const code = (outcome.error as NodeJS.ErrnoException).code;
+        const code = codeOf(outcome.error);
         if (code === "EAGAIN") await pause(1);
-        else if (code !== "EINTR") this.closed = true;
+        else if (code === "EPIPE" || code === "ESHUTDOWN") this.closed = true;
+        else if (code !== "EINTR") {
+          this.failed = { errno: errnoOf(outcome.error), line: lineAt(ends, offset) };
+          return;
+        }
       }
     }
   }
@@ -122,23 +163,36 @@ export class Output {
 const PYTHON_OS_ERRORS: Record<string, string> = {
   EPIPE: "BrokenPipeError",
   ESHUTDOWN: "BrokenPipeError",
+  EAGAIN: "BlockingIOError",
+  EALREADY: "BlockingIOError",
+  EINPROGRESS: "BlockingIOError",
+  ECHILD: "ChildProcessError",
   ECONNRESET: "ConnectionResetError",
   ECONNABORTED: "ConnectionAbortedError",
   ECONNREFUSED: "ConnectionRefusedError",
-  EACCES: "PermissionError",
-  EPERM: "PermissionError",
-  ETIMEDOUT: "TimeoutError",
+  EEXIST: "FileExistsError",
   ENOENT: "FileNotFoundError",
+  EINTR: "InterruptedError",
   EISDIR: "IsADirectoryError",
   ENOTDIR: "NotADirectoryError",
+  EACCES: "PermissionError",
+  EPERM: "PermissionError",
+  ESRCH: "ProcessLookupError",
+  ETIMEDOUT: "TimeoutError",
 };
+
+const ERRNO_NAMES = new Map<number, string>(Object.entries(constants.errno).map(([name, value]) => [value, name]));
+
+export function pythonOsError(errno: number): string {
+  return PYTHON_OS_ERRORS[ERRNO_NAMES.get(errno) ?? ""] ?? "OSError";
+}
 
 export function stdoutFlushFailed(error: unknown): number {
   const code = codeOf(error) ?? "";
   if (code === "EBADF") return 0;
   const errno = errnoOf(error);
   try {
-    writeAll(2, `Exception ignored on flushing sys.stdout:\n${PYTHON_OS_ERRORS[code] ?? "OSError"}: [Errno ${errno}] ${strerror(errno)}\n`);
+    writeAll(2, `Exception ignored on flushing sys.stdout:\n${pythonOsError(errno)}: [Errno ${errno}] ${strerror(errno)}\n`);
   } catch {}
   return 120;
 }

@@ -96,13 +96,15 @@ export async function serveListing(kind: Kind, listing: Listing, argv: string[],
     if (out.closed) break;
   }
   await out.flush();
+  let exit: number | undefined;
   if (out.interrupted) {
     status = 130;
     out.complain(`ardia ${kind}: interrupted`);
   } else if (out.closed) {
     call.noteErrorCode("stdout_closed");
     status = 141;
-  } else if (shown.complaint !== undefined) out.complain(shown.complaint);
+  } else if ((exit = out.pythonCrash()) !== undefined) status = 1;
+  else if (shown.complaint !== undefined) out.complain(shown.complaint);
   finish(call, status, python);
-  return status;
+  return exit ?? status;
 }

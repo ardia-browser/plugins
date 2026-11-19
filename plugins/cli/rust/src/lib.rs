@@ -269,22 +269,26 @@ fn serve_listing(kind: Kind, listing: &Listing, argv: &[String], python: Option<
     }
     for line in &rendered.lines {
         out.say(line);
-        if out.closed() || out.interrupted() {
+        if out.stopped() {
             break;
         }
     }
     drop(interrupts);
+    let mut exit = None;
     if out.interrupted() {
         status = 130;
         out.complain(&format!("ardia {}: interrupted", kind.name()));
     } else if out.closed() {
         call.note_error_code("stdout_closed");
         status = 141;
+    } else if let Some(crashed) = out.python_crash() {
+        status = 1;
+        exit = Some(crashed);
     } else if let Some(complaint) = &rendered.complaint {
         out.complain(complaint);
     }
     telemetry::finish(&call, status, python);
-    Some(status as i32)
+    Some(exit.unwrap_or(status as i32))
 }
 
 enum Handled {
@@ -327,6 +331,9 @@ fn handle(root: Option<&Path>, raw: &[OsString], python: Option<&Path>) -> Handl
     let Some(label) = route.label() else {
         return Handled::Python;
     };
+    if printable::stdout_unusable() {
+        return Handled::Python;
+    }
     match router::Table::load(root).side(label) {
         Some(router::Side::Rust) => run_rust(route, &argv, python),
         Some(router::Side::Ts) => match router::ts_program(root) {
