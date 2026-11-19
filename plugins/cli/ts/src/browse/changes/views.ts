@@ -9,19 +9,15 @@ import { Refs } from "../state/refs.ts";
 import type { State } from "../state/state.ts";
 import { containersOf, entriesOf, type Report, type View } from "./report.ts";
 
-const views = new WeakMap<State, Map<string, View>>();
-const shownLines = new WeakMap<State, Map<string, string>>();
+const SHOWN = new WeakMap<State, Map<string, string>>();
 
-function seenViews(state: State): Map<string, View> {
-  let found = views.get(state);
-  if (found === undefined) views.set(state, (found = new Map()));
-  return found;
-}
-
-export function shown(state: State): Map<string, string> {
-  let found = shownLines.get(state);
-  if (found === undefined) shownLines.set(state, (found = new Map()));
-  return found;
+export function shownOf(state: State): Map<string, string> {
+  let shown = SHOWN.get(state);
+  if (shown === undefined) {
+    shown = new Map();
+    SHOWN.set(state, shown);
+  }
+  return shown;
 }
 
 export function viewFrame(state: State, page: Page): string {
@@ -65,23 +61,23 @@ export async function view(state: State, page: Page, given: Node[] | null = null
 
 export async function remember(state: State, page: Page, nodes: Node[]): Promise<View> {
   const seen = await view(state, page, nodes);
-  seenViews(state).set(page.targetId, seen);
+  state.views.set(page.targetId, seen);
   return seen;
 }
 
 export function previous(state: State, page: Page): View | null {
-  const seen = seenViews(state).get(page.targetId);
+  const seen = state.views.get(page.targetId) as View | undefined;
   if (seen === undefined || seen.loader !== (page.loader(viewFrame(state, page)) || "")) return null;
   return seen;
 }
 
 export function noteShown(state: State, seen: View): void {
-  const lines = shown(state);
+  const lines = shownOf(state);
   for (const row of seen.entries) lines.set(row.ref, row.line);
 }
 
 export function markShown(state: State, report: Report, after: View): void {
-  const lines = shown(state);
+  const lines = shownOf(state);
   report.back = report.added.filter((row) => lines.get(row.ref) === row.line).map((row) => row.ref);
   for (const row of after.entries) lines.set(row.ref, row.line);
 }

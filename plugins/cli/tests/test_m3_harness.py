@@ -142,7 +142,12 @@ class Replay(unittest.TestCase):
         self.assertTrue(any("tap: unexpected request" in line or "answers" in line for line in result["differences"]), result["differences"])
 
 
-LATER_SLICES = {"core/open_title": "its `open` reports changes (D5) and it runs `snapshot` (D4)"}
+LATER_SLICES = {
+    "core/open_title": "it runs `snapshot` (D4), and `open`'s change report needs D4's snapshot",
+    "act/d5_fields": "Python's flow log probes the focused field after each step (D7)",
+    "act/d5_keys": "Python's flow log probes the focused field after each step (D7)",
+    "act/d5_batch": "Python's flow log probes the focused field after each step (D7)",
+}
 
 
 def ts_program() -> str | None:
@@ -164,7 +169,7 @@ class DaemonReplay(unittest.TestCase):
         cls.harness.__exit__(None, None, None)
 
     def test_every_daemon_recording_replays_identically_against_the_ts_daemon(self):
-        paths = [path for path in replayable() if runner.name_of(path).startswith(("daemon/", "core/")) and runner.name_of(path) not in LATER_SLICES]
+        paths = [path for path in replayable() if runner.name_of(path).startswith(("daemon/", "core/", "act/d5_")) and runner.name_of(path) not in LATER_SLICES]
         self.assertGreaterEqual(len(paths), 7)
         failed = [result for result in (self.harness.replay(runner.load(path), "ts") for path in paths) if not result["ok"]]
         self.assertEqual(failed, [], "\n".join(f"{result['name']}: {result['differences'][:3]}" for result in failed))
