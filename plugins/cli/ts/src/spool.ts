@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { lstatSync } from "node:fs";
 import { now, utcDay } from "./clock.ts";
-import { dumps, Float, I128_MAX, I128_MIN, type JsonObject, object, parse, TELEMETRY_JSON_DEPTH, type Value } from "./json.ts";
+import { dumps, Float, type JsonObject, object, parse, TELEMETRY_JSON_DEPTH, type Value } from "./json.ts";
 import { join } from "./paths.ts";
 import {
   close,
@@ -256,17 +256,21 @@ export function discardSpool(root: string): void {
   }
 }
 
-function numberIn(value: Value | undefined): number {
-  if (typeof value === "bigint") return Number(value);
+type PyNumber = bigint | number;
+
+function pyNumber(value: Value | undefined): PyNumber {
+  if (typeof value === "bigint") return value;
   if (value instanceof Float) return value.value;
-  return 0;
+  return 0n;
 }
 
-function saturatingInt(value: number): bigint {
-  if (Number.isNaN(value)) return 0n;
-  if (value >= Number(I128_MAX)) return I128_MAX;
-  if (value <= Number(I128_MIN)) return I128_MIN;
-  return BigInt(Math.trunc(value));
+function laterThan(value: PyNumber, at: number): boolean {
+  return typeof value === "bigint" ? value > BigInt(Math.floor(at)) : value > at;
+}
+
+function pyInt(value: PyNumber): bigint | undefined {
+  if (typeof value === "bigint") return value;
+  return Number.isFinite(value) ? BigInt(Math.trunc(value)) : undefined;
 }
 
 export function startFlush(dir: Dir, target: Target, python: string | null): void {
@@ -290,9 +294,11 @@ export function startFlush(dir: Dir, target: Target, python: string | null): voi
     const parsed = raw === undefined ? undefined : parse(raw, TELEMETRY_JSON_DEPTH);
     const state: JsonObject = parsed instanceof Map ? parsed : new Map();
     const at = now();
-    if (numberIn(state.get("next_at")) > at) return;
+    if (laterThan(pyNumber(state.get("next_at")), at)) return;
+    const failures = pyInt(pyNumber(state.get("failures")));
+    if (failures === undefined) return;
     const written = object([
-      ["failures", saturatingInt(Math.trunc(numberIn(state.get("failures"))))],
+      ["failures", failures],
       ["next_at", new Float(at + FLUSH_INTERVAL_S)],
     ]);
     try {
