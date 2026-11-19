@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { closeSync, fstatSync, read } from "node:fs";
 import { isatty } from "node:tty";
 import { PLUGIN_MODE } from "./route.ts";
@@ -14,6 +13,8 @@ export const ENDPOINT = "ARDIA_PLUGIN_ENDPOINT";
 export const REFUSED = 77;
 export const CODE = "plugin_refused";
 export const NESTED_CODE = "nested_commands_refused";
+export const UNAVAILABLE = "plugin_daemon_unavailable";
+export const UNAVAILABLE_WHY = "has no plugin daemon yet: plugin steps will run on a TypeScript daemon that reads pages through DOM, accessibility and input only (M3 F1)";
 const CREDENTIAL = /^p\.[A-Za-z0-9_-]{43}$/;
 const TOKEN_SERVER = /^ws:\/\/127\.0\.0\.1:([1-9][0-9]{0,4})\/devtools\/browser\/[A-Za-z0-9._-]{1,128}$/;
 const MAX_PORT = 65535;
@@ -179,16 +180,4 @@ export function checkRequest(argv: readonly string[], found: Found, rest: readon
     throw new PluginRefusal(`can't run ${verdict.why}: it runs other commands inside the daemon, which doesn't check the plugin rules on them yet, so send each step on its own`, NESTED_CODE);
   }
   if (!verdict.allowed) throw new PluginRefusal(`can't run ${verdict.why} for a plugin, only page steps`);
-}
-
-export function accessEndpointKey(access: Access): string {
-  return `plugin:${createHash("sha256").update(access.credential, "utf8").digest("hex").slice(0, 32)}`;
-}
-
-export function accessWs(access: Access): string {
-  return `${access.endpoint}?token=${access.credential}`;
-}
-
-export function accessLabel(access: Access): string {
-  return access.endpoint.slice("ws://".length);
 }

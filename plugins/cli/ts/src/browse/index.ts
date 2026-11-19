@@ -4,11 +4,11 @@ import { Call, finish } from "../telemetry.ts";
 import { cliVersion } from "../version.ts";
 import { cleanMetrics, exitOf, outputChars, processStatus, textOf } from "./answer.ts";
 import { allowedFlags, commandName, hoist, hoistFailure, jsonIntent, jsonIntentOfArgv, splitGlobals, truthy, Usage } from "./args.ts";
-import { codeJsonAnswer, honestText } from "./codes.ts";
+import { codeJsonAnswer } from "./codes.ts";
 import { BrowseError, PythonCrash } from "./errors.ts";
 import { Interrupted } from "./exchange.ts";
 import { Printer } from "./output.ts";
-import { type Access, checkRequest, CODE, dropCredential, message, pluginMode, PluginRefusal, REFUSED, takeAccess } from "./plugin.ts";
+import { checkRequest, CODE, dropCredential, message, pluginMode, PluginRefusal, REFUSED, takeAccess, UNAVAILABLE, UNAVAILABLE_WHY } from "./plugin.ts";
 import { dumps, object, type Value } from "../json.ts";
 import { Secrets } from "./redact.ts";
 import { renderError } from "./render.ts";
@@ -66,7 +66,6 @@ function printAnswer(answer: Map<string, Value>, secrets: Secrets, printer: Prin
     return { status: 1, crash: invalid };
   }
   if (asJson) codeJsonAnswer(answer);
-  else answer.set("err", honestText(answer.get("err")) ?? null);
   const code = answer.get("code");
   if (typeof code === "string") call.noteErrorCode(code);
   for (const [key, value] of cleanMetrics(answer.get("metrics"))) call.metrics.set(key, value);
@@ -83,7 +82,7 @@ function printAnswer(answer: Map<string, Value>, secrets: Secrets, printer: Prin
   return status instanceof PythonCrash ? { status: 1, crash: status } : { status };
 }
 
-async function run(browse: string[], printer: Printer, call: Call, plugin: Access | undefined, python: string | null): Promise<Outcome | undefined> {
+async function run(browse: string[], printer: Printer, call: Call, plugin: boolean, python: string | null): Promise<Outcome | undefined> {
   let parsed;
   try {
     parsed = splitGlobals(browse);
@@ -106,8 +105,9 @@ async function run(browse: string[], printer: Printer, call: Call, plugin: Acces
   }
   if (handedBack(rest, browse) !== undefined) return undefined;
   const secrets = new Secrets();
+  if (plugin) return { status: printError(new BrowseError(message(UNAVAILABLE_WHY), REFUSED, UNAVAILABLE), asJson, secrets, printer, call) };
   try {
-    const answer = await roundTrip(found, rest, secrets, call, plugin, python);
+    const answer = await roundTrip(found, rest, secrets, call, python);
     return printAnswer(answer, secrets, printer, call, asJson, outputChars(answer));
   } catch (error) {
     if (handBackReason(error) !== undefined) throw error;
@@ -162,18 +162,18 @@ function topLevelError(argv: string[], python: string | null): number {
   return failure.status;
 }
 
-async function pluginAccess(browse: string[], call: Call, python: string | null): Promise<Access | number> {
+async function pluginAccess(browse: string[], call: Call, python: string | null): Promise<number | undefined> {
   try {
-    const access = await takeAccess();
+    await takeAccess();
     let parsed;
     try {
       parsed = splitGlobals(browse);
     } catch (error) {
       if (!(error instanceof Usage)) throw error;
-      return access;
+      throw new PluginRefusal(`can't read its options (${error.message})`);
     }
     checkRequest(browse, parsed.found, parsed.rest);
-    return access;
+    return undefined;
   } catch (error) {
     if (error instanceof PluginRefusal) return refuse(jsonIntent(browse), error.message, call, python, error.code);
     if (error instanceof Interrupted) {
@@ -195,11 +195,9 @@ export async function serveBrowse(argv: string[], python: string | null): Promis
     return topLevelError(argv, python);
   }
   const call = browseCall(argv, browse);
-  let access: Access | undefined;
   if (plugin) {
-    const taken = await pluginAccess(browse, call, python);
-    if (typeof taken === "number") return taken;
-    access = taken;
+    const refused = await pluginAccess(browse, call, python);
+    if (refused !== undefined) return refused;
   }
   if (!environmentIsText()) return plugin ? refuse(jsonIntent(browse), "needs text environment variables", call, python) : undefined;
   const errors = pythonStdioErrors();
@@ -207,7 +205,7 @@ export async function serveBrowse(argv: string[], python: string | null): Promis
   const printer = new Printer(errors);
   let outcome: Outcome | undefined;
   try {
-    outcome = await run(browse, printer, call, access, python);
+    outcome = await run(browse, printer, call, plugin, python);
   } catch (error) {
     const reason = handBackReason(error);
     if (reason === undefined) throw error;

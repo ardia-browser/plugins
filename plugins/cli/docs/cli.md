@@ -1074,72 +1074,64 @@ The app's AI plugin runs `ardia browse --session plugin-<name> <step>` with `ARD
 it relies on is `tests/parity/cases/ai-plugin-contract.json` (one case per item); the credential handoff is ardia#2808's
 `docs/cli.md` › Plugin credentials.
 
+**Plugin mode never reaches the Python daemon.** ardia#2808 removes `Runtime` from plugin credentials (no `evaluate`,
+no `callFunctionOn`, no isolated worlds), and the Python daemon reads and acts on pages through page script, so plugin
+steps are served by a TypeScript plugin daemon (F1-early, on M3's D1 and D2) that uses DOM, AX and Input only. Until it
+lands, a plugin step that passes every check below answers status 77 and code `plugin_daemon_unavailable` ("has no
+plugin daemon yet…"), and nothing is sent anywhere: no daemon is started or contacted and the token server never hears
+from it. Help and `--version` are still answered by the client. The Python daemon has no plugin mode; the Python
+client's plugin mode (`plugin_access.py`) stays only as the parity reference for the refusals. The cases that expected
+a daemon's plugin answers are kept for F1-early in `tests/parity/pending/f1-early.json` (outside the parity table);
+their places in the table now expect `plugin_daemon_unavailable`.
+
+#### What the client checks today
+
 - The credential comes only on the inherited descriptor `ARDIA_PLUGIN_CREDENTIAL_FD` names (the app uses 4): read to EOF,
-  at most 256 bytes, exactly `p.` and 43 base64url characters, then closed before anything is spawned. The token server
-  is `ARDIA_PLUGIN_ENDPOINT` (`ws://127.0.0.1:<port>/devtools/browser/<id>`; empty means control is off). The session
-  daemon gets `<endpoint>?token=<credential>` on its stdin config and connects with no `Origin` header; the credential
-  is never in argv, the environment, a file or a log, and `ArdiaControl.json` is never read.
-- The session key ends in `\0plugin` and its endpoint part is `plugin:` and a SHA-256 prefix of the credential, so a
-  plugin never shares a daemon with the person's session of the same name, with an older CLI, or with another activity.
-- `--expect-loader <loaderId>` goes to the daemon as `options.expect_loader`; it checks the main frame's loader before
-  and after the step and answers `document_changed` (exit 1). `tab <id> --json` carries `data.loader`. A step whose
-  picked tab is gone answers `tab_gone`; lost-tab recovery and the notes and saved-flow hints are off.
-- The Python daemon answers the same `document_changed` when its check fails before the step (nothing ran) and after it
-  (the step ran, say a click that submitted a form), and nothing in its reply tells the two apart. So the client
-  rewords it: "The page loaded a new document before, during or after this step, so it may or may not have run; check
-  the page before repeating it. …" (both modes; intentional cases). **M3 F1's daemon must tell them apart**: keep
-  `document_changed` for the before-check (nothing ran) and answer `document_changed_after` when the step ran and the
-  document changed during or after it; the client then passes both through and drops the rewording.
-- An engine refusal arrives as a CDP error whose own message starts `ardia: <code>`. The daemon's CDP layer
-  (`connection.failure`) gives `ardia: tab_out_of_scope` (the tab left the credential's window or profile) the code
-  `tab_out_of_scope` and the act lease's `ardia: document_changed` the code `document_changed`; the client passes the
-  reply's code on and never reads codes out of message text, so page or selector text that quotes one keeps its own
-  code. A tab that is out of scope before the step isn't in the engine's filtered target list, so `tab <id>` still
-  answers `tab_not_found`.
-- The client checks the session socket and connects to it through the one `Browse` folder descriptor it opened and
-  verified: `fstatat` without following links for the socket's type, owner and mode, then a connect by its bare name
-  (`connectAt` refuses anything with a `/`, `.` or `..`). On macOS the connect runs with the calling thread's working
-  directory set to that folder; on Linux it goes through `/proc/self/fd/<n>/<name>`, non-blocking, polled within the
-  CLI's 15 s start deadline, one deadline shared by every attempt while a daemon starts. On Linux plugin mode reads the
-  locale as on macOS (a UTF-8 `LC_ALL`/`LC_CTYPE`/`LANG`, or C/POSIX), where other Linux browse calls go to Python.
-  CI's Ubuntu job runs the plugin process tests (`tests/test_ts_browse_plugin.py`); none of it runs Linux on a Mac.
+  at most 256 bytes, exactly `p.` and 43 base64url characters, then closed before anything else happens. The token
+  server is `ARDIA_PLUGIN_ENDPOINT` (`ws://127.0.0.1:<port>/devtools/browser/<id>`; empty means control is off). The
+  credential is never in argv, the environment, a file or a log, and `ArdiaControl.json` is never read.
 - Refused with status 77 and one line (JSON with code `plugin_refused` under `--json`), before anything is sent:
   `ARDIA_BROWSE_FOR_PLUGIN` other than `1`; a missing, non-numeric, closed, terminal or unreadable descriptor; anything
   but a well-formed credential (a trailing newline included); no read within 2 s (Ctrl-C ends the wait with status
   130 and `interrupted`); a missing or empty endpoint, or one whose host isn't exactly `127.0.0.1` or whose port isn't
-  1 to 65535 without a leading zero (Python's reference accepts port 0, which the WebSocket client reads as 80); `--ws`, `--port`, `--cdp`, `ARDIA_WS`, `ARDIA_PORT`, `ARDIA_CDP_URL` or `AGENT_BROWSER_CDP`; a session flag
-  after the command (`--session --namespace --data-dir --port --ws --cdp --screenshot-* --idle-timeout --init-script
-  --enable --headers --color-scheme --download-path --annotate --no-auto-dialog --pin-tab --no-pin-tab --debug
-  --capture-console --show --content-boundaries --out --stdin`); and `auth`, `notes`, `flow`, `plugin`, `read`,
-  `session`, `script`, `cdp`, `clipboard` and `close --all`. The router sends a plugin's browse call only to the TypeScript client and
-  refuses (77) rather than hand it to Python.
-- **Plugin mode is an allowlist.** Only these commands and flags reach the daemon, the AI plugin contract's §1 list:
-  `snapshot` (`-i -c -d -s -u --diff`), `get` (`text html value attr title url count box`), `click`
-  (`--button --no-humanize`), `fill`, `press`/`key` (`--no-humanize`), `type` (`--delay --no-humanize`), `scroll`
-  (`-s --no-humanize`), `wait` (`-t -u -l --state --timeout`), `find` (`--name --exact --partial --no-humanize`), `is`,
-  and `tab` as the pick (`tab <id>`) or the list. Everything else is refused with status 77 and `plugin_refused` before
-  anything is sent, including every command or flag that names a local path for the daemon (`diff snapshot --baseline`,
-  `upload`, `download`, `wait --download`, `screenshot`, `pdf`, `state`, `--out`) and the client's own `--out`; the
-  contract lists none of those. The guard reads the command's argv with the daemon's own grammar (`plugin-grammar.ts`,
-  the flags and aliases each command function in `commands.py` passes to `parse()`, and a port of `parse()` itself:
-  a value flag takes the next token even when it is `--`, and a negative number is `-` and any Unicode decimal digit,
-  as Python's `\d`), so a flag the daemon would see is never hidden from it. The guard fails closed: an argv it can't
-  read exactly (an unknown flag, a value flag with no value) is refused with 77, never sent for the daemon to reject.
-- Global options have their own allowlist: `--session`, `--json`, `--expect-loader`, `--max-output`, `--timeout`,
-  `--humanize`/`--no-humanize`, `--full`, `--no-changes` and `--no-text`. Anything else, wherever it appears (before
-  `browse` or after it), is refused with 77: `--data-dir`, `--namespace`, `--idle-timeout`, `--debug`, `--enable`,
-  `--init-script` and the rest. The data folder comes only from the environment Ardia starts the plugin with.
+  1 to 65535 without a leading zero; `--ws`, `--port`, `--cdp`, `ARDIA_WS`, `ARDIA_PORT`, `ARDIA_CDP_URL` or
+  `AGENT_BROWSER_CDP`; a session flag after the command (`--session --namespace --data-dir --port --ws --cdp
+  --screenshot-* --idle-timeout --init-script --enable --headers --color-scheme --download-path --annotate
+  --no-auto-dialog --pin-tab --no-pin-tab --debug --capture-console --show --content-boundaries --out --stdin`); global
+  options the client can't read (a value flag with no value, a launch option); and `auth`, `notes`, `flow`, `plugin`,
+  `read`, `session`, `script`, `cdp`, `clipboard` and `close --all`. The router sends a plugin's browse call only to the
+  TypeScript client and refuses (77) rather than hand it to Python.
+- **Commands and flags are an allowlist**, exactly the AI plugin contract's §1 list minus what needs page script:
+  `snapshot` (`-i -c -d -s -u --diff`; the AI sends `snapshot -c`), `get` (`text html value attr title url count box`),
+  `click` (`--button --no-humanize`), `fill`, `press`/`key` (`--no-humanize`), `type` (`--delay --no-humanize`),
+  `scroll` (`-s --no-humanize`), `wait` (`-t -u -l --state --timeout`), `find` (`--name --exact --partial
+  --no-humanize`), `is`, and `tab` as the pick (`tab <id>`) or the list. `snapshot --cursor` and `get styles` read
+  computed styles, so they are refused. Nothing allowed names a local path. The guard reads each argv with the daemon's
+  own grammar (`plugin-grammar.ts`: the flags and aliases each command function in `commands.py` passes to `parse()`,
+  and a port of `parse()` itself, where a value flag takes the next token even when it is `--` and a negative number
+  is `-` and any Unicode decimal digit), and fails closed: an argv it can't read exactly is refused with 77.
   `tests/plugin_grammar.py` reads that grammar from the real functions, and `plugin-grammar.test.ts` checks the table
-  and runs every case's argv through both parsers. One daemon-side write stays: an answer over the output cap is also
-  saved to a private file in the daemon's temp folder (`spill`), which M3 F1 must turn off for a plugin session.
-- Nothing on the allowlist needs page script. ardia#2808 removes `Runtime` from plugin credentials (no `evaluate`, no
-  `callFunctionOn`, no isolated worlds), so `snapshot --cursor` and `get styles`, which read computed styles, are
-  refused. **M3 F1's daemon serves each allowed command from plain DOM and AX reads plus Input** (the AI plugin
-  thread's mapping, the F1 spec):
+  and runs every case's argv through both parsers.
+- **Global options are an allowlist too:** `--session`, `--json`, `--expect-loader`, `--max-output`, `--timeout`,
+  `--humanize`/`--no-humanize`, `--full`, `--no-changes` and `--no-text`. Anything else, before `browse` or after it, is
+  refused with 77. The data folder comes only from the environment Ardia starts the plugin with.
+- Commands that run other commands answer code `nested_commands_refused` (77): `batch` and `open`/`goto`/`navigate
+  --read`.
+- On Linux plugin mode reads the locale like macOS, except that it treats a UTF-8 locale name as installed: glibc keeps
+  locales in one archive the client can't check cheaply, and the app always sets an installed `en_US.UTF-8`.
+- `cli_command` carries `plugin_mode: true` from the TypeScript client.
+
+#### What F1-early's daemon must do (the spec)
+
+- **The session:** the daemon gets `<endpoint>?token=<credential>` on its stdin config and connects with no `Origin`
+  header. Its session key ends in `\0plugin` and its endpoint part is `plugin:` and a SHA-256 prefix of the credential,
+  so a plugin never shares a daemon with the person's session of the same name, with an older CLI, or with another
+  activity.
+- **Exactly the commands and flags above**, served from plain data (the AI plugin thread's mapping):
 
   | command | served from |
   |---|---|
-  | `tab <id>`, the pick | Target, scoped to the credential |
+  | `tab <id>`, the pick | Target, scoped to the credential; `tab --json` carries `data.loader` |
   | `snapshot -c` | the AX tree; `--urls` from `DOM.getAttributes` |
   | `get` | the AX name or value, or `DOM.getOuterHTML` parsed in the daemon |
   | `click` | `DOM.scrollIntoViewIfNeeded`, `DOM.getContentQuads`, then a mouse event |
@@ -1147,34 +1139,35 @@ it relies on is `tests/parity/cases/ai-plugin-contract.json` (one case per item)
   | `type`, `press` | Input |
   | `scroll` | `mouseWheel` |
   | `is` | `DOM.getBoxModel` and the AX tree |
-  | `wait` | AX or `DOM.performSearch` polling, target info, lifecycle events and `DOM.getBoxModel` |
+  | `wait` | AX polling, target info, lifecycle events and `DOM.getBoxModel` |
   | `find` | an AX search |
   | dialogs | `Page.handleJavaScriptDialog` |
 
-- Every credential on one token server shares that endpoint's tab registry (`Browse/` keyed by the endpoint's
-  instance), and a plugin credential's `Target.getTargets` lists only its own scope. So a plugin session numbers the tabs
-  it sees but never prunes the registry: its list can't tell a closed tab from another activity's. The person's
-  sessions still prune. **M3 F1:** key a plugin session's registry entries by its credential id, or keep never
-  pruning from a scoped list.
-- Commands that run other commands are refused with status 77 and code `nested_commands_refused`, before anything is
-  sent: `batch` (and its aliases) and `open --read` (or `goto`/`navigate --read`, which runs `read`). `script` and
-  `flow`, the other two, are refused above. The rules here are checked by the client on the outer command only; the
-  Python daemon runs a batch's steps, a script's `browse()` calls and a saved flow's steps without them. **When plugin
-  mode moves into the daemon (M3 F1), the daemon must check every rule on every step it runs for a `for_plugin`
-  session** (the refused commands and flags, the refused session flags, `--out`, and the CDP input rules below), and
-  only then may the client stop refusing these commands. Cases: `tests/parity/cases/ai-plugin-review.json`.
-- Input the engine accepts from a plugin (ardia#2808's plugin policy). The daemon builds these CDP calls, so it keeps
-  them for a `for_plugin` session (the TypeScript daemon, M3 F1, must; today's Python daemon doesn't yet: its
-  humanized typing sends `nativeVirtualKeyCode` and its shortcuts send `undo`/`redo`):
-  - `Input.dispatchKeyEvent` never carries `nativeVirtualKeyCode` or `isSystemKey`.
-  - Its `commands` hold only `selectAll`; `moveToBeginningOfLine`, `moveToEndOfLine`, `moveToBeginningOfDocument`,
-    `moveToEndOfDocument`, `moveLeft`, `moveRight`, `moveUp`, `moveDown`, `moveWordLeft`, `moveWordRight`, each also
-    with `AndModifySelection`; `deleteBackward`, `deleteForward`, `deleteWordBackward`, `deleteWordForward`;
-    `insertNewline`; `insertTab`. Never `copy`, `cut`, `paste` or `pasteAndMatchStyle`.
-  - `backendNodeId` stays usable; the engine accepts only ids from the session's own frame tree.
-  The client keeps them where it shapes input: it refuses `clipboard`, whose copy and paste need those commands. The
-  contract cases record each rule as `cdp_rules`; the harness counts them and checks them once it has a fake engine.
-- `cli_command` carries `plugin_mode: true` from the TypeScript client.
+- **`find --name` and `wait --text` search the AX tree**, never the DOM: `DOM.performSearch` is off the engine's
+  allowlist.
+- **No input pipelining:** one `Input.dispatchMouseEvent`, `dispatchKeyEvent` or `insertText` at a time, each sent only
+  after the previous one answered, humanized typing and `fill` included, so an engine refusal stops the step after the
+  refused event with nothing queued behind it.
+- **Plugins can't drag:** no `drag` command, and no mouse-down/move/up sequence that crosses elements.
+- **Input the engine accepts from a plugin** (ardia#2808's plugin policy): `Input.dispatchKeyEvent` never carries
+  `nativeVirtualKeyCode` or `isSystemKey`; its `commands` hold only `selectAll`; `moveToBeginningOfLine`,
+  `moveToEndOfLine`, `moveToBeginningOfDocument`, `moveToEndOfDocument`, `moveLeft`, `moveRight`, `moveUp`,
+  `moveDown`, `moveWordLeft`, `moveWordRight`, each also with `AndModifySelection`; `deleteBackward`, `deleteForward`,
+  `deleteWordBackward`, `deleteWordForward`; `insertNewline`; `insertTab`; never `copy`, `cut`, `paste` or
+  `pasteAndMatchStyle`. `backendNodeId` stays usable; the engine accepts only ids from the session's own frame tree.
+  The contract cases record each rule as `cdp_rules`.
+- **The document check:** `--expect-loader <loaderId>` compares the main frame's loader before the step (mismatch:
+  `document_changed`, nothing ran) and after it (mismatch: `document_changed_after`, the step ran). A step whose picked
+  tab is gone answers `tab_gone`; there is no lost-tab recovery and no notes or saved-flow hints.
+- **Engine refusals keep their codes:** an engine error whose own message starts `ardia: tab_out_of_scope` answers
+  code `tab_out_of_scope`, and the act lease's `ardia: document_changed` answers `document_changed`; codes never come
+  from page text.
+- **A registry of its own:** a plugin session keeps its tab numbers in a registry keyed by its credential id and never
+  touches the shared `Browse/` tab registry, the temporary-tab sweep, the `using` state or `tab list`'s view of other
+  sessions. A credential's scoped target list can't tell another activity's tab from a closed one.
+- **No local writes:** no output spill file for an answer over the cap, and nothing written under the person's data
+  folder beyond the session's own socket, lock and log.
+- **Every rule on every step** it runs, if it ever runs nested steps.
 
 ### JSON error codes
 
@@ -1197,7 +1190,8 @@ Python has none:
 | `plugin_refused` | a plugin-mode refusal (status 77) |
 | `interrupted` | Ctrl-C while the client waited: on stdin, the credential, the connection or the answer (status 130) |
 | `internal_error` | the client crashed as Python's would, for instance on a reply that isn't JSON or isn't an object; `error` holds Python's crash line (status 1). If stdout itself failed, the crash line stays on stderr. Also a failing answer (nonzero exit) whose output isn't one JSON value: plain text (the text is the message), a `✗` line on stderr (its text, moved off stderr), nothing at all, or an error object whose `code` is null or not text. Valid JSON that isn't an object (a batch's list) is kept |
-| `tab_out_of_scope` | the engine's `ardia: tab_out_of_scope` refusal: the tab moved to another window or profile mid-step |
+| `tab_out_of_scope` | (F1-early's daemon) the engine's `ardia: tab_out_of_scope` refusal: the tab moved to another window or profile mid-step |
+| `plugin_daemon_unavailable` | plugin mode with a step that passed every check: its daemon (F1-early) isn't there yet, so nothing is sent (status 77) |
 | `nested_commands_refused` | plugin mode and a command that runs other commands (`batch`, `open --read`; status 77) |
 
 The Rust router's own plugin refusals (no TypeScript client, it didn't start, or it asked for Python) follow the same

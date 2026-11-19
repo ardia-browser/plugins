@@ -36,25 +36,6 @@ def holders(paths: list) -> set:
     return found
 
 
-def environment_of(pid: int) -> str:
-    if sys.platform == "darwin":
-        return subprocess.run(["ps", "-E", "-o", "command=", "-p", str(pid)], capture_output=True, text=True).stdout
-    try:
-        return Path(f"/proc/{pid}/environ").read_bytes().decode(errors="replace")
-    except OSError:
-        return ""
-
-
-def descriptor_of(pid: int, fd: int) -> str:
-    if shutil.which("lsof"):
-        return subprocess.run(["lsof", "-a", "-p", str(pid), "-d", str(fd)], capture_output=True, text=True).stdout
-    try:
-        target = os.readlink(f"/proc/{pid}/fd/{fd}")
-    except OSError:
-        return ""
-    return f"COMMAND PID USER FD TYPE\nproc {pid} user {fd}u {'PIPE' if target.startswith('pipe:') else 'OTHER'}\n"
-
-
 def programs():
     return harness.ts_binary() is not None and harness.ts_binary().exists() and harness.binary() is not None
 
@@ -127,71 +108,31 @@ class PluginCredentialProcesses(unittest.TestCase):
                 "ARDIA_TELEMETRY": "0", "NO_COLOR": "1", "ARDIA_BROWSE_FOR_PLUGIN": "1", "ARDIA_PLUGIN_CREDENTIAL_FD": str(FD),
                 "ARDIA_PLUGIN_ENDPOINT": f"ws://127.0.0.1:{port}/devtools/browser/{BROWSER}", "PYTHONPATH": str(harness.CLI)}
 
-    def family(self, root: int) -> list:
-        rows = subprocess.run(["ps", "-A", "-o", "pid=,ppid="], capture_output=True, text=True).stdout.split("\n")
-        members = {root}
-        for _ in range(6):
-            for row in rows:
-                parts = row.split()
-                if len(parts) == 2 and int(parts[1]) in members:
-                    members.add(int(parts[0]))
-        return sorted(members | set(self.daemon_pids()))
-
-    def look(self, root: int) -> list:
-        seen = []
-        for pid in self.family(root):
-            args = subprocess.run(["ps", "-o", "args=", "-p", str(pid)], capture_output=True, text=True).stdout
-            environ = environment_of(pid)
-            held = descriptor_of(pid, FD)
-            seen.append((pid, args, environ, held))
-        return seen
-
-    def start_session(self, command: list) -> tuple[str, list]:
+    def test_a_plugin_step_reads_its_credential_and_starts_nothing(self):
         server = TokenServer()
         self.addCleanup(server.close)
         reader, writer = os.pipe()
         os.write(writer, CREDENTIAL.encode())
         os.close(writer)
         moved = ["/bin/sh", "-c", f'exec {FD}<&{reader} {reader}<&-; exec "$@"', "sh"] if reader != FD else []
-        wrapped = [*moved, *command, "browse", "--session", "plugin-ai", "get", "--", "title"]
-        process = subprocess.Popen(wrapped, env=self.env(server.port), cwd=self.box / "tmp", stdin=subprocess.DEVNULL,
+        command = [*moved, str(self.install.root / "bin" / "ardia"), "browse", "--session", "plugin-ai", "--json", "get", "--", "title"]
+        process = subprocess.Popen(command, env=self.env(server.port), cwd=self.box / "tmp", stdin=subprocess.DEVNULL,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, pass_fds=(reader,), start_new_session=True)
         os.close(reader)
-        try:
-            self.assertTrue(server.asked.wait(30), "the daemon never opened the token server")
-            seen = self.look(process.pid)
-        finally:
-            server.release.set()
-            process.communicate(timeout=120)
-        return server.request.decode("latin1"), seen
-
-    def check(self, head: str, seen: list, client: str):
-        self.assertTrue(head.startswith(f"GET /devtools/browser/{BROWSER}?token={CREDENTIAL} HTTP/1.1\r\n"), head[:200])
-        self.assertNotIn("\r\norigin:", head.lower())
-        self.assertNotIn("decoy-token-never-read", head)
-        commands = [args for _, args, _, _ in seen]
-        self.assertTrue(any(client in args for args in commands), commands)
-        self.assertTrue(any("daemon.main()" in args for args in commands), commands)
-        for pid, args, environ, held in seen:
-            self.assertNotIn(CREDENTIAL[2:], args, pid)
-            self.assertNotIn(CREDENTIAL[2:], environ, pid)
-            if client in args or "daemon.main()" in args:
-                kinds = [row.split()[4] for row in held.strip().splitlines()[1:]]
-                self.assertNotIn("PIPE", kinds, f"fd {FD} is still the credential pipe in {args.strip()}")
-        for path in (Path(self.env(0)["ARDIA_DATA_DIR"]) / "Browse").iterdir():
-            if path.is_file():
-                self.assertNotIn(CREDENTIAL[2:], path.read_text(errors="replace"), path.name)
-
-    def test_the_typescript_client_starts_a_daemon_that_alone_holds_the_credential(self):
-        head, seen = self.start_session([str(self.install.root / "bin" / "ardia")])
-        self.check(head, seen, "ardia-ts.bin")
-
-    def test_the_python_client_does_the_same(self):
-        head, seen = self.start_session([str(self.install.python), "-I", "-m", "ardia_cli"])
-        self.check(head, seen, "-m ardia_cli")
+        out, err = process.communicate(timeout=60)
+        self.assertEqual((process.returncode, err), (77, b""))
+        answer = json.loads(out)
+        self.assertEqual((answer["success"], answer["code"]), (False, "plugin_daemon_unavailable"))
+        self.assertNotIn(CREDENTIAL[2:], out.decode())
+        self.assertFalse(server.asked.wait(1), "a plugin step reached the token server")
+        browse = Path(self.env(0)["ARDIA_DATA_DIR"]) / "Browse"
+        self.assertEqual(sorted(browse.iterdir()) if browse.exists() else [], [])
+        self.assertEqual(self.daemon_pids(), [])
 
 
 LONG_DATA_DIR = 94
+MAX_REQUEST = 16 * 1024 * 1024
+OVERSIZED = "✗ the ardia browse daemon closed the connection before taking the command (see the session log)\n".encode()
 
 
 def fd_open(fd: int) -> bool:
@@ -268,26 +209,7 @@ class LongDataDirs(PluginCredentialProcesses):
     def env(self, port: int) -> dict:
         return {**super().env(port), "ARDIA_DATA_DIR": str(self.long)}
 
-    def test_plugin_browse_starts_and_reaches_its_daemon_under_a_long_data_dir(self):
-        server = TokenServer()
-        self.addCleanup(server.close)
-        reader, writer = os.pipe()
-        os.write(writer, CREDENTIAL.encode())
-        os.close(writer)
-        moved = ["/bin/sh", "-c", f'exec {FD}<&{reader} {reader}<&-; exec "$@"', "sh"] if reader != FD else []
-        command = [*moved, str(self.install.root / "bin" / "ardia"), "browse", "--session", "plugin-ai", "--json", "get", "--", "title"]
-        process = subprocess.Popen(command, env=self.env(server.port), cwd=self.box / "tmp", stdin=subprocess.DEVNULL,
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, pass_fds=(reader,), start_new_session=True)
-        os.close(reader)
-        try:
-            reached = server.asked.wait(30)
-        finally:
-            server.release.set()
-            out, err = process.communicate(timeout=120)
-        self.assertNotIn(b"daemon_unreachable", out)
-        self.assertTrue(reached, (out, err))
-        self.assertTrue(server.request.startswith(f"GET /devtools/browser/{BROWSER}?token={CREDENTIAL} ".encode()))
-
+    @unittest.skipUnless(sys.platform == "darwin", "non-plugin browse hands back to Python on Linux by design")
     def test_normal_browse_reaches_a_running_daemon_under_a_long_data_dir_without_python(self):
         if str(harness.CLI) not in sys.path:
             sys.path.insert(0, str(harness.CLI))
@@ -324,6 +246,7 @@ class JsonAndStdin(LongDataDirs):
         return subprocess.Popen([str(self.install.root / "bin" / "ardia"), *argv], env=env, cwd=self.box / "tmp", stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, start_new_session=True, **extra)
 
+    @unittest.skipUnless(sys.platform == "darwin", "non-plugin browse hands back to Python on Linux by design")
     def test_a_slow_stdin_writer_is_read_to_the_end_before_the_daemon_is_asked(self):
         daemon = self.live_daemon(request_wait=1.5)
         process = self.start(["browse", "eval", "--stdin"], self.plain_env(), stdin=subprocess.PIPE)
@@ -353,16 +276,19 @@ class JsonAndStdin(LongDataDirs):
         out, err = process.communicate(timeout=60)
         return process.returncode, out, err, daemon.requests
 
+    @unittest.skipUnless(sys.platform == "darwin", "non-plugin browse hands back to Python on Linux by design")
     def test_stdin_over_the_daemons_request_limit_stops_the_read_and_sends_nothing(self):
         status, out, err, requests = self.oversized(MAX_REQUEST + 1, close_after=False)
         self.assertEqual((status, out, requests), (2, b"", []))
         self.assertEqual(err, OVERSIZED)
 
+    @unittest.skipUnless(sys.platform == "darwin", "non-plugin browse hands back to Python on Linux by design")
     def test_a_request_the_envelope_pushes_over_the_limit_is_refused_before_connecting(self):
         status, out, err, requests = self.oversized(MAX_REQUEST - 64, close_after=True)
         self.assertEqual((status, out, requests), (2, b"", []))
         self.assertEqual(err, OVERSIZED)
 
+    @unittest.skipUnless(sys.platform == "darwin", "non-plugin browse hands back to Python on Linux by design")
     def test_a_daemon_gone_while_stdin_was_read_says_the_input_was_used(self):
         daemon = self.live_daemon()
         reader, writer = os.pipe()
@@ -380,6 +306,7 @@ class JsonAndStdin(LongDataDirs):
                               "run the command again with its input\n".encode())
         self.assertEqual(daemon.requests, [])
 
+    @unittest.skipUnless(sys.platform == "darwin", "non-plugin browse hands back to Python on Linux by design")
     def test_ctrl_c_while_stdin_is_read_answers_one_json_line(self):
         self.live_daemon()
         reader, writer = os.pipe()

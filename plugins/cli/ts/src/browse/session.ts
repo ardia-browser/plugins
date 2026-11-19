@@ -1,11 +1,11 @@
 import { constants as fsConstants, lstatSync, type Stats } from "node:fs";
 import { constants } from "node:os";
 import { codeOf, errnoOf, join, uid } from "../paths.ts";
-import { type Dir, openPrivate, PathError } from "../privatefs.ts";
+import { close, type Dir, O_RDONLY, openPrivate, openPrivateFile, PathError } from "../privatefs.ts";
 import { BrowseError, PythonCrash } from "./errors.ts";
 import { osCrash } from "../crash.ts";
 import { pythonOsError } from "../printable.ts";
-import { socketInfoAt, strerror } from "../libc.ts";
+import { flock, socketInfoAt, strerror } from "../libc.ts";
 
 export const DIR_NAME = "Browse";
 const { ELOOP, ENOTDIR, ENOENT } = constants.errno;
@@ -72,4 +72,18 @@ export function checkSocket(dir: Dir, name: string): void {
   else if (info.uid !== uid()) why = `${name} belongs to another user`;
   else if ((info.mode & 0o077) !== 0) why = `${name} must be mode 0600`;
   if (why !== undefined) throw new BrowseError(`Refusing the session socket: ${why}`, 1, undefined, "socket_refused");
+}
+
+export function lockHeld(dir: Dir, key: string): boolean {
+  let fd: number;
+  try {
+    fd = openPrivateFile(`${key}.lock`, dir, O_RDONLY);
+  } catch {
+    return false;
+  }
+  try {
+    return !flock(fd, false, false);
+  } finally {
+    close(fd);
+  }
 }

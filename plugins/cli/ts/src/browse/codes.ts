@@ -3,20 +3,6 @@ import { exitOf } from "./answer.ts";
 import { PythonCrash } from "./errors.ts";
 import { ANSWER_JSON_DEPTH } from "./serve.ts";
 
-export const DOCUMENT_CHANGED = "document_changed";
-const DAEMON_DOCUMENT_CHANGED = "The page loaded a new document, so this step didn't count. Ardia checks it again for the next step";
-export const HONEST_DOCUMENT_CHANGED = "The page loaded a new document before, during or after this step, so it may or may not have run; check the page before repeating it. Ardia checks it again for the next step";
-
-const DAEMON_LINE = `✗ ${DAEMON_DOCUMENT_CHANGED}`;
-
-export function honestText(err: Value | undefined): Value | undefined {
-  if (typeof err !== "string" || !err.includes(DAEMON_LINE)) return err;
-  return err
-    .split("\n")
-    .map((line) => (line === DAEMON_LINE ? `✗ ${HONEST_DOCUMENT_CHANGED}` : line))
-    .join("\n");
-}
-
 const INTERNAL_ERROR = "internal_error";
 const TEXT_ERROR = "✗ ";
 
@@ -37,8 +23,7 @@ function codedObject(parsed: Map<string, Value>): string | undefined {
   if (parsed.get("success") !== false) return undefined;
   const error = parsed.get("error");
   const given = parsed.get("code");
-  if (given === DOCUMENT_CHANGED && error === DAEMON_DOCUMENT_CHANGED) parsed.set("error", HONEST_DOCUMENT_CHANGED);
-  else if (typeof given === "string" && given !== "") return undefined;
+  if (typeof given === "string" && given !== "") return undefined;
   else if (parsed.has("code")) parsed.set("code", INTERNAL_ERROR);
   else parsed.set("code", typeof error === "string" && error.startsWith("Unknown command:") ? "unknown_command" : "command_failed");
   return `${dumps(parsed, "compact")}\n`;

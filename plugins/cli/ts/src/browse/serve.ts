@@ -9,13 +9,11 @@ import { answerDeadline } from "./deadline.ts";
 import { type BrowseError, builtinCrash, PythonCrash, unreachable } from "./errors.ts";
 import { Absent, CONNECT_WAIT_MS, connect, exchange, type Link, Stalled } from "./exchange.ts";
 import { encodeError } from "./output.ts";
-import { type Access, accessEndpointKey, accessLabel, accessWs } from "./plugin.ts";
 import { loadAnswer } from "./pyjson.ts";
 import type { Secrets } from "./redact.ts";
 import { agentEnv, endpointChoice, endpointKey, namespaceName, optionsFrom, rootOf, sessionKey, sessionName, urlsWithSecrets } from "./request.ts";
-import { lockHeld, startDaemon } from "./spawn.ts";
 import { closeDir } from "../privatefs.ts";
-import { checkSocket, NoDaemon, openBrowseDir, osFailure } from "./session.ts";
+import { checkSocket, lockHeld, NoDaemon, openBrowseDir, osFailure } from "./session.ts";
 import { decodeStdin, pythonStdioErrors, readStdin, stdinState } from "./stdio.ts";
 import { TAKES_OUT } from "./tables.ts";
 
@@ -96,38 +94,6 @@ async function openAfterStdin(root: string, key: string, stdinRead: boolean): Pr
   }
 }
 
-type Where = { session: string; namespace: string; key: string; root: string; plugin: Access };
-
-function daemonConfig(found: Found, options: JsonObject, where: Where): JsonObject {
-  const idle = found.value("idle_timeout") || process.env.AGENT_BROWSER_IDLE_TIMEOUT_MS;
-  const parsed = idle ? parseDuration(idle) : undefined;
-  return object([
-    ["session", where.session],
-    ["namespace", where.namespace],
-    ["key", where.key],
-    ["data_root", where.root],
-    ["ws", accessWs(where.plugin)],
-    ["port", null],
-    ["data_dir", found.value("data_dir") ?? null],
-    ["endpoint_label", accessLabel(where.plugin)],
-    ["idle_timeout_ms", parsed !== undefined && "ms" in parsed ? parsed.ms : null],
-    ["debug", Boolean(found.flag("debug"))],
-    ["no_auto_dialog", options.get("no_auto_dialog") ?? false],
-    ["pin_tab", options.get("pin_tab") ?? null],
-    ["for_plugin", true],
-  ]);
-}
-
-async function pluginSession(root: string, key: string, config: JsonObject, python: string | null, call: Call): Promise<Link> {
-  const connect = (deadline?: number) => openSession(root, key, deadline);
-  try {
-    return await connect();
-  } catch (error) {
-    if (!(error instanceof NoDaemon)) throw error;
-  }
-  return startDaemon(root, key, config, python, call, connect);
-}
-
 function oversizedRequest(): BrowseError {
   return unreachable("the ardia browse daemon closed the connection before taking the command (see the session log)");
 }
@@ -196,15 +162,15 @@ async function readBeside(payload: JsonObject, rest: string[], beside: Beside, c
   return answer;
 }
 
-export async function roundTrip(found: Found, rest: string[], secrets: Secrets, call: Call, plugin: Access | undefined, python: string | null): Promise<JsonObject> {
+export async function roundTrip(found: Found, rest: string[], secrets: Secrets, call: Call, python: string | null): Promise<JsonObject> {
   const { entries: options, timeout } = optionsFrom(found);
   const session = sessionName(found);
   const namespace = namespaceName(found);
   const chosen = endpointChoice(found);
-  const endpoint = plugin === undefined ? chosen : { ...chosen, ws: accessWs(plugin), port: undefined };
+  const endpoint = chosen;
   for (const secret of urlsWithSecrets(endpoint.ws)) secrets.add(secret);
   const root = rootOf(endpoint);
-  const keySource = plugin === undefined ? endpointKey(endpoint, root) : accessEndpointKey(plugin);
+  const keySource = endpointKey(endpoint, root);
   options.set("_session", session);
   const command = rest[0] as string;
   const stdinWanted = wantsStdin(command, rest.slice(1));
@@ -213,7 +179,7 @@ export async function roundTrip(found: Found, rest: string[], secrets: Secrets, 
   checkIdle(found);
   const key = sessionKey(namespace, keySource, session, process.env.ARDIA_BROWSE_FOR_PLUGIN === "1");
   let stdin: Value = null;
-  if (stdinWanted && plugin === undefined) checkLive(root, key);
+  if (stdinWanted) checkLive(root, key);
   if (stdinWanted) {
     const raw = await readStdin(MAX_REQUEST);
     if (!(raw instanceof Buffer)) throw osFailure(raw);
@@ -232,7 +198,7 @@ export async function roundTrip(found: Found, rest: string[], secrets: Secrets, 
     ["caller", routedCaller()],
   ]);
   const line = requestLine(payload);
-  const socket = plugin === undefined ? await openAfterStdin(root, key, stdinWanted) : await pluginSession(root, key, daemonConfig(found, options, { session, namespace, key, root, plugin }), python, call);
+  const socket = await openAfterStdin(root, key, stdinWanted);
   let answer = await ask(socket, payload, rest, timeout, call, false, line);
   if (pyTruthy(answer.get("busy_elsewhere"))) answer = await readBeside(payload, rest, { root, namespace, keySource, session, timeout }, call);
   return answer;
