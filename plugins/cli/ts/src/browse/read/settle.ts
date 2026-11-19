@@ -3,6 +3,7 @@ import { BrowseError } from "../daemon-errors.ts";
 import { READPAGES_SETTLE_PROBE } from "../js/index.ts";
 import { flag } from "../metrics.ts";
 import type { Page } from "../state/page.ts";
+import { quiet } from "../state/page.ts";
 import { FETCH_FRESH } from "../state/records.ts";
 import { monotonic } from "../state/wait.ts";
 
@@ -19,7 +20,7 @@ export async function probe(page: Page): Promise<Probe> {
     const list = Array.isArray(got) ? got : [];
     return [list[0] ?? null, list[1] ?? null, Boolean(list[2])];
   } catch (error) {
-    if (!(error instanceof BrowseError) || error.code === "tab_detached") throw error;
+    if (!quiet(error) || (error as BrowseError).code === "tab_detached") throw error;
     return [null, null, true];
   }
 }
@@ -80,7 +81,7 @@ export async function arrivedText(page: Page, loader: string): Promise<boolean> 
   try {
     length = await page.call("() => (document.body && document.body.innerText || '').trim().length", [], { frame: page.mainFrame, read: true });
   } catch (error) {
-    if (error instanceof BrowseError) return false;
+    if (quiet(error)) return false;
     throw error;
   }
   return page.loader(page.mainFrame) === loader && Boolean(length);

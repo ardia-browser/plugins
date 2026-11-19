@@ -12,6 +12,7 @@ import { pageIsPdf, pageText } from "../read/pdftext.ts";
 import { postProcess } from "../read/readurl.ts";
 import { runScroll, scrolls } from "../read/scroll.ts";
 import type { Page } from "../state/page.ts";
+import { quiet } from "../state/page.ts";
 import * as pierce from "../state/pierce.ts";
 import { record } from "../state/records.ts";
 import { monotonic } from "../state/wait.ts";
@@ -59,7 +60,7 @@ export async function pageScope(page: Page, frame: string): Promise<string> {
   try {
     scope = await page.call("() => ardiaBrowse.scope()", [], { frame, read: true });
   } catch (error) {
-    if (error instanceof BrowseError) return "";
+    if (quiet(error)) return "";
     throw error;
   }
   if (scope) flag("read_scope_shown", true);

@@ -3,7 +3,7 @@ import "../libc-loaded.ts";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { Cancelled, withSignal } from "../../src/browse/cdp/cancel.ts";
+import { Cancelled, sleep, withSignal } from "../../src/browse/cdp/cancel.ts";
 import { parseCookieFile } from "../../src/browse/commands/storage.ts";
 import { Ctx } from "../../src/browse/commands/ctx.ts";
 import { parse } from "../../src/browse/commands/parse.ts";
@@ -269,7 +269,7 @@ describe("CookieFileTest", () => {
   });
 });
 
-type Reader = { targetId: string; sessionId: string | null; attach(): Promise<void>; keepAwake(): Promise<void>; enableNetwork(): Promise<void> };
+type Reader = { targetId: string; sessionId: string | null; attach(): Promise<void>; keepAwake(): Promise<void>; enableNetwork(): Promise<void>; detach(): void };
 
 function readerState() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "ardia-d4-read-"));
@@ -321,6 +321,9 @@ describe("ReadingTabs", () => {
         },
         async keepAwake() {},
         async enableNetwork() {},
+        detach() {
+          page.sessionId = null;
+        },
       };
       return page as unknown as Page;
     };
@@ -328,8 +331,11 @@ describe("ReadingTabs", () => {
       liveReads += 1;
       peak = Math.max(peak, liveReads);
       visits.push([page.targetId, url]);
-      await new Promise((resolve) => setTimeout(resolve, delay * 1000));
-      liveReads -= 1;
+      try {
+        await sleep(delay);
+      } finally {
+        liveReads -= 1;
+      }
       if (detaches.has(page.targetId)) {
         page.sessionId = null;
         return { url, source: "browser", error: "detached" };

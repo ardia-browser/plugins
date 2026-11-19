@@ -2,11 +2,11 @@ import { formatG } from "../../pylib/format.ts";
 import { reprStr } from "../../py.ts";
 import { hostnameOf, urlsplit } from "../../pylib/urllib.ts";
 import { type Browser } from "../cdp/browser.ts";
-import { sleep } from "../cdp/cancel.ts";
+import { shield, sleep } from "../cdp/cancel.ts";
 import { BrowseError, Gated, OutcomeUnknown, Usage } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
 import { flag } from "../metrics.ts";
-import { type Page } from "../state/page.ts";
+import { type Page, quiet } from "../state/page.ts";
 import { type State } from "../state/state.ts";
 import { monotonic, waitUntil } from "../state/wait.ts";
 import { afterSameDocument, beforeNavigating } from "../read/settle.ts";
@@ -26,7 +26,7 @@ export async function pageTitle(page: Page): Promise<string> {
     const title = await page.call("() => document.title", [], { frame: page.mainFrame, read: true });
     return typeof title === "string" ? title : title ? String(title) : "";
   } catch (error) {
-    if (error instanceof BrowseError) return "";
+    if (quiet(error)) return "";
     throw error;
   }
 }
@@ -42,8 +42,8 @@ export async function waitForLoad(page: Page, loader: string | null, timeout: nu
       try {
         state = await page.call("() => document.readyState", [], { frame: main, read: true });
       } catch (error) {
-        if (!(error instanceof BrowseError)) throw error;
-        if (error.code === "tab_detached") await page.state.reattach(page);
+        if (!quiet(error)) throw error;
+        if ((error as BrowseError).code === "tab_detached") await page.state.reattach(page);
         return false;
       }
       if (loader !== null && page.loader(main) !== loader) return false;
@@ -59,7 +59,7 @@ async function showsContent(page: Page, loader: string): Promise<boolean> {
   try {
     ready = await page.call("() => [document.readyState, (document.body && document.body.innerText || '').trim().length]", [], { frame: page.mainFrame, read: true });
   } catch (error) {
-    if (error instanceof BrowseError) return false;
+    if (quiet(error)) return false;
     throw error;
   }
   return page.loader(page.mainFrame) === loader && Array.isArray(ready) && ["interactive", "complete"].includes(ready[0]) && Number(ready[1]) > 0;
@@ -188,7 +188,7 @@ export async function engineOffscreen(state: State, targetId: string): Promise<b
   try {
     info = (await state.browser.send("Target.getTargetInfo", { targetId }))["targetInfo"] as Record<string, unknown>;
   } catch (error) {
-    if (error instanceof BrowseError) return false;
+    if (quiet(error)) return false;
     throw error;
   }
   if (info && typeof info === "object" && info["ardiaOffscreen"] === true) {
@@ -205,11 +205,14 @@ export async function leaveOffscreen(ctx: Ctx, page: Page): Promise<Page> {
   const url = known && !known.startsWith("about:") ? known : null;
   const label = [...state.labels].find(([, owner]) => owner === old)?.[0] ?? null;
   if (label) state.labels.delete(label);
+  const openedBefore = new Set(state.opened);
+  const pinned = state.pinnedTarget;
   let fresh: Page;
   try {
-    fresh = await newTab(ctx, url, label);
+    fresh = await newTab(ctx, null, label);
+    if (url) await navigate(ctx, fresh, normalizeUrl(url));
   } catch (error) {
-    if (label && !state.labels.has(label)) state.labels.set(label, old);
+    await shield(() => putBack(state, old, label, pinned, [...state.opened].filter((target) => !openedBefore.has(target))));
     throw error;
   }
   state.setOffscreen(old, false);
@@ -217,7 +220,7 @@ export async function leaveOffscreen(ctx: Ctx, page: Page): Promise<Page> {
     try {
       await (state.browser as Browser).send("Target.closeTarget", { targetId: old });
     } catch (error) {
-      if (!(error instanceof BrowseError)) throw error;
+      if (!quiet(error)) throw error;
     } finally {
       state.registry.finishClose(state.instance, old);
     }
@@ -225,6 +228,25 @@ export async function leaveOffscreen(ctx: Ctx, page: Page): Promise<Page> {
   state.forgetTarget(old);
   state.leftOffscreen = state.tabId(fresh.targetId);
   return fresh;
+}
+
+async function putBack(state: State, old: string, label: string | null, pinned: string | null, made: string[]): Promise<void> {
+  state.current = old;
+  if (state.pinTab) state.pinnedTarget = pinned;
+  if (label) state.labels.set(label, old);
+  for (const target of made) {
+    if (state.registry.reserveClose(state.instance, target)) {
+      try {
+        await (state.browser as Browser).send("Target.closeTarget", { targetId: target }, { signal: null });
+      } catch (error) {
+        if (!quiet(error)) throw error;
+      } finally {
+        state.registry.finishClose(state.instance, target);
+      }
+    }
+    state.forgetTarget(target);
+  }
+  flag("offscreen_handoff_rolled_back", true);
 }
 
 export function offscreenNote(state: State): string {
@@ -238,7 +260,7 @@ async function tabShown(state: State, page: Page): Promise<boolean | null> {
   try {
     infos = (await (state.browser as Browser).send("Target.getTargets", { filter: [{ type: "tab" }] }))["targetInfos"];
   } catch (error) {
-    if (error instanceof BrowseError) return null;
+    if (quiet(error)) return null;
     throw error;
   }
   await page.refreshFrames();
@@ -289,7 +311,8 @@ export async function cmdOpen(ctx: Ctx, argv: string[]): Promise<Result> {
   await state.connect();
   const url = args.length > 0 ? normalizeUrl(args[0] as string) : null;
   const show = wantsShow(ctx, options);
-  const freshTab = !(state.current && state.targetInfos.has(state.current));
+  const borrowed = state.current && state.current === state.attached ? state.attached : null;
+  const freshTab = !(state.current && state.targetInfos.has(state.current) && !borrowed);
   let page: Page;
   if (freshTab) page = await newTab(ctx, url, (options["label"] as string | undefined) ?? null, false, show);
   else {
@@ -313,8 +336,19 @@ export async function cmdOpen(ctx: Ctx, argv: string[]): Promise<Result> {
   if (background !== null) {
     const tab = state.tabId(page.targetId);
     Object.assign(data, { tabId: tab, background: true, takesInput: background });
-    if (!background) {
-      text += `\n→ Opened in its own background tab [${tab}]; this Ardia doesn't deliver input there. use: ardia browse tab ${tab} --show (or open <url> --show)`;
+    let where = `→ Opened in its own background tab [${tab}]`;
+    if (borrowed) {
+      const left = state.tabId(borrowed);
+      data["left"] = left;
+      flag("open_moved_tab", true);
+      where =
+        `→ [${tab}] is this session's tab now, a background tab of its own, since this session uses your tab [${left}] ` +
+        `and won't navigate it; \`tab ${left}\` goes back`;
+    }
+    if (borrowed || !background) {
+      text +=
+        `\n${where}; ` +
+        (background ? "it takes input without being shown" : `this Ardia doesn't deliver input there. use: ardia browse tab ${tab} --show (or open <url> --show)`);
     }
   }
   return new Result(data, text);

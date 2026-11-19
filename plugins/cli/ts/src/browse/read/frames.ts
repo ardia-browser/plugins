@@ -1,6 +1,7 @@
 import { BrowseError, ConnectionLost } from "../daemon-errors.ts";
 import { flag } from "../metrics.ts";
 import type { Page } from "../state/page.ts";
+import { quiet } from "../state/page.ts";
 import { record } from "../state/records.ts";
 
 export const MAX_FRAME_DEPTH = 3;
@@ -44,7 +45,7 @@ export async function oopifText(page: Page, frame: string): Promise<string> {
       if (typeof text !== "string" || !text.trim()) continue;
       blocks.push(`[frame "${title}"]\n${text}\n[end of frame "${title}"]`);
     } catch (error) {
-      if (error instanceof ConnectionLost || !(error instanceof BrowseError)) throw error;
+      if (!quiet(error)) throw error;
     }
   }
   if (blocks.length) flag("read_oopif_frames", true);

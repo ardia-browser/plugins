@@ -28,10 +28,6 @@ export interface Snapshots {
 
 type RefKey = [string | null, string, string, string, number];
 
-export function sameAddress(url: string): string {
-  return (url || "").split("#", 1)[0]?.replace(/\/+$/u, "") ?? "";
-}
-
 function digits(text: string): boolean {
   return /^[0-9]+$/u.test(text);
 }
@@ -43,10 +39,6 @@ export function parseRef(selector: string): string | null {
   return null;
 }
 
-function sameContext(a: readonly unknown[], b: readonly unknown[]): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
 export abstract class Refs {
   static snapshots: Snapshots | null = null;
 
@@ -54,13 +46,11 @@ export abstract class Refs {
   abstract readonly pages: Map<string, Page>;
   abstract targetInfos: Map<string, Record<string, unknown>>;
   abstract page(target?: string | null): Promise<Page>;
-  abstract addNotice(notice: string): void;
 
   readonly refs = new Map<string, Ref>();
   issuedRefs = 0;
   readonly refKeys = new Map<string, [RefKey, string]>();
   readonly navigatedRefs = new Map<string, Ref>();
-  readonly loaderUrls = new Map<string, string>();
   currentRefs: string[] = [];
   generation = 0;
   lastSnapshot: string | null = null;
@@ -71,13 +61,7 @@ export abstract class Refs {
     for (const ref of refs) {
       ref.generation = this.generation;
       this.refs.set(ref.id, ref);
-      if (page !== null && ref.frame === page.mainFrame) {
-        const key = JSON.stringify([ref.target, ref.loader]);
-        this.loaderUrls.delete(key);
-        this.loaderUrls.set(key, page.url);
-      }
     }
-    while (this.loaderUrls.size > NAVIGATED_REFS_KEPT) this.loaderUrls.delete(this.loaderUrls.keys().next().value as string);
     this.currentRefs = refs.map((ref) => ref.id);
     if (snapshotText !== null) this.lastSnapshot = snapshotText;
   }
@@ -138,17 +122,11 @@ export abstract class Refs {
     return id;
   }
 
-  async resolveRef(refId: string, follow = true): Promise<[Page, Element]> {
+  async resolveRef(refId: string): Promise<[Page, Element]> {
     const ref = this.refs.get(refId);
     if (ref === undefined) {
       const old = this.navigatedRefs.get(refId);
-      if (old !== undefined) {
-        if (follow) {
-          const reloaded = await this.followAfterReload(refId, old);
-          if (reloaded !== null) return reloaded;
-        }
-        throw new StaleRef(refId, await this.afterNavigation(old));
-      }
+      if (old !== undefined) throw new StaleRef(refId, await this.afterNavigation(old));
       if (digits(refId.slice(1)) && Number(refId.slice(1)) <= this.issuedRefs) throw new StaleRef(refId, "it came from an earlier snapshot, and refs are never reused");
       throw new BrowseError(`Unknown ref: ${refId}`, null, "unknown_ref");
     }
@@ -164,13 +142,7 @@ export abstract class Refs {
     await page.refreshFrames();
     const frame = page.frames.get(ref.frame);
     if (frame === undefined) throw new StaleRef(refId, "its frame is gone");
-    if (frame.loader !== ref.loader) {
-      if (follow) {
-        const reloaded = await this.followAfterReload(refId, ref);
-        if (reloaded !== null) return reloaded;
-      }
-      throw new StaleRef(refId, "the page navigated since that snapshot");
-    }
+    if (frame.loader !== ref.loader) throw new StaleRef(refId, "the page navigated since that snapshot");
     const element = await page.resolveBackend(ref.backend, ref.frame, `@${refId}`);
     let gone: string;
     if (element === null) gone = "the element is no longer in the page";
@@ -178,31 +150,7 @@ export abstract class Refs {
     else return [page, element];
     const successor = await this.redrawn(page, ref);
     if (successor === null) throw new StaleRef(refId, gone);
-    if (follow && ref.unique && successor.unique && successor.frame === ref.frame && sameContext(successor.context, ref.context)) {
-      const found = await this.resolveRef(successor.id, false);
-      flag("followed_redrawn_ref", true);
-      this.addNotice(`→ @${refId} was redrawn, so this used the same ${ref.role} "${ref.name}", now @${successor.id}`);
-      return found;
-    }
     throw new StaleRef(refId, `${gone}; the page redrew it, and the same ${ref.role} "${ref.name}" is now @${successor.id}`);
-  }
-
-  async followAfterReload(refId: string, old: Ref): Promise<[Page, Element] | null> {
-    const page = this.pages.get(old.target);
-    const before = this.loaderUrls.get(JSON.stringify([old.target, old.loader]));
-    if (page === undefined || !before || !old.unique || sameAddress(before) !== sameAddress(page.url)) return null;
-    let successor: Ref | null;
-    try {
-      successor = await this.redrawn(page, old);
-    } catch (error) {
-      if (error instanceof ConnectionLost || !(error instanceof BrowseError)) throw error;
-      return null;
-    }
-    if (successor === null || !successor.unique || successor.frame !== page.mainFrame || !sameContext(successor.context, old.context)) return null;
-    const found = await this.resolveRef(successor.id, false);
-    flag("followed_ref_after_reload", true);
-    this.addNotice(`→ @${refId} was from before the page reloaded the same address, so this used the same ${old.role} "${old.name}", now @${successor.id}`);
-    return found;
   }
 
   async afterNavigation(old: Ref): Promise<string> {

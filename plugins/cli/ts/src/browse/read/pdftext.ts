@@ -8,6 +8,7 @@ import { BrowseError } from "../daemon-errors.ts";
 import { PDFTEXT_FETCH, PDFTEXT_JXA } from "../js/index.ts";
 import { flag } from "../metrics.ts";
 import type { Page } from "../state/page.ts";
+import { quiet } from "../state/page.ts";
 import { record } from "../state/records.ts";
 
 export const MAX_BYTES = 40 * 1024 * 1024;
@@ -23,7 +24,7 @@ export async function pageIsPdf(page: Page, frame: string | null = null): Promis
   try {
     return isPdfType(await page.call("() => document.contentType", [], { frame: frame || page.mainFrame, read: true }));
   } catch (error) {
-    if (error instanceof BrowseError) return false;
+    if (quiet(error)) return false;
     throw error;
   }
 }

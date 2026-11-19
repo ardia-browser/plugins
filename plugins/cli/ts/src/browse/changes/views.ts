@@ -2,6 +2,7 @@ import { BrowseError, ConnectionLost } from "../daemon-errors.ts";
 import { collect } from "../snapshot/collect.ts";
 import type { Node } from "../snapshot/tree.ts";
 import type { Page } from "../state/page.ts";
+import { quiet } from "../state/page.ts";
 import type { State } from "../state/state.ts";
 import { containersOf, entriesOf, type Report, type View } from "./report.ts";
 
@@ -25,7 +26,7 @@ export async function titleOf(page: Page): Promise<string> {
   try {
     title = await page.call("() => document.title", [], { frame: page.mainFrame, read: true });
   } catch (error) {
-    if (error instanceof ConnectionLost || !(error instanceof BrowseError)) throw error;
+    if (!quiet(error)) throw error;
     return "";
   }
   return typeof title === "string" ? title : "";

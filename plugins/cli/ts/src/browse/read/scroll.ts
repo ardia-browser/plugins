@@ -8,6 +8,7 @@ import { READPAGES_MAIN_LIST, READPAGES_SCROLL_STEP } from "../js/index.ts";
 import { count, flag } from "../metrics.ts";
 import { pyIntArg } from "../pyerror.ts";
 import type { Element, Page } from "../state/page.ts";
+import { quiet } from "../state/page.ts";
 import { record } from "../state/records.ts";
 import { parseRef } from "../state/refs.ts";
 import { monotonic } from "../state/wait.ts";
@@ -179,7 +180,7 @@ export async function scrollRows(page: Page, frame: string, target: Target, limi
     try {
       await scrollStep(page, frame, target, "restore", origin);
     } catch (error) {
-      if (!(error instanceof BrowseError)) throw error;
+      if (!quiet(error)) throw error;
     }
   }
   return [collector.ordered().slice(0, limit), stopped, first];

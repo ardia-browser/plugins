@@ -17,7 +17,7 @@ export function parse(argv: readonly string[], flags: Flags = {}, aliases: Reado
     const token = argv[index] as string;
     index += 1;
     if (token === "--") {
-      positionals.push(...argv.slice(index));
+      for (let rest = index; rest < argv.length; rest += 1) positionals.push(argv[rest] as string);
       break;
     }
     const split = token.startsWith("--") && token.includes("=");
@@ -34,8 +34,11 @@ export function parse(argv: readonly string[], flags: Flags = {}, aliases: Reado
           inline = argv[index] as string;
           index += 1;
         }
-        if (kind === "multi") options[key] = [...((options[key] as string[] | undefined) ?? []), inline];
-        else options[key] = inline;
+        if (kind === "multi") {
+          const values = options[key];
+          if (Array.isArray(values)) values.push(inline);
+          else options[key] = [inline];
+        } else options[key] = inline;
       }
       continue;
     }

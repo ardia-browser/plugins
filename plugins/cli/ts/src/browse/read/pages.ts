@@ -13,7 +13,7 @@ import type { Ctx } from "../commands/ctx.ts";
 import { normalizeUrl } from "../commands/parse.ts";
 import { READPAGES_EXTRACT, READPAGES_LINKS } from "../js/index.ts";
 import { add, count, flag } from "../metrics.ts";
-import { Page } from "../state/page.ts";
+import { Page, quiet } from "../state/page.ts";
 import { record } from "../state/records.ts";
 import * as temptabs from "../state/temptabs.ts";
 import { monotonic } from "../state/wait.ts";
@@ -367,7 +367,7 @@ export async function goto(page: Page, url: string, timeout: number, keepPartial
     try {
       await waitForLoad(page, loader, Math.min(LOAD_GRACE, Math.max(deadline - monotonic(), 0.1)), "load");
     } catch (error) {
-      if (!(error instanceof BrowseError)) throw error;
+      if (!quiet(error)) throw error;
     }
     earlier = new Set([...earlier, ...[...page.network.fetchLoaders].filter(([, fetchLoader]) => oldLoaders.has(fetchLoader)).map(([id]) => id)]);
     await settle(page, Math.min(deadline, monotonic() + SETTLE_LIMIT), earlier);
@@ -408,8 +408,8 @@ export async function readIn(page: Page, url: string, selector: string | null, t
     }
     got = await extractFilled(page, selector, timeout);
   } catch (error) {
-    if (error instanceof ConnectionLost || !(error instanceof BrowseError)) throw error;
-    out["error"] = error.text;
+    if (!quiet(error)) throw error;
+    out["error"] = (error as BrowseError).text;
     return out;
   }
   Object.assign(out, { finalUrl: page.url, title: got["title"] || "", status: got["status"] ?? null, readAt: readAt(), text: postProcess(String(got["text"] || ""), options) });
@@ -489,8 +489,8 @@ export async function readHttpOne(url: string, options: Options): Promise<PageRe
   try {
     result = await fetchRun(url, { ...options }, {});
   } catch (error) {
-    if (!(error instanceof BrowseError)) throw error;
-    out["error"] = error.text;
+    if (!quiet(error)) throw error;
+    out["error"] = (error as BrowseError).text;
     return out;
   }
   const data = result.data as Record<string, unknown>;

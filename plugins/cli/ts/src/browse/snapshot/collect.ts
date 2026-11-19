@@ -3,6 +3,7 @@ import { BrowseError, ConnectionLost } from "../daemon-errors.ts";
 import { SNAPSHOT_FIELD_VALUE } from "../js/index.ts";
 import { flag } from "../metrics.ts";
 import type { Element, Page } from "../state/page.ts";
+import { quiet } from "../state/page.ts";
 import * as pierce from "../state/pierce.ts";
 import { record } from "../state/records.ts";
 import { parseRef, type Ref, Refs, type Snapshots } from "../state/refs.ts";
@@ -26,7 +27,7 @@ export async function clickableMap(page: Page, frame: string): Promise<Map<numbe
     hints = await page.call(CLICKABLE_HINTS, [], { frame, read: true });
     elements = await page.elementsFrom(remote, frame, "clickable");
   } catch (error) {
-    if (error instanceof BrowseError) return new Map();
+    if (quiet(error)) return new Map();
     throw error;
   }
   const list = Array.isArray(hints) ? hints : [];
@@ -122,7 +123,7 @@ async function stitchFrames(page: Page, nodes: Node[], frame: string): Promise<v
         }
       }
     } catch (error) {
-      if (!(error instanceof BrowseError)) throw error;
+      if (!quiet(error)) throw error;
     }
   }
   if (crossed) flag("snapshot_oopif_frames", true);
