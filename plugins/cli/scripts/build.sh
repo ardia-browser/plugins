@@ -73,6 +73,14 @@ case $platform in
   *) echo "build.sh: the platform is macos-arm64 or linux-x64, got $platform" >&2; exit 64 ;;
 esac
 [ "$platform" = "$host" ] || { echo "build.sh: build $platform on a $platform host (this one is $(uname -s) $(uname -m))" >&2; exit 64; }
+bun_version=1.3.14
+if [ -n "$bun_target" ]; then
+  bun=$(command -v bun 2>/dev/null || true)
+  [ -n "$bun" ] || bun=$HOME/.bun/bin/bun
+  [ -x "$bun" ] || { echo "build.sh: the TypeScript ardia builds with Bun $bun_version, and there's no bun on PATH or at ~/.bun/bin/bun (CI: oven-sh/setup-bun with bun-version: $bun_version)" >&2; exit 1; }
+  found_bun=$("$bun" --version 2>/dev/null || echo unknown)
+  [ "$found_bun" = "$bun_version" ] || { echo "build.sh: the TypeScript ardia builds with Bun $bun_version, and $bun is $found_bun" >&2; exit 1; }
+fi
 python_asset=cpython-$python_version+$python_release-$python_triple-install_only_stripped.tar.gz
 python_url=https://github.com/astral-sh/python-build-standalone/releases/download/$python_release/$(printf %s "$python_asset" | sed 's/+/%2B/')
 esbuild_asset=esbuild-$esbuild_platform-$esbuild_version.tgz
@@ -175,9 +183,6 @@ mkdir "$root/.leases"
 [ "$("$root/bin/ardia" --version)" = "ardia $version" ] || { echo "build.sh: the Rust ardia doesn't run" >&2; exit 1; }
 ARDIA_CLI_HOME="$work/cli-home" ARDIA_TELEMETRY=off "$root/bin/ardia" skills list >/dev/null || { echo "build.sh: the Rust ardia can't hand a command to the bundled Python" >&2; exit 1; }
 if [ -n "$bun_target" ]; then
-  bun=$(command -v bun 2>/dev/null || true)
-  [ -n "$bun" ] || bun=$HOME/.bun/bin/bun
-  [ "$("$bun" --version 2>/dev/null)" = 1.3.14 ] || { echo "build.sh: the TypeScript ardia builds with Bun 1.3.14 (~/.bun/bin/bun or on PATH)" >&2; exit 1; }
   mkdir "$root/libexec"
   PATH="$(dirname "$bun"):$PATH" sh "$cli_dir/ts/scripts/build.sh" --version "$version" --target "$bun_target" --out "$root/libexec/ardia-ts" >/dev/null
   [ -x "$root/libexec/ardia-ts" ] && [ -f "$root/libexec/ardia-libc.so" ] || { echo "build.sh: the TypeScript ardia or its addon is missing" >&2; exit 1; }
