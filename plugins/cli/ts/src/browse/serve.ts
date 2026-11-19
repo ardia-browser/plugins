@@ -132,27 +132,31 @@ function oversizedRequest(): BrowseError {
   return unreachable("the ardia browse daemon closed the connection before taking the command (see the session log)");
 }
 
-function requestLine(payload: JsonObject): Buffer {
+function requestLine(payload: JsonObject): Buffer | PythonCrash {
   const line = `${dumps(payload, "spaced")}\n`;
   const refused = SURROGATES.test(line) ? encodeError(codePoints(line)) : undefined;
-  if (refused !== undefined) throw refused;
+  if (refused !== undefined) return refused;
   const bytes = Buffer.from(line, "utf8");
   if (bytes.length - 1 > MAX_REQUEST) throw oversizedRequest();
   return bytes;
 }
 
-async function ask(socket: Link, payload: JsonObject, rest: string[], timeout: Value, call: Call, patient = false, built?: Buffer): Promise<JsonObject> {
+async function ask(socket: Link, payload: JsonObject, rest: string[], timeout: Value, call: Call, patient = false, built?: Buffer | PythonCrash): Promise<JsonObject> {
   const seconds = answerDeadline(rest, timeout, patient);
   if (seconds instanceof PythonCrash) {
     socket.destroy();
     throw seconds;
   }
-  let line: Buffer;
+  let line: Buffer | PythonCrash;
   try {
     line = built ?? requestLine(payload);
   } catch (error) {
     socket.destroy();
     throw error;
+  }
+  if (line instanceof PythonCrash) {
+    socket.destroy();
+    throw line;
   }
   let raw: Buffer;
   try {
