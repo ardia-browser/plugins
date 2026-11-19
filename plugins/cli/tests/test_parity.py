@@ -48,8 +48,6 @@ class ParityTable:
         self.assertFalse(failed, f"{len(failed)} of {len(self.outcomes)} parity cases differ:\n" + "\n".join(failed))
 
     def test_it_serves_only_proven_commands(self):
-        if self.entry == "ts" and not harness.TS_CAN_LOCK:
-            self.skipTest("TypeScript hands every command back where it can't take Python's flock, so nothing is proven native here")
         self.assertEqual(self.summary["unproven_but_served"], [], "served.txt lists commands without passing parity cases")
 
     def test_the_table_has_each_served_command_at_least_once(self):
@@ -592,7 +590,8 @@ class EntryProcess:
         shutil.copy2(binary(), bare / "bin" / "ardia")
         if self.entry == "ts" if with_ts is None else with_ts:
             (bare / "libexec").mkdir()
-            shutil.copy2(self.root / "libexec" / "ardia-ts.bin", bare / "libexec" / "ardia-ts.bin")
+            for name in ("ardia-ts.bin", harness.TS_LIBC):
+                shutil.copy2(self.root / "libexec" / name, bare / "libexec" / name)
             probe = bare / "libexec" / "ardia-ts"
             probe.write_text('#!/bin/sh\nprintf x >> "$(dirname "$0")/../ts-ran"\nexec "$(dirname "$0")/ardia-ts.bin" "$@"\n')
             probe.chmod(0o755)
@@ -834,6 +833,31 @@ class TsProcess(EntryProcess, unittest.TestCase):
         for fd in (read_end, write_end, regular):
             os.close(fd)
 
+    def other_arch_libc(self, into: Path) -> None:
+        other = "x86_64" if os.uname().machine == "arm64" else "arm64"
+        subprocess.run(["/usr/bin/xcrun", "clang", "-O2", "-bundle", "-undefined", "dynamic_lookup", "-arch", other, "-o", str(into),
+                        str(harness.TS_PROJECT / "native" / "ardia-libc.c")], check=True, capture_output=True)
+
+    def test_without_a_loadable_libc_addon_typescript_refuses_to_run(self):
+        log = self.case / "exec.log"
+        breakages = {"missing": lambda path: path.unlink(), "corrupt": lambda path: path.write_bytes(b"\xcf\xfa\xed\xfe" + b"\0" * 4092)}
+        if sys.platform == "darwin":
+            breakages["other architecture"] = self.other_arch_libc
+        for name, breaking in breakages.items():
+            for argv in (["--version"], ["--help"], ["windows"]):
+                with self.subTest(breakage=name, argv=argv):
+                    bare = self.bare_install(self.logging_python(log))
+                    libc = bare / "libexec" / harness.TS_LIBC
+                    breaking(libc)
+                    log.unlink(missing_ok=True)
+                    done = subprocess.run([str(bare / "bin" / "ardia"), *argv], env=self.environment({}), capture_output=True, timeout=30)
+                    self.assertEqual((done.returncode, done.stdout), (252, b""), done.stderr)
+                    shown = f"ardia: can't load {os.path.realpath(libc)} (".encode()
+                    self.assertTrue(done.stderr.startswith(shown) and done.stderr.endswith(b"); reinstall ardia\n"), done.stderr)
+                    self.assertEqual(done.stderr.count(b"\n"), 1, done.stderr)
+                    self.assertTrue((bare / "ts-ran").exists())
+                    self.assertFalse(log.exists(), "Python ran")
+
     def test_an_invalid_served_table_falls_back_to_the_compiled_one(self):
         data = self.case / "data"
         data.mkdir()
@@ -850,6 +874,43 @@ class TsProcess(EntryProcess, unittest.TestCase):
                     self.assertFalse(log.exists(), "Python served it")
         finally:
             fake.close()
+
+
+DEVELOPER_ID = "9EECAD314A421A371C1A157C6D61219235F0DA34"
+
+
+def developer_id() -> bool:
+    if sys.platform != "darwin" or not both_programs():
+        return False
+    found = subprocess.run(["/usr/bin/security", "find-identity", "-v", "-p", "codesigning"], capture_output=True, text=True)
+    return DEVELOPER_ID in found.stdout
+
+
+@unittest.skipUnless(developer_id(), "needs the Developer ID identity in the keychain, the Rust router and the TypeScript program")
+class ProductionSigning(unittest.TestCase):
+    def test_the_addon_and_the_program_signed_alike_load_under_the_hardened_runtime(self):
+        install = harness.Installation(harness.ts_binary(), entry="ts")
+        try:
+            libexec = install.root / "libexec"
+            for name in (harness.TS_LIBC, "ardia-ts.bin"):
+                harness.codesign("--sign", DEVELOPER_ID, "--options", "runtime", "--timestamp=none", str(libexec / name))
+                shown = subprocess.run(["/usr/bin/codesign", "-d", "--entitlements", "-", "--verbose=2", str(libexec / name)], capture_output=True, text=True)
+                self.assertIn("flags=0x10000(runtime)", shown.stderr)
+                self.assertIn("TeamIdentifier=U5L5T3NGVV", shown.stderr)
+                self.assertNotIn("<key>", shown.stdout)
+            data = install.scratch / "data"
+            data.mkdir()
+            fake = FakeArdia(data / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "windows": {"result": []}})
+            try:
+                env = {"HOME": str(install.scratch), "ARDIA_DATA_DIR": str(data), "ARDIA_CLI_HOME": str(install.scratch / "cli-home"), "ARDIA_TELEMETRY": "off"}
+                done = subprocess.run([str(install.root / "bin" / "ardia"), "windows", "--json"], env=env, capture_output=True, timeout=30)
+            finally:
+                fake.close()
+            self.assertEqual((done.returncode, done.stderr), (0, b""))
+            self.assertEqual(json.loads(done.stdout), [])
+            self.assertEqual([line for path in install.routes.iterdir() for line in path.read_text().split()], ["ts"])
+        finally:
+            install.close()
 
 
 class BuildSmoke(unittest.TestCase):

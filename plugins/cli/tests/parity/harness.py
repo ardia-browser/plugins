@@ -70,6 +70,11 @@ TS_PROBE = """#!/bin/sh
 printf 'ts\\n' >>{routes}/$PPID
 exec "$(dirname "$0")/ardia-ts.bin" "$@"
 """
+TS_LIBC = "ardia-libc.so"
+TEST_ENTITLEMENTS = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict><key>com.apple.security.cs.disable-library-validation</key><true/></dict></plist>
+"""
 ROUTE_PROBE = "import os as _parity_os\nopen({routes} + '/' + str(_parity_os.getsid(0)), 'a').write('python\\n')\n"
 
 
@@ -94,6 +99,27 @@ def ts_binary() -> Path | None:
         return Path(named)
     found = TS_PROJECT / "dist" / "ardia-ts"
     return found if found.exists() else None
+
+
+def ts_libc() -> Path:
+    program = ts_binary()
+    if program is None:
+        raise FileNotFoundError("the ts entry loads ts/dist/ardia-libc.so: build plugins/cli/ts or set ARDIA_TS_CLI")
+    return program.with_name(TS_LIBC)
+
+
+def codesign(*words: str) -> None:
+    subprocess.run(["/usr/bin/codesign", "--force", *words], check=True, capture_output=True)
+
+
+def sign_for_tests(libexec: Path) -> None:
+    if sys.platform != "darwin":
+        return
+    with tempfile.NamedTemporaryFile("w", suffix=".entitlements") as entitlements:
+        entitlements.write(TEST_ENTITLEMENTS)
+        entitlements.flush()
+        codesign("--sign", "-", "--options", "runtime", str(libexec / TS_LIBC))
+        codesign("--sign", "-", "--options", "runtime", "--entitlements", entitlements.name, str(libexec / "ardia-ts.bin"))
 
 
 def entry_binary(entry: str) -> Path | None:
@@ -139,14 +165,11 @@ def route_from(lines: list[str]) -> str:
     return "ts" if "ts" in lines else "rust"
 
 
-TS_CAN_LOCK = sys.platform == "darwin"
-
-
 def expected_route(entry: str, served: dict[str, str], case: "Case", ts_installed: bool) -> str:
     if case.fallback or case.command not in served:
         return "python"
     side = "ts" if entry == "ts" else served[case.command]
-    return "python" if side == "ts" and (not ts_installed or not TS_CAN_LOCK) else side
+    return "python" if side == "ts" and not ts_installed else side
 
 
 _blob_store = {}
@@ -538,9 +561,8 @@ class Installation:
         libexec = self.root / "libexec"
         libexec.mkdir()
         shutil.copy2(program, libexec / "ardia-ts.bin")
-        if sys.platform == "darwin":
-            subprocess.run(["/usr/bin/codesign", "--force", "--sign", "-", "--options", "runtime", str(libexec / "ardia-ts.bin")],
-                           check=True, capture_output=True)
+        shutil.copy2(ts_libc(), libexec / TS_LIBC)
+        sign_for_tests(libexec)
         (libexec / "ardia-ts").write_text(TS_PROBE.format(routes=shlex.quote(str(self.routes))))
         (libexec / "ardia-ts").chmod(0o755)
         self.ts_installed = True
