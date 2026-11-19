@@ -1,4 +1,5 @@
 import base64
+import fcntl
 import json
 import os
 import re
@@ -25,6 +26,17 @@ INSTALL_ID = harness.INSTALL_ID
 KEPT_ENV = ("PATH", "LANG", "LC_ALL", "LC_CTYPE", "TMPDIR", "USER", "LOGNAME", "SHELL")
 binary = harness.binary
 both_programs = lambda: binary() and harness.ts_binary()
+
+
+def full_blocking_pipe() -> tuple[int, int]:
+    reader, writer = os.pipe()
+    fcntl.fcntl(writer, fcntl.F_SETFL, os.O_NONBLOCK)
+    try:
+        while True:
+            os.write(writer, b"x" * 4096)
+    except BlockingIOError:
+        fcntl.fcntl(writer, fcntl.F_SETFL, 0)
+    return reader, writer
 
 
 def FakeArdia(path: Path, replies: dict):
@@ -482,17 +494,9 @@ class EntryProcess:
         self.assertEqual(new, (True, 130, b"ardia tabs: interrupted\n"))
 
     def test_ctrl_c_ends_a_call_whose_output_is_blocked(self):
-        import fcntl
-
         for argv, blocked in (([], "stdout"), (["--help"], "stdout"), (["--version"], "stdout"), (["windows"], "stderr")):
             with self.subTest(argv=argv, blocked=blocked):
-                reader, writer = os.pipe()
-                fcntl.fcntl(writer, fcntl.F_SETFL, os.O_NONBLOCK)
-                try:
-                    while True:
-                        os.write(writer, b"x" * 4096)
-                except BlockingIOError:
-                    fcntl.fcntl(writer, fcntl.F_SETFL, 0)
+                reader, writer = full_blocking_pipe()
                 streams = {"stdout": writer, "stderr": subprocess.PIPE} if blocked == "stdout" else {"stdout": subprocess.PIPE, "stderr": writer}
                 process = subprocess.Popen([str(self.root / "bin" / "ardia"), *argv], env=self.environment({}), stdin=subprocess.DEVNULL,
                                            preexec_fn=os.setsid, **streams)
@@ -875,7 +879,7 @@ class TsProcess(EntryProcess, unittest.TestCase):
                     shutil.rmtree(leases, True)
 
     def test_the_typescript_program_ends_when_the_router_is_killed(self):
-        for blocked_on in ("the call", "its output", "a private file"):
+        for blocked_on in ("the call", "its output", "a synchronous write"):
             with self.subTest(blocked_on=blocked_on):
                 self.case = Path(tempfile.mkdtemp(prefix="c", dir=self.scratch))
                 release = threading.Event()
@@ -888,14 +892,19 @@ class TsProcess(EntryProcess, unittest.TestCase):
                     fake = FakeArdia(self.case / "data" / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}},
                                      "workspace": {"result": {"windows": [{"id": "w-1", "spaces": [{"profile": "p", "tabs": tabs}]}]}}})
                 else:
-                    fake = self.spool_is_a_fifo()
-                    argv = ["windows", "--json"]
+                    fake = None
+                    argv = ["--help"]
                 try:
-                    listing = self.start(argv)
-                    self.wait_for(fake, "workspace" if blocked_on != "a private file" else "windows")
+                    if fake is None:
+                        reader, writer = full_blocking_pipe()
+                        listing = subprocess.Popen([str(self.root / "bin" / "ardia"), *argv], env=self.environment({}), stdout=writer,
+                                                   stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, preexec_fn=os.setsid)
+                        os.close(writer)
+                        listing.stdout = os.fdopen(reader, "rb")
+                    else:
+                        listing = self.start(argv)
+                        self.wait_for(fake, "workspace")
                     child = self.ts_child(listing.pid)
-                    if blocked_on == "a private file":
-                        self.assertEqual(listing.stdout.readline(), b"[]\n")
                     time.sleep(0.5)
                     self.assertIsNone(listing.poll(), f"ardia ended before it was blocked on {blocked_on}")
                     os.kill(listing.pid, signal.SIGKILL)
@@ -915,15 +924,8 @@ class TsProcess(EntryProcess, unittest.TestCase):
                     self.assertTrue(closed.wait(5), "the output pipes stayed open after the router died")
                 finally:
                     release.set()
-                    fake.close()
-
-    def spool_is_a_fifo(self):
-        data = self.case / "data"
-        (data / "Telemetry").mkdir(parents=True, mode=0o700)
-        (self.case / "home").mkdir()
-        (data / "telemetry.json").write_text(json.dumps({"sharing": True, "installId": INSTALL_ID}))
-        os.mkfifo(data / "Telemetry" / "cli-queue.jsonl", 0o600)
-        return FakeArdia(data / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "windows": {"result": []}})
+                    if fake is not None:
+                        fake.close()
 
     def test_a_hand_back_reaches_python_byte_for_byte(self):
         log = self.case / "exec.log"
