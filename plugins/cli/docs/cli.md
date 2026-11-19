@@ -1121,6 +1121,9 @@ their places in the table now expect `plugin_daemon_unavailable`.
   TypeScript client, browse or not, and the client refuses (77) whatever isn't a readable browse call (`tabs`,
   `--session x browse …`), so nothing in plugin mode reaches Python. A refusal before `browse` is named records no usage
   entry, as Python's own error there doesn't.
+- **Every refusal keeps its JSON envelope.** Plugin mode reads `--json` with the option-aware parse when the options can
+  be read; when they can't (an option before `browse`, an unreadable one after it), any `--json` token before `--` counts
+  (the last one wins), so the refusal is one JSON line on stdout. A refusal prints once and writes nothing afterwards.
 - Commands that run other commands answer code `nested_commands_refused` (77): `batch` and `open`/`goto`/`navigate
   --read`.
 - On Linux plugin mode reads the locale like macOS, except that it treats a UTF-8 locale name as installed: glibc keeps

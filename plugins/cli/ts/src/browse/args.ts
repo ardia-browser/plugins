@@ -103,6 +103,26 @@ function jsonFlag(browse: readonly string[]): boolean | undefined {
   return found?.flag("json");
 }
 
+export function plainJsonIntent(tokens: readonly string[]): boolean {
+  let wanted: boolean | undefined;
+  for (const token of tokens) {
+    if (token === "--") break;
+    if (token === "--json") wanted = true;
+    else if (token.startsWith("--json=")) wanted = truthy(token.slice("--json=".length));
+  }
+  return Boolean(wanted) || truthy(process.env.AGENT_BROWSER_JSON);
+}
+
+export function refusalJsonIntent(browse: readonly string[]): boolean {
+  try {
+    splitGlobals(browse);
+  } catch (error) {
+    if (!(error instanceof Usage)) throw error;
+    return plainJsonIntent(browse);
+  }
+  return jsonIntent(browse);
+}
+
 export function jsonIntent(browse: readonly string[]): boolean {
   return Boolean(jsonFlag(browse)) || truthy(process.env.AGENT_BROWSER_JSON);
 }

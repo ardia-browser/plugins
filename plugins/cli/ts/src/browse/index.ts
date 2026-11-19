@@ -3,7 +3,7 @@ import { abandonWork } from "../printable.ts";
 import { Call, finish } from "../telemetry.ts";
 import { cliVersion } from "../version.ts";
 import { cleanMetrics, exitOf, outputChars, processStatus, textOf } from "./answer.ts";
-import { allowedFlags, commandName, hoist, hoistFailure, jsonIntent, jsonIntentOfArgv, splitGlobals, truthy, Usage } from "./args.ts";
+import { allowedFlags, commandName, hoist, hoistFailure, jsonIntent, jsonIntentOfArgv, plainJsonIntent, refusalJsonIntent, splitGlobals, truthy, Usage } from "./args.ts";
 import { codeJsonAnswer } from "./codes.ts";
 import { BrowseError, PythonCrash } from "./errors.ts";
 import { Interrupted } from "./exchange.ts";
@@ -155,7 +155,7 @@ function unreadableBeforeBrowse(argv: string[], python: string | null): number {
   const browseAt = argv.indexOf("browse");
   const leading = browseAt < 0 ? undefined : argv.slice(0, browseAt).find((token) => token.startsWith("-") && token !== "--json");
   const why = browseAt < 0 ? "runs only `ardia browse`" : leading !== undefined ? `can't read its options (ardia browse doesn't take ${leading.split("=")[0]} before browse)` : `can't read its options (${hoistFailure(argv).text.replace(/^✗ |^ardia: /, "").trim()})`;
-  return refuse(jsonIntentOfArgv(argv), why, browseCall(argv, undefined), python, CODE, false);
+  return refuse(plainJsonIntent(argv), why, browseCall(argv, undefined), python, CODE, false);
 }
 
 async function pluginAccess(browse: string[], call: Call, python: string | null): Promise<number | undefined> {
@@ -171,7 +171,7 @@ async function pluginAccess(browse: string[], call: Call, python: string | null)
     checkRequest(browse, parsed.found, parsed.rest);
     return undefined;
   } catch (error) {
-    if (error instanceof PluginRefusal) return refuse(jsonIntent(browse), error.message, call, python, error.code);
+    if (error instanceof PluginRefusal) return refuse(refusalJsonIntent(browse), error.message, call, python, error.code);
     if (error instanceof Interrupted) {
       abandonWork();
       sayInterrupted(new Printer("strict"), jsonIntent(browse));

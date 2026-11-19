@@ -487,6 +487,15 @@ class PluginTelemetry(PluginCredentialProcesses):
         self.assertFalse(listener.heard.wait(2))
         self.assertEqual(self.tree(), before)
 
+    def test_an_account_relative_data_dir_under_json_is_one_json_refusal(self):
+        before = self.tree()
+        process = subprocess.run([str(self.install.root / "bin" / "ardia"), "--data-dir", "~nobody/x", "browse", "--session", "plugin-ai", "--json", "get", "title"],
+                                 env=self.env(9), cwd=self.box / "tmp", stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+        self.assertEqual((process.returncode, process.stderr), (77, b""))
+        self.assertEqual(process.stdout.count(b"\n"), 1)
+        self.assertEqual(json.loads(process.stdout)["code"], "plugin_refused")
+        self.assertEqual(self.tree(), before)
+
     def test_with_telemetry_off_a_plugin_call_records_nothing(self):
         process, heard, events, flushed = self.run_with_sharing("0")
         self.assertEqual(process.returncode, 77, process.stderr)

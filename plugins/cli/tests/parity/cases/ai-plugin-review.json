@@ -4133,5 +4133,60 @@
     "tasks": {}
    }
   }
+ },
+ {
+  "id": "review6--4-leading-session-then-json",
+  "command": "browse get",
+  "argv": [
+   "--session",
+   "x",
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 6: Codex's repro, a refusal keeps its JSON envelope",
+  "intentional": {
+   "why": "in plugin mode every refusal is one JSON line on stdout when --json appears anywhere and the options can't be read",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't read its options (ardia browse doesn't take --session before browse); nothing was sent\",\"code\":\"plugin_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": []
+  }
  }
 ]
