@@ -2022,7 +2022,16 @@
    "session": "plugin-ai",
    "namespace": ""
   },
-  "note": "§6 after-check"
+  "note": "§6 after-check",
+  "intentional": {
+   "why": "the daemon answers the same document_changed whether its check failed before the step (nothing ran) or after it (the step ran), so the client says it may or may not have run; the M3 F1 daemon answers document_changed_after for the second",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"The page loaded a new document before, during or after this step, so it may or may not have run; check the page before repeating it. Ardia checks it again for the next step\",\"code\":\"document_changed\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
  },
  {
   "id": "contract--6-before-check-text",
@@ -2065,7 +2074,16 @@
    "session": "plugin-ai",
    "namespace": ""
   },
-  "note": "§6 before-check in text"
+  "note": "§6 before-check in text",
+  "intentional": {
+   "why": "the daemon answers the same document_changed whether its check failed before the step (nothing ran) or after it (the step ran), so the client says it may or may not have run; the M3 F1 daemon answers document_changed_after for the second",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ The page loaded a new document before, during or after this step, so it may or may not have run; check the page before repeating it. Ardia checks it again for the next step\n"
+   }
+  }
  },
  {
   "id": "contract--3-tab-not-found",

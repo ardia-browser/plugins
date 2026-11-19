@@ -1084,6 +1084,17 @@ it relies on is `tests/parity/cases/ai-plugin-contract.json` (one case per item)
 - `--expect-loader <loaderId>` goes to the daemon as `options.expect_loader`; it checks the main frame's loader before
   and after the step and answers `document_changed` (exit 1). `tab <id> --json` carries `data.loader`. A step whose
   picked tab is gone answers `tab_gone`; lost-tab recovery and the notes and saved-flow hints are off.
+- The Python daemon answers the same `document_changed` when its check fails before the step (nothing ran) and after it
+  (the step ran, say a click that submitted a form), and nothing in its reply tells the two apart. So the client
+  rewords it: "The page loaded a new document before, during or after this step, so it may or may not have run; check
+  the page before repeating it. …" (both modes; intentional cases). **M3 F1's daemon must tell them apart**: keep
+  `document_changed` for the before-check (nothing ran) and answer `document_changed_after` when the step ran and the
+  document changed during or after it; the client then passes both through and drops the rewording.
+- An engine refusal arrives as a CDP error whose text holds `ardia: <code>`. Under `--json` the client gives
+  `ardia: tab_out_of_scope` (the tab left the credential's window or profile) the code `tab_out_of_scope` and the act
+  lease's `ardia: document_changed` the code `document_changed`, in place of a missing code, `command_failed` or
+  `policy_refused`; a code the daemon gave otherwise stays. A tab that is out of scope before the step isn't in the
+  engine's filtered target list, so `tab <id>` still answers `tab_not_found`.
 - Refused with status 77 and one line (JSON with code `plugin_refused` under `--json`), before anything is sent:
   `ARDIA_BROWSE_FOR_PLUGIN` other than `1`; a missing, non-numeric, closed, terminal or unreadable descriptor; anything
   but a well-formed credential (a trailing newline included); no read within 2 s; a missing, empty or non-loopback
@@ -1132,6 +1143,7 @@ Python has none:
 | `unknown_command` | the daemon's `Unknown command: …` |
 | `command_failed` | any other daemon error line without a code |
 | `plugin_refused` | a plugin-mode refusal (status 77) |
+| `tab_out_of_scope` | the engine's `ardia: tab_out_of_scope` refusal: the tab moved to another window or profile mid-step |
 | `nested_commands_refused` | plugin mode and a command that runs other commands (`batch`, `open --read`; status 77) |
 
 Telemetry's `error_code` stays Python's. Each such case in the parity table is marked `intentional`, holds the output

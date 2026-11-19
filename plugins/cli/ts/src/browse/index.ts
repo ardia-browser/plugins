@@ -4,12 +4,12 @@ import { Call, finish } from "../telemetry.ts";
 import { cliVersion } from "../version.ts";
 import { cleanMetrics, exitOf, outputChars, processStatus, textOf } from "./answer.ts";
 import { allowedFlags, commandName, hoist, hoistFailure, splitGlobals, truthy, Usage } from "./args.ts";
+import { codedLine, honestText } from "./codes.ts";
 import { BrowseError, PythonCrash } from "./errors.ts";
 import { Interrupted } from "./exchange.ts";
 import { Printer } from "./output.ts";
 import { type Access, checkRequest, CODE, dropCredential, message, pluginMode, PluginRefusal, REFUSED, takeAccess } from "./plugin.ts";
-import { dumps, object, parseText, type Value } from "../json.ts";
-import { ANSWER_JSON_DEPTH } from "./serve.ts";
+import { dumps, object, type Value } from "../json.ts";
 import { Secrets } from "./redact.ts";
 import { renderError } from "./render.ts";
 import { environmentIsText, Refused, Unported } from "./request.ts";
@@ -50,23 +50,9 @@ function jsonRequested(browse: readonly string[]): boolean {
   return wanted;
 }
 
-function codedLine(out: Value | undefined, exit: Value | undefined): Value | undefined {
-  const status = exitOf(exit);
-  if (typeof out !== "string" || status instanceof PythonCrash || status === 0n || !out.endsWith("\n") || out.indexOf("\n") !== out.length - 1) return out;
-  let parsed: Value | undefined;
-  try {
-    parsed = parseText(out.slice(0, -1), ANSWER_JSON_DEPTH);
-  } catch {
-    return out;
-  }
-  if (!(parsed instanceof Map) || parsed.get("success") !== false || parsed.has("code")) return out;
-  const error = parsed.get("error");
-  parsed.set("code", typeof error === "string" && error.startsWith("Unknown command:") ? "unknown_command" : "command_failed");
-  return `${dumps(parsed, "compact")}\n`;
-}
-
 function printAnswer(answer: Map<string, Value>, secrets: Secrets, printer: Printer, call: Call, asJson: boolean): Outcome {
   if (asJson) answer.set("out", codedLine(answer.get("out"), answer.get("exit")) ?? null);
+  else answer.set("err", honestText(answer.get("err")) ?? null);
   const code = answer.get("code");
   if (typeof code === "string") call.noteErrorCode(code);
   for (const [key, value] of cleanMetrics(answer.get("metrics"))) call.metrics.set(key, value);
