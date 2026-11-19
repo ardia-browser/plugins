@@ -522,6 +522,30 @@ class CheckedBeforeConnecting(unittest.TestCase):
             self.assertTrue(math.isfinite(budget), payload)
             self.assertGreaterEqual(deadline, budget + allowance, payload)
 
+    def test_flags_are_checked_before_stdin_is_read(self):
+        import contextlib
+        import io
+        from unittest import mock
+
+        from ardia_cli.browse import cli as browse_cli, client
+
+        class Unread(io.StringIO):
+            def read(self, *args):
+                raise AssertionError("stdin was read")
+
+            def isatty(self):
+                return False
+
+        for argv in (["--target=", "--params", "-"], ["--params", "-", "--timeout", "0"], ["--params", "-", "--target", " "]):
+            err = io.StringIO()
+            with mock.patch.dict(os.environ, {"ARDIA_DATA_DIR": str(self.temp), "ARDIA_TELEMETRY": "0"}), \
+                    mock.patch.object(client, "ensure_daemon", side_effect=AssertionError("connected")), \
+                    mock.patch("sys.stdin", Unread()), contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+                status = browse_cli.run(["--port", "9", "cdp", "Runtime.evaluate", *argv])
+            self.assertEqual(status, 1, argv)
+            self.assertNotIn("stdin was read", err.getvalue(), argv)
+            self.assertIn("--t", err.getvalue(), argv)
+
     def test_a_huge_timeout_never_overflows_the_client_deadline(self):
         import math
 

@@ -366,7 +366,7 @@ def read_cdp_stdin() -> str:
         raise Usage(str(error)) from None
 
 
-def check_cdp(args: list[str], stdin: str | None) -> None:
+def check_cdp_flags(args: list[str]) -> dict:
     from ardia_cli.browse.commands import CDP_FLAGS, cdp_target, parse
     from ardia_cli.browse.script import parse_timeout
 
@@ -374,6 +374,11 @@ def check_cdp(args: list[str], stdin: str | None) -> None:
     cdp_target(options)
     if options.get("timeout") is not None:
         parse_timeout(options["timeout"])
+    return options
+
+
+def check_cdp(args: list[str], stdin: str | None) -> None:
+    options = check_cdp_flags(args)
     cdp_params(options.get("params"), options.get("param") or [], stdin)
 
 
@@ -547,6 +552,8 @@ def run(argv: list[str]) -> int:
             if result is not None:
                 return print_result(result, as_json, options)
         stdin = None
+        if command == "cdp":
+            check_cdp_flags(args)
         if command == "notes" and "-" in args:
             stdin = read_stdin_text()
         elif (command in ("eval", "addinitscript") and "--stdin" in args) or (command == "eval" and not eval_code_given(args) and not sys.stdin.isatty()) \
