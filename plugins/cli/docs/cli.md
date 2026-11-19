@@ -1668,7 +1668,10 @@ that carries the case's folder in its command line or environment, or runs from 
 params as sent), telemetry, usage, the flush state, the files written (with modes) and the helpers started (each argument whole), byte for byte, with a diff
 for each mismatch, and it knows which side served a call from whether the bundled Python's `ardia_cli.cli` was imported, not from telemetry. A
 case marked `fallback` is one Rust must hand to Python; before handing off, Rust may only have asked read-only questions
-(`hello`, `workspace`, `windows`, `commands`). `--command NAME` and `--case ID` narrow a run, `--keep` keeps both
+(`hello`, `workspace`, `windows`, `commands`). A case marked `diverges` is one where Python crashes and Rust, which can't
+hand back a command it already sent, reports the problem instead: it names the exception Python must crash with and the
+exact stderr and error code Rust must give, and every other field is still compared (Python's `$exception` event left
+out). `--command NAME` and `--case ID` narrow a run, `--keep` keeps both
 sandboxes, and `--report` prints the table as JSON (per command: cases, passing, native, served) for a given commit.
 
 `python -m tests.parity.record` seeds `tests/parity/cases/seeded/` from the Python tests: it runs them with the entry

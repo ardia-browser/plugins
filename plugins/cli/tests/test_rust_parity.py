@@ -87,6 +87,23 @@ class HarnessRules(unittest.TestCase):
         self.assertEqual(harness.fallback_requests(read_first, python), python)
         self.assertEqual(harness.fallback_requests(mutate_first, python), mutate_first)
 
+    def test_a_divergence_pins_both_sides(self):
+        diverges = {"why": "Python crashes on a broken answer", "python_crash": "JSONDecodeError",
+                    "rust_stderr": "✗ unreadable\n", "rust_error_code": "malformed_answer"}
+        crash = {"event": "$exception", "properties": {"$exception_types": ["JSONDecodeError"]}}
+        command = {"event": "cli_command", "properties": {"command": "browse", "error_code": "unhandled_exception"}}
+        python = harness.Observed(b"", b"Traceback (most recent call last):\n  ...\njson.decoder.JSONDecodeError: Expecting value\n", 1, [],
+                                  [crash, command], [crash, command], ["python"], None, {}, [])
+        self.assertEqual(harness.crash_problems(python, diverges), [])
+        expected = harness.as_rust_should_differ(python, diverges)
+        self.assertEqual(expected.stderr, "✗ unreadable\n".encode())
+        self.assertEqual(expected.telemetry, [{"event": "cli_command", "properties": {"command": "browse", "error_code": "malformed_answer"}}])
+        self.assertEqual(python.telemetry, [crash, command])
+        healed = harness.Observed(b"", b"\u2717 fine\n".decode("unicode_escape").encode(), 1, [], [command | {"properties": {"error_code": None}}],
+                                  [], ["python"], None, {}, [])
+        self.assertEqual(len(harness.crash_problems(healed, diverges)), 3)
+        self.assertTrue(harness.crash_problems(python, {"why": "x"}))
+
     def test_times_are_scrubbed_only_when_they_are_now(self):
         window = (1_763_500_000.0, 1_763_500_001.0)
         scrubbed = harness.scrub_times({"last_at": 1_763_500_000.5, "first_ms": 1_763_500_000_000, "next_at": 0, "open_at": False, "done_at": None,

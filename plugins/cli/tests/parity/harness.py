@@ -153,6 +153,7 @@ class Case:
     helpers: dict = field(default_factory=dict)
     daemon: dict | None = None
     fallback: bool = False
+    diverges: dict | None = None
     normalize: list = field(default_factory=list)
     source: str = ""
     note: str = ""
@@ -170,7 +171,7 @@ class Case:
     def to_dict(self) -> dict:
         row = {"id": self.id, "command": self.command, "argv": self.argv}
         defaults = Case(id="", command="", argv=[])
-        for name in ("stdin", "env", "control", "daemon", "consent", "files", "helpers", "fallback", "normalize", "note"):
+        for name in ("stdin", "env", "control", "daemon", "consent", "files", "helpers", "fallback", "diverges", "normalize", "note"):
             value = getattr(self, name)
             if value != getattr(defaults, name):
                 row[name] = value
@@ -887,6 +888,45 @@ def text_of(value) -> str:
     return json.dumps(value, indent=1, sort_keys=True, ensure_ascii=False, default=str)
 
 
+DIVERGENCE_KEYS = frozenset({"why", "python_crash", "rust_stderr", "rust_error_code"})
+
+
+def without_crash_records(records: list) -> list:
+    return [record for record in records if record.get("event") != "$exception"]
+
+
+def crash_problems(python: Observed, diverges: dict) -> list[str]:
+    if set(diverges) != DIVERGENCE_KEYS:
+        return [f"diverges must name exactly {', '.join(sorted(DIVERGENCE_KEYS))}"]
+    crash = diverges["python_crash"]
+    crashes = [record for record in python.telemetry if record.get("event") == "$exception"]
+    commands = [record for record in python.telemetry if record.get("event") == "cli_command"]
+    last_line = python.stderr.decode("utf-8", "replace").rstrip("\n").rpartition("\n")[2]
+    problems = []
+    if [record.get("properties", {}).get("$exception_types") for record in crashes] != [[crash]]:
+        problems.append(f"the case says Python crashes with {crash}, but its telemetry shows {crashes and crashes[0].get('properties', {}).get('$exception_types')}")
+    if not commands or commands[-1].get("properties", {}).get("error_code") != "unhandled_exception":
+        problems.append("the case says Python crashes, but its cli_command event has no unhandled_exception")
+    if b"Traceback (most recent call last):\n" not in python.stderr or not re.match(rf"^([\w.]+\.)?{re.escape(crash)}: ", last_line):
+        problems.append(f"the case says Python crashes with {crash}, but its stderr isn't that traceback")
+    return problems
+
+
+def as_rust_should_differ(python: Observed, diverges: dict) -> Observed:
+    def settled(records: list) -> list:
+        kept = without_crash_records(records)
+        for record in kept:
+            properties = record.get("properties", {})
+            if record.get("event") == "cli_command" and properties.get("error_code") == "unhandled_exception":
+                properties["error_code"] = diverges["rust_error_code"]
+        return kept
+
+    from dataclasses import replace
+
+    return replace(python, stderr=diverges["rust_stderr"].encode(), telemetry=settled(json.loads(json.dumps(python.telemetry))),
+                   queued=settled(json.loads(json.dumps(python.queued))))
+
+
 FIELDS = ("status", "stdout", "stderr", "requests", "daemon_requests", "telemetry", "queued", "usage", "flush", "files", "helpers", "timed_out")
 
 
@@ -962,6 +1002,9 @@ def check_case(install: Installation, case: Case, served: set[str], keep: bool =
             shutil.rmtree(box, True)
     problems = []
     rust, python = observed["rust"], observed["python"]
+    if case.diverges is not None:
+        problems += crash_problems(python, case.diverges)
+        python = as_rust_should_differ(python, case.diverges)
     named = command_of(case.argv, labels[-1] if labels else None)
     if named is not None and named != case.command:
         problems.append(f"this call is {named!r}, the case says {case.command!r}")
