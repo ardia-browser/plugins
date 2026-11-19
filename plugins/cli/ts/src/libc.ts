@@ -5,15 +5,17 @@ import { dirname, join } from "node:path";
 export const LIBC_FILE = "ardia-libc.so";
 export const LIBC_UNAVAILABLE = 252;
 
+export type Name = string | Buffer;
+
 type Native = {
   peerUid(fd: number): number;
   interruptsIgnored(): boolean | number;
   openAt(dir: number, name: string, flags: number, mode: number): number;
   mkdirAt(dir: number, name: string, mode: number): number;
   renameAt(dir: number, from: string, to: string): number;
-  unlinkAt(dir: number, name: string): number;
-  sizeAt(dir: number, name: string): number;
-  listAt(dir: number): string[] | number;
+  unlinkAt(dir: number, name: Name): number;
+  sizeAt(dir: number, name: Name): number;
+  listAt(dir: number): Buffer[] | number;
   lock(fd: number, exclusive: boolean, wait: boolean): number;
   watchLifeline(fd: number): number;
   strerror(errno: number): string | number;
@@ -82,7 +84,8 @@ function native(): Native {
   return loaded;
 }
 
-export function errnoError(errno: number, syscall: string, name?: string): NodeJS.ErrnoException {
+export function errnoError(errno: number, syscall: string, given?: Name): NodeJS.ErrnoException {
+  const name = given === undefined ? undefined : given.toString();
   const code = ERRNO_NAMES.get(errno) ?? `E${errno}`;
   const error: NodeJS.ErrnoException = new Error(`${code}: ${strerror(errno)}, ${syscall}${name === undefined ? "" : ` '${name}'`}`);
   error.errno = -errno;
@@ -92,7 +95,7 @@ export function errnoError(errno: number, syscall: string, name?: string): NodeJ
   return error;
 }
 
-function checked(result: number, syscall: string, name?: string): number {
+function checked(result: number, syscall: string, name?: Name): number {
   if (result < 0) throw errnoError(-result, syscall, name);
   return result;
 }
@@ -119,17 +122,17 @@ export function renameAt(dir: number, from: string, to: string): void {
   checked(native().renameAt(dir, from, to), "renameat", from);
 }
 
-export function unlinkAt(dir: number, name: string): void {
+export function unlinkAt(dir: number, name: Name): void {
   checked(native().unlinkAt(dir, name), "unlinkat", name);
 }
 
-export function sizeAt(dir: number, name: string): number {
+export function sizeAt(dir: number, name: Name): number {
   return checked(native().sizeAt(dir, name), "fstatat", name);
 }
 
-export function listAt(dir: number): string[] {
+export function listAt(dir: number): Buffer[] {
   const names = native().listAt(dir);
-  if (typeof names === "number") throw errnoError(-names, "fdopendir");
+  if (typeof names === "number") throw errnoError(-names, "openat");
   return names;
 }
 

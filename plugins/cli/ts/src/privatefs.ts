@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { constants } from "node:os";
-import { flock, listAt, mkdirAt, openAt, renameAt, sizeAt as statSizeAt, unlinkAt } from "./libc.ts";
+import { flock, listAt, mkdirAt, type Name, openAt, renameAt, sizeAt as statSizeAt, unlinkAt } from "./libc.ts";
 import { codeOf, errnoOf, uid } from "./paths.ts";
 import { sleepMs } from "./printable.ts";
 
@@ -137,7 +137,7 @@ export function takeLockRetrying(name: string, dir: Dir): number | undefined {
   return undefined;
 }
 
-export function unlinkQuietly(name: string, dir: Dir): void {
+export function unlinkQuietly(name: Name, dir: Dir): void {
   try {
     unlinkAt(dir.fd, name);
   } catch (error) {
@@ -149,11 +149,11 @@ export function renameIn(dir: Dir, from: string, to: string): void {
   renameAt(dir.fd, from, to);
 }
 
-export function sizeAt(dir: Dir, name: string): number {
+export function sizeAt(dir: Dir, name: Name): number {
   return statSizeAt(dir.fd, name);
 }
 
-export function listDir(dir: Dir): string[] {
+export function listDir(dir: Dir): Buffer[] {
   return listAt(dir.fd);
 }
 

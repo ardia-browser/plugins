@@ -94,21 +94,32 @@ export function isLocalFile(name: string): boolean {
   return day.length === 10 && day.every((ch, index) => (index === 4 || index === 7 ? ch === "-" : isDecimal(ch)));
 }
 
-function byteOrder(a: string, b: string): number {
-  return Buffer.compare(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
+const STRICT_UTF8 = new TextDecoder("utf-8", { fatal: true });
+
+function textOf(raw: Buffer): string | undefined {
+  try {
+    return STRICT_UTF8.decode(raw);
+  } catch {
+    return undefined;
+  }
 }
 
 function pruneLocal(dir: Dir, at: number): void {
-  const oldestKept = localName(at - (LOCAL_DAYS - 1) * 86_400);
+  const oldestKept = utf8(localName(at - (LOCAL_DAYS - 1) * 86_400));
   const files: [string, number][] = [];
-  for (const name of listDir(dir).filter(isLocalFile).sort(byteOrder)) {
+  const named: [Buffer, string][] = [];
+  for (const raw of listDir(dir)) {
+    const name = textOf(raw);
+    if (name !== undefined && isLocalFile(name)) named.push([raw, name]);
+  }
+  for (const [raw, name] of named.sort(([a], [b]) => Buffer.compare(a, b))) {
     let size: number;
     try {
-      size = sizeAt(dir, name);
+      size = sizeAt(dir, raw);
     } catch {
       continue;
     }
-    if (byteOrder(name, oldestKept) < 0) unlinkQuietly(name, dir);
+    if (Buffer.compare(raw, oldestKept) < 0) unlinkQuietly(raw, dir);
     else files.push([name, size]);
   }
   let excess = files.reduce((total, [, size]) => total + size, 0) - MAX_LOCAL_BYTES;

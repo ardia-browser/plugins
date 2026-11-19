@@ -46,6 +46,9 @@ napi_status napi_create_double(napi_env env, double value, napi_value *result);
 napi_status napi_get_boolean(napi_env env, bool value, napi_value *result);
 napi_status napi_create_string_utf8(napi_env env, const char *str, size_t length, napi_value *result);
 napi_status napi_create_array(napi_env env, napi_value *result);
+napi_status napi_is_buffer(napi_env env, napi_value value, bool *result);
+napi_status napi_get_buffer_info(napi_env env, napi_value value, void **data, size_t *length);
+napi_status napi_create_buffer_copy(napi_env env, size_t length, const void *data, void **result_data, napi_value *result);
 napi_status napi_set_element(napi_env env, napi_value object, uint32_t index, napi_value value);
 napi_status napi_create_function(napi_env env, const char *utf8name, size_t length, napi_callback cb, void *data, napi_value *result);
 napi_status napi_set_named_property(napi_env env, napi_value object, const char *utf8name, napi_value value);
@@ -89,6 +92,17 @@ static bool bool_arg(Call *call, size_t index, bool *out) {
 
 static int name_arg(Call *call, size_t index, char *buffer, size_t size) {
   size_t length = 0;
+  bool is_buffer = false;
+  if (napi_is_buffer(call->env, call->argv[index], &is_buffer) == napi_ok && is_buffer) {
+    void *data = NULL;
+    if (napi_get_buffer_info(call->env, call->argv[index], &data, &length) != napi_ok) return -EINVAL;
+    if (length == 0) return -ENOENT;
+    if (length >= size) return -ENAMETOOLONG;
+    if (memchr(data, 0, length) != NULL) return -EINVAL;
+    memcpy(buffer, data, length);
+    buffer[length] = 0;
+    return 0;
+  }
   if (napi_get_value_string_utf8(call->env, call->argv[index], NULL, 0, &length) != napi_ok) return -EINVAL;
   if (length == 0) return -ENOENT;
   if (length >= size) return -ENAMETOOLONG;
@@ -220,7 +234,10 @@ static napi_value list_at(napi_env env, napi_callback_info info) {
   napi_value names = NULL;
   if (!take_args(env, info, 1, &call)) return status(env, -EINVAL);
   if (!int_arg(&call, 0, &dir)) return NULL;
-  int copy = fcntl(dir, F_DUPFD_CLOEXEC, 0);
+  int copy;
+  do {
+    copy = openat(dir, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+  } while (copy < 0 && errno == EINTR);
   if (copy < 0) return status(env, failed());
   DIR *stream = fdopendir(copy);
   if (stream == NULL) {
@@ -228,7 +245,6 @@ static napi_value list_at(napi_env env, napi_callback_info info) {
     close(copy);
     return status(env, error);
   }
-  rewinddir(stream);
   if (napi_create_array(env, &names) != napi_ok) {
     closedir(stream);
     return status(env, -ENOMEM);
@@ -240,7 +256,7 @@ static napi_value list_at(napi_env env, napi_callback_info info) {
     if (entry == NULL) break;
     if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
     napi_value name = NULL;
-    if (napi_create_string_utf8(env, entry->d_name, NAPI_AUTO_LENGTH, &name) != napi_ok || napi_set_element(env, names, count, name) != napi_ok) {
+    if (napi_create_buffer_copy(env, strlen(entry->d_name), entry->d_name, NULL, &name) != napi_ok || napi_set_element(env, names, count, name) != napi_ok) {
       closedir(stream);
       return status(env, -ENOMEM);
     }

@@ -1713,9 +1713,9 @@ its mode; the hardened runtime's library validation then loads it only into a pr
 | `openAt` | `openat` (always `O_CLOEXEC`) | `fs` opens by path only | `privatefs.ts`: folders and private files under an open folder |
 | `mkdirAt` | `mkdirat` | path only | `privatefs.ts`: create `Telemetry`, `Local` and the usage folder |
 | `renameAt` | `renameat` | path only | `privatefs.ts`: the temp-then-rename writes |
-| `unlinkAt` | `unlinkat` | path only | `privatefs.ts`: drop the spool and pruned copies |
+| `unlinkAt` | `unlinkat` (a name is a string or a `Buffer` of raw bytes, as for `sizeAt`) | path only | `privatefs.ts`: drop the spool and pruned copies |
 | `sizeAt` | `fstatat(…, AT_SYMLINK_NOFOLLOW)` | path only | `privatefs.ts`: spool and local-copy sizes |
-| `listAt` | `fcntl(F_DUPFD_CLOEXEC)`, `fdopendir`, `readdir` | no directory listing from a descriptor | `privatefs.ts`: prune the local copies |
+| `listAt` | `openat(fd, ".", O_RDONLY\|O_DIRECTORY\|O_CLOEXEC)`, `fdopendir`, `readdir`; names as raw-byte `Buffer`s, the folder's own descriptor left at offset 0 as `os.listdir(fd)` leaves it | no directory listing from a descriptor | `privatefs.ts`: prune the local copies |
 | `lock` | `flock` | no `flock`; `O_EXLOCK` is Darwin-only | `privatefs.ts`: the same lock Python's `fcntl.flock` takes, on macOS and Linux |
 | `strerror` | `strerror_r` (GNU form on glibc, XSI elsewhere) | Node's messages are libuv's, not libc's | `paths.ts`, `libc.ts`: every OS error text, as Python's `os.strerror` gives it on that platform |
 | `watchLifeline` | `fcntl(FD_CLOEXEC)`, a detached `pthread` blocking in `read`, `kill(getpid(), SIGKILL)` at EOF or error | a JS watcher can't run while the JS thread is blocked in a synchronous call | `main.ts`: end at once when the router dies |

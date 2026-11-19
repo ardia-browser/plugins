@@ -404,13 +404,18 @@ pub fn size_at(dir: &OwnedFd, name: &str) -> io::Result<u64> {
 }
 
 pub fn list_dir(dir: &OwnedFd) -> io::Result<Vec<String>> {
-    let copy = check(unsafe { libc::dup(dir.as_raw_fd()) })?;
+    let here = c".";
+    let copy = loop {
+        let fd = unsafe { libc::openat(dir.as_raw_fd(), here.as_ptr(), libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC) };
+        if fd >= 0 || io::Error::last_os_error().raw_os_error() != Some(libc::EINTR) {
+            break check(fd)?;
+        }
+    };
     let stream = unsafe { libc::fdopendir(copy) };
     if stream.is_null() {
         unsafe { libc::close(copy) };
         return Err(io::Error::last_os_error());
     }
-    unsafe { libc::rewinddir(stream) };
     let mut names = Vec::new();
     loop {
         let entry = unsafe { libc::readdir(stream) };
@@ -487,5 +492,24 @@ mod tests {
         assert_eq!(expand_user("~/x"), format!("{}/x", home.trim_end_matches('/')));
         assert_eq!(expand_user("a/~"), "a/~");
         assert_eq!(expand_user("~no-such-user-here/x"), "~no-such-user-here/x");
+    }
+
+    #[test]
+    fn listing_leaves_the_folder_descriptor_where_it_was() {
+        use std::os::fd::FromRawFd;
+        let dir = std::env::temp_dir().join(format!("ardia-list-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for name in ["a", "b", "c"] {
+            std::fs::write(dir.join(name), "").unwrap();
+        }
+        let path = CString::new(dir.to_str().unwrap()).unwrap();
+        let fd = unsafe { OwnedFd::from_raw_fd(libc::open(path.as_ptr(), libc::O_RDONLY | libc::O_DIRECTORY)) };
+        let mut names = list_dir(&fd).unwrap();
+        names.sort();
+        let offset = unsafe { libc::lseek(fd.as_raw_fd(), 0, libc::SEEK_CUR) };
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(names, ["a", "b", "c"]);
+        assert_eq!(offset, 0);
     }
 }

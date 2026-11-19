@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { BUILT_LIBC } from "./libc-loaded.ts";
-import { dlopenReason, errnoError, flock, interruptsIgnored, LibcUnavailable, listAt, loadLibc, mkdirAt, openAt, peerUid, sizeAt as rawSizeAt, strerror, watchLifeline } from "../src/libc.ts";
+import { dlopenReason, errnoError, flock, interruptsIgnored, LibcUnavailable, listAt, loadLibc, mkdirAt, openAt, peerUid, sizeAt as rawSizeAt, strerror, unlinkAt, watchLifeline } from "../src/libc.ts";
 import { close, closeDir, listDir, openPrivate, openPrivateFile, PathError, readPrivate, renameIn, sizeAt, takeLock, unlinkQuietly, writePrivate } from "../src/privatefs.ts";
 
 const CLI = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
@@ -107,7 +107,7 @@ test("private files are reached through the folder's descriptor, never the worki
     assert.equal(readPrivate("a.json", dir, 10)?.toString(), "[1]");
     assert.equal(sizeAt(dir, "a.json"), 3);
     renameIn(dir, "a.json", "b.json");
-    assert.deepEqual(listDir(dir), ["b.json"]);
+    assert.deepEqual(listDir(dir), [Buffer.from("b.json")]);
     unlinkQuietly("b.json", dir);
     unlinkQuietly("b.json", dir);
     assert.deepEqual(listDir(dir), []);
@@ -201,6 +201,35 @@ test("every integer argument is taken exactly or refused with a thrown error", (
     assert.throws(() => flock(dir, 1 as unknown as boolean, false), TypeError);
     assert.ok(Array.isArray(listAt(dir + 0.0)));
     assert.throws(() => listAt(-1), { code: "EBADF" });
+  } finally {
+    fs.closeSync(dir);
+  }
+});
+
+test("listing a folder leaves its descriptor where it was and gives each name's bytes", () => {
+  const folder = fs.mkdtempSync(path.join(scratch, "listed-"));
+  for (const name of ["a.jsonl", "b.jsonl", "c\u0661.jsonl"]) fs.writeFileSync(path.join(folder, name), "");
+  const odd = Buffer.concat([Buffer.from(folder), Buffer.from("/\xff\xfe.jsonl", "latin1")]);
+  let oddMade = true;
+  try {
+    fs.writeFileSync(odd, "");
+  } catch {
+    oddMade = false;
+  }
+  const dir = fs.openSync(folder, O_RDONLY);
+  try {
+    const names = listAt(dir).sort(Buffer.compare);
+    const expected = [Buffer.from("a.jsonl"), Buffer.from("b.jsonl"), Buffer.from("c\u0661.jsonl")];
+    if (oddMade) expected.push(Buffer.from("\xff\xfe.jsonl", "latin1"));
+    assert.deepEqual(names, expected.sort(Buffer.compare));
+    const offset = spawnSync(PYTHON, ["-I", "-c", "import os; print(os.lseek(3, 0, os.SEEK_CUR))"], { stdio: ["ignore", "pipe", "pipe", dir], encoding: "utf8" });
+    assert.equal(offset.stdout.trim(), "0", offset.stderr);
+    if (oddMade) {
+      const oddName = names.find((name) => name[0] === 0xff) ?? Buffer.alloc(0);
+      assert.equal(rawSizeAt(dir, oddName), 0);
+      unlinkAt(dir, oddName);
+      assert.equal(listAt(dir).length, 3);
+    }
   } finally {
     fs.closeSync(dir);
   }
