@@ -115,7 +115,7 @@ export class Output {
   constructor(readonly json: boolean) {}
 
   say(text: string): void {
-    if (!this.closed) this.pending.push(`${this.json ? jsonSafe(text) : inert(text)}\n`);
+    if (!this.closed) this.pending.push(`${this.json ? text : inert(text)}\n`);
   }
 
   pythonCrash(): { errno: number; exit: number } | undefined {

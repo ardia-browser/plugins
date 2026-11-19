@@ -3,6 +3,7 @@ import fcntl
 import json
 import os
 import re
+import resource
 import select
 import shutil
 import socket
@@ -75,6 +76,47 @@ class RustParityTable(ParityTable, unittest.TestCase):
 
 @harness.requires(both_programs(), ("rust", "ts"), "build plugins/cli/rust (the router) and plugins/cli/ts (bun run build), or set ARDIA_RUST_CLI and ARDIA_TS_CLI")
 class TsParityTable(ParityTable, unittest.TestCase):
+    entry = "ts"
+
+
+DEEP_FIXTURE_CPU_S = 5
+DEEP_FIXTURE_WALL_S = harness.TIMEOUT / 2
+
+
+def children_cpu() -> float:
+    used = resource.getrusage(resource.RUSAGE_CHILDREN)
+    return used.ru_utime + used.ru_stime
+
+
+class DeepFixtures:
+    entry = "rust"
+
+    def test_each_deep_fixture_finishes_well_inside_the_harness_timeout(self):
+        install = harness.Installation(harness.entry_binary(self.entry), entry=self.entry)
+        try:
+            for case in [case for case in harness.load_cases() if case.id.startswith("ts-r3--") and case.id.endswith("-deep")]:
+                with self.subTest(case=case.id):
+                    box = install.box()
+                    started, cpu = time.monotonic(), children_cpu()
+                    try:
+                        observed, _ = harness.run_side(install, "new", case, box)
+                    finally:
+                        elapsed, cpu = time.monotonic() - started, children_cpu() - cpu
+                        shutil.rmtree(box, True)
+                    self.assertFalse(observed.timed_out)
+                    self.assertLess(cpu, DEEP_FIXTURE_CPU_S, f"{case.id} used {cpu:.1f} s of CPU")
+                    self.assertLess(elapsed, DEEP_FIXTURE_WALL_S, f"{case.id} took {elapsed:.1f} s")
+        finally:
+            install.close()
+
+
+@harness.requires(binary(), ("rust",), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
+class RustDeepFixtures(DeepFixtures, unittest.TestCase):
+    entry = "rust"
+
+
+@harness.requires(both_programs(), ("rust", "ts"), "build plugins/cli/rust (the router) and plugins/cli/ts (bun run build), or set ARDIA_RUST_CLI and ARDIA_TS_CLI")
+class TsDeepFixtures(DeepFixtures, unittest.TestCase):
     entry = "ts"
 
 

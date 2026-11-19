@@ -291,14 +291,18 @@ function hex4(unit: number): string {
   return `\\u${unit.toString(16).padStart(4, "0")}`;
 }
 
-export function quote(text: string, ensureAscii: boolean): string {
+function c1Control(code: number): boolean {
+  return code >= 0x7f && code <= 0x9f;
+}
+
+export function quote(text: string, ensureAscii: boolean, c1Escaped = false): string {
   const out: string[] = ['"'];
   let afterLoneHigh = false;
   for (const point of codePoints(text)) {
     const code = point.charCodeAt(0);
     const short = point.length === 1 ? SHORT_ESCAPES[code] : undefined;
     if (short !== undefined) out.push(short);
-    else if (code < 0x20) out.push(hex4(code));
+    else if (code < 0x20 || (c1Escaped && point.length === 1 && c1Control(code))) out.push(hex4(code));
     else if (ensureAscii && code > 0x7e) {
       for (let index = 0; index < point.length; index += 1) out.push(hex4(point.charCodeAt(index)));
     } else {
@@ -317,16 +321,19 @@ export type Style = "compact" | "spaced" | "indented";
 
 type Frame = { entries: [string | undefined, Value][]; next: number; depth: number; close: string };
 
-export function dumps(value: Value, style: Style, ensureAscii = false): string {
+export function dumps(value: Value, style: Style, ensureAscii = false, c1Escaped = false): string {
   const out: string[] = [];
   const item = style === "spaced" ? ", " : ",";
   const pair = style === "compact" ? ":" : ": ";
+  const indents: string[] = ["\n"];
   const newline = (level: number) => {
-    if (style === "indented") out.push(`\n${"  ".repeat(level)}`);
+    if (style !== "indented") return;
+    while (indents.length <= level) indents.push(`${indents[indents.length - 1]}  `);
+    out.push(indents[level] as string);
   };
   const stack: Frame[] = [];
   const emit = (child: Value, depth: number) => {
-    const scalar = scalarJson(child, ensureAscii);
+    const scalar = scalarJson(child, ensureAscii, c1Escaped);
     if (scalar !== undefined) {
       out.push(scalar);
       return;
@@ -354,18 +361,18 @@ export function dumps(value: Value, style: Style, ensureAscii = false): string {
     if (frame.next > 0) out.push(item);
     frame.next += 1;
     newline(frame.depth + 1);
-    if (key !== undefined) out.push(quote(key, ensureAscii), pair);
+    if (key !== undefined) out.push(quote(key, ensureAscii, c1Escaped), pair);
     emit(child, frame.depth + 1);
   }
   return out.join("");
 }
 
-function scalarJson(value: Value, ensureAscii: boolean): string | undefined {
+function scalarJson(value: Value, ensureAscii: boolean, c1Escaped: boolean): string | undefined {
   if (value === null) return "null";
   if (value === true) return "true";
   if (value === false) return "false";
   if (typeof value === "bigint") return value.toString();
   if (value instanceof Float) return jsonFloat(value.value);
-  if (typeof value === "string") return quote(value, ensureAscii);
+  if (typeof value === "string") return quote(value, ensureAscii, c1Escaped);
   return undefined;
 }
