@@ -2207,12 +2207,20 @@
    "namespace": ""
   },
   "intentional": {
-   "why": "json errors always carry a code (AI plugin contract)",
+   "why": "plugin mode runs only the commands and flags the AI plugin contract lists (an allowlist checked with the daemon's own grammar)",
    "stdout": {
-    "text": "{\"success\":false,\"data\":null,\"error\":\"Unknown command: tabs. Run `ardia browse --help`\",\"code\":\"unknown_command\"}\n"
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `tabs` for a plugin, only page steps; nothing was sent\",\"code\":\"plugin_refused\"}\n"
    },
    "stderr": {
     "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse tabs (exit 77)"
+    ],
+    "tasks": {}
    }
   },
   "note": "§3 every --json error carries a code"

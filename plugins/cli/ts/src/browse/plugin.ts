@@ -3,7 +3,8 @@ import { closeSync, fstatSync, read } from "node:fs";
 import { isatty } from "node:tty";
 import { PLUGIN_MODE } from "./route.ts";
 import { raceInterrupt } from "./stdio.ts";
-import { ALIASES, VALUE_FLAGS } from "./tables.ts";
+import { pluginVerdict } from "./plugin-grammar.ts";
+import { VALUE_FLAGS } from "./tables.ts";
 
 export { pluginMode } from "./route.ts";
 
@@ -29,8 +30,6 @@ const SESSION_FLAGS = [
   "--content-boundaries", "--out", "--stdin",
 ];
 const LOCAL_COMMANDS = ["auth", "notes", "flow", "plugin", "read", "session", "script", "cdp", "clipboard"];
-const NESTING_COMMANDS = ["batch"];
-const NESTING_FLAGS: Readonly<Record<string, string>> = { open: "--read" };
 
 export class PluginRefusal extends Error {
   constructor(
@@ -146,22 +145,17 @@ function afterCommand(argv: readonly string[]): string[] {
   return [];
 }
 
-function nestedRefusal(command: string, own: readonly string[]): PluginRefusal | undefined {
-  const name = ALIASES[command] ?? command;
-  const flag = NESTING_FLAGS[name];
-  const nesting = NESTING_COMMANDS.includes(name) ? `\`${command}\`` : flag !== undefined && own.some((token) => token === flag || token.startsWith(`${flag}=`)) ? `\`${command} ${flag}\`` : undefined;
-  if (nesting === undefined) return undefined;
-  return new PluginRefusal(`can't run ${nesting}: it runs other commands inside the daemon, which doesn't check the plugin rules on them yet, so send each step on its own`, NESTED_CODE);
-}
-
 export function checkRequest(argv: readonly string[], values: Map<string, string>, rest: readonly string[]): void {
   const command = rest[0] ?? "";
   const own = afterCommand(argv);
   if (LOCAL_COMMANDS.includes(command) || (command === "close" && rest.slice(1).includes("--all"))) {
     throw new PluginRefusal(`can't run \`${command}\` for a plugin, only page steps`);
   }
-  const nested = nestedRefusal(command, own);
-  if (nested !== undefined) throw nested;
+  const verdict = pluginVerdict(rest);
+  if (!verdict.allowed && verdict.nested) {
+    throw new PluginRefusal(`can't run ${verdict.why}: it runs other commands inside the daemon, which doesn't check the plugin rules on them yet, so send each step on its own`, NESTED_CODE);
+  }
+  if (!verdict.allowed) throw new PluginRefusal(`can't run ${verdict.why} for a plugin, only page steps`);
   for (const token of own) {
     const name = token.split("=")[0] as string;
     if (SESSION_FLAGS.includes(name)) throw new PluginRefusal(`doesn't take ${name} after the command`);
