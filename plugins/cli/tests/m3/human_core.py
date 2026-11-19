@@ -171,6 +171,7 @@ async def row(run: Run, number: int) -> dict:
             browse("wait", "1000")
             notes.append("no screenshot phase (D6) and no typing (D5)")
         elif number == 11:
+            browse("wait", "2000")
             await tier.phase("attached")
             browse("wait", "1500")
             browse("get", "title")
