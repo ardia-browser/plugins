@@ -1651,6 +1651,22 @@ HOME=/tmp/ardia-cli-home ARDIA_CLI_URL=file:///tmp/ardia-cli-out/ardia-cli-0.0.1
 
 Any Chromium works for `--port`: `chromium --headless=new --remote-debugging-port=<port> --user-data-dir=<scratch>`.
 
+A test that needs the Rust router or the TypeScript program skips when it isn't built, except where
+`ARDIA_TEST_REQUIRES` (comma-separated: `rust`, `ts`) says the job built it: there a missing program fails the test.
+CI (`.github/workflows/cli.yml`) sets it, so nothing that should run there is skipped silently:
+
+| Tests | Job |
+| --- | --- |
+| `cargo test` (with the Python CLI for the listing check) | Rust, macOS and Ubuntu |
+| `RustParityTable`, `RustProcess`, `RustClosedStdout`, and the Rust-only checks in `HarnessRules` and `HarnessCatches` | Rust (`ARDIA_TEST_REQUIRES=rust`) |
+| `bun test` | TypeScript |
+| `TsParityTable`, `TsProcess`, `TsClosedStdout`, `HarnessRules`, `HarnessCatches` | TypeScript (`ARDIA_TEST_REQUIRES=rust,ts`) |
+| `ServedTable`, `ProtocolAgrees`, `BuildSmoke` | Rust, TypeScript and Python |
+| every other `tests/*.py` | Python (`unittest discover`); the parity classes skip there, no program being built |
+| `ProductionSigning` | none: it needs the Developer ID identity in the keychain, so it runs on a release Mac |
+
+macOS-only checks (`sandbox-exec`, the argument size rule) run in the macOS legs.
+
 ### Rust parity
 
 The command is moving from Python to Rust one command at a time (ardia-browser/ardia#2703). The Rust entry serves a

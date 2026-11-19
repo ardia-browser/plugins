@@ -1,5 +1,6 @@
 import base64
 import difflib
+import functools
 import hashlib
 import json
 import os
@@ -15,6 +16,7 @@ import sys
 import tempfile
 import threading
 import time
+import unittest
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -100,6 +102,34 @@ def ts_binary() -> Path | None:
         return Path(named)
     found = TS_PROJECT / "dist" / "ardia-ts"
     return found if found.exists() else None
+
+
+def ci_prerequisites() -> frozenset:
+    return frozenset(name for name in os.environ.get("ARDIA_TEST_REQUIRES", "").split(",") if name)
+
+
+def requires(available, needs: tuple, reason: str):
+    if available:
+        return lambda item: item
+    if not set(needs) <= ci_prerequisites():
+        return unittest.skip(reason)
+    complaint = f"{reason}; ARDIA_TEST_REQUIRES={','.join(sorted(ci_prerequisites()))} says this job built it"
+
+    def missing(item):
+        if isinstance(item, type):
+            def refuse(cls):
+                raise RuntimeError(complaint)
+
+            item.setUpClass = classmethod(refuse)
+            return item
+
+        @functools.wraps(item)
+        def refuse_test(*args, **kwargs):
+            raise AssertionError(complaint)
+
+        return refuse_test
+
+    return missing
 
 
 def ts_libc(program: Path) -> Path:

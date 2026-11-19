@@ -208,11 +208,11 @@ class ClosedStdout:
             install.close()
 
 
-@unittest.skipUnless(harness.binary(), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
+@harness.requires(harness.binary(), ("rust",), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
 class RustClosedStdout(ClosedStdout, unittest.TestCase):
     entry = "rust"
 
 
-@unittest.skipUnless(harness.ts_binary() and harness.binary(), "build plugins/cli/ts and plugins/cli/rust first, or set ARDIA_TS_CLI and ARDIA_RUST_CLI")
+@harness.requires(harness.ts_binary() and harness.binary(), ("rust", "ts"), "build plugins/cli/ts and plugins/cli/rust first, or set ARDIA_TS_CLI and ARDIA_RUST_CLI")
 class TsClosedStdout(ClosedStdout, unittest.TestCase):
     entry = "ts"

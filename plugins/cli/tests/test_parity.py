@@ -56,12 +56,12 @@ class ParityTable:
             self.assertGreater(self.summary["commands"][name]["cases"], 0, name)
 
 
-@unittest.skipUnless(binary(), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
+@harness.requires(binary(), ("rust",), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
 class RustParityTable(ParityTable, unittest.TestCase):
     entry = "rust"
 
 
-@unittest.skipUnless(both_programs(), "build plugins/cli/rust (the router) and plugins/cli/ts (bun run build), or set ARDIA_RUST_CLI and ARDIA_TS_CLI")
+@harness.requires(both_programs(), ("rust", "ts"), "build plugins/cli/rust (the router) and plugins/cli/ts (bun run build), or set ARDIA_RUST_CLI and ARDIA_TS_CLI")
 class TsParityTable(ParityTable, unittest.TestCase):
     entry = "ts"
 
@@ -126,7 +126,7 @@ class HarnessRules(unittest.TestCase):
         self.assertEqual(harness.expected_route("ts", served, self.case(command="tabs", argv=["tabs"]), ts_installed=True), "ts")
         self.assertEqual(harness.expected_route("rust", served, self.case(fallback=True), ts_installed=True), "python")
 
-    @unittest.skipUnless(harness.ts_binary() and harness.binary(), "build plugins/cli/ts and plugins/cli/rust first")
+    @harness.requires(harness.ts_binary() and harness.binary(), ("rust", "ts"), "build plugins/cli/ts and plugins/cli/rust first")
     def test_the_typescript_addon_comes_from_beside_the_chosen_program(self):
         with tempfile.TemporaryDirectory() as elsewhere:
             program = Path(elsewhere) / "ardia-ts"
@@ -150,6 +150,25 @@ class HarnessRules(unittest.TestCase):
                                       capture_output=True, text=True, timeout=60)
                 self.assertEqual(done.returncode, 2, done.stdout + done.stderr)
                 self.assertIn("no parity case", done.stderr)
+
+    def test_a_prerequisite_the_job_says_it_built_fails_when_missing_and_skips_otherwise(self):
+        def probe():
+            return "ran"
+
+        for required, outcome in (("", unittest.SkipTest), ("rust", unittest.SkipTest), ("rust,ts", AssertionError), ("ts,rust,x", AssertionError)):
+            with self.subTest(required=required), unittest.mock.patch.dict(os.environ, {"ARDIA_TEST_REQUIRES": required}):
+                with self.assertRaises(outcome):
+                    harness.requires(False, ("rust", "ts"), "needs both")(probe)()
+                self.assertEqual(harness.requires(True, ("rust", "ts"), "needs both")(probe)(), "ran")
+
+        class Needs(unittest.TestCase):
+            def test_nothing(self):
+                pass
+
+        with unittest.mock.patch.dict(os.environ, {"ARDIA_TEST_REQUIRES": "rust"}):
+            refused = harness.requires(False, ("rust",), "needs rust")(Needs)
+            with self.assertRaisesRegex(RuntimeError, "needs rust; ARDIA_TEST_REQUIRES=rust"):
+                refused.setUpClass()
 
     def test_a_fallback_may_only_ask_read_only_questions_first(self):
         python = [[{"id": 1, "method": "hello", "params": {"protocol": 4}}, {"id": 2, "method": "apply", "params": {"ops": []}}]]
@@ -269,7 +288,7 @@ class HarnessRules(unittest.TestCase):
         finally:
             install.close()
 
-    @unittest.skipUnless(binary(), "needs the Rust ardia")
+    @harness.requires(binary(), ("rust",), "needs the Rust ardia")
     def test_detached_children_of_the_installation_are_reaped_whatever_their_environment(self):
         install = harness.Installation(binary())
         try:
@@ -298,7 +317,7 @@ class HarnessRules(unittest.TestCase):
             shutil.rmtree(box, True)
 
 
-@unittest.skipUnless(binary(), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
+@harness.requires(binary(), ("rust",), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
 class HarnessCatches(unittest.TestCase):
     def test_the_seeder_refuses_a_secret_inside_a_binary_fixture(self):
         from parity import record
@@ -318,7 +337,7 @@ class HarnessCatches(unittest.TestCase):
             with self.subTest(launch=launch):
                 self.impostor_fails(launch)
 
-    @unittest.skipUnless(harness.ts_binary(), "build plugins/cli/ts (bun run build) or set ARDIA_TS_CLI")
+    @harness.requires(harness.ts_binary(), ("ts",), "build plugins/cli/ts (bun run build) or set ARDIA_TS_CLI")
     def test_a_typescript_program_that_runs_python_as_its_child_proves_nothing(self):
         scratch = Path(tempfile.mkdtemp(prefix="arh", dir="/tmp"))
         try:
@@ -791,12 +810,12 @@ class EntryProcess:
         self.assertEqual(leftover, [])
 
 
-@unittest.skipUnless(binary(), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
+@harness.requires(binary(), ("rust",), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
 class RustProcess(EntryProcess, unittest.TestCase):
     entry = "rust"
 
 
-@unittest.skipUnless(both_programs(), "build plugins/cli/rust (the router) and plugins/cli/ts (bun run build), or set ARDIA_RUST_CLI and ARDIA_TS_CLI")
+@harness.requires(both_programs(), ("rust", "ts"), "build plugins/cli/rust (the router) and plugins/cli/ts (bun run build), or set ARDIA_RUST_CLI and ARDIA_TS_CLI")
 class TsProcess(EntryProcess, unittest.TestCase):
     entry = "ts"
     hand_backs = (["--data-dir", "/nowhere-�", "windows"],)
