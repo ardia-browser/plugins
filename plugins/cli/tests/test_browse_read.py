@@ -196,7 +196,9 @@ class ReadListsInChrome(unittest.TestCase):
         lines = self.browse("read", "-s", "[role=grid]").stdout.splitlines()
         self.assertEqual(lines[0], "Row | SKU | Item | Qty")
         self.assertEqual(lines[1], "1 | SKU-1000 | Washer | 0")
-        self.assertRegex(lines[-1], r"^\(\d+ of 501 rows rendered; the grid is virtualized")
+        self.assertRegex(lines[-2], r"^\(\d+ of 501 rows rendered; the grid is virtualized")
+        # A read of the session's tab ends with the moment it read the page (docs/cli.md), after the note.
+        self.assertRegex(lines[-1], r"^\[read \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC\]$")
 
     def test_scroll_reads_a_lazy_virtual_list_once_in_order(self):
         out = self.browse("read", "-s", "[role=listbox]", "--scroll", "--max-output", "0").stdout.splitlines()
