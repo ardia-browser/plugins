@@ -20,12 +20,7 @@ const SPOOL_LOCK: &str = "cli-queue.lock";
 const FLUSH_CLAIM_LOCK: &str = "cli-flush-claim.lock";
 const FLUSH_STATE: &str = "cli-flush.json";
 const MAX_CONSENT_BYTES: usize = 64 * 1024;
-const LOCAL_FOLDER: &str = "local";
-const LOCAL_PREFIX: &str = "cli-";
-const LOCAL_LOCK: &str = "cli-local.lock";
-const LOCAL_DAYS: f64 = 7.0;
 const LOCAL_ONLY_ID: &str = "local";
-const MAX_LOCAL_BYTES: usize = 4 * 1024 * 1024;
 const MAX_SPOOL_BYTES: usize = 256 * 1024;
 const COUNT_CHECK_BYTES: u64 = 64 * 1024;
 const MAX_EVENTS: usize = 500;
@@ -383,7 +378,7 @@ pub fn finish(call: &Call, status: i64, python: Option<&Path>) {
     }
     let install_id = sharing_id(doc.as_ref());
     let record = command_record(call, status, install_id.as_deref().unwrap_or(LOCAL_ONLY_ID), target.environment, doc.as_ref());
-    keep_local_copy(&root, &record, install_id.is_some());
+    crate::local_copy::keep(&root, &record, install_id.is_some());
     if install_id.is_none() {
         discard_spool(&root);
         return;
@@ -393,89 +388,8 @@ pub fn finish(call: &Call, status: i64, python: Option<&Path>) {
     }
 }
 
-fn open_folder(root: &Path, create: bool) -> Result<OwnedFd, Failure> {
+pub(crate) fn open_folder(root: &Path, create: bool) -> Result<OwnedFd, Failure> {
     paths::open_private(root, &[FOLDER], create)
-}
-
-fn keep_local_copy(root: &Path, record: &Value, sent: bool) -> bool {
-    let mut with_sent = record.clone();
-    if let Value::Object(map) = &mut with_sent {
-        map.insert("sent", Value::Bool(sent));
-    }
-    let mut data = crate::pystr::well_formed(&json::dumps(&with_sent, Style::Compact, false))
-        .into_owned()
-        .into_bytes();
-    data.push(b'\n');
-    if data.len() > MAX_LOCAL_BYTES {
-        return false;
-    }
-    let attempt = || -> Result<bool, Failure> {
-        let telemetry = open_folder(root, true)?;
-        let local = paths::open_child_dir(&telemetry, LOCAL_FOLDER, true)?;
-        drop(telemetry);
-        let Some(_lock) = paths::take_lock_retrying(LOCAL_LOCK, &local)? else {
-            return Ok(false);
-        };
-        let now = clock::now();
-        let fd = paths::open_private_file(&local_name(now), &local, libc::O_WRONLY | libc::O_CREAT | libc::O_APPEND)?;
-        paths::write_fd(&fd, &data)?;
-        drop(fd);
-        prune_local(&local, now)?;
-        Ok(true)
-    };
-    attempt().unwrap_or(false)
-}
-
-fn local_name(now: f64) -> String {
-    format!("{LOCAL_PREFIX}{}.jsonl", clock::utc_day(now))
-}
-
-fn is_local_file(name: &str) -> bool {
-    let Some(day) = name.strip_prefix(LOCAL_PREFIX).and_then(|rest| rest.strip_suffix(".jsonl")) else {
-        return false;
-    };
-    let bytes = day.as_bytes();
-    bytes.len() == 10 && bytes[4] == b'-' && bytes[7] == b'-' && bytes.iter().enumerate().all(|(index, b)| index == 4 || index == 7 || b.is_ascii_digit())
-}
-
-fn prune_local(dir: &OwnedFd, now: f64) -> Result<(), Failure> {
-    let oldest_kept = local_name(now - (LOCAL_DAYS - 1.0) * 86_400.0);
-    let mut files = Vec::new();
-    let mut names: Vec<String> = paths::list_dir(dir)?.into_iter().filter(|name| is_local_file(name)).collect();
-    names.sort();
-    for name in names {
-        let Ok(size) = paths::size_at(dir, &name) else { continue };
-        if name < oldest_kept {
-            paths::unlink_quietly(&name, dir);
-        } else {
-            files.push((name, size as usize));
-        }
-    }
-    let mut excess = files.iter().map(|(_, size)| *size as i64).sum::<i64>() - MAX_LOCAL_BYTES as i64;
-    for (name, size) in files {
-        if excess <= 0 {
-            break;
-        }
-        excess -= drop_oldest_lines(dir, &name, size, excess as usize)? as i64;
-    }
-    Ok(())
-}
-
-fn drop_oldest_lines(dir: &OwnedFd, name: &str, size: usize, excess: usize) -> Result<usize, Failure> {
-    let fd = paths::open_private_file(name, dir, libc::O_RDONLY)?;
-    let raw = paths::read_fd(&fd, size)?;
-    drop(fd);
-    let from = excess.saturating_sub(1).min(raw.len());
-    let rest = match raw[from..].iter().position(|byte| *byte == b'\n') {
-        Some(cut) => raw[from + cut + 1..].to_vec(),
-        None => Vec::new(),
-    };
-    if rest.is_empty() {
-        paths::unlink_quietly(name, dir);
-        return Ok(size);
-    }
-    paths::write_private(name, dir, &rest)?;
-    Ok(size - rest.len())
 }
 
 fn read_lines(dir: &OwnedFd) -> Result<Vec<Vec<u8>>, Failure> {

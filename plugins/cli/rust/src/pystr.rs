@@ -91,6 +91,26 @@ pub fn well_formed(text: &str) -> Cow<'_, str> {
     Cow::Owned(out)
 }
 
+const PY_DECIMALS: &str = include_str!("../../py-decimals.txt");
+
+fn decimal_ranges() -> &'static [(u32, u32)] {
+    static RANGES: std::sync::OnceLock<Vec<(u32, u32)>> = std::sync::OnceLock::new();
+    RANGES.get_or_init(|| {
+        PY_DECIMALS
+            .lines()
+            .filter_map(|line| {
+                let (start, end) = line.split_once(' ')?;
+                Some((u32::from_str_radix(start, 16).ok()?, u32::from_str_radix(end, 16).ok()?))
+            })
+            .collect()
+    })
+}
+
+pub fn is_decimal(ch: char) -> bool {
+    let code = ch as u32;
+    decimal_ranges().iter().any(|(start, end)| (*start..=*end).contains(&code))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -116,5 +136,16 @@ mod tests {
         let mut pushed = String::from("a");
         push_text(&mut pushed, "b\u{ffff}c");
         assert_eq!(pushed, of(&[0x61, 0x62, 0xffff, 0x63]));
+    }
+
+    #[test]
+    fn decimals_are_what_python_re_calls_digits() {
+        for ch in ['0', '9', '\u{661}', '\u{966}', '\u{ff10}', '\u{1d7ce}', '\u{1fbf9}'] {
+            assert!(is_decimal(ch), "{ch:?}");
+        }
+        for ch in ['a', '/', ':', '\u{b2}', '\u{2460}', '\u{bc}', '\u{2167}', '\u{1d7cc}'] {
+            assert!(!is_decimal(ch), "{ch:?}");
+        }
+        assert_eq!(decimal_ranges().len(), 64);
     }
 }

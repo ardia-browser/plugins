@@ -1,3 +1,4 @@
+import decimals from "../../py-decimals.txt" with { type: "text" };
 export const SPLIT = 0xffff;
 export const SPLIT_TEXT = String.fromCharCode(SPLIT);
 const SPLIT_AFTER_HIGH = /([\ud800-\udbff])￿/g;
@@ -54,4 +55,17 @@ export function plain(text: string): string {
 
 export function utf8(text: string): Buffer {
   return Buffer.from(plain(text), "utf8");
+}
+
+const DECIMAL_RANGES: [number, number][] = decimals
+  .split("\n")
+  .filter((line) => line !== "")
+  .map((line) => {
+    const [start = "", end = ""] = line.split(" ");
+    return [Number.parseInt(start, 16), Number.parseInt(end, 16)];
+  });
+
+export function isDecimal(ch: string): boolean {
+  const code = ch.codePointAt(0) ?? -1;
+  return DECIMAL_RANGES.some(([start, end]) => code >= start && code <= end);
 }

@@ -26,7 +26,7 @@ import {
   writePrivate,
 } from "./privatefs.ts";
 import type { Target } from "./telemetry.ts";
-import { utf8 } from "./pystr.ts";
+import { isDecimal, utf8 } from "./pystr.ts";
 
 const FOLDER = "Telemetry";
 const SPOOL = "cli-queue.jsonl";
@@ -88,8 +88,10 @@ function localName(at: number): string {
   return `${LOCAL_PREFIX}${utcDay(at)}.jsonl`;
 }
 
-function isLocalFile(name: string): boolean {
-  return /^cli-[0-9]{4}-[0-9]{2}-[0-9]{2}\.jsonl$/.test(name);
+export function isLocalFile(name: string): boolean {
+  if (!name.startsWith(LOCAL_PREFIX) || !name.endsWith(".jsonl")) return false;
+  const day = [...name.slice(LOCAL_PREFIX.length, -".jsonl".length)];
+  return day.length === 10 && day.every((ch, index) => (index === 4 || index === 7 ? ch === "-" : isDecimal(ch)));
 }
 
 function byteOrder(a: string, b: string): number {

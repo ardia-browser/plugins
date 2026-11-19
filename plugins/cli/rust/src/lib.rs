@@ -6,6 +6,7 @@ pub mod endpoint;
 pub mod help;
 pub mod json;
 pub mod json_bytes;
+pub mod local_copy;
 pub mod paths;
 pub mod plist;
 pub mod printable;
