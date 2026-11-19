@@ -22,10 +22,11 @@ type Native = {
   lock(fd: number, exclusive: boolean, wait: boolean): number;
   watchLifeline(fd: number): number;
   writeSome(fd: number, bytes: Uint8Array, offset: number): number;
+  closeOnExecFrom(minFd: number): number;
   strerror(errno: number): string | number;
 };
 
-const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "connectAt", "socketInfoAt", "openFileAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "listAt", "lock", "watchLifeline", "writeSome", "strerror"];
+const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "connectAt", "socketInfoAt", "openFileAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "listAt", "lock", "watchLifeline", "writeSome", "closeOnExecFrom", "strerror"];
 const ERRNO_NAMES = new Map<number, string>(Object.entries(constants.errno).map(([name, value]) => [value, name]));
 const EWOULDBLOCK = constants.errno.EWOULDBLOCK ?? constants.errno.EAGAIN;
 
@@ -172,6 +173,10 @@ export function writeSome(fd: number, bytes: Uint8Array, offset = 0): number {
   if (written < 0) throw errnoError(-written, "write");
   if (written === 0 && offset < buffer.length) throw errnoError(constants.errno.EIO, "write");
   return written;
+}
+
+export function closeOnExecFrom(minFd: number): number {
+  return checked(native().closeOnExecFrom(minFd), "fcntl");
 }
 
 export function writtenBefore(error: unknown): number {

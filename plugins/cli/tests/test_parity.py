@@ -509,13 +509,20 @@ class EntryProcess:
             events.communicate()
             fake.close()
 
-    def blocked_listing(self, argv: list, program: Path | None = None) -> tuple:
+    def blocked_listing(self, argv: list, program: Path | None = None, prefilled: bool = False) -> tuple:
         tabs = [{"type": "tab", "id": f"tab-{index}", "title": "t" * 40, "url": "https://example.com/" + "p" * 40} for index in range(3000)]
         data = self.case / "data"
         data.mkdir(exist_ok=True)
         fake = FakeArdia(data / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "workspace": {"result": {"windows": [{"id": "w-1", "spaces": [{"profile": "p", "tabs": tabs}]}]}}})
         try:
-            listing = self.start(argv, program=program)
+            if prefilled:
+                reader, writer = full_blocking_pipe()
+                listing = subprocess.Popen([str(program or self.root / "bin" / "ardia"), *argv], env=self.environment({}), stdout=writer,
+                                           stderr=subprocess.PIPE, preexec_fn=os.setsid)
+                os.close(writer)
+                listing.stdout = os.fdopen(reader, "rb")
+            else:
+                listing = self.start(argv, program=program)
             self.wait_for(fake, "workspace")
             time.sleep(1)
             self.assertIsNone(listing.poll(), "the output should fill the pipe and block")
@@ -532,11 +539,14 @@ class EntryProcess:
             fake.close()
 
     def test_ctrl_c_while_blocked_on_output_ends_like_python(self):
-        new = self.blocked_listing(["tabs", "--json"])
-        self.case = Path(tempfile.mkdtemp(prefix="c", dir=self.scratch))
-        python = self.blocked_listing(["-I", "-m", "ardia_cli", "tabs", "--json"], program=self.python)
-        self.assertEqual(new, python)
-        self.assertEqual(new, (True, 130, b"ardia tabs: interrupted\n"))
+        for prefilled in (False, True):
+            with self.subTest(prefilled=prefilled):
+                self.case = Path(tempfile.mkdtemp(prefix="c", dir=self.scratch))
+                new = self.blocked_listing(["tabs", "--json"], prefilled=prefilled)
+                self.case = Path(tempfile.mkdtemp(prefix="c", dir=self.scratch))
+                python = self.blocked_listing(["-I", "-m", "ardia_cli", "tabs", "--json"], program=self.python, prefilled=prefilled)
+                self.assertEqual(new, python)
+                self.assertEqual(new, (True, 130, b"ardia tabs: interrupted\n"))
 
     def test_ctrl_c_ends_a_call_whose_output_is_blocked(self):
         for argv, blocked in (([], "stdout"), (["--help"], "stdout"), (["--version"], "stdout"), (["windows"], "stderr")):

@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { lstatSync } from "node:fs";
 import { now, utcDay } from "./clock.ts";
+import { closeOnExecFrom } from "./libc.ts";
 import { dumps, Float, type JsonObject, object, parse, TELEMETRY_JSON_DEPTH, type Value } from "./json.ts";
 import { join } from "./paths.ts";
 import {
@@ -333,6 +334,9 @@ function spawnFlusher(python: string, target: Target): void {
     ["url", target.url],
     ["environment", target.environment],
   ]);
+  try {
+    closeOnExecFrom(3);
+  } catch {}
   try {
     const child = spawn(python, ["-I", "-c", "from ardia_cli import telemetry; telemetry.flush_main()"], {
       stdio: ["pipe", "ignore", "ignore"],
