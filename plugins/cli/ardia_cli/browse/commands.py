@@ -1969,6 +1969,18 @@ CDP_USAGE = "cdp <Domain.method> [--params <json>|-] [--param k=v | k:=json] [--
 CDP_FLAGS = {"--params": "value", "--param": "multi", "--target": "value", "--timeout": "value"}
 
 
+def refuse_raw_on_borrowed(ctx: Ctx, page, method: str):
+    borrowed = borrowed_tab(ctx.state)
+    if borrowed and borrowed == page.target_id:
+        tab = ctx.state.tab_id(borrowed)
+        raise BrowseError(
+            f"This session is using your tab [{tab}] (picked with `tab active`), so it won't send raw DevTools calls to it "
+            f"unless you name it. To send this one there anyway: `ardia browse cdp {method} --target {tab}`; to browse on "
+            "your own, use `ardia browse open <url>`",
+            data={"tabId": tab}, code="borrowed_tab",
+        )
+
+
 @command("cdp")
 async def cmd_cdp(ctx: Ctx, argv):
     from ardia_cli.browse.cli import cdp_params
@@ -1996,6 +2008,7 @@ async def cmd_cdp(ctx: Ctx, argv):
                 page = await ctx.state.page(await ctx.state.find_tab(target))
             else:
                 page = await ctx.state.page()
+                refuse_raw_on_borrowed(ctx, page, method)
             result = await page.send(method, params, timeout=timeout, mutation=True)
             where = ctx.state.tab_id(page.target_id)
     except Gated as error:

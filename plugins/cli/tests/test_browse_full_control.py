@@ -57,6 +57,8 @@ class FakeState:
                 return state.answers.get(method, {})
 
         self.browser = Browser()
+        self.current = "T1"
+        self.extras = {}
 
     async def connect(self):
         pass
@@ -68,7 +70,7 @@ class FakeState:
         return self.pages[target_id or "T1"]
 
     async def find_tab(self, ref):
-        return {"t2": "T2", "work": "T2"}[ref]
+        return {"t1": "T1", "t2": "T2", "work": "T2"}[ref]
 
     def tab_id(self, target_id):
         return "t" + target_id[1:]
@@ -126,6 +128,22 @@ class RawCdp(unittest.TestCase):
             cdp(state, "Storage.getCookies")
         self.assertTrue(caught.exception.message.startswith("`cdp` needs Storage.getCookies, and " + UPDATE))
         self.assertTrue(caught.exception.message.endswith(": update Ardia"))
+
+    def test_a_borrowed_tab_takes_raw_calls_only_when_named(self):
+        from ardia_cli.browse.errors import BrowseError
+
+        state = FakeState()
+        state.extras["attached"] = "T1"
+        for method in ("Page.navigate", "Runtime.evaluate"):
+            with self.assertRaises(BrowseError) as caught:
+                cdp(state, method, "--param", "url=https://example.test/")
+            self.assertEqual(caught.exception.code, "borrowed_tab")
+            self.assertIn("your tab [t1] (picked with `tab active`)", caught.exception.message)
+            self.assertIn(f"`ardia browse cdp {method} --target t1`", caught.exception.message)
+        self.assertEqual(state.pages["T1"].sent, [])
+        state.tab_ids = {"t1": "T1"}
+        cdp(state, "Page.navigate", "--param", "url=https://example.test/", "--target", "t1")
+        self.assertEqual(state.pages["T1"].sent[0][0], "Page.navigate")
 
     def test_cdp_is_a_known_mutating_command(self):
         self.assertIn("cdp", commands.MUTATING)
@@ -248,7 +266,7 @@ class PlainDevToolsServer(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        for session in ("warm", "warm-again", "up", "dl", "raw", "ui", "fw", "fk"):
+        for session in ("warm", "warm-again", "up", "dl", "raw", "ui", "fw", "fk", "bo", "bb"):
             cls.browse("close", session=session, check=False)
         cls.chromium.terminate()
         try:
@@ -302,6 +320,19 @@ class PlainDevToolsServer(unittest.TestCase):
         failed = self.browse("cdp", "Nope.method", check=False, session="raw")
         self.assertEqual(failed.returncode, 1)
         self.assertIn("Nope.method", failed.stderr)
+
+    def test_raw_cdp_leaves_a_borrowed_tab_alone_unless_named(self):
+        self.browse("open", self.url + "?borrowed", session="bo")
+        picked = json.loads(self.browse("tab", "active", "--json", session="bb").stdout)["data"]
+        mine, before = picked["tabId"], picked["url"]
+        refused = self.browse("cdp", "Page.navigate", "--param", "url=about:blank#moved", "--json", check=False, session="bb")
+        self.assertEqual(refused.returncode, 1)
+        said = json.loads(refused.stdout)
+        self.assertEqual(said["code"], "borrowed_tab")
+        self.assertIn(f"--target {mine}", said["error"])
+        named = self.browse("cdp", "Runtime.evaluate", "--param", "expression=location.href", "--param", "returnByValue:=true",
+                            "--target", mine, session="bb")
+        self.assertEqual(json.loads(named.stdout)["result"]["value"], before)
 
     def test_webui_tab_is_listed(self):
         self.browse("tab", "new", "chrome://version", session="ui")
