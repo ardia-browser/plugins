@@ -93,7 +93,11 @@ export async function serveListing(kind: Kind, listing: Listing, argv: string[],
     out.say(line);
     if (out.closed) break;
   }
-  if (out.closed) {
+  await out.flush();
+  if (out.interrupted) {
+    status = 130;
+    out.complain(`ardia ${kind}: interrupted`);
+  } else if (out.closed) {
     call.noteErrorCode("stdout_closed");
     status = 141;
   } else if (shown.complaint !== undefined) out.complain(shown.complaint);

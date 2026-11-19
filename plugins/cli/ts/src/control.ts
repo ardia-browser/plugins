@@ -1,11 +1,11 @@
 import { lstatSync } from "node:fs";
 import { createConnection, type Socket } from "node:net";
-import { fromChain, wire } from "./caller.ts";
-import { askPython } from "./facts.ts";
+import { peerUid } from "./facts.ts";
 import { dumps, field, object, parse, same, type Value } from "./json.ts";
 import { baseName, errnoOf, join, LINUX, purePath, envSet, expandUser, home, strerror, uid } from "./paths.ts";
 import { MAX_LINE_BYTES, MIN_APP_PROTOCOL, PROTOCOL, SOCKET_FILE } from "./protocol.ts";
 import { strOf, truthy, Unsupported } from "./py.ts";
+import { routedCaller } from "./routed.ts";
 
 export const NOT_REACHABLE = LINUX
   ? 'Ardia isn\'t running, or "Let the ardia command control Ardia" is off in Settings.'
@@ -279,18 +279,16 @@ export async function call(dataDir: string | undefined, method: string, params: 
   checkSocket(path);
   const socket = await connectSocket(path, CONNECT_TIMEOUT);
   const name = baseName(path);
-  let release: (() => void) | undefined;
   try {
     const fd = (socket as unknown as { _handle?: { fd?: number } })._handle?.fd;
-    const facts = typeof fd === "number" ? askPython(python, fd) : undefined;
-    if (facts?.interruptsIgnored !== true) release = catchInterrupts();
-    if (facts?.peerUid === undefined) throw unreachable(`${name} couldn't check who serves it`);
-    if (facts.peerUid !== uid()) throw unreachable(`${name} is served by another user`);
+    const peer = typeof fd === "number" ? await peerUid(python, fd) : undefined;
+    if (interrupted()) throw new ControlFailure({ kind: "interrupted" });
+    if (peer === undefined) throw unreachable(`${name} couldn't check who serves it`);
+    if (peer !== uid()) throw unreachable(`${name} is served by another user`);
     const connection = new Connection(socket);
-    await hello(connection, name, wire(fromChain(facts.chain)));
+    await hello(connection, name, routedCaller());
     return await connection.call(method, params, CALL_TIMEOUT);
   } finally {
-    release?.();
     socket.destroy();
   }
 }
