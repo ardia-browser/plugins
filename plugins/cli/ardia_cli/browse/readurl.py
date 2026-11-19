@@ -1,5 +1,7 @@
 import html.parser
 import re
+import socket
+import ssl
 import urllib.error
 import urllib.request
 from urllib.parse import urljoin, urlsplit, urlunsplit
@@ -77,6 +79,24 @@ class TextExtractor(html.parser.HTMLParser):
         return "\n".join(out).strip()
 
 
+def fetch_error_code(error: BaseException) -> str:
+    # Only the kind of failure, for telemetry's error_code: never the URL, the host or the message.
+    reason = getattr(error, "reason", error)
+    if not isinstance(reason, BaseException):
+        reason = error
+    if isinstance(reason, ssl.SSLCertVerificationError):
+        return "fetch_cert_untrusted"
+    if isinstance(reason, ssl.SSLError):
+        return "fetch_tls"
+    if isinstance(reason, socket.gaierror):
+        return "fetch_dns"
+    if isinstance(reason, (TimeoutError, socket.timeout)):
+        return "fetch_timeout"
+    if isinstance(reason, ConnectionRefusedError):
+        return "fetch_refused"
+    return "fetch_failed"
+
+
 def fetch(url: str, timeout: float, accept: str = "text/markdown, text/plain;q=0.9, text/html;q=0.8, */*;q=0.5"):
     parts = urlsplit(url)
     if parts.scheme not in ("http", "https"):
@@ -91,7 +111,7 @@ def fetch(url: str, timeout: float, accept: str = "text/markdown, text/plain;q=0
     except urllib.error.HTTPError as error:
         return error.code, "", "", url
     except (urllib.error.URLError, TimeoutError, OSError) as error:
-        raise BrowseError(f"Couldn't fetch {url}: {getattr(error, 'reason', error)}") from None
+        raise BrowseError(f"Couldn't fetch {url}: {getattr(error, 'reason', error)}", code=fetch_error_code(error)) from None
     kind = content_type.split(";")[0].strip().lower()
     if kind == "application/pdf" or body.startswith(b"%PDF"):
         from ardia_cli.browse import pdftext
