@@ -13,7 +13,7 @@ import {
 import { clock, cdpCall } from "../metrics.ts";
 import { Cancelled, checkCancelled, currentSignal, later } from "./cancel.ts";
 import { ATTACH_METHODS } from "./guard.ts";
-import { CdpLink, CommandFailed, CommandTimeout, ConnectionLost as LinkLost, type EventCallback, isObject, linkLog, OpenFailed, timerMs } from "./link.ts";
+import { CdpLink, CommandFailed, CommandTimeout, ConnectionLost as LinkLost, type EventCallback, isObject, OpenFailed, report, timerMs } from "./link.ts";
 import { pyText, pyTruthy } from "./pyvalue.ts";
 
 export const MAX_MESSAGE = 256 * 1024 * 1024;
@@ -122,13 +122,15 @@ export class Browser {
     return this.link !== null && !this.link.lost;
   }
 
+  private state: "idle" | "connecting" | "open" | "closed" = "idle";
   private opening: Promise<void> | null = null;
 
   open(signal: AbortSignal | null = currentSignal()): Promise<void> {
-    if (this.opening !== null) return this.opening;
-    if (this.link?.connected) return Promise.reject(new ConnectionLost());
+    if (this.state === "connecting" && this.opening !== null) return this.opening;
+    if (this.state === "closed" || this.link?.connected) return Promise.reject(new ConnectionLost());
     const link = new CdpLink(this.endpoint.ws, MAX_MESSAGE);
     this.link = link;
+    this.state = "connecting";
     const opening = this.connect(link, signal).finally(() => {
       this.opening = null;
     });
@@ -140,23 +142,36 @@ export class Browser {
     try {
       await link.open(CONNECT_TIMEOUT, signal);
     } catch (error) {
+      if (this.state === "connecting") this.state = "idle";
       if (error instanceof Cancelled) throw error;
       if (error instanceof LinkLost) throw new ConnectionLost();
       const safe = error instanceof OpenFailed ? error : new OpenFailed("ConnectionError", "the WebSocket connection failed");
       safe.endpoint = link.endpoint;
       throw new Unreachable(this.unreachable(safe));
     }
+    if (this.state !== "connecting") {
+      await link.close();
+      throw new ConnectionLost();
+    }
+    this.state = "open";
     for (const name of EVENTS) link.on(name, (method, params, session) => this.event(method, params, session));
   }
 
   async send(method: string, params?: CdpResult | null, options: SendOptions = {}): Promise<CdpResult> {
     if (ATTACH_METHODS.has(method)) {
       const timeout = options.timeout === undefined ? 30 : options.timeout;
+      const signal = options.signal === undefined ? currentSignal() : options.signal;
+      checkCancelled(signal);
+      if (this.link === null || this.link.lost) throw new ConnectionLost();
+      if (timeout !== null && timeout <= 0) {
+        if (options.mutation) throw new OutcomeUnknown(`\`${method}\``, `Ardia didn't answer ${method} in ${formatG(timeout)}s after it was sent`);
+        throw new CdpTimeout(method, timeout);
+      }
       return claimedAttach(this, method, params, {
         wait: timeout === null ? Number.POSITIVE_INFINITY : timeout,
         session: options.session ?? null,
         unknown: options.mutation ?? false,
-        signal: options.signal === undefined ? currentSignal() : options.signal,
+        signal,
       });
     }
     return this[sendReserved](method, params, options);
@@ -190,11 +205,12 @@ export class Browser {
 
   async close(): Promise<void> {
     this.closedByUs = true;
+    this.state = "closed";
     if (this.link === null) return;
     try {
       await this.link.close();
     } catch (error) {
-      linkLog.problem("closing the browser connection failed", error);
+      report("closing the browser connection failed", error);
     }
   }
 
@@ -202,7 +218,7 @@ export class Browser {
     try {
       this.onEvent(method, params, session);
     } catch (error) {
-      linkLog.problem("event handler failed", error);
+      report("event handler failed", error);
     }
   }
 }
@@ -236,10 +252,6 @@ export async function claimedAttach(browser: Browser, method: string, params?: C
       );
     }
     attaching = browser[sendReserved](method, params, { session, timeout: null, signal: null }, ident);
-    attaching.then(
-      () => link.attaching.delete(ident),
-      () => link.attaching.delete(ident),
-    );
   }
   type Outcome = { kind: "answered"; result: CdpResult } | { kind: "failed"; error: unknown } | { kind: "late"; error: Error };
   let stopTimer = () => {};

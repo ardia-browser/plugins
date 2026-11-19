@@ -1810,9 +1810,10 @@ The TypeScript browse daemon's CDP link (M3, not served yet) differs from Python
   port reads `Failed to connect` (Python: `[Errno 61] Connect call failed (…)`); a refused handshake reads
   `server rejected WebSocket connection (Expected 101 status code)` (Python names the HTTP status). Both raise the
   same `Unreachable` error with the same exit status. A URL the WebSocket can't open (a host with a space, a bad
-  percent escape) reads `the endpoint isn't a URL a WebSocket can open (<endpoint>)`, where Python reports the lookup's
-  `[Errno 8] …`. No message names the URL's query or user info, so the session token never reaches an error, a log
-  line or telemetry.
+  percent escape) reads `the endpoint isn't a URL a WebSocket can open (<invalid endpoint>)`, where Python reports the
+  lookup's `[Errno 8] …`. An endpoint is only ever described by the scheme, host and port of a successful URL parse,
+  else as `<invalid endpoint>`, so the session token and any user info never reach an error, a log line or telemetry.
+- Once `close` starts, the connection is done for good: a later `open` fails with `connection_lost` and opens nothing.
 - `close` while the connection is still being set up ends it: the setup fails with `connection_lost` and no socket is
   left open. Python's setup would finish and keep its socket. A second setup started while one is running waits for
   that one instead of opening another socket.

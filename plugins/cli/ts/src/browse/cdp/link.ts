@@ -2,7 +2,7 @@ import { isIP } from "node:net";
 import { reprStr } from "../../py.ts";
 import { formatG } from "../../pylib/format.ts";
 import { Cancelled, checkCancelled, currentSignal, later, untilCancelled } from "./cancel.ts";
-import { ATTACH_METHODS, checkCommand, checkMessage, ForbiddenCommand } from "./guard.ts";
+import { ATTACH_METHODS, checkCommand, checkEnvelope, ForbiddenCommand } from "./guard.ts";
 import { pyText, pyTruthy } from "./pyvalue.ts";
 
 export type Message = Record<string, unknown>;
@@ -74,12 +74,25 @@ export function timerMs(timeout: number | null): number | null {
   return timeout === null || Number.isNaN(timeout) || timeout === Number.POSITIVE_INFINITY ? null : Math.max(0, timeout * 1000);
 }
 
+export const INVALID_ENDPOINT = "<invalid endpoint>";
+
 export function safeEndpoint(url: string): string {
-  const parts = /^([^:/?#]+:)?(\/\/[^/?#]*)?([^?#]*)/su.exec(url);
-  const scheme = parts?.[1] ?? "";
-  const authority = parts?.[2] ?? "";
-  const host = authority === "" ? "" : `//${authority.slice(authority.lastIndexOf("@") + 1).replace(/^\/\//u, "")}`;
-  return `${scheme}${host}${parts?.[3] ?? ""}`;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return INVALID_ENDPOINT;
+  }
+  if (!/^[a-z][a-z0-9+.-]*:$/u.test(parsed.protocol) || parsed.hostname === "") return INVALID_ENDPOINT;
+  return `${parsed.protocol}//${parsed.host}`;
+}
+
+export function report(what: string, error: unknown): void {
+  try {
+    linkLog.problem(what, error);
+  } catch {
+    return;
+  }
 }
 
 function checkedPort(port: string): void {
@@ -142,6 +155,7 @@ type State = "idle" | "connecting" | "open" | "closing" | "closed";
 export class CdpLink {
   readonly pending = new Map<number, Pending>();
   readonly attaching = new Set<number>();
+  private readonly unsent = new Set<number>();
   readonly listeners: EventCallback[] = [];
   closedWith: { code: number; reason: string } | null = null;
   private readonly handlers = new Map<string, EventCallback[]>();
@@ -262,10 +276,12 @@ export class CdpLink {
     if (this.attaching.size >= limit) return null;
     const ident = this.nextId++;
     this.attaching.add(ident);
+    this.unsent.add(ident);
     return ident;
   }
 
   async execute(command: Command, timeout: number | null = 60, ident?: number, signal: AbortSignal | null = currentSignal()): Promise<Message> {
+    if (ident !== undefined && !this.unsent.has(ident)) throw new ForbiddenCommand("an attach reservation is used by one send only");
     const id = ident ?? this.nextId++;
     let text: string;
     let socket: WebSocket;
@@ -274,18 +290,18 @@ export class CdpLink {
       socket = this.usable();
       if (signal?.aborted) throw new Cancelled();
       if (timeout !== null && timeout <= 0) throw new CommandTimeout(command.method, timeout);
-      text = this.envelope(command, id, ident !== undefined && this.attaching.has(ident));
+      text = this.envelope(command, id, ident !== undefined);
     } catch (error) {
-      this.attaching.delete(id);
+      this.release(id);
       throw error;
     }
+    this.unsent.delete(id);
     const method = command.method;
     return new Promise<Message>((resolve, reject) => {
       let stopTimer = () => {};
       const stop = () => fail(new Cancelled());
       const done = () => {
         this.pending.delete(id);
-        this.attaching.delete(id);
         stopTimer();
         signal?.removeEventListener("abort", stop);
       };
@@ -308,6 +324,7 @@ export class CdpLink {
       const ms = timerMs(timeout);
       if (ms !== null) stopTimer = later(ms, () => fail(new CommandTimeout(method, timeout as number)));
       if (socket.readyState !== OPEN || this.state !== "open") {
+        this.attaching.delete(id);
         fail(new ConnectionLost());
         return;
       }
@@ -347,7 +364,7 @@ export class CdpLink {
       try {
         socket.close(1000);
       } catch (error) {
-        linkLog.problem("closing the CDP connection failed", nameOnly(error));
+        report("closing the CDP connection failed", nameOnly(error));
       }
       let stopTimer = () => {};
       await Promise.race([this.lostPromise, new Promise<void>((resolve) => (stopTimer = later(CLOSE_WAIT * 1000, resolve)))]);
@@ -359,14 +376,17 @@ export class CdpLink {
 
   private envelope(command: Command, id: number, reserved: boolean): string {
     const text = JSON.stringify({ ...command, id });
-    const sent = checkMessage(text);
-    const only = sent.length === 1 && isObject(sent[0]) ? sent[0] : null;
-    if (only === null || only["id"] !== id) throw new ForbiddenCommand("ardia only sends one whole command at a time");
-    const method = only["method"];
+    const sent = checkEnvelope(text);
+    if (sent["id"] !== id) throw new ForbiddenCommand("ardia only sends one whole command at a time");
+    const method = sent["method"];
     if (typeof method === "string" && ATTACH_METHODS.has(method) && !reserved) {
       throw new ForbiddenCommand(`${method} goes through claimedAttach, which bounds the attaches left unanswered`);
     }
     return text;
+  }
+
+  private release(id: number): void {
+    if (this.unsent.delete(id)) this.attaching.delete(id);
   }
 
   private usable(): WebSocket {
@@ -375,10 +395,10 @@ export class CdpLink {
   }
 
   private drop(error: unknown): void {
-    linkLog.problem("sending on the CDP connection failed", nameOnly(error));
     const socket = this.socket;
     this.lose();
     if (socket !== null) abandon(socket);
+    report("sending on the CDP connection failed", nameOnly(error));
   }
 
   private received(data: unknown): void {
@@ -423,7 +443,7 @@ export class CdpLink {
       try {
         callback(method, params, session);
       } catch (error) {
-        linkLog.problem("CDP event handler failed", error);
+        report("CDP event handler failed", error);
       }
     }
   }
@@ -436,7 +456,7 @@ export class CdpLink {
     try {
       socket.close(code, truncatedUtf8(reason, 120));
     } catch (error) {
-      linkLog.problem("closing the CDP connection failed", nameOnly(error));
+      report("closing the CDP connection failed", nameOnly(error));
     }
     abandon(socket);
   }
@@ -446,6 +466,7 @@ export class CdpLink {
     if (this.isLost) return;
     this.isLost = true;
     this.attaching.clear();
+    this.unsent.clear();
     const waiting = [...this.pending.values()];
     this.pending.clear();
     for (const one of waiting) one.fail(new ConnectionLost());
@@ -460,7 +481,7 @@ function abandon(socket: WebSocket): void {
     if (typeof terminate === "function") terminate.call(socket);
     else socket.close();
   } catch (error) {
-    linkLog.problem("dropping the CDP connection failed", nameOnly(error));
+    report("dropping the CDP connection failed", nameOnly(error));
   }
 }
 

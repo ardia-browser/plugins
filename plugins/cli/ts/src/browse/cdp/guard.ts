@@ -30,3 +30,17 @@ export function checkMessage(message: string | Uint8Array): unknown[] {
   for (const command of commands) checkCommand(command);
   return commands;
 }
+
+export function checkEnvelope(text: string): Record<string, unknown> {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    throw new ForbiddenCommand("ardia only sends JSON commands");
+  }
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new ForbiddenCommand("ardia only sends one JSON command at a time");
+  }
+  checkCommand(payload);
+  return payload as Record<string, unknown>;
+}
