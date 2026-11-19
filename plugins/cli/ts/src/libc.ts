@@ -1,0 +1,140 @@
+import { realpathSync } from "node:fs";
+import { constants } from "node:os";
+import { dirname, join } from "node:path";
+import { strerror } from "./paths.ts";
+
+export const LIBC_FILE = "ardia-libc.so";
+export const LIBC_UNAVAILABLE = 252;
+
+type Native = {
+  peerUid(fd: number): number;
+  interruptsIgnored(): boolean | number;
+  openAt(dir: number, name: string, flags: number, mode: number): number;
+  mkdirAt(dir: number, name: string, mode: number): number;
+  renameAt(dir: number, from: string, to: string): number;
+  unlinkAt(dir: number, name: string): number;
+  sizeAt(dir: number, name: string): number;
+  listAt(dir: number): string[] | number;
+  lock(fd: number, exclusive: boolean, wait: boolean): number;
+};
+
+const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "listAt", "lock"];
+const ERRNO_NAMES = new Map<number, string>(Object.entries(constants.errno).map(([name, value]) => [value, name]));
+const EWOULDBLOCK = constants.errno.EWOULDBLOCK ?? constants.errno.EAGAIN;
+
+export class LibcUnavailable extends Error {
+  constructor(
+    readonly file: string,
+    readonly reason: string,
+  ) {
+    super(`ardia: can't load ${file} (${reason}); reinstall ardia`);
+  }
+}
+
+let loaded: Native | undefined;
+
+export function libcBeside(executable: string = process.execPath): string {
+  let real = executable;
+  try {
+    real = realpathSync(executable);
+  } catch {}
+  return join(dirname(real), LIBC_FILE);
+}
+
+const TRIED = "tried: '";
+
+function bracketed(text: string, open: number): string | undefined {
+  let depth = 0;
+  for (let at = open; at < text.length; at += 1) {
+    if (text[at] === "(") depth += 1;
+    else if (text[at] === ")" && --depth === 0) return text.slice(open + 1, at);
+  }
+  return undefined;
+}
+
+export function dlopenReason(error: unknown): string {
+  const text = error instanceof Error ? error.message : String(error);
+  const tried = text.indexOf(TRIED);
+  if (tried >= 0) {
+    const quote = text.indexOf("' (", tried + TRIED.length);
+    const reason = quote < 0 ? undefined : bracketed(text, quote + 2);
+    if (reason) return reason;
+  }
+  const line = text.split("\n").find((part) => part.trim() !== "")?.trim();
+  return line || "it didn't load";
+}
+
+export function loadLibc(file: string = libcBeside()): void {
+  const module = { exports: {} as Record<string, unknown> };
+  try {
+    process.dlopen(module, file);
+  } catch (error) {
+    throw new LibcUnavailable(file, dlopenReason(error));
+  }
+  const missing = EXPORTS.find((name) => typeof module.exports[name] !== "function");
+  if (missing !== undefined) throw new LibcUnavailable(file, `it has no ${missing}`);
+  loaded = module.exports as unknown as Native;
+}
+
+function native(): Native {
+  if (loaded === undefined) throw new LibcUnavailable(libcBeside(), "it wasn't loaded");
+  return loaded;
+}
+
+export function errnoError(errno: number, syscall: string, name?: string): NodeJS.ErrnoException {
+  const code = ERRNO_NAMES.get(errno) ?? `E${errno}`;
+  const error: NodeJS.ErrnoException = new Error(`${code}: ${strerror(errno)}, ${syscall}${name === undefined ? "" : ` '${name}'`}`);
+  error.errno = -errno;
+  error.code = code;
+  error.syscall = syscall;
+  if (name !== undefined) error.path = name;
+  return error;
+}
+
+function checked(result: number, syscall: string, name?: string): number {
+  if (result < 0) throw errnoError(-result, syscall, name);
+  return result;
+}
+
+export function peerUid(socket: number): number {
+  return checked(native().peerUid(socket), "getsockopt");
+}
+
+export function interruptsIgnored(): boolean {
+  const ignored = native().interruptsIgnored();
+  if (typeof ignored === "number") throw errnoError(-ignored, "sigaction");
+  return ignored;
+}
+
+export function openAt(dir: number, name: string, flags: number, mode = 0o600): number {
+  return checked(native().openAt(dir, name, flags, mode), "openat", name);
+}
+
+export function mkdirAt(dir: number, name: string, mode: number): void {
+  checked(native().mkdirAt(dir, name, mode), "mkdirat", name);
+}
+
+export function renameAt(dir: number, from: string, to: string): void {
+  checked(native().renameAt(dir, from, to), "renameat", from);
+}
+
+export function unlinkAt(dir: number, name: string): void {
+  checked(native().unlinkAt(dir, name), "unlinkat", name);
+}
+
+export function sizeAt(dir: number, name: string): number {
+  return checked(native().sizeAt(dir, name), "fstatat", name);
+}
+
+export function listAt(dir: number): string[] {
+  const names = native().listAt(dir);
+  if (typeof names === "number") throw errnoError(-names, "fdopendir");
+  return names;
+}
+
+export function flock(fd: number, exclusive: boolean, wait: boolean): boolean {
+  const result = native().lock(fd, exclusive, wait);
+  if (result === -EWOULDBLOCK && !wait) return false;
+  checked(result, "flock");
+  return true;
+}

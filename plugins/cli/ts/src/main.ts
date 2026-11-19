@@ -1,5 +1,6 @@
 import { writeSync } from "node:fs";
 import { catchInterrupts } from "./control.ts";
+import { interruptsIgnored, LIBC_UNAVAILABLE, LibcUnavailable, loadLibc } from "./libc.ts";
 import { bundledPython, installRoot } from "./install.ts";
 import { releaseLifeline, watchLifeline } from "./lifeline.ts";
 import { abandonedOutput } from "./printable.ts";
@@ -42,7 +43,16 @@ async function main(words: string[]): Promise<number> {
     return 2;
   }
   watchLifeline(routed.lifeline);
-  if (!routed.interruptsIgnored) catchInterrupts();
+  try {
+    loadLibc();
+  } catch (error) {
+    if (!(error instanceof LibcUnavailable)) throw error;
+    try {
+      writeSync(2, `${error.message}\n`);
+    } catch {}
+    return LIBC_UNAVAILABLE;
+  }
+  if (!interruptsIgnored()) catchInterrupts();
   const argv = routed.argv;
   if (argv.some((word) => word.includes(LOSSY))) return HAND_BACK;
   if (asksForVersion(argv) && servesNatively("--version")) {

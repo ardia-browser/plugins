@@ -1,26 +1,15 @@
 import fs from "node:fs";
+import { constants } from "node:os";
+import { flock, listAt, mkdirAt, openAt, renameAt, sizeAt as statSizeAt, unlinkAt } from "./libc.ts";
 import { codeOf, errnoOf, uid } from "./paths.ts";
 import { sleepMs } from "./printable.ts";
 
 const { O_RDONLY, O_WRONLY, O_RDWR, O_CREAT, O_TRUNC, O_APPEND, O_NOFOLLOW, O_DIRECTORY, O_NONBLOCK } = fs.constants;
 export { O_RDONLY, O_WRONLY, O_RDWR, O_CREAT, O_TRUNC, O_APPEND, O_NOFOLLOW, O_NONBLOCK };
-const DARWIN_O_EXLOCK = 0x20;
-
-export function flockOpenFlag(platform: string, constants: Record<string, number | undefined> = fs.constants): number | undefined {
-  return constants.O_EXLOCK ?? (platform === "darwin" ? DARWIN_O_EXLOCK : undefined);
-}
-
-export class NoFlock extends Error {
-  constructor() {
-    super("this platform has no open flag that takes the flock Python takes");
-  }
-}
-
-export function locksLikePython(): boolean {
-  return flockOpenFlag(process.platform) !== undefined;
-}
-const ELOOP = 62;
-const ENOTDIR = 20;
+const { ELOOP, ENOTDIR } = constants.errno;
+const CREATE_RETRIES = 4;
+const LOCK_ATTEMPTS = 5;
+const LOCK_RETRY_MS = 2;
 
 export class PathError extends Error {
   constructor() {
@@ -28,7 +17,7 @@ export class PathError extends Error {
   }
 }
 
-export type Dir = { path: string; fd: number; dev: number; ino: number };
+export type Dir = { fd: number };
 
 export function notFound(error: unknown): boolean {
   return codeOf(error) === "ENOENT";
@@ -45,68 +34,33 @@ export function closeDir(dir: Dir | undefined): void {
   close(dir?.fd);
 }
 
-function within<T>(dir: Dir, work: () => T): T {
-  const saved = (() => {
-    try {
-      return process.cwd();
-    } catch {
-      return undefined;
-    }
-  })();
-  process.chdir(dir.path);
+function openDir(open: () => number): Dir {
   try {
-    const here = fs.statSync(".");
-    if (here.dev !== dir.dev || here.ino !== dir.ino) throw new PathError();
-    return work();
-  } finally {
-    if (saved !== undefined) {
-      try {
-        process.chdir(saved);
-      } catch {}
-    }
-  }
-}
-
-function asDir(path: string, fd: number): Dir {
-  const info = fs.fstatSync(fd);
-  return { path, fd, dev: info.dev, ino: info.ino };
-}
-
-function openDirAt(path: string, open: () => number): Dir {
-  let fd: number;
-  try {
-    fd = open();
+    return { fd: open() };
   } catch (error) {
     const errno = errnoOf(error);
     if (errno === ELOOP || errno === ENOTDIR) throw new PathError();
     throw error;
   }
-  return asDir(path, fd);
 }
 
-function mkdirQuietly(name: string): void {
+function mkdirQuietly(dir: Dir, name: string): void {
   try {
-    fs.mkdirSync(name, { mode: 0o700 });
+    mkdirAt(dir.fd, name, 0o700);
   } catch (error) {
     if (codeOf(error) !== "EEXIST") throw error;
   }
 }
 
-function childPath(dir: Dir, name: string): string {
-  return dir.path.endsWith("/") ? dir.path + name : `${dir.path}/${name}`;
-}
-
 function openChild(dir: Dir, name: string, create: boolean): Dir {
-  return within(dir, () => {
-    if (create) mkdirQuietly(name);
-    return openDirAt(childPath(dir, name), () => fs.openSync(name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW));
-  });
+  if (create) mkdirQuietly(dir, name);
+  return openDir(() => openAt(dir.fd, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW, 0));
 }
 
 export function openPrivate(root: string, parts: string[], create: boolean): Dir {
   let dir: Dir;
   try {
-    dir = openDirAt(root, () => fs.openSync(root, O_RDONLY | O_DIRECTORY | O_NOFOLLOW));
+    dir = openDir(() => fs.openSync(root, O_RDONLY | O_DIRECTORY | O_NOFOLLOW));
   } catch (error) {
     if (notFound(error)) throw new PathError();
     throw error;
@@ -137,69 +91,70 @@ export function openChildDir(dir: Dir, name: string, checkMode: boolean): Dir {
   return child;
 }
 
-export function openPrivateFile(name: string, dir: Dir, flags: number): number {
-  return within(dir, () => {
-    let retries = flags & O_CREAT ? 4 : 0;
-    let fd: number;
-    for (;;) {
-      try {
-        fd = fs.openSync(name, flags | O_NOFOLLOW, 0o600);
-        break;
-      } catch (error) {
-        if (notFound(error) && retries > 0) retries -= 1;
-        else throw error;
-      }
+function openRetrying(dir: Dir, name: string, flags: number): number {
+  let retries = flags & O_CREAT ? CREATE_RETRIES : 0;
+  for (;;) {
+    try {
+      return openAt(dir.fd, name, flags | O_NOFOLLOW, 0o600);
+    } catch (error) {
+      if (!notFound(error) || retries === 0) throw error;
+      retries -= 1;
     }
-    const info = fs.fstatSync(fd);
-    if (!info.isFile() || info.uid !== uid()) {
-      close(fd);
-      throw new PathError();
-    }
-    if ((info.mode & 0o077) !== 0) {
-      try {
-        fs.fchmodSync(fd, 0o600);
-      } catch {}
-    }
-    return fd;
-  });
+  }
 }
 
-export function takeLock(name: string, dir: Dir): number | undefined {
-  const exclusive = flockOpenFlag(process.platform);
-  if (exclusive === undefined) throw new NoFlock();
+export function openPrivateFile(name: string, dir: Dir, flags: number): number {
+  const fd = openRetrying(dir, name, flags);
   try {
-    return openPrivateFile(name, dir, O_RDWR | O_CREAT | exclusive | O_NONBLOCK);
+    const info = fs.fstatSync(fd);
+    if (!info.isFile() || info.uid !== uid()) throw new PathError();
+    if ((info.mode & 0o077) !== 0) fs.fchmodSync(fd, 0o600);
+    return fd;
   } catch (error) {
-    if (codeOf(error) === "EAGAIN") return undefined;
+    close(fd);
     throw error;
   }
 }
 
+export function takeLock(name: string, dir: Dir): number | undefined {
+  const fd = openPrivateFile(name, dir, O_RDWR | O_CREAT);
+  try {
+    if (flock(fd, true, false)) return fd;
+  } catch (error) {
+    close(fd);
+    throw error;
+  }
+  close(fd);
+  return undefined;
+}
+
 export function takeLockRetrying(name: string, dir: Dir): number | undefined {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
+  for (let attempt = 0; attempt < LOCK_ATTEMPTS; attempt += 1) {
     const lock = takeLock(name, dir);
     if (lock !== undefined) return lock;
-    if (attempt < 4) sleepMs(2);
+    if (attempt + 1 < LOCK_ATTEMPTS) sleepMs(LOCK_RETRY_MS);
   }
   return undefined;
 }
 
 export function unlinkQuietly(name: string, dir: Dir): void {
   try {
-    within(dir, () => fs.unlinkSync(name));
-  } catch {}
+    unlinkAt(dir.fd, name);
+  } catch (error) {
+    if (!notFound(error)) throw error;
+  }
 }
 
 export function renameIn(dir: Dir, from: string, to: string): void {
-  within(dir, () => fs.renameSync(from, to));
+  renameAt(dir.fd, from, to);
 }
 
 export function sizeAt(dir: Dir, name: string): number {
-  return within(dir, () => fs.lstatSync(name).size);
+  return statSizeAt(dir.fd, name);
 }
 
 export function listDir(dir: Dir): string[] {
-  return within(dir, () => fs.readdirSync("."));
+  return listAt(dir.fd);
 }
 
 export function readFd(fd: number, limit: number): Buffer {

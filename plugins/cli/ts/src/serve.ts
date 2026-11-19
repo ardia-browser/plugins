@@ -3,7 +3,6 @@ import { render as renderHelp } from "./help.ts";
 import type { Value } from "./json.ts";
 import { failed, type Kind, type Listing, methodFailed, methodOf, paramsOf, type Rendered } from "./listing.ts";
 import { NeedsPython } from "./paths.ts";
-import { locksLikePython } from "./privatefs.ts";
 import { inert, Output, stdoutFlushFailed, writeAll } from "./printable.ts";
 import { Unsupported } from "./py.ts";
 import { render } from "./render.ts";
@@ -15,7 +14,6 @@ const GROUPS_FLAGS = [...LISTING_FLAGS, "--window", "--profile"];
 const TABS_FLAGS = [...GROUPS_FLAGS, "--flat", "--usage", "--pid"];
 
 export function serveHelp(argv: string[], python: string | null): number | undefined {
-  if (!locksLikePython()) return undefined;
   const text = renderHelp();
   if (text === undefined) return undefined;
   const call = new Call(argv);
@@ -42,9 +40,9 @@ function allowedFor(kind: Kind): string[] {
 
 type Reply = { ok: true; result: Value } | { ok: false; failure: Failure };
 
-async function ask(kind: Kind, listing: Listing, python: string | null): Promise<Reply> {
+async function ask(kind: Kind, listing: Listing): Promise<Reply> {
   try {
-    return { ok: true, result: await callControl(listing.dataDir, methodOf(kind), paramsOf(kind, listing), python) };
+    return { ok: true, result: await callControl(listing.dataDir, methodOf(kind), paramsOf(kind, listing)) };
   } catch (error) {
     if (error instanceof ControlFailure) return { ok: false, failure: error.failure };
     throw error;
@@ -77,13 +75,12 @@ function renderReply(kind: Kind, listing: Listing, reply: Reply): Rendered | und
 }
 
 export async function serveListing(kind: Kind, listing: Listing, argv: string[], python: string | null): Promise<number | undefined> {
-  if (!locksLikePython()) return undefined;
   const call = new Call(argv);
   call.command = kind;
   call.allowedFlags = allowedFor(kind);
   let reply: Reply;
   try {
-    reply = await ask(kind, listing, python);
+    reply = await ask(kind, listing);
   } catch (error) {
     if (error instanceof NeedsPython) return undefined;
     throw error;

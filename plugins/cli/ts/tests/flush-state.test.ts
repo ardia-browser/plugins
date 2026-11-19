@@ -4,7 +4,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { locksLikePython, openPrivate } from "../src/privatefs.ts";
+import "./libc-loaded.ts";
+import { openPrivate } from "../src/privatefs.ts";
 import { sleepMs } from "../src/printable.ts";
 import { startFlush } from "../src/spool.ts";
 
@@ -106,7 +107,7 @@ function viaTypeScript(state: string): Outcome {
 }
 
 for (const state of STATES) {
-  test(`a flush state of ${state} is read the way Python reads it`, { skip: !locksLikePython() }, () => {
+  test(`a flush state of ${state} is read the way Python reads it`, () => {
     assert.deepEqual(viaTypeScript(state), viaPython(state));
   });
 }

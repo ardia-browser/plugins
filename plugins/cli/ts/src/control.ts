@@ -1,6 +1,6 @@
 import { lstatSync } from "node:fs";
 import { createConnection, type Socket } from "node:net";
-import { peerUid } from "./facts.ts";
+import { peerUid } from "./libc.ts";
 import { Connection, Stop } from "./connection.ts";
 import { field, object, same, type Value } from "./json.ts";
 import { baseName, errnoOf, join, LINUX, purePath, envSet, expandUser, home, strerror, uid } from "./paths.ts";
@@ -186,7 +186,15 @@ async function hello(connection: Connection, name: string, callerWire: Value): P
   }
 }
 
-export async function call(dataDir: string | undefined, method: string, params: Value | undefined, python: string | null): Promise<Value> {
+function peerOf(fd: number): number | undefined {
+  try {
+    return peerUid(fd);
+  } catch {
+    return undefined;
+  }
+}
+
+export async function call(dataDir: string | undefined, method: string, params: Value | undefined): Promise<Value> {
   const path = join(dataRoot(dataDir), SOCKET_FILE);
   checkSocket(path);
   const socket = await connectSocket(path, CONNECT_TIMEOUT);
@@ -194,7 +202,7 @@ export async function call(dataDir: string | undefined, method: string, params: 
   let connection: Connection | undefined;
   try {
     const fd = (socket as unknown as { _handle?: { fd?: number } })._handle?.fd;
-    const peer = typeof fd === "number" ? await peerUid(python, fd) : undefined;
+    const peer = typeof fd === "number" ? peerOf(fd) : undefined;
     if (interrupted()) throw new ControlFailure({ kind: "interrupted" });
     if (peer === undefined || typeof fd !== "number") throw unreachable(`${name} couldn't check who serves it`);
     if (peer !== uid()) throw unreachable(`${name} is served by another user`);

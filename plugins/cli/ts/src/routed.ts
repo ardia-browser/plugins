@@ -6,7 +6,7 @@ const CALLER_DEPTH = 2;
 const MARKER = /^--ardia-routed=2:([01]):([1-9][0-9]{0,8}):((?:[0-9a-f]{2})+)$/;
 const FIRST_FREE_FD = 3;
 
-export type Routed = { interruptsIgnored: boolean; lifeline: number; caller: Value; argv: string[] };
+export type Routed = { lifeline: number; caller: Value; argv: string[] };
 
 let current: Value | undefined;
 
@@ -44,7 +44,7 @@ export function takeMarker(words: string[]): Routed | undefined {
   const caller = callerOf(found[3] ?? "");
   if (caller === undefined || !isPipe(lifeline)) return undefined;
   current = caller;
-  return { interruptsIgnored: found[1] === "1", lifeline, caller, argv: words.slice(1) };
+  return { lifeline, caller, argv: words.slice(1) };
 }
 
 export function routedCaller(): Value {
