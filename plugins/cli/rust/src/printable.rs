@@ -159,7 +159,7 @@ pub fn python_os_error(errno: i32) -> &'static str {
     }
 }
 
-fn python_stdout_buffer() -> usize {
+pub fn python_stdout_buffer() -> usize {
     let mut info: libc::stat = unsafe { std::mem::zeroed() };
     if unsafe { libc::fstat(1, &mut info) } == 0 && info.st_blksize > 1 {
         info.st_blksize as usize

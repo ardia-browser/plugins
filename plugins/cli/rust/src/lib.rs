@@ -215,7 +215,8 @@ fn serve_help(argv: &[String], python: Option<&Path>) -> Option<i32> {
     let mut call = telemetry::Call::new(argv);
     call.allowed_flags = TOP_FLAGS;
     let mut stdout = std::io::stdout().lock();
-    let written = stdout.write_all(printable::inert(&text).as_bytes()).and_then(|_| stdout.flush());
+    let shown = printable::inert(&text);
+    let written = stdout.write_all(shown.as_bytes()).and_then(|_| stdout.flush());
     drop(stdout);
     let closed = |error: &std::io::Error| matches!(error.raw_os_error(), Some(libc::EPIPE | libc::ESHUTDOWN));
     let exit = match written {
@@ -226,7 +227,7 @@ fn serve_help(argv: &[String], python: Option<&Path>) -> Option<i32> {
         }
         Err(error) if argv.is_empty() => {
             let errno = error.raw_os_error().unwrap_or(libc::EIO);
-            let exit = printable::report_crash(errno, true);
+            let exit = printable::report_crash(errno, shown.len() <= printable::python_stdout_buffer());
             telemetry::finish_crashed(&call, errno, python);
             exit
         }

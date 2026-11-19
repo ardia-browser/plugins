@@ -1694,8 +1694,8 @@ a call started with fd 0, 1 or 2 closed (noted by a constructor that runs before
 `/dev/null`; Python then gets them closed again). A listing whose stdout later fails with anything but EPIPE ends as
 Python's would after its traceback: the exception line, then, when the failed line fit Python's stdout buffer
 (`st_blksize`, read before the failed stdout is pointed at `/dev/null`), `Exception ignored on flushing sys.stdout:` and
-status 120, else status 1; bare `ardia` (help) always ends with both and 120, `--version` with both on a terminal and
-the second alone elsewhere. Telemetry records what Python's crash records: a `$exception` event (`cli_unhandled`,
+status 120, else status 1; bare `ardia` (help) follows the same rule for its whole text (on a hung-up Linux terminal,
+whose `st_blksize` is 1024, that is status 1), `--version` prints both on a terminal and the second alone elsewhere. Telemetry records what Python's crash records: a `$exception` event (`cli_unhandled`,
 fatal, the `OSError` subclass and `[Errno N] text`) before the `cli_command` event, which carries exit code 1 and
 `unhandled_exception`. Both entries ignore SIGXFSZ as Python does at startup, so a file-size limit gives `EFBIG`, not
 death by signal; the router restores the caller's disposition before it execs Python, and the flusher starts with it at

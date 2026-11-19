@@ -3,7 +3,8 @@ import { render as renderHelp } from "./help.ts";
 import type { Value } from "./json.ts";
 import { failed, type Kind, type Listing, methodFailed, methodOf, paramsOf, type Rendered } from "./listing.ts";
 import { codeOf, errnoOf, NeedsPython } from "./paths.ts";
-import { inert, Output, reportCrash, stdoutFlushFailed, writeAll } from "./printable.ts";
+import { inert, Output, pythonStdoutBuffer, reportCrash, stdoutFlushFailed, writeAll } from "./printable.ts";
+import { utf8 } from "./pystr.ts";
 import { Unsupported } from "./py.ts";
 import { render } from "./render.ts";
 import { Call, finish } from "./telemetry.ts";
@@ -19,8 +20,9 @@ export function serveHelp(argv: string[], python: string | null): number | undef
   if (text === undefined) return undefined;
   const call = new Call(argv);
   call.allowedFlags = TOP_FLAGS;
+  const shown = utf8(inert(text));
   try {
-    writeAll(1, inert(text));
+    writeAll(1, shown);
   } catch (error) {
     if (argv.length > 0) {
       finish(call, 0, python);
@@ -33,7 +35,7 @@ export function serveHelp(argv: string[], python: string | null): number | undef
       return 141;
     }
     const errno = errnoOf(error);
-    const exit = reportCrash(errno, true);
+    const exit = reportCrash(errno, shown.length <= pythonStdoutBuffer());
     finish(call, 1, python, osCrash(errno));
     return exit;
   }
