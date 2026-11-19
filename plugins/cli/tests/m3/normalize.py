@@ -34,6 +34,7 @@ RULES = {
     "unstable-steps": "live mode compares only exit and stderr of the steps a scenario lists in `unstable_steps`, with the reason in the scenario",
     "metrics": "of an answer's `metrics` only the key set is compared, never values",
     "racy-steps": "every mode compares only the exit status of the steps a scenario lists in `racy_steps`, where Chromium decides which of two errors the same request gets (the reason is in the scenario)",
+    "whole-floats": "a whole-number float in a request's params (91.0) is compared as the integer (91): Python's json writes 91.0 for a float, JavaScript has one number type, and Chromium reads both the same",
     "divergences": "a scenario's `divergences` name designed TS differences from tests/m3/divergences.py; each rewrites only the request form it names, on both sides",
 }
 
@@ -43,6 +44,16 @@ def load(path: Path) -> list[dict]:
     if path.suffix == ".gz":
         raw = gzip.decompress(raw)
     return [json.loads(line) for line in raw.decode("utf-8").split("\n") if line]
+
+
+def whole_numbers(value):
+    if isinstance(value, dict):
+        return {name: whole_numbers(item) for name, item in value.items()}
+    if isinstance(value, list):
+        return [whole_numbers(item) for item in value]
+    if isinstance(value, float) and value.is_integer() and abs(value) < 2 ** 53:
+        return int(value)
+    return value
 
 
 def canonical(value) -> str:
@@ -133,7 +144,7 @@ def transcript(entries: list[dict], subs: Subs) -> tuple[dict, Ids]:
         session = (conn, message.get("sessionId") or "")
         ids.walk(message)
         normalized = local.walk({name: value for name, value in message.items() if name != "id"})
-        form = subs.text(canonical(normalized))
+        form = subs.text(canonical(whole_numbers(normalized)))
         groups = steps.setdefault(step, {}).setdefault(f"{conn}:{local.walk(session[1], 'sessionId') if session[1] else 'browser'}", [])
         waiting = open_by_session.setdefault(session, set())
         if not waiting or not groups:

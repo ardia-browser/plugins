@@ -1,0 +1,111 @@
+{
+ "source": "D5 hand-written: act commands on act-input.html, title reflects what the page saw",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-input.html",
+    "--show",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "drag",
+    "#src",
+    "#dst",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "get",
+    "title"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "drag",
+    "#sort li:nth-child(1)",
+    "#sort li:nth-child(3)",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "scroll",
+    "down",
+    "250",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "scroll",
+    "-s",
+    "#pane",
+    "down",
+    "100",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "scroll",
+    "sideways",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "get",
+    "title"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "scrollintoview",
+    "#far",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "upload",
+    "#file",
+    "spawn-config.jsonl",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "upload",
+    "#file",
+    "missing.txt",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "get",
+    "title"
+   ],
+   "session": "d5"
+  }
+ ]
+}

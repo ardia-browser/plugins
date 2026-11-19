@@ -4,7 +4,7 @@ import path from "node:path";
 import { formatG, groupThousands } from "../../pylib/format.ts";
 import { joinedWords, pyFloat, pyLen } from "../../pylib/str.ts";
 import { shlexQuote } from "../../pylib/shlex.ts";
-import { click, hover } from "../act/pointer.ts";
+import { click, hover, tap, TOUCH_OFF } from "../act/pointer.ts";
 import { drag, listAfter, listBefore } from "../act/drag.ts";
 import { choose, comboKind, fill, plain, select, settledSuggestions, SUGGESTION_HINT_WAIT, setChecked, type Item, typeText, uniqueMatch, unwatchSuggestions, watchSuggestions } from "../act/fields.ts";
 import { asRecord, expectInput, mouseButton, overFrame } from "../act/common.ts";
@@ -56,7 +56,7 @@ export function consentNote(ctx: Ctx, given: Result): Result {
 }
 
 async function cmdClick(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, args] = parse(argv, { "--new-tab": "bool", "--button": "value", "--no-humanize": "bool" });
+  const [options, args] = parse(argv, { "--new-tab": "bool", "--button": "value", "--no-humanize": "bool", "--touch": "bool" });
   need(args, 1, "click <selector> [--new-tab]");
   const selector = args[0] as string;
   const [page, element] = await resolve(ctx, selector);
@@ -68,6 +68,11 @@ async function cmdClick(ctx: Ctx, argv: string[]): Promise<Result> {
     const tab = await newTab(ctx, String(href));
     ctx.state.current = previous || tab.targetId;
     return new Result({ clicked: selector, newTab: ctx.state.tabId(tab.targetId), url: tab.url });
+  }
+  if (options["touch"]) {
+    const [touched, report] = await observe(ctx, page, () => tap(page, element, humanize));
+    const done = touched ? new Result({ clicked: selector, touch: true }) : new Result({ clicked: selector, touch: false }, `✓ Done (${TOUCH_OFF})`);
+    return consentNote(ctx, attach(done, report));
   }
   const [, report] = await observe(ctx, page, () => click(page, element, humanize, 1, (options["button"] as string | undefined) || "left"));
   return consentNote(ctx, attach(new Result({ clicked: selector }), report));

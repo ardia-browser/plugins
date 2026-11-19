@@ -485,3 +485,38 @@ export async function hover(page: Page, element: Element, humanize: boolean): Pr
   const input = inputOf(page);
   await expectInput(page, element.frame, () => input.gesture("hover", () => input.pointer.move(x, y, humanize)), { mousemove: 1 }, "The hover");
 }
+
+export const TOUCH_PROBE = "() => navigator.maxTouchPoints > 0 && 'ontouchstart' in window";
+export const TOUCH_OFF =
+  "touch isn't emulated in this tab (navigator.maxTouchPoints is 0), so it got a mouse click: a touch event there would give the page a " +
+  "touch it can't explain. `set device <phone>` turns touch on";
+
+export async function touchEmulated(page: Page, frame: string | null): Promise<boolean> {
+  try {
+    return Boolean(await page.call(TOUCH_PROBE, [], { frame: frame || page.mainFrame, read: true }));
+  } catch (error) {
+    if (error instanceof BrowseError) return false;
+    throw error;
+  }
+}
+
+export async function tap(page: Page, element: Element, humanize: boolean): Promise<boolean> {
+  if (!(await touchEmulated(page, element.frame))) {
+    await click(page, element, humanize);
+    return false;
+  }
+  const [x, y] = await targetPoint(page, element, humanize);
+  const input = inputOf(page);
+  const point = { x: hundredths(x), y: hundredths(y), id: 1 };
+  await input.gesture("tap", async () => {
+    await page.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [point] }, { inputEvent: true });
+    if (humanize) await sleep(rng().uniform(0.05, 0.15));
+    await page.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] }, { inputEvent: true });
+  });
+  input.pointer.position = [x, y];
+  return true;
+}
+
+function hundredths(value: number): number {
+  return Math.round(value * 100) / 100;
+}

@@ -1,0 +1,139 @@
+{
+ "source": "D5 hand-written: act commands on act-input.html, title reflects what the page saw",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-input.html",
+    "--show",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "fill",
+    "#name",
+    "hello there",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "get",
+    "title"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "type",
+    "#area",
+    "abc",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "get",
+    "title"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "fill",
+    "#name",
+    "",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "get",
+    "title"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "check",
+    "#agree",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "uncheck",
+    "#agree",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "check",
+    "#agree",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "get",
+    "title"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "select",
+    "#pick",
+    "Banana",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "fill",
+    "#pick",
+    "Cherry",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "get",
+    "title"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "fill",
+    "#go",
+    "nope",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "focus",
+    "#name",
+    "--no-changes"
+   ],
+   "session": "d5"
+  }
+ ]
+}

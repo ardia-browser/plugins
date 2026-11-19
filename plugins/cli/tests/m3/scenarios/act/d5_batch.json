@@ -1,0 +1,52 @@
+{
+ "source": "D5 hand-written: act commands on act-input.html, title reflects what the page saw",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-input.html",
+    "--show",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "batch",
+    "click #go",
+    "fill #name batched",
+    "check #agree",
+    "select #pick c",
+    "get title",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "batch",
+    "--bail",
+    "click #go",
+    "click #missing",
+    "get title",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "batch",
+    "click #go --max-output 50",
+    "close now",
+    "batch x",
+    "get title --session other",
+    "--no-changes"
+   ],
+   "session": "d5"
+  }
+ ]
+}
