@@ -66,6 +66,9 @@ def main() -> int:
         failed = sum(not outcome.passed for outcome in outcomes)
         print(f"{len(outcomes) - failed}/{len(outcomes)} cases pass with the {args.entry} entry ({summary['intentional']} of them intentional "
               f"differences from Python, compared against the output each case records); it serves {', '.join(served)}")
+        if summary["cdp_rules_awaiting_fake_engine"]:
+            print(f"{len(summary['cdp_rules_awaiting_fake_engine'])} cases carry CDP rules the daemon must keep; nothing checks them until the "
+                  "harness has a fake engine (M3)")
         if summary["unproven_but_served"]:
             print(f"served.txt lists commands whose cases don't all pass: {', '.join(summary['unproven_but_served'])}")
         if args.keep:

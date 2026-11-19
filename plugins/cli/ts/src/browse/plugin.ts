@@ -25,7 +25,7 @@ const SESSION_FLAGS = [
   "--annotate", "--no-auto-dialog", "--pin-tab", "--no-pin-tab", "--debug", "--capture-console", "--show",
   "--content-boundaries", "--out", "--stdin",
 ];
-const LOCAL_COMMANDS = ["auth", "notes", "flow", "plugin", "read", "session", "script", "cdp"];
+const LOCAL_COMMANDS = ["auth", "notes", "flow", "plugin", "read", "session", "script", "cdp", "clipboard"];
 
 export class PluginRefusal extends Error {}
 

@@ -1091,8 +1091,19 @@ it relies on is `tests/parity/cases/ai-plugin-contract.json` (one case per item)
   after the command (`--session --namespace --data-dir --port --ws --cdp --screenshot-* --idle-timeout --init-script
   --enable --headers --color-scheme --download-path --annotate --no-auto-dialog --pin-tab --no-pin-tab --debug
   --capture-console --show --content-boundaries --out --stdin`); and `auth`, `notes`, `flow`, `plugin`, `read`,
-  `session`, `script`, `cdp` and `close --all`. The router sends a plugin's browse call only to the TypeScript client and
+  `session`, `script`, `cdp`, `clipboard` and `close --all`. The router sends a plugin's browse call only to the TypeScript client and
   refuses (77) rather than hand it to Python.
+- Input the engine accepts from a plugin (ardia#2808's plugin policy). The daemon builds these CDP calls, so it keeps
+  them for a `for_plugin` session (the TypeScript daemon, M3 F1, must; today's Python daemon doesn't yet: its
+  humanized typing sends `nativeVirtualKeyCode` and its shortcuts send `undo`/`redo`):
+  - `Input.dispatchKeyEvent` never carries `nativeVirtualKeyCode` or `isSystemKey`.
+  - Its `commands` hold only `selectAll`; `moveToBeginningOfLine`, `moveToEndOfLine`, `moveToBeginningOfDocument`,
+    `moveToEndOfDocument`, `moveLeft`, `moveRight`, `moveUp`, `moveDown`, `moveWordLeft`, `moveWordRight`, each also
+    with `AndModifySelection`; `deleteBackward`, `deleteForward`, `deleteWordBackward`, `deleteWordForward`;
+    `insertNewline`; `insertTab`. Never `copy`, `cut`, `paste` or `pasteAndMatchStyle`.
+  - `backendNodeId` stays usable; the engine accepts only ids from the session's own frame tree.
+  The client keeps them where it shapes input: it refuses `clipboard`, whose copy and paste need those commands. The
+  contract cases record each rule as `cdp_rules`; the harness counts them and checks them once it has a fake engine.
 - `cli_command` carries `plugin_mode: true` from the TypeScript client.
 
 ### JSON error codes

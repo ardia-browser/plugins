@@ -4039,5 +4039,886 @@
    "namespace": ""
   },
   "note": "Python's top-level refusal, fd dropped"
+ },
+ {
+  "id": "contract--8-press-enter",
+  "command": "browse press",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "press",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "Enter"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§8 plugin input rules: the daemon (M3 F1) builds these key events",
+  "cdp_rules": {
+   "Input.dispatchKeyEvent": {
+    "never_params": [
+     "nativeVirtualKeyCode",
+     "isSystemKey"
+    ],
+    "only_values": {
+     "commands": [
+      "selectAll",
+      "moveToBeginningOfLine",
+      "moveToBeginningOfLineAndModifySelection",
+      "moveToEndOfLine",
+      "moveToEndOfLineAndModifySelection",
+      "moveToBeginningOfDocument",
+      "moveToBeginningOfDocumentAndModifySelection",
+      "moveToEndOfDocument",
+      "moveToEndOfDocumentAndModifySelection",
+      "moveLeft",
+      "moveLeftAndModifySelection",
+      "moveRight",
+      "moveRightAndModifySelection",
+      "moveUp",
+      "moveUpAndModifySelection",
+      "moveDown",
+      "moveDownAndModifySelection",
+      "moveWordLeft",
+      "moveWordLeftAndModifySelection",
+      "moveWordRight",
+      "moveWordRightAndModifySelection",
+      "deleteBackward",
+      "deleteForward",
+      "deleteWordBackward",
+      "deleteWordForward",
+      "insertNewline",
+      "insertTab"
+     ]
+    },
+    "why": "ardia#2808 plugin policy: the engine refuses a plugin's key event that carries a native key code, a system key or an editing command off this list (never copy, cut, paste or pasteAndMatchStyle)"
+   }
+  }
+ },
+ {
+  "id": "contract--8-press-select-all",
+  "command": "browse press",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "press",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "Meta+a"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§8 plugin input rules: the daemon (M3 F1) builds these key events",
+  "cdp_rules": {
+   "Input.dispatchKeyEvent": {
+    "never_params": [
+     "nativeVirtualKeyCode",
+     "isSystemKey"
+    ],
+    "only_values": {
+     "commands": [
+      "selectAll",
+      "moveToBeginningOfLine",
+      "moveToBeginningOfLineAndModifySelection",
+      "moveToEndOfLine",
+      "moveToEndOfLineAndModifySelection",
+      "moveToBeginningOfDocument",
+      "moveToBeginningOfDocumentAndModifySelection",
+      "moveToEndOfDocument",
+      "moveToEndOfDocumentAndModifySelection",
+      "moveLeft",
+      "moveLeftAndModifySelection",
+      "moveRight",
+      "moveRightAndModifySelection",
+      "moveUp",
+      "moveUpAndModifySelection",
+      "moveDown",
+      "moveDownAndModifySelection",
+      "moveWordLeft",
+      "moveWordLeftAndModifySelection",
+      "moveWordRight",
+      "moveWordRightAndModifySelection",
+      "deleteBackward",
+      "deleteForward",
+      "deleteWordBackward",
+      "deleteWordForward",
+      "insertNewline",
+      "insertTab"
+     ]
+    },
+    "why": "ardia#2808 plugin policy: the engine refuses a plugin's key event that carries a native key code, a system key or an editing command off this list (never copy, cut, paste or pasteAndMatchStyle)"
+   }
+  }
+ },
+ {
+  "id": "contract--8-press-undo",
+  "command": "browse press",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "press",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "Meta+z"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§8 plugin input rules: the daemon (M3 F1) builds these key events",
+  "cdp_rules": {
+   "Input.dispatchKeyEvent": {
+    "never_params": [
+     "nativeVirtualKeyCode",
+     "isSystemKey"
+    ],
+    "only_values": {
+     "commands": [
+      "selectAll",
+      "moveToBeginningOfLine",
+      "moveToBeginningOfLineAndModifySelection",
+      "moveToEndOfLine",
+      "moveToEndOfLineAndModifySelection",
+      "moveToBeginningOfDocument",
+      "moveToBeginningOfDocumentAndModifySelection",
+      "moveToEndOfDocument",
+      "moveToEndOfDocumentAndModifySelection",
+      "moveLeft",
+      "moveLeftAndModifySelection",
+      "moveRight",
+      "moveRightAndModifySelection",
+      "moveUp",
+      "moveUpAndModifySelection",
+      "moveDown",
+      "moveDownAndModifySelection",
+      "moveWordLeft",
+      "moveWordLeftAndModifySelection",
+      "moveWordRight",
+      "moveWordRightAndModifySelection",
+      "deleteBackward",
+      "deleteForward",
+      "deleteWordBackward",
+      "deleteWordForward",
+      "insertNewline",
+      "insertTab"
+     ]
+    },
+    "why": "ardia#2808 plugin policy: the engine refuses a plugin's key event that carries a native key code, a system key or an editing command off this list (never copy, cut, paste or pasteAndMatchStyle)"
+   }
+  }
+ },
+ {
+  "id": "contract--8-press-copy",
+  "command": "browse press",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "press",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "Meta+c"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§8 plugin input rules: the daemon (M3 F1) builds these key events",
+  "cdp_rules": {
+   "Input.dispatchKeyEvent": {
+    "never_params": [
+     "nativeVirtualKeyCode",
+     "isSystemKey"
+    ],
+    "only_values": {
+     "commands": [
+      "selectAll",
+      "moveToBeginningOfLine",
+      "moveToBeginningOfLineAndModifySelection",
+      "moveToEndOfLine",
+      "moveToEndOfLineAndModifySelection",
+      "moveToBeginningOfDocument",
+      "moveToBeginningOfDocumentAndModifySelection",
+      "moveToEndOfDocument",
+      "moveToEndOfDocumentAndModifySelection",
+      "moveLeft",
+      "moveLeftAndModifySelection",
+      "moveRight",
+      "moveRightAndModifySelection",
+      "moveUp",
+      "moveUpAndModifySelection",
+      "moveDown",
+      "moveDownAndModifySelection",
+      "moveWordLeft",
+      "moveWordLeftAndModifySelection",
+      "moveWordRight",
+      "moveWordRightAndModifySelection",
+      "deleteBackward",
+      "deleteForward",
+      "deleteWordBackward",
+      "deleteWordForward",
+      "insertNewline",
+      "insertTab"
+     ]
+    },
+    "why": "ardia#2808 plugin policy: the engine refuses a plugin's key event that carries a native key code, a system key or an editing command off this list (never copy, cut, paste or pasteAndMatchStyle)"
+   }
+  }
+ },
+ {
+  "id": "contract--8-press-paste",
+  "command": "browse press",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "press",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "Meta+v"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§8 plugin input rules: the daemon (M3 F1) builds these key events",
+  "cdp_rules": {
+   "Input.dispatchKeyEvent": {
+    "never_params": [
+     "nativeVirtualKeyCode",
+     "isSystemKey"
+    ],
+    "only_values": {
+     "commands": [
+      "selectAll",
+      "moveToBeginningOfLine",
+      "moveToBeginningOfLineAndModifySelection",
+      "moveToEndOfLine",
+      "moveToEndOfLineAndModifySelection",
+      "moveToBeginningOfDocument",
+      "moveToBeginningOfDocumentAndModifySelection",
+      "moveToEndOfDocument",
+      "moveToEndOfDocumentAndModifySelection",
+      "moveLeft",
+      "moveLeftAndModifySelection",
+      "moveRight",
+      "moveRightAndModifySelection",
+      "moveUp",
+      "moveUpAndModifySelection",
+      "moveDown",
+      "moveDownAndModifySelection",
+      "moveWordLeft",
+      "moveWordLeftAndModifySelection",
+      "moveWordRight",
+      "moveWordRightAndModifySelection",
+      "deleteBackward",
+      "deleteForward",
+      "deleteWordBackward",
+      "deleteWordForward",
+      "insertNewline",
+      "insertTab"
+     ]
+    },
+    "why": "ardia#2808 plugin policy: the engine refuses a plugin's key event that carries a native key code, a system key or an editing command off this list (never copy, cut, paste or pasteAndMatchStyle)"
+   }
+  }
+ },
+ {
+  "id": "contract--8-press-word-left",
+  "command": "browse press",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "press",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "Alt+ArrowLeft"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§8 plugin input rules: the daemon (M3 F1) builds these key events",
+  "cdp_rules": {
+   "Input.dispatchKeyEvent": {
+    "never_params": [
+     "nativeVirtualKeyCode",
+     "isSystemKey"
+    ],
+    "only_values": {
+     "commands": [
+      "selectAll",
+      "moveToBeginningOfLine",
+      "moveToBeginningOfLineAndModifySelection",
+      "moveToEndOfLine",
+      "moveToEndOfLineAndModifySelection",
+      "moveToBeginningOfDocument",
+      "moveToBeginningOfDocumentAndModifySelection",
+      "moveToEndOfDocument",
+      "moveToEndOfDocumentAndModifySelection",
+      "moveLeft",
+      "moveLeftAndModifySelection",
+      "moveRight",
+      "moveRightAndModifySelection",
+      "moveUp",
+      "moveUpAndModifySelection",
+      "moveDown",
+      "moveDownAndModifySelection",
+      "moveWordLeft",
+      "moveWordLeftAndModifySelection",
+      "moveWordRight",
+      "moveWordRightAndModifySelection",
+      "deleteBackward",
+      "deleteForward",
+      "deleteWordBackward",
+      "deleteWordForward",
+      "insertNewline",
+      "insertTab"
+     ]
+    },
+    "why": "ardia#2808 plugin policy: the engine refuses a plugin's key event that carries a native key code, a system key or an editing command off this list (never copy, cut, paste or pasteAndMatchStyle)"
+   }
+  }
+ },
+ {
+  "id": "contract--8-type-humanized",
+  "command": "browse type",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "type",
+   "--delay=10",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "@e2",
+   "hi"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§8 plugin input rules: the daemon (M3 F1) builds these key events",
+  "cdp_rules": {
+   "Input.dispatchKeyEvent": {
+    "never_params": [
+     "nativeVirtualKeyCode",
+     "isSystemKey"
+    ],
+    "only_values": {
+     "commands": [
+      "selectAll",
+      "moveToBeginningOfLine",
+      "moveToBeginningOfLineAndModifySelection",
+      "moveToEndOfLine",
+      "moveToEndOfLineAndModifySelection",
+      "moveToBeginningOfDocument",
+      "moveToBeginningOfDocumentAndModifySelection",
+      "moveToEndOfDocument",
+      "moveToEndOfDocumentAndModifySelection",
+      "moveLeft",
+      "moveLeftAndModifySelection",
+      "moveRight",
+      "moveRightAndModifySelection",
+      "moveUp",
+      "moveUpAndModifySelection",
+      "moveDown",
+      "moveDownAndModifySelection",
+      "moveWordLeft",
+      "moveWordLeftAndModifySelection",
+      "moveWordRight",
+      "moveWordRightAndModifySelection",
+      "deleteBackward",
+      "deleteForward",
+      "deleteWordBackward",
+      "deleteWordForward",
+      "insertNewline",
+      "insertTab"
+     ]
+    },
+    "why": "ardia#2808 plugin policy: the engine refuses a plugin's key event that carries a native key code, a system key or an editing command off this list (never copy, cut, paste or pasteAndMatchStyle)"
+   }
+  }
+ },
+ {
+  "id": "contract--8-type-plain",
+  "command": "browse type",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "type",
+   "--no-humanize",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "@e2",
+   "hi"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§8 plugin input rules: the daemon (M3 F1) builds these key events",
+  "cdp_rules": {
+   "Input.dispatchKeyEvent": {
+    "never_params": [
+     "nativeVirtualKeyCode",
+     "isSystemKey"
+    ],
+    "only_values": {
+     "commands": [
+      "selectAll",
+      "moveToBeginningOfLine",
+      "moveToBeginningOfLineAndModifySelection",
+      "moveToEndOfLine",
+      "moveToEndOfLineAndModifySelection",
+      "moveToBeginningOfDocument",
+      "moveToBeginningOfDocumentAndModifySelection",
+      "moveToEndOfDocument",
+      "moveToEndOfDocumentAndModifySelection",
+      "moveLeft",
+      "moveLeftAndModifySelection",
+      "moveRight",
+      "moveRightAndModifySelection",
+      "moveUp",
+      "moveUpAndModifySelection",
+      "moveDown",
+      "moveDownAndModifySelection",
+      "moveWordLeft",
+      "moveWordLeftAndModifySelection",
+      "moveWordRight",
+      "moveWordRightAndModifySelection",
+      "deleteBackward",
+      "deleteForward",
+      "deleteWordBackward",
+      "deleteWordForward",
+      "insertNewline",
+      "insertTab"
+     ]
+    },
+    "why": "ardia#2808 plugin policy: the engine refuses a plugin's key event that carries a native key code, a system key or an editing command off this list (never copy, cut, paste or pasteAndMatchStyle)"
+   }
+  }
+ },
+ {
+  "id": "contract--8-fill",
+  "command": "browse fill",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "fill",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "@e2",
+   "Ada"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§8 plugin input rules: the daemon (M3 F1) builds these key events",
+  "cdp_rules": {
+   "Input.dispatchKeyEvent": {
+    "never_params": [
+     "nativeVirtualKeyCode",
+     "isSystemKey"
+    ],
+    "only_values": {
+     "commands": [
+      "selectAll",
+      "moveToBeginningOfLine",
+      "moveToBeginningOfLineAndModifySelection",
+      "moveToEndOfLine",
+      "moveToEndOfLineAndModifySelection",
+      "moveToBeginningOfDocument",
+      "moveToBeginningOfDocumentAndModifySelection",
+      "moveToEndOfDocument",
+      "moveToEndOfDocumentAndModifySelection",
+      "moveLeft",
+      "moveLeftAndModifySelection",
+      "moveRight",
+      "moveRightAndModifySelection",
+      "moveUp",
+      "moveUpAndModifySelection",
+      "moveDown",
+      "moveDownAndModifySelection",
+      "moveWordLeft",
+      "moveWordLeftAndModifySelection",
+      "moveWordRight",
+      "moveWordRightAndModifySelection",
+      "deleteBackward",
+      "deleteForward",
+      "deleteWordBackward",
+      "deleteWordForward",
+      "insertNewline",
+      "insertTab"
+     ]
+    },
+    "why": "ardia#2808 plugin policy: the engine refuses a plugin's key event that carries a native key code, a system key or an editing command off this list (never copy, cut, paste or pasteAndMatchStyle)"
+   }
+  }
+ },
+ {
+  "id": "contract--8-click-node-ids",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "click",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "@e3"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§8 refs resolve through backendNodeId from the session's own frame tree",
+  "cdp_rules": {
+   "DOM.resolveNode": {
+    "never_params": [],
+    "why": "ardia#2808: backendNodeId stays usable, but only ids from the session's own frame tree"
+   }
+  }
+ },
+ {
+  "id": "contract--8-refuses-clipboard",
+  "command": "browse clipboard",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "clipboard",
+   "paste"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§8 clipboard copy/paste needs editing commands a plugin never sends: refused by the client",
+  "cdp_rules": {
+   "Input.dispatchKeyEvent": {
+    "never_params": [
+     "nativeVirtualKeyCode",
+     "isSystemKey"
+    ],
+    "only_values": {
+     "commands": [
+      "selectAll",
+      "moveToBeginningOfLine",
+      "moveToBeginningOfLineAndModifySelection",
+      "moveToEndOfLine",
+      "moveToEndOfLineAndModifySelection",
+      "moveToBeginningOfDocument",
+      "moveToBeginningOfDocumentAndModifySelection",
+      "moveToEndOfDocument",
+      "moveToEndOfDocumentAndModifySelection",
+      "moveLeft",
+      "moveLeftAndModifySelection",
+      "moveRight",
+      "moveRightAndModifySelection",
+      "moveUp",
+      "moveUpAndModifySelection",
+      "moveDown",
+      "moveDownAndModifySelection",
+      "moveWordLeft",
+      "moveWordLeftAndModifySelection",
+      "moveWordRight",
+      "moveWordRightAndModifySelection",
+      "deleteBackward",
+      "deleteForward",
+      "deleteWordBackward",
+      "deleteWordForward",
+      "insertNewline",
+      "insertTab"
+     ]
+    },
+    "why": "ardia#2808 plugin policy: the engine refuses a plugin's key event that carries a native key code, a system key or an editing command off this list (never copy, cut, paste or pasteAndMatchStyle)"
+   }
+  }
  }
 ]

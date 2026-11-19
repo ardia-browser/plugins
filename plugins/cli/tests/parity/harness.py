@@ -265,6 +265,7 @@ class Case:
     daemon: dict | None = None
     credential: dict | None = None
     intentional: dict | None = None
+    cdp_rules: dict | None = None
     consent: dict = field(default_factory=dict)
     files: dict = field(default_factory=dict)
     helpers: dict = field(default_factory=dict)
@@ -286,7 +287,7 @@ class Case:
     def to_dict(self) -> dict:
         row = {"id": self.id, "command": self.command, "argv": self.argv}
         defaults = Case(id="", command="", argv=[])
-        for name in ("stdin", "env", "control", "daemon", "credential", "intentional", "consent", "files", "helpers", "fallback", "normalize", "note"):
+        for name in ("stdin", "env", "control", "daemon", "credential", "intentional", "cdp_rules", "consent", "files", "helpers", "fallback", "normalize", "note"):
             value = getattr(self, name)
             if value != getattr(defaults, name):
                 row[name] = value
@@ -314,7 +315,23 @@ def contained_path(text: str, writable: bool = False) -> bool:
     return resolved.startswith("/BOX/")
 
 
+CDP_RULE_KEYS = frozenset({"never_params", "only_values", "why"})
+
+
+def check_cdp_rules(case: Case) -> None:
+    where = f"case {case.id!r}"
+    for method, rule in (case.cdp_rules or {}).items():
+        if not re.fullmatch(r"[A-Z][A-Za-z]+\.[a-z][A-Za-z]+", method) or not isinstance(rule, dict) or set(rule) - CDP_RULE_KEYS or "why" not in rule:
+            raise UnsafeCase(f"{where}: cdp_rules maps a CDP method to never_params, only_values and why")
+        if not all(isinstance(name, str) for name in rule.get("never_params", [])):
+            raise UnsafeCase(f"{where}: never_params lists parameter names")
+        for name, values in rule.get("only_values", {}).items():
+            if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
+                raise UnsafeCase(f"{where}: only_values maps {name!r} to the values it may hold")
+
+
 def check_case_is_contained(case: Case) -> None:
+    check_cdp_rules(case)
     where = f"case {case.id!r}"
     for rel in case.files:
         parts = Path(rel).parts
@@ -1249,7 +1266,8 @@ def summarize(outcomes: list[Outcome], served: list[str] | dict[str, str]) -> di
     for name in served:
         commands.setdefault(name, {"cases": 0, "passed": 0, "native": 0, "intentional": 0, "failed": [], "served": True})
     proven = sorted(name for name, row in commands.items() if row["cases"] and row["passed"] == row["cases"] and row["native"])
-    return {"served": served, "intentional": sum(outcome.intentional for outcome in outcomes), "proven": proven, "unproven_but_served": sorted(set(served) - set(proven)), "commands": dict(sorted(commands.items()))}
+    return {"served": served, "intentional": sum(outcome.intentional for outcome in outcomes),
+            "cdp_rules_awaiting_fake_engine": sorted(outcome.case.id for outcome in outcomes if outcome.case.cdp_rules), "proven": proven, "unproven_but_served": sorted(set(served) - set(proven)), "commands": dict(sorted(commands.items()))}
 
 
 def run_all(cases: list[Case], entry_program: Path, jobs: int = 6, keep: bool = False, progress=None, entry: str = "rust") -> tuple[list[Outcome], Installation]:

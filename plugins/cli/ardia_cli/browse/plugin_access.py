@@ -27,7 +27,7 @@ SESSION_FLAGS = frozenset({
     "--annotate", "--no-auto-dialog", "--pin-tab", "--no-pin-tab", "--debug", "--capture-console", "--show",
     "--content-boundaries", "--out", "--stdin",
 })
-LOCAL_COMMANDS = ("auth", "notes", "flow", "plugin", "read", "session", "script", "cdp")
+LOCAL_COMMANDS = ("auth", "notes", "flow", "plugin", "read", "session", "script", "cdp", "clipboard")
 
 
 class Refused(Exception):
