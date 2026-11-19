@@ -10,6 +10,7 @@ const LOW_WATER = 16 * 1024;
 const POLL_MS = 100;
 const RETRY_WRITE_MS = 1;
 const EAGAIN = new Set(["EAGAIN", "EWOULDBLOCK"]);
+const EPIPE = 32;
 
 type Pending = { reply?: Value; lost?: string };
 
@@ -90,9 +91,20 @@ export class Connection {
     if (this.buffer.length > MAX_LINE_BYTES + 2) this.lose("Ardia sent a line longer than 1 MB");
   }
 
+  private socketOpen(): boolean {
+    return !this.socket.destroyed && (this.socket as unknown as { _handle?: { fd?: number } })._handle?.fd === this.fd;
+  }
+
   private pump(): void {
     this.pumpTimer = undefined;
     while (this.unsent.length > 0 && this.writeFailure === undefined) {
+      if (!this.socketOpen()) {
+        this.writeFailure = `the connection broke (${strerror(EPIPE)})`;
+        this.unsent = [];
+        this.unsentBytes = 0;
+        this.lose(this.writeFailure);
+        break;
+      }
       const head = this.unsent[0] as Buffer;
       let written: number;
       try {

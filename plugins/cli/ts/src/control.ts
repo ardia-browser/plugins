@@ -89,7 +89,7 @@ export function checkSocket(path: string): void {
 function connectSocket(path: string, timeout: number): Promise<Socket> {
   const name = baseName(path);
   return new Promise((resolve, reject) => {
-    const socket = createConnection({ path });
+    const socket = createConnection({ path, allowHalfOpen: true });
     const timer = setTimeout(() => {
       socket.destroy();
       reject(unreachable(`${name} didn't accept in ${seconds(timeout)} s`));
