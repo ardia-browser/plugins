@@ -1,7 +1,7 @@
 import { closeSync, fstatSync, openSync } from "node:fs";
 import { iso, now, parseIso } from "./clock.ts";
 import { dataRoot, installedDataDir } from "./control.ts";
-import { Float, isWideInt, type JsonObject, object, parse, type Value } from "./json.ts";
+import { Float, type JsonObject, object, parse, type Value } from "./json.ts";
 import { abspath, envSet, join, realpath, uid } from "./paths.ts";
 import { O_NOFOLLOW, O_NONBLOCK, O_RDONLY, readFd } from "./privatefs.ts";
 import { isSpace, strip } from "./py.ts";
@@ -116,9 +116,19 @@ export function readConsent(root: string): JsonObject | undefined {
   }
 }
 
+const MS_EPOCH_FLOOR = 100_000_000_000n;
+
+function bigintSeconds(value: bigint): number {
+  return value > MS_EPOCH_FLOOR ? Number(value) / 1000 : Number(value);
+}
+
+function bigintOverflowsFloat(value: bigint): boolean {
+  return !Number.isFinite(value > MS_EPOCH_FLOOR ? Number(value / 1000n) : Number(value));
+}
+
 function epochSeconds(value: Value | undefined): number | undefined {
   const scaled = (seconds: number) => (seconds > 1e11 ? seconds / 1000 : seconds);
-  if (typeof value === "bigint") return isWideInt(value) ? undefined : scaled(Number(value));
+  if (typeof value === "bigint") return bigintSeconds(value);
   if (value instanceof Float) return scaled(value.value);
   if (typeof value === "string") {
     const parsed = parseIso(value);
@@ -139,6 +149,11 @@ function validId(value: Value | undefined): string | undefined {
 function unreadableExpiry(doc: JsonObject): boolean {
   const until = doc.get("sharingUntil");
   return doc.get("sharing") === true && typeof until === "string" && typeof parseIso(until) !== "object";
+}
+
+function expiryOverflows(doc: JsonObject): boolean {
+  const until = doc.get("sharingUntil");
+  return doc.get("sharing") === true && typeof until === "bigint" && bigintOverflowsFloat(until);
 }
 
 export function consentUnreadable(argv: string[]): boolean {
@@ -232,7 +247,7 @@ export function finish(call: Call, status: number, python: string | null): void 
   const target = cliTarget(call.argv);
   if (target === undefined) return;
   const doc = readConsent(target.root);
-  if (doc !== undefined && unreadableExpiry(doc)) return;
+  if (doc !== undefined && (unreadableExpiry(doc) || expiryOverflows(doc))) return;
   const installId = sharingId(doc);
   const record = commandRecord(call, status, installId ?? LOCAL_ONLY_ID, target.environment, doc);
   keepLocalCopy(target.root, record, installId !== undefined);

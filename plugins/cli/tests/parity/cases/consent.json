@@ -297,5 +297,77 @@
   "env": {
    "DO_NOT_TRACK": "\u001c"
   }
+ },
+ {
+  "id": "windows--sharing-until-negative-beyond-i128",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "consent": {
+   "sharingUntil": -10000000000000000000000000000000000000000
+  },
+  "note": "an expiry far in the past, outside 128-bit integers"
+ },
+ {
+  "id": "windows--sharing-until-positive-beyond-i128",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "consent": {
+   "sharingUntil": 10000000000000000000000000000000000000000
+  },
+  "note": "an expiry far in the future, outside 128-bit integers"
+ },
+ {
+  "id": "windows--sharing-until-negative-beyond-float",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "consent": {
+   "sharingUntil": -10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+  },
+  "note": "an expiry no float can hold, in the past"
+ },
+ {
+  "id": "windows--sharing-until-positive-beyond-float",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "consent": {
+   "sharingUntil": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+  },
+  "note": "an expiry no float can hold, in the future"
  }
 ]

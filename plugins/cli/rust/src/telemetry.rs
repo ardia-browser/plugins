@@ -185,6 +185,10 @@ fn epoch_seconds(value: &Value) -> Option<f64> {
             Some(if number > 1e11 { number / 1000.0 } else { number })
         }
         Value::Float(number) => Some(if *number > 1e11 { number / 1000.0 } else { *number }),
+        Value::BigInt(text) => {
+            let number = text.parse::<f64>().ok()?;
+            Some(if number > 1e11 { number / 1000.0 } else { number })
+        }
         Value::Str(text) => match clock::parse_iso(text) {
             clock::Iso::At(seconds) => Some(seconds),
             clock::Iso::Invalid | clock::Iso::Unported => None,
@@ -208,6 +212,16 @@ fn valid_id(value: Option<&Value>) -> Option<String> {
 fn unreadable_expiry(doc: &Map) -> bool {
     doc.get("sharing") == Some(&Value::Bool(true))
         && matches!(doc.get("sharingUntil"), Some(Value::Str(text)) if !matches!(clock::parse_iso(text), clock::Iso::At(_)))
+}
+
+fn expiry_overflows(doc: &Map) -> bool {
+    let Some(Value::BigInt(text)) = doc.get("sharingUntil") else { return false };
+    let floored = if text.starts_with('-') {
+        text.as_str()
+    } else {
+        &text[..text.len().saturating_sub(3)]
+    };
+    doc.get("sharing") == Some(&Value::Bool(true)) && floored.parse::<f64>().is_ok_and(f64::is_infinite)
 }
 
 pub fn consent_unreadable(argv: &[String]) -> bool {
@@ -359,7 +373,7 @@ pub fn finish(call: &Call, status: i64, python: Option<&Path>) {
     let Some(target) = cli_target(&call.argv) else { return };
     let root = PathBuf::from(&target.root);
     let doc = read_consent(&root);
-    if doc.as_ref().is_some_and(unreadable_expiry) {
+    if doc.as_ref().is_some_and(|doc| unreadable_expiry(doc) || expiry_overflows(doc)) {
         return;
     }
     let install_id = sharing_id(doc.as_ref());
