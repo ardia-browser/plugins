@@ -260,8 +260,10 @@ export function discardSpool(root: string): void {
   }
   try {
     const lock = takeLockRetrying(SPOOL_LOCK, dir);
-    if (lock !== undefined) {
+    if (lock === undefined) return;
+    try {
       unlinkQuietly(SPOOL, dir);
+    } finally {
       close(lock);
     }
   } catch {

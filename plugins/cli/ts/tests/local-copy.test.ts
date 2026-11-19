@@ -5,7 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import "./libc-loaded.ts";
-import { isLocalFile, keepLocalCopy } from "../src/spool.ts";
+import { close, closeDir, openPrivate, takeLock } from "../src/privatefs.ts";
+import { discardSpool, isLocalFile, keepLocalCopy } from "../src/spool.ts";
 
 const CLI = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
 const PYTHON = process.env.ARDIA_TEST_PYTHON ?? "python3";
@@ -66,5 +67,25 @@ test("a copy dated in other digits counts against the cap, as in Python", () => 
   } finally {
     fs.rmSync(mine, { recursive: true, force: true });
     fs.rmSync(theirs, { recursive: true, force: true });
+  }
+});
+
+test("discarding the spool lets go of its lock even when the spool can't be removed", () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "ardia-spool-")));
+  try {
+    const telemetry = path.join(root, "Telemetry");
+    fs.mkdirSync(path.join(telemetry, "cli-queue.jsonl", "inside"), { recursive: true });
+    fs.chmodSync(telemetry, 0o700);
+    discardSpool(root);
+    const dir = openPrivate(root, ["Telemetry"], false);
+    try {
+      const lock = takeLock("cli-queue.lock", dir);
+      assert.notEqual(lock, undefined, "the spool lock was still held");
+      close(lock);
+    } finally {
+      closeDir(dir);
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });
