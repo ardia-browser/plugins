@@ -1810,6 +1810,11 @@ parity harness rather than stripped wholesale:
   KeyboardInterrupt, then blocks again flushing stdout as it exits, so only a second signal ends it, and it prints
   `KeyboardInterrupt` and an `Exception ignored on flushing sys.stdout` block. The native side dies by SIGINT at once and
   prints nothing more. A listing still ends as Python's does, with `ardia <command>: interrupted` and status 130.
+- Ctrl-C that lands between a listing's interrupt check and its next `write` to a stdout nobody is reading: same as
+  CPython, not a difference in kind. The signal only sets the flag; it doesn't interrupt a `write` that hasn't started,
+  so that write blocks until a second Ctrl-C or until a reader drains the pipe, and only then does the listing end
+  with `ardia <command>: interrupted` and status 130. CPython has exactly this window between its signal check and the
+  blocking `write` in its buffered writer, so no code closes it.
 
 ## Linux
 
