@@ -60,6 +60,18 @@ function pause(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function raceWithTick<T>(settled: Promise<T>, ms: number): Promise<T | undefined> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const tick = new Promise<undefined>((resolve) => {
+    timer = setTimeout(() => resolve(undefined), ms);
+  });
+  try {
+    return await Promise.race([settled, tick]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export class Output {
   closed = false;
   interrupted = false;
@@ -84,7 +96,7 @@ export class Output {
         (error: unknown): Outcome => ({ error }),
       );
       let outcome: Outcome | undefined;
-      while ((outcome = await Promise.race([settled, pause(INTERRUPT_POLL_MS).then(() => undefined)])) === undefined) {
+      while ((outcome = await raceWithTick(settled, INTERRUPT_POLL_MS)) === undefined) {
         if (stopped()) {
           this.interrupted = true;
           abandoned = true;
