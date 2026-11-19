@@ -1,5 +1,5 @@
 import { type Browser } from "../cdp/browser.ts";
-import { Cancelled, currentSignal, shield, sleep, withSignal } from "../cdp/cancel.ts";
+import { Cancelled, currentSignal, sleep, withSignal } from "../cdp/cancel.ts";
 import { BrowseError, Gated } from "../daemon-errors.ts";
 import { type Instance, type Registry } from "./registry.ts";
 
@@ -20,9 +20,10 @@ export type TempTabState = {
   forgetTarget(targetId: string): void;
 };
 
+export const SHIELD_DEADLINE = 10.0;
+
 export async function settleThenCancel<T>(run: () => Promise<T>, signal: AbortSignal | null = currentSignal()): Promise<T> {
-  const work = shield(run);
-  const result = await work;
+  const result = await withSignal(AbortSignal.timeout(SHIELD_DEADLINE * 1000), run);
   if (signal?.aborted) throw new Cancelled();
   return result;
 }

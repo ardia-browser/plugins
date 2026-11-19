@@ -16,7 +16,7 @@ type Native = {
   renameAt(dir: number, from: string, to: string): number;
   unlinkAt(dir: number, name: Name): number;
   sizeAt(dir: number, name: Name): number;
-  statAt(dir: number, name: string): number[] | number;
+  statAt(dir: number, name: string): [number, number, bigint, bigint, number] | number;
   listAt(dir: number): Buffer[] | number;
   lock(fd: number, exclusive: boolean, wait: boolean): number;
   watchLifeline(fd: number): number;
@@ -138,12 +138,12 @@ export function sizeAt(dir: number, name: Name): number {
   return checked(native().sizeAt(dir, name), "fstatat", name);
 }
 
-export type EntryInfo = { mode: number; uid: number; dev: number; ino: number; mtime: number };
+export type EntryInfo = { mode: number; uid: number; dev: bigint; ino: bigint; mtime: number };
 
 export function statAt(dir: number, name: string): EntryInfo {
   const info = native().statAt(dir, name);
   if (typeof info === "number") throw errnoError(-info, "fstatat", name);
-  const [mode = 0, owner = 0, dev = 0, ino = 0, mtime = 0] = info;
+  const [mode, owner, dev, ino, mtime] = info;
   return { mode, uid: owner, dev, ino, mtime };
 }
 

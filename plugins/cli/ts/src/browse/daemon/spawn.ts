@@ -16,6 +16,30 @@ const POLL_MS = 30;
 
 export type DaemonChoice = { kind: "ts"; program: string } | { kind: "python"; python: string; code: string };
 
+export const ENDPOINT_ENV = ["ARDIA_WS", "ARDIA_PORT", "ARDIA_CDP_URL", "AGENT_BROWSER_CDP"] as const;
+
+export function daemonEnvironment(config: JsonObject, env: NodeJS.ProcessEnv = process.env): { config: JsonObject; env: NodeJS.ProcessEnv } {
+  const folded = new Map(config);
+  const given = (name: string) => {
+    const value = env[name];
+    return value === undefined || value === "" ? null : value;
+  };
+  const unset = (field: string) => folded.get(field) === undefined || folded.get(field) === null;
+  if (unset("ws") && unset("port")) {
+    const ws = given("ARDIA_WS");
+    const port = given("ARDIA_PORT");
+    const cdp = given("ARDIA_CDP_URL");
+    if (ws !== null) folded.set("ws", ws);
+    else if (port !== null && /^[0-9]{1,5}$/u.test(port.trim()) && Number(port) > 0 && Number(port) < 65536) folded.set("port", BigInt(Number(port)));
+    else if (cdp !== null) folded.set("ws", cdp);
+  }
+  const kept: NodeJS.ProcessEnv = {};
+  for (const [name, value] of Object.entries(env)) {
+    if (!(ENDPOINT_ENV as readonly string[]).includes(name)) kept[name] = value;
+  }
+  return { config: folded, env: kept };
+}
+
 export class DaemonDidNotStart extends Error {
   override readonly name = "DaemonDidNotStart";
 }
@@ -39,10 +63,11 @@ export type Spawned = {
 
 export function spawnDaemon(dir: number, key: string, config: JsonObject, choice: DaemonChoice): Spawned {
   const [program, args] = choice.kind === "ts" ? [choice.program, ["daemon"]] : [choice.python, ["-I", "-c", choice.code]];
+  const prepared = daemonEnvironment(config);
   const log = openPrivateFile(`${key}.log`, dir, O_WRONLY | O_CREAT | O_TRUNC);
   let child: ChildProcess;
   try {
-    child = spawn(program, args, { stdio: ["pipe", log, log], detached: true, cwd: "/" });
+    child = spawn(program, args, { stdio: ["pipe", log, log], detached: true, cwd: "/", env: prepared.env });
   } finally {
     closeFd(log);
   }
@@ -60,7 +85,7 @@ export function spawnDaemon(dir: number, key: string, config: JsonObject, choice
       return;
     }
     stdin.once("error", () => resolve());
-    stdin.end(utf8(dumps(config, "spaced")), () => resolve());
+    stdin.end(utf8(dumps(prepared.config, "spaced")), () => resolve());
   });
   child.unref();
   return { child, written, exited: () => exited };

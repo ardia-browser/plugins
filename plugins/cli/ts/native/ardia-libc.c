@@ -43,6 +43,7 @@ napi_status napi_get_value_bool(napi_env env, napi_value value, bool *result);
 napi_status napi_get_value_string_utf8(napi_env env, napi_value value, char *buf, size_t bufsize, size_t *result);
 napi_status napi_create_int32(napi_env env, int32_t value, napi_value *result);
 napi_status napi_create_double(napi_env env, double value, napi_value *result);
+napi_status napi_create_bigint_uint64(napi_env env, uint64_t value, napi_value *result);
 napi_status napi_get_boolean(napi_env env, bool value, napi_value *result);
 napi_status napi_get_null(napi_env env, napi_value *result);
 napi_status napi_create_string_utf8(napi_env env, const char *str, size_t length, napi_value *result);
@@ -280,27 +281,35 @@ static bool plain_name(const char *name) {
   return name[0] != 0 && strchr(name, '/') == NULL && strcmp(name, ".") != 0 && strcmp(name, "..") != 0;
 }
 
+static napi_value big(napi_env env, uint64_t value) {
+  napi_value result = NULL;
+  napi_create_bigint_uint64(env, value, &result);
+  return result;
+}
+
 static napi_value stat_at(napi_env env, napi_callback_info info) {
   Call call;
   int32_t dir;
   char name[PATH_MAX];
   struct stat found;
   napi_value result = NULL;
-  if (!take_args(env, info, 2, &call)) return status(env, -EINVAL);
+  if (!take_args(env, info, 2, &call) || call.argc != 2) return status(env, -EINVAL);
   if (!int_arg(&call, 0, &dir)) return NULL;
+  if (dir < 0) return status(env, -EBADF);
   int checked = name_arg(&call, 1, name, sizeof(name));
   if (checked != 0) return status(env, checked);
   if (!plain_name(name)) return status(env, -EINVAL);
   if (fstatat(dir, name, &found, AT_SYMLINK_NOFOLLOW) != 0) return status(env, failed());
-  double fields[5] = {(double)found.st_mode, (double)found.st_uid, (double)found.st_dev, (double)found.st_ino,
 #if defined(__APPLE__)
-                      (double)found.st_mtimespec.tv_sec + (double)found.st_mtimespec.tv_nsec / 1e9};
+  double mtime = (double)found.st_mtimespec.tv_sec + (double)found.st_mtimespec.tv_nsec / 1e9;
 #else
-                      (double)found.st_mtim.tv_sec + (double)found.st_mtim.tv_nsec / 1e9};
+  double mtime = (double)found.st_mtim.tv_sec + (double)found.st_mtim.tv_nsec / 1e9;
 #endif
+  napi_value fields[5] = {number(env, (double)found.st_mode), number(env, (double)found.st_uid), big(env, (uint64_t)found.st_dev),
+                          big(env, (uint64_t)found.st_ino), number(env, mtime)};
   if (napi_create_array(env, &result) != napi_ok) return status(env, -ENOMEM);
   for (uint32_t index = 0; index < 5; index += 1) {
-    if (napi_set_element(env, result, index, number(env, fields[index])) != napi_ok) return status(env, -ENOMEM);
+    if (fields[index] == NULL || napi_set_element(env, result, index, fields[index]) != napi_ok) return status(env, -ENOMEM);
   }
   return result;
 }

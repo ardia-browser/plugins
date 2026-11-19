@@ -7,6 +7,7 @@ import { Registry } from "../../state/registry.ts";
 import * as temptabs from "../../state/temptabs.ts";
 import { wallSeconds } from "../../tokens.ts";
 import { StubPage } from "./page.ts";
+import { announce, announcePath, type Caller, sameCaller } from "../announce.ts";
 
 export const PAGE_SCHEMES = ["http:", "https:", "about:", "data:", "blob:", "file:"];
 export const NO_SESSION_TAB =
@@ -58,6 +59,8 @@ export class StubState implements temptabs.TempTabState {
   pinnedTarget: string | null = null;
   mustClose = new Set<string>();
   mustCloseTask: temptabs.TempTabState["mustCloseTask"] = null;
+  caller: Caller | null = null;
+  announced: Caller | null = null;
   private currentTarget: string | null = null;
 
   constructor(
@@ -100,11 +103,15 @@ export class StubState implements temptabs.TempTabState {
       );
     }
     const browser = new Browser(endpoint, (method, params, session) => this.onEvent(method, params, session), (error) => unreachableMessage(endpoint, error));
+    this.announced = null;
+    const announcing = this.announceCaller(endpoint);
     try {
       await browser.open();
     } catch (error) {
       await shield(() => browser.close());
       throw error;
+    } finally {
+      await announcing;
     }
     this.browser = browser;
     this.endpoint = endpoint;
@@ -119,6 +126,13 @@ export class StubState implements temptabs.TempTabState {
     await this.refreshTargets();
     await temptabs.sweep(this);
     spent("connect_ms", started);
+  }
+
+  async announceCaller(endpoint: Endpoint | null): Promise<void> {
+    const caller = this.caller;
+    if (caller === null || sameCaller(caller, this.announced) || endpoint === null || endpoint.explicit) return;
+    this.announced = caller;
+    await announce(announcePath(endpoint.source), caller);
   }
 
   async disconnect(): Promise<void> {

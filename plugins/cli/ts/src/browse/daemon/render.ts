@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import { dumps, Float, parseText, type Value } from "../../json.ts";
 import { openAt } from "../../libc.ts";
 import { uid } from "../../paths.ts";
-import { codePoints } from "../../pystr.ts";
+import { isHigh, isLow, SPLIT } from "../../pystr.ts";
 import { formatG, groupThousands } from "../../pylib/format.ts";
 import { inert, jsonSafe } from "../../printable.ts";
 import { redact } from "../../redact.ts";
@@ -114,25 +114,50 @@ function limitOf(options: Options, name: string, fallback: number | null): numbe
   return Math.trunc(Number(given));
 }
 
+function nextPoint(text: string, at: number): number {
+  const unit = text.charCodeAt(at);
+  if (isHigh(unit)) {
+    const next = text.charCodeAt(at + 1);
+    if (next === SPLIT || isLow(next)) return at + 2;
+  }
+  return at + 1;
+}
+
+function pointCount(text: string): number {
+  let count = 0;
+  for (let at = 0; at < text.length; at = nextPoint(text, at)) count += 1;
+  return count;
+}
+
+function unitOfPoint(text: string, point: number): number {
+  let at = 0;
+  for (let index = 0; index < point && at < text.length; index += 1) at = nextPoint(text, at);
+  return at;
+}
+
 export function cap(text: string, options: Options, name = "", fallback: number | null = null): string {
   if (options["full"]) return text;
   const limit = limitOf(options, name, fallback);
   if (limit <= 0 || text.length <= limit) return text;
-  const points = codePoints(text);
-  if (points.length <= limit) return text;
-  let found = -1;
-  for (let at = Math.min(limit, points.length - 1); at >= 0; at -= 1) {
-    if (points[at] === "\n") {
-      found = at;
-      break;
+  const total = pointCount(text);
+  if (total <= limit) return text;
+  const limitAt = unitOfPoint(text, limit);
+  const newlineAt = text.lastIndexOf("\n", limitAt);
+  let cut = limit;
+  let cutAt = limitAt;
+  if (newlineAt >= 0) {
+    let between = 0;
+    for (let at = newlineAt; at < limitAt; at = nextPoint(text, at)) between += 1;
+    const found = limit - between;
+    if (found >= limit * 0.8) {
+      cut = found;
+      cutAt = newlineAt;
     }
   }
-  const cut = found >= limit * 0.8 ? found : limit;
   const saved = spill(text);
   const where = saved ? `; all of it is in ${saved}` : "";
-  const total = points.length;
   return (
-    points.slice(0, cut).join("") +
+    text.slice(0, cutAt) +
     `\n${CAP_NOTICE}${groupThousands(String(cut))} of ${groupThousands(String(total))} characters${where}. Narrow it instead: ` +
     `${Object.hasOwn(NARROWER, name) ? NARROWER[name] : NARROW_ANY}. Only if you need every line: --max-output ${total}]`
   );

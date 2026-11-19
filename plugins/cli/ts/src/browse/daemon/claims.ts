@@ -1,9 +1,8 @@
 import { createHash } from "node:crypto";
 import { type JsonObject, type Value } from "../../json.ts";
-import { flock } from "../../libc.ts";
 import { strOf } from "../../py.ts";
 import { BrowseError } from "../daemon-errors.ts";
-import { closeFd, listNames, lockHeld, openPrivateDirAt, openPrivateFile, readPrivateJson, unlinkQuietly, writePrivateJson } from "../paths.ts";
+import { closeFd, listNames, lockWithin, lockHeld, openPrivateDirAt, openPrivateFile, readPrivateJson, unlinkQuietly, writePrivateJson } from "../paths.ts";
 
 function nameOf(targetId: string): string {
   return `${createHash("sha256").update(Buffer.from(targetId, "utf8")).digest("hex").slice(0, 24)}.json`;
@@ -14,7 +13,7 @@ function locked<T>(browseFd: number, run: (folder: number) => T): T {
   let lock: number | undefined;
   try {
     lock = openPrivateFile(".lock", folder);
-    flock(lock, true, true);
+    lockWithin(lock, "The tab claims");
     return run(folder);
   } finally {
     closeFd(lock);
