@@ -29,18 +29,37 @@ function codedObject(parsed: Map<string, Value>): string | undefined {
   return `${dumps(parsed, "compact")}\n`;
 }
 
+function codedRows(rows: Value[]): boolean {
+  let changed = false;
+  for (const row of rows) {
+    if (!(row instanceof Map) || row.get("success") !== false) continue;
+    const code = row.get("code");
+    if (typeof code === "string" && code !== "") continue;
+    row.set("code", INTERNAL_ERROR);
+    changed = true;
+  }
+  return changed;
+}
+
 export function codeJsonAnswer(answer: Map<string, Value>): void {
   const status = exitOf(answer.get("exit"));
   if (status instanceof PythonCrash || status === 0n) return;
   const given = answer.get("out");
   const out = typeof given === "string" ? given : "";
   const parsed = parsedLine(out);
-  if (parsed instanceof Map) {
+  if (Array.isArray(parsed)) {
+    if (codedRows(parsed)) answer.set("out", `${dumps(parsed, "compact")}\n`);
+    return;
+  }
+  if (parsed instanceof Map && parsed.get("success") === false) {
     const coded = codedObject(parsed);
     if (coded !== undefined) answer.set("out", coded);
     return;
   }
-  if (parsed !== undefined) return;
+  if (parsed !== undefined) {
+    answer.set("out", errorLine(out.trim()));
+    return;
+  }
   if (out.trim() !== "") {
     answer.set("out", errorLine(out.trim()));
     return;

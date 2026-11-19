@@ -3525,5 +3525,214 @@
     "tasks": {}
    }
   }
+ },
+ {
+  "id": "review4--6-batch-row-without-code",
+  "command": "browse batch",
+  "argv": [
+   "browse",
+   "--json",
+   "batch",
+   "get title",
+   "click @e9"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "[{\"command\":[\"get\",\"title\"],\"success\":true,\"result\":{\"title\":\"T\"},\"error\":null,\"text\":\"T\"},{\"command\":[\"click\",\"@e9\"],\"success\":false,\"result\":null,\"error\":\"Element is covered\",\"text\":null}]\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "round 4: a failed batch row without a code gets internal_error",
+  "intentional": {
+   "why": "under --json a failing answer's error rows always carry a code, and other JSON becomes one error object (AI plugin contract §3)",
+   "stdout": {
+    "text": "[{\"command\":[\"get\",\"title\"],\"success\":true,\"result\":{\"title\":\"T\"},\"error\":null,\"text\":\"T\"},{\"command\":[\"click\",\"@e9\"],\"success\":false,\"result\":null,\"error\":\"Element is covered\",\"text\":null,\"code\":\"internal_error\"}]\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review4--6-batch-close-row",
+  "command": "browse batch",
+  "argv": [
+   "browse",
+   "--json",
+   "batch",
+   "get title",
+   "click @e9"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "[{\"command\":[\"get\",\"title\"],\"success\":true,\"result\":{\"title\":\"T\"},\"error\":null,\"text\":\"T\"},{\"command\":[\"close\"],\"success\":false,\"result\":null,\"error\":\"Session default is closing\"}]\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "round 4: the joined close row too",
+  "intentional": {
+   "why": "under --json a failing answer's error rows always carry a code, and other JSON becomes one error object (AI plugin contract §3)",
+   "stdout": {
+    "text": "[{\"command\":[\"get\",\"title\"],\"success\":true,\"result\":{\"title\":\"T\"},\"error\":null,\"text\":\"T\"},{\"command\":[\"close\"],\"success\":false,\"result\":null,\"error\":\"Session default is closing\",\"code\":\"internal_error\"}]\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review4--6-batch-row-with-code",
+  "command": "browse batch",
+  "argv": [
+   "browse",
+   "--json",
+   "batch",
+   "get title",
+   "click @e9"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "[{\"command\":[\"get\",\"title\"],\"success\":true,\"result\":{\"title\":\"T\"},\"error\":null,\"text\":\"T\"},{\"command\":[\"click\",\"@e9\"],\"success\":false,\"result\":null,\"error\":\"Element is covered\",\"text\":null,\"code\":\"covered\"}]\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "round 4: a row's own code stays"
+ },
+ {
+  "id": "review4--6-scalar",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--json",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "42\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "round 4: a JSON number from a failing answer becomes one error object",
+  "intentional": {
+   "why": "under --json a failing answer's error rows always carry a code, and other JSON becomes one error object (AI plugin contract §3)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"42\",\"code\":\"internal_error\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review4--6-object-without-success",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--json",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"title\":\"T\"}\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "round 4: an object that isn't an error becomes one",
+  "intentional": {
+   "why": "under --json a failing answer's error rows always carry a code, and other JSON becomes one error object (AI plugin contract §3)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"{\\\"title\\\":\\\"T\\\"}\",\"code\":\"internal_error\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review4--6-success-true-but-failed",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--json",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":true,\"data\":null,\"error\":null}\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "round 4: success true with a failing exit becomes an error",
+  "intentional": {
+   "why": "under --json a failing answer's error rows always carry a code, and other JSON becomes one error object (AI plugin contract §3)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"{\\\"success\\\":true,\\\"data\\\":null,\\\"error\\\":null}\",\"code\":\"internal_error\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review4--6-batch-success-untouched",
+  "command": "browse batch",
+  "argv": [
+   "browse",
+   "--json",
+   "batch",
+   "get title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "[{\"command\":[\"get\",\"title\"],\"success\":true,\"result\":{\"title\":\"T\"},\"error\":null,\"text\":\"T\"}]\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "round 4: a succeeding batch is left alone"
  }
 ]
