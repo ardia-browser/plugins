@@ -4478,7 +4478,18 @@
    "session": "plugin-ai",
    "namespace": ""
   },
-  "note": "Python's top-level refusal, fd dropped"
+  "note": "Python's top-level refusal, fd dropped",
+  "intentional": {
+   "why": "plugin mode checks the options before browse first: anything but --json there is a plugin refusal (77), never a usage error",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't read its options (ardia browse doesn't take --timeout before browse); nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": []
+  }
  },
  {
   "id": "contract--8-press-enter",

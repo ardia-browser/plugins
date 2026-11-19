@@ -264,8 +264,8 @@ function commandRecord(call: Call, status: number | bigint, crashed: boolean, di
   return properties;
 }
 
-export function finish(call: Call, status: number | bigint, python: string | null, crash?: Crash): void {
-  recordUsage(call, status);
+export function finish(call: Call, status: number | bigint, python: string | null, crash?: Crash, withUsage = true): void {
+  if (withUsage) recordUsage(call, status);
   try {
     record(call, status, python, crash);
   } catch (error) {

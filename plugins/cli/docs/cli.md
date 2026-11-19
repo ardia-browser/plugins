@@ -1112,9 +1112,15 @@ their places in the table now expect `plugin_daemon_unavailable`.
   is `-` and any Unicode decimal digit), and fails closed: an argv it can't read exactly is refused with 77.
   `tests/plugin_grammar.py` reads that grammar from the real functions, and `plugin-grammar.test.ts` checks the table
   and runs every case's argv through both parsers.
-- **Global options are an allowlist too:** `--session`, `--json`, `--expect-loader`, `--max-output`, `--timeout`,
-  `--humanize`/`--no-humanize`, `--full`, `--no-changes` and `--no-text`. Anything else, before `browse` or after it, is
-  refused with 77. The data folder comes only from the environment Ardia starts the plugin with.
+- **Global options are an allowlist too:** `--session`, `--json`, `--expect-loader`, `--max-output`,
+  `--humanize`/`--no-humanize`, `--full`, `--no-changes` and `--no-text`, after `browse`; before it, only `--json`.
+  The plugin checks run before any ordinary parsing, so anything else, before `browse` or after it, unreadable or not
+  allowed, is refused with 77 `plugin_refused`, never a usage error. `--timeout` is not a browse option in either
+  place (Python says so too). The data folder comes only from the environment Ardia starts the plugin with.
+- **Plugin mode runs only `ardia browse`.** The router sends every call with `ARDIA_BROWSE_FOR_PLUGIN` set to the
+  TypeScript client, browse or not, and the client refuses (77) whatever isn't a readable browse call (`tabs`,
+  `--session x browse …`), so nothing in plugin mode reaches Python. A refusal before `browse` is named records no usage
+  entry, as Python's own error there doesn't.
 - Commands that run other commands answer code `nested_commands_refused` (77): `batch` and `open`/`goto`/`navigate
   --read`.
 - On Linux plugin mode reads the locale like macOS, except that it treats a UTF-8 locale name as installed: glibc keeps

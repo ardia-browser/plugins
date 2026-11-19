@@ -124,14 +124,14 @@ async function run(browse: string[], printer: Printer, call: Call, plugin: boole
   }
 }
 
-function refuse(asJson: boolean, why: string, call: Call, python: string | null, code = CODE): number {
+function refuse(asJson: boolean, why: string, call: Call, python: string | null, code = CODE, withUsage = true): number {
   const printer = new Printer("strict");
   call.noteErrorCode(code);
   if (asJson) {
     const payload = object([["success", false], ["data", null], ["error", message(why)], ["code", code]]);
     printer.out(`${dumps(payload, "compact")}\n`);
   } else printer.err(`✗ ${message(why)}\n`);
-  finish(call, REFUSED, python);
+  finish(call, REFUSED, python, undefined, withUsage);
   return REFUSED;
 }
 
@@ -152,14 +152,11 @@ export function refuseOrHandBack(argv: string[], python: string | null): number 
   return refuse(jsonIntentOfArgv(argv), "needs text paths and readable telemetry consent", browseCall(argv, undefined), python);
 }
 
-function topLevelError(argv: string[], python: string | null): number {
-  const failure = hoistFailure(argv);
-  const call = new Call(argv);
-  const printer = new Printer("strict");
-  if (jsonIntentOfArgv(argv)) printer.out(renderError(new BrowseError(failure.text.replace(/\n$/, ""), failure.status, "usage_error"), true, new Secrets()).out);
-  else printer.err(failure.text);
-  finish(call, failure.status, python);
-  return failure.status;
+function unreadableBeforeBrowse(argv: string[], python: string | null): number {
+  const browseAt = argv.indexOf("browse");
+  const leading = browseAt < 0 ? undefined : argv.slice(0, browseAt).find((token) => token.startsWith("-") && token !== "--json");
+  const why = browseAt < 0 ? "runs only `ardia browse`" : leading !== undefined ? `can't read its options (ardia browse doesn't take ${leading.split("=")[0]} before browse)` : `can't read its options (${hoistFailure(argv).text.replace(/^✗ |^ardia: /, "").trim()})`;
+  return refuse(jsonIntentOfArgv(argv), why, browseCall(argv, undefined), python, CODE, false);
 }
 
 async function pluginAccess(browse: string[], call: Call, python: string | null): Promise<number | undefined> {
@@ -192,7 +189,7 @@ export async function serveBrowse(argv: string[], python: string | null): Promis
   if (browse === undefined) {
     if (!plugin) return undefined;
     dropCredential();
-    return topLevelError(argv, python);
+    return unreadableBeforeBrowse(argv, python);
   }
   const call = browseCall(argv, browse);
   if (plugin) {

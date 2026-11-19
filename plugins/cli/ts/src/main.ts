@@ -35,7 +35,7 @@ async function serveBrowse(argv: string[], python: string | null): Promise<numbe
 
 async function serve(argv: string[], python: string | null): Promise<number | undefined> {
   const { invokesBrowse, pluginMode } = await import("./browse/route.ts");
-  if (invokesBrowse(argv) && (pluginMode() || servesNatively("browse"))) {
+  if (pluginMode() || (invokesBrowse(argv) && servesNatively("browse"))) {
     browseServed = true;
     return serveBrowse(argv, python);
   }

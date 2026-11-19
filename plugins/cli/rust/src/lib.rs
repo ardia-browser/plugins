@@ -379,7 +379,7 @@ fn run_for_plugin(root: Option<&Path>, raw: &[OsString]) -> Handled {
 }
 
 fn handle(root: Option<&Path>, raw: &[OsString], python: Option<&Path>) -> Handled {
-    if browse_route::for_plugin() && browse_route::invoked(raw) {
+    if browse_route::for_plugin() {
         return run_for_plugin(root, raw);
     }
     let Some(argv) = raw.iter().map(|arg| arg.to_str().map(str::to_string)).collect::<Option<Vec<String>>>() else {

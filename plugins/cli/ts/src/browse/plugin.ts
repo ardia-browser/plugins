@@ -147,7 +147,7 @@ function afterCommand(argv: readonly string[]): string[] {
   return [];
 }
 
-const GLOBAL_VALUES = ["session", "expect_loader", "max_output", "timeout"];
+const GLOBAL_VALUES = ["session", "expect_loader", "max_output"];
 const GLOBAL_FLAGS = ["json", "humanize", "no_humanize", "full", "no_changes", "no_text"];
 
 function globalRefusal(found: Found): string | undefined {

@@ -108,6 +108,16 @@ class PluginCredentialProcesses(unittest.TestCase):
                 "ARDIA_TELEMETRY": "0", "NO_COLOR": "1", "ARDIA_BROWSE_FOR_PLUGIN": "1", "ARDIA_PLUGIN_CREDENTIAL_FD": str(FD),
                 "ARDIA_PLUGIN_ENDPOINT": f"ws://127.0.0.1:{port}/devtools/browser/{BROWSER}", "PYTHONPATH": str(harness.CLI)}
 
+    def test_plugin_mode_runs_only_browse_and_never_python(self):
+        for words in (["tabs"], ["--session", "x", "browse", "get", "title"], ["--timeout", "5", "browse", "get", "title"]):
+            process = subprocess.Popen([str(self.install.root / "bin" / "ardia"), *words], env=self.env(9), cwd=self.box / "tmp",
+                                       stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+            out, err = process.communicate(timeout=60)
+            self.assertEqual(process.returncode, 77, (words, out, err))
+            self.assertTrue(err.startswith("✗ ardia browse for a plugin".encode()), (words, err))
+            routes = self.install.routes / str(process.pid)
+            self.assertEqual(routes.read_text() if routes.exists() else "", "ts\n", words)
+
     def test_a_plugin_step_reads_its_credential_and_starts_nothing(self):
         server = TokenServer()
         self.addCleanup(server.close)
