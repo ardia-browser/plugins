@@ -47,6 +47,7 @@ PLACES = ("box", "home", "cli_home", "data", "cwd", "tmp", "outside", "cli")
 HARNESS_FILES = ("helpers.log", "stubs")
 FLUSH_FILE = "data/Telemetry/cli-flush.json"
 CONTENT_APART = ("data/Telemetry/local", "data/Telemetry/cli-queue.jsonl", FLUSH_FILE, "cli-home/Usage/usage.json")
+NATIVE_ATTEMPTS = 1
 READ_ONLY_METHODS = frozenset({"hello", "workspace", "windows", "commands"})
 PATH_ENV = frozenset({"ARDIA_DATA_DIR", "ARDIA_CONFIG_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME",
                       "XDG_RUNTIME_DIR"})
@@ -915,8 +916,7 @@ def read_only(connection: list) -> bool:
 
 
 def fallback_requests(new: list, python: list) -> list:
-    extra = len(new) - len(python)
-    if extra > 0 and exact(new[extra:]) == exact(python) and all(read_only(connection) for connection in new[:extra]):
+    if len(new) == len(python) + NATIVE_ATTEMPTS and exact(new[NATIVE_ATTEMPTS:]) == exact(python) and read_only(new[0]):
         return python
     return new
 

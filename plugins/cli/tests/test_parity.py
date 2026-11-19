@@ -158,6 +158,21 @@ class HarnessRules(unittest.TestCase):
         self.assertEqual(harness.fallback_requests(read_first, python), python)
         self.assertEqual(harness.fallback_requests(mutate_first, python), mutate_first)
 
+    def test_a_fallback_may_ask_once_before_python_and_only_in_a_fallback_case(self):
+        python = [[{"id": 1, "method": "hello", "params": {"protocol": 4}}, {"id": 2, "method": "workspace"}]]
+        once = [[{"id": 1, "method": "hello", "params": {"protocol": 4}}, {"id": 2, "method": "windows"}]] + python
+        twice = [[{"id": 1, "method": "hello", "params": {"protocol": 4}}, {"id": 2, "method": "windows"}]] * 2 + python
+        self.assertEqual(harness.fallback_requests(once, python), python)
+        self.assertEqual(harness.fallback_requests(twice, python), twice)
+        seen = {"stdout": b"", "stderr": b"", "status": 0, "telemetry": [], "queued": [], "usage": None, "flush": None, "files": {},
+                "helpers": [], "served_by": [], "timed_out": False}
+        python_side = harness.Observed(requests=python, **seen)
+        self.assertEqual(harness.compare(harness.Observed(requests=once, **seen), python_side, fallback=True), [])
+        for requests, fallback in ((twice, True), (once, False)):
+            with self.subTest(connections=len(requests), fallback=fallback):
+                mismatches = harness.compare(harness.Observed(requests=requests, **seen), python_side, fallback=fallback)
+                self.assertEqual([name for name, _ in mismatches], ["requests"])
+
     def test_times_are_scrubbed_only_when_they_are_now(self):
         window = (1_763_500_000.0, 1_763_500_001.0)
         scrubbed = harness.scrub_times({"last_at": 1_763_500_000.5, "first_ms": 1_763_500_000_000, "next_at": 0, "open_at": False, "done_at": None,

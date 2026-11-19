@@ -1667,8 +1667,9 @@ system services are still allowed. Elsewhere it runs only on a throwaway machine
 that carries the case's folder in its command line or environment, or runs from the harness's own install. It compares stdout, stderr, exit code, each control-socket connection's requests (ids and
 params as sent), telemetry, usage, the flush state, the files written (with modes) and the helpers started (each argument whole), byte for byte, with a diff
 for each mismatch, and it knows which side served a call from whether the bundled Python's `ardia_cli.cli` was imported, not from telemetry. A
-case marked `fallback` is one Rust must hand to Python; before handing off, Rust may only have asked read-only questions
-(`hello`, `workspace`, `windows`, `commands`). `--command NAME` and `--case ID` narrow a run, `--keep` keeps both
+case marked `fallback` is one Rust must hand to Python; before handing off, the native side may have opened at most one
+connection of its own, asking only read-only questions (`hello`, `workspace`, `windows`, `commands`); a second extra
+connection, or one in a case not marked `fallback`, is a mismatch. `--command NAME` and `--case ID` narrow a run, `--keep` keeps both
 sandboxes, and `--report` prints the table as JSON (per command: cases, passing, native, served) for a given commit.
 
 The Rust entry stays `bin/ardia` and routes. A call whose stdout is closed, open read-only or non-blocking goes to Python
@@ -1739,6 +1740,16 @@ test set, and drops a recording that would carry a local path, the host name or 
 table, checks that `served.txt` lists only proven commands, that both sides speak the same control protocol, that the
 harness refuses unsafe cases and catches a binary that hands everything to Python, and keeps the process checks
 (Ctrl-C, leases, the flusher, paths that aren't UTF-8).
+
+#### Accepted differences from the Python implementation
+
+The native entries (the Rust router serving a row itself, and the TypeScript program behind it) match Python's exit
+status, the lines Python prints on stderr for a failure (its final exception line and any `Exception ignored ...`
+block) and the telemetry it records, except for these, each asserted by name in `tests/test_closed_stdout.py` and the
+parity harness rather than stripped wholesale:
+
+- A call Python serves after a native hand-back (status 253) may show one extra control connection before Python's own,
+  holding only read-only questions: the native side asked before it found it couldn't serve the reply exactly.
 
 ## Linux
 
