@@ -3,8 +3,6 @@ import logging
 import re
 
 MASK = "***"
-# redact() also runs over finished JSON, where a backslash starts an escape (token=abc\" is token=abc and an
-# escaped quote). A match that swallowed it would remove the escape and end the string early.
 _TOKEN_QUERY = re.compile(r"(token=)[^&\s'\"<>\\]+")
 _secrets: set[str] = set()
 _installed = False
