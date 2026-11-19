@@ -418,7 +418,9 @@ impl Connection {
         if let Some(params) = params {
             request.push(("params", params));
         }
-        let mut line = json::dumps(&Value::object(request), Style::Compact, false).into_bytes();
+        let mut line = crate::pystr::well_formed(&json::dumps(&Value::object(request), Style::Compact, false))
+            .into_owned()
+            .into_bytes();
         line.push(b'\n');
         if line.len() > MAX_LINE {
             return Err(Failure::Method {

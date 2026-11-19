@@ -1,4 +1,5 @@
 use crate::json::{float_repr, Map, Value};
+use crate::pystr;
 
 #[derive(Debug, PartialEq)]
 pub struct Unsupported;
@@ -42,7 +43,7 @@ pub fn iterate_or_empty(value: &Value) -> Shape<Vec<Value>> {
     }
     match value {
         Value::Array(items) => Ok(items.clone()),
-        Value::Str(text) => Ok(text.chars().map(|c| Value::Str(c.to_string())).collect()),
+        Value::Str(text) => Ok(pystr::points(text).map(|code| Value::Str(pystr::from_code(code))).collect()),
         Value::Object(map) => Ok(map.iter().map(|(key, _)| Value::Str(key.clone())).collect()),
         _ => Err(Unsupported),
     }
@@ -51,7 +52,7 @@ pub fn iterate_or_empty(value: &Value) -> Shape<Vec<Value>> {
 pub fn length(value: &Value) -> Shape<usize> {
     match value {
         Value::Array(items) => Ok(items.len()),
-        Value::Str(text) => Ok(text.chars().count()),
+        Value::Str(text) => Ok(pystr::len(text)),
         Value::Object(map) => Ok(map.len()),
         _ => Err(Unsupported),
     }
@@ -145,12 +146,12 @@ pub fn rstrip(text: &str) -> &str {
 }
 
 pub fn right(text: &str, width: usize) -> String {
-    let count = text.chars().count();
+    let count = pystr::len(text);
     format!("{}{}", " ".repeat(width.saturating_sub(count)), text)
 }
 
 pub fn left(text: &str, width: usize) -> String {
-    let count = text.chars().count();
+    let count = pystr::len(text);
     format!("{}{}", text, " ".repeat(width.saturating_sub(count)))
 }
 

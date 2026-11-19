@@ -110,7 +110,11 @@ pub fn record(call: &Call, status: i64) {
     if note(&mut state, &name, status, clock::now()).is_err() {
         return;
     }
-    let _ = paths::write_private(STATE, &dir, json::dumps(&Value::Object(state), Style::Spaced, false).as_bytes());
+    let _ = paths::write_private(
+        STATE,
+        &dir,
+        crate::pystr::well_formed(&json::dumps(&Value::Object(state), Style::Spaced, false)).as_bytes(),
+    );
 }
 
 #[cfg(test)]

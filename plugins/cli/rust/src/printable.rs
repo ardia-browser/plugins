@@ -74,7 +74,8 @@ impl Output {
         if self.closed || self.interrupted {
             return;
         }
-        let mut line = if self.json { json_safe(text) } else { inert(text) };
+        let text = crate::pystr::well_formed(text);
+        let mut line = if self.json { json_safe(&text) } else { inert(&text) };
         line.push('\n');
         match write_stdout(line.as_bytes(), crate::control::interrupted) {
             Ok(()) => {}
@@ -89,7 +90,7 @@ impl Output {
     pub fn complain(&mut self, text: &str) {
         let _ = std::io::stdout().flush();
         let mut stderr = std::io::stderr().lock();
-        let _ = stderr.write_all(inert(text).as_bytes());
+        let _ = stderr.write_all(inert(&crate::pystr::well_formed(text)).as_bytes());
         let _ = stderr.write_all(b"\n");
         let _ = stderr.flush();
     }

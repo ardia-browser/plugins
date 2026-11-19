@@ -1,3 +1,5 @@
+use crate::json_bytes::{decode, next_code};
+use crate::pystr;
 use std::fmt::Write;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -111,130 +113,6 @@ pub fn parse_limited(bytes: &[u8], depth_limit: usize) -> Result<Option<Value>, 
     Ok((parser.at == parser.chars.len()).then_some(value))
 }
 
-fn push_code(out: &mut Vec<u8>, code: u32) {
-    match code {
-        0..=0x7f => out.push(code as u8),
-        0x80..=0x7ff => out.extend([0xc0 | (code >> 6) as u8, 0x80 | (code & 0x3f) as u8]),
-        0x800..=0xffff => out.extend([0xe0 | (code >> 12) as u8, 0x80 | ((code >> 6) & 0x3f) as u8, 0x80 | (code & 0x3f) as u8]),
-        _ => out.extend([
-            0xf0 | (code >> 18) as u8,
-            0x80 | ((code >> 12) & 0x3f) as u8,
-            0x80 | ((code >> 6) & 0x3f) as u8,
-            0x80 | (code & 0x3f) as u8,
-        ]),
-    }
-}
-
-fn next_code(bytes: &[u8], at: usize) -> Option<(u32, usize)> {
-    let lead = *bytes.get(at)?;
-    let tail = |index: usize| bytes.get(at + index).filter(|byte| *byte & 0xc0 == 0x80).map(|byte| u32::from(byte & 0x3f));
-    match lead {
-        0..=0x7f => Some((u32::from(lead), 1)),
-        0xc2..=0xdf => Some(((u32::from(lead & 0x1f) << 6) | tail(1)?, 2)),
-        0xe0..=0xef => {
-            let code = (u32::from(lead & 0x0f) << 12) | (tail(1)? << 6) | tail(2)?;
-            (code >= 0x800).then_some((code, 3))
-        }
-        0xf0..=0xf4 => {
-            let code = (u32::from(lead & 0x07) << 18) | (tail(1)? << 12) | (tail(2)? << 6) | tail(3)?;
-            (0x10000..=0x10ffff).contains(&code).then_some((code, 4))
-        }
-        _ => None,
-    }
-}
-
-fn utf8_surrogate_pass(bytes: &[u8]) -> Option<Vec<u8>> {
-    if std::str::from_utf8(bytes).is_ok() {
-        return Some(bytes.to_vec());
-    }
-    let mut at = 0;
-    while at < bytes.len() {
-        at += next_code(bytes, at)?.1;
-    }
-    Some(bytes.to_vec())
-}
-
-fn from_units(units: impl Iterator<Item = u32>) -> Option<Vec<u8>> {
-    let mut out = Vec::new();
-    let mut pending: Option<u32> = None;
-    for unit in units {
-        if let Some(high) = pending.take() {
-            if (0xdc00..0xe000).contains(&unit) {
-                push_code(&mut out, 0x10000 + ((high - 0xd800) << 10) + (unit - 0xdc00));
-                continue;
-            }
-            push_code(&mut out, high);
-        }
-        if (0xd800..0xdc00).contains(&unit) {
-            pending = Some(unit);
-        } else {
-            push_code(&mut out, unit);
-        }
-    }
-    if let Some(high) = pending {
-        push_code(&mut out, high);
-    }
-    Some(out)
-}
-
-fn utf16(bytes: &[u8], big_endian: bool) -> Option<Vec<u8>> {
-    if !bytes.len().is_multiple_of(2) {
-        return None;
-    }
-    from_units(bytes.chunks(2).map(|pair| {
-        let pair = [pair[0], pair[1]];
-        u32::from(if big_endian { u16::from_be_bytes(pair) } else { u16::from_le_bytes(pair) })
-    }))
-}
-
-fn utf32(bytes: &[u8], big_endian: bool) -> Option<Vec<u8>> {
-    if !bytes.len().is_multiple_of(4) {
-        return None;
-    }
-    let mut out = Vec::new();
-    for chunk in bytes.chunks(4) {
-        let quad = [chunk[0], chunk[1], chunk[2], chunk[3]];
-        let code = if big_endian { u32::from_be_bytes(quad) } else { u32::from_le_bytes(quad) };
-        if code > 0x10ffff {
-            return None;
-        }
-        push_code(&mut out, code);
-    }
-    Some(out)
-}
-
-fn decode(bytes: &[u8]) -> Option<Vec<u8>> {
-    if bytes.starts_with(&[0, 0, 0xfe, 0xff]) || bytes.starts_with(&[0xff, 0xfe, 0, 0]) {
-        return utf32(&bytes[4..], bytes[0] == 0);
-    }
-    if bytes.starts_with(&[0xfe, 0xff]) || bytes.starts_with(&[0xff, 0xfe]) {
-        return utf16(&bytes[2..], bytes[0] == 0xfe);
-    }
-    if let Some(rest) = bytes.strip_prefix(&[0xef, 0xbb, 0xbf]) {
-        return utf8_surrogate_pass(rest);
-    }
-    if bytes.len() >= 4 {
-        if bytes[0] == 0 {
-            return if bytes[1] != 0 { utf16(bytes, true) } else { utf32(bytes, true) };
-        }
-        if bytes[1] == 0 {
-            return if bytes[2] != 0 || bytes[3] != 0 {
-                utf16(bytes, false)
-            } else {
-                utf32(bytes, false)
-            };
-        }
-    } else if bytes.len() == 2 {
-        if bytes[0] == 0 {
-            return utf16(bytes, true);
-        }
-        if bytes[1] == 0 {
-            return utf16(bytes, false);
-        }
-    }
-    utf8_surrogate_pass(bytes)
-}
-
 struct Parser<'a> {
     chars: &'a [u8],
     at: usize,
@@ -243,45 +121,18 @@ struct Parser<'a> {
     too_deep: bool,
 }
 
-struct Text {
-    shown: String,
-    lone: Option<Vec<u32>>,
-}
-
-impl Text {
-    fn push(&mut self, ch: char) {
-        self.shown.push(ch);
-        if let Some(lone) = &mut self.lone {
-            lone.push(ch as u32);
-        }
+fn push_raw(out: &mut String, raw: &[u8]) -> Option<()> {
+    if let Ok(text) = std::str::from_utf8(raw) {
+        pystr::push_text(out, text);
+        return Some(());
     }
-
-    fn push_code(&mut self, code: u32) {
-        match char::from_u32(code) {
-            Some(ch) => self.push(ch),
-            None => {
-                let lone = self.lone.get_or_insert_with(|| self.shown.chars().map(|ch| ch as u32).collect());
-                lone.push(code);
-                self.shown.push('\u{fffd}');
-            }
-        }
+    let mut at = 0;
+    while at < raw.len() {
+        let (code, size) = next_code(raw, at)?;
+        pystr::push_code(out, code);
+        at += size;
     }
-
-    fn push_raw(&mut self, raw: &[u8]) -> Option<()> {
-        if self.lone.is_none() {
-            if let Ok(text) = std::str::from_utf8(raw) {
-                self.shown.push_str(text);
-                return Some(());
-            }
-        }
-        let mut at = 0;
-        while at < raw.len() {
-            let (code, size) = next_code(raw, at)?;
-            self.push_code(code);
-            at += size;
-        }
-        Some(())
-    }
+    Some(())
 }
 
 impl Parser<'_> {
@@ -318,7 +169,7 @@ impl Parser<'_> {
     fn value(&mut self) -> Option<Value> {
         match self.peek()? {
             open @ (b'{' | b'[') => self.nested(open),
-            b'"' => self.string().map(|text| Value::Str(text.shown)),
+            b'"' => self.string().map(Value::Str),
             b'n' if self.word("null") => Some(Value::Null),
             b't' if self.word("true") => Some(Value::Bool(true)),
             b'f' if self.word("false") => Some(Value::Bool(false)),
@@ -336,7 +187,6 @@ impl Parser<'_> {
     fn object(&mut self) -> Option<Value> {
         self.at += 1;
         let mut map = Map::new();
-        let mut lone_keys: Vec<Option<Vec<u32>>> = Vec::new();
         self.space();
         if self.peek() == Some(b'}') {
             self.at += 1;
@@ -355,18 +205,7 @@ impl Parser<'_> {
             self.at += 1;
             self.space();
             let value = self.value()?;
-            let seen = map
-                .entries
-                .iter()
-                .zip(&lone_keys)
-                .position(|((shown, _), lone)| *lone == key.lone && (lone.is_some() || *shown == key.shown));
-            match seen {
-                Some(index) => map.entries[index].1 = value,
-                None => {
-                    map.entries.push((key.shown, value));
-                    lone_keys.push(key.lone);
-                }
-            }
+            map.insert(&key, value);
             self.space();
             match self.peek()? {
                 b',' => self.at += 1,
@@ -412,12 +251,9 @@ impl Parser<'_> {
         u32::from_str_radix(text, 16).ok()
     }
 
-    fn string(&mut self) -> Option<Text> {
+    fn string(&mut self) -> Option<String> {
         self.at += 1;
-        let mut out = Text {
-            shown: String::new(),
-            lone: None,
-        };
+        let mut out = String::new();
         loop {
             let start = self.at;
             while let Some(byte) = self.peek() {
@@ -426,7 +262,7 @@ impl Parser<'_> {
                 }
                 self.at += 1;
             }
-            out.push_raw(&self.chars[start..self.at])?;
+            push_raw(&mut out, &self.chars[start..self.at])?;
             match self.peek()? {
                 b'"' => {
                     self.at += 1;
@@ -453,13 +289,13 @@ impl Parser<'_> {
                                 match self.hex4() {
                                     Some(low) if (0xdc00..0xe000).contains(&low) => {
                                         let code = 0x10000 + ((unit - 0xd800) << 10) + (low - 0xdc00);
-                                        out.push_code(code);
+                                        pystr::push_code(&mut out, code);
                                         continue;
                                     }
                                     _ => self.at = saved,
                                 }
                             }
-                            out.push_code(unit);
+                            pystr::push_code(&mut out, unit);
                         }
                         _ => return None,
                     }
@@ -565,25 +401,30 @@ fn json_float(value: f64) -> String {
 
 pub fn quote(text: &str, ensure_ascii: bool, out: &mut String) {
     out.push('"');
-    for ch in text.chars() {
-        match ch {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            '\u{8}' => out.push_str("\\b"),
-            '\u{c}' => out.push_str("\\f"),
-            c if (c as u32) < 0x20 => {
-                let _ = write!(out, "\\u{:04x}", c as u32);
+    for code in pystr::points(text) {
+        match code {
+            0x22 => out.push_str("\\\""),
+            0x5c => out.push_str("\\\\"),
+            0x0a => out.push_str("\\n"),
+            0x0d => out.push_str("\\r"),
+            0x09 => out.push_str("\\t"),
+            0x08 => out.push_str("\\b"),
+            0x0c => out.push_str("\\f"),
+            c if c < 0x20 => {
+                let _ = write!(out, "\\u{c:04x}");
             }
-            c if ensure_ascii && (c as u32) > 0x7e => {
-                let mut units = [0u16; 2];
-                for unit in c.encode_utf16(&mut units) {
-                    let _ = write!(out, "\\u{:04x}", unit);
+            c if ensure_ascii && c > 0x7e => match char::from_u32(c) {
+                Some(ch) => {
+                    let mut units = [0u16; 2];
+                    for unit in ch.encode_utf16(&mut units) {
+                        let _ = write!(out, "\\u{unit:04x}");
+                    }
                 }
-            }
-            c => out.push(c),
+                None => {
+                    let _ = write!(out, "\\u{c:04x}");
+                }
+            },
+            c => pystr::push_code(out, c),
         }
     }
     out.push('"');
@@ -703,7 +544,7 @@ mod tests {
         assert_eq!(dumps(&value, Style::Compact, false), r#"{"a":"last","b":{}}"#);
         let value = parse(br#"[1, 2.0, -0, 1E2, "\ud83d\ude00", "\ud800x", "\u007f\u0001", 123456789012345678901234567890123456789012]"#).unwrap();
         assert_eq!(
-            dumps(&value, Style::Spaced, false),
+            pystr::well_formed(&dumps(&value, Style::Spaced, false)),
             "[1, 2.0, 0, 100.0, \"😀\", \"\u{fffd}x\", \"\u{7f}\\u0001\", 123456789012345678901234567890123456789012]"
         );
         assert_eq!(dumps(&value, Style::Indented, false).lines().count(), 10);
@@ -711,32 +552,13 @@ mod tests {
     }
 
     #[test]
-    fn reads_bytes_like_json_loads() {
-        let doc = r#"{"a": "\u00e9"}"#;
-        let expected = parse(doc.as_bytes()).unwrap();
-        let utf16le: Vec<u8> = doc.encode_utf16().flat_map(u16::to_le_bytes).collect();
-        let utf16be: Vec<u8> = doc.encode_utf16().flat_map(u16::to_be_bytes).collect();
-        let utf32le: Vec<u8> = doc.chars().flat_map(|ch| (ch as u32).to_le_bytes()).collect();
-        for bytes in [
-            [&[0xff, 0xfe][..], &utf16le].concat(),
-            utf16le.clone(),
-            utf16be,
-            [&[0xff, 0xfe, 0, 0][..], &utf32le].concat(),
-            utf32le,
-            [&[0xef, 0xbb, 0xbf][..], doc.as_bytes()].concat(),
-        ] {
-            assert_eq!(parse(&bytes).as_ref(), Some(&expected), "{bytes:?}");
-        }
-        assert!(parse(&[&[0xef, 0xbb, 0xbf, 0xef, 0xbb, 0xbf][..], doc.as_bytes()].concat()).is_none());
-        assert!(parse(&[&[0xff, 0xfe][..], &utf16le, &[0]].concat()).is_none());
-        assert_eq!(parse(b"\"a\xed\xa0\x80\""), Some(Value::str("a\u{fffd}")));
-        assert!(parse(b"\"a\xc0\x80\"").is_none());
-    }
-
-    #[test]
     fn keeps_lone_surrogate_keys_apart() {
         let value = parse(br#"{"\ud800": 1, "\ud801": 2, "\ud800": 3, "\ufffd": 4}"#).unwrap();
-        assert_eq!(dumps(&value, Style::Compact, false), "{\"\u{fffd}\":3,\"\u{fffd}\":2,\"\u{fffd}\":4}");
+        assert_eq!(
+            pystr::well_formed(&dumps(&value, Style::Compact, false)),
+            "{\"\u{fffd}\":3,\"\u{fffd}\":2,\"\u{fffd}\":4}"
+        );
+        assert_eq!(dumps(&value, Style::Compact, true), r#"{"\ud800":3,"\ud801":2,"\ufffd":4}"#);
     }
 
     #[test]

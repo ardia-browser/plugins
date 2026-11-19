@@ -402,7 +402,9 @@ fn keep_local_copy(root: &Path, record: &Value, sent: bool) -> bool {
     if let Value::Object(map) = &mut with_sent {
         map.insert("sent", Value::Bool(sent));
     }
-    let mut data = json::dumps(&with_sent, Style::Compact, false).into_bytes();
+    let mut data = crate::pystr::well_formed(&json::dumps(&with_sent, Style::Compact, false))
+        .into_owned()
+        .into_bytes();
     data.push(b'\n');
     if data.len() > MAX_LOCAL_BYTES {
         return false;
@@ -512,7 +514,7 @@ fn write_lines(dir: &OwnedFd, lines: &[Vec<u8>]) -> Result<(), Failure> {
 }
 
 fn append(root: &Path, record: &Value) -> Option<OwnedFd> {
-    let mut line = json::dumps(record, Style::Compact, false).into_bytes();
+    let mut line = crate::pystr::well_formed(&json::dumps(record, Style::Compact, false)).into_owned().into_bytes();
     line.push(b'\n');
     let data = if line.len() <= MAX_LINE_BYTES { line } else { Vec::new() };
     let dir = open_folder(root, true).ok()?;
@@ -585,7 +587,13 @@ fn start_flush(dir: &OwnedFd, target: &Target, python: Option<&Path>) {
     }
     let Some(failures) = whole(state.get("failures")) else { return };
     let written = Value::object(vec![("failures", failures), ("next_at", Value::Float(now + FLUSH_INTERVAL_S))]);
-    if paths::write_private(FLUSH_STATE, dir, json::dumps(&written, Style::Spaced, false).as_bytes()).is_err() {
+    if paths::write_private(
+        FLUSH_STATE,
+        dir,
+        crate::pystr::well_formed(&json::dumps(&written, Style::Spaced, false)).as_bytes(),
+    )
+    .is_err()
+    {
         return;
     }
     drop(claim);

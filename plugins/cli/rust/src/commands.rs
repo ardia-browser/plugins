@@ -156,7 +156,7 @@ fn commands(listing: &Listing, result: &Value) -> Shape<Rendered> {
     for row in &rows {
         ids.push(str_of(row.get("id").unwrap_or(&Value::str("")))?);
     }
-    let width = ids.iter().map(|id| id.chars().count()).max().unwrap_or(0).min(40);
+    let width = ids.iter().map(|id| crate::pystr::len(id)).max().unwrap_or(0).min(40);
     for (row, id) in rows.iter().zip(ids) {
         let tail = match row.get("variants").filter(|variants| truthy(variants)) {
             Some(variants) => format!("  [{}]", iterate_or_empty(variants)?.iter().map(str_of).collect::<Shape<Vec<_>>>()?.join(", ")),
