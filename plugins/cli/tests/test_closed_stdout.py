@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from parity import harness
-from test_parity import FakeArdia
+from test_parity import FakeArdia, full_blocking_pipe
 
 CALLS = (["--version"], ["--help"], ["-h"], [])
 LISTINGS = (["windows", "--json"], ["tabs", "--json"], ["tabs"])
@@ -156,6 +156,31 @@ def run_with_stderr(command: list[str], home: Path, kind: str) -> tuple:
     return process.returncode, stdout, TRACEBACK.sub(b"", tail), telemetry_of(home)
 
 
+def crash_recorded_while_stderr_blocks(command: list[str], home: Path) -> tuple:
+    keep, stderr = full_blocking_pipe()
+    master, stdout = pty.openpty()
+    os.close(master)
+    try:
+        process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=stdout, stderr=stderr, env=environment(home, telemetry=True))
+    finally:
+        os.close(stdout)
+        os.close(stderr)
+    local = home / LOCAL_TELEMETRY
+
+    def recorded() -> bool:
+        return any('"cli_command"' in path.read_text() for path in local.glob("cli-*.jsonl"))
+
+    try:
+        early = harness.wait_until(recorded, 20)
+    finally:
+        drainer = threading.Thread(target=drain, args=(keep,))
+        drainer.start()
+        process.wait(60)
+        drainer.join(10)
+        os.close(keep)
+    return early, process.returncode, telemetry_of(home)
+
+
 def run_limited(command: list[str], home: Path, limit: int, ignored: bool, telemetry: bool) -> tuple:
     out = home / "out"
     stdout = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -274,6 +299,25 @@ class ClosedStdout:
                                 self.assertEqual(new, python)
                     finally:
                         fake.close()
+        finally:
+            install.close()
+
+    def test_a_crash_is_recorded_before_its_diagnostic_waits_on_a_blocked_stderr(self):
+        install = harness.Installation(harness.entry_binary(self.entry), entry=self.entry)
+        try:
+            with tempfile.TemporaryDirectory() as scratch:
+                home = Path(scratch)
+                (home / "data").mkdir()
+                fake = FakeArdia(home / "data" / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "windows": {"result": [{"id": "w-1"}]}})
+                try:
+                    for argv in (["windows"], []):
+                        with self.subTest(argv=argv):
+                            python = crash_recorded_while_stderr_blocks([sys.executable, "-m", "ardia_cli", *argv], home)
+                            new = crash_recorded_while_stderr_blocks([*install.command("new"), *argv], home)
+                            self.assertTrue(python[0])
+                            self.assertEqual(new, python)
+                finally:
+                    fake.close()
         finally:
             install.close()
 

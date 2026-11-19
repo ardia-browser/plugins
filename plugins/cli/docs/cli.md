@@ -1698,7 +1698,7 @@ through the buffer. A failure while writing straight leaves nothing behind, so t
 ends with status 1; a failure writing the buffered rest leaves it in the buffer, which Python's exit flush tries again,
 so the call prints the exception line, tries the rest once more and, when that fails too, prints
 `Exception ignored on flushing sys.stdout:` with the second error and ends with status 120; bare `ardia` (help) follows the same rule for its whole text (on a hung-up Linux terminal,
-whose `st_blksize` is 1024, that is status 1), `--version` prints both on a terminal and the second alone elsewhere. Telemetry records what Python's crash records: a `$exception` event (`cli_unhandled`,
+whose `st_blksize` is 1024, that is status 1), `--version` prints both on a terminal and the second alone elsewhere. Telemetry records what Python's crash records, and records it first, before any of that is written to stderr, as Python's `telemetry.track` does before the interpreter prints the exception: a `$exception` event (`cli_unhandled`,
 fatal, the `OSError` subclass and `[Errno N] text`) before the `cli_command` event, which carries exit code 1 and
 `unhandled_exception`. A line on stderr that fails later (a closed pipe, a hung-up terminal) stays pending as it does in
 Python's line-buffered stderr and is tried again before exit: a complaint that fails with EPIPE ends as Python's caught

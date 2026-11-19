@@ -29,9 +29,8 @@ export function serveHelp(argv: string[], python: string | null): number | undef
       return 141;
     }
     if (stop !== undefined) {
-      const exit = reportCrash(stop.errno, stop.unwritten);
       finish(call, 1, python, stop.errno);
-      return exit;
+      return reportCrash(stop.errno, stop.unwritten);
     }
     finish(call, 0, python);
     return 0;
@@ -118,9 +117,8 @@ export async function serveListing(kind: Kind, listing: Listing, argv: string[],
     status = 141;
   } else {
     if (out.failed !== undefined) {
-      const exit = out.reportCrash();
       finish(call, 1, python, out.failed.errno);
-      return exit;
+      return out.reportCrash();
     }
     const errno = shown.complaint === undefined ? undefined : out.complain(shown.complaint);
     if (errno !== undefined) return complaintFailed(call, errno, python);

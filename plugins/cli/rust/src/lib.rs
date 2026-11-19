@@ -217,9 +217,8 @@ fn serve_help(argv: &[String], python: Option<&Path>) -> Option<i32> {
     if argv.is_empty() {
         let exit = match printable::write_as_python_buffers(shown.as_bytes(), printable::python_stdout_buffer(), || false) {
             Err(printable::Stopped::Failed { errno, unwritten }) => {
-                let exit = printable::report_crash(errno, &unwritten);
                 telemetry::finish_crashed(&call, errno, python);
-                exit
+                printable::report_crash(errno, &unwritten)
             }
             Err(_) => {
                 call.note_error_code("stdout_closed");
@@ -308,9 +307,8 @@ fn serve_listing(kind: Kind, listing: &Listing, argv: &[String], python: Option<
         call.note_error_code("stdout_closed");
         status = 141;
     } else if let Some(errno) = out.failed() {
-        let exit = out.report_crash();
         telemetry::finish_crashed(&call, errno, python);
-        return Some(exit);
+        return Some(out.report_crash());
     } else if let Some(errno) = rendered.complaint.as_deref().and_then(|complaint| out.complain(complaint)) {
         return Some(complaint_failed(&mut call, errno, python));
     }
