@@ -177,3 +177,47 @@ export function urlsplit(input: string): SplitResult {
   checkNetloc(netloc);
   return { scheme, netloc, path: url, query, fragment };
 }
+
+export function hostInfo(netloc: string): [string, string | null] {
+  const hostinfo = netloc.slice(netloc.lastIndexOf("@") + 1);
+  const [, open, bracketed] = partition(hostinfo, "[");
+  let hostname: string;
+  let port: string;
+  if (open) {
+    const [inside, , rest] = partition(bracketed, "]");
+    hostname = inside;
+    port = partition(rest, ":")[2];
+  } else {
+    const [name, , after] = partition(hostinfo, ":");
+    hostname = name;
+    port = after;
+  }
+  return [hostname, port ? port : null];
+}
+
+export function hostnameOf(netloc: string): string | null {
+  const [hostname] = hostInfo(netloc);
+  if (!hostname) return null;
+  const [name, percent, zone] = partition(hostname, "%");
+  return name.toLowerCase() + percent + zone;
+}
+
+export function portOf(netloc: string): number | null {
+  const [, port] = hostInfo(netloc);
+  if (port === null) return null;
+  if (!/^[0-9]+$/.test(port)) throw invalid(`Port could not be cast to integer value as ${reprText(port)}`);
+  const value = Number(port);
+  if (!(value >= 0 && value <= 65535)) throw invalid("Port out of range 0-65535");
+  return value;
+}
+
+export function parseQsl(query: string, keepBlank = false): [string, string][] {
+  if (!query) return [];
+  const out: [string, string][] = [];
+  for (const nameValue of query.split("&")) {
+    if (!nameValue) continue;
+    const [name, , value] = partition(nameValue, "=");
+    if (value || keepBlank) out.push([unquotePlus(name), unquotePlus(value)]);
+  }
+  return out;
+}

@@ -143,3 +143,48 @@ export function compareText(left: string, right: string): number {
   }
   return a.length - b.length;
 }
+
+export function isSpaceCode(code: number): boolean {
+  if (code <= 0x20) return code === 0x20 || (code >= 0x09 && code <= 0x0d) || (code >= 0x1c && code <= 0x1f);
+  if (code < 0x85) return false;
+  return code === 0x85 || code === 0xa0 || code === 0x1680 || (code >= 0x2000 && code <= 0x200a) || code === 0x2028 || code === 0x2029 || code === 0x202f || code === 0x205f || code === 0x3000;
+}
+
+export function pyStrip(text: string): string {
+  let start = 0;
+  let end = text.length;
+  while (start < end && isSpaceCode(text.charCodeAt(start))) start += 1;
+  while (end > start && isSpaceCode(text.charCodeAt(end - 1))) end -= 1;
+  return start === 0 && end === text.length ? text : text.slice(start, end);
+}
+
+export function pyRstrip(text: string): string {
+  let end = text.length;
+  while (end > 0 && isSpaceCode(text.charCodeAt(end - 1))) end -= 1;
+  return end === text.length ? text : text.slice(0, end);
+}
+
+export function joinedWords(text: string): string {
+  let out = "";
+  let index = 0;
+  const length = text.length;
+  while (index < length) {
+    while (index < length && isSpaceCode(text.charCodeAt(index))) index += 1;
+    if (index >= length) break;
+    const start = index;
+    while (index < length && !isSpaceCode(text.charCodeAt(index))) index += 1;
+    out = out ? `${out} ${text.slice(start, index)}` : text.slice(start, index);
+  }
+  return out;
+}
+
+export function headPoints(text: string, size: number): string {
+  if (text.length <= size) return text;
+  let units = 0;
+  for (let count = 0; count < size && units < text.length; count += 1) {
+    const unit = text.charCodeAt(units);
+    const next = text.charCodeAt(units + 1);
+    units += unit >= 0xd800 && unit < 0xdc00 && ((next >= 0xdc00 && next < 0xe000) || next === 0xffff) ? 2 : 1;
+  }
+  return text.slice(0, units);
+}

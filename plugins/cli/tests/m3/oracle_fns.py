@@ -158,3 +158,11 @@ oracle("py.format_g")(lambda value, precision: format(value, f".{precision}g"))
 oracle("py.round")(round)
 oracle("py.round_to")(round)
 oracle("py.len")(len)
+
+import oracle_fns_p2
+
+oracle_fns_p2.register(oracle, secrets_set)
+
+import oracle_fns_p2b
+
+oracle_fns_p2b.register(oracle)

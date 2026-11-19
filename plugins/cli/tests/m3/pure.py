@@ -12,6 +12,8 @@ CLI = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 
 from cases import GENERATORS, recorded_strings
+import cases_p2
+import cases_p2b
 
 
 def run(command: list[str], lines: str) -> list[str]:

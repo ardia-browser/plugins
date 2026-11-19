@@ -1,4 +1,5 @@
 import ast
+import re
 import math
 import struct
 from pathlib import Path
@@ -35,7 +36,8 @@ def recorded_strings(tests: Path) -> list[str]:
 
 
 def noise(rng, pieces=PIECES, most=12) -> str:
-    return "".join(rng.choice(pieces) for _ in range(rng.randint(0, most)))
+    text = "".join(rng.choice(pieces) for _ in range(rng.randint(0, most)))
+    return re.sub("([\ud800-\udbff])\uffff+", "\\1", text)
 
 
 def pick(rng, corpus: list[str], fresh, share: float = 0.3) -> str:
