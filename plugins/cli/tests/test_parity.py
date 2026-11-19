@@ -800,6 +800,79 @@ class EntryProcess:
                     subprocess.run(["pkill", "-f", f"{self.python} .*flush_main"], capture_output=True)
                     self.flushers_done()
 
+    def small_volume(self) -> Path:
+        mount = Path(tempfile.mkdtemp(prefix="vol", dir="/tmp"))
+        image = mount.with_suffix(".dmg")
+        subprocess.run(["/usr/bin/hdiutil", "create", "-quiet", "-size", "2m", "-fs", "HFS+", "-volname", mount.name, str(image)], check=True)
+        subprocess.run(["/usr/bin/hdiutil", "attach", "-quiet", "-nobrowse", "-mountpoint", str(mount), str(image)], check=True)
+
+        def detach():
+            subprocess.run(["/usr/bin/hdiutil", "detach", "-quiet", "-force", str(mount)], capture_output=True)
+            image.unlink(missing_ok=True)
+            shutil.rmtree(mount, True)
+
+        self.addCleanup(detach)
+        return mount
+
+    def test_a_spool_append_cut_short_leaves_no_partial_record(self):
+        for spool_size, path in ((4096 - 64, "append"), (64 * 1024 - 64, "rewrite")):
+            with self.subTest(path=path):
+                self.case = Path(tempfile.mkdtemp(prefix="c", dir=self.scratch))
+                self.spool_cut_short_leaves_no_partial_record(spool_size)
+
+    def spool_cut_short_leaves_no_partial_record(self, spool_size: int):
+        limit_of_one_append = 4096
+        limit = spool_size + 64
+        (self.case / "home").mkdir()
+        on_full_volume = sys.platform == "darwin"
+        data = (self.small_volume() if on_full_volume else self.case) / "data"
+        data.mkdir()
+        telemetry = data / "Telemetry"
+        (data / "telemetry.json").write_text(json.dumps({"sharing": True, "installId": INSTALL_ID}))
+        env = self.environment({"ARDIA_DATA_DIR": str(data)})
+        fake = FakeArdia(data / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "windows": {"result": []}})
+        filler_path = data / "filler"
+
+        def cut_short():
+            if not on_full_volume:
+                signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
+                resource.setrlimit(resource.RLIMIT_FSIZE, (limit, resource.RLIM_INFINITY))
+
+        def run(prepare=None):
+            done = subprocess.run([str(self.root / "bin" / "ardia"), "windows"], capture_output=True, env=env, timeout=30, preexec_fn=prepare)
+            self.assertEqual(done.returncode, 0, done.stderr)
+
+        try:
+            run()
+            self.flushers_done()
+            flush_state = telemetry / "cli-flush.json"
+            flush_state.write_text(json.dumps({"failures": 0, "next_at": time.time() + 3600}))
+            filler = b""
+            while len(filler) < spool_size - 80:
+                filler += json.dumps({"event": "filler", "index": len(filler)}).encode() + b"\n"
+            pad = b'{"event":"filler","pad":""}\n'
+            filler += pad[:-3] + b"p" * (spool_size - len(filler) - len(pad)) + pad[-3:]
+            spool = telemetry / "cli-queue.jsonl"
+            spool.write_bytes(filler)
+            if on_full_volume:
+                with open(filler_path, "wb", buffering=0) as filling:
+                    for size in (65536, 4096, 1):
+                        try:
+                            while True:
+                                filling.write(b"\0" * size)
+                        except OSError:
+                            pass
+                if spool_size > limit_of_one_append:
+                    os.truncate(filler_path, filler_path.stat().st_size - 8192)
+            run(cut_short)
+            self.assertTrue(spool.read_bytes().endswith(b"\n"), "the cut append left a partial record")
+            filler_path.unlink(missing_ok=True)
+            run()
+        finally:
+            fake.close()
+        records = [json.loads(line) for line in spool.read_bytes().split(b"\n") if line.strip()]
+        self.assertEqual([record["event"] for record in records if record.get("event") != "filler"], ["cli_command"])
+
     def test_the_lease_is_held_through_the_hand_off_to_python(self):
         leases = self.root / ".leases"
         leases.mkdir(exist_ok=True)

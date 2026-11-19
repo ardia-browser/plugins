@@ -4,7 +4,7 @@ use crate::json::{self, Map, Style, Value};
 use crate::paths::{self, env, Failure};
 use crate::records;
 use crate::usage;
-use std::os::fd::OwnedFd;
+use std::os::fd::{AsRawFd, OwnedFd};
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -359,6 +359,39 @@ fn spool_line(record: &Value) -> Option<Vec<u8>> {
     (line.len() <= MAX_LINE_BYTES).then_some(line)
 }
 
+fn append_whole(fd: &OwnedFd, data: &[u8]) -> std::io::Result<()> {
+    let raw = fd.as_raw_fd();
+    let mut info: libc::stat = unsafe { std::mem::zeroed() };
+    if unsafe { libc::fstat(raw, &mut info) } != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    let before = info.st_size;
+    let mut last = *b"\n";
+    if before > 0 && unsafe { libc::pread(raw, last.as_mut_ptr().cast(), 1, before - 1) } != 1 {
+        last[0] = b'\n';
+    }
+    let whole = if last[0] == b'\n' { data.to_vec() } else { [b"\n".as_slice(), data].concat() };
+    let mut rest = whole.as_slice();
+    while !rest.is_empty() {
+        let written = unsafe { libc::write(raw, rest.as_ptr().cast(), rest.len()) };
+        if written > 0 {
+            rest = &rest[written as usize..];
+            continue;
+        }
+        let error = if written == 0 {
+            std::io::Error::from_raw_os_error(libc::EIO)
+        } else {
+            std::io::Error::last_os_error()
+        };
+        if error.kind() == std::io::ErrorKind::Interrupted {
+            continue;
+        }
+        unsafe { libc::ftruncate(raw, before) };
+        return Err(error);
+    }
+    Ok(())
+}
+
 fn append(root: &Path, records: &[Value]) -> Option<OwnedFd> {
     let data: Vec<Vec<u8>> = records.iter().filter_map(spool_line).collect();
     let size_of_data: usize = data.iter().map(Vec::len).sum();
@@ -366,7 +399,7 @@ fn append(root: &Path, records: &[Value]) -> Option<OwnedFd> {
     let lock = paths::take_lock_retrying(SPOOL_LOCK, &dir).ok()??;
     let size = paths::size_at(&dir, SPOOL).unwrap_or(0);
     let written = if size + size_of_data as u64 <= COUNT_CHECK_BYTES {
-        paths::open_private_file(SPOOL, &dir, libc::O_WRONLY | libc::O_CREAT | libc::O_APPEND).and_then(|fd| Ok(paths::write_once(&fd, &data.concat())?))
+        paths::open_private_file(SPOOL, &dir, libc::O_RDWR | libc::O_CREAT | libc::O_APPEND).and_then(|fd| Ok(append_whole(&fd, &data.concat())?))
     } else {
         read_lines(&dir).and_then(|mut lines| {
             lines.extend(data);

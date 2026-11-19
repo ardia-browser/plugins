@@ -8,6 +8,7 @@ const { O_RDONLY, O_WRONLY, O_RDWR, O_CREAT, O_TRUNC, O_APPEND, O_NOFOLLOW, O_DI
 export { O_RDONLY, O_WRONLY, O_RDWR, O_CREAT, O_TRUNC, O_APPEND, O_NOFOLLOW, O_NONBLOCK };
 const { ELOOP, ENOTDIR } = constants.errno;
 const CREATE_RETRIES = 4;
+const NEWLINE_BYTE = 0x0a;
 const LOCK_ATTEMPTS = 5;
 const LOCK_RETRY_MS = 2;
 
@@ -179,12 +180,41 @@ export function readFd(fd: number, limit: number): Buffer {
 }
 
 export function writeOnce(fd: number, data: Uint8Array): void {
-  for (;;) {
+  let offset = 0;
+  while (offset < data.length) {
     try {
-      fs.writeSync(fd, data, 0, data.length);
-      return;
+      const written = fs.writeSync(fd, data, offset, data.length - offset);
+      if (written <= 0) throw Object.assign(new Error("EIO: write made no progress"), { code: "EIO" });
+      offset += written;
     } catch (error) {
       if (codeOf(error) !== "EINTR") throw error;
+    }
+  }
+}
+
+export function appendWhole(fd: number, data: Uint8Array): void {
+  const before = fs.fstatSync(fd).size;
+  const last = Buffer.from([NEWLINE_BYTE]);
+  if (before > 0) {
+    try {
+      if (fs.readSync(fd, last, 0, 1, before - 1) !== 1) last[0] = NEWLINE_BYTE;
+    } catch {
+      last[0] = NEWLINE_BYTE;
+    }
+  }
+  const whole = last[0] === NEWLINE_BYTE ? data : Buffer.concat([Buffer.from([NEWLINE_BYTE]), data]);
+  let offset = 0;
+  while (offset < whole.length) {
+    try {
+      const written = fs.writeSync(fd, whole, offset, whole.length - offset);
+      if (written <= 0) throw Object.assign(new Error("EIO: write made no progress"), { code: "EIO" });
+      offset += written;
+    } catch (error) {
+      if (codeOf(error) === "EINTR") continue;
+      try {
+        fs.ftruncateSync(fd, before);
+      } catch {}
+      throw error;
     }
   }
 }
@@ -194,9 +224,12 @@ export function writePrivate(name: string, dir: Dir, data: Uint8Array): void {
   const fd = openPrivateFile(temp, dir, O_WRONLY | O_CREAT | O_TRUNC);
   try {
     writeOnce(fd, data);
-  } finally {
+  } catch (error) {
     close(fd);
+    unlinkQuietly(temp, dir);
+    throw error;
   }
+  close(fd);
   renameIn(dir, temp, name);
 }
 

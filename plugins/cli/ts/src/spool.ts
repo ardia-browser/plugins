@@ -4,6 +4,7 @@ import { now, utcDay } from "./clock.ts";
 import { dumps, Float, type JsonObject, object, parse, TELEMETRY_JSON_DEPTH, type Value } from "./json.ts";
 import { join } from "./paths.ts";
 import {
+  appendWhole,
   close,
   closeDir,
   type Dir,
@@ -11,6 +12,7 @@ import {
   O_APPEND,
   O_CREAT,
   O_RDONLY,
+  O_RDWR,
   O_WRONLY,
   openChildDir,
   openPrivate,
@@ -223,9 +225,9 @@ export function appendToSpool(root: string, records: JsonObject[]): Dir | undefi
       size = 0;
     }
     if (size + dataSize <= COUNT_CHECK_BYTES) {
-      const fd = openPrivateFile(SPOOL, dir, O_WRONLY | O_CREAT | O_APPEND);
+      const fd = openPrivateFile(SPOOL, dir, O_RDWR | O_CREAT | O_APPEND);
       try {
-        writeOnce(fd, Buffer.concat(data));
+        appendWhole(fd, Buffer.concat(data));
       } finally {
         close(fd);
       }

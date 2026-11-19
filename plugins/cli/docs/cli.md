@@ -1810,6 +1810,12 @@ parity harness rather than stripped wholesale:
   KeyboardInterrupt, then blocks again flushing stdout as it exits, so only a second signal ends it, and it prints
   `KeyboardInterrupt` and an `Exception ignored on flushing sys.stdout` block. The native side dies by SIGINT at once and
   prints nothing more. A listing still ends as Python's does, with `ardia <command>: interrupted` and status 130.
+- A telemetry spool write cut short (a full disk, a file-size limit): Python's `os.write` appends whatever fit, so the
+  spool keeps a partial record that the next append joins, and neither line parses. The native side writes each append
+  until every byte is in, and on any failure truncates the spool back to its size before that append, which it read
+  under the spool lock; if even the truncation fails, the next append starts with a newline, so the fragment is a line of
+  its own that readers skip. A rewrite of the whole spool (past 64 KiB) writes its temp file whole or removes it, so a
+  cut spool is never renamed into place. Either way the cut events are dropped, as Python's are, and the spool still parses.
 - Ctrl-C that lands between a listing's interrupt check and its next `write` to a stdout nobody is reading: same as
   CPython, not a difference in kind. The signal only sets the flag; it doesn't interrupt a `write` that hasn't started,
   so that write blocks until a second Ctrl-C or until a reader drains the pipe, and only then does the listing end

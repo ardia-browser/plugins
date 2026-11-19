@@ -243,15 +243,23 @@ pub fn read_fd(fd: &OwnedFd, limit: usize) -> io::Result<Vec<u8>> {
 }
 
 pub fn write_once(fd: &OwnedFd, data: &[u8]) -> io::Result<()> {
-    loop {
-        if unsafe { libc::write(fd.as_raw_fd(), data.as_ptr().cast(), data.len()) } >= 0 {
-            return Ok(());
+    let mut rest = data;
+    while !rest.is_empty() {
+        let written = unsafe { libc::write(fd.as_raw_fd(), rest.as_ptr().cast(), rest.len()) };
+        if written > 0 {
+            rest = &rest[written as usize..];
+            continue;
         }
-        let error = io::Error::last_os_error();
+        let error = if written == 0 {
+            io::Error::from_raw_os_error(libc::EIO)
+        } else {
+            io::Error::last_os_error()
+        };
         if error.kind() != io::ErrorKind::Interrupted {
             return Err(error);
         }
     }
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -461,7 +469,11 @@ fn errno_location() -> *mut libc::c_int {
 pub fn write_private(name: &str, dir: &OwnedFd, data: &[u8]) -> Result<(), Failure> {
     let temp = format!(".{name}.{}.tmp", std::process::id());
     let fd = open_private_file(&temp, dir, libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC)?;
-    write_once(&fd, data)?;
+    if let Err(error) = write_once(&fd, data) {
+        drop(fd);
+        unlink_quietly(&temp, dir);
+        return Err(error.into());
+    }
     drop(fd);
     rename_in(dir, &temp, name)?;
     Ok(())
