@@ -1151,7 +1151,7 @@
    "session": "plugin-ai",
    "namespace": ""
   },
-  "note": "§7 fail closed, status 77, nothing sent"
+  "note": "§7 a credential in a regular file passes the client's checks; today the active case answers plugin_daemon_unavailable, and F1-early restores the daemon's answer here"
  },
  {
   "id": "contract--8-press-enter",
