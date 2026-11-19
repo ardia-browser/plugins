@@ -2980,7 +2980,16 @@
    "session": "plugin-ai",
    "namespace": ""
   },
-  "note": "round 3: both clients reject wait --state as a launch option (Python's bug, kept for parity: plugins#18)"
+  "note": "round 3: both clients reject wait --state as a launch option (Python's bug, kept for parity: plugins#18)",
+  "intentional": {
+   "why": "under --json exactly one JSON line with a code goes to stdout, whatever fails (AI plugin contract §3)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"--state doesn't apply to Ardia: ardia browse drives the browser you're running, so launch options have no effect\",\"code\":\"usage_error\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
  },
  {
   "id": "review3--3-wait-state-spaced",
