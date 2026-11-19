@@ -264,11 +264,14 @@ class HarnessCatches(unittest.TestCase):
             with self.subTest(launch=launch):
                 self.impostor_fails(launch)
 
-    def impostor_fails(self, launch):
+    def test_a_hand_off_that_drops_the_harness_environment_still_shows_python(self):
+        self.impostor_fails('-I -m ardia_cli "$@"', prefix="/usr/bin/env -u ARDIA_PARITY_PYTHON_LOG -u ARDIA_PARITY_BOX ")
+
+    def impostor_fails(self, launch, prefix=""):
         scratch = Path(tempfile.mkdtemp(prefix="arh", dir="/tmp"))
         try:
             impostor = scratch / "ardia"
-            impostor.write_text('#!/bin/sh\nhere=$(cd "$(dirname "$0")/.." && pwd)\nexec "$here/python/bin/python3" ' + launch + '\n')
+            impostor.write_text('#!/bin/sh\nhere=$(cd "$(dirname "$0")/.." && pwd)\nexec ' + prefix + '"$here/python/bin/python3" ' + launch + '\n')
             impostor.chmod(0o755)
             cases = [case for case in harness.load_cases() if case.id in ("version--version", "windows--windows") or case.id.startswith("tabs--tabs-json")]
             self.assertTrue(cases)

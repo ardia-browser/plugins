@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import site
@@ -29,7 +30,7 @@ INSTALL_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
 KEPT_ENV = ("PATH", "LANG", "LC_ALL", "LC_CTYPE", "USER", "LOGNAME", "SHELL")
 PROTECTED_ENV = frozenset({"HOME", "ARDIA_CLI_HOME", "TMPDIR", "PATH", "ARDIA_TELEMETRY_URL", "http_proxy", "https_proxy",
                            "HTTP_PROXY", "HTTPS_PROXY", "no_proxy", "NO_PROXY", "ALL_PROXY", "all_proxy", "PYTHONPATH",
-                           "PYTHONHOME", "PYTHONSTARTUP", "PYTHONDONTWRITEBYTECODE", "ARDIA_PARITY_PYTHON_LOG", "ARDIA_PARITY_BOX",
+                           "PYTHONHOME", "PYTHONSTARTUP", "PYTHONDONTWRITEBYTECODE", "ARDIA_PARITY_BOX",
                            "DYLD_INSERT_LIBRARIES", "LD_PRELOAD"})
 VOLATILE = ("uuid",)
 VOLATILE_PROPERTIES = ("$session_id", "total_ms", "startup_ms", "served_by")
@@ -43,7 +44,7 @@ DENIED_PROGRAMS = ("/bin/launchctl", "/usr/bin/security", "/usr/bin/codesign", "
                    "/usr/bin/afplay", "/usr/bin/defaults", "/usr/bin/curl", "/usr/bin/ssh")
 ROOTS = ("home", "cli-home", "data", "cwd", "tmp", "outside")
 PLACES = ("box", "home", "cli_home", "data", "cwd", "tmp", "outside", "cli")
-HARNESS_FILES = ("helpers.log", "route.log", "stubs")
+HARNESS_FILES = ("helpers.log", "stubs")
 CONTENT_APART = ("data/Telemetry/local", "data/Telemetry/cli-queue.jsonl", "data/Telemetry/cli-flush.json", "cli-home/Usage/usage.json")
 READ_ONLY_METHODS = frozenset({"hello", "workspace", "windows", "commands"})
 PATH_ENV = frozenset({"ARDIA_DATA_DIR", "ARDIA_CONFIG_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME",
@@ -61,14 +62,14 @@ SANDBOX_PROFILE = """(version 1)
 (deny network-inbound (local ip))
 (deny network-outbound (remote unix-socket))
 (allow network-outbound (remote unix-socket (subpath (param "BOX"))))
-(deny file-write* (require-not (require-any (subpath (param "BOX")) (literal "/dev/null") (literal "/dev/tty") (literal "/dev/dtracehelper") (regex #"^/dev/fd/"))))
+(deny file-write* (require-not (require-any (subpath (param "BOX")) (subpath (param "ROUTES")) (literal "/dev/null") (literal "/dev/tty") (literal "/dev/dtracehelper") (regex #"^/dev/fd/"))))
 (deny process-exec {denied})
 """
 TS_PROBE = """#!/bin/sh
-[ -n "$ARDIA_PARITY_PYTHON_LOG" ] && printf 'ts\\n' >>"$ARDIA_PARITY_PYTHON_LOG"
+printf 'ts\\n' >>{routes}/$$
 exec "$(dirname "$0")/ardia-ts.bin" "$@"
 """
-ROUTE_PROBE = "import os as _parity_os\n_parity_os.environ.get('ARDIA_PARITY_PYTHON_LOG') and open(_parity_os.environ['ARDIA_PARITY_PYTHON_LOG'], 'a').write('python\\n')\n"
+ROUTE_PROBE = "import os as _parity_os\nopen({routes} + '/' + str(_parity_os.getpid()), 'a').write('python\\n')\n"
 
 
 class UnsafeCase(ValueError):
@@ -483,10 +484,12 @@ class Installation:
         self.sandbox = sandbox_mode()
         self.scratch = Path(scratch or tempfile.mkdtemp(prefix="arp", dir="/tmp")).resolve()
         self.root = self.scratch / "cli"
+        self.routes = self.scratch / "routes"
+        self.routes.mkdir()
         (self.root / "bin").mkdir(parents=True)
         if entry == "ts":
             shutil.copy2(entry_program, self.root / "bin" / "ardia-ts.bin")
-            (self.root / "bin" / "ardia").write_text(TS_PROBE)
+            (self.root / "bin" / "ardia").write_text(TS_PROBE.format(routes=shlex.quote(str(self.routes))))
             (self.root / "bin" / "ardia").chmod(0o755)
         else:
             shutil.copy2(entry_program, self.root / "bin" / "ardia")
@@ -498,7 +501,7 @@ class Installation:
                                             check=True, capture_output=True, text=True).stdout.strip())
         (self.packages / "ardia-checkout.pth").write_text("\n".join([str(self.source), *site.getsitepackages()]) + "\n")
         entry = self.source / "ardia_cli" / "cli.py"
-        entry.write_text(ROUTE_PROBE + entry.read_text())
+        entry.write_text(ROUTE_PROBE.format(routes=repr(str(self.routes))) + entry.read_text())
         shutil.copytree(CLI / "tests" / "fixtures", self.source / "tests" / "fixtures")
         subprocess.run([str(self.python), "-I", "-m", "compileall", "-q", str(self.source)], check=True)
         self.profile = self.scratch / "sandbox.sb"
@@ -515,8 +518,17 @@ class Installation:
 
     def confined(self, argv: list[str], box: Path) -> list[str]:
         if self.sandbox == "sandbox-exec":
-            return ["/usr/bin/sandbox-exec", "-f", str(self.profile), "-D", f"BOX={box}", *argv]
+            return ["/usr/bin/sandbox-exec", "-f", str(self.profile), "-D", f"BOX={box}", "-D", f"ROUTES={self.routes}", *argv]
         return argv
+
+    def route_of(self, pid: int) -> list[str]:
+        path = self.routes / str(pid)
+        try:
+            lines = path.read_text().split()
+        except FileNotFoundError:
+            return []
+        path.unlink()
+        return lines
 
     def box(self) -> Path:
         with self.counter_lock:
@@ -689,7 +701,6 @@ def environment(box: Path, places: dict, case: Case) -> dict:
         "COLUMNS": "100",
         "LINES": "40",
         "PYTHONDONTWRITEBYTECODE": "1",
-        "ARDIA_PARITY_PYTHON_LOG": str(box / "route.log"),
         "ARDIA_PARITY_BOX": str(box),
     })
     for key, value in expand(case.env, places).items():
@@ -787,8 +798,7 @@ def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[O
     flush = scrub_times(json.loads(flush_text), window) if flush_text else flush_text
     log_text = read_inside(box, box / "helpers.log")
     helpers = log_text.splitlines() if log_text else []
-    route_log = box / "route.log"
-    route_lines = route_log.read_text().split() if route_log.exists() else []
+    route_lines = install.route_of(process.pid)
     route = route_lines[-1] if route_lines else install.entry
     observed = Observed(stdout, stderr, process.returncode, fake.transcript() if fake else [], records, queued, served, usage,
                         file_changes(before, after), helpers, flush, route, timed_out, fake.complete if fake else True)
