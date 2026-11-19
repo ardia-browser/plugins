@@ -1717,6 +1717,7 @@ its mode; the hardened runtime's library validation then loads it only into a pr
 | `sizeAt` | `fstatat(…, AT_SYMLINK_NOFOLLOW)` | path only | `privatefs.ts`: spool and local-copy sizes |
 | `listAt` | `fcntl(F_DUPFD_CLOEXEC)`, `fdopendir`, `readdir` | no directory listing from a descriptor | `privatefs.ts`: prune the local copies |
 | `lock` | `flock` | no `flock`; `O_EXLOCK` is Darwin-only | `privatefs.ts`: the same lock Python's `fcntl.flock` takes, on macOS and Linux |
+| `strerror` | `strerror_r` (GNU form on glibc, XSI elsewhere) | Node's messages are libuv's, not libc's | `paths.ts`, `libc.ts`: every OS error text, as Python's `os.strerror` gives it on that platform |
 | `watchLifeline` | `fcntl(FD_CLOEXEC)`, a detached `pthread` blocking in `read`, `kill(getpid(), SIGKILL)` at EOF or error | a JS watcher can't run while the JS thread is blocked in a synchronous call | `main.ts`: end at once when the router dies |
 
 So nothing changes the working directory and no helper process runs: the private-file code follows Python's `dir_fd`

@@ -1,6 +1,5 @@
 import { readlinkSync } from "node:fs";
 import { userInfo } from "node:os";
-import { DARWIN_ERRORS } from "./errnos.ts";
 
 export const LINUX = process.platform === "linux";
 const LOSSY = "\ufffd";
@@ -24,10 +23,7 @@ export function uid(): number {
   return process.getuid?.() ?? -1;
 }
 
-export function strerror(code: number): string {
-  if (code === 0) return "Undefined error: 0";
-  return DARWIN_ERRORS[code] ?? `Unknown error: ${code}`;
-}
+export { strerror } from "./libc.ts";
 
 export function errnoOf(error: unknown): number {
   const errno = (error as NodeJS.ErrnoException | undefined)?.errno;

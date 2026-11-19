@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { BUILT_LIBC } from "./libc-loaded.ts";
-import { dlopenReason, interruptsIgnored, LibcUnavailable, listAt, loadLibc, openAt, peerUid } from "../src/libc.ts";
+import { dlopenReason, errnoError, interruptsIgnored, LibcUnavailable, listAt, loadLibc, openAt, peerUid, strerror } from "../src/libc.ts";
 import { close, closeDir, listDir, openPrivate, openPrivateFile, PathError, readPrivate, renameIn, sizeAt, takeLock, unlinkQuietly, writePrivate } from "../src/privatefs.ts";
 
 const CLI = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
@@ -172,4 +172,13 @@ test("a lock file another program created with loose permissions is tightened, a
   assert.equal(fs.fstatSync(created).mode & 0o777, 0o600);
   close(created);
   closeDir(dir);
+});
+
+test("error text is this libc's, as Python's os.strerror gives it", () => {
+  const codes = [0, ...Array.from({ length: 140 }, (_, index) => index + 1), 999, 99_999];
+  const script = "import json, os, sys; print(json.dumps([os.strerror(c) for c in json.loads(sys.argv[1])]))";
+  const python = spawnSync(PYTHON, ["-I", "-c", script, JSON.stringify(codes)], { encoding: "utf8" });
+  assert.equal(python.status, 0, python.stderr);
+  assert.deepEqual(codes.map(strerror), JSON.parse(python.stdout));
+  assert.equal(errnoError(os.constants.errno.EIO, "write").message, `EIO: ${JSON.parse(python.stdout)[os.constants.errno.EIO]}, write`);
 });

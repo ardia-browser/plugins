@@ -1,7 +1,6 @@
 import { realpathSync } from "node:fs";
 import { constants } from "node:os";
 import { dirname, join } from "node:path";
-import { strerror } from "./paths.ts";
 
 export const LIBC_FILE = "ardia-libc.so";
 export const LIBC_UNAVAILABLE = 252;
@@ -17,9 +16,10 @@ type Native = {
   listAt(dir: number): string[] | number;
   lock(fd: number, exclusive: boolean, wait: boolean): number;
   watchLifeline(fd: number): number;
+  strerror(errno: number): string | number;
 };
 
-const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "listAt", "lock", "watchLifeline"];
+const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "listAt", "lock", "watchLifeline", "strerror"];
 const ERRNO_NAMES = new Map<number, string>(Object.entries(constants.errno).map(([name, value]) => [value, name]));
 const EWOULDBLOCK = constants.errno.EWOULDBLOCK ?? constants.errno.EAGAIN;
 
@@ -142,4 +142,10 @@ export function flock(fd: number, exclusive: boolean, wait: boolean): boolean {
 
 export function watchLifeline(fd: number): void {
   checked(native().watchLifeline(fd), "pthread_create");
+}
+
+export function strerror(errno: number): string {
+  const text = native().strerror(errno);
+  if (typeof text === "number") throw errnoError(-text, "strerror_r");
+  return text;
 }

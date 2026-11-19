@@ -230,6 +230,23 @@ static napi_value lock(napi_env env, napi_callback_info info) {
   }
 }
 
+static napi_value error_text(napi_env env, napi_callback_info info) {
+  Call call;
+  int32_t code;
+  char buffer[256];
+  napi_value result = NULL;
+  if (!take_args(env, info, 1, &call) || !int_arg(&call, 0, &code)) return status(env, -EINVAL);
+  memset(buffer, 0, sizeof(buffer));
+#if defined(__GLIBC__) && defined(_GNU_SOURCE)
+  const char *text = strerror_r(code, buffer, sizeof(buffer));
+#else
+  (void)strerror_r(code, buffer, sizeof(buffer));
+  const char *text = buffer;
+#endif
+  if (napi_create_string_utf8(env, text, NAPI_AUTO_LENGTH, &result) != napi_ok) return status(env, -ENOMEM);
+  return result;
+}
+
 static void *watch_lifeline_thread(void *argument) {
   int fd = (int)(intptr_t)argument;
   char sink[64];
@@ -272,7 +289,8 @@ __attribute__((visibility("default"))) napi_value napi_register_module_v1(napi_e
       && define(env, exports, "sizeAt", size_at)
       && define(env, exports, "listAt", list_at)
       && define(env, exports, "lock", lock)
-      && define(env, exports, "watchLifeline", watch_lifeline);
+      && define(env, exports, "watchLifeline", watch_lifeline)
+      && define(env, exports, "strerror", error_text);
   return ok ? exports : NULL;
 }
 
