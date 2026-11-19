@@ -1178,6 +1178,28 @@ their places in the table now expect `plugin_daemon_unavailable`.
   folder beyond the session's own socket, lock and log.
 - **Every rule on every step** it runs, if it ever runs nested steps.
 
+### Starting the TS daemon
+
+M1's client starts no daemon in plugin mode and hands any other missing daemon to Python. When the switch to M3's
+daemon happens, on top of D2 (plugins#20), the client starts daemons through D2's `browse/daemon/spawn.ts`, and these
+are the exact changes:
+
+- **Starting:** in the client's session open, after `openSession` answers `NoDaemon`, start one with
+  `awaitDaemon(dir.fd, key, spawnDaemon(dir.fd, key, config, choice), connect)`, where `choice` is
+  `chooseDaemon(python)` and `config` is the daemon's stdin config, which the client builds as Python's client does.
+  If `chooseDaemon` answers `null` (no bundled Python and no TS daemon), the client answers `daemon_unreachable`.
+  `connect` is `() => openSession(root, key, deadline).catch((error) => error instanceof NoDaemon ? null : Promise.reject(error))`:
+  `null` means "not listening yet", and any other error stops the wait.
+- **Failure:** `DaemonDidNotStart` maps to the unreachable error (`unreachable(error.message)`, exit 2, code
+  `daemon_unreachable`), with D2's own message ("exited before it listened: <log tail>" or "didn't start in 15 s").
+- **One stat call:** D2's `statAt` (mode, owner, device, inode and mtime, links not followed, one plain name) replaces
+  this PR's `socketInfoAt`. `checkSocket` reads `mode` and `uid` from it, and the addon drops the `socketInfoAt` export.
+  `stat_at` takes over `socket_info_at`'s refusal of a negative descriptor (`AT_FDCWD`, `-1`) with `EBADF`, and the
+  `native-arity` test moves to `statAt`.
+- **Plugin mode** still starts nothing until F1-early. Then `choice` is the TS plugin daemon, and the same
+  `awaitDaemon` call starts it, with no flusher and no other child.
+- Until then, the client hands a missing daemon to Python exactly as today.
+
 ### JSON error codes
 
 Under `--json` the TypeScript client prints every browse error as one JSON line with a `code` (the AI plugin contract;
