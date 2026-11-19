@@ -1,8 +1,10 @@
-import { fstatSync, write, writeSync } from "node:fs";
+import { fstatSync, write } from "node:fs";
 import { interrupted as interruptRequested } from "./control.ts";
+import { writeWhole } from "./libc.ts";
 import { codeOf, errnoOf, strerror } from "./paths.ts";
 import { utf8 } from "./pystr.ts";
 import { constants } from "node:os";
+import { isatty } from "node:tty";
 
 function escaped(text: string, controls: RegExp): string {
   return text.replace(controls, (found) => `\\u${found.charCodeAt(0).toString(16).padStart(4, "0")}`);
@@ -29,17 +31,7 @@ export function sleepMs(ms: number): void {
 }
 
 export function writeAll(fd: number, text: string | Uint8Array): void {
-  const bytes = typeof text === "string" ? utf8(text) : text;
-  let offset = 0;
-  while (offset < bytes.length) {
-    try {
-      offset += writeSync(fd, bytes, offset, bytes.length - offset);
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code === "EAGAIN") sleepMs(1);
-      else if (code !== "EINTR") throw error;
-    }
-  }
+  writeWhole(fd, typeof text === "string" ? utf8(text) : text);
 }
 
 const INTERRUPT_POLL_MS = 50;
@@ -104,15 +96,10 @@ export class Output {
     if (!this.closed) this.pending.push(`${this.json ? jsonSafe(text) : inert(text)}\n`);
   }
 
-  pythonCrash(): number | undefined {
+  pythonCrash(): { errno: number; exit: number } | undefined {
     if (this.failed === undefined) return undefined;
     const { errno, line } = this.failed;
-    const exception = `${pythonOsError(errno)}: [Errno ${errno}] ${strerror(errno)}\n`;
-    const crashed = line > pythonStdoutBuffer();
-    try {
-      writeAll(2, crashed ? exception : `${exception}Exception ignored on flushing sys.stdout:\n${exception}`);
-    } catch {}
-    return crashed ? 1 : 120;
+    return { errno, exit: reportCrash(errno, line <= pythonStdoutBuffer()) };
   }
 
   async flush(stopped: () => boolean = interruptRequested): Promise<void> {
@@ -185,6 +172,18 @@ const ERRNO_NAMES = new Map<number, string>(Object.entries(constants.errno).map(
 
 export function pythonOsError(errno: number): string {
   return PYTHON_OS_ERRORS[ERRNO_NAMES.get(errno) ?? ""] ?? "OSError";
+}
+
+export function reportCrash(errno: number, flushFailsAgain: boolean): number {
+  const exception = `${pythonOsError(errno)}: [Errno ${errno}] ${strerror(errno)}\n`;
+  try {
+    writeAll(2, flushFailsAgain ? `${exception}Exception ignored on flushing sys.stdout:\n${exception}` : exception);
+  } catch {}
+  return flushFailsAgain ? 120 : 1;
+}
+
+export function versionWriteFailed(error: unknown): number {
+  return codeOf(error) !== "EBADF" && isatty(1) ? reportCrash(errnoOf(error), true) : stdoutFlushFailed(error);
 }
 
 export function stdoutFlushFailed(error: unknown): number {

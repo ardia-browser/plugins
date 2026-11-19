@@ -13,7 +13,9 @@ pub mod plist;
 pub mod printable;
 pub mod py;
 pub mod pystr;
+pub mod records;
 pub mod router;
+pub mod standard_fds;
 pub mod telemetry;
 pub mod usage;
 
@@ -193,6 +195,7 @@ fn pass_through(python: Option<&Path>, argv: &[OsString]) -> i32 {
     unsafe {
         libc::signal(libc::SIGPIPE, libc::SIG_DFL);
     }
+    standard_fds::close_those_closed_at_start();
     let error = std::process::Command::new(python)
         .arg0(python)
         .args(["-I", "-m", "ardia_cli"])
@@ -214,15 +217,28 @@ fn serve_help(argv: &[String], python: Option<&Path>) -> Option<i32> {
     let mut stdout = std::io::stdout().lock();
     let written = stdout.write_all(printable::inert(&text).as_bytes()).and_then(|_| stdout.flush());
     drop(stdout);
-    let (status, exit) = match written {
-        Err(_) if argv.is_empty() => {
+    let closed = |error: &std::io::Error| matches!(error.raw_os_error(), Some(libc::EPIPE | libc::ESHUTDOWN));
+    let exit = match written {
+        Err(error) if argv.is_empty() && closed(&error) => {
             call.note_error_code("stdout_closed");
-            (141, 141)
+            telemetry::finish(&call, 141, python);
+            141
         }
-        Err(error) => (0, printable::stdout_flush_failed(&error)),
-        Ok(()) => (0, 0),
+        Err(error) if argv.is_empty() => {
+            let errno = error.raw_os_error().unwrap_or(libc::EIO);
+            let exit = printable::report_crash(errno, true);
+            telemetry::finish_crashed(&call, errno, python);
+            exit
+        }
+        Err(error) => {
+            telemetry::finish(&call, 0, python);
+            printable::stdout_flush_failed(&error)
+        }
+        Ok(()) => {
+            telemetry::finish(&call, 0, python);
+            0
+        }
     };
-    telemetry::finish(&call, status, python);
     Some(exit)
 }
 
@@ -276,21 +292,20 @@ fn serve_listing(kind: Kind, listing: &Listing, argv: &[String], python: Option<
         }
     }
     drop(interrupts);
-    let mut exit = None;
     if out.interrupted() {
         status = 130;
         out.complain(&format!("ardia {}: interrupted", kind.name()));
     } else if out.closed() {
         call.note_error_code("stdout_closed");
         status = 141;
-    } else if let Some(crashed) = out.python_crash() {
-        status = 1;
-        exit = Some(crashed);
+    } else if let Some((errno, exit)) = out.python_crash() {
+        telemetry::finish_crashed(&call, errno, python);
+        return Some(exit);
     } else if let Some(complaint) = &rendered.complaint {
         out.complain(complaint);
     }
     telemetry::finish(&call, status, python);
-    Some(exit.unwrap_or(status as i32))
+    Some(status as i32)
 }
 
 enum Handled {
@@ -316,7 +331,7 @@ fn run_rust(route: Route, argv: &[String], python: Option<&Path>) -> Handled {
     let served = match route {
         Route::Version => match writeln!(std::io::stdout(), "ardia {}", telemetry::version()).and_then(|_| std::io::stdout().flush()) {
             Ok(()) => Some(0),
-            Err(error) => Some(printable::stdout_flush_failed(&error)),
+            Err(error) => Some(printable::version_write_failed(&error)),
         },
         Route::Help => serve_help(argv, python),
         Route::Listing(kind, listing) => serve_listing(kind, &listing, argv, python),
@@ -352,7 +367,7 @@ fn handle(root: Option<&Path>, raw: &[OsString], python: Option<&Path>) -> Handl
         None if browse_route::invoked(raw) => browse_route::LABEL,
         None => return Handled::Python,
     };
-    if printable::stdout_unusable() {
+    if standard_fds::any_closed_at_start() || printable::stdout_unusable() {
         return Handled::Python;
     }
     match router::Table::load(root).side(label) {
@@ -366,13 +381,17 @@ fn handle(root: Option<&Path>, raw: &[OsString], python: Option<&Path>) -> Handl
 }
 
 pub fn run() -> i32 {
+    let file_size = router::ignore_file_size_signal();
     let raw: Vec<OsString> = std::env::args_os().skip(1).collect();
     let root = install_root();
     let python = root.as_ref().map(|root| root.join("python").join("bin").join("python3"));
     let lease = Lease::take(root.as_deref());
     match handle(root.as_deref(), &raw, python.as_deref()) {
         Handled::Status(status) => status,
-        Handled::Python => pass_through(python.as_deref(), &raw),
+        Handled::Python => {
+            router::restore_file_size_signal(&file_size);
+            pass_through(python.as_deref(), &raw)
+        }
         Handled::Signaled(signal) => {
             drop(lease);
             router::die_by(signal)

@@ -56,12 +56,12 @@ class ParityTable:
             self.assertGreater(self.summary["commands"][name]["cases"], 0, name)
 
 
-@unittest.skipUnless(binary(), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
+@harness.requires(binary(), ("rust",), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
 class RustParityTable(ParityTable, unittest.TestCase):
     entry = "rust"
 
 
-@unittest.skipUnless(both_programs(), "build plugins/cli/rust (the router) and plugins/cli/ts (bun run build), or set ARDIA_RUST_CLI and ARDIA_TS_CLI")
+@harness.requires(both_programs(), ("rust", "ts"), "build plugins/cli/rust (the router) and plugins/cli/ts (bun run build), or set ARDIA_RUST_CLI and ARDIA_TS_CLI")
 class TsParityTable(ParityTable, unittest.TestCase):
     entry = "ts"
 
@@ -126,7 +126,7 @@ class HarnessRules(unittest.TestCase):
         self.assertEqual(harness.expected_route("ts", served, self.case(command="tabs", argv=["tabs"]), ts_installed=True), "ts")
         self.assertEqual(harness.expected_route("rust", served, self.case(fallback=True), ts_installed=True), "python")
 
-    @unittest.skipUnless(harness.ts_binary() and harness.binary(), "build plugins/cli/ts and plugins/cli/rust first")
+    @harness.requires(harness.ts_binary() and harness.binary(), ("rust", "ts"), "build plugins/cli/ts and plugins/cli/rust first")
     def test_the_typescript_addon_comes_from_beside_the_chosen_program(self):
         with tempfile.TemporaryDirectory() as elsewhere:
             program = Path(elsewhere) / "ardia-ts"
@@ -151,12 +151,46 @@ class HarnessRules(unittest.TestCase):
                 self.assertEqual(done.returncode, 2, done.stdout + done.stderr)
                 self.assertIn("no parity case", done.stderr)
 
+    def test_a_prerequisite_the_job_says_it_built_fails_when_missing_and_skips_otherwise(self):
+        def probe():
+            return "ran"
+
+        for required, outcome in (("", unittest.SkipTest), ("rust", unittest.SkipTest), ("rust,ts", AssertionError), ("ts,rust,x", AssertionError)):
+            with self.subTest(required=required), unittest.mock.patch.dict(os.environ, {"ARDIA_TEST_REQUIRES": required}):
+                with self.assertRaises(outcome):
+                    harness.requires(False, ("rust", "ts"), "needs both")(probe)()
+                self.assertEqual(harness.requires(True, ("rust", "ts"), "needs both")(probe)(), "ran")
+
+        class Needs(unittest.TestCase):
+            def test_nothing(self):
+                pass
+
+        with unittest.mock.patch.dict(os.environ, {"ARDIA_TEST_REQUIRES": "rust"}):
+            refused = harness.requires(False, ("rust",), "needs rust")(Needs)
+            with self.assertRaisesRegex(RuntimeError, "needs rust; ARDIA_TEST_REQUIRES=rust"):
+                refused.setUpClass()
+
     def test_a_fallback_may_only_ask_read_only_questions_first(self):
         python = [[{"id": 1, "method": "hello", "params": {"protocol": 4}}, {"id": 2, "method": "apply", "params": {"ops": []}}]]
         read_first = [[{"id": 1, "method": "hello", "params": {"protocol": 4}}, {"id": 2, "method": "workspace"}]] + python
         mutate_first = [[{"id": 1, "method": "hello", "params": {"protocol": 4}}, {"id": 2, "method": "apply", "params": {"ops": []}}]] + python
         self.assertEqual(harness.fallback_requests(read_first, python), python)
         self.assertEqual(harness.fallback_requests(mutate_first, python), mutate_first)
+
+    def test_a_fallback_may_ask_once_before_python_and_only_in_a_fallback_case(self):
+        python = [[{"id": 1, "method": "hello", "params": {"protocol": 4}}, {"id": 2, "method": "workspace"}]]
+        once = [[{"id": 1, "method": "hello", "params": {"protocol": 4}}, {"id": 2, "method": "windows"}]] + python
+        twice = [[{"id": 1, "method": "hello", "params": {"protocol": 4}}, {"id": 2, "method": "windows"}]] * 2 + python
+        self.assertEqual(harness.fallback_requests(once, python), python)
+        self.assertEqual(harness.fallback_requests(twice, python), twice)
+        seen = {"stdout": b"", "stderr": b"", "status": 0, "telemetry": [], "queued": [], "usage": None, "flush": None, "files": {},
+                "helpers": [], "served_by": [], "timed_out": False}
+        python_side = harness.Observed(requests=python, **seen)
+        self.assertEqual(harness.compare(harness.Observed(requests=once, **seen), python_side, fallback=True), [])
+        for requests, fallback in ((twice, True), (once, False)):
+            with self.subTest(connections=len(requests), fallback=fallback):
+                mismatches = harness.compare(harness.Observed(requests=requests, **seen), python_side, fallback=fallback)
+                self.assertEqual([name for name, _ in mismatches], ["requests"])
 
     def test_times_are_scrubbed_only_when_they_are_now(self):
         window = (1_763_500_000.0, 1_763_500_001.0)
@@ -254,7 +288,7 @@ class HarnessRules(unittest.TestCase):
         finally:
             install.close()
 
-    @unittest.skipUnless(binary(), "needs the Rust ardia")
+    @harness.requires(binary(), ("rust",), "needs the Rust ardia")
     def test_detached_children_of_the_installation_are_reaped_whatever_their_environment(self):
         install = harness.Installation(binary())
         try:
@@ -283,7 +317,7 @@ class HarnessRules(unittest.TestCase):
             shutil.rmtree(box, True)
 
 
-@unittest.skipUnless(binary(), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
+@harness.requires(binary(), ("rust",), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
 class HarnessCatches(unittest.TestCase):
     def test_the_seeder_refuses_a_secret_inside_a_binary_fixture(self):
         from parity import record
@@ -303,7 +337,7 @@ class HarnessCatches(unittest.TestCase):
             with self.subTest(launch=launch):
                 self.impostor_fails(launch)
 
-    @unittest.skipUnless(harness.ts_binary(), "build plugins/cli/ts (bun run build) or set ARDIA_TS_CLI")
+    @harness.requires(harness.ts_binary(), ("ts",), "build plugins/cli/ts (bun run build) or set ARDIA_TS_CLI")
     def test_a_typescript_program_that_runs_python_as_its_child_proves_nothing(self):
         scratch = Path(tempfile.mkdtemp(prefix="arh", dir="/tmp"))
         try:
@@ -447,6 +481,35 @@ class EntryProcess:
         self.assertEqual(new, python)
         self.assertEqual(new, (True, 130, b"ardia tabs: interrupted\n"))
 
+    def test_ctrl_c_ends_a_call_whose_output_is_blocked(self):
+        import fcntl
+
+        for argv, blocked in (([], "stdout"), (["--help"], "stdout"), (["--version"], "stdout"), (["windows"], "stderr")):
+            with self.subTest(argv=argv, blocked=blocked):
+                reader, writer = os.pipe()
+                fcntl.fcntl(writer, fcntl.F_SETFL, os.O_NONBLOCK)
+                try:
+                    while True:
+                        os.write(writer, b"x" * 4096)
+                except BlockingIOError:
+                    fcntl.fcntl(writer, fcntl.F_SETFL, 0)
+                streams = {"stdout": writer, "stderr": subprocess.PIPE} if blocked == "stdout" else {"stdout": subprocess.PIPE, "stderr": writer}
+                process = subprocess.Popen([str(self.root / "bin" / "ardia"), *argv], env=self.environment({}), stdin=subprocess.DEVNULL,
+                                           preexec_fn=os.setsid, **streams)
+                os.close(writer)
+                try:
+                    time.sleep(1)
+                    self.assertIsNone(process.poll(), "the output should fill the pipe and block")
+                    self.ctrl_c(process)
+                    process.wait(5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    self.fail("Ctrl-C didn't end a call blocked on its output")
+                finally:
+                    os.close(reader)
+                    process.communicate()
+                self.assertEqual(process.returncode, -signal.SIGINT)
+
     def slow_listing(self, release: threading.Event, first=None):
         asked = []
 
@@ -541,6 +604,59 @@ class EntryProcess:
             python = subprocess.run([str(self.python), "-I", "-m", "ardia_cli", *argv], env=env, capture_output=True, timeout=30)
             self.assertEqual((new.returncode, new.stdout, new.stderr), (python.returncode, python.stdout, python.stderr), argv)
             self.assertNotIn("�".encode(), new.stderr)
+
+    def flushers_done(self) -> None:
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline:
+            running = subprocess.run(["pgrep", "-f", f"{self.python} .*flush_main"], capture_output=True, text=True).stdout.split()
+            if not running:
+                return
+            time.sleep(0.1)
+        self.fail("a telemetry flusher outlived its deadline")
+
+    def ends_with_a_fifo_at(self, place: str, program: list, hold: bool) -> tuple:
+        case = Path(tempfile.mkdtemp(prefix="f", dir=self.scratch))
+        data, usage, local = case / "data", case / "cli-home" / "Usage", case / "data" / "Telemetry" / "local"
+        for folder in (local, usage, case / "home"):
+            folder.mkdir(parents=True, mode=0o700)
+        for folder in (data / "Telemetry", case / "cli-home"):
+            folder.chmod(0o700)
+        (data / "telemetry.json").write_text(json.dumps({"sharing": True, "installId": INSTALL_ID}))
+        (data / "Telemetry" / "cli-flush.json").write_text(json.dumps({"failures": 0, "next_at": 9e9}))
+        (data / "Telemetry" / "cli-flush.json").chmod(0o600)
+        fifo = case / place.format(today=time.strftime("%Y-%m-%d", time.gmtime()))
+        fifo.unlink(missing_ok=True)
+        os.mkfifo(fifo, 0o600)
+        held = os.open(fifo, os.O_RDWR | os.O_NONBLOCK) if hold else None
+        fake = FakeArdia(data / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "windows": {"result": [{"id": "w-1"}]}})
+        env = {**self.environment({}), "HOME": str(case / "home"), "ARDIA_CLI_HOME": str(case / "cli-home"), "ARDIA_DATA_DIR": str(data)}
+        started = time.time()
+        try:
+            done = subprocess.run([*program, "windows", "--json"], env=env, capture_output=True, timeout=20)
+            self.flushers_done()
+        finally:
+            fake.close()
+            if held is not None:
+                os.close(held)
+        window = (started, time.time())
+        kind = "fifo" if fifo.is_fifo() else "file" if fifo.is_file() else "gone"
+        if kind == "fifo":
+            fifo.unlink()
+        records, queued, _, _ = harness.read_telemetry(case, data, window)
+        found = {}
+        for name in (data / "Telemetry" / "cli-flush.json", usage / "usage.json"):
+            text = harness.read_inside(case, name) if name.is_file() else None
+            found[name.name] = harness.scrub_times(json.loads(text), window) if text else text
+        return done.returncode, done.stdout, done.stderr, records, queued, found, kind
+
+    def test_a_private_file_that_is_a_fifo_never_blocks_and_ends_as_python_would_once_it_opened(self):
+        for place in ("data/Telemetry/cli-queue.jsonl", "data/Telemetry/cli-queue.lock", "data/Telemetry/cli-flush-claim.lock",
+                      "data/Telemetry/cli-flush.json", "data/Telemetry/local/cli-{today}.jsonl", "data/Telemetry/local/cli-local.lock",
+                      "cli-home/Usage/usage.json", "cli-home/Usage/usage.lock"):
+            with self.subTest(fifo=place):
+                python = self.ends_with_a_fifo_at(place, [str(self.python), "-I", "-m", "ardia_cli"], hold=True)
+                new = self.ends_with_a_fifo_at(place, [str(self.root / "bin" / "ardia")], hold=False)
+                self.assertEqual(new, python)
 
     def test_its_events_reach_the_collector_through_the_python_flusher(self):
         collector = ThreadingHTTPServer(("127.0.0.1", 0), Collector)
@@ -694,12 +810,12 @@ class EntryProcess:
         self.assertEqual(leftover, [])
 
 
-@unittest.skipUnless(binary(), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
+@harness.requires(binary(), ("rust",), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
 class RustProcess(EntryProcess, unittest.TestCase):
     entry = "rust"
 
 
-@unittest.skipUnless(both_programs(), "build plugins/cli/rust (the router) and plugins/cli/ts (bun run build), or set ARDIA_RUST_CLI and ARDIA_TS_CLI")
+@harness.requires(both_programs(), ("rust", "ts"), "build plugins/cli/rust (the router) and plugins/cli/ts (bun run build), or set ARDIA_RUST_CLI and ARDIA_TS_CLI")
 class TsProcess(EntryProcess, unittest.TestCase):
     entry = "ts"
     hand_backs = (["--data-dir", "/nowhere-�", "windows"],)
@@ -826,7 +942,8 @@ class TsProcess(EntryProcess, unittest.TestCase):
 
     def test_bun_and_node_variables_neither_reach_the_typescript_program_nor_leave_python(self):
         planted = {"BUN_BE_BUN": "1", "BUN_OPTIONS": "--print 7", "NODE_OPTIONS": "--require /nonexistent.js",
-                   "BUN_JSC_useJIT": "0", "JSC_useJIT": "0", "NODE_CHANNEL_FD": "0", "UV_THREADPOOL_SIZE": "1", "BUN_ODD": "x\udcfe"}
+                   "BUN_JSC_useJIT": "0", "JSC_useJIT": "0", "NODE_CHANNEL_FD": "0", "UV_THREADPOOL_SIZE": "1", "BUN_ODD": "x\udcfe",
+                   "mimalloc_verbose": "1", "MiMalloc_Show_Stats": "1"}
         data = self.case / "data"
         data.mkdir()
         fake = FakeArdia(data / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "windows": {"result": []}})

@@ -2,6 +2,7 @@ use crate::clock;
 use crate::endpoint;
 use crate::json::{self, Map, Style, Value};
 use crate::paths::{self, env, Failure};
+use crate::records;
 use crate::usage;
 use std::io::Write;
 use std::os::fd::OwnedFd;
@@ -25,9 +26,7 @@ const MAX_SPOOL_BYTES: usize = 256 * 1024;
 const COUNT_CHECK_BYTES: u64 = 64 * 1024;
 const MAX_EVENTS: usize = 500;
 const MAX_LINE_BYTES: usize = 32 * 1024;
-const MAX_FLAGS: usize = 20;
 const FLUSH_INTERVAL_S: f64 = 60.0;
-const MAX_MS: f64 = 3_600_000.0;
 const TEST_ENDPOINT_FLAGS: &[&str] = &["--port", "--ws", "--cdp"];
 const TEST_ENDPOINT_ENV: &[&str] = &["ARDIA_WS", "ARDIA_PORT", "ARDIA_CDP_URL", "AGENT_BROWSER_CDP"];
 const OFF_VALUES: &[&str] = &["0", "false", "off", "no"];
@@ -42,8 +41,8 @@ pub fn is_dev_build() -> bool {
 
 pub struct Call {
     pub argv: Vec<String>,
-    started: Instant,
-    started_at: f64,
+    pub(crate) started: Instant,
+    pub(crate) started_at: f64,
     pub command: String,
     pub subcommand: Option<String>,
     pub allowed_flags: &'static [&'static str],
@@ -259,7 +258,7 @@ pub fn uuid7() -> String {
     format!("{}-{}-{}-{}-{}", &text[..8], &text[8..12], &text[12..16], &text[16..20], &text[20..])
 }
 
-fn session_id(doc: Option<&Map>) -> String {
+pub(crate) fn session_id(doc: Option<&Map>) -> String {
     if let Some(doc) = doc {
         if doc.get("sessionOpen") == Some(&Value::Bool(true)) {
             if let Some(session) = valid_id(doc.get("sessionId")) {
@@ -270,105 +269,21 @@ fn session_id(doc: Option<&Map>) -> String {
     uuid7()
 }
 
-fn watch_report(doc: &Map) -> Option<String> {
+pub(crate) fn watch_report(doc: &Map) -> Option<String> {
     let report = doc.get("watchReport")?.as_str()?;
     let code = report.strip_prefix("FB-")?;
     ((2..=16).contains(&code.len()) && code.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())).then(|| report.to_string())
 }
 
-fn flag_names(argv: &[String], allowed: &[&str]) -> String {
-    let mut names: Vec<&str> = leading_tokens(argv)
-        .iter()
-        .filter(|token| token.starts_with('-'))
-        .map(|token| token.split('=').next().unwrap_or(""))
-        .filter(|name| allowed.contains(name))
-        .collect();
-    names.sort_unstable();
-    names.dedup();
-    names.truncate(MAX_FLAGS);
-    names.join(",")
-}
-
-#[cfg(target_os = "macos")]
-fn process_started_at() -> Option<f64> {
-    let mut mib = [libc::CTL_KERN, libc::KERN_PROC, libc::KERN_PROC_PID, std::process::id() as libc::c_int];
-    let mut buffer = [0u8; 1024];
-    let mut size = buffer.len();
-    let result = unsafe { libc::sysctl(mib.as_mut_ptr(), 4, buffer.as_mut_ptr().cast(), &mut size, std::ptr::null_mut(), 0) };
-    if result != 0 || size < 16 {
-        return None;
-    }
-    let seconds = i64::from_le_bytes(buffer[..8].try_into().ok()?);
-    let micros = i32::from_le_bytes(buffer[8..12].try_into().ok()?);
-    (seconds > 0).then(|| seconds as f64 + f64::from(micros) / 1e6)
-}
-
-#[cfg(not(target_os = "macos"))]
-fn process_started_at() -> Option<f64> {
-    let raw = std::fs::read("/proc/self/stat").ok()?;
-    let close = raw.iter().rposition(|byte| *byte == b')')?;
-    let fields: Vec<&[u8]> = raw[close + 1..]
-        .split(|byte| byte.is_ascii_whitespace())
-        .filter(|field| !field.is_empty())
-        .collect();
-    let ticks: f64 = std::str::from_utf8(fields.get(19)?).ok()?.parse().ok()?;
-    let mut boot: libc::timespec = unsafe { std::mem::zeroed() };
-    if unsafe { libc::clock_gettime(libc::CLOCK_BOOTTIME, &mut boot) } != 0 {
-        return None;
-    }
-    let per_second = unsafe { libc::sysconf(libc::_SC_CLK_TCK) } as f64;
-    let age = boot.tv_sec as f64 + boot.tv_nsec as f64 / 1e9 - ticks / per_second;
-    (age >= 0.0).then(|| clock::now() - age)
-}
-
-fn whole_ms(value: f64) -> Value {
-    Value::Int(value.round_ties_even().clamp(0.0, MAX_MS) as i128)
-}
-
-fn timings(call: &Call, into: &mut Vec<(&'static str, Value)>) {
-    let elapsed = call.started.elapsed().as_secs_f64() * 1000.0;
-    let startup = process_started_at().map(|started| (call.started_at - started) * 1000.0);
-    match startup {
-        Some(startup) if (0.0..=MAX_MS).contains(&startup) => {
-            into.push(("startup_ms", whole_ms(startup)));
-            into.push(("total_ms", whole_ms(startup + elapsed)));
-        }
-        _ => into.push(("total_ms", whole_ms(elapsed))),
-    }
-}
-
-fn error_code_ok(code: &str) -> bool {
-    let mut bytes = code.bytes();
-    matches!(bytes.next(), Some(b'a'..=b'z')) && code.len() <= 41 && bytes.all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
-}
-
-fn command_record(call: &Call, status: i64, distinct_id: &str, environment: &str, doc: Option<&Map>) -> Value {
-    let error_code = call.error_code.as_deref().filter(|code| error_code_ok(code)).map_or(Value::Null, Value::str);
-    let mut properties = vec![
-        ("command", Value::str(&call.command)),
-        ("subcommand", call.subcommand.as_deref().map_or(Value::Null, Value::str)),
-        ("exit_code", Value::Int(i128::from(status))),
-        ("error_code", error_code),
-        ("flags", Value::str(&flag_names(&call.argv, call.allowed_flags))),
-    ];
-    timings(call, &mut properties);
-    properties.push(("cli_version", Value::str(version())));
-    properties.push(("$environment", Value::str(environment)));
-    properties.push(("served_by", Value::str(SERVED_BY)));
-    properties.push(("$session_id", Value::str(&session_id(doc))));
-    if let Some(report) = doc.filter(|doc| sharing_id(Some(doc)).is_some()).and_then(watch_report) {
-        properties.push(("watch_report", Value::Str(report)));
-    }
-    Value::object(vec![
-        ("uuid", Value::str(&uuid7())),
-        ("event", Value::str("cli_command")),
-        ("distinct_id", Value::str(distinct_id)),
-        ("timestamp", Value::str(&clock::iso(clock::now()))),
-        ("properties", Value::object(properties)),
-    ])
-}
-
 pub fn finish(call: &Call, status: i64, python: Option<&Path>) {
+    finish_with(call, status, None, python);
+}
+
+pub fn finish_crashed(call: &Call, errno: i32, python: Option<&Path>) {
+    finish_with(call, 1, Some(errno), python);
+}
+
+fn finish_with(call: &Call, status: i64, crash: Option<i32>, python: Option<&Path>) {
     usage::record(call, status);
     let Some(target) = cli_target(&call.argv) else { return };
     let root = PathBuf::from(&target.root);
@@ -377,13 +292,27 @@ pub fn finish(call: &Call, status: i64, python: Option<&Path>) {
         return;
     }
     let install_id = sharing_id(doc.as_ref());
-    let record = command_record(call, status, install_id.as_deref().unwrap_or(LOCAL_ONLY_ID), target.environment, doc.as_ref());
-    crate::local_copy::keep(&root, &record, install_id.is_some());
+    let distinct_id = install_id.as_deref().unwrap_or(LOCAL_ONLY_ID);
+    let session = session_id(doc.as_ref());
+    let mut records = Vec::new();
+    if let Some(errno) = crash {
+        records.push(records::exception_record(errno, distinct_id, target.environment, doc.as_ref(), &session));
+    }
+    records.push(records::command_record(
+        call,
+        status,
+        crash.is_some(),
+        distinct_id,
+        target.environment,
+        doc.as_ref(),
+        &session,
+    ));
+    crate::local_copy::keep(&root, &records, install_id.is_some());
     if install_id.is_none() {
         discard_spool(&root);
         return;
     }
-    if let Some(dir) = append(&root, &record) {
+    if let Some(dir) = append(&root, &records) {
         start_flush(&dir, &target, python);
     }
 }
@@ -427,20 +356,23 @@ fn write_lines(dir: &OwnedFd, lines: &[Vec<u8>]) -> Result<(), Failure> {
     paths::write_private(SPOOL, dir, &lines.concat())
 }
 
-fn append(root: &Path, record: &Value) -> Option<OwnedFd> {
+fn spool_line(record: &Value) -> Option<Vec<u8>> {
     let mut line = crate::pystr::well_formed(&json::dumps(record, Style::Compact, false)).into_owned().into_bytes();
     line.push(b'\n');
-    let data = if line.len() <= MAX_LINE_BYTES { line } else { Vec::new() };
+    (line.len() <= MAX_LINE_BYTES).then_some(line)
+}
+
+fn append(root: &Path, records: &[Value]) -> Option<OwnedFd> {
+    let data: Vec<Vec<u8>> = records.iter().filter_map(spool_line).collect();
+    let size_of_data: usize = data.iter().map(Vec::len).sum();
     let dir = open_folder(root, true).ok()?;
     let lock = paths::take_lock_retrying(SPOOL_LOCK, &dir).ok()??;
     let size = paths::size_at(&dir, SPOOL).unwrap_or(0);
-    let written = if size + data.len() as u64 <= COUNT_CHECK_BYTES {
-        paths::open_private_file(SPOOL, &dir, libc::O_WRONLY | libc::O_CREAT | libc::O_APPEND).and_then(|fd| Ok(paths::write_fd(&fd, &data)?))
+    let written = if size + size_of_data as u64 <= COUNT_CHECK_BYTES {
+        paths::open_private_file(SPOOL, &dir, libc::O_WRONLY | libc::O_CREAT | libc::O_APPEND).and_then(|fd| Ok(paths::write_once(&fd, &data.concat())?))
     } else {
         read_lines(&dir).and_then(|mut lines| {
-            if !data.is_empty() {
-                lines.push(data);
-            }
+            lines.extend(data);
             write_lines(&dir, &newest(lines))
         })
     };
@@ -545,6 +477,7 @@ fn spawn_flusher(python: &Path, target: &Target) {
                 }
             }
             libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+            libc::signal(libc::SIGXFSZ, libc::SIG_DFL);
             Ok(())
         });
     }
@@ -599,20 +532,5 @@ mod tests {
         let mut off = doc;
         off.insert("sharing", Value::Int(1));
         assert_eq!(sharing_id(Some(&off)), None);
-    }
-
-    #[test]
-    fn names_only_known_flags() {
-        let argv: Vec<String> = ["--json", "tabs", "--window=w-1", "--flat", "--json", "--", "--usage"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-        assert_eq!(flag_names(&argv, &["--json", "--window", "--flat", "--usage"]), "--flat,--json,--window");
-        assert!(loopback_url("http://127.0.0.1:9/v1/logs"));
-        assert!(!loopback_url("http://example.com:9/x"));
-        assert!(!loopback_url("https://127.0.0.1:9/x"));
-        assert_eq!(data_dir_arg(&["--data-dir".into(), "a".into(), "--data-dir=b".into()]), Some("b".into()));
-        assert!(error_code_ok("connection_dropped"));
-        assert!(!error_code_ok("Bad"));
     }
 }

@@ -11,6 +11,7 @@ type Native = {
   peerUid(fd: number): number;
   interruptsIgnored(): boolean | number;
   openAt(dir: number, name: string, flags: number, mode: number): number;
+  openFileAt(dir: number, name: string, flags: number, mode: number): number | null;
   mkdirAt(dir: number, name: string, mode: number): number;
   renameAt(dir: number, from: string, to: string): number;
   unlinkAt(dir: number, name: Name): number;
@@ -18,10 +19,11 @@ type Native = {
   listAt(dir: number): Buffer[] | number;
   lock(fd: number, exclusive: boolean, wait: boolean): number;
   watchLifeline(fd: number): number;
+  writeAll(fd: number, bytes: Uint8Array): number;
   strerror(errno: number): string | number;
 };
 
-const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "listAt", "lock", "watchLifeline", "strerror"];
+const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "openFileAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "listAt", "lock", "watchLifeline", "writeAll", "strerror"];
 const ERRNO_NAMES = new Map<number, string>(Object.entries(constants.errno).map(([name, value]) => [value, name]));
 const EWOULDBLOCK = constants.errno.EWOULDBLOCK ?? constants.errno.EAGAIN;
 
@@ -114,6 +116,11 @@ export function openAt(dir: number, name: string, flags: number, mode = 0o600): 
   return checked(native().openAt(dir, name, flags, mode), "openat", name);
 }
 
+export function openFileAt(dir: number, name: string, flags: number, mode = 0o600): number | null {
+  const opened = native().openFileAt(dir, name, flags, mode);
+  return opened === null ? null : checked(opened, "openat", name);
+}
+
 export function mkdirAt(dir: number, name: string, mode: number): void {
   checked(native().mkdirAt(dir, name, mode), "mkdirat", name);
 }
@@ -145,6 +152,10 @@ export function flock(fd: number, exclusive: boolean, wait: boolean): boolean {
 
 export function watchLifeline(fd: number): void {
   checked(native().watchLifeline(fd), "pthread_create");
+}
+
+export function writeWhole(fd: number, bytes: Uint8Array): void {
+  checked(native().writeAll(fd, Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)), "write");
 }
 
 export function strerror(errno: number): string {

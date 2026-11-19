@@ -10,16 +10,21 @@ const LOCAL_LOCK: &str = "cli-local.lock";
 const LOCAL_DAYS: f64 = 7.0;
 const MAX_LOCAL_BYTES: usize = 4 * 1024 * 1024;
 
-pub fn keep(root: &Path, record: &Value, sent: bool) -> bool {
+fn local_line(record: &Value, sent: bool) -> Vec<u8> {
     let mut with_sent = record.clone();
     if let Value::Object(map) = &mut with_sent {
         map.insert("sent", Value::Bool(sent));
     }
-    let mut data = crate::pystr::well_formed(&json::dumps(&with_sent, Style::Compact, false))
+    let mut line = crate::pystr::well_formed(&json::dumps(&with_sent, Style::Compact, false))
         .into_owned()
         .into_bytes();
-    data.push(b'\n');
-    if data.len() > MAX_LOCAL_BYTES {
+    line.push(b'\n');
+    line
+}
+
+pub fn keep(root: &Path, records: &[Value], sent: bool) -> bool {
+    let data: Vec<u8> = records.iter().flat_map(|record| local_line(record, sent)).collect();
+    if data.is_empty() || data.len() > MAX_LOCAL_BYTES {
         return false;
     }
     let attempt = || -> Result<bool, Failure> {
@@ -31,7 +36,7 @@ pub fn keep(root: &Path, record: &Value, sent: bool) -> bool {
         };
         let now = clock::now();
         let fd = paths::open_private_file(&local_name(now), &local, libc::O_WRONLY | libc::O_CREAT | libc::O_APPEND)?;
-        paths::write_fd(&fd, &data)?;
+        paths::write_once(&fd, &data)?;
         drop(fd);
         prune_local(&local, now)?;
         Ok(true)

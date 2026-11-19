@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { constants } from "node:os";
-import { flock, listAt, mkdirAt, type Name, openAt, renameAt, sizeAt as statSizeAt, unlinkAt } from "./libc.ts";
+import { flock, listAt, mkdirAt, type Name, openAt, openFileAt, renameAt, sizeAt as statSizeAt, unlinkAt } from "./libc.ts";
 import { codeOf, errnoOf, uid } from "./paths.ts";
 import { sleepMs } from "./printable.ts";
 
@@ -95,7 +95,9 @@ function openRetrying(dir: Dir, name: string, flags: number): number {
   let retries = flags & O_CREAT ? CREATE_RETRIES : 0;
   for (;;) {
     try {
-      return openAt(dir.fd, name, flags | O_NOFOLLOW, 0o600);
+      const fd = openFileAt(dir.fd, name, flags, 0o600);
+      if (fd === null) throw new PathError();
+      return fd;
     } catch (error) {
       if (!notFound(error) || retries === 0) throw error;
       retries -= 1;
@@ -176,11 +178,11 @@ export function readFd(fd: number, limit: number): Buffer {
   return Buffer.concat(chunks);
 }
 
-export function writeFd(fd: number, data: Uint8Array): void {
-  let offset = 0;
-  while (offset < data.length) {
+export function writeOnce(fd: number, data: Uint8Array): void {
+  for (;;) {
     try {
-      offset += fs.writeSync(fd, data, offset, data.length - offset);
+      fs.writeSync(fd, data, 0, data.length);
+      return;
     } catch (error) {
       if (codeOf(error) !== "EINTR") throw error;
     }
@@ -191,7 +193,7 @@ export function writePrivate(name: string, dir: Dir, data: Uint8Array): void {
   const temp = `.${name}.${process.pid}.tmp`;
   const fd = openPrivateFile(temp, dir, O_WRONLY | O_CREAT | O_TRUNC);
   try {
-    writeFd(fd, data);
+    writeOnce(fd, data);
   } finally {
     close(fd);
   }
