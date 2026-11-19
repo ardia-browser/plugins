@@ -1706,7 +1706,19 @@ Python's line-buffered stderr and is tried again before exit: a complaint that f
 `BrokenPipeError` does (`stdout_closed`, status 141), any other error as its crash (the two events above, then the
 exception line), and a stderr still failing at exit makes the status 120, as Python's last flush does. Both entries ignore SIGXFSZ as Python does at startup, so a file-size limit gives `EFBIG`, not
 death by signal; the router restores the caller's disposition before it execs Python, and the flusher starts with it at
-its default, as Python's `subprocess` starts it. A command whose row in `served.txt` says `rust` it serves itself; one that
+its default, as Python's `subprocess` starts it. Like Python's `close_fds=True`, the flusher inherits no descriptor
+above stderr, and the spawn itself sees to it rather than the caller scanning beforehand. On macOS the Rust entry starts
+it with `posix_spawn` and `POSIX_SPAWN_CLOEXEC_DEFAULT` (with `POSIX_SPAWN_SETSID`, SIGPIPE and SIGXFSZ at their
+defaults and an empty signal mask), giving it exactly the config pipe as stdin and `/dev/null` as stdout and stderr,
+whatever the descriptor limits; Bun's macOS spawn, which the TypeScript entry uses, sets the same flag. On Linux the Rust
+entry's child, after its stdio is set up and before it execs, calls `close_range(3, ~0U, CLOSE_RANGE_CLOEXEC)`, then
+`close_range` without the flag (kernels 5.9 and 5.10), then marks what `/proc/self/fd` lists, and when all of those
+fail scans up to the hard `RLIMIT_NOFILE`, capped at 2^20; only that last fallback, on a kernel older than 5.9 with
+`/proc` unavailable, can miss a descriptor above a lowered hard limit. The TypeScript entry relies on Bun's Linux spawn,
+which uses `close_range` and, when that fails (kernels older than 5.9), falls back to a scan bounded by the soft limit
+that can miss a descriptor above a lowered limit. The flusher is detached but stays a child of the Rust entry, which never
+waits for it, so while that call is still running (blocked on its output, say) a flusher that already finished shows as
+a zombie until the call exits and it is reparented and reaped; it holds no descriptors meanwhile. A command whose row in `served.txt` says `rust` it serves itself; one that
 says `ts` it runs as a child, `<root>/libexec/ardia-ts`, whose first argument `--ardia-routed=2:<sigint>:<fd>:<hex caller>`
 carries whether SIGINT was ignored when ardia started, the lifeline descriptor and the caller's hello JSON, since Bun by
 itself can learn none of them. The lifeline is the read end of a pipe whose write end only the router holds: the child sees EOF on it
@@ -1798,6 +1810,11 @@ parity harness rather than stripped wholesale:
   KeyboardInterrupt, then blocks again flushing stdout as it exits, so only a second signal ends it, and it prints
   `KeyboardInterrupt` and an `Exception ignored on flushing sys.stdout` block. The native side dies by SIGINT at once and
   prints nothing more. A listing still ends as Python's does, with `ardia <command>: interrupted` and status 130.
+- Ctrl-C that lands between a listing's interrupt check and its next `write` to a stdout nobody is reading: same as
+  CPython, not a difference in kind. The signal only sets the flag; it doesn't interrupt a `write` that hasn't started,
+  so that write blocks until a second Ctrl-C or until a reader drains the pipe, and only then does the listing end
+  with `ardia <command>: interrupted` and status 130. CPython has exactly this window between its signal check and the
+  blocking `write` in its buffered writer, so no code closes it.
 
 The TypeScript browse daemon's CDP link (M3, not served yet) differs from Python's in these ways, each covered by
 `ts/tests/m3/link.test.ts`, `browser.test.ts` or the link scenarios (`docs/m3-harness.md`):
