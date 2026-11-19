@@ -9,6 +9,8 @@ SCRIPT_DEFAULT = 90.0
 DEFAULT_TIMEOUT_MS = 25000
 LONG_COMMANDS = {"batch": 600.0, "read": 600.0, "record": 600.0}
 MAX_GIVEN = 24 * 3600.0
+MAX_DEADLINE = 9.2e9
+MAX_COMMAND_LIMIT = MAX_DEADLINE - 2 * MAX_GIVEN
 
 
 def seconds_of(text: str | None) -> float | None:
@@ -35,6 +37,10 @@ def given_timeout(argv: list[str]) -> float | None:
 
 
 def command_limit(name: str, argv: list[str], timeout: float) -> float:
+    return min(unbounded_command_limit(name, argv, timeout), MAX_COMMAND_LIMIT)
+
+
+def unbounded_command_limit(name: str, argv: list[str], timeout: float) -> float:
     given = given_timeout(argv)
     if name == "wait":
         plain = next((seconds_of(arg) for arg in argv if re.fullmatch(r"\d+(\.\d+)?", arg)), None)
@@ -58,4 +64,4 @@ def answer_deadline(payload: dict) -> float:
     timeout = float(options.get("timeout_ms") or DEFAULT_TIMEOUT_MS) / 1000
     name, rest = str(argv[0]), [str(arg) for arg in argv[1:]]
     waits = max(queue_wait(name, rest, patient=bool(payload.get("patient_queue"))), BEHIND_SCRIPT_WAIT)
-    return min(waits + command_limit(name, rest, timeout) + LIMIT_MARGIN, MAX_GIVEN)
+    return waits + command_limit(name, rest, timeout) + LIMIT_MARGIN

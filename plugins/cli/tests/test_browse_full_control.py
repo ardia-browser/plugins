@@ -479,13 +479,48 @@ class CheckedBeforeConnecting(unittest.TestCase):
             self.assertEqual(status, 1, argv)
             self.assertIn("--target", err)
 
-    def test_the_client_deadline_is_capped_at_a_day(self):
+    def test_finite_deadlines_are_what_they_were_before_the_cap(self):
         from ardia_cli.browse import limits
 
-        for payload in ({"argv": ["script", "--timeout", "1d"]}, {"argv": ["script", "--timeout", "9" * 400]},
-                        {"argv": ["wait", "x"], "options": {"timeout_ms": "inf"}}, {"argv": ["cdp", "Page.x"], "options": {"timeout_ms": "1e400"}}):
-            self.assertLessEqual(limits.answer_deadline(payload), limits.MAX_GIVEN, payload)
-        self.assertEqual(limits.answer_deadline({"argv": ["get", "url"], "options": {"timeout_ms": "inf"}}), 450.0)
+        def before(payload):
+            argv = payload.get("argv") or [""]
+            options = payload.get("options") or {}
+            timeout = float(options.get("timeout_ms") or limits.DEFAULT_TIMEOUT_MS) / 1000
+            name, rest = str(argv[0]), [str(arg) for arg in argv[1:]]
+            waits = max(limits.queue_wait(name, rest, patient=bool(payload.get("patient_queue"))), limits.BEHIND_SCRIPT_WAIT)
+            return waits + limits.command_limit(name, rest, timeout) + limits.LIMIT_MARGIN
+
+        payloads = [{"argv": ["wait", "86400000"]}, {"argv": ["wait", "86399999"]}, {"argv": ["wait", "86400001"]},
+                    {"argv": ["wait", "--text", "x", "--timeout", "86400000"]}, {"argv": ["wait", "x"], "options": {"timeout_ms": 86400000}},
+                    {"argv": ["wait", "x"], "options": {"timeout_ms": 10 ** 12}}, {"argv": ["script", "--timeout", "1d"]},
+                    {"argv": ["script", "--timeout", "1440m"]}, {"argv": ["script", "--timeout", "86399s"]},
+                    {"argv": ["read", "a", "--timeout", "86400s"], "patient_queue": True}, {"argv": ["cdp", "Page.x", "--timeout", "10m"]},
+                    {"argv": ["get", "url"], "options": {"timeout_ms": "inf"}}, {"argv": ["click", "@e1"]}]
+        for payload in payloads:
+            self.assertEqual(limits.answer_deadline(payload), before(payload), payload)
+        self.assertEqual(limits.answer_deadline({"argv": ["wait", "86400000"]}), 300 + 86430 + 30)
+        self.assertEqual(limits.answer_deadline({"argv": ["script", "--timeout", "1440m"]}), 172860)
+
+    def test_an_unbounded_deadline_is_capped_above_the_daemons_budget(self):
+        import math
+        import socket as sockets
+
+        from ardia_cli.browse import limits
+
+        for payload in ({"argv": ["wait", "x"], "options": {"timeout_ms": "inf"}}, {"argv": ["wait", "--text", "x"], "options": {"timeout_ms": "1e400"}},
+                        {"argv": ["wait", "x"], "options": {"timeout_ms": 10 ** 16}}, {"argv": ["cdp", "Page.x"], "options": {"timeout_ms": "1e300"}},
+                        {"argv": ["read", "a"], "options": {"timeout_ms": "inf"}, "patient_queue": True}):
+            deadline = limits.answer_deadline(payload)
+            self.assertTrue(math.isfinite(deadline), payload)
+            probe = sockets.socket()
+            probe.settimeout(deadline)
+            probe.close()
+            name, rest = payload["argv"][0], payload["argv"][1:]
+            timeout = float(payload["options"]["timeout_ms"]) / 1000
+            budget = limits.command_limit(name, rest, timeout)
+            allowance = max(limits.queue_wait(name, rest, patient=bool(payload.get("patient_queue"))), limits.BEHIND_SCRIPT_WAIT)
+            self.assertTrue(math.isfinite(budget), payload)
+            self.assertGreaterEqual(deadline, budget + allowance, payload)
 
     def test_a_huge_timeout_never_overflows_the_client_deadline(self):
         import math
