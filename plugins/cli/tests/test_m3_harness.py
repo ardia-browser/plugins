@@ -74,19 +74,33 @@ class Normalizer(unittest.TestCase):
 
 
 class Divergences(unittest.TestCase):
-    def shaped(self, items):
-        return normalize.transcript(entries(*items), normalize.Subs({}))[0]
+    def shaped(self, items, names=None):
+        rewrite = divergences.rewriter(names) if names is not None else None
+        return normalize.transcript(entries(*items), normalize.Subs({}), rewrite)[0]
 
     def test_the_busy_probe_compares_equal_across_worlds_only_when_the_scenario_names_it(self):
-        python = self.shaped([("mark", 3), ("out", message(id=1, method="Runtime.evaluate", sessionId="S", params={"expression": "1", "returnByValue": True}))])
-        ts = self.shaped([("mark", 3), ("out", message(id=4, method="Runtime.evaluate", sessionId="S", params={"expression": "1", "contextId": 2, "returnByValue": True}))])
-        self.assertTrue(compare.compared(python, ts, compare.LIVE))
-        named = ["busy-probe-isolated"]
-        self.assertEqual(compare.compared(divergences.apply(copy.deepcopy(python), named), divergences.apply(copy.deepcopy(ts), named), compare.LIVE), [])
-        other = self.shaped([("mark", 3), ("out", message(id=4, method="Runtime.evaluate", sessionId="S", params={"expression": "2", "contextId": 2}))])
-        self.assertTrue(compare.compared(divergences.apply(copy.deepcopy(python), named), divergences.apply(other, named), compare.LIVE))
+        python = [("mark", 3), ("out", message(id=1, method="Runtime.evaluate", sessionId="S", params={"expression": "1", "returnByValue": True}))]
+        ts = [("mark", 3), ("out", message(id=4, method="Runtime.evaluate", sessionId="S", params={"expression": "1", "contextId": 2, "returnByValue": True}))]
+        self.assertTrue(compare.compared(self.shaped(python), self.shaped(ts), compare.LIVE))
+        named = divergences.names_for({"divergences": ["busy-probe-isolated"]})
+        self.assertEqual(compare.compared(self.shaped(python, named), self.shaped(ts, named), compare.LIVE), [])
+        other = [("mark", 3), ("out", message(id=4, method="Runtime.evaluate", sessionId="S", params={"expression": "2", "contextId": 2}))]
+        self.assertTrue(compare.compared(self.shaped(python, named), self.shaped(other, named), compare.LIVE))
         with self.assertRaises(ValueError):
-            divergences.apply(copy.deepcopy(python), ["no-such-divergence"])
+            divergences.names_for({"divergences": ["no-such-divergence"]})
+
+    def test_world_handles_compare_with_python_context_ids_without_shifting_other_ids(self):
+        call = {"functionDeclaration": "() => document.title", "arguments": [], "returnByValue": True, "awaitPromise": True}
+        python = [("mark", 1), ("out", message(id=1, method="Runtime.callFunctionOn", sessionId="SESSION-A", params={**call, "executionContextId": 5})),
+                  ("in", message(id=1, result={})), ("out", message(id=2, method="DOM.describeNode", sessionId="SESSION-A", params={"objectId": "NODE-1"}))]
+        ts = [("mark", 1), ("out", message(id=7, method="Runtime.evaluate", sessionId="SESSION-B", params={"expression": "globalThis", "contextId": 5, "returnByValue": False})),
+              ("in", message(id=7, result={"result": {"objectId": "HANDLE-XYZ"}})),
+              ("out", message(id=8, method="Runtime.callFunctionOn", sessionId="SESSION-B", params={**call, "objectId": "HANDLE-XYZ"})),
+              ("in", message(id=8, result={})), ("out", message(id=9, method="DOM.describeNode", sessionId="SESSION-B", params={"objectId": "NODE-2"}))]
+        names = divergences.names_for({})
+        self.assertEqual(names, ["world-handle"])
+        self.assertTrue(compare.compared(self.shaped(python, []), self.shaped(ts, []), compare.LIVE))
+        self.assertEqual(compare.compared(self.shaped(python, names), self.shaped(ts, names), compare.LIVE), [])
 
     def test_every_divergence_names_its_row(self):
         for name, entry in divergences.DIVERGENCES.items():
@@ -99,11 +113,15 @@ class Divergences(unittest.TestCase):
             lines = [{"k": "out", "m": message(id=1, method="Runtime.enable", sessionId="S")},
                      {"k": "out", "m": message(id=2, method="Runtime.enable")},
                      {"k": "out", "m": message(id=3, method="Debugger.enable", sessionId="S")},
-                     {"k": "out", "m": message(id=4, method="Runtime.evaluate", sessionId="S", params={"expression": "1"})},
-                     {"k": "out", "m": message(id=5, method="Runtime.evaluate", sessionId="S", params={"expression": "1", "contextId": 3})}]
+                     {"k": "out", "m": message(id=4, method="Runtime.evaluate", sessionId="T", params={"expression": "1"})},
+                     {"k": "out", "m": message(id=5, method="Page.createIsolatedWorld", sessionId="S", params={"frameId": "F"})},
+                     {"k": "out", "m": message(id=6, method="Runtime.evaluate", sessionId="S", params={"expression": "1"})},
+                     {"k": "out", "m": message(id=7, method="Runtime.evaluate", sessionId="S", params={"expression": "1", "contextId": 3})},
+                     {"k": "out", "m": message(id=8, method="Runtime.callFunctionOn", sessionId="S", params={"executionContextId": 3})}]
             path.write_text("".join(json.dumps(line) + "\n" for line in lines))
-            self.assertEqual(divergences.checks(path), ["row 8: Debugger.enable sent on a page session", "row 8: Runtime.enable sent on a page session",
-                                                        "row 8: the busy probe ran in the page's main world"])
+            self.assertEqual(divergences.checks(path), ["a page call named a numeric execution context instead of its world handle",
+                                                        "row 8: Debugger.enable sent on a page session", "row 8: Runtime.enable sent on a page session",
+                                                        "row 8: the busy probe ran in the page's main world though the page had an isolated world"])
         finally:
             shutil.rmtree(folder, ignore_errors=True)
 

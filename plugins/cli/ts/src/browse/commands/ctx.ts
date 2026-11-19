@@ -19,75 +19,48 @@ function joinPath(head: string, tail: string): string {
   return `${head}/${tail}`;
 }
 
-function splitPath(target: string): [string, string] {
-  const cut = target.lastIndexOf("/") + 1;
-  let head = target.slice(0, cut);
-  if (head !== "" && !/^\/+$/u.test(head)) head = head.replace(/\/+$/u, "");
-  return [head, target.slice(cut)];
-}
-
-function lstatLink(target: string): boolean {
-  try {
-    return fs.lstatSync(target).isSymbolicLink();
-  } catch {
-    return false;
-  }
-}
-
-function joinRealpath(start: string, given: string, seen: Map<string, string | null>): [string, boolean] {
-  let current = start;
-  let rest = given;
-  if (rest.startsWith("/")) {
-    rest = rest.slice(1);
-    current = "/";
-  }
-  while (rest) {
-    const cut = rest.indexOf("/");
-    const name = cut < 0 ? rest : rest.slice(0, cut);
-    rest = cut < 0 ? "" : rest.slice(cut + 1);
-    if (name === "" || name === ".") continue;
-    if (name === "..") {
-      if (current) {
-        const [head, tail] = splitPath(current);
-        current = tail === ".." ? joinPath(joinPath(head, ".."), "..") : head;
-      } else current = "..";
+export function pyResolve(filename: string): string {
+  const rest: (string | null)[] = filename.split("/").reverse();
+  let partCount = rest.length;
+  let current = filename.startsWith("/") ? "/" : process.cwd();
+  const seen = new Map<string, string | null>();
+  while (partCount) {
+    const name = rest.pop();
+    if (name === null) {
+      seen.set(rest.pop() as string, current);
       continue;
     }
-    const next = joinPath(current, name);
-    if (!lstatLink(next)) {
+    partCount -= 1;
+    if (!name || name === ".") continue;
+    if (name === "..") {
+      current = current.slice(0, current.lastIndexOf("/")) || "/";
+      continue;
+    }
+    const next = current === "/" ? `/${name}` : `${current}/${name}`;
+    let target: string;
+    try {
+      if (!fs.lstatSync(next).isSymbolicLink()) {
+        current = next;
+        continue;
+      }
+      if (seen.has(next)) {
+        const known = seen.get(next);
+        current = known ?? next;
+        continue;
+      }
+      target = fs.readlinkSync(next);
+    } catch {
       current = next;
       continue;
     }
-    if (seen.has(next)) {
-      const known = seen.get(next);
-      if (known !== null && known !== undefined) {
-        current = known;
-        continue;
-      }
-      return [joinPath(next, rest), false];
-    }
+    if (target.startsWith("/")) current = "/";
     seen.set(next, null);
-    const [resolved, ok] = joinRealpath(current, fs.readlinkSync(next), seen);
-    current = resolved;
-    if (!ok) return [joinPath(current, rest), false];
-    seen.set(next, current);
+    rest.push(next, null);
+    const parts = target.split("/").reverse();
+    rest.push(...parts);
+    partCount += parts.length;
   }
-  return [current, true];
-}
-
-function normpath(target: string): string {
-  const leading = target.startsWith("//") && !target.startsWith("///") ? "//" : target.startsWith("/") ? "/" : "";
-  const parts: string[] = [];
-  for (const part of target.split("/")) {
-    if (part === "" || part === ".") continue;
-    if (part !== ".." || (!leading && parts.length === 0) || parts.at(-1) === "..") parts.push(part);
-    else if (parts.length > 0) parts.pop();
-  }
-  return leading + parts.join("/") || leading || ".";
-}
-
-export function pyResolve(target: string): string {
-  return normpath(joinRealpath("", target, new Map())[0]);
+  return current;
 }
 
 export class Ctx {

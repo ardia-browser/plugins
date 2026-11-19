@@ -3,6 +3,16 @@ import json
 from tests.m3 import normalize
 
 DIVERGENCES = {
+    "world-handle": {
+        "row": 8,
+        "always": True,
+        "commands": "every isolated-world page call",
+        "python": 'Runtime.callFunctionOn {"executionContextId": <world>, ...}',
+        "ts": 'Runtime.evaluate {"expression": "globalThis", "contextId": <world>, "returnByValue": false} once per world, then '
+              'Runtime.callFunctionOn {"objectId": <that handle>, ...}',
+        "why": "a numeric context id can be reused across renderer processes; the handle's object id is refused by the renderer once "
+               "its document is gone, so a call never runs in a document it wasn't meant for",
+    },
     "busy-probe-isolated": {
         "row": 8,
         "commands": "any command on a tab whose page stopped answering in the last 120 s (the busy probe before it)",
@@ -13,7 +23,8 @@ DIVERGENCES = {
     },
     "oopif-auto-attach": {
         "row": 13,
-        "commands": "every page session the TS daemon attaches (always applied)",
+        "always": True,
+        "commands": "every page session the TS daemon attaches",
         "python": "nothing: Python never sees out-of-process iframes",
         "ts": 'Target.setAutoAttach {"autoAttach": true, "waitForDebuggerOnStart": false, "flatten": true, "filter": iframes only} on the page '
               "session after Page.setLifecycleEventsEnabled, and on each iframe session it attaches; replay answers it with an empty result",
@@ -21,27 +32,29 @@ DIVERGENCES = {
     },
     "temp-tab-marker": {
         "row": None,
+        "always": True,
         "decision": "D2 round 3 (plugins#20): temporary tabs open at about:blank#ardia-temp-<nonce> so a later sweep finds lost ones",
-        "commands": "read <url>... (temporary reader tabs), always applied",
+        "commands": "read <url>... (temporary reader tabs)",
         "python": 'Target.createTarget {"url": "about:blank", "background": true} for a reader tab',
-        "ts": 'Target.createTarget {"url": "about:blank#ardia-temp-<nonce>", "background": true}, D2\'s marked temporary tabs that a later sweep can find',
-        "why": "D2 review: a temporary tab lost at shutdown is closed by the next sweep only if it is marked (docs/cli.md accepted differences)",
+        "ts": 'Target.createTarget {"url": "about:blank#ardia-temp-<nonce>", "background": true}',
+        "why": "a temporary tab lost at shutdown is closed by the next sweep only if it is marked (docs/cli.md accepted differences)",
     },
     "shadow-pierce": {
         "row": 12,
-        "commands": "a selector that matches nothing in the document (get, is, snapshot -s, read -s, get count), always applied",
+        "always": True,
+        "commands": "a selector that matches nothing in the document (get, is, snapshot -s, read -s, get count)",
         "python": "nothing: the command fails with not_found",
-        "ts": 'DOM.getDocument {"depth": -1, "pierce": true}, then each open or closed shadow root resolved into the isolated world and searched',
+        "ts": 'DOM.getDocument {"depth": -1, "pierce": true}, then each open or closed shadow root resolved into the isolated world and searched; '
+              "replay answers it with an empty document",
         "why": "selectors reach elements inside closed shadow roots (ardia#2812 row 12)",
     },
 }
-ALWAYS = ("oopif-auto-attach", "temp-tab-marker", "shadow-pierce")
 TEMP_MARKER = "about:blank#ardia-temp-"
-AUTO_ATTACH = "Target.setAutoAttach"
 
 UNANSWERING_FAULTS = ("drop", "stop")
 PAGE_SESSION_ENABLES = ("Runtime.enable", "Debugger.enable", "Console.enable")
 BUSY_PROBE = "1"
+WORLD_HANDLE = "globalThis"
 
 
 def daemon_of(impl: str) -> str:
@@ -52,44 +65,48 @@ def busy_probe(message: dict) -> bool:
     return message.get("method") == "Runtime.evaluate" and (message.get("params") or {}).get("expression") == BUSY_PROBE
 
 
-def rewrite(form: str, names: list[str]) -> str:
-    parsed = json.loads(form)
-    if "oopif-auto-attach" in names and parsed.get("method") == AUTO_ATTACH:
-        return ""
-    if "shadow-pierce" in names and parsed.get("method") == "DOM.getDocument" and (parsed.get("params") or {}).get("pierce") is True:
-        return ""
-    if "temp-tab-marker" in names and parsed.get("method") == "Target.createTarget" and str((parsed.get("params") or {}).get("url", "")).startswith(TEMP_MARKER):
-        parsed["params"] = {**parsed["params"], "url": "about:blank"}
-        return normalize.canonical(parsed)
-    if "busy-probe-isolated" not in names:
-        return form
-    message = json.loads(form)
-    if busy_probe(message):
-        params = dict(message.get("params") or {})
-        params.pop("contextId", None)
-        message["params"] = params
-        return normalize.canonical(message)
-    return form
+def names_for(scenario: dict, fault=None) -> list[str]:
+    names = [name for name, entry in DIVERGENCES.items() if entry.get("always")]
+    for name in scenario.get("divergences") or []:
+        if name not in DIVERGENCES:
+            raise ValueError(f"unknown divergence: {name}")
+        if name not in names:
+            names.append(name)
+    if fault is not None and fault.kind in UNANSWERING_FAULTS and "busy-probe-isolated" not in names:
+        names.append("busy-probe-isolated")
+    return names
 
 
-def apply(shaped: dict, names: list[str] | None) -> dict:
-    names = list(names or []) + [name for name in ALWAYS if name not in (names or [])]
+def rewriter(names: list[str]):
     unknown = [name for name in names if name not in DIVERGENCES]
     if unknown:
         raise ValueError(f"unknown divergence(s): {unknown}")
-    for part in ("requests", "request_sets"):
-        for step, sessions in shaped.get(part, {}).items():
-            for session, value in sessions.items():
-                if part == "requests":
-                    sessions[session] = [sorted(form for form in (rewrite(item, names) for item in group) if form) for group in value]
-                    sessions[session] = [group for group in sessions[session] if group]
-                else:
-                    sessions[session] = sorted({form for form in (rewrite(item, names) for item in value) if form})
-    return shaped
+
+    def rewrite(message: dict) -> dict | None:
+        params = message.get("params") or {}
+        method = message.get("method")
+        if "world-handle" in names:
+            if method == "Runtime.evaluate" and params.get("expression") == WORLD_HANDLE and params.get("returnByValue") is False:
+                return None
+            if method == "Runtime.callFunctionOn":
+                kept = {key: value for key, value in params.items() if key not in ("executionContextId", "objectId")}
+                message = {**message, "params": kept}
+        if "oopif-auto-attach" in names and method == "Target.setAutoAttach":
+            return None
+        if "shadow-pierce" in names and method == "DOM.getDocument" and params.get("pierce") is True:
+            return None
+        if "temp-tab-marker" in names and method == "Target.createTarget" and str(params.get("url", "")).startswith(TEMP_MARKER):
+            message = {**message, "params": {**params, "url": "about:blank"}}
+        if "busy-probe-isolated" in names and busy_probe(message):
+            message = {**message, "params": {key: value for key, value in params.items() if key != "contextId"}}
+        return message
+
+    return rewrite
 
 
 def checks(transcript_path) -> list[str]:
     found = []
+    worlds = set()
     for entry in normalize.load(transcript_path):
         if entry.get("k") != "out":
             continue
@@ -101,6 +118,10 @@ def checks(transcript_path) -> list[str]:
             continue
         if message.get("method") in PAGE_SESSION_ENABLES:
             found.append(f"row 8: {message['method']} sent on a page session")
-        if busy_probe(message) and "contextId" not in (message.get("params") or {}):
-            found.append("row 8: the busy probe ran in the page's main world")
+        if message.get("method") == "Page.createIsolatedWorld":
+            worlds.add(message["sessionId"])
+        if busy_probe(message) and "contextId" not in (message.get("params") or {}) and message["sessionId"] in worlds:
+            found.append("row 8: the busy probe ran in the page's main world though the page had an isolated world")
+        if message.get("method") == "Runtime.callFunctionOn" and "executionContextId" in (message.get("params") or {}):
+            found.append("a page call named a numeric execution context instead of its world handle")
     return sorted(set(found))

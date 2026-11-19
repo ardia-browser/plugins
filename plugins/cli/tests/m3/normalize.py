@@ -34,7 +34,7 @@ RULES = {
     "unstable-steps": "live mode compares only exit and stderr of the steps a scenario lists in `unstable_steps`, with the reason in the scenario",
     "metrics": "of an answer's `metrics` only the key set is compared, never values",
     "racy-steps": "every mode compares only the exit status of the steps a scenario lists in `racy_steps`, where Chromium decides which of two errors the same request gets (the reason is in the scenario)",
-    "divergences": "a scenario's `divergences` name designed TS differences from tests/m3/divergences.py; each rewrites only the request form it names, on both sides",
+    "divergences": "designed TS differences from tests/m3/divergences.py (`world-handle` always, the rest when a scenario names them) rewrite only the request fields they name, on both sides, before IDs are numbered",
 }
 
 
@@ -98,7 +98,7 @@ class Subs:
         return text
 
 
-def transcript(entries: list[dict], subs: Subs) -> tuple[dict, Ids]:
+def transcript(entries: list[dict], subs: Subs, rewrite=None) -> tuple[dict, Ids]:
     ids = Ids()
     local = Ids()
     step: str = "setup"
@@ -106,6 +106,7 @@ def transcript(entries: list[dict], subs: Subs) -> tuple[dict, Ids]:
     open_by_session: dict[tuple, set] = {}
     session_of: dict[tuple, tuple] = {}
     sources: dict[str, set] = {}
+    dropped: set = set()
     for entry in entries:
         kind = entry.get("k")
         if kind == "mark":
@@ -123,6 +124,9 @@ def transcript(entries: list[dict], subs: Subs) -> tuple[dict, Ids]:
             continue
         conn = entry.get("c", 0)
         if kind == "in":
+            if (conn, message.get("id")) in dropped:
+                dropped.discard((conn, message.get("id")))
+                continue
             ids.walk(message)
             found = (conn, message.get("id"))
             if found in session_of:
@@ -130,6 +134,12 @@ def transcript(entries: list[dict], subs: Subs) -> tuple[dict, Ids]:
             continue
         if "method" not in message or "id" not in message:
             continue
+        if rewrite is not None:
+            rewritten = rewrite(message)
+            if rewritten is None:
+                dropped.add((conn, message["id"]))
+                continue
+            message = rewritten
         session = (conn, message.get("sessionId") or "")
         ids.walk(message)
         normalized = local.walk({name: value for name, value in message.items() if name != "id"})
@@ -199,9 +209,9 @@ def files(found: dict, subs: Subs, ids: Ids, keys: dict) -> dict:
     return dict(sorted(shaped.items()))
 
 
-def run(result, unstable: list[int] | None = None, racy: list[int] | None = None) -> dict:
+def run(result, unstable: list[int] | None = None, racy: list[int] | None = None, rewrite=None) -> dict:
     subs = Subs(result.subs)
-    requests, ids = transcript(load(result.transcript), subs)
+    requests, ids = transcript(load(result.transcript), subs, rewrite)
     keys = session_keys(result.files)
     answers = [answer(step, subs, ids, keys) for step in result.steps]
     for index in unstable or []:

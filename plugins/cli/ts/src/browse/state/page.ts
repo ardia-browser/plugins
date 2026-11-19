@@ -34,8 +34,10 @@ const BUSY_WHY = (probe: number) =>
   `the page's own scripts are keeping its tab busy, so it isn't answering. While it stays that way, commands on this tab give up after ${formatG(probe)} s instead of waiting; \`ardia browse reload\` it, or work from a lighter page (search results, the site's own API, or \`read --http <url>\`)`;
 const CRASH_SAFE = new Set(["Inspector.enable", "Page.reload", "Page.navigate"]);
 const OTHER_WORLD = "same JavaScript world";
-const STALE_CONTEXT = ["Cannot find context", "Execution context was destroyed", "Cannot find default execution context", "Inspected target navigated"];
+const STALE_CONTEXT = ["Cannot find context", "Execution context was destroyed", "Cannot find default execution context", "Inspected target navigated", "Could not find object with given id"];
+export const WORLD_HANDLE = "globalThis";
 
+export type World = { frame: string; loader: string | null; context: number; handle: string };
 export type Frame = { id: string; url: string; loader: string | null; parent: string | null; name: string; origin: string };
 export type Lifecycle = { loader: string | null; names: Set<string> };
 export type Viewport = [number, number] | null;
@@ -100,7 +102,7 @@ export class Page {
   browser: Browser | null = null;
   frames = new Map<string, Frame>();
   mainFrame: string | null = null;
-  readonly worlds = new Map<string, [string | null, number]>();
+  readonly worlds = new Map<string, [string | null, number, string]>();
   readonly frameSessions = new Map<string, string>();
   readonly oopifs = new Map<string, oopif.Oopif>();
   readonly lifecycle = new Map<string, Lifecycle>();
@@ -237,13 +239,10 @@ export class Page {
     const deadline = monotonic() + BUSY_PROBE;
     const left = () => Math.max(0.001, deadline - monotonic());
     try {
-      let main = this.mainFrame;
+      const main = this.mainFrame;
       if (main === null) {
-        const tree = await browser.send("Page.getFrameTree", null, { session, timeout: left() });
-        const found = record(record(tree["frameTree"])["frame"])["id"];
-        main = typeof found === "string" ? found : null;
-      }
-      if (main !== null) {
+        await browser.send("Runtime.evaluate", { expression: "1", returnByValue: true }, { session, timeout: BUSY_PROBE });
+      } else {
         const cached = this.worlds.get(main);
         const context =
           cached && cached[0] === this.loader(main)
@@ -290,6 +289,10 @@ export class Page {
         this.scriptIds.set(visible, String(result["identifier"]));
         restored += 1;
       } catch (error) {
+        if (error instanceof Cancelled || error instanceof OutcomeUnknown || error instanceof CdpTimeout) {
+          this.dropSession();
+          throw error;
+        }
         if (!ignorable(error)) throw error;
         lost.push(`init script ${visible}`);
         this.initScripts.delete(visible);
@@ -337,6 +340,19 @@ export class Page {
       );
     }
     if (restored) flag("setup_restored", true);
+  }
+
+  dropSession(): void {
+    const session = this.session;
+    const browser = this.browser;
+    this.detach();
+    this.needsEnable = true;
+    this.needsRestore = true;
+    this.restoring = null;
+    flag("setup_session_dropped", true);
+    if (session !== null && browser !== null) {
+      browser.send("Target.detachFromTarget", { sessionId: session }, { timeout: DETACH_WAIT, signal: null }).catch(() => {});
+    }
   }
 
   markCrashed(): void {
@@ -430,11 +446,12 @@ export class Page {
     return (await this.worldOf(frameId)).context;
   }
 
-  private stillCurrent(frame: string, loader: string | null, context: number): boolean {
-    return this.frames.has(frame) && this.loader(frame) === loader && this.worlds.get(frame)?.[1] === context;
+  private stillCurrent(world: World): boolean {
+    const cached = this.worlds.get(world.frame);
+    return this.frames.has(world.frame) && this.loader(world.frame) === world.loader && cached?.[1] === world.context && cached[2] === world.handle;
   }
 
-  async worldOf(frameId: string | null = null): Promise<{ frame: string; loader: string | null; context: number }> {
+  async worldOf(frameId: string | null = null): Promise<World> {
     const frame = frameId || this.mainFrame;
     if (frame === null || !this.frames.has(frame)) {
       await this.refreshFrames();
@@ -442,16 +459,22 @@ export class Page {
     }
     const loader = this.loader(frame);
     const cached = this.worlds.get(frame);
-    if (cached && cached[0] === loader) return { frame, loader, context: cached[1] };
+    if (cached && cached[0] === loader) return { frame, loader, context: cached[1], handle: cached[2] };
     const session = this.sessionFor(frame);
+    const fresh = () => this.frames.has(frame) && this.loader(frame) === loader;
+    const guard = () => {
+      if (!fresh()) throw new StaleWorld();
+    };
     const result = await this.send("Page.createIsolatedWorld", { frameId: frame, worldName: WORLD_NAME }, { session });
     const context = Number(result["executionContextId"]);
-    const fresh = () => this.frames.has(frame) && this.loader(frame) === loader;
-    if (!fresh()) throw new StaleWorld();
-    await this.send("Runtime.evaluate", { expression: LIBRARY, contextId: context, returnByValue: true }, { session, guard: () => { if (!fresh()) throw new StaleWorld(); } });
-    if (!fresh()) throw new StaleWorld();
-    this.worlds.set(frame, [loader, context]);
-    return { frame, loader, context };
+    guard();
+    await this.send("Runtime.evaluate", { expression: LIBRARY, contextId: context, returnByValue: true }, { session, guard });
+    guard();
+    const handle = record(record((await this.send("Runtime.evaluate", { expression: WORLD_HANDLE, contextId: context, returnByValue: false }, { session, guard }))["result"]))["objectId"];
+    guard();
+    if (typeof handle !== "string" || !handle) throw new StaleWorld();
+    this.worlds.set(frame, [loader, context, handle]);
+    return { frame, loader, context, handle };
   }
 
   async call(fn: string, args: unknown[] = [], options: CallOptions = {}): Promise<unknown> {
@@ -460,14 +483,14 @@ export class Page {
     const read = options.read ?? false;
     const elements = args.some((arg) => arg instanceof Element);
     for (const attempt of [0, 1]) {
-      let world: { frame: string; loader: string | null; context: number } | undefined;
+      let world: World | undefined;
       let result: CdpResult;
       try {
         world = await this.worldOf(wanted);
-        const { frame, loader, context } = world;
+        const bound = world;
         const params = {
           functionDeclaration: fn,
-          executionContextId: context,
+          objectId: bound.handle,
           arguments: args.map((arg) => (arg instanceof Element ? { objectId: arg.objectId } : { value: arg })),
           returnByValue: byValue,
           awaitPromise: options.awaitPromise ?? true,
@@ -475,9 +498,9 @@ export class Page {
         result = await this.send("Runtime.callFunctionOn", params, {
           timeout: options.timeout ?? 30,
           mutation: !read,
-          session: this.sessionFor(frame),
+          session: this.sessionFor(bound.frame),
           guard: () => {
-            if (!this.stillCurrent(frame, loader, context)) throw new StaleWorld();
+            if (!this.stillCurrent(bound)) throw new StaleWorld();
           },
         });
       } catch (error) {

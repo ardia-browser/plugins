@@ -46,6 +46,8 @@ function designed(message: Message): Message {
   if (message.method === "Target.createTarget" && String(params["url"] ?? "").startsWith(TEMP_MARKER)) return { ...message, params: { ...params, url: "about:blank" } };
   return message;
 }
+const WORLD_HANDLE = "globalThis";
+const HANDLE_PREFIX = "ardia-world-handle:";
 
 export class ReplayConn {
   private readonly requests: Recorded[] = [];
@@ -114,6 +116,7 @@ export class ReplayConn {
     if (this.failed) return;
     const message = parse(text);
     if (!message || message.id === undefined || !message.method) return;
+    if (this.worldHandle(message)) return;
     const session = message.sessionId ?? "";
     const form = requestForm(designed(message));
     const synthesized = synthesize(message);
@@ -138,6 +141,22 @@ export class ReplayConn {
     this.happened.set(found.hit.index, performance.now());
     this.skipPassedProbes(found.hit.index);
     this.pump();
+  }
+
+  private worldHandle(message: NonNullable<ReturnType<typeof parse>>): boolean {
+    const params = (message.params ?? {}) as Record<string, unknown>;
+    if (message.method === "Runtime.evaluate" && params["expression"] === WORLD_HANDLE && params["returnByValue"] === false && typeof params["contextId"] === "number") {
+      const answer: Record<string, unknown> = { id: message.id, result: { result: { type: "object", className: "Window", objectId: `${HANDLE_PREFIX}${params["contextId"]}` } } };
+      if (message.sessionId) answer["sessionId"] = message.sessionId;
+      this.hooks.note("divergence", requestForm(message));
+      this.hooks.batch(() => this.hooks.send(JSON.stringify(answer)));
+      return true;
+    }
+    if (message.method === "Runtime.callFunctionOn" && typeof params["objectId"] === "string" && params["objectId"].startsWith(HANDLE_PREFIX)) {
+      const { objectId, ...rest } = params;
+      message.params = { ...rest, executionContextId: Number(String(objectId).slice(HANDLE_PREFIX.length)) };
+    }
+    return false;
   }
 
   private open(group: number): Recorded[] {

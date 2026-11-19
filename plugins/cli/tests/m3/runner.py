@@ -44,9 +44,10 @@ def expectation(name: str) -> Path:
     return infra.TRANSCRIPTS / f"{name}.result.json.gz"
 
 
-def expected_of(name: str, racy: list[int] | None = None) -> dict:
+def expected_of(name: str, racy: list[int] | None = None, rewrite=None) -> dict:
     raw = json.loads(gzip.decompress(expectation(name).read_bytes()))
-    return normalize.run(Run(root=Path(raw["subs"]["root"]), transcript=recording(name), steps=raw["steps"], files=raw["files"], subs=raw["subs"]), None, racy)
+    return normalize.run(Run(root=Path(raw["subs"]["root"]), transcript=recording(name), steps=raw["steps"], files=raw["files"], subs=raw["subs"]), None, racy,
+                         rewrite)
 
 
 def checked_protocol(result: Run, label: str) -> list[str]:
@@ -58,10 +59,7 @@ def racy_of(scenario: dict) -> list[int] | None:
 
 
 def shaped_of(result: Run, scenario: dict, unstable: list[int] | None = None, fault: Fault | None = None) -> dict:
-    names = list(scenario.get("divergences") or [])
-    if fault is not None and fault.kind in divergences.UNANSWERING_FAULTS and "busy-probe-isolated" not in names:
-        names.append("busy-probe-isolated")
-    return divergences.apply(normalize.run(result, unstable, racy_of(scenario)), names)
+    return normalize.run(result, unstable, racy_of(scenario), divergences.rewriter(divergences.names_for(scenario, fault)))
 
 
 def checked_rows(result: Run, impl: str, label: str) -> list[str]:
@@ -128,11 +126,11 @@ class Harness:
         if not recording(name).exists():
             return {"name": name, "mode": f"replay {impl}", "ok": False, "differences": ["no recording; run `record` first"]}
         result = self.side(scenario, f"replay-{impl}", impl, replay=recording(name))
-        expected = expected_of(name, racy_of(scenario))
+        expected = expected_of(name, racy_of(scenario), divergences.rewriter(divergences.names_for(scenario)))
         differences = [f"tap: {failure}" for failure in result.tap.get("failures", [])]
         if result.tap.get("remaining"):
             differences.append(f"tap: {result.tap['remaining']} recorded request(s) never sent, first: {result.tap.get('remainingForms', [])[:2]}")
-        differences += compare.compared(divergences.apply(expected, scenario.get("divergences")), shaped_of(result, scenario), compare.LIVE)
+        differences += compare.compared(expected, shaped_of(result, scenario), compare.LIVE)
         differences += checked_protocol(result, impl)
         differences += checked_rows(result, impl, impl)
         return {"name": name, "mode": f"replay {impl}", "ok": not differences, "differences": differences}
