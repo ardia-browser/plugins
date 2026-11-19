@@ -465,7 +465,7 @@ static bool bigint_arg(Call *call, size_t index, uint64_t *out) {
   return napi_get_value_bigint_uint64(call->env, call->argv[index], out, &lossless) == napi_ok && lossless;
 }
 
-enum { WATCHDOG_IDLE, WATCHDOG_ARMED, WATCHDOG_DISARMED };
+enum { WATCHDOG_IDLE, WATCHDOG_ARMED, WATCHDOG_FIRING, WATCHDOG_DISARMED };
 static atomic_int watchdog_state = WATCHDOG_IDLE;
 
 typedef struct {
@@ -474,6 +474,7 @@ typedef struct {
   uint64_t dev;
   uint64_t ino;
   int64_t deadline;
+  int64_t fire_delay;
   int code;
 } Watchdog;
 
@@ -485,17 +486,23 @@ static int64_t monotonic_ms(void) {
   return (int64_t)clock.tv_sec * 1000 + clock.tv_nsec / 1000000;
 }
 
+static void nap_ms(int64_t ms) {
+  struct timespec pause = {.tv_sec = (time_t)(ms / 1000), .tv_nsec = (long)(ms % 1000) * 1000000L};
+  while (nanosleep(&pause, &pause) != 0 && errno == EINTR) {
+  }
+}
+
 static void *watchdog_thread(void *argument) {
   (void)argument;
   for (;;) {
     if (atomic_load(&watchdog_state) != WATCHDOG_ARMED) return NULL;
     int64_t left = watchdog.deadline - monotonic_ms();
     if (left <= 0) break;
-    int64_t nap = left < 50 ? left : 50;
-    struct timespec pause = {.tv_sec = 0, .tv_nsec = (long)nap * 1000000L};
-    nanosleep(&pause, NULL);
+    nap_ms(left < 50 ? left : 50);
   }
-  if (atomic_load(&watchdog_state) != WATCHDOG_ARMED) return NULL;
+  int expected = WATCHDOG_ARMED;
+  if (!atomic_compare_exchange_strong(&watchdog_state, &expected, WATCHDOG_FIRING)) return NULL;
+  if (watchdog.fire_delay > 0) nap_ms(watchdog.fire_delay);
   struct stat found;
   if (fstatat(watchdog.dir, watchdog.name, &found, AT_SYMLINK_NOFOLLOW) == 0 && S_ISSOCK(found.st_mode)
       && (uint64_t)found.st_dev == watchdog.dev && (uint64_t)found.st_ino == watchdog.ino) {
@@ -507,17 +514,21 @@ static void *watchdog_thread(void *argument) {
 
 static napi_value arm_watchdog(napi_env env, napi_callback_info info) {
   Call call;
-  int32_t dir, ms, code;
+  int32_t dir, ms, code, fire_delay = 0;
   uint64_t dev, ino;
   char name[PATH_MAX];
-  if (!take_args(env, info, 6, &call) || call.argc != 6) return status(env, -EINVAL);
+  if (!take_args(env, info, 6, &call) || call.argc < 6 || call.argc > 7) return status(env, -EINVAL);
   if (!int_arg(&call, 0, &dir) || !int_arg(&call, 4, &ms) || !int_arg(&call, 5, &code)) return NULL;
+  if (call.argc == 7 && !int_arg(&call, 6, &fire_delay)) return NULL;
   if (dir < 0) return status(env, -EBADF);
-  if (ms < 1 || ms > 86400000 || code < 0 || code > 255) return status(env, -EINVAL);
+  if (ms < 1 || ms > 86400000 || code < 0 || code > 255 || fire_delay < 0 || fire_delay > 10000) return status(env, -EINVAL);
   if (!bigint_arg(&call, 2, &dev) || !bigint_arg(&call, 3, &ino)) return status(env, -EINVAL);
   int checked = name_arg(&call, 1, name, sizeof(name));
   if (checked != 0) return status(env, checked);
   if (!plain_name(name)) return status(env, -EINVAL);
+  struct stat folder;
+  if (fstat(dir, &folder) != 0) return status(env, failed());
+  if (!S_ISDIR(folder.st_mode)) return status(env, -ENOTDIR);
   int expected = WATCHDOG_IDLE;
   if (!atomic_compare_exchange_strong(&watchdog_state, &expected, WATCHDOG_ARMED)) return status(env, -EBUSY);
   int copy = fcntl(dir, F_DUPFD_CLOEXEC, 0);
@@ -531,25 +542,33 @@ static napi_value arm_watchdog(napi_env env, napi_callback_info info) {
   watchdog.dev = dev;
   watchdog.ino = ino;
   watchdog.code = code;
+  watchdog.fire_delay = fire_delay;
   watchdog.deadline = monotonic_ms() + ms;
   pthread_t thread;
   pthread_attr_t attributes;
-  if (pthread_attr_init(&attributes) != 0) {
-    atomic_store(&watchdog_state, WATCHDOG_DISARMED);
-    return status(env, -ENOMEM);
+  int started = pthread_attr_init(&attributes);
+  if (started == 0) {
+    pthread_attr_setdetachstate(&attributes, PTHREAD_CREATE_DETACHED);
+    started = pthread_create(&thread, &attributes, watchdog_thread, NULL);
+    pthread_attr_destroy(&attributes);
   }
-  pthread_attr_setdetachstate(&attributes, PTHREAD_CREATE_DETACHED);
-  int started = pthread_create(&thread, &attributes, watchdog_thread, NULL);
-  pthread_attr_destroy(&attributes);
-  if (started != 0) atomic_store(&watchdog_state, WATCHDOG_DISARMED);
-  return status(env, -started);
+  if (started != 0) {
+    atomic_store(&watchdog_state, WATCHDOG_DISARMED);
+    close(copy);
+    return status(env, -started);
+  }
+  return status(env, 0);
 }
 
 static napi_value disarm_watchdog(napi_env env, napi_callback_info info) {
   Call call;
   if (!take_args(env, info, 0, &call) || call.argc != 0) return status(env, -EINVAL);
   int expected = WATCHDOG_ARMED;
-  return status(env, atomic_compare_exchange_strong(&watchdog_state, &expected, WATCHDOG_DISARMED) ? 0 : -EINVAL);
+  if (atomic_compare_exchange_strong(&watchdog_state, &expected, WATCHDOG_DISARMED)) {
+    close(watchdog.dir);
+    return status(env, 0);
+  }
+  return status(env, expected == WATCHDOG_FIRING ? -EBUSY : -EINVAL);
 }
 
 static napi_value rename_exclusive_at(napi_env env, napi_callback_info info) {
