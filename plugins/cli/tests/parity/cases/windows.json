@@ -280,6 +280,40 @@
   "note": "lone surrogate escapes stay distinct (two keys stay two) and become U+FFFD only when written"
  },
  {
+  "id": "windows--utf8-encoded-surrogates",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": {
+      "base64": "eyJpZCI6MiwicmVzdWx0IjpbeyJpZCI6MSwia2luZCI6Im7toIAiLCJ0YWJzIjpbeyJpZCI6MTEsInRpdGxlIjoidO2/vyIsInVybCI6InUifV19XX0K"
+     }
+    }
+   }
+  },
+  "note": "json.loads decodes UTF-8 with surrogatepass, so an encoded surrogate is read, not refused"
+ },
+ {
+  "id": "windows--utf16-reply-line",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": {
+      "base64": "ewAiAGkAZAAiADoAMgAsACIAcgBlAHMAdQBsAHQAIgA6AFsAewAiAGkAZAAiADoAMQAsACIAdABhAGIAcwAiADoAWwBdAH0AXQB9AAo="
+     }
+    }
+   }
+  },
+  "note": "a reply line is decoded like json.loads(bytes): UTF-16 without a BOM is detected"
+ },
+ {
   "id": "windows--lone-surrogates-json",
   "command": "windows",
   "argv": [
@@ -294,5 +328,41 @@
    }
   },
   "note": "lone surrogate escapes stay distinct (two keys stay two) and become U+FFFD only when written"
+ },
+ {
+  "id": "windows--utf8-encoded-surrogates-json",
+  "command": "windows",
+  "argv": [
+   "windows",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": {
+      "base64": "eyJpZCI6MiwicmVzdWx0IjpbeyJpZCI6MSwia2luZCI6Im7toIAiLCJ0YWJzIjpbeyJpZCI6MTEsInRpdGxlIjoidO2/vyIsInVybCI6InUifV19XX0K"
+     }
+    }
+   }
+  },
+  "note": "json.loads decodes UTF-8 with surrogatepass, so an encoded surrogate is read, not refused"
+ },
+ {
+  "id": "windows--utf16-reply-line-json",
+  "command": "windows",
+  "argv": [
+   "windows",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": {
+      "base64": "ewAiAGkAZAAiADoAMgAsACIAcgBlAHMAdQBsAHQAIgA6AFsAewAiAGkAZAAiADoAMQAsACIAdABhAGIAcwAiADoAWwBdAH0AXQB9AAo="
+     }
+    }
+   }
+  },
+  "note": "a reply line is decoded like json.loads(bytes): UTF-16 without a BOM is detected"
  }
 ]

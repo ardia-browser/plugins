@@ -1,7 +1,7 @@
 import { closeSync, fstatSync, openSync } from "node:fs";
 import { iso, now, parseIso } from "./clock.ts";
 import { dataRoot, installedDataDir } from "./control.ts";
-import { Float, type JsonObject, object, parse, type Value } from "./json.ts";
+import { Float, type JsonObject, object, parse, TELEMETRY_JSON_DEPTH, TooDeep, type Value } from "./json.ts";
 import { abspath, envSet, join, realpath, uid } from "./paths.ts";
 import { O_NOFOLLOW, O_NONBLOCK, O_RDONLY, readFd } from "./privatefs.ts";
 import { isSpace, strip } from "./py.ts";
@@ -14,6 +14,7 @@ const LOGS_URL = "https://ardia.dev/otel/v1/logs";
 const CONSENT_FILE = "telemetry.json";
 const MAX_CONSENT_BYTES = 64 * 1024;
 const LOCAL_ONLY_ID = "local";
+const INSTALL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\n?$/;
 const MAX_FLAGS = 20;
 const MAX_MS = 3_600_000;
 const TEST_ENDPOINT_FLAGS = ["--port", "--ws", "--cdp"];
@@ -107,9 +108,10 @@ export function readConsent(root: string): JsonObject | undefined {
   try {
     const info = fstatSync(fd);
     if (!info.isFile() || info.uid !== uid() || info.size > MAX_CONSENT_BYTES) return undefined;
-    const doc = parse(readFd(fd, MAX_CONSENT_BYTES + 1));
+    const doc = parse(readFd(fd, MAX_CONSENT_BYTES + 1), TELEMETRY_JSON_DEPTH);
     return doc instanceof Map ? doc : undefined;
-  } catch {
+  } catch (error) {
+    if (error instanceof TooDeep) throw error;
     return undefined;
   } finally {
     closeSync(fd);
@@ -140,10 +142,7 @@ function epochSeconds(value: Value | undefined): number | undefined {
 function validId(value: Value | undefined): string | undefined {
   if (typeof value !== "string") return undefined;
   const text = value.toLowerCase();
-  const groups = text.split("-");
-  const lengths = [8, 4, 4, 4, 12];
-  const valid = groups.length === 5 && groups.every((group, index) => group.length === lengths[index] && /^[0-9a-f]+$/.test(group));
-  return valid ? text : undefined;
+  return INSTALL_ID.test(text) ? text : undefined;
 }
 
 function unreadableExpiry(doc: JsonObject): boolean {
@@ -158,8 +157,13 @@ function expiryOverflows(doc: JsonObject): boolean {
 
 export function consentUnreadable(argv: string[]): boolean {
   const target = cliTarget(argv);
-  const doc = target === undefined ? undefined : readConsent(target.root);
-  return doc !== undefined && unreadableExpiry(doc);
+  try {
+    const doc = target === undefined ? undefined : readConsent(target.root);
+    return doc !== undefined && unreadableExpiry(doc);
+  } catch (error) {
+    if (error instanceof TooDeep) return false;
+    throw error;
+  }
 }
 
 export function sharingId(doc: JsonObject | undefined): string | undefined {
@@ -244,6 +248,14 @@ function commandRecord(call: Call, status: number, distinctId: string, environme
 
 export function finish(call: Call, status: number, python: string | null): void {
   recordUsage(call, status);
+  try {
+    record(call, status, python);
+  } catch (error) {
+    if (!(error instanceof TooDeep)) throw error;
+  }
+}
+
+function record(call: Call, status: number, python: string | null): void {
   const target = cliTarget(call.argv);
   if (target === undefined) return;
   const doc = readConsent(target.root);

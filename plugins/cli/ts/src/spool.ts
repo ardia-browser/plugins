@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { lstatSync } from "node:fs";
 import { now, utcDay } from "./clock.ts";
-import { dumps, Float, I128_MAX, I128_MIN, type JsonObject, object, parse, type Value } from "./json.ts";
+import { dumps, Float, I128_MAX, I128_MIN, type JsonObject, object, parse, TELEMETRY_JSON_DEPTH, type Value } from "./json.ts";
 import { join } from "./paths.ts";
 import {
   close,
@@ -287,7 +287,7 @@ export function startFlush(dir: Dir, target: Target, python: string | null): voi
     } catch {
       raw = undefined;
     }
-    const parsed = raw === undefined ? undefined : parse(raw);
+    const parsed = raw === undefined ? undefined : parse(raw, TELEMETRY_JSON_DEPTH);
     const state: JsonObject = parsed instanceof Map ? parsed : new Map();
     const at = now();
     if (numberIn(state.get("next_at")) > at) return;

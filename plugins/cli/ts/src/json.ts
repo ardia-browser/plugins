@@ -1,3 +1,5 @@
+import { decodeJsonBytes } from "./json-bytes.ts";
+
 export class Float {
   constructor(readonly value: number) {}
 }
@@ -38,18 +40,17 @@ export function same(a: Value | undefined, b: Value | undefined): boolean {
   return a === b;
 }
 
-export function parse(bytes: Uint8Array): Value | undefined {
-  let text: string;
-  try {
-    text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
-  } catch {
-    return undefined;
-  }
-  return parseText(text.startsWith("\ufeff") ? text.slice(1) : text);
+export class TooDeep extends Error {}
+
+export const TELEMETRY_JSON_DEPTH = 9995;
+
+export function parse(bytes: Uint8Array, depthLimit: number): Value | undefined {
+  const text = decodeJsonBytes(bytes);
+  return text === undefined ? undefined : parseText(text, depthLimit);
 }
 
-export function parseText(text: string): Value | undefined {
-  const parser = new Parser(text);
+export function parseText(text: string, depthLimit = Number.POSITIVE_INFINITY): Value | undefined {
+  const parser = new Parser(text, depthLimit);
   parser.space();
   const value = parser.value();
   if (value === undefined) return undefined;
@@ -61,7 +62,16 @@ const HEX = /^[0-9a-fA-F]{4}$/;
 
 class Parser {
   at = 0;
-  constructor(readonly text: string) {}
+  depth = 0;
+  constructor(
+    readonly text: string,
+    readonly depthLimit: number,
+  ) {}
+
+  enter(): void {
+    this.depth += 1;
+    if (this.depth > this.depthLimit) throw new TooDeep();
+  }
 
   peek(): string | undefined {
     return this.text[this.at];
@@ -79,8 +89,12 @@ class Parser {
 
   value(): Value | undefined {
     const next = this.peek();
-    if (next === "{") return this.object();
-    if (next === "[") return this.array();
+    if (next === "{" || next === "[") {
+      this.enter();
+      const nested = next === "{" ? this.object() : this.array();
+      this.depth -= 1;
+      return nested;
+    }
     if (next === '"') return this.string();
     if (next === "n" && this.word("null")) return null;
     if (next === "t" && this.word("true")) return true;

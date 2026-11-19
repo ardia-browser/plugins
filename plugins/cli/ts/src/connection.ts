@@ -1,9 +1,10 @@
 import { writeSync } from "node:fs";
 import type { Socket } from "node:net";
-import { dumps, field, object, parse, type Value } from "./json.ts";
+import { dumps, field, object, parse, TooDeep, type Value } from "./json.ts";
 import { errnoOf, strerror } from "./paths.ts";
 import { MAX_LINE_BYTES } from "./protocol.ts";
 
+const CONTROL_JSON_DEPTH = 9991;
 const HIGH_WATER = 64 * 1024;
 const LOW_WATER = 16 * 1024;
 const POLL_MS = 100;
@@ -25,6 +26,7 @@ export class Connection {
   private buffer: Buffer = Buffer.alloc(0);
   private nextId = 0n;
   private lost: string | undefined;
+  private readerStopped = false;
   private pending = new Map<bigint, Pending>();
   private unsent: Buffer[] = [];
   private unsentBytes = 0;
@@ -51,7 +53,7 @@ export class Connection {
   }
 
   private lose(reason: string): void {
-    if (this.lost !== undefined) return;
+    if (this.lost !== undefined || this.readerStopped) return;
     this.lost = reason;
     for (const request of this.pending.values()) request.lost ??= reason;
     this.pending.clear();
@@ -59,7 +61,7 @@ export class Connection {
   }
 
   private received(chunk: Buffer): void {
-    if (this.lost !== undefined) return;
+    if (this.lost !== undefined || this.readerStopped) return;
     this.buffer = this.buffer.length === 0 ? chunk : Buffer.concat([this.buffer, chunk]);
     for (;;) {
       const end = this.buffer.indexOf(0x0a);
@@ -67,7 +69,15 @@ export class Connection {
       const line = this.buffer.subarray(0, end + 1);
       this.buffer = this.buffer.subarray(end + 1);
       if (line.length > MAX_LINE_BYTES + 1) return this.lose("Ardia sent a line longer than 1 MB");
-      const message = parse(line);
+      let message: Value | undefined;
+      try {
+        message = parse(line, CONTROL_JSON_DEPTH);
+      } catch (error) {
+        if (!(error instanceof TooDeep)) throw error;
+        this.readerStopped = true;
+        this.buffer = Buffer.alloc(0);
+        return;
+      }
       if (message === undefined) return this.lose("Ardia sent a line that isn't JSON");
       const id = field(message, "id");
       if (typeof id !== "bigint") continue;

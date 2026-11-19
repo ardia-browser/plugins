@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { now } from "./clock.ts";
-import { dumps, Float, type JsonObject, parse, type Value } from "./json.ts";
+import { dumps, Float, type JsonObject, parse, TELEMETRY_JSON_DEPTH, type Value } from "./json.ts";
 import { envSet, expandUser, home, join, purePath } from "./paths.ts";
 import { close, closeDir, type Dir, openPrivate, readPrivate, takeLockRetrying, writePrivate } from "./privatefs.ts";
 import { iterateOrEmpty, truthy } from "./py.ts";
@@ -79,7 +79,7 @@ export function recordUsage(call: Call, status: number): void {
     } catch {
       raw = undefined;
     }
-    const parsed = raw === undefined ? undefined : parse(raw);
+    const parsed = raw === undefined ? undefined : parse(raw, TELEMETRY_JSON_DEPTH);
     const state: JsonObject = parsed instanceof Map ? parsed : new Map();
     note(state, name, status, now());
     try {
