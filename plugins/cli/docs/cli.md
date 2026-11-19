@@ -1692,9 +1692,12 @@ The Rust entry stays `bin/ardia` and routes. A call whose stdout or stderr is op
 whatever its row says, since Python's failure there is an unhandled exception native code can't reproduce, and so does
 a call started with fd 0, 1 or 2 closed (noted by a constructor that runs before Rust's runtime reopens them on
 `/dev/null`; Python then gets them closed again). A listing whose stdout later fails with anything but EPIPE ends as
-Python's would after its traceback: the exception line, then, when the failed line fit Python's stdout buffer
-(`st_blksize`, read before the failed stdout is pointed at `/dev/null`), `Exception ignored on flushing sys.stdout:` and
-status 120, else status 1; bare `ardia` (help) follows the same rule for its whole text (on a hung-up Linux terminal,
+Python's would after its traceback. Each line is written as CPython 3.13's `BufferedWriter` writes it (its buffer is
+stdout's `st_blksize`): straight to the descriptor while what is left is at least one buffer long, then the shorter rest
+through the buffer. A failure while writing straight leaves nothing behind, so the call prints the exception line and
+ends with status 1; a failure writing the buffered rest leaves it in the buffer, which Python's exit flush tries again,
+so the call prints the exception line, tries the rest once more and, when that fails too, prints
+`Exception ignored on flushing sys.stdout:` with the second error and ends with status 120; bare `ardia` (help) follows the same rule for its whole text (on a hung-up Linux terminal,
 whose `st_blksize` is 1024, that is status 1), `--version` prints both on a terminal and the second alone elsewhere. Telemetry records what Python's crash records: a `$exception` event (`cli_unhandled`,
 fatal, the `OSError` subclass and `[Errno N] text`) before the `cli_command` event, which carries exit code 1 and
 `unhandled_exception`. A line on stderr that fails later (a closed pipe, a hung-up terminal) stays pending as it does in

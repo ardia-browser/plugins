@@ -213,23 +213,30 @@ fn serve_help(argv: &[String], python: Option<&Path>) -> Option<i32> {
     let text = help::render()?;
     let mut call = telemetry::Call::new(argv);
     call.allowed_flags = TOP_FLAGS;
-    let mut stdout = std::io::stdout().lock();
     let shown = printable::inert(&text);
+    if argv.is_empty() {
+        let exit = match printable::write_as_python_buffers(shown.as_bytes(), printable::python_stdout_buffer(), || false) {
+            Err(printable::Stopped::Failed { errno, unwritten }) => {
+                let exit = printable::report_crash(errno, &unwritten);
+                telemetry::finish_crashed(&call, errno, python);
+                exit
+            }
+            Err(_) => {
+                call.note_error_code("stdout_closed");
+                telemetry::finish(&call, 141, python);
+                141
+            }
+            Ok(()) => {
+                telemetry::finish(&call, 0, python);
+                0
+            }
+        };
+        return Some(exit);
+    }
+    let mut stdout = std::io::stdout().lock();
     let written = stdout.write_all(shown.as_bytes()).and_then(|_| stdout.flush());
     drop(stdout);
-    let closed = |error: &std::io::Error| matches!(error.raw_os_error(), Some(libc::EPIPE | libc::ESHUTDOWN));
     let exit = match written {
-        Err(error) if argv.is_empty() && closed(&error) => {
-            call.note_error_code("stdout_closed");
-            telemetry::finish(&call, 141, python);
-            141
-        }
-        Err(error) if argv.is_empty() => {
-            let errno = error.raw_os_error().unwrap_or(libc::EIO);
-            let exit = printable::report_crash(errno, shown.len() <= printable::python_stdout_buffer());
-            telemetry::finish_crashed(&call, errno, python);
-            exit
-        }
         Err(error) => {
             telemetry::finish(&call, 0, python);
             printable::stdout_flush_failed(&error)
@@ -300,7 +307,8 @@ fn serve_listing(kind: Kind, listing: &Listing, argv: &[String], python: Option<
     } else if out.closed() {
         call.note_error_code("stdout_closed");
         status = 141;
-    } else if let Some((errno, exit)) = out.python_crash() {
+    } else if let Some(errno) = out.failed() {
+        let exit = out.report_crash();
         telemetry::finish_crashed(&call, errno, python);
         return Some(exit);
     } else if let Some(errno) = rendered.complaint.as_deref().and_then(|complaint| out.complain(complaint)) {

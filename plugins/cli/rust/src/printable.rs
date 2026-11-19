@@ -76,42 +76,56 @@ pub fn json_safe(text: &str) -> String {
 const PYTHON_DEFAULT_BUFFER: usize = 8192;
 
 #[derive(Debug, PartialEq)]
-enum Stopped {
+pub enum Stopped {
     Closed,
     Interrupted,
-    Failed(i32),
+    Failed { errno: i32, unwritten: Vec<u8> },
 }
 
-fn write_stdout(mut bytes: &[u8], interrupted: impl Fn() -> bool) -> Result<(), Stopped> {
+pub fn write_as_python_buffers(mut bytes: &[u8], buffer: usize, interrupted: impl Fn() -> bool) -> Result<(), Stopped> {
+    let mut direct = bytes.len() >= buffer;
     while !bytes.is_empty() {
+        direct = direct && bytes.len() >= buffer;
         if interrupted() {
             return Err(Stopped::Interrupted);
         }
-        let written = unsafe { libc::write(1, bytes.as_ptr().cast(), bytes.len()) };
-        if written >= 0 {
-            bytes = &bytes[written as usize..];
-        } else {
-            match std::io::Error::last_os_error().raw_os_error().unwrap_or(libc::EIO) {
-                libc::EINTR => {}
-                libc::EPIPE | libc::ESHUTDOWN => return Err(Stopped::Closed),
-                errno => return Err(Stopped::Failed(errno)),
+        match write_some(1, bytes) {
+            Ok(written) => bytes = &bytes[written..],
+            Err(libc::EPIPE | libc::ESHUTDOWN) => return Err(Stopped::Closed),
+            Err(errno) => {
+                let unwritten = match (direct, errno) {
+                    (true, libc::EAGAIN) => bytes[..buffer].to_vec(),
+                    (true, _) => Vec::new(),
+                    (false, _) => bytes.to_vec(),
+                };
+                return Err(Stopped::Failed { errno, unwritten });
             }
         }
     }
     Ok(())
 }
 
+pub fn report_crash(errno: i32, unwritten: &[u8]) -> i32 {
+    let exception = exception_line(errno);
+    let _ = to_stderr(exception.as_bytes());
+    let mut left = unwritten;
+    while !left.is_empty() {
+        match write_some(1, left) {
+            Ok(written) => left = &left[written..],
+            Err(again) => {
+                let _ = to_stderr(format!("Exception ignored on flushing sys.stdout:\n{}", exception_line(again)).as_bytes());
+                return 120;
+            }
+        }
+    }
+    1
+}
+
 pub struct Output {
     json: bool,
     closed: bool,
     interrupted: bool,
-    failed: Option<Failed>,
-}
-
-#[derive(Clone, Copy)]
-struct Failed {
-    errno: i32,
-    line: usize,
+    failed: Option<(i32, Vec<u8>)>,
     buffer: usize,
 }
 
@@ -122,6 +136,7 @@ impl Output {
             closed: false,
             interrupted: false,
             failed: None,
+            buffer: python_stdout_buffer(),
         }
     }
 
@@ -129,9 +144,15 @@ impl Output {
         self.closed || self.interrupted || self.failed.is_some()
     }
 
-    pub fn python_crash(&self) -> Option<(i32, i32)> {
-        let failed = self.failed?;
-        Some((failed.errno, report_crash(failed.errno, failed.line <= failed.buffer)))
+    pub fn failed(&self) -> Option<i32> {
+        self.failed.as_ref().map(|(errno, _)| *errno)
+    }
+
+    pub fn report_crash(&self) -> i32 {
+        let Some((errno, unwritten)) = &self.failed else { return 1 };
+        let exit = report_crash(*errno, unwritten);
+        quiet_stdout();
+        exit
     }
 
     pub fn closed(&self) -> bool {
@@ -149,19 +170,13 @@ impl Output {
         let text = crate::pystr::well_formed(text);
         let mut line = if self.json { json_safe(&text) } else { inert(&text) };
         line.push('\n');
-        match write_stdout(line.as_bytes(), crate::control::interrupted) {
+        match write_as_python_buffers(line.as_bytes(), self.buffer, crate::control::interrupted) {
             Ok(()) => {}
             Err(Stopped::Closed) => self.closed = true,
             Err(Stopped::Interrupted) => self.interrupted = true,
-            Err(Stopped::Failed(errno)) => {
-                self.failed = Some(Failed {
-                    errno,
-                    line: line.len(),
-                    buffer: python_stdout_buffer(),
-                })
-            }
+            Err(Stopped::Failed { errno, unwritten }) => self.failed = Some((errno, unwritten)),
         }
-        if self.stopped() {
+        if self.closed || self.interrupted {
             quiet_stdout();
         }
     }
@@ -172,16 +187,6 @@ impl Output {
         line.push('\n');
         to_stderr(line.as_bytes()).err()
     }
-}
-
-pub fn report_crash(errno: i32, flush_fails_again: bool) -> i32 {
-    let exception = exception_line(errno);
-    let _ = to_stderr(exception.as_bytes());
-    if !flush_fails_again {
-        return 1;
-    }
-    let _ = to_stderr(format!("Exception ignored on flushing sys.stdout:\n{exception}").as_bytes());
-    120
 }
 
 pub fn python_os_error(errno: i32) -> &'static str {
@@ -220,7 +225,11 @@ pub fn stdout_unusable() -> bool {
 
 pub fn version_write_failed(error: &std::io::Error) -> i32 {
     match error.raw_os_error() {
-        Some(errno) if errno != libc::EBADF && unsafe { libc::isatty(1) } == 1 => report_crash(errno, true),
+        Some(errno) if errno != libc::EBADF && unsafe { libc::isatty(1) } == 1 => {
+            let _ = to_stderr(exception_line(errno).as_bytes());
+            let _ = to_stderr(format!("Exception ignored on flushing sys.stdout:\n{}", exception_line(errno)).as_bytes());
+            120
+        }
         _ => stdout_flush_failed(error),
     }
 }
@@ -258,8 +267,8 @@ mod tests {
 
     #[test]
     fn a_write_stops_when_interrupted() {
-        assert_eq!(write_stdout(b"never written", || true), Err(Stopped::Interrupted));
-        assert_eq!(write_stdout(b"", || true), Ok(()));
+        assert_eq!(write_as_python_buffers(b"never written", 8, || true), Err(Stopped::Interrupted));
+        assert_eq!(write_as_python_buffers(b"", 8, || true), Ok(()));
     }
 
     #[test]

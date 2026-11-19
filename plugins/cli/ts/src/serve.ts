@@ -4,7 +4,7 @@ import { render as renderHelp } from "./help.ts";
 import type { Value } from "./json.ts";
 import { failed, type Kind, type Listing, methodFailed, methodOf, paramsOf, type Rendered } from "./listing.ts";
 import { codeOf, errnoOf, NeedsPython } from "./paths.ts";
-import { exceptionLine, inert, Output, pythonStdoutBuffer, reportCrash, stdoutFlushFailed, toStderr, writeAll } from "./printable.ts";
+import { exceptionLine, inert, Output, reportCrash, stdoutFlushFailed, toStderr, writeAll, writeAsPythonBuffers } from "./printable.ts";
 import { utf8 } from "./pystr.ts";
 import { Unsupported } from "./py.ts";
 import { render } from "./render.ts";
@@ -21,23 +21,26 @@ export function serveHelp(argv: string[], python: string | null): number | undef
   const call = new Call(argv);
   call.allowedFlags = TOP_FLAGS;
   const shown = utf8(inert(text));
-  try {
-    writeAll(1, shown);
-  } catch (error) {
-    if (argv.length > 0) {
-      finish(call, 0, python);
-      return stdoutFlushFailed(error);
-    }
-    const code = codeOf(error);
-    if (code === "EPIPE" || code === "ESHUTDOWN") {
+  if (argv.length === 0) {
+    const stop = writeAsPythonBuffers(shown);
+    if (stop?.kind === "closed") {
       call.noteErrorCode("stdout_closed");
       finish(call, 141, python);
       return 141;
     }
-    const errno = errnoOf(error);
-    const exit = reportCrash(errno, shown.length <= pythonStdoutBuffer());
-    finish(call, 1, python, errno);
-    return exit;
+    if (stop !== undefined) {
+      const exit = reportCrash(stop.errno, stop.unwritten);
+      finish(call, 1, python, stop.errno);
+      return exit;
+    }
+    finish(call, 0, python);
+    return 0;
+  }
+  try {
+    writeAll(1, shown);
+  } catch (error) {
+    finish(call, 0, python);
+    return stdoutFlushFailed(error);
   }
   finish(call, 0, python);
   return 0;
@@ -114,10 +117,10 @@ export async function serveListing(kind: Kind, listing: Listing, argv: string[],
     call.noteErrorCode("stdout_closed");
     status = 141;
   } else {
-    const crashed = out.pythonCrash();
-    if (crashed !== undefined) {
-      finish(call, 1, python, crashed.errno);
-      return crashed.exit;
+    if (out.failed !== undefined) {
+      const exit = out.reportCrash();
+      finish(call, 1, python, out.failed.errno);
+      return exit;
     }
     const errno = shown.complaint === undefined ? undefined : out.complain(shown.complaint);
     if (errno !== undefined) return complaintFailed(call, errno, python);

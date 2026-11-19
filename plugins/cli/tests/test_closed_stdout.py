@@ -251,6 +251,32 @@ class ClosedStdout:
         finally:
             install.close()
 
+    def test_a_line_cut_by_a_file_size_limit_ends_as_pythons_buffered_writer_decides(self):
+        install = harness.Installation(harness.entry_binary(self.entry), entry=self.entry)
+        try:
+            with tempfile.TemporaryDirectory() as scratch:
+                home = Path(scratch)
+                (home / "data").mkdir()
+                (home / "probe").touch()
+                block = os.stat(home / "probe").st_blksize
+                first = len("window w-1  normal\n")
+                tab_line_extra = len("     t  " + "  u\n")
+                for line, limit in ((block + 16, 2000), (block, first), (block - 1, first), (block - 1, first + 100), (2 * block + 5, block + 100),
+                                    (2 * block + 5, first)):
+                    tabs = [{"id": "t", "title": "a" * (line - tab_line_extra), "url": "u"}]
+                    (home / "data" / "ArdiaControl.sock").unlink(missing_ok=True)
+                    fake = FakeArdia(home / "data" / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "windows": {"result": [{"id": "w-1", "tabs": tabs}]}})
+                    try:
+                        for ignored in (False, True):
+                            with self.subTest(line=line, limit=limit, buffer=block, sigxfsz_ignored=ignored):
+                                python = run_limited([sys.executable, "-m", "ardia_cli", "windows"], home, limit, ignored, False)
+                                new = run_limited([*install.command("new"), "windows"], home, limit, ignored, False)
+                                self.assertEqual(new, python)
+                    finally:
+                        fake.close()
+        finally:
+            install.close()
+
     def test_a_call_ends_like_python_when_a_standard_descriptor_was_closed_before_it_started(self):
         install = harness.Installation(harness.entry_binary(self.entry), entry=self.entry)
         try:
