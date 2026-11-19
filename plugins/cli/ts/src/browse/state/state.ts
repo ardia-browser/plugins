@@ -1,7 +1,7 @@
 import http from "node:http";
 import { formatG } from "../../pylib/format.ts";
 import { Browser } from "../cdp/browser.ts";
-import { Cancelled, currentSignal, shield, sleep, untilCancelled } from "../cdp/cancel.ts";
+import { Cancelled, currentSignal, shield, sleep } from "../cdp/cancel.ts";
 import { BrowseError, CdpError, ConnectionLost } from "../daemon-errors.ts";
 import { announce, announcePath, type Caller, sameCaller } from "../daemon/announce.ts";
 import { release as releaseClaims } from "../daemon/claims.ts";
@@ -80,8 +80,22 @@ function isPageInfo(info: Json): boolean {
   return info["type"] === "page" && PAGE_SCHEMES.some((scheme) => String(info["url"] ?? "").startsWith(scheme));
 }
 
-function fetchActive(url: string): Promise<unknown> {
+function fetchActive(url: string, signal: AbortSignal | null): Promise<unknown> {
+  if (signal?.aborted) return Promise.reject(new Cancelled());
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (error: unknown, value?: unknown) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(deadline);
+      signal?.removeEventListener("abort", cancel);
+      if (error === null) resolve(value);
+      else {
+        request.destroy();
+        reject(error);
+      }
+    };
+    const cancel = () => finish(new Cancelled());
     const request = http.get(url, { timeout: ACTIVE_TIMEOUT * 1000, agent: false }, (response) => {
       const chunks: Buffer[] = [];
       let size = 0;
@@ -91,19 +105,21 @@ function fetchActive(url: string): Promise<unknown> {
       });
       response.on("end", () => {
         if ((response.statusCode ?? 0) >= 400) {
-          reject(new Error(`HTTP ${response.statusCode}`));
+          finish(new Error(`HTTP ${response.statusCode}`));
           return;
         }
         try {
-          resolve(JSON.parse(Buffer.concat(chunks).subarray(0, 64 * 1024).toString("utf8")));
+          finish(null, JSON.parse(Buffer.concat(chunks).subarray(0, 64 * 1024).toString("utf8")));
         } catch (error) {
-          reject(error);
+          finish(error);
         }
       });
-      response.on("error", reject);
+      response.on("error", (error) => finish(error));
     });
-    request.on("timeout", () => request.destroy(new Error("timed out")));
-    request.on("error", reject);
+    const deadline = setTimeout(() => finish(new Error("timed out")), (ACTIVE_TIMEOUT + 1) * 1000);
+    signal?.addEventListener("abort", cancel, { once: true });
+    request.on("timeout", () => finish(new Error("timed out")));
+    request.on("error", (error) => finish(error));
   });
 }
 
@@ -239,11 +255,7 @@ export class State extends Refs implements temptabs.TempTabState {
     this.sessions.clear();
     this.discovering = true;
     try {
-      try {
-        await browser.send("Target.setDiscoverTargets", { discover: true });
-      } catch (error) {
-        if (!quiet(error)) throw error;
-      }
+      await this.watchTargets(browser);
       await this.refreshTargets();
     } catch (error) {
       if (browser.alive) {
@@ -260,11 +272,18 @@ export class State extends Refs implements temptabs.TempTabState {
     spent("connect_ms", started);
   }
 
+  async watchTargets(browser: Browser): Promise<void> {
+    try {
+      await browser.send("Target.setDiscoverTargets", { discover: true });
+    } catch (error) {
+      if (!quiet(error)) throw error;
+    }
+  }
+
   async announceCaller(endpoint: Endpoint | null): Promise<void> {
     const caller = this.caller;
     if (caller === null || sameCaller(caller, this.announced) || endpoint === null || endpoint.explicit) return;
-    this.announced = caller;
-    await announce(announcePath(endpoint.source), caller, undefined, currentSignal());
+    if (await announce(announcePath(endpoint.source), caller, undefined, currentSignal())) this.announced = caller;
   }
 
   async disconnect(): Promise<void> {
@@ -488,7 +507,7 @@ export class State extends Refs implements temptabs.TempTabState {
     if (!active) return UNKNOWN;
     let answer: unknown;
     try {
-      answer = await untilCancelled(fetchActive(active), currentSignal());
+      answer = await fetchActive(active, currentSignal());
     } catch (error) {
       if (error instanceof Cancelled) throw error;
       return UNKNOWN;

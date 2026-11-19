@@ -2,7 +2,8 @@ import { formatG } from "../../pylib/format.ts";
 import { reprStr } from "../../py.ts";
 import { hostnameOf, urlsplit } from "../../pylib/urllib.ts";
 import { type Browser } from "../cdp/browser.ts";
-import { shield, sleep } from "../cdp/cancel.ts";
+import { Cancelled, shield, sleep, untilCancelled } from "../cdp/cancel.ts";
+import * as temptabs from "../state/temptabs.ts";
 import { BrowseError, Gated, OutcomeUnknown, Usage } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
 import { flag } from "../metrics.ts";
@@ -154,14 +155,37 @@ export function wantsShow(ctx: Ctx, options: Record<string, unknown>): boolean {
   return Boolean(options["show"] || ctx.options["show"] || ["1", "true", "yes", "on"].includes(String(ctx.env["AGENT_BROWSER_SHOW_TAB"] || "").toLowerCase()));
 }
 
-export async function newTab(ctx: Ctx, url: string | null, label: string | null = null, window = false, show = false): Promise<Page> {
+export async function newTab(
+  ctx: Ctx,
+  url: string | null,
+  label: string | null = null,
+  window = false,
+  show = false,
+  abandoned: ((targetId: string) => void) | null = null,
+): Promise<Page> {
   const state = ctx.state;
   await state.connect();
   const params: Record<string, unknown> = { url: "about:blank", background: true };
   if (window) params["newWindow"] = true;
   let result: Record<string, unknown>;
   try {
-    result = await (state.browser as Browser).send("Target.createTarget", params);
+    if (abandoned === null) result = await (state.browser as Browser).send("Target.createTarget", params);
+    else {
+      const creating = (state.browser as Browser).send("Target.createTarget", params, { signal: null });
+      try {
+        result = await untilCancelled(creating);
+      } catch (error) {
+        if (error instanceof Cancelled) {
+          creating.then(
+            (late) => {
+              if (typeof late["targetId"] === "string") abandoned(late["targetId"]);
+            },
+            () => {},
+          );
+        }
+        throw error;
+      }
+    }
   } catch (error) {
     if (error instanceof Gated) throw new BrowseError(`Ardia's policy refused to open a tab for the ardia command (${error.refusal})`, null, "policy_refused");
     throw error;
@@ -211,10 +235,14 @@ export async function leaveOffscreen(ctx: Ctx, page: Page): Promise<Page> {
   const pinned = state.pinnedTarget;
   let fresh: Page;
   try {
-    fresh = await newTab(ctx, null, label);
+    fresh = await newTab(ctx, null, label, false, false, (late) => temptabs.mustClose(state, late));
     if (url) await navigate(ctx, fresh, normalizeUrl(url));
   } catch (error) {
-    await shield(() => putBack(state, old, label, pinned, [...state.opened].filter((target) => !openedBefore.has(target))));
+    try {
+      await shield(() => putBack(state, old, label, pinned, [...state.opened].filter((target) => !openedBefore.has(target))));
+    } catch (closing) {
+      if (error instanceof Error && error.cause === undefined) Object.defineProperty(error, "cause", { value: closing, configurable: true, writable: true });
+    }
     throw error;
   }
   state.setOffscreen(old, false);
@@ -236,19 +264,29 @@ async function putBack(state: State, old: string, label: string | null, pinned: 
   state.current = old;
   if (state.pinTab) state.pinnedTarget = pinned;
   if (label) state.labels.set(label, old);
+  let closedAll = true;
+  let failure: unknown = null;
   for (const target of made) {
+    let closed = false;
     if (state.registry.reserveClose(state.instance, target)) {
       try {
-        await (state.browser as Browser).send("Target.closeTarget", { targetId: target }, { signal: null });
+        const answer = await (state.browser as Browser).send("Target.closeTarget", { targetId: target }, { signal: null });
+        closed = answer["success"] !== false;
       } catch (error) {
-        if (!quiet(error)) throw error;
+        failure ??= error;
       } finally {
-        state.registry.finishClose(state.instance, target);
+        if (closed) state.registry.finishClose(state.instance, target);
+        else state.registry.releaseClose(state.instance, target);
       }
     }
-    state.forgetTarget(target);
+    if (closed) state.forgetTarget(target);
+    else {
+      closedAll = false;
+      temptabs.mustClose(state, target);
+    }
   }
-  flag("offscreen_handoff_rolled_back", true);
+  if (closedAll) flag("offscreen_handoff_rolled_back", true);
+  if (failure !== null) throw failure;
 }
 
 export function offscreenNote(state: State): string {

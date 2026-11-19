@@ -1,4 +1,5 @@
 import { isSpace, strip } from "../../py.ts";
+import { decimalValue } from "../../pylib/unicode.ts";
 import { Usage } from "../daemon-errors.ts";
 
 export type Kind = "bool" | "value" | "multi";
@@ -6,7 +7,17 @@ export type Flags = Readonly<Record<string, Kind>>;
 export type Parsed = Record<string, unknown>;
 
 export const KNOWN_SCHEMES = ["http", "https", "about", "data", "file", "blob", "chrome", "view-source"];
-const LOOPBACK = /^(localhost|127\.\p{Nd}+\.\p{Nd}+\.\p{Nd}+|\[::1\])(:\p{Nd}+)?(\/|$)/u;
+const LOOPBACK = /^(localhost|127\.[0-9]+\.[0-9]+\.[0-9]+|\[::1\])(:[0-9]+)?(\/|$)/u;
+
+function pyDigit(point: string | undefined): boolean {
+  return point !== undefined && decimalValue(point.codePointAt(0) as number) >= 0;
+}
+
+function digitsAsZero(text: string): string {
+  let mapped = "";
+  for (const point of text) mapped += (point.codePointAt(0) as number) >= 0x80 && pyDigit(point) ? "0" : point;
+  return mapped;
+}
 const SCHEME = /^([a-zA-Z][a-zA-Z0-9+.-]*):/u;
 
 export function parse(argv: readonly string[], flags: Flags = {}, aliases: Readonly<Record<string, string>> = {}): [Parsed, string[]] {
@@ -42,7 +53,7 @@ export function parse(argv: readonly string[], flags: Flags = {}, aliases: Reado
       }
       continue;
     }
-    if (token.startsWith("-") && token.length > 1 && !/^-\p{Nd}/u.test(token)) throw new Usage(`Unknown flag: ${token}`);
+    if (token.startsWith("-") && token.length > 1 && !pyDigit([...token.slice(1, 3)][0])) throw new Usage(`Unknown flag: ${token}`);
     positionals.push(token);
   }
   return [options, positionals];
@@ -56,6 +67,6 @@ export function normalizeUrl(given: string): string {
   const url = strip(given, isSpace);
   const match = SCHEME.exec(url);
   if (match && KNOWN_SCHEMES.includes((match[1] as string).toLowerCase())) return url;
-  if (LOOPBACK.test(url)) return `http://${url}`;
+  if (LOOPBACK.test(digitsAsZero(url))) return `http://${url}`;
   return `https://${url}`;
 }

@@ -35,6 +35,7 @@ class DetachBrowser {
     if (method === "Page.getFrameTree") return { frameTree: { frame: { id: "F", url: this.url, loaderId: this.loader, securityOrigin: "https://mine.example" } } };
     if (method === "Page.getLayoutMetrics") return { cssVisualViewport: { clientWidth: 800, clientHeight: 600 } };
     if (method === "Page.createIsolatedWorld") return { executionContextId: 7 };
+    if (method === "Runtime.evaluate" && params?.["expression"] === "globalThis") return { result: { type: "object", objectId: "WORLD-HANDLE" } };
     if (method === "Runtime.callFunctionOn") {
       const source = String(params?.["functionDeclaration"]);
       return { result: { value: source.includes("document.title") ? "Destination" : source.includes("readyState") ? "complete" : false } };
