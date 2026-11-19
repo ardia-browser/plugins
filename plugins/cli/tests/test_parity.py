@@ -430,6 +430,35 @@ class EntryProcess:
             release.set()
             fake.close()
 
+    def test_an_interrupt_sent_to_ardia_alone_says_interrupted(self):
+        release = threading.Event()
+        fake = self.slow_listing(release)
+        try:
+            listing = self.start(["tabs"])
+            self.wait_for(fake, "workspace")
+            os.kill(listing.pid, signal.SIGINT)
+            out, err = listing.communicate(timeout=10)
+            self.assertEqual((listing.returncode, out, err), (130, b"", b"ardia tabs: interrupted\n"))
+        finally:
+            release.set()
+            fake.close()
+
+    def test_an_ignored_interrupt_sent_to_ardia_alone_stays_ignored(self):
+        release = threading.Event()
+        fake = self.slow_listing(release)
+        try:
+            listing = self.start(["tabs"], ignore_interrupts=True)
+            self.wait_for(fake, "workspace")
+            os.kill(listing.pid, signal.SIGINT)
+            time.sleep(0.5)
+            self.assertIsNone(listing.poll(), "an ignored interrupt stopped the listing")
+            release.set()
+            out, err = listing.communicate(timeout=10)
+            self.assertEqual((listing.returncode, err), (0, b""))
+        finally:
+            release.set()
+            fake.close()
+
     def test_an_ignored_interrupt_stays_ignored_during_a_listing(self):
         release = threading.Event()
         fake = self.slow_listing(release)

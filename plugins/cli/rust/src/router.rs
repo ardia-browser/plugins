@@ -11,7 +11,7 @@ pub const HAND_BACK: i32 = 253;
 pub const MARKER_VERSION: u32 = 1;
 const COMPILED: &str = include_str!("../../served.txt");
 const TABLE_LIMIT: u64 = 64 * 1024;
-const FORWARDED: [libc::c_int; 2] = [libc::SIGTERM, libc::SIGHUP];
+const FORWARDED: [libc::c_int; 3] = [libc::SIGINT, libc::SIGTERM, libc::SIGHUP];
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Side {
@@ -206,7 +206,7 @@ pub fn run_child(program: &Path, marker: &str, argv: &[OsString]) -> Ended {
     let Some(words) = words(program, marker, argv) else {
         return Ended::NotStarted;
     };
-    let blocked = signal_set(&[libc::SIGINT, FORWARDED[0], FORWARDED[1]]);
+    let blocked = signal_set(&FORWARDED);
     let mut original: libc::sigset_t = unsafe { std::mem::zeroed() };
     unsafe { libc::sigprocmask(libc::SIG_BLOCK, &blocked, &mut original) };
     let children = set_handler(libc::SIGCHLD, libc::SIG_DFL);
@@ -217,7 +217,7 @@ pub fn run_child(program: &Path, marker: &str, argv: &[OsString]) -> Ended {
     };
     CHILD.store(pid, Ordering::SeqCst);
     let handler: extern "C" fn(libc::c_int) = forward;
-    let mut saved = vec![children, set_handler(libc::SIGINT, libc::SIG_IGN)];
+    let mut saved = vec![children];
     for signal in FORWARDED {
         if disposition(signal) == libc::SIG_DFL {
             saved.push(set_handler(signal, handler as libc::sighandler_t));
