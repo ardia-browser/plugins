@@ -469,6 +469,37 @@ class RawCdp(unittest.TestCase):
         self.assertEqual((before, after), (16, 17))
         self.assertEqual(connection.MAX_LATE_ATTACHES, 16)
 
+    def test_a_raw_attach_answered_late_is_detached_on_its_session(self):
+        from ardia_cli.browse.errors import OutcomeUnknown
+
+        def answer(message):
+            if message["method"] == "Target.attachToBrowserTarget" and "sessionId" not in message:
+                return {"sessionId": "S-browser"}
+            return None if message["method"].startswith("Target.attachTo") else {}
+
+        async def late(method, give_up):
+            state = FakeState()
+            state.browser, sock = linked_browser(answer)
+            argv = [method, "--target", "browser", "--timeout", "50ms"] + (["--param", "targetId=X", "--param", "flatten:=true"] if method == "Target.attachToTarget" else [])
+            call = asyncio.ensure_future(commands.COMMANDS["cdp"](ctx(state), argv))
+            while not [message for message in sock.methods(method) if message.get("sessionId") == "S-browser"]:
+                await asyncio.sleep(0.005)
+            if give_up == "cancel":
+                call.cancel()
+            with self.assertRaises((asyncio.CancelledError, OutcomeUnknown)):
+                await call
+            await asyncio.sleep(0.2)
+            asked = [message for message in sock.methods(method) if message.get("sessionId") == "S-browser"][0]
+            sock.inbox.put_nowait({"id": asked["id"], "result": {"sessionId": "S-child"}})
+            await settle()
+            detached = [(message.get("sessionId"), message["params"]) for message in sock.methods("Target.detachFromTarget")]
+            await state.browser.close()
+            return detached
+
+        for method in ("Target.attachToTarget", "Target.attachToBrowserTarget"):
+            for give_up in ("cancel", "timeout"):
+                self.assertEqual(asyncio.run(late(method, give_up)), [("S-browser", {"sessionId": "S-child"})], (method, give_up))
+
     def test_the_notice_says_whether_the_connection_or_only_the_session_changed(self):
         from ardia_cli.browse import rawcdp
         from ardia_cli.browse.errors import CdpError

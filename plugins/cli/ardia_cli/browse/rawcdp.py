@@ -4,6 +4,7 @@ BROWSER = "browser"
 SESSION_GONE = ("Session with given id not found", "No session with given id", "no attached session has that sessionId")
 SESSION_NOT_FOUND_CODE = -32001
 ATTACH_TIMEOUT = 10
+USER_ATTACHES = ("Target.attachToTarget", "Target.attachToBrowserTarget")
 RESET_NOTICES = {
     "reopened": "→ This session's DevTools connection was reopened since the last cdp call (it closes after 30 s idle), "
                 "so cdp got a fresh session there: domains and settings earlier cdp calls turned on are off again",
@@ -85,13 +86,21 @@ async def session_for(state, key: str) -> tuple[str | None, str]:
     return session, "reattached"
 
 
+async def call(state, method: str, params: dict, session: str | None, timeout: float) -> dict:
+    from ardia_cli.browse.connection import claimed_attach
+
+    if method in USER_ATTACHES:
+        return await claimed_attach(state.browser, method, params, timeout, session, unknown=True)
+    return await state.browser.send(method, params, session, timeout=timeout, mutation=True)
+
+
 async def send(state, key: str, method: str, params: dict, timeout: float) -> tuple[dict, str]:
     session, status = await session_for(state, key)
     try:
-        return await state.browser.send(method, params, session, timeout=timeout, mutation=True), status
+        return await call(state, method, params, session, timeout), status
     except CdpError as error:
         if session is None or not session_gone(error):
             raise
     forget_session(state, session)
     session, status = await session_for(state, key)
-    return await state.browser.send(method, params, session, timeout=timeout, mutation=True), status
+    return await call(state, method, params, session, timeout), status
