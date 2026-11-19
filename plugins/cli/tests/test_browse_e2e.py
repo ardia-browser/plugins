@@ -1989,13 +1989,24 @@ class BrowseTokenPath(unittest.TestCase):
         session = "token-gated"
         self.browse("open", self.url("login.html"), session=session)
         for args, method in ((["cookies"], "Network.getCookies"), (["network", "route", "*", "--abort"], "Fetch.enable"),
-                             (["set", "geo", "1", "2"], "Emulation.setGeolocationOverride"), (["trace", "start"], "Tracing.start"),
-                             (["upload", "#email", str(FIXTURES / "login.html")], "DOM.setFileInputFiles")):
+                             (["set", "geo", "1", "2"], "Emulation.setGeolocationOverride"), (["trace", "start"], "Tracing.start")):
             done = self.browse(*args, session=session, check=False)
             if done.returncode == 0:
                 continue
             self.assertEqual(done.returncode, 1, args)
             self.assertIn(f"needs {method}", done.stderr)
+            self.assertIn("isn't allowed for the ardia command", done.stderr)
+            self.assertIn("update Ardia", done.stderr)
+        self.browse("open", self.url("upload.html"), session=session)
+        files = (FIXTURES / "login.html", FIXTURES / "upload.html")
+        done = self.browse("upload", "#f", *map(str, files), session=session, check=False)
+        if done.returncode == 0:
+            self.assertIn("2 files", done.stdout)
+            self.assertEqual(self.browse("get", "text", "#out", session=session).stdout.strip(),
+                             ",".join(f"{path.name}:{path.stat().st_size}" for path in files))
+        else:
+            self.assertEqual(done.returncode, 1)
+            self.assertIn("needs DOM.setFileInputFiles", done.stderr)
             self.assertIn("isn't allowed for the ardia command", done.stderr)
             self.assertIn("update Ardia", done.stderr)
         data = json.loads(self.browse("cookies", "--json", session=session, check=False).stdout)

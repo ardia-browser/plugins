@@ -1,0 +1,3 @@
+<!doctype html><title>upload</title>
+<input type=file id=f multiple><div id=out></div>
+<script>f.onchange=()=>{out.textContent=[...f.files].map(x=>x.name+':'+x.size).join(',')}</script>
