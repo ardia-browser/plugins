@@ -13,22 +13,84 @@ export const QUIET = 0.12;
 export const SETTLE_LIMIT = 1.5;
 export const POLL = 0.025;
 
-export async function axNodes(page: PluginPage): Promise<AxNode[]> {
-  const nodes = (await page.send("Accessibility.getFullAXTree", {}))["nodes"];
+export async function axNodes(page: PluginPage, frameId: string | null = null): Promise<AxNode[]> {
+  const nodes = (await page.send("Accessibility.getFullAXTree", frameId === null ? {} : { frameId }))["nodes"];
   return isAxList(nodes) ? nodes : [];
 }
 
-export async function collect(session: PluginSession, page: PluginPage, scope: number | null = null): Promise<Node[]> {
-  const started = clock();
-  const frame = page.mainFrame ?? "";
-  const nodes = buildTree(await axNodes(page), scope);
+export type FrameCount = { skipped: number };
+
+const FRAME_ROLES = new Set(["Iframe", "iframe"]);
+const NUMERIC_HOST = /^[0-9.]+$|^\[[0-9a-f:.]+\]$/iu;
+
+export function siteOf(origin: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(origin);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  const host = url.hostname.toLowerCase();
+  const site = NUMERIC_HOST.test(host) || !host.includes(".") ? host : host.split(".").slice(-2).join(".");
+  return `${url.protocol}//${site}`;
+}
+
+function assignRefs(session: PluginSession, page: PluginPage, nodes: readonly Node[], frame: string): void {
   for (const node of walk(nodes)) {
     node.frame = frame;
     if (!REF_ROLES.has(node.role) || node.backend === null || (node.role === "heading" && !node.name)) continue;
     node.ref = session.refFor(page, frame, node.backend);
   }
+}
+
+async function childFrame(page: PluginPage, backend: number): Promise<string | null> {
+  try {
+    const node = (await page.send("DOM.describeNode", { backendNodeId: backend }))["node"] as Record<string, unknown> | undefined;
+    return typeof node?.["frameId"] === "string" ? node["frameId"] : null;
+  } catch (error) {
+    if (unavailable(error)) return null;
+    throw error;
+  }
+}
+
+async function readFrames(session: PluginSession, page: PluginPage, nodes: readonly Node[], counted: FrameCount, seen: Set<string>): Promise<void> {
+  const site = siteOf(page.origin || page.url);
+  for (const node of [...walk(nodes)]) {
+    if (!FRAME_ROLES.has(node.role) || node.backend === null) continue;
+    const frameId = await childFrame(page, node.backend);
+    const frame = frameId === null ? undefined : page.frames.get(frameId);
+    if (frameId === null || frame === undefined || seen.has(frameId) || site === null || siteOf(frame.origin || frame.url) !== site) {
+      counted.skipped += 1;
+      continue;
+    }
+    seen.add(frameId);
+    let inner: AxNode[];
+    try {
+      inner = await axNodes(page, frameId);
+    } catch (error) {
+      if (!unavailable(error)) throw error;
+      counted.skipped += 1;
+      continue;
+    }
+    const children = buildTree(inner);
+    assignRefs(session, page, children, frameId);
+    node.children = children;
+    await readFrames(session, page, children, counted, seen);
+  }
+}
+
+export async function collect(session: PluginSession, page: PluginPage, scope: number | null = null, counted: FrameCount = { skipped: 0 }): Promise<Node[]> {
+  const started = clock();
+  const nodes = buildTree(await axNodes(page), scope);
+  assignRefs(session, page, nodes, page.mainFrame ?? "");
+  await readFrames(session, page, nodes, counted, new Set());
   spent("snapshot_build_ms", started);
   return nodes;
+}
+
+export function framesNotRead(counted: FrameCount): string | null {
+  return counted.skipped === 0 ? null : `${counted.skipped} embedded frame${counted.skipped === 1 ? "" : "s"} not read`;
 }
 
 export function refsOf(session: PluginSession, page: PluginPage, nodes: readonly Node[]): Ref[] {

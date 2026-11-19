@@ -169,6 +169,11 @@ and never by Python's or by the person's own session. The TypeScript daemon only
   `press` the engine would refuse (Meta+C, Meta+V, Meta+Z, Shift+Delete, a character no key types) answers 77
   `plugin_refused` before any key goes out, so no modifier is left down. `type` and humanized `fill` send each
   character as key events when the engine allows them and as `Input.insertText` otherwise (é, CJK, emoji).
+- **Frames.** `snapshot` (and each step's changes view) reads the top document's AX tree and, under each `<iframe>`,
+  the child frame's own tree (`Accessibility.getFullAXTree {frameId}`) when that frame is in the tab's frame tree and
+  same-site with the top document (same scheme and registrable domain, approximated as the host's last two labels).
+  Cross-site frames (out-of-process iframes) aren't read; when any frame is skipped the snapshot ends with one line,
+  `N embedded frame(s) not read`, and `--json` carries `framesNotRead`. Refs inside a read frame work like any other.
 - **Refs.** A step acts only on the picked tab: a ref taken on another tab answers 77 `stale_ref` and nothing is sent.
 - **Document check.** With `options.expect_loader`, the daemon compares the picked tab's main-frame loader before the
   step (a mismatch answers code `document_changed`, exit 1, and nothing ran) and after it, even when the step failed (a

@@ -9,7 +9,7 @@ import { diff as diffViews } from "../changes/report.ts";
 import { asData, renderReport } from "../changes/text.ts";
 import { type Node, walk } from "../snapshot/tree.ts";
 import { type PluginPage } from "./page.ts";
-import { attach, collect, keepRefs, noteShown, observe, onlyTheFieldChanged, previous, remember } from "./ax.ts";
+import { attach, collect, framesNotRead, keepRefs, noteShown, observe, onlyTheFieldChanged, previous, remember } from "./ax.ts";
 import { center, describe, editable, type Element, focus, locate, notEditable } from "./dom.ts";
 import { buttonOf, clearField, clickAt, comboEvents, pressCombo, typeText } from "./input.ts";
 import { type PluginSession, PluginRefused } from "./session.ts";
@@ -101,7 +101,8 @@ async function cmdSnapshot(ctx: PluginCtx, argv: string[]): Promise<Result> {
   await page.refreshFrames();
   const before = options["diff"] ? previous(session, page) : null;
   const scope = selector ? (await locate(session, selector)).backend : null;
-  const nodes = await collect(session, page, scope);
+  const counted = { skipped: 0 };
+  const nodes = await collect(session, page, scope, counted);
   if (selector && nodes.length === 0) throw new BrowseError(`Nothing in the accessibility tree under ${selector}: the element matching it is hidden or empty`);
   const urls = Boolean(options["urls"]);
   if (urls) await linkUrls(page, [...walk(nodes)]);
@@ -111,6 +112,11 @@ async function cmdSnapshot(ctx: PluginCtx, argv: string[]): Promise<Result> {
   const origin = page.origin && page.origin !== "null" ? page.origin : page.url;
   const data: Record<string, unknown> = { origin: origin.endsWith("/") ? origin : `${origin}/`, refs: session.refsJson(), snapshot: text };
   let body = text || "(empty page)";
+  const skipped = framesNotRead(counted);
+  if (skipped !== null) {
+    body += `\n${skipped}`;
+    data["framesNotRead"] = counted.skipped;
+  }
   if (options["diff"]) {
     if (before === null) {
       data["changes"] = null;
