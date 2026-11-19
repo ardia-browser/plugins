@@ -24,3 +24,10 @@ pub fn close_those_closed_at_start() {
         }
     }
 }
+
+pub fn any_is_a_directory() -> bool {
+    (0..3).any(|fd| {
+        let mut found: libc::stat = unsafe { std::mem::zeroed() };
+        unsafe { libc::fstat(fd, &mut found) == 0 && found.st_mode & libc::S_IFMT == libc::S_IFDIR }
+    })
+}

@@ -1,5 +1,52 @@
 use std::fmt::Write as _;
 use std::io::Write;
+use std::sync::Mutex;
+
+static STDERR_LEFT: Mutex<Vec<u8>> = Mutex::new(Vec::new());
+
+fn last_errno() -> i32 {
+    std::io::Error::last_os_error().raw_os_error().unwrap_or(libc::EIO)
+}
+
+fn write_some(fd: i32, bytes: &[u8]) -> Result<usize, i32> {
+    loop {
+        let written = unsafe { libc::write(fd, bytes.as_ptr().cast(), bytes.len()) };
+        if written > 0 || (written == 0 && bytes.is_empty()) {
+            return Ok(written as usize);
+        }
+        let errno = if written == 0 { libc::EIO } else { last_errno() };
+        if errno != libc::EINTR {
+            return Err(errno);
+        }
+    }
+}
+
+pub fn to_stderr(bytes: &[u8]) -> Result<(), i32> {
+    let mut left = STDERR_LEFT.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    left.extend_from_slice(bytes);
+    while !left.is_empty() {
+        let written = write_some(2, &left)?;
+        left.drain(..written);
+    }
+    Ok(())
+}
+
+pub fn settle_stderr(status: i32) -> i32 {
+    if to_stderr(b"").is_err() {
+        120
+    } else {
+        status
+    }
+}
+
+pub fn stderr_unusable() -> bool {
+    let flags = unsafe { libc::fcntl(2, libc::F_GETFL) };
+    flags < 0 || flags & libc::O_ACCMODE == libc::O_RDONLY || flags & libc::O_NONBLOCK != 0
+}
+
+pub fn exception_line(errno: i32) -> String {
+    format!("{}: [Errno {errno}] {}\n", python_os_error(errno), crate::paths::strerror(errno))
+}
 
 fn escaped(text: &str, escape: impl Fn(u32) -> bool) -> String {
     let mut out = String::with_capacity(text.len());
@@ -29,42 +76,56 @@ pub fn json_safe(text: &str) -> String {
 const PYTHON_DEFAULT_BUFFER: usize = 8192;
 
 #[derive(Debug, PartialEq)]
-enum Stopped {
+pub enum Stopped {
     Closed,
     Interrupted,
-    Failed(i32),
+    Failed { errno: i32, unwritten: Vec<u8> },
 }
 
-fn write_stdout(mut bytes: &[u8], interrupted: impl Fn() -> bool) -> Result<(), Stopped> {
+pub fn write_as_python_buffers(mut bytes: &[u8], buffer: usize, interrupted: impl Fn() -> bool) -> Result<(), Stopped> {
+    let mut direct = bytes.len() >= buffer;
     while !bytes.is_empty() {
+        direct = direct && bytes.len() >= buffer;
         if interrupted() {
             return Err(Stopped::Interrupted);
         }
-        let written = unsafe { libc::write(1, bytes.as_ptr().cast(), bytes.len()) };
-        if written >= 0 {
-            bytes = &bytes[written as usize..];
-        } else {
-            match std::io::Error::last_os_error().raw_os_error().unwrap_or(libc::EIO) {
-                libc::EINTR => {}
-                libc::EPIPE | libc::ESHUTDOWN => return Err(Stopped::Closed),
-                errno => return Err(Stopped::Failed(errno)),
+        match write_some(1, bytes) {
+            Ok(written) => bytes = &bytes[written..],
+            Err(libc::EPIPE | libc::ESHUTDOWN) => return Err(Stopped::Closed),
+            Err(errno) => {
+                let unwritten = match (direct, errno) {
+                    (true, libc::EAGAIN) => bytes[..buffer].to_vec(),
+                    (true, _) => Vec::new(),
+                    (false, _) => bytes.to_vec(),
+                };
+                return Err(Stopped::Failed { errno, unwritten });
             }
         }
     }
     Ok(())
 }
 
+pub fn report_crash(errno: i32, unwritten: &[u8]) -> i32 {
+    let exception = exception_line(errno);
+    let _ = to_stderr(exception.as_bytes());
+    let mut left = unwritten;
+    while !left.is_empty() {
+        match write_some(1, left) {
+            Ok(written) => left = &left[written..],
+            Err(again) => {
+                let _ = to_stderr(format!("Exception ignored on flushing sys.stdout:\n{}", exception_line(again)).as_bytes());
+                return 120;
+            }
+        }
+    }
+    1
+}
+
 pub struct Output {
     json: bool,
     closed: bool,
     interrupted: bool,
-    failed: Option<Failed>,
-}
-
-#[derive(Clone, Copy)]
-struct Failed {
-    errno: i32,
-    line: usize,
+    failed: Option<(i32, Vec<u8>)>,
     buffer: usize,
 }
 
@@ -75,6 +136,7 @@ impl Output {
             closed: false,
             interrupted: false,
             failed: None,
+            buffer: python_stdout_buffer(),
         }
     }
 
@@ -82,9 +144,15 @@ impl Output {
         self.closed || self.interrupted || self.failed.is_some()
     }
 
-    pub fn python_crash(&self) -> Option<(i32, i32)> {
-        let failed = self.failed?;
-        Some((failed.errno, report_crash(failed.errno, failed.line <= failed.buffer)))
+    pub fn failed(&self) -> Option<i32> {
+        self.failed.as_ref().map(|(errno, _)| *errno)
+    }
+
+    pub fn report_crash(&self) -> i32 {
+        let Some((errno, unwritten)) = &self.failed else { return 1 };
+        let exit = report_crash(*errno, unwritten);
+        quiet_stdout();
+        exit
     }
 
     pub fn closed(&self) -> bool {
@@ -102,41 +170,23 @@ impl Output {
         let text = crate::pystr::well_formed(text);
         let mut line = if self.json { json_safe(&text) } else { inert(&text) };
         line.push('\n');
-        match write_stdout(line.as_bytes(), crate::control::interrupted) {
+        match write_as_python_buffers(line.as_bytes(), self.buffer, crate::control::interrupted) {
             Ok(()) => {}
             Err(Stopped::Closed) => self.closed = true,
             Err(Stopped::Interrupted) => self.interrupted = true,
-            Err(Stopped::Failed(errno)) => {
-                self.failed = Some(Failed {
-                    errno,
-                    line: line.len(),
-                    buffer: python_stdout_buffer(),
-                })
-            }
+            Err(Stopped::Failed { errno, unwritten }) => self.failed = Some((errno, unwritten)),
         }
-        if self.stopped() {
+        if self.closed || self.interrupted {
             quiet_stdout();
         }
     }
 
-    pub fn complain(&mut self, text: &str) {
+    pub fn complain(&mut self, text: &str) -> Option<i32> {
         let _ = std::io::stdout().flush();
-        let mut stderr = std::io::stderr().lock();
-        let _ = stderr.write_all(inert(&crate::pystr::well_formed(text)).as_bytes());
-        let _ = stderr.write_all(b"\n");
-        let _ = stderr.flush();
+        let mut line = inert(&crate::pystr::well_formed(text));
+        line.push('\n');
+        to_stderr(line.as_bytes()).err()
     }
-}
-
-pub fn report_crash(errno: i32, flush_fails_again: bool) -> i32 {
-    let exception = format!("{}: [Errno {errno}] {}\n", python_os_error(errno), crate::paths::strerror(errno));
-    let mut stderr = std::io::stderr().lock();
-    let _ = stderr.write_all(exception.as_bytes());
-    if !flush_fails_again {
-        return 1;
-    }
-    let _ = write!(stderr, "Exception ignored on flushing sys.stdout:\n{exception}");
-    120
 }
 
 pub fn python_os_error(errno: i32) -> &'static str {
@@ -175,7 +225,11 @@ pub fn stdout_unusable() -> bool {
 
 pub fn version_write_failed(error: &std::io::Error) -> i32 {
     match error.raw_os_error() {
-        Some(errno) if errno != libc::EBADF && unsafe { libc::isatty(1) } == 1 => report_crash(errno, true),
+        Some(errno) if errno != libc::EBADF && unsafe { libc::isatty(1) } == 1 => {
+            let _ = to_stderr(exception_line(errno).as_bytes());
+            let _ = to_stderr(format!("Exception ignored on flushing sys.stdout:\n{}", exception_line(errno)).as_bytes());
+            120
+        }
         _ => stdout_flush_failed(error),
     }
 }
@@ -185,16 +239,11 @@ pub fn stdout_flush_failed(error: &std::io::Error) -> i32 {
     if errno == libc::EBADF {
         return 0;
     }
-    let _ = write!(
-        std::io::stderr(),
-        "Exception ignored on flushing sys.stdout:\n{}: [Errno {errno}] {}\n",
-        python_os_error(errno),
-        crate::paths::strerror(errno)
-    );
+    let _ = to_stderr(format!("Exception ignored on flushing sys.stdout:\n{}", exception_line(errno)).as_bytes());
     120
 }
 
-fn quiet_stdout() {
+pub fn quiet_stdout() {
     let null = std::ffi::CString::new("/dev/null").unwrap_or_default();
     unsafe {
         let sink = libc::open(null.as_ptr(), libc::O_WRONLY);
@@ -218,8 +267,8 @@ mod tests {
 
     #[test]
     fn a_write_stops_when_interrupted() {
-        assert_eq!(write_stdout(b"never written", || true), Err(Stopped::Interrupted));
-        assert_eq!(write_stdout(b"", || true), Ok(()));
+        assert_eq!(write_as_python_buffers(b"never written", 8, || true), Err(Stopped::Interrupted));
+        assert_eq!(write_as_python_buffers(b"", 8, || true), Ok(()));
     }
 
     #[test]
