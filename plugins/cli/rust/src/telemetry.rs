@@ -199,7 +199,8 @@ fn epoch_seconds(value: &Value) -> Option<f64> {
 
 fn valid_id(value: Option<&Value>) -> Option<String> {
     let text = value?.as_str()?.to_lowercase();
-    let groups: Vec<&str> = text.split('-').collect();
+    let id = text.strip_suffix('\n').unwrap_or(&text);
+    let groups: Vec<&str> = id.split('-').collect();
     let lengths = [8, 4, 4, 4, 12];
     let valid = groups.len() == 5
         && groups
@@ -624,6 +625,9 @@ mod tests {
         assert_eq!(&id[14..15], "7");
         assert!(matches!(&id[19..20], "8" | "9" | "a" | "b"));
         assert!(valid_id(Some(&Value::str(&id.to_uppercase()))).is_some());
+        assert_eq!(valid_id(Some(&Value::str(&format!("{}\n", id.to_uppercase())))), Some(format!("{id}\n")));
+        assert_eq!(valid_id(Some(&Value::str(&format!("{id}\n\n")))), None);
+        assert_eq!(valid_id(Some(&Value::str(&format!("\n{id}")))), None);
     }
 
     #[test]
