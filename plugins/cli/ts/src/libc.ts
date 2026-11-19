@@ -19,11 +19,11 @@ type Native = {
   listAt(dir: number): Buffer[] | number;
   lock(fd: number, exclusive: boolean, wait: boolean): number;
   watchLifeline(fd: number): number;
-  writeAll(fd: number, bytes: Uint8Array): number;
+  writeSome(fd: number, bytes: Uint8Array, offset: number): number;
   strerror(errno: number): string | number;
 };
 
-const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "openFileAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "listAt", "lock", "watchLifeline", "writeAll", "strerror"];
+const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "openFileAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "listAt", "lock", "watchLifeline", "writeSome", "strerror"];
 const ERRNO_NAMES = new Map<number, string>(Object.entries(constants.errno).map(([name, value]) => [value, name]));
 const EWOULDBLOCK = constants.errno.EWOULDBLOCK ?? constants.errno.EAGAIN;
 
@@ -154,8 +154,28 @@ export function watchLifeline(fd: number): void {
   checked(native().watchLifeline(fd), "pthread_create");
 }
 
+export function writeSome(fd: number, bytes: Uint8Array, offset = 0): number {
+  const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const written = native().writeSome(fd, buffer, offset);
+  if (written < 0) throw errnoError(-written, "write");
+  if (written === 0 && offset < buffer.length) throw errnoError(constants.errno.EIO, "write");
+  return written;
+}
+
+export function writtenBefore(error: unknown): number {
+  const written = (error as { written?: unknown } | undefined)?.written;
+  return typeof written === "number" ? written : 0;
+}
+
 export function writeWhole(fd: number, bytes: Uint8Array): void {
-  checked(native().writeAll(fd, Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)), "write");
+  let offset = 0;
+  while (offset < bytes.byteLength) {
+    try {
+      offset += writeSome(fd, bytes, offset);
+    } catch (error) {
+      throw Object.assign(error as NodeJS.ErrnoException, { written: offset });
+    }
+  }
 }
 
 export function strerror(errno: number): string {

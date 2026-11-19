@@ -1688,16 +1688,23 @@ connection of its own, asking only read-only questions (`hello`, `workspace`, `w
 connection, or one in a case not marked `fallback`, is a mismatch. `--command NAME` and `--case ID` narrow a run, `--keep` keeps both
 sandboxes, and `--report` prints the table as JSON (per command: cases, passing, native, served) for a given commit.
 
-The Rust entry stays `bin/ardia` and routes. A call whose stdout is closed, open read-only or non-blocking goes to Python
+The Rust entry stays `bin/ardia` and routes. A call whose stdout or stderr is open read-only or non-blocking goes to Python
 whatever its row says, since Python's failure there is an unhandled exception native code can't reproduce, and so does
 a call started with fd 0, 1 or 2 closed (noted by a constructor that runs before Rust's runtime reopens them on
-`/dev/null`; Python then gets them closed again). A listing whose stdout later fails with anything but EPIPE ends as
-Python's would after its traceback: the exception line, then, when the failed line fit Python's stdout buffer
-(`st_blksize`, read before the failed stdout is pointed at `/dev/null`), `Exception ignored on flushing sys.stdout:` and
-status 120, else status 1; bare `ardia` (help) follows the same rule for its whole text (on a hung-up Linux terminal,
-whose `st_blksize` is 1024, that is status 1), `--version` prints both on a terminal and the second alone elsewhere. Telemetry records what Python's crash records: a `$exception` event (`cli_unhandled`,
+`/dev/null`; Python then gets them closed again), and so does a call with fd 0, 1 or 2 open on a directory, which CPython's
+`init_sys_streams` refuses at startup (`<stdin> is a directory, cannot continue`, status 1). A listing whose stdout later fails with anything but EPIPE ends as
+Python's would after its traceback. Each line is written as CPython 3.13's `BufferedWriter` writes it (its buffer is
+stdout's `st_blksize`): straight to the descriptor while what is left is at least one buffer long, then the shorter rest
+through the buffer. A failure while writing straight leaves nothing behind, so the call prints the exception line and
+ends with status 1; a failure writing the buffered rest leaves it in the buffer, which Python's exit flush tries again,
+so the call prints the exception line, tries the rest once more and, when that fails too, prints
+`Exception ignored on flushing sys.stdout:` with the second error and ends with status 120; bare `ardia` (help) follows the same rule for its whole text (on a hung-up Linux terminal,
+whose `st_blksize` is 1024, that is status 1), `--version` prints both on a terminal and the second alone elsewhere. Telemetry records what Python's crash records, and records it first, before any of that is written to stderr, as Python's `telemetry.track` does before the interpreter prints the exception: a `$exception` event (`cli_unhandled`,
 fatal, the `OSError` subclass and `[Errno N] text`) before the `cli_command` event, which carries exit code 1 and
-`unhandled_exception`. Both entries ignore SIGXFSZ as Python does at startup, so a file-size limit gives `EFBIG`, not
+`unhandled_exception`. A line on stderr that fails later (a closed pipe, a hung-up terminal) stays pending as it does in
+Python's line-buffered stderr and is tried again before exit: a complaint that fails with EPIPE ends as Python's caught
+`BrokenPipeError` does (`stdout_closed`, status 141), any other error as its crash (the two events above, then the
+exception line), and a stderr still failing at exit makes the status 120, as Python's last flush does. Both entries ignore SIGXFSZ as Python does at startup, so a file-size limit gives `EFBIG`, not
 death by signal; the router restores the caller's disposition before it execs Python, and the flusher starts with it at
 its default, as Python's `subprocess` starts it. A command whose row in `served.txt` says `rust` it serves itself; one that
 says `ts` it runs as a child, `<root>/libexec/ardia-ts`, whose first argument `--ardia-routed=2:<sigint>:<fd>:<hex caller>`
@@ -1744,7 +1751,7 @@ its mode; the hardened runtime's library validation then loads it only into a pr
 | `listAt` | what CPython 3.13's `os.listdir(fd)` does: `fcntl(F_DUPFD_CLOEXEC)` (sharing the folder's open file and its offset), `fdopendir`, `readdir` from that offset, then `rewinddir` and `closedir`; names as raw-byte `Buffer`s. So it sees what Python sees on every filesystem (on overlayfs, not a file made after the folder was opened) and leaves the offset where Python leaves it | no directory listing from a descriptor | `privatefs.ts`: prune the local copies |
 | `lock` | `flock` | no `flock`; `O_EXLOCK` is Darwin-only | `privatefs.ts`: the same lock Python's `fcntl.flock` takes, on macOS and Linux |
 | `strerror` | `strerror_r` (GNU form on glibc, XSI elsewhere) | Node's messages are libuv's, not libc's | `paths.ts`, `libc.ts`: every OS error text, as Python's `os.strerror` gives it on that platform |
-| `writeAll` | `write` until all is written (`poll` for `POLLOUT` on `EAGAIN`), with SIGINT at its default disposition for the duration unless it was ignored | a synchronous `writeSync` blocked on a full pipe or a paused terminal can't be ended by Ctrl-C while Bun's own SIGINT handler is installed | `printable.ts`, `main.ts`: help, `--version` and every line on stderr |
+| `writeSome` | one `write` (retried on `EINTR`), returning the bytes written or the error, with SIGINT at its default disposition for the duration unless it was ignored; `EAGAIN` comes back at once, so a non-blocking descriptor is never waited on | a synchronous `writeSync` blocked on a full pipe or a paused terminal can't be ended by Ctrl-C while Bun's own SIGINT handler is installed, and the caller needs to know how much was written to keep the unwritten tail as Python's buffer does | `libc.ts` (`writeWhole`), `printable.ts`, `main.ts`: help, `--version` and every line on stderr |
 | `watchLifeline` | `fcntl(FD_CLOEXEC)`, a detached `pthread` blocking in `read`, `kill(getpid(), SIGKILL)` at EOF or error | a JS watcher can't run while the JS thread is blocked in a synchronous call | `main.ts`: end at once when the router dies |
 
 Every integer argument must be a number that is exactly a 32-bit integer, and a boolean a boolean; anything else throws

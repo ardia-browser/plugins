@@ -5,7 +5,7 @@ import { charCount, dict, getOrNull, iterateOrEmpty, left, length, rstrip, strOf
 import { groups, tabs } from "./render-tabs.ts";
 
 export function pretty(value: Value): string {
-  return dumps(value, "indented");
+  return dumps(value, "indented", false, true);
 }
 
 export function shownOf(value: Value | undefined): string {
@@ -127,11 +127,14 @@ export function flatGroups(tree: Value): JsonObject[] {
     for (const [, key] of SECTIONS) {
       const walked: [JsonObject, number][] = [];
       walk(getOrNull(space, key), 0, walked);
-      for (const [item, depth] of walked) {
-        if (item.get("type") !== "group") continue;
-        const inner: [JsonObject, number][] = [];
-        walk(item.get("items") ?? null, 0, inner);
-        const tabIds = inner.filter(([tab]) => tab.get("type") === "tab").map(([tab]) => tab.get("id") ?? null);
+      walked.forEach(([item, depth], index) => {
+        if (item.get("type") !== "group") return;
+        const tabIds: Value[] = [];
+        for (let inner = index + 1; inner < walked.length; inner += 1) {
+          const [tab, level] = walked[inner] as [JsonObject, number];
+          if (level <= depth) break;
+          if (tab.get("type") === "tab") tabIds.push(tab.get("id") ?? null);
+        }
         out.push(
           merged(
             item,
@@ -139,7 +142,7 @@ export function flatGroups(tree: Value): JsonObject[] {
             "items",
           ),
         );
-      }
+      });
     }
   }
   return out;
