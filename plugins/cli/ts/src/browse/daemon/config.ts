@@ -47,6 +47,21 @@ function wholeNumber(config: Map<string, Value>, field: string, low: bigint, hig
   return value;
 }
 
+export function cleanLabel(label: string | null): string | null {
+  if (label === null) return null;
+  let kept = label;
+  for (const mark of ["?", "#"]) {
+    const at = kept.indexOf(mark);
+    if (at >= 0) kept = kept.slice(0, at);
+  }
+  const scheme = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//u.exec(kept)?.[0] ?? "";
+  const rest = kept.slice(scheme.length);
+  const slash = rest.indexOf("/");
+  const authority = slash < 0 ? rest : rest.slice(0, slash);
+  const at = authority.lastIndexOf("@");
+  return at < 0 ? kept : scheme + rest.slice(at + 1);
+}
+
 export function parseConfig(text: string): DaemonConfig {
   let parsed: Value | undefined;
   try {
@@ -85,7 +100,7 @@ export function parseConfig(text: string): DaemonConfig {
     ws,
     port: port === null ? null : Number(port),
     dataDir: optionalText(parsed, "data_dir"),
-    endpointLabel: optionalText(parsed, "endpoint_label"),
+    endpointLabel: cleanLabel(optionalText(parsed, "endpoint_label")),
     idleTimeoutMs,
     debug: flag(parsed, "debug"),
     noAutoDialog: flag(parsed, "no_auto_dialog"),

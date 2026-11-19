@@ -8,6 +8,7 @@ import { addSecret, redact } from "../redact.ts";
 import { parseQsl, quote, urlsplit } from "../pylib/urllib.ts";
 import { strerror } from "../libc.ts";
 import { closeFd, readFdUpTo } from "./paths.ts";
+import { Cancelled, currentSignal } from "./cdp/cancel.ts";
 
 export const CONTROL_FILE = "ArdiaControl.json";
 const BROWSER_PATH = /^\/devtools\/browser\/[0-9A-Za-z-]{1,128}$/;
@@ -47,12 +48,13 @@ function fromWs(url: string, source: string): Endpoint {
   return { ws: url, source, explicit: true, active: null, instance: `${parts.netloc}${parts.path}` };
 }
 
-async function fromPort(port: number, source: string): Promise<Endpoint> {
+async function fromPort(port: number, source: string, signal: AbortSignal | null): Promise<Endpoint> {
   if (!(port > 0 && port < 65536)) throw new EndpointError(`${source} must be between 1 and 65535, not ${port}`);
   let info: unknown;
   try {
-    info = parseText((await versionBody(port)).toString("utf8"));
+    info = parseText((await versionBody(port, signal)).toString("utf8"));
   } catch (error) {
+    if (error instanceof Cancelled) throw error;
     const code = (error as NodeJS.ErrnoException).code;
     const errno = typeof code === "string" && Object.hasOwn(constants.errno, code) ? (constants.errno as Record<string, number>)[code] ?? 0 : 0;
     const reason = errno > 0 ? `[Errno ${errno}] ${strerror(errno)}` : error instanceof Error && error.message ? error.message : "can't connect";
@@ -63,8 +65,21 @@ async function fromPort(port: number, source: string): Promise<Endpoint> {
   return fromWs(ws, `${source} ${port}`);
 }
 
-function versionBody(port: number): Promise<Buffer> {
+function versionBody(port: number, signal: AbortSignal | null): Promise<Buffer> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new Cancelled());
+      return;
+    }
+    let settled = false;
+    const finish = (fail: unknown, body?: Buffer) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(deadline);
+      signal?.removeEventListener("abort", aborted);
+      if (fail === null) resolve(body as Buffer);
+      else reject(fail);
+    };
     const request = http.get({ host: "127.0.0.1", port, path: "/json/version", timeout: PORT_TIMEOUT_MS, agent: false }, (response) => {
       const chunks: Buffer[] = [];
       let size = 0;
@@ -73,13 +88,25 @@ function versionBody(port: number): Promise<Buffer> {
         size += chunk.length;
       });
       response.on("end", () => {
-        if ((response.statusCode ?? 0) >= 400) reject(new Error(`HTTP Error ${response.statusCode}: ${response.statusMessage ?? ""}`));
-        else resolve(Buffer.concat(chunks).subarray(0, MAX_CONTROL_FILE));
+        if ((response.statusCode ?? 0) >= 400) finish(new Error(`HTTP Error ${response.statusCode}: ${response.statusMessage ?? ""}`));
+        else finish(null, Buffer.concat(chunks).subarray(0, MAX_CONTROL_FILE));
       });
-      response.on("error", reject);
+      response.on("error", (error) => finish(error));
     });
-    request.on("timeout", () => request.destroy(new Error("timed out")));
-    request.on("error", reject);
+    const aborted = () => {
+      finish(new Cancelled());
+      request.destroy();
+    };
+    const deadline = setTimeout(() => {
+      finish(new Error("timed out"));
+      request.destroy();
+    }, PORT_TIMEOUT_MS);
+    signal?.addEventListener("abort", aborted, { once: true });
+    request.on("timeout", () => {
+      finish(new Error("timed out"));
+      request.destroy();
+    });
+    request.on("error", (error) => finish(error));
   });
 }
 
@@ -151,14 +178,14 @@ function setting(value: unknown): string | null {
   return typeof value === "string" && value !== "" ? value : null;
 }
 
-export async function resolve(config: EndpointConfig): Promise<Endpoint> {
+export async function resolve(config: EndpointConfig, signal: AbortSignal | null = currentSignal()): Promise<Endpoint> {
   const ws = setting(config.ws);
   if (ws !== null) return fromWs(ws, "--ws");
-  if (typeof config.port === "number" || typeof config.port === "bigint") return fromPort(Number(config.port), "--port");
+  if (typeof config.port === "number" || typeof config.port === "bigint") return fromPort(Number(config.port), "--port", signal);
   const envWs = process.env["ARDIA_WS"];
   if (envWs) return fromWs(envWs, "ARDIA_WS");
   const envPort = process.env["ARDIA_PORT"];
-  if (envPort) return fromPort(portNumber(envPort), "ARDIA_PORT");
+  if (envPort) return fromPort(portNumber(envPort), "ARDIA_PORT", signal);
   const envCdp = process.env["ARDIA_CDP_URL"];
   if (envCdp) return fromWs(envCdp, "ARDIA_CDP_URL");
   const dataDir = setting(config.data_dir);

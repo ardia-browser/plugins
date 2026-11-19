@@ -1,5 +1,5 @@
 import { formatG } from "../../../pylib/format.ts";
-import { type Browser, type CdpResult, isMutation } from "../../cdp/browser.ts";
+import { type Browser, type CdpResult, DETACH_WAIT, isMutation } from "../../cdp/browser.ts";
 import { Cancelled, sleep } from "../../cdp/cancel.ts";
 import { BrowseError, CdpError, CdpTimeout, Gated, OutcomeUnknown, PageBusy } from "../../daemon-errors.ts";
 import { LIBRARY } from "../../js/index.ts";
@@ -44,6 +44,7 @@ function frameOf(frame: Record<string, unknown>, parent: string | null): Frame {
 
 export class StubPage {
   sessionId: string | null = null;
+  attaching: string | null = null;
   browser: Browser | null = null;
   frames = new Map<string, Frame>();
   mainFrame: string | null = null;
@@ -66,6 +67,8 @@ export class StubPage {
   ) {}
 
   async attach(browser: Browser): Promise<void> {
+    if (this.sessionId !== null) this.state.sessions.delete(this.sessionId);
+    this.sessionId = null;
     this.browser = browser;
     this.worlds.clear();
     let result: CdpResult;
@@ -78,22 +81,30 @@ export class StubPage {
       }
       throw error;
     }
-    this.sessionId = String(result["sessionId"]);
-    this.state.sessions.set(this.sessionId, this);
-    this.attaches += 1;
-    const known = this.crashed;
-    this.crashed = false;
+    const session = String(result["sessionId"]);
+    this.attaching = session;
+    this.needsEnable = true;
+    this.state.sessions.set(session, this);
     try {
-      await this.send("Inspector.enable", null, { timeout: CRASH_PROBE });
+      this.attaches += 1;
+      const known = this.crashed;
+      this.crashed = false;
+      try {
+        await this.send("Inspector.enable", null, { timeout: CRASH_PROBE });
+      } catch (error) {
+        if (error instanceof Gated) this.crashed = known;
+        else if (!(error instanceof BrowseError)) throw error;
+      }
+      if (!this.crashed) await this.enablePage();
     } catch (error) {
-      if (error instanceof Gated) this.crashed = known;
-      else if (!(error instanceof BrowseError)) throw error;
-    }
-    if (this.crashed) {
+      this.attaching = null;
+      this.state.sessions.delete(session);
       this.needsEnable = true;
-      return;
+      browser.send("Target.detachFromTarget", { sessionId: session }, { timeout: DETACH_WAIT, signal: null }).catch(() => {});
+      throw error;
     }
-    await this.enablePage();
+    this.attaching = null;
+    this.sessionId = session;
   }
 
   async enablePage(): Promise<void> {
@@ -124,7 +135,7 @@ export class StubPage {
 
   async stillBusy(method: string): Promise<void> {
     try {
-      await (this.browser as Browser).send("Runtime.evaluate", { expression: "1", returnByValue: true }, { session: this.sessionId, timeout: BUSY_PROBE });
+      await (this.browser as Browser).send("Runtime.evaluate", { expression: "1", returnByValue: true }, { session: this.sessionId ?? this.attaching, timeout: BUSY_PROBE });
     } catch (error) {
       if (error instanceof CdpTimeout) {
         flag("page_busy_fast_fail", true);
@@ -143,13 +154,16 @@ export class StubPage {
 
   detach(): void {
     if (this.sessionId) this.state.sessions.delete(this.sessionId);
+    if (this.attaching) this.state.sessions.delete(this.attaching);
     this.sessionId = null;
+    this.attaching = null;
     this.worlds.clear();
     for (const call of this.calls) call.abort(new Cancelled());
   }
 
   async send(method: string, params: CdpResult | null = null, options: { timeout?: number; mutation?: boolean; inputEvent?: boolean } = {}): Promise<CdpResult> {
-    if (this.sessionId === null) throw new BrowseError(DETACHED, null, "tab_detached");
+    const session = this.sessionId ?? this.attaching;
+    if (session === null) throw new BrowseError(DETACHED, null, "tab_detached");
     if (this.crashed && !CRASH_SAFE.has(method)) throw new BrowseError(CRASHED, null, "tab_crashed");
     if (this.unansweredAt && monotonic() - this.unansweredAt < BUSY_MEMORY) await this.stillBusy(method);
     const timeout = options.timeout ?? 30;
@@ -157,7 +171,7 @@ export class StubPage {
     this.calls.add(dropped);
     const unknown = Boolean(options.inputEvent || options.mutation || isMutation(method));
     try {
-      const sending = (this.browser as Browser).send(method, params, { session: this.sessionId, timeout });
+      const sending = (this.browser as Browser).send(method, params, { session, timeout });
       return await new Promise<CdpResult>((resolve, reject) => {
         dropped.signal.addEventListener("abort", () => reject(dropped.signal.reason), { once: true });
         sending.then(resolve, reject);

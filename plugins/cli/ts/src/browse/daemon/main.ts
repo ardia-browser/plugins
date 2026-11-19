@@ -84,6 +84,7 @@ export async function daemonMain(argv: string[]): Promise<number> {
   process.on("unhandledRejection", (error) => log.exception("a background task failed", error));
   const where = { dataRoot: config.dataRoot, testEndpoint: Boolean(config.ws || config.port) };
   const lease = takeLease();
+  process.once("exit", () => dropLease(lease));
   try {
     const { Daemon } = await import("./server.ts");
     const daemon = new Daemon(config);

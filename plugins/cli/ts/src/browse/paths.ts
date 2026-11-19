@@ -5,6 +5,7 @@ import { dumps, parseText, type Value } from "../json.ts";
 import { flock, listAt, mkdirAt, openAt, openFileAt, renameAt, statAt, unlinkAt } from "../libc.ts";
 import { codeOf, errnoOf, uid } from "../paths.ts";
 import { plain } from "../pystr.ts";
+import { BrowseError } from "./daemon-errors.ts";
 
 const { O_RDONLY, O_RDWR, O_WRONLY, O_CREAT, O_TRUNC, O_NOFOLLOW, O_DIRECTORY, S_IFMT, S_IFSOCK } = fs.constants;
 const { ELOOP, ENOTDIR } = constants.errno;
@@ -161,7 +162,7 @@ export function lockHeld(name: string, dir: number): boolean {
   }
 }
 
-export type SocketId = { dev: number; ino: number };
+export type SocketId = { dev: bigint; ino: bigint };
 
 export function socketIsOurs(name: string, dir: number): SocketId | null {
   let info;
@@ -179,6 +180,29 @@ export function socketIsOurs(name: string, dir: number): SocketId | null {
 
 export function sameSocket(a: SocketId | null, b: SocketId | null): boolean {
   return a !== null && b !== null && a.dev === b.dev && a.ino === b.ino;
+}
+
+export const LOCK_WAIT = 5.0;
+const LOCK_RETRY_MS = 5;
+
+
+function sleepSync(ms: number): void {
+  const bun = (globalThis as unknown as { Bun?: { sleepSync(ms: number): void } }).Bun;
+  if (bun !== undefined) {
+    bun.sleepSync(ms);
+    return;
+  }
+  const until = performance.now() + ms;
+  while (performance.now() < until) {}
+}
+
+export function lockWithin(fd: number, label: string, seconds = LOCK_WAIT): void {
+  const deadline = performance.now() + seconds * 1000;
+  for (;;) {
+    if (flock(fd, true, false)) return;
+    if (performance.now() >= deadline) throw new BrowseError(`${label} stayed locked by another process for ${seconds} s; try again`, null, "lock_busy");
+    sleepSync(LOCK_RETRY_MS);
+  }
 }
 
 export function writeAllFd(fd: number, data: Uint8Array): void {

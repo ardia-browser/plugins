@@ -1,11 +1,12 @@
+import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { type Value } from "../../json.ts";
-import { peerUid } from "../../libc.ts";
+import { peerUid, renameAt } from "../../libc.ts";
 import { uid } from "../../paths.ts";
 import { formatG, roundHalfEven } from "../../pylib/format.ts";
-import { Cancelled, currentSignal, shield, withSignal } from "../cdp/cancel.ts";
+import { Cancelled, currentSignal, withSignal } from "../cdp/cancel.ts";
 import { BrowseError, ConnectionLost, Unreachable, Usage } from "../daemon-errors.ts";
 import { type Endpoint, EndpointError, resolve } from "../endpoint.ts";
 import { BEHIND_SCRIPT_WAIT, commandLimit, QUEUE_WAIT, queueWait } from "../limits.ts";
@@ -16,6 +17,7 @@ import { wallSeconds } from "../tokens.ts";
 import { release as releaseClaims } from "./claims.ts";
 import { type DaemonConfig } from "./config.ts";
 import { FifoLock } from "./lock.ts";
+import { parseCaller } from "./announce.ts";
 import { log } from "./log.ts";
 import { canonical, SKIPPED } from "./names.ts";
 import { type Answer, encodeAnswer, joinedBatch, MAX_REQUEST, type Options, render, Result, timedOut } from "./render.ts";
@@ -78,6 +80,10 @@ export class Daemon {
   sockId: SocketId | null = null;
   readonly idleLimit: number;
   connectedIdle = CONNECTED_IDLE;
+  settleTimeout = SETTLE_TIMEOUT;
+  cleanupTimeout = CLEANUP_TIMEOUT;
+  closeTimeout = CLEANUP_TIMEOUT;
+  exit: (code: number) => void = (code) => process.exit(code);
   private stopNow: () => void = () => {};
   private readonly stopped: Promise<void>;
   private server: net.Server | null = null;
@@ -123,25 +129,54 @@ export class Daemon {
 
   private enterFolder(): void {
     process.chdir(path.join(this.config.dataRoot, "Browse"));
-    const here = fs.statSync(".");
-    const held = fs.fstatSync(this.dirFd);
+    const here = fs.statSync(".", { bigint: true });
+    const held = fs.fstatSync(this.dirFd, { bigint: true });
     if (here.dev !== held.dev || here.ino !== held.ino) throw new PathError("the Browse folder changed while the daemon started");
   }
 
   private listen(): Promise<net.Server> {
+    const bound = `.${this.key}.${process.pid}.${randomBytes(6).toString("hex")}.sock`;
     const previous = process.umask(0o177);
     return new Promise<net.Server>((resolve, reject) => {
       const server = net.createServer({ allowHalfOpen: true }, (socket) => {
         this.handle(socket).catch((error: unknown) => log.exception("request failed", error));
       });
       server.once("error", reject);
-      server.listen(this.sock, () => {
+      server.listen(bound, () => {
         server.off("error", reject);
+        try {
+          renameAt(this.dirFd, bound, this.sock);
+        } catch (error) {
+          server.close();
+          reject(error);
+          return;
+        }
         resolve(server);
       });
     }).finally(() => {
       process.umask(previous);
+      try {
+        unlinkQuietly(bound, this.dirFd);
+      } catch {}
     });
+  }
+
+  private dropSocket(): void {
+    try {
+      if (this.sockId !== null && sameSocket(socketIsOurs(this.sock, this.dirFd), this.sockId)) unlinkQuietly(this.sock, this.dirFd);
+    } catch {}
+  }
+
+  private armWatchdog(): () => void {
+    const timer = setTimeout(() => {
+      log.warning("shutdown ran past its deadline; exiting");
+      this.dropSocket();
+      try {
+        unlinkQuietly(`${this.key}.json`, this.dirFd);
+      } catch {}
+      this.exit(1);
+    }, (this.settleTimeout + this.cleanupTimeout) * 1000);
+    return () => clearTimeout(timer);
   }
 
   async run(): Promise<number> {
@@ -178,11 +213,13 @@ export class Daemon {
       await this.stopped;
     } finally {
       this.stopping = true;
+      const disarm = this.armWatchdog();
       this.server.close();
       clearInterval(idle);
       clearInterval(watch);
       await this.settle();
       await this.cleanup();
+      disarm();
       for (const signal of ["SIGTERM", "SIGHUP", "SIGINT"] as const) process.off(signal, onSignal);
     }
     return 0;
@@ -196,16 +233,9 @@ export class Daemon {
   async settle(): Promise<void> {
     const active = [...this.active];
     if (active.length === 0) return;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    await Promise.race([
-      Promise.allSettled(active.map((task) => task.done)),
-      new Promise((resolve) => {
-        timer = setTimeout(resolve, SETTLE_TIMEOUT * 1000);
-      }),
-    ]);
-    clearTimeout(timer);
+    await within(Promise.allSettled(active.map((task) => task.done)), this.settleTimeout);
     for (const task of active) task.stop.abort(new Cancelled());
-    await Promise.allSettled(active.map((task) => task.done));
+    await within(Promise.allSettled(active.map((task) => task.done)), this.cleanupTimeout);
   }
 
   refuseClosing(options: Options, name: string): Answer {
@@ -214,17 +244,18 @@ export class Daemon {
 
   async cleanup(): Promise<void> {
     const budget = new AbortController();
-    const timer = setTimeout(() => budget.abort(new Cancelled()), CLEANUP_TIMEOUT * 1000);
+    const timer = setTimeout(() => budget.abort(new Cancelled()), this.cleanupTimeout * 1000);
     try {
-      await withSignal(budget.signal, () => this.cleanupInner());
+      await within(
+        withSignal(budget.signal, () => this.cleanupInner()),
+        this.cleanupTimeout,
+      );
     } catch (error) {
       log.exception("cleanup failed", error);
     } finally {
       clearTimeout(timer);
     }
-    try {
-      if (this.sockId !== null && sameSocket(socketIsOurs(this.sock, this.dirFd), this.sockId)) unlinkQuietly(this.sock, this.dirFd);
-    } catch {}
+    this.dropSocket();
     try {
       unlinkQuietly(`${this.key}.json`, this.dirFd);
     } catch {}
@@ -241,11 +272,11 @@ export class Daemon {
 
   private async cleanupInner(): Promise<void> {
     if (this.plugin !== null) {
-      await shield(() => (this.plugin as PluginSession).disconnect());
+      await this.plugin.disconnect();
       return;
     }
     await temptabs.drain(this.state);
-    await shield(() => this.state.disconnect());
+    await this.state.disconnect();
   }
 
   async idleTick(): Promise<void> {
@@ -352,6 +383,7 @@ export class Daemon {
     const name = argv.length > 0 ? canonical(String(argv[0])) : "";
     const cwd = typeof request["cwd"] === "string" && request["cwd"] ? request["cwd"] : (process.env["HOME"] ?? "/");
     const ctx = new Ctx(this.state, options, cwd, record(request["env"]), typeof request["stdin"] === "string" ? request["stdin"] : null, name);
+    this.state.caller = parseCaller(request["caller"]) ?? this.state.caller;
     if (options["no_auto_dialog"]) this.state.autoDialog = false;
     if (options["pin_tab"] !== undefined && options["pin_tab"] !== null) this.state.pinTab = Boolean(options["pin_tab"]);
     if (this.stopping) return this.refuseClosing(options, name);
@@ -379,6 +411,7 @@ export class Daemon {
       if (this.live.lost) return render(options, null, new ConnectionLost(), name);
       this.live.notice = null;
       this.plugin?.useCredential(request["credential"] as string);
+      if (this.plugin === null && this.state.connected) await this.state.announceCaller(this.state.endpoint);
       this.closeAfterBatch = false;
       this.running = { name, since: monotonic() };
       const limit = commandLimit(name, words, ctx.timeout);
@@ -516,52 +549,75 @@ export class Daemon {
       return render(ctx.options, new Result({ closed: true, tabs: 0, keptOpen: [] }, `✓ Session ${this.plugin.session} closed (0 tabs it opened)`), null, "close");
     }
     const state = this.state;
-    let closed = 0;
-    const kept: string[] = [];
+    const tally = { closed: 0, kept: [] as string[] };
     await this.lockForClose();
     try {
       if (this.stopping) return this.refuseClosing(ctx.options, "close");
       this.stopping = true;
-      const leftovers = state.instance !== null && state.registry.temporaries(state.instance).length > 0;
-      if ((state.opened.size > 0 || leftovers) && !state.lost) {
-        try {
-          await state.connect();
-          await state.refreshTargets();
-          await temptabs.sweep(state);
-          const registry = state.registry;
-          const instance = state.instance;
-          for (const targetId of [...state.opened]) {
-            if (!state.targetInfos.has(targetId)) {
-              state.forgetTarget(targetId);
-              continue;
-            }
-            if (!registry.reserveClose(instance, targetId)) {
-              const users = registry.others(instance)[1].get(targetId) ?? ["another session"];
-              kept.push(`[${state.tabId(targetId)}], which session ${users.join(", ")} uses`);
-              state.forgetTarget(targetId);
-              continue;
-            }
-            try {
-              await state.browser?.send("Target.closeTarget", { targetId });
-              closed += 1;
-            } finally {
-              registry.finishClose(instance, targetId);
-            }
-            state.forgetTarget(targetId);
-          }
-        } catch (error) {
-          if (!(error instanceof BrowseError)) throw error;
-        }
+      const deadline = new AbortController();
+      const timer = setTimeout(() => deadline.abort(new Cancelled()), this.closeTimeout * 1000);
+      try {
+        await within(
+          withSignal(deadline.signal, () => this.closeTabs(tally)),
+          this.closeTimeout,
+        );
+      } catch (error) {
+        if (!(error instanceof Cancelled)) log.exception("closing the session's tabs failed", error);
+      } finally {
+        clearTimeout(timer);
       }
     } finally {
       this.lock.release();
+      if (this.stopping) this.stopNow();
     }
-    this.stopNow();
-    let text = `✓ Session ${state.session} closed (${closed} tab${closed !== 1 ? "s" : ""} it opened)`;
-    if (kept.length > 0) text += `; left open: ${kept.join("; ")}`;
-    return render(ctx.options, new Result({ closed: true, tabs: closed, keptOpen: kept }, text), null, "close");
+    let text = `✓ Session ${state.session} closed (${tally.closed} tab${tally.closed !== 1 ? "s" : ""} it opened)`;
+    if (tally.kept.length > 0) text += `; left open: ${tally.kept.join("; ")}`;
+    return render(ctx.options, new Result({ closed: true, tabs: tally.closed, keptOpen: tally.kept }, text), null, "close");
   }
 
+  private async closeTabs(tally: { closed: number; kept: string[] }): Promise<void> {
+    const state = this.state;
+    const leftovers = state.instance !== null && state.registry.temporaries(state.instance).length > 0;
+    if ((state.opened.size === 0 && !leftovers) || state.lost) return;
+    try {
+      await state.connect();
+      await state.refreshTargets();
+      await temptabs.sweep(state);
+      const registry = state.registry;
+      const instance = state.instance;
+      for (const targetId of [...state.opened]) {
+        if (!state.targetInfos.has(targetId)) {
+          state.forgetTarget(targetId);
+          continue;
+        }
+        if (!registry.reserveClose(instance, targetId)) {
+          const users = registry.others(instance)[1].get(targetId) ?? ["another session"];
+          tally.kept.push(`[${state.tabId(targetId)}], which session ${users.join(", ")} uses`);
+          state.forgetTarget(targetId);
+          continue;
+        }
+        try {
+          await state.browser?.send("Target.closeTarget", { targetId });
+          tally.closed += 1;
+        } finally {
+          registry.finishClose(instance, targetId);
+        }
+        state.forgetTarget(targetId);
+      }
+    } catch (error) {
+      if (!(error instanceof BrowseError)) throw error;
+    }
+  }
+}
+
+function within<T>(work: Promise<T>, seconds: number): Promise<T | undefined> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    work,
+    new Promise<undefined>((resolve) => {
+      timer = setTimeout(() => resolve(undefined), seconds * 1000);
+    }),
+  ]).finally(() => clearTimeout(timer));
 }
 
 export function plainOf(value: Value): unknown {
@@ -621,7 +677,7 @@ export function readRequest(socket: net.Socket): { line: Promise<Buffer>; gone: 
     if (newline >= 0) {
       chunks.push(chunk.subarray(0, newline + 1));
       size += newline + 1;
-      if (size > MAX_REQUEST + 1) {
+      if (size > MAX_REQUEST) {
         lineDone = true;
         clearTimeout(timer);
         rejectLine(new Error("the request is over the 16 MB limit"));
@@ -633,7 +689,7 @@ export function readRequest(socket: net.Socket): { line: Promise<Buffer>; gone: 
     }
     chunks.push(chunk);
     size += chunk.length;
-    if (size > MAX_REQUEST) {
+    if (size >= MAX_REQUEST) {
       lineDone = true;
       clearTimeout(timer);
       rejectLine(new Error("the request is over the 16 MB limit"));

@@ -43,7 +43,9 @@ The client starts a daemon when `<key>.sock` doesn't answer:
   or `ARDIA_BROWSE_DAEMON=ts` is set (`ARDIA_BROWSE_DAEMON=python` forces Python's). Otherwise it starts Python's.
 
 Either way the child is detached (its own session), runs with cwd `/`, gets stdin as a pipe and the `<key>.log` file
-descriptor as stdout and stderr, and inherits no other descriptor. The config is written to stdin as one JSON object
+descriptor as stdout and stderr, and inherits no other descriptor. The TypeScript client also leaves `ARDIA_WS`,
+`ARDIA_PORT`, `ARDIA_CDP_URL` and `AGENT_BROWSER_CDP` out of the daemon's environment, moving the endpoint they named
+into `ws` or `port` first (`daemonEnvironment` in `spawn.ts`). The config is written to stdin as one JSON object
 and stdin is closed; the client waits for the write before it polls. Nothing goes in argv or the environment. The
 client then polls for the socket for up to 15 s; if the child exits and the lock isn't held, it fails at once with
 `the ardia browse daemon exited before it listened: <the log's last 2,000 bytes>`.
@@ -59,7 +61,7 @@ client then polls for the socket for up to 15 s; if the child exits and the lock
 | `key` | 24 lowercase hex digits | the session key (file names) |
 | `data_root` | absolute path | the data dir holding `Browse/` |
 | `ws`, `port`, `data_dir` | string or null, 1–65535 or null, string or null | the endpoint choice, as the client resolved it |
-| `endpoint_label` | string or null | how `<key>.json` names the endpoint |
+| `endpoint_label` | string or null | how `<key>.json` names the endpoint; the TS daemon drops any query, fragment or user info |
 | `idle_timeout_ms` | number or null | exit after this long without a command while disconnected (default 1 h) |
 | `debug` | boolean | log at INFO instead of WARNING |
 | `no_auto_dialog`, `pin_tab` | boolean or null | session defaults |
@@ -68,7 +70,7 @@ client then polls for the socket for up to 15 s; if the child exits and the lock
 
 ## Request
 
-One line of JSON (UTF-8, ending in `\n`) per connection, at most 16 MiB including the newline. The daemon first checks
+One line of JSON (UTF-8, ending in `\n`) per connection, at most 16 MiB (16,777,216 bytes) including the newline. The daemon first checks
 the peer's uid (`LOCAL_PEERCRED`) and closes the connection if it isn't its own. A line over the limit, a line that
 isn't a JSON object, or a client that sends nothing for 30 s gets the connection closed with no answer.
 
@@ -113,6 +115,9 @@ One line of JSON (UTF-8, `\n`), at most 256 MiB. An answer over that is replaced
   timeout plus 30 s), after which it's stopped with `command_timeout`.
 - `close` takes the lock after what's already running, marks the session closing (so commands queued before it, and any
   after, get `session_closing`), closes the tabs it opened and ends the daemon.
+- When it connects to Ardia through `ArdiaControl.json`, and before a command whose `caller` differs from the last one
+  it announced, the daemon tells Ardia's control socket who is driving it (`hello` with the caller, then `caller`,
+  within 1 s, failures ignored).
 - Lifetime: after 30 s with no command and nothing held, the daemon drops the browser connection and keeps its state;
   the next command makes a new connection and refuses (`browser_restarted`) if the browser instance changed. While
   disconnected it re-reads the endpoint every 2 s and exits if it's gone or changed. Without a command for

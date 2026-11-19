@@ -1871,6 +1871,27 @@ or the `daemon/*` harness scenarios:
   the next command instead. The harness's Ctrl-C comparison shows this as a request moving between steps; the answers
   don't change.
 
+These are intentional: Python behaves the other way, and the TypeScript daemon fixes it.
+
+- It never lets Bun own `<key>.sock`. It binds a private temporary name and renames it into place, so closing the server
+  can't unlink the path. At exit it unlinks `<key>.sock` (through the folder descriptor) only if the device and inode are
+  still the ones it bound, compared exactly. A socket file someone replaced is left alone.
+- Once `close` has marked the session closing, the rest of it (closing tabs, ending the daemon) runs to the end within
+  its own 10 s deadline, even if the client goes away. Python cancels it there and strands the session, which then
+  refuses every command until its idle exit.
+- Shutdown deadlines are hard. Endpoint discovery (`/json/version`) honours cancellation and gives up after 3 s in all,
+  where Python's 3 s applies to each socket operation, so a server that trickles bytes held Python forever. Shielded
+  temp-tab work has its own 10 s deadline. Waiting for `tabs.lock` or `claims/.lock` gives up after 5 s with `lock_busy`;
+  Python waits for as long as another process holds them. A watchdog exits the daemon (status 1) 15 s after a stop
+  began, whatever is still running, after unlinking its own socket with the inode check.
+- An attach that fails or is cancelled before `Page.enable` and the frame refresh finish publishes no session: the page
+  stays unattached and needs enabling, and the half-made CDP session is detached. Python keeps the session id and skips
+  the enable on the next command.
+- The client starts the daemon without `ARDIA_WS`, `ARDIA_PORT`, `ARDIA_CDP_URL` or `AGENT_BROWSER_CDP` in its
+  environment, after moving the one the daemon would have used into the config's `ws` or `port`. The daemon writes the
+  endpoint label without any query, fragment or user info, whatever the client sent.
+- A request line may be 16 MiB including its newline; one byte more is dropped unanswered.
+
 ## Linux
 
 The same CLI, with these differences:

@@ -1,10 +1,9 @@
 import { createHash } from "node:crypto";
 import { dumps, Float, type JsonObject, type Value } from "../../json.ts";
-import { flock } from "../../libc.ts";
 import { strOf, truthy } from "../../py.ts";
 import { groupThousands } from "../../pylib/format.ts";
 import { BrowseError } from "../daemon-errors.ts";
-import { closeFd, entryInfo, listNames, lockHeld, openPrivateFile, PathError, readPrivateJson, unlinkQuietly, writePrivateJson } from "../paths.ts";
+import { closeFd, entryInfo, listNames, lockWithin, lockHeld, openPrivateFile, PathError, readPrivateJson, unlinkQuietly, writePrivateJson } from "../paths.ts";
 import { tokenHex, wallSeconds } from "../tokens.ts";
 
 export const LOCK = "tabs.lock";
@@ -105,7 +104,7 @@ export class Registry {
     this.instances.add(instance);
     const lock = openPrivateFile(LOCK, dir);
     try {
-      flock(lock, true, true);
+      lockWithin(lock, "The tab registry");
       let loaded: Value | undefined;
       try {
         loaded = readPrivateJson(name, dir, MAX_FILE);
