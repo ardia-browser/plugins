@@ -1,6 +1,7 @@
 import { parse, type Value } from "./json.ts";
 
 export const HAND_BACK = 253;
+const CALLER_DEPTH = 2;
 const MARKER = /^--ardia-routed=1:([01]):((?:[0-9a-f]{2})+)$/;
 
 export type Routed = { interruptsIgnored: boolean; caller: Value; argv: string[] };
@@ -8,7 +9,7 @@ export type Routed = { interruptsIgnored: boolean; caller: Value; argv: string[]
 let current: Value | undefined;
 
 function callerOf(hex: string): Value | undefined {
-  const value = parse(Buffer.from(hex, "hex"));
+  const value = parse(Buffer.from(hex, "hex"), CALLER_DEPTH);
   if (!(value instanceof Map) || typeof value.get("name") !== "string") return undefined;
   for (const [key, field] of value) {
     if ((key !== "name" && key !== "app") || typeof field !== "string") return undefined;
