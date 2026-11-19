@@ -32,7 +32,7 @@ export class FakeBrowser {
     try {
       await new Promise((resolve) => setImmediate(resolve));
       const scripted = this.script(method, given, session);
-      const answer = scripted === undefined ? this.fallback(method) : scripted;
+      const answer = scripted === undefined ? this.fallback(method, given) : scripted;
       if (answer instanceof Error) throw answer;
       if (typeof answer === "function") return await answer();
       return answer;
@@ -41,13 +41,14 @@ export class FakeBrowser {
     }
   }
 
-  fallback(method: string): Record<string, unknown> {
+  fallback(method: string, params: Record<string, unknown> = {}): Record<string, unknown> {
     if (method === "Target.attachToTarget") {
       this.attaches += 1;
       return { sessionId: `SESSION-${this.attaches}` };
     }
     if (method === "Page.getFrameTree") return frameTree();
     if (method === "Page.createIsolatedWorld") return { executionContextId: 7 };
+    if (method === "Runtime.evaluate" && params["expression"] === "globalThis") return { result: { type: "object", className: "Window", objectId: "WORLD-HANDLE" } };
     if (method === "Page.getLayoutMetrics") return { cssVisualViewport: { clientWidth: 1000, clientHeight: 700 } };
     if (method === "Target.getTargets") return { targetInfos: [{ targetId: "TARGET", type: "page", url: "http://127.0.0.1/page.html", title: "Page" }] };
     if (method === "Runtime.callFunctionOn") return { result: { type: "string", value: "ok" } };

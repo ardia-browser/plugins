@@ -4,6 +4,16 @@ import sys
 from tests.m3 import normalize
 
 DIVERGENCES = {
+    "world-handle": {
+        "row": 8,
+        "always": True,
+        "commands": "every isolated-world page call",
+        "python": 'Runtime.callFunctionOn {"executionContextId": <world>, ...}',
+        "ts": 'Runtime.evaluate {"expression": "globalThis", "contextId": <world>, "returnByValue": false} once per world, then '
+              'Runtime.callFunctionOn {"objectId": <that handle>, ...}',
+        "why": "a numeric context id can be reused across renderer processes; the handle's object id is refused by the renderer once "
+               "its document is gone, so a call never runs in a document it wasn't meant for",
+    },
     "busy-probe-isolated": {
         "row": 8,
         "commands": "any command on a tab whose page stopped answering in the last 120 s (the busy probe before it)",
@@ -12,6 +22,9 @@ DIVERGENCES = {
               "Page.createIsolatedWorld first when that world isn't known for the current document",
         "why": "a main-world evaluation is visible to the page (ardia#2812 row 8); the isolated world shares the document but not its JS",
     },
+}
+
+EDITING_COMMANDS = {
     "editing-commands": {
         "row": 20,
         "commands": "press, keydown and fill's select-all: a shortcut with Control, Meta or Alt",
@@ -22,10 +35,14 @@ DIVERGENCES = {
                "Control+a is not select-all there",
     },
 }
+DIVERGENCES.update(EDITING_COMMANDS)
 
 UNANSWERING_FAULTS = ("drop", "stop")
+MAC_SHORTCUT_KEYS = ("a", "c", "x", "v", "z")
+META = 4
 PAGE_SESSION_ENABLES = ("Runtime.enable", "Debugger.enable", "Console.enable")
 BUSY_PROBE = "1"
+WORLD_HANDLE = "globalThis"
 
 
 def daemon_of(impl: str) -> str:
@@ -36,46 +53,44 @@ def busy_probe(message: dict) -> bool:
     return message.get("method") == "Runtime.evaluate" and (message.get("params") or {}).get("expression") == BUSY_PROBE
 
 
-MAC_SHORTCUT_KEYS = ("a", "c", "x", "v", "z")
-META = 4
+def names_for(scenario: dict, fault=None) -> list[str]:
+    names = [name for name, entry in DIVERGENCES.items() if entry.get("always")]
+    for name in scenario.get("divergences") or []:
+        if name not in DIVERGENCES:
+            raise ValueError(f"unknown divergence: {name}")
+        if name not in names:
+            names.append(name)
+    if fault is not None and fault.kind in UNANSWERING_FAULTS and "busy-probe-isolated" not in names:
+        names.append("busy-probe-isolated")
+    return names
 
 
-def rewrite(form: str, names: list[str]) -> str:
-    if "busy-probe-isolated" not in names and "editing-commands" not in names:
-        return form
-    message = json.loads(form)
-    if "editing-commands" in names and message.get("method") == "Input.dispatchKeyEvent" and "commands" in (message.get("params") or {}):
-        params = dict(message["params"])
-        params.pop("commands")
-        message["params"] = params
-        return normalize.canonical(message)
-    if "busy-probe-isolated" in names and busy_probe(message):
-        params = dict(message.get("params") or {})
-        params.pop("contextId", None)
-        message["params"] = params
-        return normalize.canonical(message)
-    return form
-
-
-def apply(shaped: dict, names: list[str] | None) -> dict:
-    if not names:
-        return shaped
+def rewriter(names: list[str]):
     unknown = [name for name in names if name not in DIVERGENCES]
     if unknown:
         raise ValueError(f"unknown divergence(s): {unknown}")
-    for part in ("requests", "request_sets"):
-        for step, sessions in shaped.get(part, {}).items():
-            for session, value in sessions.items():
-                if part == "requests":
-                    sessions[session] = [sorted(form for form in (rewrite(item, names) for item in group) if form) for group in value]
-                    sessions[session] = [group for group in sessions[session] if group]
-                else:
-                    sessions[session] = sorted({form for form in (rewrite(item, names) for item in value) if form})
-    return shaped
+
+    def rewrite(message: dict) -> dict | None:
+        params = message.get("params") or {}
+        method = message.get("method")
+        if "world-handle" in names:
+            if method == "Runtime.evaluate" and params.get("expression") == WORLD_HANDLE and params.get("returnByValue") is False:
+                return None
+            if method == "Runtime.callFunctionOn":
+                kept = {key: value for key, value in params.items() if key not in ("executionContextId", "objectId")}
+                message = {**message, "params": kept}
+        if "editing-commands" in names and method == "Input.dispatchKeyEvent" and "commands" in params:
+            message = {**message, "params": {key: value for key, value in params.items() if key != "commands"}}
+        if "busy-probe-isolated" in names and busy_probe(message):
+            message = {**message, "params": {key: value for key, value in params.items() if key != "contextId"}}
+        return message
+
+    return rewrite
 
 
 def checks(transcript_path) -> list[str]:
     found = []
+    worlds = set()
     touch_emulated = False
     for entry in normalize.load(transcript_path):
         if entry.get("k") != "out":
@@ -88,8 +103,12 @@ def checks(transcript_path) -> list[str]:
             continue
         if message.get("method") in PAGE_SESSION_ENABLES:
             found.append(f"row 8: {message['method']} sent on a page session")
-        if busy_probe(message) and "contextId" not in (message.get("params") or {}):
-            found.append("row 8: the busy probe ran in the page's main world")
+        if message.get("method") == "Page.createIsolatedWorld":
+            worlds.add(message["sessionId"])
+        if busy_probe(message) and "contextId" not in (message.get("params") or {}) and message["sessionId"] in worlds:
+            found.append("row 8: the busy probe ran in the page's main world though the page had an isolated world")
+        if message.get("method") == "Runtime.callFunctionOn" and "executionContextId" in (message.get("params") or {}):
+            found.append("a page call named a numeric execution context instead of its world handle")
         params = message.get("params") or {}
         if (sys.platform == "darwin" and message.get("method") == "Input.dispatchKeyEvent" and params.get("type") in ("keyDown", "rawKeyDown")
                 and (params.get("modifiers") or 0) & META and str(params.get("key", "")).lower() in MAC_SHORTCUT_KEYS and not params.get("commands")):

@@ -71,18 +71,19 @@ function usableSocket(file: string): boolean {
   }
 }
 
-export function announce(file: string, caller: Caller, timeout = ANNOUNCE_TIMEOUT, signal: AbortSignal | null = null): Promise<void> {
-  if (signal?.aborted || !usableSocket(file)) return Promise.resolve();
-  return new Promise<void>((resolve) => {
+export function announce(file: string, caller: Caller, timeout = ANNOUNCE_TIMEOUT, signal: AbortSignal | null = null): Promise<boolean> {
+  if (signal?.aborted || !usableSocket(file)) return Promise.resolve(false);
+  return new Promise<boolean>((resolve) => {
     const socket = net.connect(file);
     let buffer = "";
     let stage = 0;
-    const done = () => {
+    const finish = (handshaken: boolean) => {
       clearTimeout(timer);
       signal?.removeEventListener("abort", done);
       socket.destroy();
-      resolve();
+      resolve(handshaken);
     };
+    const done = () => finish(false);
     const timer = setTimeout(done, timeout * 1000);
     signal?.addEventListener("abort", done, { once: true });
     socket.on("error", done);
@@ -124,7 +125,7 @@ export function announce(file: string, caller: Caller, timeout = ANNOUNCE_TIMEOU
           stage = 1;
           socket.write(`${JSON.stringify({ id: 2, method: "caller" })}\n`);
         } else if (stage === 1 && reply["id"] === 2) {
-          done();
+          finish(true);
           return;
         }
       }

@@ -427,7 +427,7 @@ describe("11 and 12: unanswered calls and the busy probe", () => {
     expect(page.unansweredAt).toBeGreaterThan(0);
   });
 
-  test("with no frame known yet, the probe still evaluates 1 in the isolated world", async () => {
+  test("with no frame known yet, the probe evaluates 1 as Python does (round 2 of the review)", async () => {
     const browser = new FakeBrowser();
     const state = stateWith(browser);
     const page = await state.page("TARGET");
@@ -436,13 +436,9 @@ describe("11 and 12: unanswered calls and the busy probe", () => {
     page.unansweredAt = performance.now() / 1000;
     const before = browser.sent.length;
     await page.send("DOM.getDocument");
-    const probe = browser.sent.slice(before).map((entry) => [entry.method, entry.params["expression"] ?? null, entry.params["contextId"] ?? null]);
-    expect(probe.slice(0, 3)).toEqual([
-      ["Page.getFrameTree", null, null],
-      ["Page.createIsolatedWorld", null, null],
-      ["Runtime.evaluate", "1", 7],
-    ]);
+    expect(browser.sent.slice(before).map((entry) => entry.method)).toEqual(["Runtime.evaluate", "DOM.getDocument"]);
   });
+
 });
 
 describe("parser nits", () => {
