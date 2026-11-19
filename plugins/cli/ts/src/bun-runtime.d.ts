@@ -1,3 +1,3 @@
-declare const Bun: {
-  sleepSync(ms: number): void;
-};
+declare namespace Bun {
+  function sleepSync(ms: number): void;
+}
