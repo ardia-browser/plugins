@@ -263,5 +263,36 @@
     }
    }
   }
+ },
+ {
+  "id": "windows--lone-surrogates",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": "{\"id\":2,\"result\":[{\"id\":1,\"kind\":\"normal\",\"\\ud800\":1,\"\\ud801\":2,\"profileName\":\"\\udfffP\",\"tabs\":[{\"id\":11,\"title\":\"a\\ud83d\\ude00b\\ud83dc\\udc00\",\"url\":\"https://x/\\udbff\",\"\\ud800\":3}]}]}\n"
+    }
+   }
+  },
+  "note": "lone surrogate escapes stay distinct (two keys stay two) and become U+FFFD only when written"
+ },
+ {
+  "id": "windows--lone-surrogates-json",
+  "command": "windows",
+  "argv": [
+   "windows",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": "{\"id\":2,\"result\":[{\"id\":1,\"kind\":\"normal\",\"\\ud800\":1,\"\\ud801\":2,\"profileName\":\"\\udfffP\",\"tabs\":[{\"id\":11,\"title\":\"a\\ud83d\\ude00b\\ud83dc\\udc00\",\"url\":\"https://x/\\udbff\",\"\\ud800\":3}]}]}\n"
+    }
+   }
+  },
+  "note": "lone surrogate escapes stay distinct (two keys stay two) and become U+FFFD only when written"
  }
 ]

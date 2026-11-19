@@ -191,7 +191,7 @@ class Parser {
         }
         this.at = saved;
       }
-      out += unit >= 0xd800 && unit < 0xe000 ? "\ufffd" : String.fromCharCode(unit);
+      out += String.fromCharCode(unit);
     }
   }
 
