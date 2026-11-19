@@ -95,6 +95,8 @@ class Divergences(unittest.TestCase):
                   ("in", message(id=1, result={})), ("out", message(id=2, method="DOM.describeNode", sessionId="SESSION-A", params={"objectId": "NODE-1"}))]
         ts = [("mark", 1), ("out", message(id=7, method="Runtime.evaluate", sessionId="SESSION-B", params={"expression": "globalThis", "contextId": 5, "returnByValue": False})),
               ("in", message(id=7, result={"result": {"objectId": "HANDLE-XYZ"}})),
+              ("out", message(id=10, method="Page.getFrameTree", sessionId="SESSION-B", params={})),
+              ("in", message(id=10, result={})),
               ("out", message(id=8, method="Runtime.callFunctionOn", sessionId="SESSION-B", params={**call, "objectId": "HANDLE-XYZ"})),
               ("in", message(id=8, result={})), ("out", message(id=9, method="DOM.describeNode", sessionId="SESSION-B", params={"objectId": "NODE-2"}))]
         names = divergences.names_for({})
@@ -117,9 +119,12 @@ class Divergences(unittest.TestCase):
                      {"k": "out", "m": message(id=5, method="Page.createIsolatedWorld", sessionId="S", params={"frameId": "F"})},
                      {"k": "out", "m": message(id=6, method="Runtime.evaluate", sessionId="S", params={"expression": "1"})},
                      {"k": "out", "m": message(id=7, method="Runtime.evaluate", sessionId="S", params={"expression": "1", "contextId": 3})},
-                     {"k": "out", "m": message(id=8, method="Runtime.callFunctionOn", sessionId="S", params={"executionContextId": 3})}]
+                     {"k": "out", "m": message(id=8, method="Runtime.callFunctionOn", sessionId="S", params={"executionContextId": 3})},
+                     {"k": "out", "m": message(id=9, method="Runtime.evaluate", sessionId="S", params={"expression": "globalThis", "contextId": 3, "returnByValue": False})},
+                     {"k": "out", "m": message(id=10, method="Runtime.callFunctionOn", sessionId="S", params={"objectId": "H"})}]
             path.write_text("".join(json.dumps(line) + "\n" for line in lines))
             self.assertEqual(divergences.checks(path), ["a page call named a numeric execution context instead of its world handle",
+                                                        "a world handle was used before its loader was checked by Page.getFrameTree",
                                                         "row 8: Debugger.enable sent on a page session", "row 8: Runtime.enable sent on a page session",
                                                         "row 8: the busy probe ran in the page's main world though the page had an isolated world"])
         finally:

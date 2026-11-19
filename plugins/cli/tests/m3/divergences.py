@@ -9,6 +9,7 @@ DIVERGENCES = {
         "commands": "every isolated-world page call",
         "python": 'Runtime.callFunctionOn {"executionContextId": <world>, ...}',
         "ts": 'Runtime.evaluate {"expression": "globalThis", "contextId": <world>, "returnByValue": false} once per world, then '
+              'Page.getFrameTree on the same session to bind the handle to the loader it reports, then '
               'Runtime.callFunctionOn {"objectId": <that handle>, ...}',
         "why": "a numeric context id can be reused across renderer processes; the handle's object id is refused by the renderer once "
                "its document is gone, so a call never runs in a document it wasn't meant for",
@@ -54,12 +55,20 @@ def rewriter(names: list[str]):
     if unknown:
         raise ValueError(f"unknown divergence(s): {unknown}")
 
+    binding: set = set()
+
     def rewrite(message: dict) -> dict | None:
         params = message.get("params") or {}
         method = message.get("method")
+        session = message.get("sessionId") or ""
         if "world-handle" in names:
             if method == "Runtime.evaluate" and params.get("expression") == WORLD_HANDLE and params.get("returnByValue") is False:
+                binding.add(session)
                 return None
+            if session in binding:
+                binding.discard(session)
+                if method == "Page.getFrameTree":
+                    return None
             if method == "Runtime.callFunctionOn":
                 kept = {key: value for key, value in params.items() if key not in ("executionContextId", "objectId")}
                 message = {**message, "params": kept}
@@ -73,6 +82,7 @@ def rewriter(names: list[str]):
 def checks(transcript_path) -> list[str]:
     found = []
     worlds = set()
+    binding = set()
     for entry in normalize.load(transcript_path):
         if entry.get("k") != "out":
             continue
@@ -86,6 +96,13 @@ def checks(transcript_path) -> list[str]:
             found.append(f"row 8: {message['method']} sent on a page session")
         if message.get("method") == "Page.createIsolatedWorld":
             worlds.add(message["sessionId"])
+        params = message.get("params") or {}
+        if message["sessionId"] in binding:
+            binding.discard(message["sessionId"])
+            if message.get("method") != "Page.getFrameTree":
+                found.append("a world handle was used before its loader was checked by Page.getFrameTree")
+        if message.get("method") == "Runtime.evaluate" and params.get("expression") == WORLD_HANDLE and params.get("returnByValue") is False:
+            binding.add(message["sessionId"])
         if busy_probe(message) and "contextId" not in (message.get("params") or {}) and message["sessionId"] in worlds:
             found.append("row 8: the busy probe ran in the page's main world though the page had an isolated world")
         if message.get("method") == "Runtime.callFunctionOn" and "executionContextId" in (message.get("params") or {}):

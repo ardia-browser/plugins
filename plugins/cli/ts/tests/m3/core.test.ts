@@ -120,7 +120,8 @@ describe("busy probe (row 8)", () => {
 
 describe("calls and worlds", () => {
   test("a world is made once per document and the library goes in before the first call", async () => {
-    const browser = new FakeBrowser();
+    let loader = LOADER;
+    const browser = new FakeBrowser((method) => (method === "Page.getFrameTree" ? frameTree(MAIN, loader) : undefined));
     const state = stateWith(browser);
     const page = await state.page("TARGET");
     await page.call("() => 1", [], { read: true });
@@ -128,6 +129,7 @@ describe("calls and worlds", () => {
     expect(browser.methods("SESSION-1").filter((method) => method === "Page.createIsolatedWorld")).toHaveLength(1);
     const library = browser.sent.find((entry) => entry.method === "Runtime.evaluate");
     expect(library?.params["contextId"]).toBe(7);
+    loader = "LOADER-2";
     page.onEvent("Page.frameNavigated", { frame: { id: MAIN, loaderId: "LOADER-2", url: "http://127.0.0.1/next.html" } });
     expect(page.navigations).toBe(1);
     await page.call("() => 3", [], { read: true });

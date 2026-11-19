@@ -235,7 +235,7 @@ export async function leaveOffscreen(ctx: Ctx, page: Page): Promise<Page> {
   const pinned = state.pinnedTarget;
   let fresh: Page;
   try {
-    fresh = await newTab(ctx, null, label, false, false, (late) => temptabs.mustClose(state, late));
+    fresh = await newTab(ctx, null, label, false, false, (late) => temptabs.mustClose(state, late, true));
     if (url) await navigate(ctx, fresh, normalizeUrl(url));
   } catch (error) {
     try {
@@ -267,23 +267,14 @@ async function putBack(state: State, old: string, label: string | null, pinned: 
   let closedAll = true;
   let failure: unknown = null;
   for (const target of made) {
-    let closed = false;
-    if (state.registry.reserveClose(state.instance, target)) {
-      try {
-        const answer = await (state.browser as Browser).send("Target.closeTarget", { targetId: target }, { signal: null });
-        closed = answer["success"] !== false;
-      } catch (error) {
-        failure ??= error;
-      } finally {
-        if (closed) state.registry.finishClose(state.instance, target);
-        else state.registry.releaseClose(state.instance, target);
-      }
+    const outcome = await temptabs.closeReserved(state, target);
+    if (outcome.closed) {
+      state.forgetTarget(target);
+      continue;
     }
-    if (closed) state.forgetTarget(target);
-    else {
-      closedAll = false;
-      temptabs.mustClose(state, target);
-    }
+    closedAll = false;
+    if (outcome.error !== null) failure ??= outcome.error;
+    temptabs.mustClose(state, target, true);
   }
   if (closedAll) flag("offscreen_handoff_rolled_back", true);
   if (failure !== null) throw failure;
