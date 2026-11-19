@@ -58,7 +58,7 @@ async function main(words: string[]): Promise<number> {
     try {
       writeWhole(1, Buffer.from(`ardia ${cliVersion()}\n`));
     } catch (error) {
-      return (await import("./printable.ts")).stdoutFlushFailed(error);
+      return (await import("./printable.ts")).versionWriteFailed(error);
     }
     return 0;
   }

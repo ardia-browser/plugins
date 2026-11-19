@@ -153,6 +153,24 @@ fn set_handler(signal: libc::c_int, handler: libc::sighandler_t) -> Saved {
     Saved { signal, action: previous }
 }
 
+pub struct FileSizeSignal(Saved);
+
+pub fn ignore_file_size_signal() -> FileSizeSignal {
+    let mut action: libc::sigaction = unsafe { std::mem::zeroed() };
+    action.sa_sigaction = libc::SIG_IGN;
+    unsafe { libc::sigemptyset(&mut action.sa_mask) };
+    let mut previous: libc::sigaction = unsafe { std::mem::zeroed() };
+    unsafe { libc::sigaction(libc::SIGXFSZ, &action, &mut previous) };
+    FileSizeSignal(Saved {
+        signal: libc::SIGXFSZ,
+        action: previous,
+    })
+}
+
+pub fn restore_file_size_signal(saved: &FileSizeSignal) {
+    restore(std::slice::from_ref(&saved.0));
+}
+
 fn restore(saved: &[Saved]) {
     for entry in saved.iter().rev() {
         unsafe { libc::sigaction(entry.signal, &entry.action, std::ptr::null_mut()) };

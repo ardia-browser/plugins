@@ -22,7 +22,7 @@ import {
   takeLock,
   takeLockRetrying,
   unlinkQuietly,
-  writeFd,
+  writeOnce,
   writePrivate,
 } from "./privatefs.ts";
 import type { Target } from "./telemetry.ts";
@@ -53,9 +53,9 @@ function lineOf(record: Value): Buffer {
   return utf8(`${dumps(record, "compact")}\n`);
 }
 
-export function keepLocalCopy(root: string, record: JsonObject, sent: boolean): boolean {
-  const data = lineOf(new Map([...record, ["sent", sent]]));
-  if (data.length > MAX_LOCAL_BYTES) return false;
+export function keepLocalCopy(root: string, records: JsonObject[], sent: boolean): boolean {
+  const data = Buffer.concat(records.map((record) => lineOf(new Map([...record, ["sent", sent]]))));
+  if (data.length === 0 || data.length > MAX_LOCAL_BYTES) return false;
   let local: Dir | undefined;
   let lock: number | undefined;
   try {
@@ -70,7 +70,7 @@ export function keepLocalCopy(root: string, record: JsonObject, sent: boolean): 
     const at = now();
     const fd = openPrivateFile(localName(at), local, O_WRONLY | O_CREAT | O_APPEND);
     try {
-      writeFd(fd, data);
+      writeOnce(fd, data);
     } finally {
       close(fd);
     }
@@ -195,9 +195,9 @@ function writeLines(dir: Dir, lines: Buffer[]): void {
   else writePrivate(SPOOL, dir, Buffer.concat(lines));
 }
 
-export function appendToSpool(root: string, record: JsonObject): Dir | undefined {
-  const line = lineOf(record);
-  const data = line.length <= MAX_LINE_BYTES ? line : Buffer.alloc(0);
+export function appendToSpool(root: string, records: JsonObject[]): Dir | undefined {
+  const data = records.map(lineOf).filter((line) => line.length <= MAX_LINE_BYTES);
+  const dataSize = data.reduce((total, line) => total + line.length, 0);
   let dir: Dir;
   try {
     dir = openFolder(root, true);
@@ -222,18 +222,14 @@ export function appendToSpool(root: string, record: JsonObject): Dir | undefined
     } catch {
       size = 0;
     }
-    if (size + data.length <= COUNT_CHECK_BYTES) {
+    if (size + dataSize <= COUNT_CHECK_BYTES) {
       const fd = openPrivateFile(SPOOL, dir, O_WRONLY | O_CREAT | O_APPEND);
       try {
-        writeFd(fd, data);
+        writeOnce(fd, Buffer.concat(data));
       } finally {
         close(fd);
       }
-    } else {
-      const lines = readLines(dir);
-      if (data.length > 0) lines.push(data);
-      writeLines(dir, newest(lines));
-    }
+    } else writeLines(dir, newest([...readLines(dir), ...data]));
   } catch {
     written = false;
   } finally {

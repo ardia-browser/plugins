@@ -58,7 +58,7 @@ test("a copy dated in other digits counts against the cap, as in Python", () => 
   const mine = seeded();
   const theirs = seeded();
   try {
-    assert.ok(keepLocalCopy(mine, new Map([["event", "cli_command"]]), false));
+    assert.ok(keepLocalCopy(mine, [new Map([["event", "cli_command"]])], false));
     const script = `import json, sys; sys.path.insert(0, ${JSON.stringify(CLI)}); from pathlib import Path; from ardia_cli import telemetry; `
       + "print(json.dumps(telemetry.keep_local_copy(Path(json.loads(sys.argv[1])), [{'event': 'cli_command'}], False)))";
     assert.equal(python(script, theirs), true);

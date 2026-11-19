@@ -178,11 +178,11 @@ export function readFd(fd: number, limit: number): Buffer {
   return Buffer.concat(chunks);
 }
 
-export function writeFd(fd: number, data: Uint8Array): void {
-  let offset = 0;
-  while (offset < data.length) {
+export function writeOnce(fd: number, data: Uint8Array): void {
+  for (;;) {
     try {
-      offset += fs.writeSync(fd, data, offset, data.length - offset);
+      fs.writeSync(fd, data, 0, data.length);
+      return;
     } catch (error) {
       if (codeOf(error) !== "EINTR") throw error;
     }
@@ -193,7 +193,7 @@ export function writePrivate(name: string, dir: Dir, data: Uint8Array): void {
   const temp = `.${name}.${process.pid}.tmp`;
   const fd = openPrivateFile(temp, dir, O_WRONLY | O_CREAT | O_TRUNC);
   try {
-    writeFd(fd, data);
+    writeOnce(fd, data);
   } finally {
     close(fd);
   }

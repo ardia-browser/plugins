@@ -2,8 +2,8 @@ import { call as callControl, ControlFailure, errorCode, type Failure, interrupt
 import { render as renderHelp } from "./help.ts";
 import type { Value } from "./json.ts";
 import { failed, type Kind, type Listing, methodFailed, methodOf, paramsOf, type Rendered } from "./listing.ts";
-import { NeedsPython } from "./paths.ts";
-import { inert, Output, stdoutFlushFailed, writeAll } from "./printable.ts";
+import { codeOf, errnoOf, NeedsPython } from "./paths.ts";
+import { inert, Output, reportCrash, stdoutFlushFailed, writeAll } from "./printable.ts";
 import { Unsupported } from "./py.ts";
 import { render } from "./render.ts";
 import { Call, finish } from "./telemetry.ts";
@@ -18,19 +18,26 @@ export function serveHelp(argv: string[], python: string | null): number | undef
   if (text === undefined) return undefined;
   const call = new Call(argv);
   call.allowedFlags = TOP_FLAGS;
-  let status = 0;
-  let exit = 0;
   try {
     writeAll(1, inert(text));
   } catch (error) {
-    if (argv.length === 0) {
+    if (argv.length > 0) {
+      finish(call, 0, python);
+      return stdoutFlushFailed(error);
+    }
+    const code = codeOf(error);
+    if (code === "EPIPE" || code === "ESHUTDOWN") {
       call.noteErrorCode("stdout_closed");
-      status = 141;
-      exit = 141;
-    } else exit = stdoutFlushFailed(error);
+      finish(call, 141, python);
+      return 141;
+    }
+    const errno = errnoOf(error);
+    const exit = reportCrash(errno, true);
+    finish(call, 1, python, errno);
+    return exit;
   }
-  finish(call, status, python);
-  return exit;
+  finish(call, 0, python);
+  return 0;
 }
 
 function allowedFor(kind: Kind): string[] {
@@ -96,15 +103,20 @@ export async function serveListing(kind: Kind, listing: Listing, argv: string[],
     if (out.closed) break;
   }
   await out.flush();
-  let exit: number | undefined;
   if (out.interrupted) {
     status = 130;
     out.complain(`ardia ${kind}: interrupted`);
   } else if (out.closed) {
     call.noteErrorCode("stdout_closed");
     status = 141;
-  } else if ((exit = out.pythonCrash()) !== undefined) status = 1;
-  else if (shown.complaint !== undefined) out.complain(shown.complaint);
+  } else {
+    const crashed = out.pythonCrash();
+    if (crashed !== undefined) {
+      finish(call, 1, python, crashed.errno);
+      return crashed.exit;
+    }
+    if (shown.complaint !== undefined) out.complain(shown.complaint);
+  }
   finish(call, status, python);
-  return exit ?? status;
+  return status;
 }

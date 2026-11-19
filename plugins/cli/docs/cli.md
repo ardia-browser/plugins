@@ -1673,10 +1673,17 @@ connection, or one in a case not marked `fallback`, is a mismatch. `--command NA
 sandboxes, and `--report` prints the table as JSON (per command: cases, passing, native, served) for a given commit.
 
 The Rust entry stays `bin/ardia` and routes. A call whose stdout is closed, open read-only or non-blocking goes to Python
-whatever its row says, since Python's failure there is an unhandled exception native code can't reproduce; a listing
-whose stdout later fails with anything but EPIPE ends as Python's would after its traceback: the exception line, then,
-when the failed line fit Python's stdout buffer (`st_blksize`), `Exception ignored on flushing sys.stdout:` and status
-120, else status 1. A command whose row in `served.txt` says `rust` it serves itself; one that
+whatever its row says, since Python's failure there is an unhandled exception native code can't reproduce, and so does
+a call started with fd 0, 1 or 2 closed (noted by a constructor that runs before Rust's runtime reopens them on
+`/dev/null`; Python then gets them closed again). A listing whose stdout later fails with anything but EPIPE ends as
+Python's would after its traceback: the exception line, then, when the failed line fit Python's stdout buffer
+(`st_blksize`, read before the failed stdout is pointed at `/dev/null`), `Exception ignored on flushing sys.stdout:` and
+status 120, else status 1; bare `ardia` (help) always ends with both and 120, `--version` with both on a terminal and
+the second alone elsewhere. Telemetry records what Python's crash records: a `$exception` event (`cli_unhandled`,
+fatal, the `OSError` subclass and `[Errno N] text`) before the `cli_command` event, which carries exit code 1 and
+`unhandled_exception`. Both entries ignore SIGXFSZ as Python does at startup, so a file-size limit gives `EFBIG`, not
+death by signal; the router restores the caller's disposition before it execs Python, and the flusher starts with it at
+its default, as Python's `subprocess` starts it. A command whose row in `served.txt` says `rust` it serves itself; one that
 says `ts` it runs as a child, `<root>/libexec/ardia-ts`, whose first argument `--ardia-routed=2:<sigint>:<fd>:<hex caller>`
 carries whether SIGINT was ignored when ardia started, the lifeline descriptor and the caller's hello JSON, since Bun by
 itself can learn none of them. The lifeline is the read end of a pipe whose write end only the router holds: the child sees EOF on it
@@ -1756,6 +1763,10 @@ parity harness rather than stripped wholesale:
 - With a `MIMALLOC_*` variable set (in any case), Python's own bundled mimalloc prints its diagnostics on stderr, while
   a natively served call prints none: the router keeps those variables from the TypeScript program so Bun's mimalloc
   can't change what it prints or how it runs, and the Rust side has no mimalloc.
+- Python's traceback, the `Traceback (most recent call last):` header and its frames, isn't printed; the exception line
+  and any `Exception ignored ...` block are. A `$exception` telemetry event carries the same type, value, mechanism
+  and level, with an empty `stacktrace.frames`: the frames name Python's own functions and line numbers. So that event
+  is shorter than Python's, and under a file-size limit it can fit where Python's write is cut short.
 - A private file the CLI opens (the telemetry spool, a local copy, the usage file, the flush state, any of their locks)
   that is a FIFO: Python's open blocks until something opens the other end, forever if nothing does, and a Ctrl-C then
   ends it by KeyboardInterrupt. The native side opens it without blocking and treats it as Python treats a file that
