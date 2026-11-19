@@ -174,6 +174,31 @@ class Telemetry(CallBase):
         self.assertNotIn("very-private", json.dumps(recorded))
 
 
+    def recorded(self, *runs):
+        records = []
+        target = telemetry.Target(self.temp, "http://127.0.0.1:1/", "test")
+        with mock.patch.object(telemetry, "cli_target", return_value=target), \
+                mock.patch.object(telemetry, "keep_local_copy", side_effect=lambda root, rows, sent: records.extend(rows)), \
+                mock.patch.object(telemetry, "discard_spool"):
+            for argv in runs:
+                self.run_cli(*argv)
+        return [r["properties"] for r in records if r["event"] == "cli_command"]
+
+    def test_ardias_error_code_is_recorded_only_from_the_known_set(self):
+        server = self.serve_methods()
+        server.replies["tabs.close"] = lambda params: {"error": {"code": "private_marker", "message": "x"}}
+        server.replies["methods"] = lambda params: {"error": {"code": "another_marker", "message": "y"}}
+        rows = self.recorded(["call", "tabs.close"], ["methods"], ["call", "nope.method"])
+        self.assertEqual([row["error_code"] for row in rows], ["other", "other", "unknown_method"])
+        self.assertNotIn("marker", json.dumps(rows))
+
+    def test_every_protocol_code_passes_through(self):
+        for code in ("bad_request", "unknown_method", "unknown_command", "refused", "no_window", "failed", "unsupported_protocol"):
+            self.assertEqual(call_cli.recorded_code(code), code)
+        for code in ("private_marker", "", None, 7, "Bad_Request"):
+            self.assertEqual(call_cli.recorded_code(code), "other")
+
+
 class Wire(unittest.TestCase):
     def test_protocol_number_is_unchanged(self):
         self.assertEqual(control.PROTOCOL, 4)

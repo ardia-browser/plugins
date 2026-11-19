@@ -44,6 +44,7 @@ FAMILIES = frozenset({
     "peek", "sidebar", "command", "config", "plugins", "sync", "import", "certificates", "cache", "browser", "engine",
 })
 MAX_STDIN_PARAMS = 1024 * 1024
+PROTOCOL_CODES = frozenset({"bad_request", "unknown_method", "unknown_command", "refused", "no_window", "failed", "unsupported_protocol"})
 
 
 class ParamsError(Exception):
@@ -53,6 +54,10 @@ class ParamsError(Exception):
 def family(method: str) -> str:
     head = method.split(".", 1)[0].split("/", 1)[0].lower()
     return head if head in FAMILIES else "other"
+
+
+def recorded_code(code) -> str:
+    return code if isinstance(code, str) and code in PROTOCOL_CODES else "other"
 
 
 def build_params(raw: str | None, pairs: list[str], stdin=None) -> dict | None:
@@ -202,7 +207,7 @@ def cmd_call(args) -> int:
     except Unreachable as error:
         return unreachable_exit(error, args.method)
     if isinstance(result, MethodError):
-        telemetry.note_error_code(result.code)
+        telemetry.note_error_code(recorded_code(result.code))
         if catalog is not None:
             hint = closest(args.method, catalog)
         elif result.code == "unknown_method":
@@ -228,7 +233,7 @@ def cmd_methods(args) -> int:
     except Unreachable as error:
         return unreachable_exit(error)
     except MethodError as error:
-        telemetry.note_error_code(error.code)
+        telemetry.note_error_code(recorded_code(error.code))
         if error.code == "unknown_method":
             telemetry.note_error_code("methods_unsupported")
             complain(f"ardia methods: {TOO_OLD}")

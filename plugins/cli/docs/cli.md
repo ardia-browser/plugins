@@ -1335,7 +1335,8 @@ from a checkout), `$geoip_disable`, `$process_person_profile: false` and `$sessi
   bare `ardia` and `--help`), `subcommand` (the second word; for `browse`, the browse command, or `other` when it
   isn't one; for `call`, the method's family, the part before the first dot from a fixed list (`FAMILIES` in
   `call_cli.py`: `windows`, `tabs`, `history`, `cookies`, …) or `other`, never the method or its params; `error_code` is
-  Ardia's error code, such as `unknown_method` or `bad_request`, or `bad_params`; `methods` on an Ardia without it is
+  one of the protocol's codes (`bad_request`, `unknown_method`, `unknown_command`, `refused`, `no_window`, `failed`,
+  `unsupported_protocol`), `other` for any other code Ardia sends (never the code itself), or `bad_params`; `methods` on an Ardia without it is
   `methods_unsupported`), `exit_code`, `error_code` (browse's `code`, such as `stale_ref`, `element_replaced` or
   `connection_lost`, or `unhandled_exception`), and `flags`, the option names given, comma-separated, only names the
   command's parser knows. Then times in whole ms and counts, each capped (an hour, 100 million): `total_ms` (process
