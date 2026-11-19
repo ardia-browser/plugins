@@ -158,3 +158,9 @@ export async function lockHolder(file: string): Promise<{ release(): void }> {
 export function staleSocket(file: string): void {
   spawnSync(PYTHON, ["-c", "import socket,sys,os; os.umask(0o177); s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()", file]);
 }
+
+export async function sessionMeta(data: string, key: string, timeoutMs = 5000): Promise<Record<string, unknown>> {
+  const file = path.join(data, "Browse", `${key}.json`);
+  if (!(await until(() => fs.existsSync(file), timeoutMs))) throw new Error(`${key}.json never appeared`);
+  return JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>;
+}
