@@ -62,7 +62,22 @@ export function jsonRequested(browse: readonly string[]): boolean {
   return wanted;
 }
 
+function invalidReply(answer: Map<string, Value>, secrets: Secrets): PythonCrash | undefined {
+  for (const key of ["out", "err"]) {
+    const text = textOf(answer.get(key), secrets.known());
+    if (text instanceof PythonCrash) return text;
+  }
+  const status = exitOf(answer.get("exit"));
+  return status instanceof PythonCrash ? status : undefined;
+}
+
 function printAnswer(answer: Map<string, Value>, secrets: Secrets, printer: Printer, call: Call, asJson: boolean, chars: bigint): Outcome {
+  const invalid = asJson ? invalidReply(answer, secrets) : undefined;
+  if (invalid !== undefined) {
+    for (const [key, value] of cleanMetrics(answer.get("metrics"))) call.metrics.set(key, value);
+    call.metrics.set("output_chars", chars);
+    return { status: 1, crash: invalid };
+  }
   if (asJson) answer.set("out", codedLine(answer.get("out"), answer.get("exit")) ?? null);
   else answer.set("err", honestText(answer.get("err")) ?? null);
   const code = answer.get("code");
@@ -122,16 +137,9 @@ async function run(browse: string[], printer: Printer, call: Call, plugin: Acces
   }
 }
 
-function refuse(browse: readonly string[] | undefined, why: string, call: Call, python: string | null, code = CODE): number {
+function refuse(tokens: readonly string[], why: string, call: Call, python: string | null, code = CODE): number {
   const printer = new Printer("strict");
-  let asJson = false;
-  if (browse !== undefined) {
-    try {
-      asJson = Boolean(splitGlobals(browse).found.flag("json")) || truthy(process.env.AGENT_BROWSER_JSON);
-    } catch (error) {
-      if (!(error instanceof Usage)) throw error;
-    }
-  }
+  const asJson = jsonRequested(tokens);
   call.noteErrorCode(code);
   if (asJson) {
     const payload = object([["success", false], ["data", null], ["error", message(why)], ["code", code]]);
@@ -155,14 +163,15 @@ function browseCall(argv: string[], browse: readonly string[] | undefined): Call
 export function refuseOrHandBack(argv: string[], python: string | null): number | undefined {
   if (!pluginMode()) return undefined;
   dropCredential();
-  return refuse(undefined, "needs text paths and readable telemetry consent", browseCall(argv, undefined), python);
+  return refuse(argv, "needs text paths and readable telemetry consent", browseCall(argv, undefined), python);
 }
 
 function topLevelError(argv: string[], python: string | null): number {
   const failure = hoistFailure(argv);
   const call = new Call(argv);
   const printer = new Printer("strict");
-  printer.err(failure.text);
+  if (jsonRequested(argv)) printer.out(renderError(new BrowseError(failure.text.replace(/\n$/, ""), failure.status, "usage_error"), true, new Secrets()).out);
+  else printer.err(failure.text);
   finish(call, failure.status, python);
   return failure.status;
 }

@@ -2336,5 +2336,252 @@
    "namespace": ""
   },
   "note": "round 2: only a whole line is reworded"
+ },
+ {
+  "id": "review2--5-reply-bad-exit-json",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--json",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":true,\"data\":{\"title\":\"T\"},\"error\":null}\n",
+     "err": "",
+     "exit": "x"
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: a reply whose exit isn't a number prints nothing of its out",
+  "intentional": {
+   "why": "under --json exactly one JSON line with a code goes to stdout, whatever fails (AI plugin contract §3)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ValueError: invalid literal for int() with base 10: 'x'\",\"code\":\"internal_error\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review2--5-reply-bad-err-json",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--json",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":true,\"data\":{\"title\":\"T\"},\"error\":null}\n",
+     "err": 5,
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: a reply whose err isn't text prints nothing of its out",
+  "intentional": {
+   "why": "under --json exactly one JSON line with a code goes to stdout, whatever fails (AI plugin contract §3)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"AttributeError: 'int' object has no attribute 'replace'\",\"code\":\"internal_error\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review2--5-reply-bad-exit-text",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "T\n",
+     "err": "",
+     "exit": "x"
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: text mode stays Python's"
+ },
+ {
+  "id": "review2--5-other-account-home-json",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8",
+   "ARDIA_DATA_DIR": "~nobody/data"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: a data dir naming another account's home",
+  "intentional": {
+   "why": "under --json exactly one JSON line with a code goes to stdout, whatever fails (AI plugin contract §3); the client can't look up another account's home in plugin mode, so it refuses",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) needs text paths and readable telemetry consent; nothing was sent\",\"code\":\"plugin_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review2--5-no-credential-trailing-session-json",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "get",
+   "title",
+   "--session"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: no credential and an option missing its value",
+  "intentional": {
+   "why": "under --json exactly one JSON line with a code goes to stdout, whatever fails (AI plugin contract §3)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) needs ARDIA_PLUGIN_CREDENTIAL_FD, the descriptor Ardia passes the activity's credential on, and it isn't set; nothing was sent\",\"code\":\"plugin_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
  }
 ]
