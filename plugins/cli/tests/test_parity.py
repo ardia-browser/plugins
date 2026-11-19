@@ -23,6 +23,7 @@ CLI = harness.CLI
 INSTALL_ID = harness.INSTALL_ID
 KEPT_ENV = ("PATH", "LANG", "LC_ALL", "LC_CTYPE", "TMPDIR", "USER", "LOGNAME", "SHELL")
 binary = harness.binary
+both_programs = lambda: binary() and harness.ts_binary()
 
 
 def FakeArdia(path: Path, replies: dict):
@@ -59,7 +60,7 @@ class RustParityTable(ParityTable, unittest.TestCase):
     entry = "rust"
 
 
-@unittest.skipUnless(harness.ts_binary(), "build plugins/cli/ts first (bun run build) or set ARDIA_TS_CLI")
+@unittest.skipUnless(both_programs(), "build plugins/cli/rust (the router) and plugins/cli/ts (bun run build), or set ARDIA_RUST_CLI and ARDIA_TS_CLI")
 class TsParityTable(ParityTable, unittest.TestCase):
     entry = "ts"
 
@@ -267,6 +268,28 @@ class HarnessCatches(unittest.TestCase):
             with self.subTest(launch=launch):
                 self.impostor_fails(launch)
 
+    def test_a_typescript_program_that_runs_python_as_its_child_proves_nothing(self):
+        scratch = Path(tempfile.mkdtemp(prefix="arh", dir="/tmp"))
+        try:
+            impostor = scratch / "ardia-ts"
+            impostor.write_text('#!/bin/sh\nhere=$(cd "$(dirname "$0")/.." && pwd)\nshift\n"$here/python/bin/python3" -I -m ardia_cli "$@"\nexit $?\n')
+            impostor.chmod(0o755)
+            cases = [case for case in harness.load_cases() if case.id in ("version--version", "windows--windows")]
+            self.assertTrue(cases)
+            outcomes, install = harness.run_all(cases, impostor, entry="ts")
+            install.close()
+            self.assertTrue(all("expected ts to serve it, but python did" in outcome.problems for outcome in outcomes), [o.problems for o in outcomes])
+        finally:
+            shutil.rmtree(scratch, True)
+
+    def test_routes_follow_the_session_not_the_process(self):
+        self.assertEqual(harness.route_from([]), "rust")
+        self.assertEqual(harness.route_from(["ts"]), "ts")
+        self.assertEqual(harness.route_from(["ts", "python"]), "python")
+        self.assertEqual(harness.route_from(["python", "ts"]), "python")
+        self.assertIn("getsid(0)", harness.ROUTE_PROBE)
+        self.assertIn("$PPID", harness.TS_PROBE)
+
     def test_a_hand_off_that_drops_the_harness_environment_still_shows_python(self):
         self.impostor_fails('-I -m ardia_cli "$@"', prefix="/usr/bin/env -u ARDIA_PARITY_PYTHON_LOG -u ARDIA_PARITY_BOX ")
 
@@ -291,6 +314,7 @@ class HarnessCatches(unittest.TestCase):
 
 class EntryProcess:
     entry = "rust"
+    hand_backs: tuple = ()
 
     @classmethod
     def setUpClass(cls):
@@ -320,18 +344,32 @@ class EntryProcess:
         env.update(extra)
         return env
 
+    def start(self, argv: list, env: dict | None = None, ignore_interrupts: bool = False, program: Path | None = None) -> subprocess.Popen:
+        def prepare():
+            os.setsid()
+            if ignore_interrupts:
+                signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+        return subprocess.Popen([str(program or self.root / "bin" / "ardia"), *argv], env=env or self.environment({}), stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, preexec_fn=prepare)
+
+    def ctrl_c(self, process: subprocess.Popen) -> None:
+        os.killpg(process.pid, signal.SIGINT)
+
+    def wait_for(self, fake, method: str, count: int = 1):
+        deadline = time.monotonic() + 20
+        while [name for name, _ in fake.requests].count(method) < count and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertGreaterEqual([name for name, _ in fake.requests].count(method), count, f"ardia never asked {method}")
+
     def test_an_ignored_interrupt_stays_ignored_after_the_hand_off(self):
         data = self.case / "data"
         data.mkdir()
         fake = FakeArdia(data / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "subscribe": {"result": {}}})
+        events = self.start(["events"], ignore_interrupts=True)
         try:
-            events = subprocess.Popen([str(self.root / "bin" / "ardia"), "events"], env=self.environment({}), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                      preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_IGN))
-            deadline = time.monotonic() + 20
-            while not any(method == "subscribe" for method, _ in fake.requests) and time.monotonic() < deadline:
-                time.sleep(0.05)
-            self.assertIn("subscribe", [method for method, _ in fake.requests], "ardia events never subscribed")
-            events.send_signal(signal.SIGINT)
+            self.wait_for(fake, "subscribe")
+            self.ctrl_c(events)
             time.sleep(1)
             self.assertIsNone(events.poll(), events.stderr.read() if events.poll() is not None else "")
         finally:
@@ -339,31 +377,39 @@ class EntryProcess:
             events.communicate()
             fake.close()
 
-    def test_ctrl_c_stops_a_command_blocked_on_its_output(self):
+    def blocked_listing(self, argv: list, program: Path | None = None) -> tuple:
         tabs = [{"type": "tab", "id": f"tab-{index}", "title": "t" * 40, "url": "https://example.com/" + "p" * 40} for index in range(3000)]
         data = self.case / "data"
-        data.mkdir()
+        data.mkdir(exist_ok=True)
         fake = FakeArdia(data / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "workspace": {"result": {"windows": [{"id": "w-1", "spaces": [{"profile": "p", "tabs": tabs}]}]}}})
         try:
-            listing = subprocess.Popen([str(self.root / "bin" / "ardia"), "tabs", "--json"], env=self.environment({}), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            deadline = time.monotonic() + 20
-            while not any(method == "workspace" for method, _ in fake.requests) and time.monotonic() < deadline:
-                time.sleep(0.05)
-            self.assertIn("workspace", [method for method, _ in fake.requests])
+            listing = self.start(argv, program=program)
+            self.wait_for(fake, "workspace")
             time.sleep(1)
             self.assertIsNone(listing.poll(), "the output should fill the pipe and block")
-            listing.send_signal(signal.SIGINT)
+            self.ctrl_c(listing)
             deadline = time.monotonic() + 5
             while listing.poll() is None and time.monotonic() < deadline:
                 time.sleep(0.05)
-            self.assertIsNotNone(listing.poll(), "Ctrl-C didn't stop a command blocked on its output")
+            stopped = listing.poll() is not None
+            if not stopped:
+                listing.kill()
+            out, err = listing.communicate()
+            return stopped, listing.returncode, err
         finally:
-            listing.kill()
-            listing.communicate()
             fake.close()
 
-    def slow_listing(self, release: threading.Event):
+    def test_ctrl_c_stops_a_command_blocked_on_its_output(self):
+        stopped, _, _ = self.blocked_listing(["tabs", "--json"])
+        self.assertTrue(stopped, "Ctrl-C didn't stop a command blocked on its output")
+
+    def slow_listing(self, release: threading.Event, first=None):
+        asked = []
+
         def answer():
+            asked.append(1)
+            if first is not None and len(asked) == 1:
+                return first
             release.wait(10)
             return {"result": {"windows": []}}
 
@@ -371,19 +417,13 @@ class EntryProcess:
         data.mkdir()
         return FakeArdia(data / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "workspace": answer})
 
-    def wait_for_workspace(self, fake):
-        deadline = time.monotonic() + 20
-        while not any(method == "workspace" for method, _ in fake.requests) and time.monotonic() < deadline:
-            time.sleep(0.05)
-        self.assertIn("workspace", [method for method, _ in fake.requests])
-
     def test_ctrl_c_during_the_call_says_interrupted(self):
         release = threading.Event()
         fake = self.slow_listing(release)
         try:
-            listing = subprocess.Popen([str(self.root / "bin" / "ardia"), "tabs"], env=self.environment({}), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.wait_for_workspace(fake)
-            listing.send_signal(signal.SIGINT)
+            listing = self.start(["tabs"])
+            self.wait_for(fake, "workspace")
+            self.ctrl_c(listing)
             out, err = listing.communicate(timeout=10)
             self.assertEqual((listing.returncode, out, err), (130, b"", b"ardia tabs: interrupted\n"))
         finally:
@@ -394,10 +434,9 @@ class EntryProcess:
         release = threading.Event()
         fake = self.slow_listing(release)
         try:
-            listing = subprocess.Popen([str(self.root / "bin" / "ardia"), "tabs"], env=self.environment({}), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                       preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_IGN))
-            self.wait_for_workspace(fake)
-            listing.send_signal(signal.SIGINT)
+            listing = self.start(["tabs"], ignore_interrupts=True)
+            self.wait_for(fake, "workspace")
+            self.ctrl_c(listing)
             time.sleep(0.5)
             self.assertIsNone(listing.poll(), "an ignored Ctrl-C stopped the listing")
             release.set()
@@ -408,7 +447,7 @@ class EntryProcess:
             fake.close()
 
     def test_paths_that_are_not_utf8_go_to_python(self):
-        lossy = self.case / "data-\ufffd"
+        lossy = self.case / "data-�"
         lossy.mkdir()
         fake = FakeArdia(lossy / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "windows": {"result": [{"id": 1, "tabs": []}]}})
         try:
@@ -418,7 +457,7 @@ class EntryProcess:
                 python = subprocess.run([str(self.python), "-I", "-m", "ardia_cli", "windows"], env=env, capture_output=True, timeout=30)
                 self.assertEqual((new.returncode, new.stdout, new.stderr), (python.returncode, python.stdout, python.stderr), name)
             self.assertEqual(fake.requests, [])
-            self.assertFalse((self.case / "home-\ufffd").exists())
+            self.assertFalse((self.case / "home-�").exists())
         finally:
             fake.close()
 
@@ -428,7 +467,7 @@ class EntryProcess:
             new = subprocess.run([str(self.root / "bin" / "ardia"), *argv], env=env, capture_output=True, timeout=30)
             python = subprocess.run([str(self.python), "-I", "-m", "ardia_cli", *argv], env=env, capture_output=True, timeout=30)
             self.assertEqual((new.returncode, new.stdout, new.stderr), (python.returncode, python.stdout, python.stderr), argv)
-            self.assertNotIn("\ufffd".encode(), new.stderr)
+            self.assertNotIn("�".encode(), new.stderr)
 
     def test_its_events_reach_the_collector_through_the_python_flusher(self):
         collector = ThreadingHTTPServer(("127.0.0.1", 0), Collector)
@@ -494,12 +533,21 @@ class EntryProcess:
         self.assertEqual(done.returncode, 127)
         self.assertEqual(os.listdir(bare / ".leases"), [])
 
-    def bare_install(self, python_text: str | None = None, mode: int = 0o755) -> Path:
+    def bare_install(self, python_text: str | None = None, mode: int = 0o755, with_ts: bool | None = None, served: str | None = None) -> Path:
         bare = Path(tempfile.mkdtemp(prefix="b", dir=self.case))
         (bare / "bin").mkdir()
         (bare / ".leases").mkdir()
         (bare / "python" / "bin").mkdir(parents=True)
-        shutil.copy2(harness.entry_binary(self.entry), bare / "bin" / "ardia")
+        shutil.copy2(binary(), bare / "bin" / "ardia")
+        if self.entry == "ts" if with_ts is None else with_ts:
+            (bare / "libexec").mkdir()
+            shutil.copy2(self.root / "libexec" / "ardia-ts.bin", bare / "libexec" / "ardia-ts.bin")
+            probe = bare / "libexec" / "ardia-ts"
+            probe.write_text('#!/bin/sh\nprintf x >> "$(dirname "$0")/../ts-ran"\nexec "$(dirname "$0")/ardia-ts.bin" "$@"\n')
+            probe.chmod(0o755)
+            served = served if served is not None else "".join(f"{name} ts\n" for name in harness.served_table())
+        if served is not None:
+            (bare / "served.txt").write_text(served)
         python = bare / "python" / "bin" / "python3"
         python.write_text(python_text if python_text is not None else f'#!/bin/sh\nexec "{self.python}" "$@"\n')
         python.chmod(mode)
@@ -508,23 +556,11 @@ class EntryProcess:
     def couldnt_run(self, bare: Path, reason: str) -> bytes:
         return f"ardia: couldn't run {os.path.realpath(bare)}/python/bin/python3: {reason}\n".encode()
 
-    def test_a_raw_hand_off_keeps_the_environment_out_of_every_command_line(self):
-        log = self.case / "exec.log"
-        wrapper = (f'#!/bin/sh\nfor word in "$@"; do printf "%s\\n" "$word" >> "{log}"; done\n'
-                   f'[ "$2" = "-m" ] && printf "note=%s\\n" "$(printenv ARDIA_NOTE | /usr/bin/xxd -p)" >> "{log}"\n'
-                   f'exec "{self.python}" "$@"\n')
-        bare = self.bare_install(wrapper)
-        secret = "parity-secret-credential-0123"
-        env = self.environment({"ARDIA_SECRET": secret, "ARDIA_NOTE": "n\udcfe"})
-        done = subprocess.run([str(bare / "bin" / "ardia"), "nosuch-\udcff"], env=env, capture_output=True, timeout=30)
-        self.assertEqual((done.returncode, done.stderr), (2, b"ardia: unknown command 'nosuch-\\udcff' (see ardia --help)\n"))
-        logged = log.read_bytes()
-        self.assertNotIn(secret.encode().hex().encode(), logged)
-        self.assertNotIn(secret.encode(), logged)
-        self.assertIn(b"note=" + b"n\xfe\n".hex().encode(), logged)
+    def exec_cases(self) -> list:
+        return [["config", "path"], ["nosuch-\udcff"], *self.hand_backs]
 
     def test_a_python_that_cannot_run_is_reported_and_the_lease_dropped(self):
-        for argv in (["config", "path"], ["nosuch-\udcff"]):
+        for argv in self.exec_cases():
             for body, mode, reason in ((None, 0o644, "Permission denied"), ("#!/nonexistent/interpreter\n", 0o755, "No such file or directory")):
                 with self.subTest(argv=argv, reason=reason):
                     bare = self.bare_install(body, mode)
@@ -533,7 +569,7 @@ class EntryProcess:
                     self.assertEqual(os.listdir(bare / ".leases"), [])
 
     def test_a_python_that_is_not_a_program_runs_through_the_shell_as_execvp_does(self):
-        for argv in (["config", "path"], ["nosuch-\udcff"]):
+        for argv in self.exec_cases():
             with self.subTest(argv=argv):
                 bare = self.bare_install("echo shell-ran \"$@\"\nexit 9\n")
                 done = subprocess.run([str(bare / "bin" / "ardia"), *argv], env=self.environment({}), capture_output=True, timeout=30)
@@ -541,7 +577,7 @@ class EntryProcess:
 
     @unittest.skipUnless(sys.platform == "darwin", "the size rule it checks is macOS's; Linux caps each string at 128 KB, so ardia itself would not start")
     def test_an_argument_list_too_long_for_python_is_reported_and_the_lease_dropped(self):
-        for argv in (["config", "path"], ["nosuch-\udcff"]):
+        for argv in self.exec_cases():
             with self.subTest(argv=argv):
                 bare = self.bare_install(f'#!/bin/sh\nexec "{self.python}" "$@"\n')
                 program = str(bare / "bin" / "ardia")
@@ -560,7 +596,7 @@ class EntryProcess:
                 self.assertEqual((done.returncode, done.stdout, done.stderr), (127, b"", self.couldnt_run(bare, "Argument list too long")))
                 self.assertEqual(os.listdir(bare / ".leases"), [])
 
-    def test_a_lease_is_held_while_it_runs(self):
+    def test_a_lease_is_held_by_ardia_while_it_runs_and_removed_after(self):
         leases = self.root / ".leases"
         leases.mkdir(exist_ok=True)
         seen = []
@@ -573,14 +609,14 @@ class EntryProcess:
         data.mkdir()
         fake = FakeArdia(data / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "windows": listing})
         try:
-            done = subprocess.run([str(self.root / "bin" / "ardia"), "windows"], capture_output=True, env=self.environment({}), timeout=30)
+            running = self.start(["windows"])
+            out, err = running.communicate(timeout=30)
         finally:
             fake.close()
             leftover = os.listdir(leases)
             shutil.rmtree(leases, True)
-        self.assertEqual(done.returncode, 0, done.stderr)
-        self.assertEqual(len(seen), 1)
-        self.assertTrue(seen[0].isdigit())
+        self.assertEqual(running.returncode, 0, err)
+        self.assertEqual(seen, [str(running.pid)])
         self.assertEqual(leftover, [])
 
 
@@ -589,9 +625,120 @@ class RustProcess(EntryProcess, unittest.TestCase):
     entry = "rust"
 
 
-@unittest.skipUnless(harness.ts_binary(), "build plugins/cli/ts first (bun run build) or set ARDIA_TS_CLI")
+@unittest.skipUnless(both_programs(), "build plugins/cli/rust (the router) and plugins/cli/ts (bun run build), or set ARDIA_RUST_CLI and ARDIA_TS_CLI")
 class TsProcess(EntryProcess, unittest.TestCase):
     entry = "ts"
+    hand_backs = (["--data-dir", "/nowhere-�", "windows"],)
+    not_routed = b"ardia-ts: this program runs only as part of ardia; run ardia instead\n"
+
+    def logging_python(self, log: Path) -> str:
+        return (f'#!/bin/sh\nif [ "$2" = "-m" ]; then\n  for word in "$@"; do printf %s "$word" | /usr/bin/xxd -p | tr -d "\\n" >> "{log}"; echo >> "{log}"; done\n'
+                f'  printf "note=" >> "{log}"; printenv ARDIA_NOTE | /usr/bin/xxd -p >> "{log}"\nfi\nexec "{self.python}" "$@"\n')
+
+    def ts_child(self, pid: int) -> int:
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            found = subprocess.run(["/usr/bin/pgrep", "-P", str(pid)], capture_output=True, text=True).stdout.split()
+            if found:
+                return int(found[0])
+            time.sleep(0.05)
+        self.fail("the router started no child")
+
+    def test_ctrl_c_while_blocked_on_output_ends_like_python(self):
+        new = self.blocked_listing(["tabs", "--json"])
+        self.case = Path(tempfile.mkdtemp(prefix="c", dir=self.scratch))
+        python = self.blocked_listing(["-I", "-m", "ardia_cli", "tabs", "--json"], program=self.python)
+        self.assertEqual(new, python)
+        self.assertEqual(new, (True, 130, b"ardia tabs: interrupted\n"))
+
+    def test_an_ignored_interrupt_stays_ignored_for_python_after_a_hand_back(self):
+        release = threading.Event()
+        fake = self.slow_listing(release, first={"result": 3})
+        try:
+            listing = self.start(["tabs"], ignore_interrupts=True)
+            self.wait_for(fake, "workspace", 2)
+            self.ctrl_c(listing)
+            time.sleep(0.5)
+            self.assertIsNone(listing.poll(), "an ignored Ctrl-C stopped Python after the hand-back")
+            release.set()
+            out, err = listing.communicate(timeout=10)
+            self.assertEqual((listing.returncode, err), (0, b""))
+        finally:
+            release.set()
+            fake.close()
+
+    def test_ardia_ends_by_the_signal_that_ended_the_typescript_program(self):
+        leases = self.root / ".leases"
+        for target, sent in (("child", signal.SIGTERM), ("child", signal.SIGKILL), ("router", signal.SIGTERM)):
+            with self.subTest(target=target, sent=sent):
+                self.case = Path(tempfile.mkdtemp(prefix="c", dir=self.scratch))
+                leases.mkdir(exist_ok=True)
+                release = threading.Event()
+                fake = self.slow_listing(release)
+                try:
+                    listing = self.start(["tabs"])
+                    self.wait_for(fake, "workspace")
+                    child = self.ts_child(listing.pid)
+                    self.assertEqual(os.listdir(leases), [str(listing.pid)])
+                    os.kill(child if target == "child" else listing.pid, sent)
+                    listing.communicate(timeout=10)
+                    self.assertEqual(listing.returncode, -sent)
+                    self.assertEqual(os.listdir(leases), [])
+                    with self.assertRaises(ProcessLookupError):
+                        os.kill(child, 0)
+                finally:
+                    release.set()
+                    fake.close()
+                    shutil.rmtree(leases, True)
+
+    def test_a_hand_back_reaches_python_byte_for_byte(self):
+        log = self.case / "exec.log"
+        bare = self.bare_install(self.logging_python(log))
+        env = self.environment({"ARDIA_NOTE": "n\udcfe"})
+        for argv, through_ts in ((["--data-dir", str(self.case / "d-�"), "windows"], True), (["windows", "--data-dir", str(self.case / "d-\udcff")], False)):
+            with self.subTest(argv=argv):
+                log.unlink(missing_ok=True)
+                (bare / "ts-ran").unlink(missing_ok=True)
+                done = subprocess.run([str(bare / "bin" / "ardia"), *argv], env=env, capture_output=True, timeout=30)
+                python = subprocess.run([str(self.python), "-I", "-m", "ardia_cli", *argv], env=env, capture_output=True, timeout=30)
+                self.assertEqual((done.returncode, done.stdout, done.stderr), (python.returncode, python.stdout, python.stderr))
+                self.assertEqual((bare / "ts-ran").exists(), through_ts)
+                words = [os.fsencode(word).hex() for word in ["-I", "-m", "ardia_cli", *argv]]
+                self.assertEqual(log.read_text(), "\n".join(words) + "\nnote=" + b"n\xfe\n".hex() + "\n")
+
+    def test_without_the_typescript_program_python_serves(self):
+        log = self.case / "exec.log"
+        bare = self.bare_install(self.logging_python(log))
+        shutil.rmtree(bare / "libexec")
+        done = subprocess.run([str(bare / "bin" / "ardia"), "--version"], env=self.environment({}), capture_output=True, timeout=30)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertTrue(done.stdout.startswith(b"ardia "))
+        self.assertIn(b"--version".hex(), log.read_text())
+
+    def test_the_typescript_program_refuses_to_run_without_the_router(self):
+        program = self.root / "libexec" / "ardia-ts.bin"
+        for argv in ([], ["windows"], ["--ardia-routed=1:2:7b7d", "windows"], ["--ardia-routed=1:0:7b7d", "windows"], ["--ardia-routed=1:0:zz", "windows"],
+                     ["--ardia-routed=2:0:" + b'{"name":"x"}'.hex(), "windows"], ["windows", "--ardia-routed=1:0:" + b'{"name":"x"}'.hex()]):
+            with self.subTest(argv=argv):
+                done = subprocess.run([str(program), *argv], env=self.environment({}), capture_output=True, timeout=30)
+                self.assertEqual((done.returncode, done.stdout, done.stderr), (2, b"", self.not_routed))
+
+    def test_an_invalid_served_table_falls_back_to_the_compiled_one(self):
+        data = self.case / "data"
+        data.mkdir()
+        fake = FakeArdia(data / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "windows": {"result": []}})
+        log = self.case / "exec.log"
+        try:
+            for served, by_ts in (("windows ts\ntabs go\n", False), ("windows ts\nwindows ts\n", False), ("windows ts\n", True)):
+                with self.subTest(served=served):
+                    bare = self.bare_install(self.logging_python(log), served=served)
+                    log.unlink(missing_ok=True)
+                    done = subprocess.run([str(bare / "bin" / "ardia"), "windows"], env=self.environment({}), capture_output=True, timeout=30)
+                    self.assertEqual(done.returncode, 0, done.stderr)
+                    self.assertEqual((bare / "ts-ran").exists(), by_ts)
+                    self.assertFalse(log.exists(), "Python served it")
+        finally:
+            fake.close()
 
 
 class BuildSmoke(unittest.TestCase):
