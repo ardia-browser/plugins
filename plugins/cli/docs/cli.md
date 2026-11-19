@@ -1706,7 +1706,13 @@ Python's line-buffered stderr and is tried again before exit: a complaint that f
 `BrokenPipeError` does (`stdout_closed`, status 141), any other error as its crash (the two events above, then the
 exception line), and a stderr still failing at exit makes the status 120, as Python's last flush does. Both entries ignore SIGXFSZ as Python does at startup, so a file-size limit gives `EFBIG`, not
 death by signal; the router restores the caller's disposition before it execs Python, and the flusher starts with it at
-its default, as Python's `subprocess` starts it. A command whose row in `served.txt` says `rust` it serves itself; one that
+its default, as Python's `subprocess` starts it. Like Python's `close_fds=True`, the flusher inherits no descriptor
+above stderr: before starting it, either entry marks every descriptor from 3 up close-on-exec, found by listing
+`/dev/fd` (macOS) or `/proc/self/fd` (Linux), or, when that listing can't be read, by trying each number up to the hard
+`RLIMIT_NOFILE`, capped at 2^20 (1,048,576) so an unlimited hard limit can't make the scan endless; a descriptor above
+the cap in that fallback alone would still be inherited. The flusher is detached but stays a child of the Rust entry,
+which never waits for it, so while that call is still running (blocked on its output, say) a flusher that already
+finished shows as a zombie until the call exits and it is reparented and reaped; it holds no descriptors meanwhile. A command whose row in `served.txt` says `rust` it serves itself; one that
 says `ts` it runs as a child, `<root>/libexec/ardia-ts`, whose first argument `--ardia-routed=2:<sigint>:<fd>:<hex caller>`
 carries whether SIGINT was ignored when ardia started, the lifeline descriptor and the caller's hello JSON, since Bun by
 itself can learn none of them. The lifeline is the read end of a pipe whose write end only the router holds: the child sees EOF on it

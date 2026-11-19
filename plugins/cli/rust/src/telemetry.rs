@@ -453,25 +453,34 @@ const OPEN_DESCRIPTORS: &str = "/proc/self/fd";
 #[cfg(not(target_os = "linux"))]
 const OPEN_DESCRIPTORS: &str = "/dev/fd";
 
-fn open_descriptors_above_stderr() -> Vec<libc::c_int> {
-    let mut found: Vec<libc::c_int> = std::fs::read_dir(OPEN_DESCRIPTORS)
-        .map(|entries| {
-            entries
-                .filter_map(|entry| entry.ok()?.file_name().to_str()?.parse().ok())
-                .filter(|fd| *fd > 2)
-                .collect()
-        })
-        .unwrap_or_default();
-    if found.is_empty() {
-        let mut limit: libc::rlimit = unsafe { std::mem::zeroed() };
-        let highest = if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) } == 0 {
-            (limit.rlim_cur as i64).clamp(3, 65_536)
-        } else {
-            1024
-        } as libc::c_int;
-        found = (3..highest).collect();
+pub const DESCRIPTOR_SCAN_CAP: libc::c_int = 1 << 20;
+
+fn listed_descriptors(listing: &Path) -> Option<Vec<libc::c_int>> {
+    let found: Vec<libc::c_int> = std::fs::read_dir(listing)
+        .ok()?
+        .filter_map(|entry| entry.ok()?.file_name().to_str()?.parse().ok())
+        .collect();
+    (!found.is_empty()).then_some(found)
+}
+
+fn scanned_descriptors(from: libc::c_int) -> Vec<libc::c_int> {
+    let mut limit: libc::rlimit = unsafe { std::mem::zeroed() };
+    let hard = if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) } == 0 && limit.rlim_max != libc::RLIM_INFINITY {
+        limit.rlim_max.min(DESCRIPTOR_SCAN_CAP as libc::rlim_t) as libc::c_int
+    } else {
+        DESCRIPTOR_SCAN_CAP
+    };
+    (from..hard).collect()
+}
+
+pub fn close_on_exec_from(from: libc::c_int, listing: &Path) {
+    let descriptors = listed_descriptors(listing).unwrap_or_else(|| scanned_descriptors(from));
+    for fd in descriptors.into_iter().filter(|fd| *fd >= from) {
+        let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
+        if flags >= 0 && flags & libc::FD_CLOEXEC == 0 {
+            unsafe { libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC) };
+        }
     }
-    found
 }
 
 fn spawn_flusher(python: &Path, target: &Target) {
@@ -487,16 +496,10 @@ fn spawn_flusher(python: &Path, target: &Target) {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .current_dir("/");
-    let inherited = open_descriptors_above_stderr();
+    close_on_exec_from(3, Path::new(OPEN_DESCRIPTORS));
     unsafe {
-        command.pre_exec(move || {
+        command.pre_exec(|| {
             libc::setsid();
-            for &fd in &inherited {
-                let flags = libc::fcntl(fd, libc::F_GETFD);
-                if flags >= 0 {
-                    libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC);
-                }
-            }
             libc::signal(libc::SIGPIPE, libc::SIG_DFL);
             libc::signal(libc::SIGXFSZ, libc::SIG_DFL);
             Ok(())
@@ -523,6 +526,28 @@ mod tests {
         assert_eq!(whole(Some(&Value::Bool(true))), Some(Value::Int(0)));
         assert_eq!(whole(None), Some(Value::Int(0)));
         assert_eq!(number(Some(&Value::BigInt("9".repeat(400)))), f64::INFINITY);
+    }
+
+    #[test]
+    fn marks_descriptors_above_the_soft_limit_when_the_listing_is_missing() {
+        let mut pair = [0; 2];
+        assert_eq!(unsafe { libc::pipe(pair.as_mut_ptr()) }, 0);
+        let high = 4000;
+        assert_eq!(unsafe { libc::dup2(pair[1], high) }, high);
+        let mut saved: libc::rlimit = unsafe { std::mem::zeroed() };
+        unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut saved) };
+        let lowered = libc::rlimit {
+            rlim_cur: 32,
+            rlim_max: saved.rlim_max,
+        };
+        unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &lowered) };
+        close_on_exec_from(3, Path::new("/nonexistent-descriptor-listing"));
+        unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &saved) };
+        let flags = unsafe { libc::fcntl(high, libc::F_GETFD) };
+        for fd in [pair[0], pair[1], high] {
+            unsafe { libc::close(fd) };
+        }
+        assert!(flags >= 0 && flags & libc::FD_CLOEXEC != 0, "{flags}");
     }
 
     #[test]
