@@ -147,6 +147,7 @@ LATER_SLICES = {
     "act/d5_fields": "Python's flow log probes the focused field after each step (D7)",
     "act/d5_keys": "Python's flow log probes the focused field after each step (D7)",
     "act/d5_batch": "Python's flow log probes the focused field after each step (D7)",
+    "act/d5_changes": "change reports read D4's snapshot, and Python's flow log probes the focused field (D7)",
 }
 
 
