@@ -1720,7 +1720,9 @@ its mode; the hardened runtime's library validation then loads it only into a pr
 | `strerror` | `strerror_r` (GNU form on glibc, XSI elsewhere) | Node's messages are libuv's, not libc's | `paths.ts`, `libc.ts`: every OS error text, as Python's `os.strerror` gives it on that platform |
 | `watchLifeline` | `fcntl(FD_CLOEXEC)`, a detached `pthread` blocking in `read`, `kill(getpid(), SIGKILL)` at EOF or error | a JS watcher can't run while the JS thread is blocked in a synchronous call | `main.ts`: end at once when the router dies |
 
-So nothing changes the working directory and no helper process runs: the private-file code follows Python's `dir_fd`
+Every integer argument must be a number that is exactly a 32-bit integer, and a boolean a boolean; anything else throws
+a `TypeError` or `RangeError` rather than being truncated or wrapped, and an export that opened a descriptor closes it if it
+can't hand back the result. So nothing changes the working directory and no helper process runs: the private-file code follows Python's `dir_fd`
 code call for call. The caller still comes from the router's marker, which already walked the process ancestry. The
 program loads the addon from beside its own resolved path before it serves anything, `--version` included; if it is
 missing, isn't a loadable library for this architecture, fails library validation or lacks an export, it prints

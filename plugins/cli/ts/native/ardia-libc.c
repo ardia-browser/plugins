@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <math.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -24,15 +25,20 @@ typedef struct napi_env__ *napi_env;
 typedef struct napi_value__ *napi_value;
 typedef struct napi_callback_info__ *napi_callback_info;
 typedef int napi_status;
+typedef int napi_valuetype;
 typedef napi_value (*napi_callback)(napi_env env, napi_callback_info info);
 #define napi_ok 0
+#define napi_number 3
 #endif
 #ifndef NAPI_AUTO_LENGTH
 #define NAPI_AUTO_LENGTH SIZE_MAX
 #endif
 
 napi_status napi_get_cb_info(napi_env env, napi_callback_info cbinfo, size_t *argc, napi_value *argv, napi_value *this_arg, void **data);
-napi_status napi_get_value_int32(napi_env env, napi_value value, int32_t *result);
+napi_status napi_typeof(napi_env env, napi_value value, napi_valuetype *result);
+napi_status napi_get_value_double(napi_env env, napi_value value, double *result);
+napi_status napi_throw_type_error(napi_env env, const char *code, const char *msg);
+napi_status napi_throw_range_error(napi_env env, const char *code, const char *msg);
 napi_status napi_get_value_bool(napi_env env, napi_value value, bool *result);
 napi_status napi_get_value_string_utf8(napi_env env, napi_value value, char *buf, size_t bufsize, size_t *result);
 napi_status napi_create_int32(napi_env env, int32_t value, napi_value *result);
@@ -60,11 +66,25 @@ static bool take_args(napi_env env, napi_callback_info info, size_t wanted, Call
 }
 
 static bool int_arg(Call *call, size_t index, int32_t *out) {
-  return napi_get_value_int32(call->env, call->argv[index], out) == napi_ok;
+  napi_valuetype type;
+  double value = 0;
+  if (napi_typeof(call->env, call->argv[index], &type) != napi_ok || type != napi_number
+      || napi_get_value_double(call->env, call->argv[index], &value) != napi_ok) {
+    napi_throw_type_error(call->env, NULL, "ardia-libc: expected an integer");
+    return false;
+  }
+  if (!isfinite(value) || value < INT32_MIN || value > INT32_MAX || value != trunc(value)) {
+    napi_throw_range_error(call->env, NULL, "ardia-libc: expected a 32-bit integer");
+    return false;
+  }
+  *out = (int32_t)value;
+  return true;
 }
 
 static bool bool_arg(Call *call, size_t index, bool *out) {
-  return napi_get_value_bool(call->env, call->argv[index], out) == napi_ok;
+  if (napi_get_value_bool(call->env, call->argv[index], out) == napi_ok) return true;
+  napi_throw_type_error(call->env, NULL, "ardia-libc: expected a boolean");
+  return false;
 }
 
 static int name_arg(Call *call, size_t index, char *buffer, size_t size) {
@@ -89,6 +109,13 @@ static napi_value status(napi_env env, int value) {
   return result;
 }
 
+static napi_value owned_fd(napi_env env, int fd) {
+  napi_value result = NULL;
+  if (napi_create_int32(env, fd, &result) == napi_ok) return result;
+  close(fd);
+  return NULL;
+}
+
 static int failed(void) {
   return errno > 0 ? -errno : -EIO;
 }
@@ -96,7 +123,8 @@ static int failed(void) {
 static napi_value peer_uid(napi_env env, napi_callback_info info) {
   Call call;
   int32_t fd;
-  if (!take_args(env, info, 1, &call) || !int_arg(&call, 0, &fd)) return status(env, -EINVAL);
+  if (!take_args(env, info, 1, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &fd)) return NULL;
 #if defined(__APPLE__)
   struct xucred credentials;
   socklen_t size = sizeof(credentials);
@@ -128,12 +156,13 @@ static napi_value open_at(napi_env env, napi_callback_info info) {
   Call call;
   int32_t dir, flags, mode;
   char name[PATH_MAX];
-  if (!take_args(env, info, 4, &call) || !int_arg(&call, 0, &dir) || !int_arg(&call, 2, &flags) || !int_arg(&call, 3, &mode)) return status(env, -EINVAL);
+  if (!take_args(env, info, 4, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &dir) || !int_arg(&call, 2, &flags) || !int_arg(&call, 3, &mode)) return NULL;
   int checked = name_arg(&call, 1, name, sizeof(name));
   if (checked != 0) return status(env, checked);
   for (;;) {
     int fd = openat(dir, name, flags | O_CLOEXEC, (mode_t)mode);
-    if (fd >= 0) return status(env, fd);
+    if (fd >= 0) return owned_fd(env, fd);
     if (errno != EINTR) return status(env, failed());
   }
 }
@@ -142,7 +171,8 @@ static napi_value mkdir_at(napi_env env, napi_callback_info info) {
   Call call;
   int32_t dir, mode;
   char name[PATH_MAX];
-  if (!take_args(env, info, 3, &call) || !int_arg(&call, 0, &dir) || !int_arg(&call, 2, &mode)) return status(env, -EINVAL);
+  if (!take_args(env, info, 3, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &dir) || !int_arg(&call, 2, &mode)) return NULL;
   int checked = name_arg(&call, 1, name, sizeof(name));
   if (checked != 0) return status(env, checked);
   return status(env, mkdirat(dir, name, (mode_t)mode) == 0 ? 0 : failed());
@@ -152,7 +182,8 @@ static napi_value rename_at(napi_env env, napi_callback_info info) {
   Call call;
   int32_t dir;
   char from[PATH_MAX], to[PATH_MAX];
-  if (!take_args(env, info, 3, &call) || !int_arg(&call, 0, &dir)) return status(env, -EINVAL);
+  if (!take_args(env, info, 3, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &dir)) return NULL;
   int checked = name_arg(&call, 1, from, sizeof(from));
   if (checked == 0) checked = name_arg(&call, 2, to, sizeof(to));
   if (checked != 0) return status(env, checked);
@@ -163,7 +194,8 @@ static napi_value unlink_at(napi_env env, napi_callback_info info) {
   Call call;
   int32_t dir;
   char name[PATH_MAX];
-  if (!take_args(env, info, 2, &call) || !int_arg(&call, 0, &dir)) return status(env, -EINVAL);
+  if (!take_args(env, info, 2, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &dir)) return NULL;
   int checked = name_arg(&call, 1, name, sizeof(name));
   if (checked != 0) return status(env, checked);
   return status(env, unlinkat(dir, name, 0) == 0 ? 0 : failed());
@@ -174,7 +206,8 @@ static napi_value size_at(napi_env env, napi_callback_info info) {
   int32_t dir;
   char name[PATH_MAX];
   struct stat found;
-  if (!take_args(env, info, 2, &call) || !int_arg(&call, 0, &dir)) return status(env, -EINVAL);
+  if (!take_args(env, info, 2, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &dir)) return NULL;
   int checked = name_arg(&call, 1, name, sizeof(name));
   if (checked != 0) return status(env, checked);
   if (fstatat(dir, name, &found, AT_SYMLINK_NOFOLLOW) != 0) return status(env, failed());
@@ -185,7 +218,8 @@ static napi_value list_at(napi_env env, napi_callback_info info) {
   Call call;
   int32_t dir;
   napi_value names = NULL;
-  if (!take_args(env, info, 1, &call) || !int_arg(&call, 0, &dir)) return status(env, -EINVAL);
+  if (!take_args(env, info, 1, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &dir)) return NULL;
   int copy = fcntl(dir, F_DUPFD_CLOEXEC, 0);
   if (copy < 0) return status(env, failed());
   DIR *stream = fdopendir(copy);
@@ -222,7 +256,8 @@ static napi_value lock(napi_env env, napi_callback_info info) {
   Call call;
   int32_t fd;
   bool exclusive, wait;
-  if (!take_args(env, info, 3, &call) || !int_arg(&call, 0, &fd) || !bool_arg(&call, 1, &exclusive) || !bool_arg(&call, 2, &wait)) return status(env, -EINVAL);
+  if (!take_args(env, info, 3, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &fd) || !bool_arg(&call, 1, &exclusive) || !bool_arg(&call, 2, &wait)) return NULL;
   int operation = (exclusive ? LOCK_EX : LOCK_SH) | (wait ? 0 : LOCK_NB);
   for (;;) {
     if (flock(fd, operation) == 0) return status(env, 0);
@@ -235,7 +270,8 @@ static napi_value error_text(napi_env env, napi_callback_info info) {
   int32_t code;
   char buffer[256];
   napi_value result = NULL;
-  if (!take_args(env, info, 1, &call) || !int_arg(&call, 0, &code)) return status(env, -EINVAL);
+  if (!take_args(env, info, 1, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &code)) return NULL;
   memset(buffer, 0, sizeof(buffer));
 #if defined(__GLIBC__) && defined(_GNU_SOURCE)
   const char *text = strerror_r(code, buffer, sizeof(buffer));
@@ -264,7 +300,9 @@ static napi_value watch_lifeline(napi_env env, napi_callback_info info) {
   int32_t fd;
   pthread_t thread;
   pthread_attr_t attributes;
-  if (!take_args(env, info, 1, &call) || !int_arg(&call, 0, &fd) || fd < 0) return status(env, -EINVAL);
+  if (!take_args(env, info, 1, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &fd)) return NULL;
+  if (fd < 0) return status(env, -EINVAL);
   if (fcntl(fd, F_SETFD, FD_CLOEXEC) != 0) return status(env, failed());
   if (pthread_attr_init(&attributes) != 0) return status(env, -ENOMEM);
   pthread_attr_setdetachstate(&attributes, PTHREAD_CREATE_DETACHED);

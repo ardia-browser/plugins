@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { BUILT_LIBC } from "./libc-loaded.ts";
-import { dlopenReason, errnoError, interruptsIgnored, LibcUnavailable, listAt, loadLibc, openAt, peerUid, strerror } from "../src/libc.ts";
+import { dlopenReason, errnoError, flock, interruptsIgnored, LibcUnavailable, listAt, loadLibc, mkdirAt, openAt, peerUid, sizeAt as rawSizeAt, strerror, watchLifeline } from "../src/libc.ts";
 import { close, closeDir, listDir, openPrivate, openPrivateFile, PathError, readPrivate, renameIn, sizeAt, takeLock, unlinkQuietly, writePrivate } from "../src/privatefs.ts";
 
 const CLI = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
@@ -181,4 +181,27 @@ test("error text is this libc's, as Python's os.strerror gives it", () => {
   assert.equal(python.status, 0, python.stderr);
   assert.deepEqual(codes.map(strerror), JSON.parse(python.stdout));
   assert.equal(errnoError(os.constants.errno.EIO, "write").message, `EIO: ${JSON.parse(python.stdout)[os.constants.errno.EIO]}, write`);
+});
+
+test("every integer argument is taken exactly or refused with a thrown error", () => {
+  const dir = fs.openSync(scratch, O_RDONLY);
+  try {
+    for (const bad of [4.5, 2 ** 32 + dir, -(2 ** 31) - 1, 2 ** 31, Number.NaN, Number.POSITIVE_INFINITY]) {
+      assert.throws(() => listAt(bad), RangeError, `${bad}`);
+      assert.throws(() => peerUid(bad), RangeError, `${bad}`);
+      assert.throws(() => strerror(bad), RangeError, `${bad}`);
+      assert.throws(() => openAt(dir, "x", O_RDONLY, bad), RangeError, `${bad}`);
+      assert.throws(() => mkdirAt(bad, "x", 0o700), RangeError, `${bad}`);
+      assert.throws(() => watchLifeline(bad), RangeError, `${bad}`);
+    }
+    for (const bad of ["3", 3n, null, undefined, {}]) {
+      assert.throws(() => rawSizeAt(bad as unknown as number, "x"), TypeError, String(bad));
+      assert.throws(() => flock(bad as unknown as number, true, false), TypeError, String(bad));
+    }
+    assert.throws(() => flock(dir, 1 as unknown as boolean, false), TypeError);
+    assert.ok(Array.isArray(listAt(dir + 0.0)));
+    assert.throws(() => listAt(-1), { code: "EBADF" });
+  } finally {
+    fs.closeSync(dir);
+  }
 });
