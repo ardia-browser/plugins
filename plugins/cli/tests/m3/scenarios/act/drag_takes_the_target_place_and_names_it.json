@@ -1,0 +1,33 @@
+{
+ "source": "tests/test_browse_act.py ActInChrome.test_drag_takes_the_target_place_and_names_it",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "batch",
+    "drag \"#mouse li:nth-child(1)\" \"#mouse li:nth-child(5)\"",
+    "drag \"#mouse li:nth-child(5)\" \"#mouse li:nth-child(2)\"",
+    "drag \"#mouse li:nth-child(1)\" \"#mouse li:nth-child(3)\" --after"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "[...document.querySelectorAll('#mouse li')].map((n) => n.textContent).join(' ')"
+   ],
+   "session": "act"
+  }
+ ]
+}

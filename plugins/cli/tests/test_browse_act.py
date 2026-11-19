@@ -2,7 +2,6 @@ import asyncio
 import os
 import re
 import shutil
-import socket
 import subprocess
 import sys
 import tempfile
@@ -13,6 +12,9 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import browse_driver
 
 from ardia_cli import command_metrics
 from ardia_cli.browse import actions, commands, help as helptext
@@ -168,12 +170,6 @@ class CellAnswer(unittest.TestCase):
         self.assertEqual(empty.text, '✓ Done\n~ gridcell "Bin, new row": empty (was empty)')
 
 
-def free_port() -> int:
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
-
-
 def answers(url: str) -> bool:
     try:
         with urllib.request.urlopen(url, timeout=2) as response:
@@ -198,7 +194,8 @@ class ActInChrome(unittest.TestCase):
         cls.scratch = Path(tempfile.mkdtemp(prefix="ardia-act-"))
         cls.data = cls.scratch / "cli-data"
         cls.data.mkdir()
-        cls.http_port, cls.port = free_port(), free_port()
+        cls.http_port, cls.port = browse_driver.free_port(), browse_driver.free_port()
+        browse_driver.begin_class(f"http://127.0.0.1:{cls.http_port}")
         cls.server = subprocess.Popen([sys.executable, "-I", "-m", "http.server", str(cls.http_port), "--bind", "127.0.0.1"], cwd=FIXTURES,
                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         cls.chrome = subprocess.Popen([CHROME, "--headless=new", f"--remote-debugging-port={cls.port}", f"--user-data-dir={cls.scratch / 'profile'}",
@@ -222,14 +219,13 @@ class ActInChrome(unittest.TestCase):
 
     @classmethod
     def browse(cls, *args, check=True):
-        env = dict(os.environ, PYTHONPATH=str(CLI))
-        done = subprocess.run([sys.executable, "-m", "ardia_cli", "browse", "--port", str(cls.port), "--data-dir", str(cls.data), "--session", "act",
-                               *args], capture_output=True, text=True, timeout=120, env=env, cwd=CLI)
-        if check and done.returncode:
-            raise AssertionError(f"ardia browse {' '.join(args)} exited {done.returncode}: {done.stderr}{done.stdout}")
-        return done
+        return browse_driver.browse(args, endpoint=["--port", str(cls.port)], data_dir=cls.data, session="act", check=check)
+
+    def tearDown(self):
+        browse_driver.end()
 
     def setUp(self):
+        browse_driver.begin(self.id())
         self.browse("open", f"http://127.0.0.1:{self.http_port}/act-cells.html", "--show")
 
     def value(self, expression: str) -> str:

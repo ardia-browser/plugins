@@ -1,0 +1,25 @@
+{
+ "source": "tests/test_browse_act.py ActInChrome.test_html5_drag_into_a_redrawn_list_names_the_place",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "drag",
+    "#html5 li:nth-child(1)",
+    "#html5 li:nth-child(3)"
+   ],
+   "session": "act"
+  }
+ ]
+}

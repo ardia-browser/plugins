@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from cases import PIECES, generator, many, noise
+from tests.m3.cases import PIECES, generator, many, noise
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 SPIKES = Path(os.environ.get("ARDIA_M3_SPIKES", "/Users/barreloflube/ardia-scratch/ts-port/m3-spikes"))

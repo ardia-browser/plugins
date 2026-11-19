@@ -1,0 +1,46 @@
+{
+ "source": "tests/test_browse_act.py ActInChrome.test_an_aria_modal_faded_by_filter_opacity_0_does_not_hold_back_a_dom_click",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/carousel-modal.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "reveal('filtered')"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "click",
+    "#s2"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "state.clicked.join()"
+   ],
+   "session": "act"
+  }
+ ]
+}

@@ -2,7 +2,7 @@ import json
 import os
 from pathlib import Path
 
-from cases import PIECES, generator, many, noise, secret_list
+from tests.m3.cases import PIECES, generator, many, noise, secret_list
 
 ROLES = ["button", "link", "textbox", "checkbox", "radio", "option", "menuitem", "treeitem", "tab", "switch", "heading", "StaticText", "generic",
          "GenericContainer", "group", "div", "presentation", "RootWebArea", "WebArea", "none", "InlineTextBox", "LineBreak", "ListMarker", "Date",

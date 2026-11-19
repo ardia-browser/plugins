@@ -8,7 +8,7 @@ const PYTHON = process.env.ARDIA_TEST_PYTHON ?? "python3";
 const COUNT = process.env.ARDIA_ORACLE_COUNT ?? "150";
 
 test("every ported pure function answers exactly as its Python original", { timeout: 310_000 }, () => {
-  const run = spawnSync(PYTHON, [path.join(CLI, "tests", "m3", "pure.py"), "--count", COUNT, "--bun", process.execPath], {
+  const run = spawnSync(PYTHON, ["-m", "tests.m3.pure", "all", "--generated", COUNT, "--show", "3"], {
     cwd: CLI,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,

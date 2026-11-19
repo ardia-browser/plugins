@@ -1,0 +1,54 @@
+{
+ "live_only": "Python's wait loops (dialog fade, disabled waits, lazy scroll, load settle) count against the daemon's own clock, so replay sends a different number of checks; first replay mismatch: Runtime.callFunctionOn (el) => {",
+ "source": "tests/test_browse_act.py ActInChrome.test_a_tooltip_over_the_top_aria_modal_does_not_let_a_click_into_the_one_below",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/carousel-modal.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "reveal('lower', 'upper', 'tip'), 'ok'"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.elementFromPoint(620, 400).id"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "click",
+    "#l2"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "state.clicked.join()"
+   ],
+   "session": "act"
+  }
+ ]
+}

@@ -84,7 +84,7 @@ function pyRound(value: number): bigint {
   return BigInt(roundHalfEven(value));
 }
 
-export const FUNCTIONS: Record<string, Fn> = {
+export const PURE: Record<string, Fn> = {
   "limits.seconds_of": (value) => optionalFloat(secondsOf(optionalText(value))),
   "limits.given_timeout": (argv) => optionalFloat(givenTimeout(texts(argv))),
   "limits.command_limit": (name, argv, timeout) => float(commandLimit(text(name), texts(argv), num(timeout))),

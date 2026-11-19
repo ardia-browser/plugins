@@ -1,0 +1,54 @@
+{
+ "live_only": "Python's wait loops (dialog fade, disabled waits, lazy scroll, load settle) count against the daemon's own clock, so replay sends a different number of checks; first replay mismatch: Runtime.callFunctionOn (el) => {",
+ "source": "tests/test_browse_act.py ActInChrome.test_a_zero_height_aria_modal_wrapper_with_fixed_children_holds_back_a_dom_click",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/carousel-modal.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "reveal('headless'), document.getElementById('pay').focus(), 'ok'"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "String(document.getElementById('headless').getBoundingClientRect().height)"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "click",
+    "#s2"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "state.clicked.join()"
+   ],
+   "session": "act"
+  }
+ ]
+}

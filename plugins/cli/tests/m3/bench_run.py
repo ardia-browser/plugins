@@ -41,7 +41,7 @@ def main() -> int:
     parser.add_argument("--jit", action="store_true", help="also time the JIT build each round")
     parser.add_argument("--json", help="write every sample here")
     args = parser.parse_args()
-    hardened, jit = build(Path(tempfile.gettempdir()) / "ardia-m3-bench", args.bun)
+    hardened, jit = build(Path(tempfile.gettempdir()) / "ardia-m3p-bench", args.bun)
     runs = {"ts": [hardened], "python": [args.python, str(HERE / "bench.py")]}
     if args.jit:
         runs["ts-jit"] = [jit]

@@ -4,7 +4,7 @@ import struct
 import zlib
 from pathlib import Path
 
-from cases import PIECES, generator, many, noise
+from tests.m3.cases import PIECES, generator, many, noise
 
 SPIKE = Path(os.environ.get("ARDIA_M3_SPIKE_DATA", "/Users/barreloflube/ardia-scratch/ts-port/m3-spikes/data"))
 

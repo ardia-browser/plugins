@@ -4,13 +4,14 @@ import urllib.parse
 
 from ardia_cli import command_metrics, redact
 from ardia_cli.browse import errors, fields, flowurl, limits, shape
+from tests.m3 import oracle_fns_p2, oracle_fns_p2b, oracle_fns_p3
 
-FUNCTIONS: dict = {}
+PURE: dict = {}
 
 
 def oracle(name: str):
     def register(function):
-        FUNCTIONS[name] = function
+        PURE[name] = function
         return function
 
     return register
@@ -159,14 +160,6 @@ oracle("py.round")(round)
 oracle("py.round_to")(round)
 oracle("py.len")(len)
 
-import oracle_fns_p2
-
 oracle_fns_p2.register(oracle, secrets_set)
-
-import oracle_fns_p2b
-
 oracle_fns_p2b.register(oracle)
-
-import oracle_fns_p3
-
 oracle_fns_p3.register(oracle)

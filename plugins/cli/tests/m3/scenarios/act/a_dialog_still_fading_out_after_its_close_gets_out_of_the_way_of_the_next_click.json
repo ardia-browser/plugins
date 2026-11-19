@@ -1,0 +1,136 @@
+{
+ "source": "tests/test_browse_act.py ActInChrome.test_a_dialog_still_fading_out_after_its_close_gets_out_of_the_way_of_the_next_click",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/carousel-modal.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "state.clicked.length = 0, reveal('fading')"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "batch",
+    "click #fade-close",
+    "click #s2"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "state.clicked.join()"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "state.clicked.length = 0, reveal('fading')"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "click",
+    "#fade-close"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "click",
+    "#s2"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "state.clicked.join()"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "state.clicked.length = 0, reveal('fading')"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "batch",
+    "press Escape",
+    "click #s2"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "state.clicked.join()"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "state.clicked.length = 0, reveal('fading')"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "press",
+    "Escape"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "click",
+    "#s2"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "state.clicked.join()"
+   ],
+   "session": "act"
+  }
+ ],
+ "unstable_steps": {
+  "steps": [
+   3,
+   6,
+   7,
+   10,
+   13,
+   14
+  ],
+  "reason": "the change report after this action depends on whether the page finished its change (a dialog fading out, a field becoming enabled) before the daemon's snapshot; Python differs from itself run to run"
+ }
+}
