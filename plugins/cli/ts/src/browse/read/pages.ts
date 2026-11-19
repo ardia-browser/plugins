@@ -307,7 +307,7 @@ export async function openReader(ctx: Ctx, opened: string[]): Promise<Page> {
   const state = ctx.state;
   const targetId = await temptabs.create(state, opened);
   if (!state.targetInfos.has(targetId)) state.targetInfos.set(targetId, { targetId, url: "about:blank", title: "", type: "page" });
-  const page = new Page(state, targetId);
+  const page = readers.makePage(state, targetId);
   state.pages.set(targetId, page);
   await page.attach(state.browser as NonNullable<typeof state.browser>);
   await page.keepAwake();
@@ -424,6 +424,11 @@ export async function readIn(page: Page, url: string, selector: string | null, t
   return out;
 }
 
+export const readers = {
+  makePage: (state: Ctx["state"], targetId: string): Page => new Page(state, targetId),
+  readIn,
+};
+
 export async function inLanes<T>(work: readonly T[], width: number, lane: (take: () => T | undefined) => Promise<void>): Promise<void> {
   const queue = [...work];
   const take = () => queue.shift();
@@ -465,7 +470,7 @@ export async function readTabs(ctx: Ctx, urls: readonly string[], selector: stri
           const [index, url] = item;
           for (let attempt = 0; attempt < READER_TRIES; attempt += 1) {
             if (page === null || page.sessionId === null) page = await openReader(ctx, opened);
-            records[index] = await readIn(page, url, selector, timeout, options);
+            records[index] = await readers.readIn(page, url, selector, timeout, options);
             if (page.sessionId !== null || !("error" in (records[index] as PageRecord)) || attempt + 1 === READER_TRIES) break;
             add("read_tabs_reopened");
           }

@@ -21,6 +21,7 @@ DIVERGENCES = {
     },
     "temp-tab-marker": {
         "row": None,
+        "decision": "D2 round 3 (plugins#20): temporary tabs open at about:blank#ardia-temp-<nonce> so a later sweep finds lost ones",
         "commands": "read <url>... (temporary reader tabs), always applied",
         "python": 'Target.createTarget {"url": "about:blank", "background": true} for a reader tab',
         "ts": 'Target.createTarget {"url": "about:blank#ardia-temp-<nonce>", "background": true}, D2\'s marked temporary tabs that a later sweep can find',

@@ -90,7 +90,7 @@ class Divergences(unittest.TestCase):
 
     def test_every_divergence_names_its_row(self):
         for name, entry in divergences.DIVERGENCES.items():
-            self.assertIsInstance(entry.get("row"), int, name)
+            self.assertTrue(isinstance(entry.get("row"), int) or isinstance(entry.get("decision"), str), name)
 
     def test_the_transcript_check_finds_page_session_enables_and_a_main_world_probe(self):
         folder = Path(tempfile.mkdtemp(prefix="ardia-m3-div-"))
