@@ -69,3 +69,9 @@ export function isDecimal(ch: string): boolean {
   const code = ch.codePointAt(0) ?? -1;
   return DECIMAL_RANGES.some(([start, end]) => code >= start && code <= end);
 }
+
+export function decimalDigit(ch: string): number | undefined {
+  const code = ch.codePointAt(0) ?? -1;
+  const range = DECIMAL_RANGES.find(([start, end]) => code >= start && code <= end);
+  return range === undefined ? undefined : (code - range[0]) % 10;
+}

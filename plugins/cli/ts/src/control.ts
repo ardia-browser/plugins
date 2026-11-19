@@ -120,6 +120,10 @@ function onInterrupt(): void {
   wakeAll?.();
 }
 
+export function wakeOnInterrupt(wake: (() => void) | undefined): void {
+  wakeAll = wake;
+}
+
 export function catchInterrupts(): () => void {
   process.on("SIGINT", onInterrupt);
   return () => {

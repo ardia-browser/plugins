@@ -3,8 +3,12 @@ import { now } from "./clock.ts";
 import { dumps, Float, type JsonObject, parse, TELEMETRY_JSON_DEPTH, type Value } from "./json.ts";
 import { envSet, expandUser, home, join, purePath } from "./paths.ts";
 import { close, closeDir, type Dir, openPrivate, readPrivate, takeLockRetrying, writePrivate } from "./privatefs.ts";
-import { iterateOrEmpty, truthy } from "./py.ts";
-import type { Call } from "./telemetry.ts";
+import { isSpace, iterateOrEmpty, strip, truthy } from "./py.ts";
+import { type Call, dataDirArg, leadingTokens, namesTestEndpoint, TEST_ENDPOINT_ENV } from "./telemetry.ts";
+import { installedDataDir } from "./control.ts";
+import { realpath } from "./paths.ts";
+import { writeAll } from "./printable.ts";
+import { STAR_PROMPT, TASK_COMMANDS } from "./browse/tables.ts";
 import { isDevBuild } from "./version.ts";
 import { utf8 } from "./pystr.ts";
 
@@ -15,6 +19,40 @@ const MAX_STATE_BYTES = 64 * 1024;
 const MAX_RECENT = 5;
 const TASK_GAP_S = 30 * 60;
 const NOT_RECORDED = ["feedback", "star", "none"];
+const TASKS_BEFORE_ASKING = 5;
+const OFF_VALUES = ["0", "false", "off", "no"];
+const CI_ENV = ["CI", "GITHUB_ACTIONS", "BUILDKITE", "JENKINS_URL"];
+
+function lowered(name: string): string {
+  return strip(process.env[name] ?? "", isSpace).toLowerCase();
+}
+
+function promptAllowed(): boolean {
+  if (OFF_VALUES.includes(lowered("ARDIA_STAR_PROMPT"))) return false;
+  return !CI_ENV.some((name) => !["", "0", "false"].includes(lowered(name)));
+}
+
+function isTestContext(argv: string[]): boolean {
+  const tokens = leadingTokens(argv);
+  if (namesTestEndpoint(tokens) || TEST_ENDPOINT_ENV.some((name) => envSet(name) !== undefined)) return true;
+  const dataDir = dataDirArg(tokens) ?? envSet("ARDIA_DATA_DIR");
+  if (dataDir === undefined) return false;
+  try {
+    return realpath(expandUser(dataDir)) !== realpath(installedDataDir());
+  } catch {
+    return true;
+  }
+}
+
+function dictIn(state: JsonObject, key: string): JsonObject {
+  const value = state.get(key);
+  return value instanceof Map ? value : new Map();
+}
+
+function dueForPrompt(state: JsonObject): boolean {
+  const star = dictIn(state, "star");
+  return !truthy(star.get("prompted_at")) && !truthy(star.get("done_at")) && numberIn(dictIn(state, "tasks").get("done")) >= TASKS_BEFORE_ASKING;
+}
 
 export function cliHome(): string {
   const chosen = envSet("ARDIA_CLI_HOME") ?? join(home(), "Library", "Application Support", "Ardia", "CLI");
@@ -38,9 +76,9 @@ function intOf(value: Value | undefined): bigint {
   return 0n;
 }
 
-function remember(state: JsonObject, name: string, status: number): void {
+function remember(state: JsonObject, name: string, status: number | bigint): void {
   const recent = iterateOrEmpty(state.get("recent") ?? null).filter((entry) => typeof entry === "string");
-  recent.push(status === 0 ? name : `${name} (exit ${status})`);
+  recent.push(BigInt(status) === 0n ? name : `${name} (exit ${status})`);
   state.set("recent", recent.slice(Math.max(0, recent.length - MAX_RECENT)));
 }
 
@@ -51,15 +89,26 @@ function closeStaleTask(tasks: JsonObject, at: number): void {
   }
 }
 
-export function note(state: JsonObject, name: string, status: number, at: number): void {
+export function note(state: JsonObject, name: string, status: number | bigint, at: number, task = false, ask = false): boolean {
   remember(state, name, status);
   const existing = state.get("tasks");
-  const tasks: JsonObject = existing instanceof Map ? new Map(existing) : new Map();
+  const tasks: JsonObject = existing instanceof Map ? existing : new Map();
+  if (!(existing instanceof Map)) state.set("tasks", tasks);
   closeStaleTask(tasks, at);
-  state.set("tasks", tasks);
+  if (!task) return false;
+  closeStaleTask(tasks, at);
+  tasks.set("open", true);
+  tasks.set("last_at", new Float(at));
+  if (!ask || !dueForPrompt(state)) return false;
+  const star = state.get("star");
+  if (star !== undefined && !(star instanceof Map)) throw new Error("usage.json's star isn't an object");
+  const kept: JsonObject = star ?? new Map();
+  if (star === undefined) state.set("star", kept);
+  kept.set("prompted_at", new Float(at));
+  return true;
 }
 
-export function recordUsage(call: Call, status: number): void {
+export function recordUsage(call: Call, status: number | bigint): void {
   const where = recordingHome();
   if (where === undefined || NOT_RECORDED.includes(call.command)) return;
   const name = [call.command, call.subcommand].filter((part): part is string => part !== undefined && part !== "").join(" ");
@@ -70,6 +119,7 @@ export function recordUsage(call: Call, status: number): void {
   }
   let dir: Dir | undefined;
   let lock: number | undefined;
+  let prompt = false;
   try {
     dir = openPrivate(where, [FOLDER], true);
     lock = takeLockRetrying(LOCK, dir);
@@ -82,7 +132,8 @@ export function recordUsage(call: Call, status: number): void {
     }
     const parsed = raw === undefined ? undefined : parse(raw, TELEMETRY_JSON_DEPTH);
     const state: JsonObject = parsed instanceof Map ? parsed : new Map();
-    note(state, name, status, now());
+    const task = BigInt(status) === 0n && call.command === "browse" && TASK_COMMANDS.includes(call.subcommand ?? "") && !isTestContext(call.argv);
+    prompt = note(state, name, status, now(), task, promptAllowed());
     try {
       writePrivate(STATE, dir, utf8(dumps(state, "spaced")));
     } catch {}
@@ -91,5 +142,10 @@ export function recordUsage(call: Call, status: number): void {
   } finally {
     close(lock);
     closeDir(dir);
+  }
+  if (prompt) {
+    try {
+      writeAll(2, `${STAR_PROMPT}\n`);
+    } catch {}
   }
 }

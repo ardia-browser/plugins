@@ -7,6 +7,7 @@ import { inert, Output, reportCrash, stdoutFlushFailed, writeAll } from "./print
 import { Unsupported } from "./py.ts";
 import { render } from "./render.ts";
 import { Call, finish } from "./telemetry.ts";
+import { osCrash } from "./crash.ts";
 
 const TOP_FLAGS = ["-h", "--help", "--version", "--skill"];
 const LISTING_FLAGS = [...TOP_FLAGS, "--data-dir", "--json"];
@@ -33,7 +34,7 @@ export function serveHelp(argv: string[], python: string | null): number | undef
     }
     const errno = errnoOf(error);
     const exit = reportCrash(errno, true);
-    finish(call, 1, python, errno);
+    finish(call, 1, python, osCrash(errno));
     return exit;
   }
   finish(call, 0, python);
@@ -112,7 +113,7 @@ export async function serveListing(kind: Kind, listing: Listing, argv: string[],
   } else {
     const crashed = out.pythonCrash();
     if (crashed !== undefined) {
-      finish(call, 1, python, crashed.errno);
+      finish(call, 1, python, osCrash(crashed.errno));
       return crashed.exit;
     }
     if (shown.complaint !== undefined) out.complain(shown.complaint);

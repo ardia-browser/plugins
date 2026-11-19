@@ -37,6 +37,10 @@ export function writeAll(fd: number, text: string | Uint8Array): void {
 const INTERRUPT_POLL_MS = 50;
 let abandoned = false;
 
+export function abandonWork(): void {
+  abandoned = true;
+}
+
 export function abandonedOutput(): boolean {
   return abandoned;
 }
