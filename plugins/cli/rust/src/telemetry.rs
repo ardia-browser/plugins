@@ -51,8 +51,9 @@ pub struct Call {
     started_at: f64,
     pub command: String,
     pub subcommand: Option<String>,
-    pub allowed_flags: &'static [&'static str],
+    pub allowed_flags: Vec<&'static str>,
     pub error_code: Option<String>,
+    pub metrics: Map,
 }
 
 impl Call {
@@ -63,8 +64,9 @@ impl Call {
             started_at: clock::now(),
             command: "none".into(),
             subcommand: None,
-            allowed_flags: &[],
+            allowed_flags: Vec::new(),
             error_code: None,
+            metrics: Map::new(),
         }
     }
 
@@ -152,6 +154,10 @@ pub fn names_test_endpoint(tokens: &[String]) -> bool {
 
 pub fn test_endpoint_env() -> bool {
     TEST_ENDPOINT_ENV.iter().any(|name| paths::env_set(name).is_some())
+}
+
+pub fn shareable() -> bool {
+    !opted_out() && logs_url().is_some() && !test_endpoint_env()
 }
 
 pub fn cli_target(argv: &[String]) -> Option<Target> {
@@ -311,16 +317,18 @@ fn whole_ms(value: f64) -> Value {
     Value::Int(value.round_ties_even().clamp(0.0, MAX_MS) as i128)
 }
 
-fn timings(call: &Call, into: &mut Vec<(&'static str, Value)>) {
+fn timings(call: &Call) -> Map {
     let elapsed = call.started.elapsed().as_secs_f64() * 1000.0;
     let startup = process_started_at().map(|started| (call.started_at - started) * 1000.0);
+    let mut values = call.metrics.clone();
     match startup {
         Some(startup) if (0.0..=MAX_MS).contains(&startup) => {
-            into.push(("startup_ms", whole_ms(startup)));
-            into.push(("total_ms", whole_ms(startup + elapsed)));
+            values.insert("startup_ms", whole_ms(startup));
+            values.insert("total_ms", whole_ms(startup + elapsed));
         }
-        _ => into.push(("total_ms", whole_ms(elapsed))),
+        _ => values.insert("total_ms", whole_ms(elapsed)),
     }
+    values
 }
 
 fn error_code_ok(code: &str) -> bool {
@@ -330,14 +338,19 @@ fn error_code_ok(code: &str) -> bool {
 
 fn command_record(call: &Call, status: i64, distinct_id: &str, environment: &str, doc: Option<&Map>) -> Value {
     let error_code = call.error_code.as_deref().filter(|code| error_code_ok(code)).map_or(Value::Null, Value::str);
-    let mut properties = vec![
+    let mut properties: Vec<(&str, Value)> = vec![
         ("command", Value::str(&call.command)),
         ("subcommand", call.subcommand.as_deref().map_or(Value::Null, Value::str)),
         ("exit_code", Value::Int(i128::from(status))),
         ("error_code", error_code),
-        ("flags", Value::str(&flag_names(&call.argv, call.allowed_flags))),
+        ("flags", Value::str(&flag_names(&call.argv, &call.allowed_flags))),
     ];
-    timings(call, &mut properties);
+    let measured = timings(call);
+    for (key, value) in measured.iter() {
+        if !properties.iter().any(|(name, _)| *name == key.as_str()) {
+            properties.push((key.as_str(), value.clone()));
+        }
+    }
     properties.push(("cli_version", Value::str(version())));
     properties.push(("$environment", Value::str(environment)));
     properties.push(("served_by", Value::str(SERVED_BY)));

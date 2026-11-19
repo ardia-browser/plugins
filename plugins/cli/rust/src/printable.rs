@@ -65,7 +65,7 @@ impl Output {
     }
 }
 
-fn quiet_stdout() {
+pub fn quiet_stdout() {
     let null = std::ffi::CString::new("/dev/null").unwrap_or_default();
     unsafe {
         let sink = libc::open(null.as_ptr(), libc::O_WRONLY);

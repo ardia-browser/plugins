@@ -43,6 +43,29 @@ pub fn catch_interrupts() -> Interrupts {
     Interrupts(previous)
 }
 
+pub struct UnrestartedInterrupts(libc::sigaction);
+
+impl Drop for UnrestartedInterrupts {
+    fn drop(&mut self) {
+        unsafe { libc::sigaction(libc::SIGINT, &self.0, std::ptr::null_mut()) };
+    }
+}
+
+pub fn catch_interrupts_unrestarted() -> UnrestartedInterrupts {
+    let handler: extern "C" fn(libc::c_int) = on_interrupt;
+    unsafe {
+        let mut previous: libc::sigaction = std::mem::zeroed();
+        libc::sigaction(libc::SIGINT, std::ptr::null(), &mut previous);
+        if previous.sa_sigaction != libc::SIG_IGN {
+            let mut wanted: libc::sigaction = std::mem::zeroed();
+            wanted.sa_sigaction = handler as libc::sighandler_t;
+            libc::sigemptyset(&mut wanted.sa_mask);
+            libc::sigaction(libc::SIGINT, &wanted, std::ptr::null_mut());
+        }
+        UnrestartedInterrupts(previous)
+    }
+}
+
 pub fn interrupted() -> bool {
     INTERRUPTED.load(Ordering::SeqCst)
 }
@@ -192,7 +215,7 @@ pub fn g(value: f64) -> String {
 }
 
 #[cfg(target_os = "macos")]
-fn peer_uid(stream: &UnixStream) -> Option<u32> {
+pub fn peer_uid(stream: &UnixStream) -> Option<u32> {
     let mut raw = [0u8; 76];
     let mut size = raw.len() as libc::socklen_t;
     let result = unsafe { libc::getsockopt(stream.as_raw_fd(), 0, 1, raw.as_mut_ptr().cast(), &mut size) };
@@ -203,7 +226,7 @@ fn peer_uid(stream: &UnixStream) -> Option<u32> {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn peer_uid(stream: &UnixStream) -> Option<u32> {
+pub fn peer_uid(stream: &UnixStream) -> Option<u32> {
     let mut credentials: libc::ucred = unsafe { std::mem::zeroed() };
     let mut size = std::mem::size_of::<libc::ucred>() as libc::socklen_t;
     let result = unsafe {

@@ -1,3 +1,4 @@
+pub mod browse;
 pub mod caller;
 pub mod clock;
 pub mod commands;
@@ -16,6 +17,7 @@ use commands::{Kind, Listing, Rendered};
 use json::Value;
 use std::ffi::OsString;
 use std::io::Write;
+use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 
@@ -41,6 +43,7 @@ pub enum Route {
     Version,
     Help,
     Listing(Kind, Listing),
+    Browse(browse::Plan),
     Python,
 }
 
@@ -65,11 +68,12 @@ pub fn serves(label: &str) -> bool {
 }
 
 impl Route {
-    pub fn label(&self) -> Option<&'static str> {
+    pub fn label(&self) -> Option<&str> {
         match self {
             Route::Version => Some("--version"),
             Route::Help => Some("--help"),
             Route::Listing(kind, _) => Some(kind.name()),
+            Route::Browse(plan) => Some(&plan.label),
             Route::Python => None,
         }
     }
@@ -88,6 +92,9 @@ fn parse_route(argv: &[String]) -> Route {
     }
     if argv.is_empty() || argv == ["--help"] || argv == ["-h"] {
         return Route::Help;
+    }
+    if let Some(plan) = browse::plan(argv) {
+        return Route::Browse(plan);
     }
     let mut listing = Listing::default();
     let mut index = 0;
@@ -180,6 +187,23 @@ impl Drop for Lease {
     }
 }
 
+fn refeed_stdin(bytes: &[u8]) {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_nanos());
+    let path = std::env::temp_dir().join(format!("ardia-stdin-{}-{stamp}", std::process::id()));
+    let opened = std::fs::OpenOptions::new().read(true).write(true).create_new(true).mode(0o600).open(&path);
+    let Ok(mut file) = opened else { return };
+    let _ = std::fs::remove_file(&path);
+    if file.write_all(bytes).is_err() {
+        return;
+    }
+    unsafe {
+        libc::lseek(std::os::fd::AsRawFd::as_raw_fd(&file), 0, libc::SEEK_SET);
+        libc::dup2(std::os::fd::AsRawFd::as_raw_fd(&file), 0);
+    }
+}
+
 fn pass_through(python: Option<&Path>, argv: &[OsString]) -> i32 {
     let Some(python) = python.filter(|python| python.exists()) else {
         let place = python.map_or_else(|| "next to this ardia".to_string(), |python| python.display().to_string());
@@ -206,7 +230,7 @@ fn pass_through(python: Option<&Path>, argv: &[OsString]) -> i32 {
 fn serve_help(argv: &[String], python: Option<&Path>) -> Option<i32> {
     let text = help::render()?;
     let mut call = telemetry::Call::new(argv);
-    call.allowed_flags = TOP_FLAGS;
+    call.allowed_flags = TOP_FLAGS.to_vec();
     let mut stdout = std::io::stdout().lock();
     let written = stdout.write_all(printable::inert(&text).as_bytes()).and_then(|_| stdout.flush());
     drop(stdout);
@@ -227,7 +251,8 @@ fn serve_listing(kind: Kind, listing: &Listing, argv: &[String], python: Option<
         Kind::Tabs => TABS_FLAGS,
         Kind::Groups => GROUPS_FLAGS,
         Kind::Windows | Kind::Commands => LISTING_FLAGS,
-    };
+    }
+    .to_vec();
     let interrupts = control::catch_interrupts();
     let caller = caller::current();
     let reply = control::call(listing.data_dir.as_deref(), kind.method(), listing.params(kind), &caller);
@@ -299,6 +324,15 @@ pub fn run() -> i32 {
         }
         Route::Help => serve_help(&argv, python.as_deref()),
         Route::Listing(kind, listing) => serve_listing(kind, &listing, &argv, python.as_deref()),
+        Route::Browse(plan) => match browse::serve(&plan, &argv, python.as_deref()) {
+            browse::Served::Status(status) => Some(status as i32),
+            browse::Served::Python(stdin) => {
+                if let Some(stdin) = stdin {
+                    refeed_stdin(&stdin);
+                }
+                None
+            }
+        },
         Route::Python => None,
     };
     match served {
@@ -384,7 +418,6 @@ mod tests {
             &["--port", "9222", "tabs"],
             &["tabs", "--data-dir"],
             &["--data-dir"],
-            &["browse", "snapshot"],
             &["config", "get", "x"],
             &["--json"],
         ] {
