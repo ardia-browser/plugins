@@ -99,7 +99,7 @@ class Connection:
         if self.socket is None or self.lost.is_set():
             raise ConnectionLost()
 
-    async def execute_command(self, command: dict, timeout: float = 60) -> dict:
+    async def execute_command(self, command: dict, timeout: float | None = 60) -> dict:
         from ardia_cli import wsclient
 
         guard.check_command(command)
@@ -109,10 +109,10 @@ class Connection:
         future = asyncio.get_running_loop().create_future()
         self.pending[ident] = future
         loop = asyncio.get_running_loop()
-        deadline = loop.time() + timeout
+        deadline = None if timeout is None else loop.time() + timeout
         try:
             await asyncio.wait_for(self.socket.send(json.dumps({**command, "id": ident})), timeout)
-            reply = await asyncio.wait_for(future, max(0.0, deadline - loop.time()))
+            reply = await asyncio.wait_for(future, None if deadline is None else max(0.0, deadline - loop.time()))
         except asyncio.TimeoutError:
             raise CommandTimeout(method, timeout) from None
         except wsclient.Closed:

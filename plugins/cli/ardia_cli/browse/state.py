@@ -379,10 +379,11 @@ class State:
         return (focused or visible or [None])[0]
 
     async def probe(self, target_id: str) -> tuple[bool, bool]:
+        from ardia_cli.browse.connection import claimed_attach
         from ardia_cli.browse.page import WORLD_NAME
 
         try:
-            attached = await self.browser.send("Target.attachToTarget", {"targetId": target_id, "flatten": True}, timeout=PROBE_TIMEOUT)
+            attached = await claimed_attach(self.browser, "Target.attachToTarget", {"targetId": target_id, "flatten": True}, PROBE_TIMEOUT)
         except BrowseError:
             return False, False
         session = attached["sessionId"]

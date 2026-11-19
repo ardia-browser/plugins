@@ -6,6 +6,8 @@ from ardia_cli.browse.errors import POLICY_REFUSAL, CdpError, CdpTimeout, Connec
 
 MAX_MESSAGE = 256 * 1024 * 1024
 CONNECT_TIMEOUT = 10
+ATTACH_WAIT = 30
+DETACH_WAIT = 10
 EVENTS = (
     "Target.targetCreated",
     "Target.targetDestroyed",
@@ -63,6 +65,27 @@ def failure(method: str, error) -> Exception:
     return CdpError(method, detail, error.code)
 
 
+def detach_unclaimed(browser, attaching: asyncio.Future) -> None:
+    if attaching.cancelled() or attaching.exception() is not None:
+        return
+    session = (attaching.result() or {}).get("sessionId")
+    if session:
+        detaching = asyncio.ensure_future(browser.send("Target.detachFromTarget", {"sessionId": session}, timeout=DETACH_WAIT))
+        detaching.add_done_callback(lambda done: done.cancelled() or done.exception())
+
+
+async def claimed_attach(browser, method: str, params: dict | None = None, wait: float | None = None) -> dict:
+    wait = ATTACH_WAIT if wait is None else wait
+    attaching = asyncio.ensure_future(browser.send(method, params, timeout=None))
+    try:
+        return await asyncio.wait_for(asyncio.shield(attaching), wait)
+    except (asyncio.CancelledError, asyncio.TimeoutError) as error:
+        attaching.add_done_callback(lambda done: detach_unclaimed(browser, done))
+        if isinstance(error, asyncio.TimeoutError):
+            raise CdpTimeout(method, wait) from None
+        raise
+
+
 class Browser:
     def __init__(self, endpoint, on_event):
         self.endpoint = endpoint
@@ -97,7 +120,7 @@ class Browser:
     def alive(self) -> bool:
         return self.link is not None and not self.link.lost.is_set()
 
-    async def send(self, method: str, params: dict | None = None, session: str | None = None, timeout: float = 30, mutation: bool = False):
+    async def send(self, method: str, params: dict | None = None, session: str | None = None, timeout: float | None = 30, mutation: bool = False):
         from ardia_cli import cdp
 
         method = getattr(method, "value", method)

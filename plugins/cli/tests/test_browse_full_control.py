@@ -92,6 +92,46 @@ class FakeState:
         return "t" + target_id[1:]
 
 
+class LinkSocket:
+    def __init__(self):
+        self.sent = []
+        self.inbox = asyncio.Queue()
+
+    async def send(self, text):
+        self.sent.append(json.loads(text))
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        message = await self.inbox.get()
+        if message is None:
+            raise StopAsyncIteration
+        return json.dumps(message)
+
+    async def close(self):
+        self.inbox.put_nowait(None)
+
+    def methods(self, name):
+        return [message for message in self.sent if message["method"] == name]
+
+
+def linked_browser():
+    from ardia_cli.browse.connection import Browser
+    from ardia_cli.cdp import Connection
+
+    browser = Browser(None, lambda *event: None)
+    browser.link = Connection("ws://fake")
+    browser.link.socket = LinkSocket()
+    browser.link.reader = asyncio.ensure_future(browser.link._read())
+    return browser, browser.link.socket
+
+
+async def settle(rounds=50):
+    for _ in range(rounds):
+        await asyncio.sleep(0)
+
+
 def raw_sent(state):
     return [row for row in state.browser_sent if not row[0].startswith("Target.attachTo")]
 
@@ -328,6 +368,66 @@ class RawCdp(unittest.TestCase):
             cached = "S-late" in rawcdp.of(state).sessions.values()
             detached = ("Target.detachFromTarget", {"sessionId": "S-late"}) in [row[:2] for row in state.browser_sent]
             self.assertTrue(cached or detached, (run.__name__, state.browser_sent))
+
+    def test_an_attach_answered_after_any_wait_is_detached(self):
+        from unittest import mock
+
+        from ardia_cli.browse import rawcdp
+        from ardia_cli.browse.errors import CdpTimeout
+
+        async def late(argv, give_up):
+            state = FakeState()
+            state.browser, sock = linked_browser()
+            with mock.patch.object(rawcdp, "ATTACH_TIMEOUT", 0.05), mock.patch.object(rawcdp, "LATE_ATTACH_GRACE", 0.05, create=True):
+                call = asyncio.ensure_future(commands.COMMANDS["cdp"](ctx(state), argv))
+                while not sock.sent:
+                    await asyncio.sleep(0)
+                if give_up == "cancel":
+                    call.cancel()
+                with self.assertRaises((asyncio.CancelledError, CdpTimeout)):
+                    await call
+                await asyncio.sleep(0.3)
+            sock.inbox.put_nowait({"id": sock.sent[0]["id"], "result": {"sessionId": "S-late"}})
+            await settle()
+            detached = [message["params"] for message in sock.methods("Target.detachFromTarget")]
+            await state.browser.close()
+            return detached, rawcdp.of(state).sessions
+
+        for argv in (["Runtime.evaluate"], ["Browser.getVersion", "--target", "browser"]):
+            for give_up in ("cancel", "timeout"):
+                detached, sessions = asyncio.run(late(argv, give_up))
+                self.assertEqual(detached, [{"sessionId": "S-late"}], (argv, give_up))
+                self.assertNotIn("S-late", sessions.values(), (argv, give_up))
+
+    def test_the_pages_own_attach_answered_late_is_detached(self):
+        from unittest import mock
+
+        from ardia_cli.browse import connection
+        from ardia_cli.browse.page import Page
+
+        async def late(give_up):
+            state = SimpleNamespace(sessions={})
+            browser, sock = linked_browser()
+            page = Page(state, "T1")
+            with mock.patch.object(connection, "ATTACH_WAIT", 0.05, create=True):
+                attaching = asyncio.ensure_future(page.attach(browser))
+                while not sock.sent:
+                    await asyncio.sleep(0)
+                if give_up == "cancel":
+                    attaching.cancel()
+                with self.assertRaises((asyncio.CancelledError, asyncio.TimeoutError, connection.CdpTimeout)):
+                    await asyncio.wait_for(attaching, 1)
+                await asyncio.sleep(0.2)
+            sock.inbox.put_nowait({"id": sock.sent[0]["id"], "result": {"sessionId": "S-page-late"}})
+            await settle()
+            detached = [message["params"] for message in sock.methods("Target.detachFromTarget")]
+            await browser.close()
+            return detached, state.sessions, page.session_id
+
+        for give_up in ("cancel", "timeout"):
+            detached, sessions, session = asyncio.run(late(give_up))
+            self.assertEqual(detached, [{"sessionId": "S-page-late"}], give_up)
+            self.assertEqual((sessions, session), ({}, None), give_up)
 
     def test_cdp_is_a_known_mutating_command(self):
         self.assertIn("cdp", commands.MUTATING)

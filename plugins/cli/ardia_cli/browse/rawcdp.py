@@ -1,12 +1,9 @@
-import asyncio
-
-from ardia_cli.browse.errors import BrowseError, CdpError, CdpTimeout, Gated
+from ardia_cli.browse.errors import BrowseError, CdpError, Gated
 
 BROWSER = "browser"
 SESSION_GONE = ("Session with given id not found", "No session with given id", "no attached session has that sessionId")
 SESSION_NOT_FOUND_CODE = -32001
 ATTACH_TIMEOUT = 10
-LATE_ATTACH_GRACE = 30
 RESET_NOTICE = ("→ This session's DevTools connection was reopened since the last cdp call (it closes after 30 s idle), "
                 "so cdp got a fresh session there: domains and settings earlier cdp calls turned on are off again")
 
@@ -43,25 +40,10 @@ def session_gone(error: CdpError) -> bool:
     return error.cdp_code == SESSION_NOT_FOUND_CODE or any(gone in error.cdp_message for gone in SESSION_GONE)
 
 
-def detach_unclaimed(browser, attaching: asyncio.Future) -> None:
-    if attaching.cancelled() or attaching.exception() is not None:
-        return
-    session = (attaching.result() or {}).get("sessionId")
-    if session:
-        detaching = asyncio.ensure_future(browser.send("Target.detachFromTarget", {"sessionId": session}, timeout=ATTACH_TIMEOUT))
-        detaching.add_done_callback(lambda done: done.cancelled() or done.exception())
-
-
 async def attach_reply(state, method: str, params: dict | None = None) -> dict:
-    browser = state.browser
-    attaching = asyncio.ensure_future(browser.send(method, params, timeout=ATTACH_TIMEOUT + LATE_ATTACH_GRACE))
-    try:
-        return await asyncio.wait_for(asyncio.shield(attaching), ATTACH_TIMEOUT)
-    except (asyncio.CancelledError, asyncio.TimeoutError) as error:
-        attaching.add_done_callback(lambda done: detach_unclaimed(browser, done))
-        if isinstance(error, asyncio.TimeoutError):
-            raise CdpTimeout(method, ATTACH_TIMEOUT) from None
-        raise
+    from ardia_cli.browse.connection import claimed_attach
+
+    return await claimed_attach(state.browser, method, params, ATTACH_TIMEOUT)
 
 
 async def attach(state, key: str) -> str | None:
