@@ -7,7 +7,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from ardia_cli import redact as redaction
-from ardia_cli.browse import changes, media, snapshot
+import difflib
+
+from ardia_cli.browse import changes, media, readurl, snapshot
 
 data_dir = Path(sys.argv[1])
 wanted = set(sys.argv[2].split(",")) if len(sys.argv) > 2 and sys.argv[2] else None
@@ -63,4 +65,17 @@ timed("png_decode_1280x800", 3, lambda: media.decode_png(shot_a))
 timed("png_compare_total", 3, lambda: media.compare_pngs(shot_a, shot_b, 0.1, None))
 image = media.decode_png(shot_a)
 timed("png_encode_deflate6", 3, lambda: media.encode_png(image))
+big_html = (data_dir.parent / "big.html").read_text()
+
+
+def extract():
+    extractor = readurl.TextExtractor()
+    extractor.feed(big_html)
+    return extractor.text()
+
+
+timed("readurl_extract_577KB", 3, extract)
+before_lines = text.splitlines()
+after_lines = [line + " changed" if index % 997 == 0 else line for index, line in enumerate(before_lines)]
+timed("diff_snapshot_unified", 3, lambda: list(difflib.unified_diff(before_lines, after_lines, "before", "after", lineterm="")))
 print(json.dumps({"runtime": "python", "ms": results}))

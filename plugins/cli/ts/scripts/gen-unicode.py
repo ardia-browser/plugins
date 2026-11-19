@@ -1,4 +1,6 @@
 import argparse
+import html.entities
+import json
 import sys
 import unicodedata
 from pathlib import Path
@@ -58,6 +60,7 @@ def source() -> str:
         "DECIMAL_ZEROS": " ".join(f"{code:x}" for code in decimal_starts()),
         "CASEFOLD": casefolds(),
     }
+    tables["HTML5_ENTITIES"] = json.dumps(html.entities.html5, ensure_ascii=True, separators=(",", ":"))
     lines = [f"export const {name} = {json_string(value)};" for name, value in tables.items()]
     return "\n".join(lines) + "\n"
 
@@ -68,7 +71,7 @@ def json_string(value: str) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Writes ts/src/pylib/unicode-data.ts from this Python's str methods "
-                                     "(isprintable, isdigit, isalnum, isalpha, isdecimal, casefold). --check compares instead.")
+                                     "(isprintable, isdigit, isalnum, isalpha, isdecimal, casefold) and html.entities.html5. --check compares instead.")
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     text = source()

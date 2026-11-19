@@ -188,3 +188,24 @@ export function headPoints(text: string, size: number): string {
   }
   return text.slice(0, units);
 }
+
+const LINE_BREAKS = new Set([0x0a, 0x0b, 0x0c, 0x0d, 0x1c, 0x1d, 0x1e, 0x85, 0x2028, 0x2029]);
+
+export function splitlines(text: string, keepends = false): string[] {
+  const out: string[] = [];
+  let start = 0;
+  let index = 0;
+  while (index < text.length) {
+    const code = text.charCodeAt(index);
+    if (!LINE_BREAKS.has(code)) {
+      index += 1;
+      continue;
+    }
+    const end = code === 0x0d && text.charCodeAt(index + 1) === 0x0a ? index + 2 : index + 1;
+    out.push(text.slice(start, keepends ? end : index));
+    start = end;
+    index = end;
+  }
+  if (start < text.length) out.push(text.slice(start));
+  return out;
+}

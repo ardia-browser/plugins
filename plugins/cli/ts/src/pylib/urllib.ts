@@ -138,11 +138,15 @@ function checkNetloc(netloc: string): void {
   }
 }
 
-export function urlsplit(input: string): SplitResult {
+export function urlsplit(input: string, defaultScheme = ""): SplitResult {
   let start = 0;
   while (start < input.length && input.charCodeAt(start) <= 0x20) start += 1;
   let url = input.slice(start).replace(/[\t\r\n]/g, "");
-  let scheme = "";
+  let from = 0;
+  let to = defaultScheme.length;
+  while (from < to && defaultScheme.charCodeAt(from) <= 0x20) from += 1;
+  while (to > from && defaultScheme.charCodeAt(to - 1) <= 0x20) to -= 1;
+  let scheme = defaultScheme.slice(from, to).replace(/[\t\r\n]/g, "");
   let netloc = "";
   let query = "";
   let fragment = "";
@@ -220,4 +224,74 @@ export function parseQsl(query: string, keepBlank = false): [string, string][] {
     if (value || keepBlank) out.push([unquotePlus(name), unquotePlus(value)]);
   }
   return out;
+}
+
+const USES_RELATIVE = new Set(["", "ftp", "http", "gopher", "nntp", "imap", "wais", "file", "https", "shttp", "mms", "prospero", "rtsp", "rtsps", "rtspu", "sftp", "svn", "svn+ssh", "ws", "wss"]);
+const USES_NETLOC = new Set(["", "ftp", "http", "gopher", "nntp", "telnet", "imap", "wais", "file", "mms", "https", "shttp", "snews", "prospero", "rtsp", "rtsps", "rtspu", "rsync", "svn", "svn+ssh", "sftp", "nfs", "git", "git+ssh", "ws", "wss", "itms-services"]);
+const USES_PARAMS = new Set(["", "ftp", "hdl", "prospero", "http", "imap", "https", "shttp", "rtsp", "rtsps", "rtspu", "sip", "sips", "mms", "sftp", "tel"]);
+
+type Parsed = { scheme: string; netloc: string; path: string; params: string; query: string; fragment: string };
+
+export function urlparse(url: string, defaultScheme = ""): Parsed {
+  const split = urlsplit(url, defaultScheme);
+  let path = split.path;
+  let params = "";
+  if (USES_PARAMS.has(split.scheme) && path.includes(";")) {
+    let at: number;
+    if (path.includes("/")) at = path.indexOf(";", path.lastIndexOf("/"));
+    else at = path.indexOf(";");
+    if (at >= 0) {
+      params = path.slice(at + 1);
+      path = path.slice(0, at);
+    }
+  }
+  return { scheme: split.scheme, netloc: split.netloc, path, params, query: split.query, fragment: split.fragment };
+}
+
+export function urlunsplit(scheme: string, netloc: string, path: string, query: string, fragment: string): string {
+  let url = path;
+  if (netloc) {
+    if (url && !url.startsWith("/")) url = `/${url}`;
+    url = `//${netloc}${url}`;
+  } else if (url.startsWith("//")) url = `//${url}`;
+  else if (scheme && USES_NETLOC.has(scheme) && (!url || url.startsWith("/"))) url = `//${url}`;
+  if (scheme) url = `${scheme}:${url}`;
+  if (query) url = `${url}?${query}`;
+  if (fragment) url = `${url}#${fragment}`;
+  return url;
+}
+
+function urlunparse(parts: Parsed): string {
+  return urlunsplit(parts.scheme, parts.netloc, parts.params ? `${parts.path};${parts.params}` : parts.path, parts.query, parts.fragment);
+}
+
+export function urljoin(base: string, url: string): string {
+  if (!base) return url;
+  if (!url) return base;
+  const from = urlparse(base);
+  const to = urlparse(url, from.scheme);
+  if (to.scheme !== from.scheme || !USES_RELATIVE.has(to.scheme)) return url;
+  let netloc = to.netloc;
+  if (USES_NETLOC.has(to.scheme)) {
+    if (netloc) return urlunparse(to);
+    netloc = from.netloc;
+  }
+  if (!to.path && !to.params) {
+    return urlunparse({ ...to, netloc, path: from.path, params: from.params, query: to.query || from.query });
+  }
+  const baseParts = from.path.split("/");
+  if (baseParts.at(-1) !== "") baseParts.pop();
+  let segments: string[];
+  if (to.path.startsWith("/")) segments = to.path.split("/");
+  else {
+    segments = [...baseParts, ...to.path.split("/")];
+    if (segments.length > 2) segments = [segments[0] as string, ...segments.slice(1, -1).filter((segment) => segment), segments.at(-1) as string];
+  }
+  const resolved: string[] = [];
+  for (const segment of segments) {
+    if (segment === "..") resolved.pop();
+    else if (segment !== ".") resolved.push(segment);
+  }
+  if (segments.at(-1) === "." || segments.at(-1) === "..") resolved.push("");
+  return urlunparse({ ...to, netloc, path: resolved.join("/") || "/" });
 }

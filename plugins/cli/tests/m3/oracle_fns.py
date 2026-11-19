@@ -166,3 +166,7 @@ oracle_fns_p2.register(oracle, secrets_set)
 import oracle_fns_p2b
 
 oracle_fns_p2b.register(oracle)
+
+import oracle_fns_p3
+
+oracle_fns_p3.register(oracle)

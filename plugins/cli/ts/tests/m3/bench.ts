@@ -6,6 +6,9 @@ import { comparePixels, comparePngs, decodePng, encodePng } from "../../src/brow
 import { render } from "../../src/browse/snapshot/render.ts";
 import { buildTree, type Node, REF_ROLES, walk } from "../../src/browse/snapshot/tree.ts";
 import { addSecret, redact } from "../../src/redact.ts";
+import { extractHtml } from "../../src/browse/read/readurl.ts";
+import { unifiedDiff } from "../../src/pylib/difflib.ts";
+import { splitlines } from "../../src/pylib/str.ts";
 
 const [dataDir = ".", only = ""] = process.argv.slice(2);
 const wanted = only ? new Set(only.split(",")) : null;
@@ -58,5 +61,10 @@ const imageB = decodePng(shotB);
 timed("png_compare_pixels", 3, () => comparePixels(imageA, imageB, 0.1));
 timed("png_compare_total", 3, () => comparePngs(shotA, shotB, 0.1));
 timed("png_encode_deflate6", 3, () => encodePng(imageA));
+const bigHtml = fs.readFileSync(path.join(dataDir, "..", "big.html"), "utf8");
+timed("readurl_extract_577KB", 3, () => extractHtml(bigHtml));
+const beforeLines = splitlines(text);
+const afterLines = beforeLines.map((line, index) => (index % 997 === 0 ? `${line} changed` : line));
+timed("diff_snapshot_unified", 3, () => unifiedDiff(beforeLines, afterLines, "before", "after", "", "", 3, ""));
 results.jit_check_loop = Math.round(jitCheck());
 process.stdout.write(`${JSON.stringify({ runtime: "ts", ms: results })}\n`);

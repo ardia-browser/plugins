@@ -13,6 +13,7 @@ import { casefold } from "../../src/pylib/unicode.ts";
 import { quote, quotePlus, unquote, unquotePlus, urlsplit } from "../../src/pylib/urllib.ts";
 import { bool, float, num, optionalFloat, optionalText, text, texts, toValue } from "./values.ts";
 import { P2_FUNCTIONS } from "./oracle-fns-p2.ts";
+import { P3_FUNCTIONS } from "./oracle-fns-p3.ts";
 
 type Fn = (...args: Value[]) => Value;
 
@@ -161,4 +162,5 @@ export const FUNCTIONS: Record<string, Fn> = {
   "py.round_to": (value, digits) => new Float(roundTo(num(value), num(digits))),
   "py.len": (value) => BigInt(pyLen(text(value))),
   ...P2_FUNCTIONS,
+  ...P3_FUNCTIONS,
 };
