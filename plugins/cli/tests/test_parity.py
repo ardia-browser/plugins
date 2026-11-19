@@ -491,6 +491,35 @@ class EntryProcess:
         self.assertEqual(done.returncode, 127)
         self.assertEqual(os.listdir(bare / ".leases"), [])
 
+    def bare_install(self, python_text: str | None = None, mode: int = 0o755) -> Path:
+        bare = Path(tempfile.mkdtemp(prefix="b", dir=self.case))
+        (bare / "bin").mkdir()
+        (bare / ".leases").mkdir()
+        (bare / "python" / "bin").mkdir(parents=True)
+        shutil.copy2(harness.entry_binary(self.entry), bare / "bin" / "ardia")
+        python = bare / "python" / "bin" / "python3"
+        python.write_text(python_text if python_text is not None else f'#!/bin/sh\nexec "{self.python}" "$@"\n')
+        python.chmod(mode)
+        return bare
+
+    def couldnt_run(self, bare: Path, reason: str) -> bytes:
+        return f"ardia: couldn't run {os.path.realpath(bare)}/python/bin/python3: {reason}\n".encode()
+
+    def test_a_raw_hand_off_keeps_the_environment_out_of_every_command_line(self):
+        log = self.case / "exec.log"
+        wrapper = (f'#!/bin/sh\nfor word in "$@"; do printf "%s\\n" "$word" >> "{log}"; done\n'
+                   f'[ "$2" = "-m" ] && printf "note=%s\\n" "$(printenv ARDIA_NOTE | /usr/bin/xxd -p)" >> "{log}"\n'
+                   f'exec "{self.python}" "$@"\n')
+        bare = self.bare_install(wrapper)
+        secret = "parity-secret-credential-0123"
+        env = self.environment({"ARDIA_SECRET": secret, "ARDIA_NOTE": "n\udcfe"})
+        done = subprocess.run([str(bare / "bin" / "ardia"), "nosuch-\udcff"], env=env, capture_output=True, timeout=30)
+        self.assertEqual((done.returncode, done.stderr), (2, b"ardia: unknown command 'nosuch-\\udcff' (see ardia --help)\n"))
+        logged = log.read_bytes()
+        self.assertNotIn(secret.encode().hex().encode(), logged)
+        self.assertNotIn(secret.encode(), logged)
+        self.assertIn(b"note=" + b"n\xfe\n".hex().encode(), logged)
+
     def test_a_lease_is_held_while_it_runs(self):
         leases = self.root / ".leases"
         leases.mkdir(exist_ok=True)

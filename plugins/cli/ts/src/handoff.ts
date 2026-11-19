@@ -48,7 +48,7 @@ function decodedLossily(argv: string[]): boolean {
   return argv.some(lossy) || Object.entries(process.env).some(([key, value]) => lossy(key) || lossy(value));
 }
 
-export async function handOff(argv: string[], python: string | null = bundledPython()): Promise<number> {
+export async function handOff(argv: string[], python: string | null = bundledPython(), lease?: string): Promise<number> {
   if (python === null || !existsSync(python)) {
     complain(`ardia: this command runs on the bundled Python, which isn't there (${python ?? "next to this ardia"})\n`);
     return 127;
@@ -56,8 +56,8 @@ export async function handOff(argv: string[], python: string | null = bundledPyt
   try {
     if (decodedLossily(argv)) {
       const raw = await import("./raw-handoff.ts");
-      const words = raw.rawWords(python);
-      if (words !== undefined) raw.execWithRawBytes(python, words);
+      const folder = await raw.parcelRawWords();
+      if (folder !== undefined) raw.execTrampoline(python, folder, lease);
     }
     process.execve?.(python, [python, "-I", "-m", "ardia_cli", ...argv], process.env);
   } catch (error) {

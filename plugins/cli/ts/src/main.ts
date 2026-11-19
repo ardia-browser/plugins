@@ -32,14 +32,14 @@ async function main(argv: string[]): Promise<number> {
   const python = bundledPython(root);
   const lease = takeLease(root);
   try {
-    if (argv.some((word) => word.includes(LOSSY))) return await handOff(argv, python);
+    if (argv.some((word) => word.includes(LOSSY))) return await handOff(argv, python, lease);
     if (asksForVersion(argv) && servesNatively("--version")) {
       try {
         writeSync(1, `ardia ${cliVersion()}\n`);
       } catch {}
       return 0;
     }
-    return (await serve(argv, python)) ?? (await handOff(argv, python));
+    return (await serve(argv, python)) ?? (await handOff(argv, python, lease));
   } finally {
     dropLease(lease);
   }
