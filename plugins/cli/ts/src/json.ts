@@ -1,5 +1,5 @@
 import { decodeJsonBytes } from "./json-bytes.ts";
-import { codePoints, isHigh, joinPy, SPLIT_TEXT, splitsAfterHigh } from "./pystr.ts";
+import { codePoints, isHigh, SPLIT_TEXT, splitsAfterHigh } from "./pystr.ts";
 
 export class Float {
   constructor(readonly value: number) {}
@@ -73,6 +73,27 @@ export function parseText(text: string, depthLimit = Number.POSITIVE_INFINITY): 
 }
 
 const HEX = /^[0-9a-fA-F]{4}$/;
+
+class PyStringParts {
+  private parts: string[] = [];
+  private last = -1;
+
+  join(piece: string): void {
+    if (piece === "") return;
+    if (this.last >= 0 && isHigh(this.last) && splitsAfterHigh(piece.charCodeAt(0))) this.parts.push(SPLIT_TEXT);
+    this.append(piece);
+  }
+
+  append(piece: string): void {
+    if (piece === "") return;
+    this.parts.push(piece);
+    this.last = piece.charCodeAt(piece.length - 1);
+  }
+
+  text(): string {
+    return this.parts.length === 1 ? (this.parts[0] as string) : this.parts.join("");
+  }
+}
 
 class Parser {
   at = 0;
@@ -182,7 +203,7 @@ class Parser {
 
   string(): string | undefined {
     this.at += 1;
-    let out = "";
+    const parts = new PyStringParts();
     for (;;) {
       const start = this.at;
       while (this.at < this.text.length) {
@@ -190,12 +211,12 @@ class Parser {
         if (code === 0x22 || code === 0x5c || code < 0x20) break;
         this.at += 1;
       }
-      out = joinPy(out, this.text.slice(start, this.at));
+      parts.join(this.text.slice(start, this.at));
       const next = this.peek();
       if (next === undefined) return undefined;
       if (next === '"') {
         this.at += 1;
-        return out;
+        return parts.text();
       }
       if (next !== "\\") return undefined;
       this.at += 1;
@@ -203,7 +224,7 @@ class Parser {
       this.at += 1;
       const simple = escape === undefined ? undefined : ESCAPES[escape];
       if (simple !== undefined) {
-        out += simple;
+        parts.append(simple);
         continue;
       }
       if (escape !== "u") return undefined;
@@ -214,12 +235,12 @@ class Parser {
         this.at += 2;
         const low = this.hex4();
         if (low !== undefined && low >= 0xdc00 && low < 0xe000) {
-          out = joinPy(out, String.fromCodePoint(0x10000 + ((unit - 0xd800) << 10) + (low - 0xdc00)));
+          parts.join(String.fromCodePoint(0x10000 + ((unit - 0xd800) << 10) + (low - 0xdc00)));
           continue;
         }
         this.at = saved;
       }
-      out = joinPy(out, String.fromCharCode(unit));
+      parts.join(String.fromCharCode(unit));
     }
   }
 
