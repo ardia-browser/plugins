@@ -1170,7 +1170,7 @@ Python has none:
 | `command_failed` | any other daemon error line without a code |
 | `plugin_refused` | a plugin-mode refusal (status 77) |
 | `interrupted` | Ctrl-C while the client waited: on stdin, the credential, the connection or the answer (status 130) |
-| `internal_error` | the client crashed as Python's would, for instance on a reply that isn't JSON or isn't an object; `error` holds Python's crash line (status 1). If stdout itself failed, the crash line stays on stderr |
+| `internal_error` | the client crashed as Python's would, for instance on a reply that isn't JSON or isn't an object; `error` holds Python's crash line (status 1). If stdout itself failed, the crash line stays on stderr. Also a failing answer (nonzero exit) whose output isn't one JSON value: plain text (the text is the message), a `✗` line on stderr (its text, moved off stderr), nothing at all, or an error object whose `code` is null or not text. Valid JSON that isn't an object (a batch's list) is kept |
 | `tab_out_of_scope` | the engine's `ardia: tab_out_of_scope` refusal: the tab moved to another window or profile mid-step |
 | `nested_commands_refused` | plugin mode and a command that runs other commands (`batch`, `open --read`; status 77) |
 

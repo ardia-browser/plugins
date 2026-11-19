@@ -4,7 +4,7 @@ import { Call, finish } from "../telemetry.ts";
 import { cliVersion } from "../version.ts";
 import { cleanMetrics, exitOf, outputChars, processStatus, textOf } from "./answer.ts";
 import { allowedFlags, commandName, hoist, hoistFailure, jsonIntent, jsonIntentOfArgv, splitGlobals, truthy, Usage } from "./args.ts";
-import { codedLine, honestText } from "./codes.ts";
+import { codeJsonAnswer, honestText } from "./codes.ts";
 import { BrowseError, PythonCrash } from "./errors.ts";
 import { Interrupted } from "./exchange.ts";
 import { Printer } from "./output.ts";
@@ -65,7 +65,7 @@ function printAnswer(answer: Map<string, Value>, secrets: Secrets, printer: Prin
     call.metrics.set("output_chars", chars);
     return { status: 1, crash: invalid };
   }
-  if (asJson) answer.set("out", codedLine(answer.get("out"), answer.get("exit")) ?? null);
+  if (asJson) codeJsonAnswer(answer);
   else answer.set("err", honestText(answer.get("err")) ?? null);
   const code = answer.get("code");
   if (typeof code === "string") call.noteErrorCode(code);
