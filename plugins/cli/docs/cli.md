@@ -1151,6 +1151,11 @@ it relies on is `tests/parity/cases/ai-plugin-contract.json` (one case per item)
   | `find` | an AX search |
   | dialogs | `Page.handleJavaScriptDialog` |
 
+- Every credential on one token server shares that endpoint's tab registry (`Browse/` keyed by the endpoint's
+  instance), and a plugin credential's `Target.getTargets` lists only its own scope. So a plugin session numbers the tabs
+  it sees but never prunes the registry: its list can't tell a closed tab from another activity's. The person's
+  sessions still prune. **M3 F1:** key a plugin session's registry entries by its credential id, or keep never
+  pruning from a scoped list.
 - Commands that run other commands are refused with status 77 and code `nested_commands_refused`, before anything is
   sent: `batch` (and its aliases) and `open --read` (or `goto`/`navigate --read`, which runs `read`). `script` and
   `flow`, the other two, are refused above. The rules here are checked by the client on the outer command only; the

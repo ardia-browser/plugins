@@ -170,6 +170,9 @@ class State:
         for target_id in list(self.pages) + ([self.current] if self.current else []):
             if target_id not in self.target_infos:
                 self.forget_target(target_id)
+        if self.config.get("for_plugin"):
+            self.tab_ids.update(self.registry.numbers(self.instance, self.target_infos))
+            return pages
         every_target = {info["targetId"] for info in infos if info.get("targetId")}
         self.tab_ids.update(self.registry.numbers(self.instance, self.target_infos, present=every_target, taken_at=taken_at))
         return pages
