@@ -1,0 +1,134 @@
+# The browse daemon's differential harness
+
+The TypeScript browse daemon (M3) is done when it behaves like the Python one. This harness checks that: it runs the
+same `ardia browse` calls against both, records every CDP message each daemon exchanges with Chromium, and compares
+the normalized requests, the answers and the session folder. Everything runs from `plugins/cli`.
+
+## Pieces
+
+| Piece | File | What it does |
+|---|---|---|
+| Tap | `ts/tests/m3/tap.ts` (Bun, not shipped) | WebSocket proxy in front of one Chromium. Serves `/json/version` with its own URL, forwards frames unchanged and writes a JSONL transcript. It also injects faults. |
+| Replay | `ts/tests/m3/replay.ts` | The tap's `--replay` mode. It answers the daemon from a recording, with no browser. |
+| Scenario | `tests/m3/scenarios/<group>/<name>.json` | `steps`: `argv` (`{fixture}` is the fixture server, `{home}` the side's HOME), `session`, optional `stdin`. Optional: `window`, `env`, `seed`, `pace` (`asap` or `recorded`), `live_only` (a reason). |
+| Recording | `tests/m3/transcripts/<name>.jsonl.gz` and `.result.json.gz` (raw answers and files; normalized when compared, so a normalizer change needs no re-record) | The Python run's transcript and raw result. Re-record a scenario whenever Python changes. |
+| Runner | `python -m tests.m3` (`runner.py`, `side.py`) | One side = one Chromium, one tap and one daemon, isolated (HOME, TMPDIR, `ARDIA_CONFIG_HOME`, `ARDIA_CLI_HOME`, XDG and data dir all under the side's scratch folder). After the steps it snapshots the session folder, then runs `close --all`. |
+| Normalizer | `tests/m3/normalize.py` | Every rule is named in `RULES` and tested in `tests/test_m3_harness.py`. A rule that masks more than its named field is a review finding. |
+| Function oracle | `tests/m3/oracle.py`, `ts/tests/m3/oracle.ts`, `tests/m3/pure.py` | Runs a named Python function and its TypeScript twin on the same JSON inputs (recorded or fuzzed) and diffs the results. |
+| Driver | `tests/browse_driver.py` | The `browse()` helper the process-level tests share. `ARDIA_BROWSE_DAEMON=python\|ts` picks the client and daemon. `ARDIA_BROWSE_HARNESS=<dir>` writes each test's calls as a scenario. `ARDIA_BROWSE_TEST_PORTS=a-b` pins the tests' ports. |
+
+## Setup
+
+- Bun 1.3.14 and `bun install --frozen-lockfile --ignore-scripts` in `ts/`.
+- Live modes need `ARDIA_M3_CHROME`: a pinned `chrome-headless-shell` (Chrome for Testing 158.0.8127.18, Playwright's
+  `chromium_headless_shell-1254`, in its own folder). It always runs headless, never headed.
+- Ports come from `ARDIA_M3_PORTS` (default `9400-9419`; slice *i* uses `9400 + 20i` through `+19`). The top port
+  serves the fixtures; the rest are Chromium and tap pairs.
+- The TS side runs through `ARDIA_M3_TS_PROGRAM=<built ardia-ts>`. The program is started as `<program> browse …`. To
+  be seeded it must read `harness_seed` from its spawn config (below).
+
+## What a slice runs
+
+```sh
+python -m tests.m3 replay --impl ts                        # CI: every recording, no browser
+python -m tests.m3 live core/open_title --a python --b ts  # truth: twin Chromiums
+python -m tests.m3 cancel act/drag_takes_the_target_place_and_names_it --impl ts   # Ctrl-C at every CDP request
+python -m tests.m3 cancel core/open_title --kind kill --step 0 --impl ts            # or kill|stop|close|drop|error
+python -m tests.m3.pure printable.shown --fuzz 2000        # P-slices: Python vs TS function
+python -m tests.m3 record <scenario>                       # after a Python change, then commit the recording
+python -m tests.m3 selftest                                # the harness itself: Python vs Python, live and replay
+python -m unittest tests.test_m3_harness                   # normalizer rules + every recording replays
+```
+
+Add `--keep --scratch <dir>` to keep each side's `transcript.jsonl`, `tap.log`, `answers.jsonl`, `chrome.log` and data
+dir. A failed replay prints the tap's report: the request the daemon sent and the recorded ones it could have been.
+
+## How comparison works
+
+- **Answers.** For each step: `exit`, `out` and `err` after normalization. From the raw daemon answer it compares
+  `code`, `busy_elsewhere`, `exit` and the key set of `metrics`. For Python, the seeded client writes the raw answer
+  to `ARDIA_M3_ANSWERS`. A TS client in harness mode should append the same `{"request", "answer"}` lines.
+- **Requests.** Requests are compared per step, per connection and per CDP session. Browser-issued IDs become
+  `<id#n>`, `<node#n>`, `<backend#n>` or `<context#n>`, numbered by first appearance in that step's own requests (browser
+  events cross step boundaries by timing), and the message `id` is dropped. Live mode compares each step's requests as a **set** of distinct forms (and ignores the
+  `() => document.readyState` probe). Chromium's load timing decides how often Python polls and whether the load event
+  beats its readiness check, so two live Pythons never agree on order or counts. Order is checked in replay instead.
+- **Sources.** Every `expression`, `functionDeclaration` and `source` is hashed per step, so JS drift between `js.py`
+  and `browse/js/*.js` fails even when the results agree.
+- **Files.** The session folder (`Browse/`) is compared before teardown: names, modes and JSON contents, with keys,
+  pids and times masked.
+
+## Replay
+
+Replay serves the recorded browser messages in their recorded order. Each event and answer is sent as soon as the
+request it followed has arrived, in one corked batch, and each answer gets the live request's `id`. What replay
+preserves is each event's order against the daemon's requests, not its delay. With real delays the daemon outruns an
+event Chromium had already sent (`Page.frameNavigated` before `Page.createIsolatedWorld`). A request matches the first
+unconsumed recorded request with the same form, in the session's current concurrency group or up to `lookahead` groups
+ahead. That covers asyncio tasks that interleave by timing (a `Network.disable` cleanup beside a page call).
+
+`tests/m3/elastic.json` lists the read-only probes whose count follows the daemon's own sleeps (`open --show`'s
+`visibilityState` and `Target.getTargets` loop, `Page.getFrameTree`, `Target.activateTarget`):
+- an extra one is answered with its latest recorded answer;
+- a recorded one the daemon doesn't send is skipped once the daemon sends any request recorded after it (it has moved
+  past that point), or once it waits on an answer queued behind one. It is never skipped while the daemon is idle
+  between steps.
+
+Nothing that acts on the page is ever elastic. If a reorder still leaves an answer stuck behind a request that hasn't
+come, the answer is sent ahead after 50 ms. Every elastic step is written to the transcript as `{"k": "elastic"}`.
+
+Replay fails on:
+- an unmatched request;
+- a recorded request the daemon never sent;
+- a stall, where the daemon waits for answers and the recording waits for a request that never comes.
+
+A scenario whose action logic runs on the daemon's clock gets `"live_only": "<reason>"`. Examples: waiting out a
+fading dialog before a DOM click, waiting for a field to enable, `read --scroll`'s lazy-load waits. Python replayed
+against its own recording then makes different decisions. 15 of the 33 recorded scenarios are live-only today; the
+other 18 replay identically, run after run. `"unstable_steps": {"steps": [...], "reason": …}` names steps whose
+`changes:` report depends on whether the page finished a change before the daemon's snapshot. For those steps live mode
+compares only exit and stderr. `"pace": "recorded"` replays the recorded gaps (capped at 2 s); no scenario needs it now.
+
+The tap delivers each Chromium burst as one write (a burst ends after 3 ms of quiet, or at 250 ms). Python handles every
+message of one socket read before the command that waited on an answer resumes, so the grouping decides what the
+daemon sees first. Live and replay therefore group the same way.
+
+The recorded scratch root is replaced by the replay's own root in every frame, so paths match.
+
+## Determinism
+
+The harness starts each daemon itself, as the client does, and adds `harness_seed` to the spawn config. Python's
+bootstrap (`tests/m3/seeded_client.py`) then calls `random.seed(seed)`, and `secrets.token_hex`, `token_bytes` and
+`token_urlsafe` draw from `random.Random(seed + 1)`. That covers humanized paths, watch IDs, nonces and tab slots.
+The TS daemon must do the same with `pylib/random.ts` (MT19937), and only when the config carries `harness_seed`. The
+seed is the scenario's `seed` or a hash of its name.
+
+## Faults and cancellation
+
+`POST /tap/fault {"at": k, "kind": …}` on the tap arms one fault at the k-th CDP request from now, or with
+`"method": M` at the k-th request of method M. For every request the recording made in a step, `cancel` arms the fault
+at that request's method and occurrence. A step whose order depends on timing (`open`) is then still hit at the same
+logical request on both sides:
+
+| Kind | Effect |
+|---|---|
+| `interrupt` (default) | The tap holds request k, the harness sends SIGINT to the client (Ctrl-C), then releases the request. |
+| `kill` | Forward request k, then SIGKILL Chromium. |
+| `stop` | Forward request k, then SIGSTOP Chromium for `seconds`. |
+| `close` | Close the daemon's WebSocket with `code` instead of forwarding. |
+| `drop` | Forward request k, but swallow its reply. |
+| `error` | Answer request k with a CDP error. |
+
+Both sides get the same fault. Then the faulted step's requests after the fault (the cleanup: held keys released,
+`Network.disable`, temp tabs closed), every later step, the answers and the session folder must match. Requests before
+the fault in the faulted step are already covered by the plain runs, and in `open` they depend on timing. If one side
+never reaches the fault point, that point is reported as skipped, not as a difference.
+
+## Converting a test
+
+Route the test class's `browse()` through `browse_driver.browse`. Call `browse_driver.begin_class(fixture_base)` in
+`setUpClass`, `begin(self.id())` in `setUp` and `end()` in `tearDown`. Then run the class with
+`ARDIA_BROWSE_HARNESS=<dir> ARDIA_BROWSE_TEST_PORTS=9410-9419 ARDIA_BROWSE_CHROME=<chrome>`. Copy the scenarios it
+writes into `tests/m3/scenarios/<group>/`, then `record` them. `test_browse_act.ActInChrome` and
+`test_browse_read.ReadListsInChrome` are converted this way. `test_browse_e2e.py` and `test_browse_pages_e2e.py` need
+Ardia.app; they convert the same way once a hidden instance runs them.

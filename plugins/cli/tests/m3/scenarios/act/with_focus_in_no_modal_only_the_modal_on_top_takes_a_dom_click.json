@@ -1,0 +1,75 @@
+{
+ "live_only": "Python's wait loops (dialog fade, disabled waits, lazy scroll, load settle) count against the daemon's own clock, so replay sends a different number of checks; first replay mismatch: Runtime.callFunctionOn (el) => {",
+ "source": "tests/test_browse_act.py ActInChrome.test_with_focus_in_no_modal_only_the_modal_on_top_takes_a_dom_click",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/carousel-modal.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.getElementById('modal').showModal(), document.getElementById('confirm').showModal(), document.activeElement.blur(), 'ok'"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.activeElement.tagName"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "click",
+    "#m2"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "state.clicked.join()"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.getElementById('confirm').close(), document.activeElement.blur(), 'ok'"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "click",
+    "#m2"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "state.clicked.join()"
+   ],
+   "session": "act"
+  }
+ ]
+}

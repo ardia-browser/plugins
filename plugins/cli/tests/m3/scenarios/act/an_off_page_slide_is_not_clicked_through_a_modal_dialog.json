@@ -1,0 +1,47 @@
+{
+ "live_only": "Python's wait loops (dialog fade, disabled waits, lazy scroll, load settle) count against the daemon's own clock, so replay sends a different number of checks; first replay mismatch: Runtime.callFunctionOn (el) => {",
+ "source": "tests/test_browse_act.py ActInChrome.test_an_off_page_slide_is_not_clicked_through_a_modal_dialog",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/carousel-modal.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "click",
+    "#open-modal"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "click",
+    "#s2"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "state.clicked.join()"
+   ],
+   "session": "act"
+  }
+ ]
+}

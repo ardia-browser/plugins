@@ -76,6 +76,8 @@ jobs:
       - run: bun install --frozen-lockfile --ignore-scripts
       - name: Type check (tsrs)
         run: ./node_modules/.bin/tsrs --noEmit -p .
+      - name: Type check the browse daemon harness (tsrs)
+        run: ./node_modules/.bin/tsrs --noEmit -p tests/m3
       - name: Build the program and its libc addon, the addon checked against Node's own Node-API headers
         run: sh scripts/build.sh --node-headers "$(dirname "$(dirname "$(realpath "$(command -v node)")")")/include/node"
       - name: Size
@@ -104,6 +106,10 @@ jobs:
           ~/.local/bin/uv venv --python 3.13 "$RUNNER_TEMP/venv"
           VIRTUAL_ENV="$RUNNER_TEMP/venv" ~/.local/bin/uv pip install --quiet --require-hashes --no-build -r requirements.lock
           "$RUNNER_TEMP/venv/bin/python" -m unittest -v tests.test_parity.TsParityTable tests.test_parity.TsProcess tests.test_parity.HarnessCatches tests.test_parity.ServedTable tests.test_parity.ProtocolAgrees tests.test_closed_stdout.TsClosedStdout
+      - name: Browse daemon harness, replay mode (recordings answer the Python daemon, no browser)
+        if: matrix.os == 'macos-15'
+        working-directory: plugins/cli
+        run: '"$RUNNER_TEMP/venv/bin/python" -m unittest -v tests.test_m3_harness'
 
   python:
     name: Python tests on ${{ matrix.os }}
