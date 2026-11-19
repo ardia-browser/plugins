@@ -3,7 +3,8 @@ import { iso, now, parseIso } from "./clock.ts";
 import { dataRoot, installedDataDir } from "./control.ts";
 import { Float, type JsonObject, object, parse, TELEMETRY_JSON_DEPTH, TooDeep, type Value } from "./json.ts";
 import { abspath, envSet, join, realpath, uid } from "./paths.ts";
-import { O_NOFOLLOW, O_NONBLOCK, O_RDONLY, readFd } from "./privatefs.ts";
+import { closeDir, O_NOFOLLOW, O_NONBLOCK, O_RDONLY, readFd } from "./privatefs.ts";
+import { pluginMode } from "./browse/route.ts";
 import { isSpace, strip } from "./py.ts";
 import { appendToSpool, discardSpool, keepLocalCopy, startFlush } from "./spool.ts";
 import { recordUsage } from "./usage.ts";
@@ -293,5 +294,10 @@ function record(call: Call, status: number | bigint, python: string | null, cras
     return;
   }
   const spooled = appendToSpool(target.root, records);
-  if (spooled !== undefined) startFlush(spooled, target, python);
+  if (spooled === undefined) return;
+  if (pluginMode()) {
+    closeDir(spooled);
+    return;
+  }
+  startFlush(spooled, target, python);
 }

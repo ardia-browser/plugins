@@ -382,5 +382,73 @@ class JsonAndStdin(LongDataDirs):
                 self.assertIn(b"ardia-libc.so", done.stderr)
 
 
+
+class Listener:
+    def __init__(self):
+        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server.bind(("127.0.0.1", 0))
+        self.server.listen(4)
+        self.server.settimeout(0.2)
+        self.port = self.server.getsockname()[1]
+        self.heard = threading.Event()
+        self.closing = threading.Event()
+        threading.Thread(target=self.serve, daemon=True).start()
+
+    def serve(self):
+        while not self.closing.is_set():
+            try:
+                connection, _ = self.server.accept()
+            except OSError:
+                continue
+            self.heard.set()
+            connection.close()
+
+    def close(self):
+        self.closing.set()
+        self.server.close()
+
+
+@unittest.skipUnless(programs(), "build plugins/cli/rust (the router) and plugins/cli/ts first")
+class PluginTelemetry(PluginCredentialProcesses):
+    def run_with_sharing(self, telemetry: str | None) -> tuple:
+        data = self.box / "data"
+        (data / "telemetry.json").write_text(json.dumps({"sharing": True, "installId": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"}))
+        (data / "Telemetry").mkdir(mode=0o700, exist_ok=True)
+        listener = Listener()
+        self.addCleanup(listener.close)
+        env = {key: value for key, value in self.env(9).items() if key != "ARDIA_TELEMETRY"}
+        if telemetry is not None:
+            env["ARDIA_TELEMETRY"] = telemetry
+        env["ARDIA_TELEMETRY_URL"] = f"http://127.0.0.1:{listener.port}/v1/logs"
+        reader, writer = os.pipe()
+        os.write(writer, CREDENTIAL.encode())
+        os.close(writer)
+        moved = ["/bin/sh", "-c", f'exec {FD}<&{reader} {reader}<&-; exec "$@"', "sh"] if reader != FD else []
+        command = [*moved, str(self.install.root / "bin" / "ardia"), "browse", "--session", "plugin-ai", "--json", "get", "--", "title"]
+        process = subprocess.run(command, env=env, cwd=self.box / "tmp", stdin=subprocess.DEVNULL, capture_output=True,
+                                 pass_fds=(reader,), timeout=60)
+        os.close(reader)
+        heard = listener.heard.wait(3)
+        spool = data / "Telemetry" / "cli-queue.jsonl"
+        events = [json.loads(line) for line in spool.read_text().splitlines()] if spool.exists() else []
+        return process, heard, events, (data / "Telemetry" / "cli-flush.json").exists()
+
+    def test_with_sharing_on_a_plugin_call_spools_its_event_and_starts_no_flusher(self):
+        process, heard, events, flushed = self.run_with_sharing(None)
+        self.assertEqual(process.returncode, 77, process.stderr)
+        self.assertFalse(heard, "a plugin call reached the network")
+        self.assertFalse(flushed, "a plugin call started a flush")
+        commands = [event for event in events if event.get("event") == "cli_command" or event.get("body", {}).get("event") == "cli_command"
+                    or "cli_command" in json.dumps(event)]
+        self.assertEqual(len(commands), 1, events)
+        self.assertIn('"plugin_mode": true', json.dumps(commands[0]))
+        self.assertNotIn(CREDENTIAL[2:], json.dumps(events))
+
+    def test_with_telemetry_off_a_plugin_call_records_nothing(self):
+        process, heard, events, flushed = self.run_with_sharing("0")
+        self.assertEqual(process.returncode, 77, process.stderr)
+        self.assertEqual((heard, events, flushed), (False, [], False))
+
+
 if __name__ == "__main__":
     unittest.main()
