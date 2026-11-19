@@ -12,6 +12,10 @@ export const ENGINE_CODES: readonly (readonly [string, string, string])[] = [
   ["ardia: document_changed", "document_changed", "plugin_lease_refused"],
 ];
 
+export function unavailable(error: unknown): error is CdpError {
+  return error instanceof CdpError && !error.code;
+}
+
 export function engineCoded(error: unknown): unknown {
   if (!(error instanceof CdpError)) return error;
   for (const [prefix, code, metric] of ENGINE_CODES) {

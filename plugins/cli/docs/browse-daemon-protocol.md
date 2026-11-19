@@ -137,13 +137,14 @@ and never by Python's or by the person's own session. The TypeScript daemon only
 - **Spawn.** As above (`<ardia-ts> daemon`, always TypeScript's, whatever `served.txt` says), with `plugin` set to the
   credential id, `ws` set to the token server exactly as `ARDIA_PLUGIN_ENDPOINT` gave it (`ws://127.0.0.1:<port>/devtools/browser/<id>`,
   no query), `port`, `data_dir` and `endpoint_label` null. The credential itself is never in the config, argv or the
-  environment: the client strips `ARDIA_WS`, `ARDIA_PORT`, `ARDIA_CDP_URL`, `AGENT_BROWSER_CDP` and
-  `ARDIA_PLUGIN_CREDENTIAL_FD` from the child's environment and closes the credential descriptor before spawning. A
-  config with `plugin` and any other endpoint is refused (exit 2).
+  environment: every spawn drops `ARDIA_WS`, `ARDIA_PORT`, `ARDIA_CDP_URL`, `AGENT_BROWSER_CDP`, every `ARDIA_PLUGIN_*`
+  variable and `ARDIA_BROWSE_FOR_PLUGIN` from the child's environment, and the client closes the credential descriptor
+  before spawning. A config with `plugin` and any other endpoint is refused (exit 2).
 - **Requests.** Every request carries `credential`. The plugin daemon checks `sha256(credential)[:32]` against its
-  `plugin` (in constant time) before anything else and answers status 77, code `plugin_refused`, with nothing sent, when
-  it's missing or different. A daemon without `plugin` answers the same to any request that carries `credential`, so a
-  person's session never serves a plugin step. The daemon holds the credential only while that request runs; it
+  `plugin` (in constant time) as soon as the line is parsed, before it reads any option or touches any state, and answers
+  a missing or different one with exactly `exit` 77, `out`, `err` and `code` `plugin_refused`: no `loader`, `metrics` or
+  `daemon`, nothing sent, and no change to its caller, dialog or pinning settings. A daemon without `plugin` answers the
+  same, just as early, to any request that carries `credential`, so a person's session never serves a plugin step. The daemon holds the credential only while that request runs; it
   registers it for redaction and never writes it.
 - **Connection.** On a step's first CDP need the daemon connects to `<ws>?token=<credential>` with no `Origin` header.
   It drops the connection after 30 s idle like any session, and the next step reconnects with that step's credential. A
@@ -158,12 +159,21 @@ and never by Python's or by the person's own session. The TypeScript daemon only
   (`Input.dispatch*`, `Input.insertText` or `Ardia.dispatchClick`) is outstanding: each is sent
   only after the previous one was answered, and one left unanswered (10 s, `outcome_unknown`) holds back the next step's
   input for up to 10 s more (`input_unanswered`).
+- **Keys.** Key events follow ardia#2808's key policy, whose key table the daemon carries as generated data
+  (`ts/scripts/plugin-key-table.ts`, checked against the engine's compiled validator by `plugin-keys.test.ts`). A
+  `press` the engine would refuse (Meta+C, Meta+V, Meta+Z, Shift+Delete, a character no key types) answers 77
+  `plugin_refused` before any key goes out, so no modifier is left down. `type` and humanized `fill` send each
+  character as key events when the engine allows them and as `Input.insertText` otherwise (é, CJK, emoji).
+- **Refs.** A step acts only on the picked tab: a ref taken on another tab answers 77 `stale_ref` and nothing is sent.
 - **Document check.** With `options.expect_loader`, the daemon compares the picked tab's main-frame loader before the
-  step (a mismatch answers code `document_changed`, exit 1, and nothing ran) and after it (a mismatch answers code
-  `document_changed_after`, exit 1, `data.ran: true`: the step ran). The pick ignores it. Every answer whose tab is
+  step (a mismatch answers code `document_changed`, exit 1, and nothing ran) and after it, even when the step failed (a
+  mismatch answers code `document_changed_after`, exit 1, `data.ran: true`, in place of the step's own answer). The
+  pick ignores it. Every answer whose tab is
   attached carries `loader`.
 - **Engine codes.** A CDP error whose own message starts `ardia: tab_out_of_scope` answers code `tab_out_of_scope`, and
   one that starts `ardia: document_changed` (the act lease) answers `document_changed`. Codes never come from page text.
+  A coded refusal always ends the step before any further CDP call; only a plain, uncoded CDP failure may fall back
+  (an empty title, a default viewport point, "no box").
 - **State.** Tab numbers live in the daemon's memory, per credential; the shared `tabs-*.json` registry, claims, the
   temporary-tab sweep and `using` are never touched. Nothing is written in `Browse/` beyond the session's socket, lock and
   log (no `<key>.json`), and an answer over the output cap is cut, not spilled.

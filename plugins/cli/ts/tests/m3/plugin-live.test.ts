@@ -67,11 +67,24 @@ describe.skipIf(!CHROME)("plugin mode against headless Chrome for Testing, throu
   });
 
   test("press <key>: key events with editing commands only from the allowlist", async () => {
-    for (const key of ["Enter", "Meta+a", "Meta+z", "Meta+c", "Meta+v", "Alt+ArrowLeft"]) {
+    for (const key of ["Enter", "Meta+a", "Alt+ArrowLeft", "Shift+Tab"]) {
       const pressed = await marked(`press ${key}`, ["press", "--", key], { expect_loader: loader });
       expect(pressed.exit).toBe(0);
       expect(pressed.out.startsWith("✓ Done\nchanges")).toBe(true);
     }
+    for (const key of ["Meta+z", "Meta+c", "Meta+v", "Shift+Delete", "é"]) {
+      const refused = await marked(`press ${key}`, ["press", "--", key], { expect_loader: loader });
+      expect(refused).toMatchObject({ exit: 77, code: "plugin_refused" });
+      expect((methodsBetweenMarks(entries(world)).get(`press ${key}`) ?? []).filter((method) => method.startsWith("Input."))).toEqual([]);
+    }
+  });
+
+  test("type sends key events where the engine allows them and insertText for the rest", async () => {
+    const typed = await marked("type mixed", ["type", "--", "@e2", "aé中"], { expect_loader: loader, no_changes: true });
+    expect(typed.exit).toBe(0);
+    const sent = methodsBetweenMarks(entries(world)).get("type mixed") ?? [];
+    expect(sent.filter((method) => method === "Input.insertText")).toHaveLength(2);
+    expect(sent.filter((method) => method === "Input.dispatchKeyEvent")).toHaveLength(2);
   });
 
   test("click @ref: scrollIntoViewIfNeeded, getContentQuads, then Ardia.dispatchClick [tap emulates Ardia.dispatchClick]", async () => {

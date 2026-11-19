@@ -1,6 +1,7 @@
 import { formatG } from "../../pylib/format.ts";
 import { sleep } from "../cdp/cancel.ts";
-import { BrowseError, CdpError, Usage } from "../daemon-errors.ts";
+import { BrowseError, Usage } from "../daemon-errors.ts";
+import { unavailable } from "./link.ts";
 import { Result } from "../daemon/render.ts";
 import { need, parse, waitUntil } from "../daemon/stub/commands.ts";
 import { type AxNode, buildTree, isAxList, type Node, ROLE_NAMES } from "../snapshot/tree.ts";
@@ -9,7 +10,7 @@ import { clickElement, fillElement, type PluginCtx, PLUGIN_COMMANDS, type Plugin
 import { boxOf, center, describe, type Element, focus, locate } from "./dom.ts";
 import { comboEvents, typeText, wheelAt } from "./input.ts";
 import { type PluginPage } from "./page.ts";
-import { PluginRefused, type PluginSession } from "./session.ts";
+import { ForeignRef, PluginRefused, type PluginSession } from "./session.ts";
 
 export const SCROLL_DEFAULT = 300;
 export const FIND_WAIT = 1.5;
@@ -60,7 +61,7 @@ async function partialAx(element: Element): Promise<AxNode | null> {
     if (!isAxList(nodes)) return null;
     return nodes.find((node) => node["backendDOMNodeId"] === element.backend) ?? null;
   } catch (error) {
-    if (error instanceof CdpError) return null;
+    if (unavailable(error)) return null;
     throw error;
   }
 }
@@ -99,7 +100,7 @@ async function queryAll(page: PluginPage, selector: string): Promise<number[]> {
   try {
     found = await page.send("DOM.querySelectorAll", { nodeId: root?.["nodeId"], selector });
   } catch (error) {
-    if (error instanceof CdpError) throw new BrowseError(`Invalid selector ${selector}: ${error.cdpMessage}`);
+    if (unavailable(error)) throw new BrowseError(`Invalid selector ${selector}: ${error.cdpMessage}`);
     throw error;
   }
   const ids = Array.isArray(found["nodeIds"]) ? (found["nodeIds"] as number[]) : [];
@@ -221,7 +222,7 @@ async function viewportCenter(page: PluginPage): Promise<[number, number]> {
     const height = Number(viewport?.["clientHeight"]);
     if (width > 0 && height > 0) return [width / 2, height / 2];
   } catch (error) {
-    if (!(error instanceof BrowseError)) throw error;
+    if (!unavailable(error)) throw error;
   }
   return [400, 300];
 }
@@ -250,7 +251,7 @@ async function stateOf(session: PluginSession, selector: string, wanted: string)
   try {
     element = await locate(session, selector);
   } catch (error) {
-    if (error instanceof BrowseError && (error.code === "not_found" || error.code === "stale_ref")) return wanted === "hidden" || wanted === "detached";
+    if (error instanceof BrowseError && !(error instanceof ForeignRef) && (error.code === "not_found" || error.code === "stale_ref")) return wanted === "hidden" || wanted === "detached";
     throw error;
   }
   if (wanted === "attached") return true;

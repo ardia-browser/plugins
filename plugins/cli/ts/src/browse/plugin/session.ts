@@ -5,7 +5,7 @@ import { BrowseError, ConnectionLost, StaleRef } from "../daemon-errors.ts";
 import { type View } from "../changes/report.ts";
 import { clock, flag, spent } from "../metrics.ts";
 import { CREDENTIAL, withToken } from "./key.ts";
-import { PluginLink } from "./link.ts";
+import { PluginLink, unavailable } from "./link.ts";
 import { PluginPage } from "./page.ts";
 
 export const PAGE_SCHEMES = ["http:", "https:", "about:", "data:", "blob:", "file:"];
@@ -14,6 +14,14 @@ export const NO_TAB = "This plugin session has no tab yet: pick one first with `
 
 export type Ref = { id: string; target: string; frame: string; loader: string; backend: number; role: string; name: string };
 export type PluginConfig = { session: string; endpoint: string; credentialId: string; autoDialog: boolean };
+
+export class ForeignRef extends BrowseError {
+  override readonly exitCode: number = 77;
+
+  constructor(id: string) {
+    super(`@${id} is from another tab: a plugin step acts only on the tab it picked, so nothing was sent. Snapshot this tab and use its refs`, null, "stale_ref");
+  }
+}
 
 export class PluginRefused extends BrowseError {
   override readonly exitCode: number = 77;
@@ -199,7 +207,7 @@ export class PluginSession {
       if (info) this.targetInfos.set(page.targetId, info);
       return typeof info?.["title"] === "string" ? info["title"] : "";
     } catch (error) {
-      if (error instanceof BrowseError && !(error instanceof ConnectionLost)) return "";
+      if (unavailable(error)) return "";
       throw error;
     }
   }
@@ -234,6 +242,7 @@ export class PluginSession {
       if (/^e[0-9]+$/u.test(id) && Number(id.slice(1)) <= this.issuedRefs) throw new StaleRef(id, "it came from an earlier snapshot, and refs are never reused");
       throw new BrowseError(`Unknown ref: ${id}`, null, "unknown_ref");
     }
+    if (ref.target !== this.current) throw new ForeignRef(id);
     let page: PluginPage;
     try {
       page = await this.page(ref.target);

@@ -1,10 +1,12 @@
 import { pyLen } from "../../pylib/str.ts";
 import { sleep } from "../cdp/cancel.ts";
 import { Usage } from "../daemon-errors.ts";
-import { CHAR_TO_KEY_INFO, pauseAfter } from "../input/human.ts";
+import { pauseAfter } from "../input/human.ts";
 import { MODIFIER_BITS, MODIFIER_KEYS, parseCombo, parseKey } from "../input/keys.ts";
 import { type PluginPage } from "./page.ts";
+import { keyRefusal, tableKey } from "./keys.ts";
 import { CLICK_METHOD } from "./policy.ts";
+import { PluginRefused } from "./session.ts";
 
 export const BUTTONS: Readonly<Record<string, number>> = { left: 1, right: 2 };
 const SHORTCUT = MODIFIER_BITS["Meta"] as number;
@@ -36,8 +38,12 @@ export function editingCommand(key: string, bits: number, single: boolean): stri
 
 type KeyParams = Record<string, unknown>;
 
-function keyParams(kind: "keyDown" | "keyUp", key: string, code: string, keycode: number, bits: number, text: string | null = null, commands: string[] = []): KeyParams {
-  const params: KeyParams = { type: kind, key, code, windowsVirtualKeyCode: keycode, modifiers: bits };
+export class NoKey extends Error {}
+
+function keyParams(kind: "keyDown" | "keyUp", key: string, bits: number, text: string | null = null, commands: string[] = []): KeyParams {
+  const found = tableKey(key);
+  if (found === null) throw new NoKey(`no key on the keyboard Ardia lets a plugin use types ${JSON.stringify(key)}`);
+  const params: KeyParams = { type: kind, key, code: found.code, windowsVirtualKeyCode: found.windowsKeyCode, modifiers: bits };
   if (kind === "keyDown" && text !== null) {
     params["text"] = text;
     params["unmodifiedText"] = text;
@@ -47,36 +53,60 @@ function keyParams(kind: "keyDown" | "keyUp", key: string, code: string, keycode
   return params;
 }
 
-export function comboEvents(combo: string): KeyParams[] {
-  const [modifiers, last] = parseCombo(combo);
-  const events: KeyParams[] = [];
-  let bits = 0;
-  for (const modifier of modifiers) {
-    const [key, code, keycode] = MODIFIER_KEYS[modifier] as readonly [string, string, number];
-    bits |= MODIFIER_BITS[modifier] as number;
-    events.push(keyParams("keyDown", key, code, keycode, bits));
-  }
-  if (last !== null) {
-    const [key, code, keycode, given] = parseKey(last);
-    let text = given;
-    if (bits & (CONTROL | SHORTCUT | WORD)) text = null;
-    else if (text !== null && bits & SHIFT && pyLen(text) === 1) text = text.toUpperCase();
-    const command = editingCommand(key, bits, pyLen(last) === 1);
-    events.push(keyParams("keyDown", key, code, keycode, bits, text, command ? [command] : []));
-    events.push(keyParams("keyUp", key, code, keycode, bits));
-  }
-  for (const modifier of [...modifiers].reverse()) {
-    const [key, code, keycode] = MODIFIER_KEYS[modifier] as readonly [string, string, number];
-    bits &= ~(MODIFIER_BITS[modifier] as number);
-    events.push(keyParams("keyUp", key, code, keycode, bits));
+function checked(events: KeyParams[]): KeyParams[] | string {
+  for (const event of events) {
+    const refusal = keyRefusal(event);
+    if (refusal !== null) return `Ardia refuses a plugin key event ${refusal}`;
   }
   return events;
 }
 
-export function charEvents(char: string): KeyParams[] {
-  const [key, code, keycode] = CHAR_TO_KEY_INFO.get(char) ?? [char, "", 0];
-  if (char === "\n") return [keyParams("keyDown", "Enter", "Enter", 13, 0, "\r"), keyParams("keyUp", "Enter", "Enter", 13, 0)];
-  return [keyParams("keyDown", key, code, keycode, 0, char), keyParams("keyUp", key, code, keycode, 0)];
+export function uncheckedComboEvents(combo: string): KeyParams[] {
+  const [modifiers, last] = parseCombo(combo);
+  const events: KeyParams[] = [];
+  let bits = 0;
+  for (const modifier of modifiers) {
+    bits |= MODIFIER_BITS[modifier] as number;
+    events.push(keyParams("keyDown", (MODIFIER_KEYS[modifier] as readonly [string, string, number])[0], bits));
+  }
+  if (last !== null) {
+    const [key, , , given] = parseKey(last);
+    let text = given;
+    if (bits & (CONTROL | SHORTCUT | WORD)) text = null;
+    else if (text !== null && bits & SHIFT && pyLen(text) === 1) text = text.toUpperCase();
+    const command = editingCommand(key, bits, pyLen(last) === 1);
+    events.push(keyParams("keyDown", key, bits, text, command ? [command] : []));
+    events.push(keyParams("keyUp", key, bits));
+  }
+  for (const modifier of [...modifiers].reverse()) {
+    bits &= ~(MODIFIER_BITS[modifier] as number);
+    events.push(keyParams("keyUp", (MODIFIER_KEYS[modifier] as readonly [string, string, number])[0], bits));
+  }
+  return events;
+}
+
+export function comboEvents(combo: string): KeyParams[] {
+  let events: KeyParams[];
+  try {
+    events = uncheckedComboEvents(combo);
+  } catch (error) {
+    if (error instanceof NoKey) throw new PluginRefused(`\`press ${combo}\`: ${error.message}; use \`type\` for text. Nothing was sent`);
+    throw error;
+  }
+  const allowed = checked(events);
+  if (typeof allowed === "string") throw new PluginRefused(`\`press ${combo}\`: ${allowed}, so nothing was sent`);
+  return allowed;
+}
+
+export function charEvents(char: string): KeyParams[] | null {
+  try {
+    const events = char === "\n" ? [keyParams("keyDown", "Enter", 0, "\r"), keyParams("keyUp", "Enter", 0)] : [keyParams("keyDown", char, 0, char), keyParams("keyUp", char, 0)];
+    const allowed = checked(events);
+    return typeof allowed === "string" ? null : allowed;
+  } catch (error) {
+    if (error instanceof NoKey) return null;
+    throw error;
+  }
 }
 
 export async function pressCombo(page: PluginPage, combo: string): Promise<void> {
@@ -90,7 +120,9 @@ export async function clearField(page: PluginPage): Promise<void> {
 
 export async function typeText(page: PluginPage, text: string, delay: number, humanize: boolean): Promise<void> {
   for (const char of text) {
-    for (const params of charEvents(char)) await page.send("Input.dispatchKeyEvent", params);
+    const events = charEvents(char);
+    if (events === null) await page.send("Input.insertText", { text: char });
+    else for (const params of events) await page.send("Input.dispatchKeyEvent", params);
     const pause = humanize ? pauseAfter(char) : delay / 1000;
     if (pause > 0) await sleep(pause);
   }

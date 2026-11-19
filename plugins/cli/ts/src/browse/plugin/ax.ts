@@ -1,5 +1,5 @@
 import { sleep } from "../cdp/cancel.ts";
-import { BrowseError, ConnectionLost } from "../daemon-errors.ts";
+import { unavailable } from "./link.ts";
 import { containersOf, diff, entriesOf, type Report, type View } from "../changes/report.ts";
 import { asData, renderReport } from "../changes/text.ts";
 import { clock, flag, spent } from "../metrics.ts";
@@ -91,7 +91,7 @@ export async function observe<T>(session: PluginSession, page: PluginPage, optio
   try {
     before = await viewOf(session, page, await collect(session, page));
   } catch (error) {
-    if (error instanceof ConnectionLost || !(error instanceof BrowseError)) throw error;
+    if (!unavailable(error)) throw error;
     before = null;
   }
   const navigations = page.navigations;
@@ -107,7 +107,7 @@ export async function observe<T>(session: PluginSession, page: PluginPage, optio
     keepRefs(session, page, nodes, false);
     after = await remember(session, page, nodes);
   } catch (error) {
-    if (error instanceof ConnectionLost || !(error instanceof BrowseError)) throw error;
+    if (!unavailable(error)) throw error;
     const report = diff(null, { target: page.targetId, loader: "", url: page.url, title: "", entries: [], containers: new Set() });
     report.document = "unknown";
     report.error = error.text;

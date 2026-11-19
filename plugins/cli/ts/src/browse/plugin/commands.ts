@@ -1,4 +1,5 @@
-import { BrowseError, Usage } from "../daemon-errors.ts";
+import { Cancelled } from "../cdp/cancel.ts";
+import { BrowseError, ConnectionLost, Usage } from "../daemon-errors.ts";
 import { DEFAULT_TIMEOUT_MS } from "../limits.ts";
 import { flag } from "../metrics.ts";
 import { Result, type Options } from "../daemon/render.ts";
@@ -219,10 +220,27 @@ export async function runPluginCommand(session: PluginSession, options: Options,
       throw new BrowseError(DOCUMENT_CHANGED, null, "document_changed");
     }
   }
-  const result = await handler(ctx, argv);
-  if (expected !== null && name !== "tab" && (await loaderNow(session)) !== expected) {
-    flag("plugin_loader_after", true);
-    throw new BrowseError(DOCUMENT_CHANGED_AFTER, { ran: true }, "document_changed_after");
+  let failure: unknown = null;
+  let result: Result | null = null;
+  try {
+    result = await handler(ctx, argv);
+  } catch (error) {
+    if (error instanceof Cancelled) throw error;
+    failure = error;
   }
-  return result;
+  if (expected !== null && name !== "tab" && !(failure instanceof ConnectionLost)) {
+    let now: string | null;
+    try {
+      now = await loaderNow(session);
+    } catch (error) {
+      if (failure !== null) throw failure;
+      throw error;
+    }
+    if (now !== expected) {
+      flag("plugin_loader_after", true);
+      throw new BrowseError(DOCUMENT_CHANGED_AFTER, { ran: true }, "document_changed_after");
+    }
+  }
+  if (failure !== null) throw failure;
+  return result as Result;
 }

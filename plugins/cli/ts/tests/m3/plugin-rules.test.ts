@@ -3,6 +3,7 @@ import { type Entry } from "./canon.ts";
 import { pluginViolations } from "./plugin-rules.ts";
 import { checkRequest, PluginPolicy } from "../../src/browse/plugin/policy.ts";
 import { comboEvents, editingCommand } from "../../src/browse/plugin/input.ts";
+import { PluginRefused } from "../../src/browse/plugin/session.ts";
 import { credentialId, pluginSessionKey, sameCredential } from "../../src/browse/plugin/key.ts";
 
 const out = (id: number, method: string, params: Record<string, unknown> = {}, c = 0): Entry => ({ k: "out", c, m: JSON.stringify({ id, method, params, sessionId: "S" }) });
@@ -90,15 +91,13 @@ describe("the daemon's own policy", () => {
   test("key combos map to the editing allowlist and never to clipboard or undo commands", () => {
     const commands = (combo: string) => comboEvents(combo).flatMap((event) => (event["commands"] as string[] | undefined) ?? []);
     expect(commands("Meta+a")).toEqual(["selectAll"]);
-    expect(commands("Meta+c")).toEqual([]);
-    expect(commands("Meta+v")).toEqual([]);
-    expect(commands("Meta+z")).toEqual([]);
+    for (const refused of ["Meta+c", "Meta+v", "Meta+z", "Meta+x", "Shift+Insert"]) expect(() => comboEvents(refused)).toThrow(PluginRefused);
     expect(commands("Alt+ArrowLeft")).toEqual(["moveWordLeft"]);
     expect(commands("Shift+Meta+ArrowRight")).toEqual(["moveToEndOfLineAndModifySelection"]);
     expect(commands("Backspace")).toEqual(["deleteBackward"]);
     expect(commands("Enter")).toEqual([]);
     expect(editingCommand("ArrowDown", 0, false)).toBe("moveDown");
-    for (const combo of ["Enter", "Meta+a", "Meta+c", "Alt+ArrowLeft", "a", "Shift+Tab"]) {
+    for (const combo of ["Enter", "Meta+a", "Alt+ArrowLeft", "a", "Shift+Tab"]) {
       for (const event of comboEvents(combo)) expect(() => checkRequest("Input.dispatchKeyEvent", event)).not.toThrow();
     }
   });

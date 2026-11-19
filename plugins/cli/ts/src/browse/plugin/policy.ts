@@ -1,3 +1,6 @@
+import { keyRefusal } from "./keys.ts";
+
+export { KEY_COMMANDS } from "./keys.ts";
 export const SENT_METHODS: ReadonlySet<string> = new Set([
   "Target.getTargets",
   "Target.getTargetInfo",
@@ -43,18 +46,6 @@ export const FORBIDDEN_METHODS: ReadonlySet<string> = new Set([
   "Input.emulateTouchFromMouseEvent",
 ]);
 
-export const KEY_COMMANDS: ReadonlySet<string> = new Set([
-  "selectAll",
-  ...["moveToBeginningOfLine", "moveToEndOfLine", "moveToBeginningOfDocument", "moveToEndOfDocument", "moveLeft", "moveRight", "moveUp", "moveDown", "moveWordLeft", "moveWordRight"].flatMap(
-    (name) => [name, `${name}AndModifySelection`],
-  ),
-  "deleteBackward",
-  "deleteForward",
-  "deleteWordBackward",
-  "deleteWordForward",
-  "insertNewline",
-  "insertTab",
-]);
 
 const MOUSE_TYPES = new Set(["mouseMoved", "mouseWheel"]);
 const CLICK_BUTTONS = new Set(["left", "right"]);
@@ -69,12 +60,8 @@ export function forbidden(method: string): boolean {
 }
 
 function checkKey(params: Record<string, unknown>): void {
-  if ("nativeVirtualKeyCode" in params || "isSystemKey" in params) throw new PluginPolicy("a plugin key event carries no nativeVirtualKeyCode or isSystemKey");
-  const commands = params["commands"];
-  if (commands === undefined) return;
-  if (!Array.isArray(commands) || commands.some((command) => typeof command !== "string" || !KEY_COMMANDS.has(command))) {
-    throw new PluginPolicy(`a plugin key event's commands must come from the editing allowlist, not ${JSON.stringify(commands)}`);
-  }
+  const refusal = keyRefusal(params);
+  if (refusal !== null) throw new PluginPolicy(`Ardia refuses a plugin key event ${refusal}`);
 }
 
 export function mouseViolation(params: Record<string, unknown>): string | null {

@@ -139,7 +139,18 @@ export async function tap(world: World, route: string, body: unknown = {}): Prom
   return (await response.json()) as Record<string, unknown>;
 }
 
-export async function resetPage(world: World, target: string, url = `http://127.0.0.1:${world.sitePort}/form`): Promise<void> {
+export async function openTab(world: World, url = `http://127.0.0.1:${world.sitePort}/form`): Promise<string> {
+  const tab = (await (await fetch(`http://127.0.0.1:${world.chromePort}/json/new?${url}`, { method: "PUT" })).json()) as { id: string };
+  const deadline = performance.now() + 10_000;
+  while (performance.now() < deadline) {
+    const list = (await (await fetch(`http://127.0.0.1:${world.chromePort}/json/list`)).json()) as { id: string; title: string }[];
+    if (list.some((item) => item.id === tab.id && item.title === "Form page")) return tab.id;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error("the new tab didn't load");
+}
+
+export async function resetPage(world: World, target: string, url = `http://127.0.0.1:${world.sitePort}/form`, settle = true): Promise<void> {
   const socket = new WebSocket(`ws://127.0.0.1:${world.chromePort}/devtools/page/${target}`);
   await new Promise<void>((resolve, reject) => {
     socket.onopen = () => socket.send(JSON.stringify({ id: 1, method: "Page.navigate", params: { url } }));
@@ -149,6 +160,7 @@ export async function resetPage(world: World, target: string, url = `http://127.
     socket.onerror = () => reject(new Error("the harness couldn't reach the page to reset it"));
   });
   socket.close();
+  if (!settle) return;
   const deadline = performance.now() + 10_000;
   while (performance.now() < deadline) {
     const list = (await (await fetch(`http://127.0.0.1:${world.chromePort}/json/list`)).json()) as { id: string; url: string; title: string }[];

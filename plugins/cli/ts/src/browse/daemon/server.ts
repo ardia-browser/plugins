@@ -372,6 +372,12 @@ export class Daemon {
       const line = await reading.line;
       const request = parseRequest(line);
       if (request === null) return;
+      const refused = this.refusedCredential(request);
+      if (refused !== null) {
+        const [code, out, err] = render(record(request["options"]), null, refused, "");
+        await writeAnswer(socket, encodeAnswer(code, out, err, [["code", refused.code ?? "plugin_refused"]]));
+        return;
+      }
       const stop = new AbortController();
       let metrics: Metrics | undefined;
       const execute = withSignal(stop.signal, () =>
@@ -420,8 +426,6 @@ export class Daemon {
     if (options["no_auto_dialog"]) this.state.autoDialog = false;
     if (options["pin_tab"] !== undefined && options["pin_tab"] !== null) this.state.pinTab = Boolean(options["pin_tab"]);
     if (this.stopping) return this.refuseClosing(options, name);
-    const refused = this.refusedCredential(request);
-    if (refused !== null) return render(options, null, refused, name);
     if (name === "close") return this.close(ctx, caller);
     if (request["beside_if_busy"] && this.lock.locked) {
       request["busy_elsewhere"] = true;

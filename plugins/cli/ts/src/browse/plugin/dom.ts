@@ -1,4 +1,5 @@
-import { BrowseError, CdpError } from "../daemon-errors.ts";
+import { BrowseError } from "../daemon-errors.ts";
+import { unavailable } from "./link.ts";
 import { type PluginPage } from "./page.ts";
 import { type PluginSession } from "./session.ts";
 
@@ -40,7 +41,7 @@ export async function queryBackend(page: PluginPage, selector: string): Promise<
   try {
     found = await page.send("DOM.querySelector", { nodeId: rootId, selector });
   } catch (error) {
-    if (error instanceof CdpError) throw new BrowseError(`Invalid selector ${selector}: ${error.cdpMessage}`);
+    if (unavailable(error)) throw new BrowseError(`Invalid selector ${selector}: ${error.cdpMessage}`);
     throw error;
   }
   const nodeId = found["nodeId"];
@@ -103,7 +104,7 @@ export async function boxOf(element: Element): Promise<Box | null> {
   try {
     model = (await element.page.send("DOM.getBoxModel", { backendNodeId: element.backend }))["model"] as Record<string, unknown> | undefined;
   } catch (error) {
-    if (error instanceof CdpError) return null;
+    if (unavailable(error)) return null;
     throw error;
   }
   const border = model?.["border"];
