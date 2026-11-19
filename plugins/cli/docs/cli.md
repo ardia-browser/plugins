@@ -1238,16 +1238,15 @@ the TypeScript client must print instead of Python's, and is counted apart in th
 ### Testing it
 
 `python -m unittest discover -s plugins/cli/tests` runs the unit tests (`test_browse.py`). The end-to-end test needs a
-
-`ARDIA_TEST_STDIN_READY_FD=<n>` (tests only) makes the TypeScript client write one byte, `r`, to inherited descriptor
-`n` and close it once it has checked the session's daemon and is about to read stdin, so a process test can act at
-that moment instead of sleeping. Nothing else reads it.
-
 built app (never `/Applications`):
 
 ```sh
 ARDIA_BROWSE_E2E_APP=<build>/Ardia.app python -m unittest plugins/cli/tests/test_browse_e2e.py
 ```
+
+`ARDIA_TEST_STDIN_READY_FD=<n>` (tests only) makes the TypeScript client write one byte, `r`, to inherited descriptor
+`n` and close it once it has checked the session's daemon and is about to read stdin, so a process test can act at
+that moment instead of sleeping. Nothing else reads it.
 
 A Debug build takes its JavaScript from Metro, and the token instance has no DevTools port to find it by, so name it:
 `ARDIA_BROWSE_E2E_JS=localhost:8081`. Without it that instance never turns control on and `BrowseTokenPath` times out
