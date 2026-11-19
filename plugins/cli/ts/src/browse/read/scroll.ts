@@ -6,7 +6,7 @@ import { Result } from "../daemon/render.ts";
 import type { Ctx } from "../commands/ctx.ts";
 import { READPAGES_MAIN_LIST, READPAGES_SCROLL_STEP } from "../js/index.ts";
 import { count, flag } from "../metrics.ts";
-import { pyIntArg } from "../pyerror.ts";
+import { pyFloat, pyIntArg } from "../pyerror.ts";
 import type { Element, Page } from "../state/page.ts";
 import { quiet } from "../state/page.ts";
 import { record } from "../state/records.ts";
@@ -94,8 +94,8 @@ export function scrollSummary(total: number, shown: number, match: string | null
   return `[${counted}; ${reasons[stopped]}${hidden}]`;
 }
 
-export async function scrollStep(page: Page, frame: string, target: Target, action: string, to = 0): Promise<Step> {
-  const step = await page.call(READPAGES_SCROLL_STEP, [target, action, to], { frame, read: true });
+export async function scrollStep(page: Page, frame: string, target: Target, action: string, to = 0, float = false): Promise<Step> {
+  const step = await page.call(READPAGES_SCROLL_STEP, [target, action, float ? pyFloat(to) : to], { frame, read: true });
   const found = record(step);
   if (!step || found["missing"]) throw new BrowseError(`nothing on the page matches ${typeof target === "string" ? target : target.label}`, null, "no_match");
   const rows = (Array.isArray(found["rows"]) ? found["rows"] : []).map((raw) => {
@@ -136,7 +136,7 @@ export async function waitAtBottom(page: Page, frame: string, target: Target, co
     await sleep(0.25);
     if (!nudged && monotonic() >= until - SCROLL_END_WAIT / 2) {
       nudged = true;
-      await scrollStep(page, frame, target, "restore", Math.max(Number(current["position"]) - Number(current["view"]) * 0.5, 0));
+      await scrollStep(page, frame, target, "restore", Math.max(Number(current["position"]) - Number(current["view"]) * 0.5, 0), true);
       await scrollStep(page, frame, target, "next");
     }
     const step = await scrollStep(page, frame, target, "peek");

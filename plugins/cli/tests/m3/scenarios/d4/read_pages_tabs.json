@@ -1,10 +1,23 @@
 {
+ "racy_steps": {
+  "steps": [
+   2
+  ],
+  "why": "two reader tabs load in parallel, so which tab's isolated world is created first (and numbered first) follows Chromium's timing"
+ },
  "steps": [
   {
    "argv": [
     "open",
     "{fixture}/listing.html",
     "--no-changes"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read",
+    "{fixture}/item.html"
    ],
    "session": "d4"
   },

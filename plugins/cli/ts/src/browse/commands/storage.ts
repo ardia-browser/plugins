@@ -1,8 +1,8 @@
-import { floatRepr, type Value } from "../../json.ts";
+import type { Value } from "../../json.ts";
 import { pyStrip } from "../../pylib/str.ts";
 import { BrowseError, Gated, Usage } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
-import { pyError } from "../pyerror.ts";
+import { pyError, pyFloat } from "../pyerror.ts";
 import { record } from "../state/records.ts";
 import type { Ctx } from "./ctx.ts";
 import { register } from "./index.ts";
@@ -80,13 +80,6 @@ function pyText(value: Value): string {
   return String(value);
 }
 
-type RawJson = (text: string) => unknown;
-
-function pyFloatJson(value: number): unknown {
-  const raw = (JSON as unknown as { rawJSON?: RawJson }).rawJSON;
-  return raw && Number.isFinite(value) ? raw(floatRepr(value)) : value;
-}
-
 function capitalize(text: string): string {
   return text ? text.slice(0, 1).toUpperCase() + text.slice(1).toLowerCase() : text;
 }
@@ -136,7 +129,7 @@ export async function cmdCookies(ctx: Ctx, argv: string[]): Promise<Result> {
         if (Number.isNaN(expires) && !/^[+-]?nan$/iu.test(pyStrip(options["expires"] as string))) {
           throw pyError("ValueError", `could not convert string to float: '${options["expires"]}'`);
         }
-        params["expires"] = pyFloatJson(expires);
+        params["expires"] = pyFloat(expires);
       }
       const result = await page.send("Network.setCookie", params);
       if (result["success"] === false) throw new BrowseError("The browser refused that cookie");
