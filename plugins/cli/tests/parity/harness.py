@@ -66,10 +66,10 @@ SANDBOX_PROFILE = """(version 1)
 (deny process-exec {denied})
 """
 TS_PROBE = """#!/bin/sh
-printf 'ts\\n' >>{routes}/$$
+printf 'ts\\n' >>{routes}/$PPID
 exec "$(dirname "$0")/ardia-ts.bin" "$@"
 """
-ROUTE_PROBE = "import os as _parity_os\nopen({routes} + '/' + str(_parity_os.getpid()), 'a').write('python\\n')\n"
+ROUTE_PROBE = "import os as _parity_os\nopen({routes} + '/' + str(_parity_os.getsid(0)), 'a').write('python\\n')\n"
 
 
 class UnsafeCase(ValueError):
@@ -130,6 +130,12 @@ def served_table(path: Path = SERVED_TABLE) -> dict[str, str]:
 
 def served_commands(path: Path = SERVED_TABLE) -> list[str]:
     return list(served_table(path))
+
+
+def route_from(lines: list[str]) -> str:
+    if "python" in lines:
+        return "python"
+    return "ts" if "ts" in lines else "rust"
 
 
 def expected_route(entry: str, served: dict[str, str], case: "Case") -> str:
@@ -477,7 +483,7 @@ def time_marker(value, window: tuple[float, float]):
 
 
 class Installation:
-    def __init__(self, entry_program: Path, scratch: Path | None = None, entry: str = "rust"):
+    def __init__(self, entry_program: Path, scratch: Path | None = None, entry: str = "rust", router: Path | None = None):
         if entry not in ENTRIES:
             raise ValueError(f"the entry is one of {', '.join(ENTRIES)}, not {entry!r}")
         self.entry = entry
@@ -488,12 +494,7 @@ class Installation:
         self.routes.mkdir()
         (self.root / "bin").mkdir(parents=True)
         if entry == "ts":
-            shutil.copy2(entry_program, self.root / "bin" / "ardia-ts.bin")
-            if sys.platform == "darwin":
-                subprocess.run(["/usr/bin/codesign", "--force", "--sign", "-", "--options", "runtime", str(self.root / "bin" / "ardia-ts.bin")],
-                               check=True, capture_output=True)
-            (self.root / "bin" / "ardia").write_text(TS_PROBE.format(routes=shlex.quote(str(self.routes))))
-            (self.root / "bin" / "ardia").chmod(0o755)
+            self.install_ts(entry_program, router or binary())
         else:
             shutil.copy2(entry_program, self.root / "bin" / "ardia")
         subprocess.run([sys.executable, "-m", "venv", "--without-pip", str(self.root / "python")], check=True)
@@ -511,6 +512,23 @@ class Installation:
         self.profile.write_text(SANDBOX_PROFILE.format(denied=" ".join(f'(literal "{program}")' for program in DENIED_PROGRAMS)))
         self.counter = 0
         self.counter_lock = threading.Lock()
+
+    def install_ts(self, program: Path, router: Path | None):
+        if router is None or not router.exists():
+            raise FileNotFoundError("the ts entry runs behind the Rust router: build plugins/cli/rust or set ARDIA_RUST_CLI")
+        shutil.copy2(router, self.root / "bin" / "ardia")
+        libexec = self.root / "libexec"
+        libexec.mkdir()
+        shutil.copy2(program, libexec / "ardia-ts.bin")
+        if sys.platform == "darwin":
+            subprocess.run(["/usr/bin/codesign", "--force", "--sign", "-", "--options", "runtime", str(libexec / "ardia-ts.bin")],
+                           check=True, capture_output=True)
+        (libexec / "ardia-ts").write_text(TS_PROBE.format(routes=shlex.quote(str(self.routes))))
+        (libexec / "ardia-ts").chmod(0o755)
+        (self.root / "served.txt").write_text("".join(f"{name} ts\n" for name in served_table()))
+
+    def stray_routes(self) -> list[str]:
+        return sorted(path.name for path in self.routes.iterdir())
 
     def close(self):
         reap(str(self.scratch))
@@ -801,8 +819,7 @@ def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[O
     flush = scrub_times(json.loads(flush_text), window) if flush_text else flush_text
     log_text = read_inside(box, box / "helpers.log")
     helpers = log_text.splitlines() if log_text else []
-    route_lines = install.route_of(process.pid)
-    route = route_lines[-1] if route_lines else install.entry
+    route = route_from(install.route_of(process.pid))
     observed = Observed(stdout, stderr, process.returncode, fake.transcript() if fake else [], records, queued, served, usage,
                         file_changes(before, after), helpers, flush, route, timed_out, fake.complete if fake else True)
     return apply_normalizers(observed, case, places), labels
@@ -965,6 +982,10 @@ def run_all(cases: list[Case], entry_program: Path, jobs: int = 6, keep: bool = 
             outcomes.append(outcome)
             if progress:
                 progress(outcome)
+    stray = install.stray_routes()
+    if stray:
+        install.close()
+        raise RuntimeError(f"route markers no case claimed, so a probe keyed one by something other than its session: {', '.join(stray)}")
     return outcomes, install
 
 
