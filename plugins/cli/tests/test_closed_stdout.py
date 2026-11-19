@@ -1,7 +1,11 @@
 import fcntl
+import json
 import os
 import pty
 import re
+import resource
+import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -17,19 +21,48 @@ from test_parity import FakeArdia
 
 CALLS = (["--version"], ["--help"], ["-h"], [])
 LISTINGS = (["windows", "--json"], ["tabs", "--json"], ["tabs"])
-STDOUT_KINDS = ("closed pipe", "read-only file", "full non-blocking pipe", "hung-up terminal")
+STDOUT_KINDS = ("closed pipe", "read-only file", "full non-blocking pipe", "hung-up terminal") + (("full device",) if Path("/dev/full").exists() else ())
 TRACEBACK = re.compile(rb"Traceback \(most recent call last\):\n(?:  .*\n)*")
 TABS = [{"type": "tab", "id": f"tab-{index}", "title": "t" * 40, "url": "https://example.com/" + "p" * 40} for index in range(3000)]
 DRAIN_AFTER_S = 0.4
+CLOSING = {0: "<&-", 1: ">&-", 2: "2>&-"}
+LOCAL_TELEMETRY = Path("data") / "Telemetry" / "local"
 
 
-def environment(home: Path) -> dict:
-    return {"PATH": "/usr/bin:/bin", "HOME": str(home), "ARDIA_CLI_HOME": str(home / "cli"), "ARDIA_DATA_DIR": str(home / "data"),
-            "TMPDIR": str(home), "ARDIA_TELEMETRY": "0", "LANG": os.environ.get("LANG", "en_US.UTF-8"), "PYTHONPATH": str(harness.CLI)}
+def environment(home: Path, telemetry: bool = False) -> dict:
+    env = {"PATH": "/usr/bin:/bin", "HOME": str(home), "ARDIA_CLI_HOME": str(home / "cli"), "ARDIA_DATA_DIR": str(home / "data"),
+           "TMPDIR": str(home), "ARDIA_TELEMETRY": "0", "LANG": os.environ.get("LANG", "en_US.UTF-8"), "PYTHONPATH": str(harness.CLI)}
+    if telemetry:
+        del env["ARDIA_TELEMETRY"]
+        env["ARDIA_TELEMETRY_URL"] = "http://127.0.0.1:9/v1/logs"
+    return env
 
 
-def run_to_closed_pipe(command: list[str], home: Path) -> tuple[int, bytes]:
-    return run_to(command, home, "closed pipe")
+def without_native_differences(record: dict) -> dict:
+    for exception in record.get("properties", {}).get("$exception_list") or []:
+        exception.get("stacktrace", {}).pop("frames", None)
+    return record
+
+
+def telemetry_of(home: Path) -> list:
+    records = []
+    for path in sorted((home / LOCAL_TELEMETRY).glob("cli-*.jsonl")):
+        for line in path.read_text().splitlines():
+            record = json.loads(line)
+            for key in (*harness.VOLATILE, "timestamp"):
+                record.pop(key, None)
+            for key in harness.VOLATILE_PROPERTIES:
+                record.get("properties", {}).pop(key, None)
+            records.append(without_native_differences(record))
+    shutil.rmtree(home / "data" / "Telemetry", True)
+    return records
+
+
+def run_with_closed(command: list[str], home: Path, fd: int) -> tuple:
+    wrapped = ["/bin/sh", "-c", f'exec "$@" {CLOSING[fd]}', "sh", *command]
+    captured = {name: subprocess.DEVNULL if index == fd else subprocess.PIPE for index, name in enumerate(("stdin", "stdout", "stderr"))}
+    process = subprocess.run(wrapped, env=environment(home, telemetry=True), timeout=60, **captured)
+    return process.returncode, process.stdout, TRACEBACK.sub(b"", process.stderr or b""), telemetry_of(home)
 
 
 def full_pipe() -> tuple[int, int]:
@@ -47,9 +80,12 @@ def drain(read_end: int) -> None:
         pass
 
 
-def run_to(command: list[str], home: Path, kind: str) -> tuple[int, bytes]:
-    env = environment(home)
-    if kind == "read-only file":
+def run_to(command: list[str], home: Path, kind: str) -> tuple:
+    env = environment(home, telemetry=True)
+    if kind == "full device":
+        stdout = os.open("/dev/full", os.O_WRONLY)
+        keep = None
+    elif kind == "read-only file":
         target = home / "read-only"
         target.touch()
         stdout = os.open(target, os.O_RDONLY)
@@ -75,21 +111,38 @@ def run_to(command: list[str], home: Path, kind: str) -> tuple[int, bytes]:
         if drainer is not None:
             drainer.join(10)
             os.close(keep)
-    return process.returncode, TRACEBACK.sub(b"", stderr)
+    return process.returncode, TRACEBACK.sub(b"", stderr), telemetry_of(home)
+
+
+def run_limited(command: list[str], home: Path, limit: int, ignored: bool, telemetry: bool) -> tuple:
+    out = home / "out"
+    stdout = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+
+    def limit_file_size():
+        resource.setrlimit(resource.RLIMIT_FSIZE, (limit, resource.RLIM_INFINITY))
+        signal.signal(signal.SIGXFSZ, signal.SIG_IGN if ignored else signal.SIG_DFL)
+
+    try:
+        process = subprocess.run(command, stdin=subprocess.DEVNULL, stdout=stdout, stderr=subprocess.PIPE, env=environment(home, telemetry),
+                                 preexec_fn=limit_file_size, timeout=60)
+    finally:
+        os.close(stdout)
+    return process.returncode, out.stat().st_size, TRACEBACK.sub(b"", process.stderr), telemetry_of(home)
 
 
 class ClosedStdout:
     entry = "rust"
 
-    def test_each_served_call_ends_like_python_when_stdout_is_a_closed_pipe(self):
+    def test_each_served_call_ends_like_python_whatever_stdout_fails_with(self):
         install = harness.Installation(harness.entry_binary(self.entry), entry=self.entry)
         try:
             with tempfile.TemporaryDirectory() as scratch:
                 for argv in CALLS:
-                    with self.subTest(argv=argv):
-                        python = run_to_closed_pipe([sys.executable, "-m", "ardia_cli", *argv], Path(scratch))
-                        new = run_to_closed_pipe([*install.command("new"), *argv], Path(scratch))
-                        self.assertEqual(new, python)
+                    for kind in STDOUT_KINDS:
+                        with self.subTest(argv=argv, stdout=kind):
+                            python = run_to([sys.executable, "-m", "ardia_cli", *argv], Path(scratch), kind)
+                            new = run_to([*install.command("new"), *argv], Path(scratch), kind)
+                            self.assertEqual(new, python)
         finally:
             install.close()
 
@@ -113,12 +166,53 @@ class ClosedStdout:
         finally:
             install.close()
 
+    def test_a_file_size_limit_ends_like_python_whether_or_not_sigxfsz_was_ignored(self):
+        install = harness.Installation(harness.entry_binary(self.entry), entry=self.entry)
+        try:
+            with tempfile.TemporaryDirectory() as scratch:
+                home = Path(scratch)
+                (home / "data").mkdir()
+                windows = [{"id": f"w-{index}", "title": "t" * 30} for index in range(300)]
+                fake = FakeArdia(home / "data" / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "windows": {"result": windows}})
+                try:
+                    for argv, limit, telemetry in ((["windows", "--json"], 4096, True), (["windows"], 4096, True), ([], 2048, False),
+                                                   (["--help"], 2048, False), (["--version"], 8, False)):
+                        for ignored in (False, True):
+                            with self.subTest(argv=argv, sigxfsz_ignored=ignored):
+                                python = run_limited([sys.executable, "-m", "ardia_cli", *argv], home, limit, ignored, telemetry)
+                                new = run_limited([*install.command("new"), *argv], home, limit, ignored, telemetry)
+                                self.assertEqual(new, python)
+                finally:
+                    fake.close()
+        finally:
+            install.close()
 
-@unittest.skipUnless(harness.binary(), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
+    def test_a_call_ends_like_python_when_a_standard_descriptor_was_closed_before_it_started(self):
+        install = harness.Installation(harness.entry_binary(self.entry), entry=self.entry)
+        try:
+            with tempfile.TemporaryDirectory() as scratch:
+                home = Path(scratch)
+                (home / "data").mkdir()
+                fake = FakeArdia(home / "data" / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "windows": {"result": [{"id": "w-1"}]},
+                                 "workspace": {"result": {"windows": [{"id": "w-1", "spaces": [{"profile": "p", "tabs": TABS[:2]}]}]}}})
+                try:
+                    for argv in (*CALLS, *LISTINGS):
+                        for fd in CLOSING:
+                            with self.subTest(argv=argv, closed=fd):
+                                python = run_with_closed([sys.executable, "-m", "ardia_cli", *argv], home, fd)
+                                new = run_with_closed([*install.command("new"), *argv], home, fd)
+                                self.assertEqual(new, python)
+                finally:
+                    fake.close()
+        finally:
+            install.close()
+
+
+@harness.requires(harness.binary(), ("rust",), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
 class RustClosedStdout(ClosedStdout, unittest.TestCase):
     entry = "rust"
 
 
-@unittest.skipUnless(harness.ts_binary() and harness.binary(), "build plugins/cli/ts and plugins/cli/rust first, or set ARDIA_TS_CLI and ARDIA_RUST_CLI")
+@harness.requires(harness.ts_binary() and harness.binary(), ("rust", "ts"), "build plugins/cli/ts and plugins/cli/rust first, or set ARDIA_TS_CLI and ARDIA_RUST_CLI")
 class TsClosedStdout(ClosedStdout, unittest.TestCase):
     entry = "ts"

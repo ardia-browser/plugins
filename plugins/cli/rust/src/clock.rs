@@ -191,6 +191,38 @@ fn parse_iso_at(text: &str) -> Option<Iso> {
     Some(Iso::At(base as f64 + clock - sign * offset))
 }
 
+#[cfg(target_os = "macos")]
+pub fn process_started_at() -> Option<f64> {
+    let mut mib = [libc::CTL_KERN, libc::KERN_PROC, libc::KERN_PROC_PID, std::process::id() as libc::c_int];
+    let mut buffer = [0u8; 1024];
+    let mut size = buffer.len();
+    let result = unsafe { libc::sysctl(mib.as_mut_ptr(), 4, buffer.as_mut_ptr().cast(), &mut size, std::ptr::null_mut(), 0) };
+    if result != 0 || size < 16 {
+        return None;
+    }
+    let seconds = i64::from_le_bytes(buffer[..8].try_into().ok()?);
+    let micros = i32::from_le_bytes(buffer[8..12].try_into().ok()?);
+    (seconds > 0).then(|| seconds as f64 + f64::from(micros) / 1e6)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn process_started_at() -> Option<f64> {
+    let raw = std::fs::read("/proc/self/stat").ok()?;
+    let close = raw.iter().rposition(|byte| *byte == b')')?;
+    let fields: Vec<&[u8]> = raw[close + 1..]
+        .split(|byte| byte.is_ascii_whitespace())
+        .filter(|field| !field.is_empty())
+        .collect();
+    let ticks: f64 = std::str::from_utf8(fields.get(19)?).ok()?.parse().ok()?;
+    let mut boot: libc::timespec = unsafe { std::mem::zeroed() };
+    if unsafe { libc::clock_gettime(libc::CLOCK_BOOTTIME, &mut boot) } != 0 {
+        return None;
+    }
+    let per_second = unsafe { libc::sysconf(libc::_SC_CLK_TCK) } as f64;
+    let age = boot.tv_sec as f64 + boot.tv_nsec as f64 / 1e9 - ticks / per_second;
+    (age >= 0.0).then(|| now() - age)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

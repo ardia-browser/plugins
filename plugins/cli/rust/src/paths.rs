@@ -242,19 +242,16 @@ pub fn read_fd(fd: &OwnedFd, limit: usize) -> io::Result<Vec<u8>> {
     Ok(out)
 }
 
-pub fn write_fd(fd: &OwnedFd, mut data: &[u8]) -> io::Result<()> {
-    while !data.is_empty() {
-        let wrote = unsafe { libc::write(fd.as_raw_fd(), data.as_ptr().cast(), data.len()) };
-        if wrote < 0 {
-            let error = io::Error::last_os_error();
-            if error.kind() == io::ErrorKind::Interrupted {
-                continue;
-            }
+pub fn write_once(fd: &OwnedFd, data: &[u8]) -> io::Result<()> {
+    loop {
+        if unsafe { libc::write(fd.as_raw_fd(), data.as_ptr().cast(), data.len()) } >= 0 {
+            return Ok(());
+        }
+        let error = io::Error::last_os_error();
+        if error.kind() != io::ErrorKind::Interrupted {
             return Err(error);
         }
-        data = &data[wrote as usize..];
     }
-    Ok(())
 }
 
 #[derive(Debug)]
@@ -342,16 +339,35 @@ pub fn open_child_dir(dir: &OwnedFd, name: &str, check_mode: bool) -> Result<Own
     Ok(fd)
 }
 
+fn waiting_fifo(dir: &OwnedFd, name: &str) -> bool {
+    let Ok(name) = cname(name) else { return false };
+    let mut found: libc::stat = unsafe { std::mem::zeroed() };
+    unsafe { libc::fstatat(dir.as_raw_fd(), name.as_ptr(), &mut found, libc::AT_SYMLINK_NOFOLLOW) == 0 && found.st_mode & libc::S_IFMT == libc::S_IFIFO }
+}
+
+fn open_regular(name: &str, dir: &OwnedFd, flags: libc::c_int) -> Result<OwnedFd, Failure> {
+    let fd = match openat(dir, name, flags | libc::O_NOFOLLOW | libc::O_NONBLOCK, 0o600) {
+        Err(error) if error.raw_os_error() == Some(libc::ENXIO) && waiting_fifo(dir, name) => return Err(Failure::Path(PathError)),
+        other => other?,
+    };
+    if !metadata(&fd)?.is_file() {
+        return Err(Failure::Path(PathError));
+    }
+    let now = check(unsafe { libc::fcntl(fd.as_raw_fd(), libc::F_GETFL) })?;
+    check(unsafe { libc::fcntl(fd.as_raw_fd(), libc::F_SETFL, now & !libc::O_NONBLOCK) })?;
+    Ok(fd)
+}
+
 pub fn open_private_file(name: &str, dir: &OwnedFd, flags: libc::c_int) -> Result<OwnedFd, Failure> {
     let mut retries = if flags & libc::O_CREAT != 0 { 4 } else { 0 };
     let fd = loop {
-        match openat(dir, name, flags | libc::O_NOFOLLOW, 0o600) {
-            Err(error) if error.kind() == io::ErrorKind::NotFound && retries > 0 => retries -= 1,
+        match open_regular(name, dir, flags) {
+            Err(error) if error.not_found() && retries > 0 => retries -= 1,
             other => break other?,
         }
     };
     let info = metadata(&fd)?;
-    if !info.is_file() || info.uid() != uid() {
+    if info.uid() != uid() {
         return Err(Failure::Path(PathError));
     }
     if info.permissions().mode() & 0o077 != 0 {
@@ -404,38 +420,48 @@ pub fn size_at(dir: &OwnedFd, name: &str) -> io::Result<u64> {
 }
 
 pub fn list_dir(dir: &OwnedFd) -> io::Result<Vec<String>> {
-    let here = c".";
-    let copy = loop {
-        let fd = unsafe { libc::openat(dir.as_raw_fd(), here.as_ptr(), libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC) };
-        if fd >= 0 || io::Error::last_os_error().raw_os_error() != Some(libc::EINTR) {
-            break check(fd)?;
-        }
-    };
+    let copy = check(unsafe { libc::fcntl(dir.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 0) })?;
     let stream = unsafe { libc::fdopendir(copy) };
     if stream.is_null() {
+        let error = io::Error::last_os_error();
         unsafe { libc::close(copy) };
-        return Err(io::Error::last_os_error());
+        return Err(error);
     }
     let mut names = Vec::new();
-    loop {
+    let failure = loop {
+        unsafe { *errno_location() = 0 };
         let entry = unsafe { libc::readdir(stream) };
         if entry.is_null() {
-            break;
+            let error = io::Error::last_os_error();
+            break (error.raw_os_error() != Some(0)).then_some(error);
         }
         let name = unsafe { CStr::from_ptr((*entry).d_name.as_ptr()) };
         let name = OsStr::from_bytes(name.to_bytes()).to_string_lossy().into_owned();
         if name != "." && name != ".." {
             names.push(name);
         }
+    };
+    unsafe {
+        libc::rewinddir(stream);
+        libc::closedir(stream);
     }
-    unsafe { libc::closedir(stream) };
-    Ok(names)
+    failure.map_or(Ok(names), Err)
+}
+
+#[cfg(target_os = "macos")]
+fn errno_location() -> *mut libc::c_int {
+    unsafe { libc::__error() }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn errno_location() -> *mut libc::c_int {
+    unsafe { libc::__errno_location() }
 }
 
 pub fn write_private(name: &str, dir: &OwnedFd, data: &[u8]) -> Result<(), Failure> {
     let temp = format!(".{name}.{}.tmp", std::process::id());
     let fd = open_private_file(&temp, dir, libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC)?;
-    write_fd(&fd, data)?;
+    write_once(&fd, data)?;
     drop(fd);
     rename_in(dir, &temp, name)?;
     Ok(())
@@ -511,5 +537,49 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
         assert_eq!(names, ["a", "b", "c"]);
         assert_eq!(offset, 0);
+    }
+
+    fn folder_opened_before_its_files(tag: &str) -> (PathBuf, OwnedFd) {
+        use std::os::fd::FromRawFd;
+        let dir = std::env::temp_dir().join(format!("ardia-list-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("before"), "").unwrap();
+        let path = CString::new(dir.to_str().unwrap()).unwrap();
+        let fd = unsafe { OwnedFd::from_raw_fd(libc::open(path.as_ptr(), libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC)) };
+        for name in ["after-1", "after-2"] {
+            std::fs::write(dir.join(name), "").unwrap();
+        }
+        (dir, fd)
+    }
+
+    #[test]
+    fn lists_what_python_lists_in_a_folder_opened_before_its_files() {
+        use std::os::unix::process::CommandExt;
+        let python = std::env::var("ARDIA_TEST_PYTHON").unwrap_or_else(|_| "python3".into());
+        let (theirs, their_fd) = folder_opened_before_its_files("python");
+        let (mine, my_fd) = folder_opened_before_its_files("rust");
+        let raw = their_fd.as_raw_fd();
+        let script = "import json, os; names = sorted(os.listdir(3)); print(json.dumps([names, os.lseek(3, 0, os.SEEK_CUR)]))";
+        let mut command = std::process::Command::new(&python);
+        command.args(["-I", "-c", script]);
+        unsafe {
+            command.pre_exec(move || {
+                if libc::dup2(raw, 3) == 3 && libc::fcntl(3, libc::F_SETFD, 0) == 0 {
+                    Ok(())
+                } else {
+                    Err(io::Error::last_os_error())
+                }
+            });
+        }
+        let python_saw = command.output().unwrap();
+        assert!(python_saw.status.success(), "{}", String::from_utf8_lossy(&python_saw.stderr));
+        let mut names = list_dir(&my_fd).unwrap();
+        names.sort();
+        let offset = unsafe { libc::lseek(my_fd.as_raw_fd(), 0, libc::SEEK_CUR) };
+        std::fs::remove_dir_all(&theirs).unwrap();
+        std::fs::remove_dir_all(&mine).unwrap();
+        let ours = format!("[{names:?}, {offset}]\n");
+        assert_eq!(String::from_utf8_lossy(&python_saw.stdout), ours);
     }
 }
