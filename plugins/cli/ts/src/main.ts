@@ -46,7 +46,9 @@ async function main(words: string[]): Promise<number> {
   if (asksForVersion(argv) && servesNatively("--version")) {
     try {
       writeSync(1, `ardia ${cliVersion()}\n`);
-    } catch {}
+    } catch (error) {
+      return (await import("./printable.ts")).stdoutFlushFailed(error);
+    }
     return 0;
   }
   return (await serve(argv, bundledPython(installRoot()))) ?? HAND_BACK;
