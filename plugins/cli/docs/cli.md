@@ -120,8 +120,13 @@ you bump a pin.
 - `ardia call METHOD [--params JSON|-] [-p key=value]… [-p key:=json]… [--timeout S] [--json] [--data-dir DIR]` sends
   any method to `<data dir>/ArdiaControl.sock` (`hello` first, as every control command does) and prints the result:
   JSON with `--json`, otherwise a readable `key: value` / `- item` outline with control characters escaped, or
-  `✓ METHOD` for a null result. `--params` is a JSON object (`-` reads it from stdin, up to 1 MB); `-p key=value`
-  sets a string and `-p key:=json` any JSON value, and `-p` wins over `--params` for the same key. `--timeout` is seconds
+  `✓ METHOD` for a null result. `--params` is a JSON object (`-` reads it from stdin, up to 1 MB in bytes); `-p key=value`
+  sets a string and `-p key:=json` any JSON value, and `-p` wins over `--params` for the same key. Params are checked
+  before connecting and must be clean JSON: UTF-8, no lone surrogates (an escaped `\ud800` too), no `NaN` or
+  `Infinity`, no number a double can't hold (`1e400`), no key twice, at most 64 levels deep, and not empty. Empty
+  input is refused rather than read as `{}`: an empty pipe usually means the command feeding it failed, and running a
+  method with no params then could change something nobody asked for; send `{}` for no params. The whole request line
+  must fit the socket's 1 MB (`MAX_LINE`, bytes). Any of these exits 2, like other usage errors, with nothing sent. `--timeout` is seconds
   above 0 and up to 600 (default 30), checked before connecting; an unknown method's nearest-name lookup (`methods`)
   runs only inside what is left of it, and not at all when the unknown method is `methods` itself. A refusal prints
   `ardia call: <Ardia's message>` and exits 1; an unknown method adds the closest name from `methods`, or, on an Ardia
@@ -976,8 +981,9 @@ DevTools server, and nothing in the command changes.
 `data`), or `✓ <method>` for an empty result. It goes to the session's tab, to the tab `--target` names (`t1`,
 `tab-…`, a label or a targetId, as `tab` takes them; attached without becoming the session's tab), or with
 `--target browser` to the browser connection itself (`Browser.*`, `Target.*`, `Storage.*`, `SystemInfo.*`). Params
-work as in `ardia call`, with `--param` for `-p` (agent-browser's `-p` is its provider flag); `--params -` reads stdin,
-up to 1 MB. Every call counts as a mutation, so a timeout or a dropped connection reports the outcome as unknown and
+work as in `ardia call`, with `--param` for `-p` (agent-browser's `-p` is its provider flag), and are checked the same
+way before the daemon starts; `--params -` reads stdin, up to 1 MB in bytes, and the encoded params are at most 1 MB.
+A bad param is a usage error, exit 1 as for every browse command. Every call counts as a mutation, so a timeout or a dropped connection reports the outcome as unknown and
 a `batch` stops there. Events aren't printed, and a domain it enables stays on for the tab until the session ends. A
 method name that isn't `Domain.method` is a usage error. Its result is page content (`--content-boundaries` wraps it)
 and goes through the output cap. Telemetry: the browse command event's `subcommand` `cdp`, with `error_code`

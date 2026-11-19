@@ -343,13 +343,37 @@ def params_from_stdin(args: list[str]) -> bool:
     return "--params=-" in args or any(a == "--params" and b == "-" for a, b in zip(args, args[1:]))
 
 
-def check_cdp(args: list[str]) -> None:
+def cdp_params(raw: str | None, pairs: list[str], stdin: str | None) -> dict:
+    import io
+
+    from ardia_cli.call_cli import ParamsError, build_params
+
+    try:
+        params = build_params(raw, pairs, io.StringIO(stdin or "")) or {}
+    except ParamsError as error:
+        raise Usage(str(error).replace("-p ", "--param ")) from None
+    if len(json.dumps(params, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > MAX_CDP_STDIN:
+        raise Usage("--params is over 1 MB once encoded")
+    return params
+
+
+def read_cdp_stdin() -> str:
+    from ardia_cli.call_cli import ParamsError, read_params_stdin
+
+    try:
+        return read_params_stdin(sys.stdin)
+    except ParamsError as error:
+        raise Usage(str(error)) from None
+
+
+def check_cdp(args: list[str], stdin: str | None) -> None:
     from ardia_cli.browse.commands import CDP_FLAGS, parse
     from ardia_cli.browse.script import parse_timeout
 
     options, _ = parse(args, CDP_FLAGS)
     if options.get("timeout") is not None:
         parse_timeout(options["timeout"])
+    cdp_params(options.get("params"), options.get("param") or [], stdin)
 
 
 def read_stdin_text() -> str:
@@ -528,13 +552,11 @@ def run(argv: list[str]) -> int:
                 or (command == "batch" and not [a for a in args if not a.startswith("--")] and not sys.stdin.isatty()):
             stdin = sys.stdin.read()
         elif command == "cdp" and params_from_stdin(args):
-            stdin = sys.stdin.read(MAX_CDP_STDIN + 1)
-            if len(stdin) > MAX_CDP_STDIN:
-                raise Usage("--params from stdin is over 1 MB")
+            stdin = read_cdp_stdin()
         elif command == "read":
             stdin = read_stdin_urls(args)
         if command == "cdp":
-            check_cdp(args)
+            check_cdp(args, stdin)
         elif command == "script":
             stdin = script_source(args, os.getcwd())
         if command == "close" and "--all" in args:

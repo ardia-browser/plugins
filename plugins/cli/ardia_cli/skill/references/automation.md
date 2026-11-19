@@ -108,9 +108,9 @@ ardia call <name> -p key=value -p limit:=20 --json   # -p k=v is a string, k:=js
 ardia call <name> --params '{"ids": ["tab-1"]}'      # or --params - to read the JSON from stdin
 ```
 
-- `ardia call` prints Ardia's result (JSON with `--json`), exits 1 with Ardia's message when it refuses, and 2 when
-  Ardia can't be reached or the connection dropped after sending (then the method may or may not have run: check
-  before retrying one that `changes`).
+- `ardia call` prints Ardia's result (JSON with `--json`) and exits 1 with Ardia's message when it refuses. Exit 2
+  means bad params (nothing sent: clean JSON only, `{}` for none), Ardia can't be reached, or the outcome is unknown
+  ("may or may not have run": check before retrying one that `changes`).
 - Ask before calling a method marked `changes` that the user didn't ask for, as for any unasked step.
 - "this Ardia is too old to list its methods": ask the user to update Ardia; the commands above still work.
 - On a page, `ardia browse cdp <Domain.method> [--param k=v] [--param k:=json] [--target browser|t<N>]` sends any Chrome

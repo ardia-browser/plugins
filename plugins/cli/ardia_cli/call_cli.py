@@ -18,9 +18,12 @@ method's params, result and whether it changes anything.
 Params come from --params (a JSON object, or - to read one from stdin) and -p (repeatable): -p key=value sets a
 string, -p key:=value a JSON value (a number, true, null, an object or a list). -p wins over --params for the same key.
 
-Exit status: 0 done, 1 Ardia refused or failed the method, or the params aren't valid, 2 Ardia can't be reached (or
-the connection dropped after the request went out, or Ardia answered with neither a result nor an error, so the method
-may or may not have run).
+Params must be clean JSON: UTF-8, no lone surrogates, no NaN or Infinity, no number too large for a double, no key
+twice, at most 64 levels deep, and not empty (send {} for no params). The whole request is at most 1 MB.
+
+Exit status: 0 done, 1 Ardia refused or failed the method, 2 the params or options aren't valid (nothing was sent),
+Ardia can't be reached, or the connection dropped after the request went out, or Ardia answered with neither a result
+nor an error (so the method may or may not have run).
 
 Examples:
   ardia methods
@@ -75,17 +78,91 @@ def recorded_code(code) -> str:
     return code if isinstance(code, str) and code in PROTOCOL_CODES else "other"
 
 
+MAX_PARAMS_DEPTH = 64
+
+
+def read_params_stdin(stdin=None) -> str:
+    stream = stdin or sys.stdin
+    binary = getattr(stream, "buffer", None)
+    raw = binary.read(MAX_STDIN_PARAMS + 1) if binary is not None else stream.read(MAX_STDIN_PARAMS + 1).encode("utf-8", "surrogatepass")
+    if len(raw) > MAX_STDIN_PARAMS:
+        raise ParamsError("--params from stdin is over 1 MB")
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ParamsError(f"--params from stdin isn't UTF-8 (byte 0x{raw[error.start]:02x} at offset {error.start})") from None
+
+
+def strict_json(text: str, what: str):
+    def unique(pairs):
+        found = {}
+        for key, value in pairs:
+            if key in found:
+                raise ParamsError(f"{what} has the key {json.dumps(key)} twice")
+            found[key] = value
+        return found
+
+    def no_constant(name):
+        raise ParamsError(f"{what} has {name}, which isn't JSON")
+
+    def finite_float(literal):
+        value = float(literal)
+        if not math.isfinite(value):
+            raise ParamsError(f"{what} has the number {literal[:24]}, which is too large for JSON")
+        return value
+
+    def bounded_int(literal):
+        value = int(literal)
+        try:
+            float(value)
+        except OverflowError:
+            raise ParamsError(f"{what} has the number {literal[:24]}…, which is too large for JSON") from None
+        return value
+
+    if not text.strip():
+        raise ParamsError(f"{what} is empty; give a JSON object, like {{}}")
+    try:
+        value = json.loads(text, object_pairs_hook=unique, parse_constant=no_constant, parse_float=finite_float, parse_int=bounded_int)
+    except RecursionError:
+        raise ParamsError(f"{what} is nested deeper than {MAX_PARAMS_DEPTH} levels") from None
+    except ValueError as error:
+        raise ParamsError(f"{what} isn't valid JSON ({error})") from None
+    checked(value, what)
+    return value
+
+
+def checked(value, what: str) -> None:
+    stack = [(value, 0)]
+    while stack:
+        item, depth = stack.pop()
+        if isinstance(item, (dict, list)):
+            if depth >= MAX_PARAMS_DEPTH:
+                raise ParamsError(f"{what} is nested deeper than {MAX_PARAMS_DEPTH} levels")
+            if isinstance(item, dict):
+                for key in item:
+                    plain_text(key, what)
+                stack.extend((child, depth + 1) for child in item.values())
+            else:
+                stack.extend((child, depth + 1) for child in item)
+        elif isinstance(item, str):
+            plain_text(item, what)
+        elif isinstance(item, float) and not math.isfinite(item):
+            raise ParamsError(f"{what} has a number that is too large for JSON")
+
+
+def plain_text(text: str, what: str) -> None:
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError as error:
+        raise ParamsError(f"{what} has a lone surrogate (\\u{ord(text[error.start]):04x}), which isn't valid Unicode") from None
+
+
 def build_params(raw: str | None, pairs: list[str], stdin=None) -> dict | None:
     params = None
     if raw is not None:
         if raw == "-":
-            raw = (stdin or sys.stdin).read(MAX_STDIN_PARAMS + 1)
-            if len(raw) > MAX_STDIN_PARAMS:
-                raise ParamsError("--params from stdin is over 1 MB")
-        try:
-            params = json.loads(raw) if raw.strip() else {}
-        except ValueError as error:
-            raise ParamsError(f"--params isn't valid JSON ({error})") from None
+            raw = read_params_stdin(stdin)
+        params = strict_json(raw, "--params")
         if not isinstance(params, dict):
             raise ParamsError("--params must be a JSON object, like '{\"limit\": 10}'")
     for pair in pairs:
@@ -94,11 +171,12 @@ def build_params(raw: str | None, pairs: list[str], stdin=None) -> dict | None:
             raise ParamsError(f"-p {pair}: give key=value, or key:=json")
         params = params if params is not None else {}
         if key.endswith(":"):
-            try:
-                params[key[:-1]] = json.loads(value)
-            except ValueError as error:
-                raise ParamsError(f"-p {pair}: the value after := isn't valid JSON ({error})") from None
+            key = key[:-1]
+            plain_text(key, f"-p {key}")
+            params[key] = strict_json(value, f"-p {key}: the value after :=")
         else:
+            plain_text(key, f"-p {key}")
+            plain_text(value, f"-p {key}")
             params[key] = value
     return params
 
@@ -223,11 +301,14 @@ def cmd_call(args) -> int:
 
     telemetry.note_command("call", family(args.method), allowed_flags={"--params", "-p", "--param", "--timeout", "--json", "--data-dir"})
     try:
+        plain_text(args.method, "METHOD")
         params = build_params(args.params, args.pairs)
+        if len(control.request_line(control.WIDEST_ID, args.method, params)) > control.MAX_LINE:
+            raise ParamsError("the request is over 1 MB, the most Ardia's control socket takes in one line")
     except ParamsError as error:
         telemetry.note_error_code("bad_params")
         complain(f"ardia call: {error}")
-        return 1
+        return 2
     timeout = args.timeout
 
     async def work(connection):

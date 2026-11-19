@@ -1971,10 +1971,8 @@ CDP_FLAGS = {"--params": "value", "--param": "multi", "--target": "value", "--ti
 
 @command("cdp")
 async def cmd_cdp(ctx: Ctx, argv):
-    import io
-
+    from ardia_cli.browse.cli import cdp_params
     from ardia_cli.browse.script import parse_timeout
-    from ardia_cli.call_cli import ParamsError, build_params
 
     options, args = parse(argv, CDP_FLAGS)
     need(args, 1, CDP_USAGE)
@@ -1983,10 +1981,7 @@ async def cmd_cdp(ctx: Ctx, argv):
     method = args[0]
     if not CDP_METHOD.match(method):
         raise Usage(f"{method} isn't a DevTools method name; give Domain.method, like Page.getLayoutMetrics")
-    try:
-        params = build_params(options.get("params"), options.get("param") or [], io.StringIO(ctx.stdin or "")) or {}
-    except ParamsError as error:
-        raise Usage(str(error).replace("-p ", "--param ")) from None
+    params = cdp_params(options.get("params"), options.get("param") or [], ctx.stdin)
     timeout = parse_timeout(options["timeout"]) if options.get("timeout") else 30
     target = options.get("target")
     try:

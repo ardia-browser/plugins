@@ -18,6 +18,7 @@ CONNECT_TIMEOUT = 5.0
 PROTOCOL = 4
 MIN_APP_PROTOCOL = 1
 CALL_TIMEOUT = 30.0
+WIDEST_ID = 2 ** 53
 ANNOUNCE_TIMEOUT = 1.0
 EVENT_QUEUE_CAP = 1000
 EVENTS = (
@@ -92,6 +93,13 @@ class MethodError(Exception):
         super().__init__(message)
         self.code = code
         self.message = message
+
+
+def request_line(ident: int, method: str, params=None) -> bytes:
+    request = {"id": ident, "method": method}
+    if params is not None:
+        request["params"] = params
+    return json.dumps(request, ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\n"
 
 
 def unreachable(detail: str | None = None) -> Unreachable:
@@ -226,10 +234,7 @@ class Connection:
             raise unreachable(self._lost)
         self._next_id += 1
         ident = self._next_id
-        request = {"id": ident, "method": method}
-        if params is not None:
-            request["params"] = params
-        line = json.dumps(request, ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\n"
+        line = request_line(ident, method, params)
         if len(line) > MAX_LINE:
             raise MethodError("bad_request", "the request is longer than 1 MB")
         future = asyncio.get_running_loop().create_future()

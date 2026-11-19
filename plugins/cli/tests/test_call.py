@@ -73,7 +73,7 @@ class Call(CallBase):
         for argv, said in ((["--params", "[1]"], "must be a JSON object"), (["--params", "{nope"], "isn't valid JSON"),
                            (["-p", "novalue"], "give key=value"), (["-p", "n:={bad"], "after := isn't valid JSON")):
             status, _, err = self.run_cli("call", "history.search", *argv)
-            self.assertEqual(status, 1, argv)
+            self.assertEqual(status, 2, argv)
             self.assertIn(said, err)
         self.assertEqual(server.requests, [])
 
@@ -166,6 +166,62 @@ class Call(CallBase):
         self.assertEqual(status, 1)
         self.assertNotIn("methods", [m for m, _ in server.requests])
         self.assertNotIn("did you mean", err)
+
+    def piped(self, raw: bytes, *argv):
+        with mock.patch("sys.stdin", io.TextIOWrapper(io.BytesIO(raw), encoding="utf-8")):
+            return self.run_cli("call", "history.search", "--params", "-", *argv)
+
+    def test_params_that_arent_clean_json_never_reach_ardia(self):
+        server = self.serve_methods()
+        deep = '{"a": ' + "[" * 70 + "]" * 70 + "}"
+        very_deep = '{"a": ' + "[" * 100000 + "]" * 100000 + "}"
+        for raw, said in (('{"q": "\\ud800"}', "lone surrogate"), ('{"\\udfff": 1}', "lone surrogate"),
+                          ('{"n": NaN}', "NaN"), ('{"n": -Infinity}', "-Infinity"), ('{"n": 1e400}', "too large"),
+                          ('{"n": ' + "9" * 400 + "}", "too large"), ('{"a": 1, "a": 2}', 'key "a" twice'),
+                          ('{"o": {"b": 1, "b": 1}}', 'key "b" twice'), (deep, "nested deeper than 64"),
+                          (very_deep, "nested deeper than 64"), ("", "is empty"), ("   \n", "is empty")):
+            status, out, err = self.run_cli("call", "history.search", "--params", raw)
+            self.assertEqual((status, out), (2, ""), raw[:40])
+            self.assertIn(said, err, raw[:40])
+            self.assertNotIn("Traceback", err)
+        self.assertEqual(server.requests, [])
+
+    def test_stdin_must_be_utf8_and_is_limited_in_bytes(self):
+        server = self.serve_methods()
+        status, _, err = self.piped(b'{"q": "\xff"}')
+        self.assertEqual(status, 2)
+        self.assertIn("isn't UTF-8", err)
+        status, _, err = self.piped(b"")
+        self.assertEqual(status, 2)
+        self.assertIn("is empty", err)
+        wide = json.dumps({"q": "é" * (call_cli.MAX_STDIN_PARAMS // 2 + 10)}, ensure_ascii=False).encode()
+        self.assertLess(len(wide.decode()), call_cli.MAX_STDIN_PARAMS)
+        status, _, err = self.piped(wide)
+        self.assertEqual(status, 2)
+        self.assertIn("over 1 MB", err)
+        self.assertEqual(server.requests, [])
+        status, _, err = self.piped('{"q": "ok é"}'.encode())
+        self.assertEqual(status, 0, err)
+        self.assertEqual(server.requests[-1], ("history.search", {"q": "ok é"}))
+
+    def test_the_whole_request_must_fit_the_socket_line_before_connecting(self):
+        server = self.serve_methods()
+        big = "é" * (control.MAX_LINE // 2)
+        status, _, err = self.run_cli("call", "history.search", "-p", f"q={big}")
+        self.assertEqual(status, 2)
+        self.assertIn("over 1 MB", err)
+        self.assertEqual(server.requests, [])
+
+    def test_pairs_are_checked_too(self):
+        server = self.serve_methods()
+        for pair, said in (("q=\udcff", "lone surrogate"), ("n:=NaN", "NaN"), ("o:={\"a\":1,\"a\":2}", "twice")):
+            status, _, err = self.run_cli("call", "history.search", "-p", pair)
+            self.assertEqual(status, 2, pair)
+            self.assertIn(said, err)
+        status, _, err = self.run_cli("call", "bad\udced.method")
+        self.assertEqual(status, 2)
+        self.assertIn("METHOD has a lone surrogate", err)
+        self.assertEqual(server.requests, [])
 
 class Methods(CallBase):
     def test_lists_what_ardia_offers(self):

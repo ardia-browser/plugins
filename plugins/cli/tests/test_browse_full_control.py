@@ -160,6 +160,17 @@ class CheckedBeforeConnecting(unittest.TestCase):
             self.assertEqual(status, 1, value)
             self.assertIn("--timeout", err)
 
+    def test_bad_params_fail_before_connecting(self):
+        for argv, stdin, said in ((["--params", "-"], b'{"a": "\xff"}', "isn't UTF-8"), (["--params", "-"], b"", "is empty"),
+                                  (["--params", '{"a": "\\ud800"}'], "", "lone surrogate"), (["--params", '{"n": NaN}'], "", "NaN"),
+                                  (["--params", '{"n": 1e400}'], "", "too large"), (["--params", '{"a": 1, "a": 2}'], "", "twice"),
+                                  (["--param", "n:=Infinity"], "", "Infinity"),
+                                  (["--params", "-"], json.dumps({"q": "é" * 600000}, ensure_ascii=False).encode(), "over 1 MB")):
+            status, err = self.browse("cdp", "Runtime.evaluate", *argv, stdin=stdin)
+            self.assertEqual(status, 1, argv)
+            self.assertIn(said, err, argv)
+            self.assertNotIn("Traceback", err)
+
     def test_a_huge_timeout_never_overflows_the_client_deadline(self):
         import math
 
