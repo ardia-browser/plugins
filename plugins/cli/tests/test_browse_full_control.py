@@ -680,6 +680,14 @@ class CheckedBeforeConnecting(unittest.TestCase):
         self.assertLessEqual(max(capped.timeouts), 0.05)
         self.assertLess(client.RECV_CHUNK, 2 ** 31 / 1000)
 
+    def test_the_e2e_daemons_dont_inherit_no_auto_dialog(self):
+        from unittest import mock
+
+        with mock.patch.dict(os.environ, {"AGENT_BROWSER_NO_AUTO_DIALOG": "1"}):
+            env = PlainDevToolsServer.daemon_env(self.temp)
+        self.assertNotIn("AGENT_BROWSER_NO_AUTO_DIALOG", env)
+        self.assertEqual(env["ARDIA_DATA_DIR"], str(self.temp / "data"))
+
     def test_a_huge_timeout_never_overflows_the_client_deadline(self):
         import math
 
@@ -903,7 +911,7 @@ class PlainDevToolsServer(unittest.TestCase):
             except OSError:
                 time.sleep(0.2)
         (cls.temp / "data").mkdir()
-        cls.env = dict(os.environ, ARDIA_DATA_DIR=str(cls.temp / "data"), ARDIA_TELEMETRY="0", PYTHONPATH=str(CLI))
+        cls.env = cls.daemon_env(cls.temp)
         cls.url = f"http://127.0.0.1:{cls.http.server_address[1]}/page.html"
         for session in ("warm", "warm-again"):
             cls.browse("open", cls.url, session=session, check=False)
@@ -920,10 +928,16 @@ class PlainDevToolsServer(unittest.TestCase):
         cls.http.shutdown()
         shutil.rmtree(cls.temp, True)
 
+    @staticmethod
+    def daemon_env(temp):
+        env = dict(os.environ, ARDIA_DATA_DIR=str(temp / "data"), ARDIA_TELEMETRY="0", PYTHONPATH=str(CLI))
+        env.pop("AGENT_BROWSER_NO_AUTO_DIALOG", None)
+        return env
+
     @classmethod
-    def browse(cls, *args, session, check=True, stdin=None):
+    def browse(cls, *args, session, check=True, stdin=None, timeout=90):
         done = subprocess.run([sys.executable, "-m", "ardia_cli", "browse", "--port", str(cls.port), "--session", session, *args],
-                              capture_output=True, text=True, timeout=90, env=cls.env, input=stdin)
+                              capture_output=True, text=True, timeout=timeout, env=cls.env, input=stdin)
         if check and done.returncode != 0:
             raise AssertionError(f"{args}: {done.returncode}\n{done.stdout}\n{done.stderr}")
         return done
@@ -1027,7 +1041,12 @@ class PlainDevToolsServer(unittest.TestCase):
     def dialog_once_open(self, session):
         deadline = time.monotonic() + 15
         while time.monotonic() < deadline:
-            status = json.loads(self.browse("dialog", "status", "--json", session=session).stdout)["data"]
+            left = deadline - time.monotonic()
+            try:
+                done = self.browse("dialog", "status", "--json", session=session, timeout=max(left, 0.1))
+            except subprocess.TimeoutExpired:
+                break
+            status = json.loads(done.stdout)["data"]
             if status.get("hasDialog"):
                 return status
             time.sleep(0.2)
