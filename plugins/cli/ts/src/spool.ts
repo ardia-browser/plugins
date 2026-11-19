@@ -26,6 +26,7 @@ import {
   writePrivate,
 } from "./privatefs.ts";
 import type { Target } from "./telemetry.ts";
+import { utf8 } from "./pystr.ts";
 
 const FOLDER = "Telemetry";
 const SPOOL = "cli-queue.jsonl";
@@ -49,7 +50,7 @@ function openFolder(root: string, create: boolean): Dir {
 }
 
 function lineOf(record: Value): Buffer {
-  return Buffer.from(`${dumps(record, "compact")}\n`, "utf8");
+  return utf8(`${dumps(record, "compact")}\n`);
 }
 
 export function keepLocalCopy(root: string, record: JsonObject, sent: boolean): boolean {
@@ -302,7 +303,7 @@ export function startFlush(dir: Dir, target: Target, python: string | null): voi
       ["next_at", new Float(at + FLUSH_INTERVAL_S)],
     ]);
     try {
-      writePrivate(FLUSH_STATE, dir, Buffer.from(dumps(written, "spaced"), "utf8"));
+      writePrivate(FLUSH_STATE, dir, utf8(dumps(written, "spaced")));
     } catch {
       return;
     }
@@ -329,7 +330,7 @@ function spawnFlusher(python: string, target: Target): void {
     });
     child.on("error", () => {});
     child.stdin?.on("error", () => {});
-    child.stdin?.end(dumps(config, "spaced", true));
+    child.stdin?.end(utf8(dumps(config, "spaced", true)));
     child.unref();
   } catch {}
 }

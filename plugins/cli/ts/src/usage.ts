@@ -6,6 +6,7 @@ import { close, closeDir, type Dir, openPrivate, readPrivate, takeLockRetrying, 
 import { iterateOrEmpty, truthy } from "./py.ts";
 import type { Call } from "./telemetry.ts";
 import { isDevBuild } from "./version.ts";
+import { utf8 } from "./pystr.ts";
 
 const FOLDER = "Usage";
 const STATE = "usage.json";
@@ -83,7 +84,7 @@ export function recordUsage(call: Call, status: number): void {
     const state: JsonObject = parsed instanceof Map ? parsed : new Map();
     note(state, name, status, now());
     try {
-      writePrivate(STATE, dir, Buffer.from(dumps(state, "spaced"), "utf8"));
+      writePrivate(STATE, dir, utf8(dumps(state, "spaced")));
     } catch {}
   } catch {
     return;

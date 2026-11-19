@@ -1,4 +1,5 @@
 import { Float, floatRepr, isWideInt, type JsonObject, type Value } from "./json.ts";
+import { codePoints, joinCodePoints } from "./pystr.ts";
 
 export class Unsupported extends Error {
   constructor() {
@@ -27,14 +28,14 @@ export function getOrNull(value: Value | undefined, key: string): Value {
 export function iterateOrEmpty(value: Value | undefined): Value[] {
   if (!truthy(value) || value === undefined) return [];
   if (Array.isArray(value)) return value;
-  if (typeof value === "string") return [...value];
+  if (typeof value === "string") return codePoints(value);
   if (value instanceof Map) return [...value.keys()];
   throw new Unsupported();
 }
 
 export function length(value: Value | undefined): number {
   if (Array.isArray(value)) return value.length;
-  if (typeof value === "string") return [...value].length;
+  if (typeof value === "string") return codePoints(value).length;
   if (value instanceof Map) return value.size;
   throw new Unsupported();
 }
@@ -148,25 +149,23 @@ export function isSpace(ch: string): boolean {
 }
 
 export function rstrip(text: string, strip: (ch: string) => boolean = isSpace): string {
-  const chars = [...text];
+  const chars = codePoints(text);
   let end = chars.length;
   while (end > 0 && strip(chars[end - 1] ?? "")) end -= 1;
-  return chars.slice(0, end).join("");
+  return joinCodePoints(chars.slice(0, end));
 }
 
 export function strip(text: string, drop: (ch: string) => boolean): string {
-  const chars = [...text];
+  const chars = codePoints(text);
   let start = 0;
   while (start < chars.length && drop(chars[start] ?? "")) start += 1;
   let end = chars.length;
   while (end > start && drop(chars[end - 1] ?? "")) end -= 1;
-  return chars.slice(start, end).join("");
+  return joinCodePoints(chars.slice(start, end));
 }
 
 function charCount(text: string): number {
-  let count = 0;
-  for (const _ of text) count += 1;
-  return count;
+  return codePoints(text).length;
 }
 
 export function right(text: string, width: number): string {

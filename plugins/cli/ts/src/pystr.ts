@@ -1,0 +1,57 @@
+export const SPLIT = 0xffff;
+export const SPLIT_TEXT = String.fromCharCode(SPLIT);
+const SPLIT_AFTER_HIGH = /([\ud800-\udbff])￿/g;
+
+export function isHigh(unit: number): boolean {
+  return unit >= 0xd800 && unit < 0xdc00;
+}
+
+export function isLow(unit: number): boolean {
+  return unit >= 0xdc00 && unit < 0xe000;
+}
+
+export function splitsAfterHigh(unit: number): boolean {
+  return isLow(unit) || unit === SPLIT;
+}
+
+export function joinPy(left: string, right: string): string {
+  if (left === "" || right === "") return left + right;
+  return isHigh(left.charCodeAt(left.length - 1)) && splitsAfterHigh(right.charCodeAt(0)) ? left + SPLIT_TEXT + right : left + right;
+}
+
+export function joinCodePoints(points: string[]): string {
+  let out = "";
+  for (const point of points) out = joinPy(out, point);
+  return out;
+}
+
+export function codePoints(text: string): string[] {
+  const out: string[] = [];
+  for (let at = 0; at < text.length; ) {
+    const unit = text.charCodeAt(at);
+    if (isHigh(unit)) {
+      const next = text.charCodeAt(at + 1);
+      if (next === SPLIT) {
+        out.push(text[at] as string);
+        at += 2;
+        continue;
+      }
+      if (isLow(next)) {
+        out.push(text.slice(at, at + 2));
+        at += 2;
+        continue;
+      }
+    }
+    out.push(text[at] as string);
+    at += 1;
+  }
+  return out;
+}
+
+export function plain(text: string): string {
+  return text.includes(SPLIT_TEXT) ? text.replace(SPLIT_AFTER_HIGH, "$1") : text;
+}
+
+export function utf8(text: string): Buffer {
+  return Buffer.from(plain(text), "utf8");
+}

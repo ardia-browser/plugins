@@ -1,4 +1,5 @@
 import { decodeJsonBytes } from "./json-bytes.ts";
+import { codePoints, isHigh, joinPy, SPLIT_TEXT, splitsAfterHigh } from "./pystr.ts";
 
 export class Float {
   constructor(readonly value: number) {}
@@ -189,7 +190,7 @@ class Parser {
         if (code === 0x22 || code === 0x5c || code < 0x20) break;
         this.at += 1;
       }
-      out += this.text.slice(start, this.at);
+      out = joinPy(out, this.text.slice(start, this.at));
       const next = this.peek();
       if (next === undefined) return undefined;
       if (next === '"') {
@@ -213,12 +214,12 @@ class Parser {
         this.at += 2;
         const low = this.hex4();
         if (low !== undefined && low >= 0xdc00 && low < 0xe000) {
-          out += String.fromCodePoint(0x10000 + ((unit - 0xd800) << 10) + (low - 0xdc00));
+          out = joinPy(out, String.fromCodePoint(0x10000 + ((unit - 0xd800) << 10) + (low - 0xdc00)));
           continue;
         }
         this.at = saved;
       }
-      out += String.fromCharCode(unit);
+      out = joinPy(out, String.fromCharCode(unit));
     }
   }
 
@@ -291,17 +292,25 @@ function hex4(unit: number): string {
 }
 
 export function quote(text: string, ensureAscii: boolean): string {
-  let out = '"';
-  for (const ch of text) {
-    const code = ch.codePointAt(0) ?? 0;
-    const short = SHORT_ESCAPES[code];
-    if (short !== undefined) out += short;
-    else if (code < 0x20) out += hex4(code);
+  const out: string[] = ['"'];
+  let afterLoneHigh = false;
+  for (const point of codePoints(text)) {
+    const code = point.charCodeAt(0);
+    const short = point.length === 1 ? SHORT_ESCAPES[code] : undefined;
+    if (short !== undefined) out.push(short);
+    else if (code < 0x20) out.push(hex4(code));
     else if (ensureAscii && code > 0x7e) {
-      for (let index = 0; index < ch.length; index += 1) out += hex4(ch.charCodeAt(index));
-    } else out += ch;
+      for (let index = 0; index < point.length; index += 1) out.push(hex4(point.charCodeAt(index)));
+    } else {
+      if (afterLoneHigh && splitsAfterHigh(code)) out.push(SPLIT_TEXT);
+      out.push(point);
+      afterLoneHigh = point.length === 1 && isHigh(code);
+      continue;
+    }
+    afterLoneHigh = false;
   }
-  return `${out}"`;
+  out.push('"');
+  return out.join("");
 }
 
 export type Style = "compact" | "spaced" | "indented";

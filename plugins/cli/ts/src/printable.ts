@@ -1,6 +1,7 @@
 import { write, writeSync } from "node:fs";
 import { interrupted as interruptRequested } from "./control.ts";
 import { codeOf, errnoOf, strerror } from "./paths.ts";
+import { utf8 } from "./pystr.ts";
 
 function escaped(text: string, controls: RegExp): string {
   return text.replace(controls, (found) => `\\u${found.charCodeAt(0).toString(16).padStart(4, "0")}`);
@@ -27,7 +28,7 @@ export function sleepMs(ms: number): void {
 }
 
 export function writeAll(fd: number, text: string | Uint8Array): void {
-  const bytes = typeof text === "string" ? Buffer.from(text, "utf8") : text;
+  const bytes = typeof text === "string" ? utf8(text) : text;
   let offset = 0;
   while (offset < bytes.length) {
     try {
@@ -70,7 +71,7 @@ export class Output {
   }
 
   async flush(stopped: () => boolean = interruptRequested): Promise<void> {
-    const bytes = Buffer.from(this.pending.join(""), "utf8");
+    const bytes = utf8(this.pending.join(""));
     this.pending = [];
     let offset = 0;
     while (offset < bytes.length && !this.closed) {

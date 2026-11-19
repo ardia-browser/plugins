@@ -1,3 +1,5 @@
+import { isHigh, SPLIT, splitsAfterHigh } from "./pystr.ts";
+
 type Encoding = "utf-8" | "utf-8-sig" | "utf-16" | "utf-16-be" | "utf-16-le" | "utf-32" | "utf-32-be" | "utf-32-le";
 
 function startsWith(bytes: Uint8Array, prefix: number[]): boolean {
@@ -24,6 +26,16 @@ function detectEncoding(bytes: Uint8Array): Encoding {
   return "utf-8";
 }
 
+function pushCodePoint(units: number[], code: number, afterLoneHigh: boolean): boolean {
+  if (code >= 0x10000) {
+    units.push(0xd800 + ((code - 0x10000) >> 10), 0xdc00 + ((code - 0x10000) & 0x3ff));
+    return false;
+  }
+  if (afterLoneHigh && splitsAfterHigh(code)) units.push(SPLIT);
+  units.push(code);
+  return isHigh(code);
+}
+
 const strictUtf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
 function continuation(byte: number | undefined): boolean {
@@ -36,6 +48,7 @@ function utf8SurrogatePass(bytes: Uint8Array): string | undefined {
   } catch {}
   const units: number[] = [];
   let out = "";
+  let loneHigh = false;
   const flush = () => {
     out += String.fromCharCode(...units);
     units.length = 0;
@@ -56,8 +69,7 @@ function utf8SurrogatePass(bytes: Uint8Array): string | undefined {
       size = 4;
       if (code < 0x10000 || code > 0x10ffff) return undefined;
     } else return undefined;
-    if (code >= 0x10000) units.push(0xd800 + ((code - 0x10000) >> 10), 0xdc00 + ((code - 0x10000) & 0x3ff));
-    else units.push(code);
+    loneHigh = pushCodePoint(units, code, loneHigh);
     if (units.length >= 4096) flush();
     at += size;
   }
@@ -71,8 +83,10 @@ function utf16(bytes: Uint8Array, bigEndian: boolean): string | undefined {
   let out = "";
   for (let at = 0; at < bytes.length; at += 2) {
     const [high, low] = [bytes[at] as number, bytes[at + 1] as number];
-    units.push(bigEndian ? (high << 8) | low : (low << 8) | high);
-    if (units.length >= 4096) {
+    const unit = bigEndian ? (high << 8) | low : (low << 8) | high;
+    if (unit === SPLIT && units.length > 0 && isHigh(units[units.length - 1] as number)) units.push(SPLIT);
+    units.push(unit);
+    if (units.length >= 4096 && !isHigh(unit)) {
       out += String.fromCharCode(...units);
       units.length = 0;
     }
@@ -85,11 +99,11 @@ function utf32(bytes: Uint8Array, bigEndian: boolean): string | undefined {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const units: number[] = [];
   let out = "";
+  let loneHigh = false;
   for (let at = 0; at < bytes.length; at += 4) {
     const code = view.getUint32(at, !bigEndian);
     if (code > 0x10ffff) return undefined;
-    if (code >= 0x10000) units.push(0xd800 + ((code - 0x10000) >> 10), 0xdc00 + ((code - 0x10000) & 0x3ff));
-    else units.push(code);
+    loneHigh = pushCodePoint(units, code, loneHigh);
     if (units.length >= 4096) {
       out += String.fromCharCode(...units);
       units.length = 0;

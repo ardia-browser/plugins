@@ -3,6 +3,7 @@ import type { Socket } from "node:net";
 import { dumps, field, object, parse, TooDeep, type Value } from "./json.ts";
 import { errnoOf, strerror } from "./paths.ts";
 import { MAX_LINE_BYTES } from "./protocol.ts";
+import { utf8 } from "./pystr.ts";
 
 const CONTROL_JSON_DEPTH = 9991;
 const HIGH_WATER = 64 * 1024;
@@ -171,7 +172,7 @@ export class Connection {
       ["method", method],
     ]);
     if (params !== undefined) request.set("params", params);
-    const line = Buffer.from(`${dumps(request, "compact")}\n`, "utf8");
+    const line = utf8(`${dumps(request, "compact")}\n`);
     if (line.length > MAX_LINE_BYTES) throw new Stop("the request is longer than 1 MB", "too_long");
     const waiting: Pending = {};
     this.pending.set(ident, waiting);

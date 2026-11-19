@@ -169,5 +169,162 @@
    }
   },
   "note": "a window id and a tab group nested 9,980 lists deep are printed with str(), which Python manages at that depth"
+ },
+ {
+  "id": "ts-r3--windows-escaped-high-raw-low",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": {
+      "base64": "eyJpZCI6MiwicmVzdWx0IjpbeyJpZCI6MSwia2luZCI6Im5vcm1hbCIsIlx1ZDgwMO2wgCI6MSwi8JCAgCI6MiwicHJvZmlsZU5hbWUiOiJQIiwidGFicyI6W3siaWQiOjExLCJ0aXRsZSI6Ilx1ZDgwMO2wgCIsInVybCI6IvCQgIAifV19XX0K"
+     }
+    }
+   }
+  },
+  "note": "json.loads keeps a surrogate it read separately apart from its neighbour, so these keys stay distinct from a real astral character and each other"
+ },
+ {
+  "id": "ts-r3--windows---json-escaped-high-raw-low",
+  "command": "windows",
+  "argv": [
+   "windows",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": {
+      "base64": "eyJpZCI6MiwicmVzdWx0IjpbeyJpZCI6MSwia2luZCI6Im5vcm1hbCIsIlx1ZDgwMO2wgCI6MSwi8JCAgCI6MiwicHJvZmlsZU5hbWUiOiJQIiwidGFicyI6W3siaWQiOjExLCJ0aXRsZSI6Ilx1ZDgwMO2wgCIsInVybCI6IvCQgIAifV19XX0K"
+     }
+    }
+   }
+  },
+  "note": "json.loads keeps a surrogate it read separately apart from its neighbour, so these keys stay distinct from a real astral character and each other"
+ },
+ {
+  "id": "ts-r3--windows-raw-high-raw-low",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": {
+      "base64": "eyJpZCI6MiwicmVzdWx0IjpbeyJpZCI6MSwia2luZCI6Im5vcm1hbCIsIu2ggO2wgCI6MSwi8JCAgCI6MiwicHJvZmlsZU5hbWUiOiJQIiwidGFicyI6W3siaWQiOjExLCJ0aXRsZSI6Iu2ggO2wgCIsInVybCI6IvCQgIAifV19XX0K"
+     }
+    }
+   }
+  },
+  "note": "json.loads keeps a surrogate it read separately apart from its neighbour, so these keys stay distinct from a real astral character and each other"
+ },
+ {
+  "id": "ts-r3--windows---json-raw-high-raw-low",
+  "command": "windows",
+  "argv": [
+   "windows",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": {
+      "base64": "eyJpZCI6MiwicmVzdWx0IjpbeyJpZCI6MSwia2luZCI6Im5vcm1hbCIsIu2ggO2wgCI6MSwi8JCAgCI6MiwicHJvZmlsZU5hbWUiOiJQIiwidGFicyI6W3siaWQiOjExLCJ0aXRsZSI6Iu2ggO2wgCIsInVybCI6IvCQgIAifV19XX0K"
+     }
+    }
+   }
+  },
+  "note": "json.loads keeps a surrogate it read separately apart from its neighbour, so these keys stay distinct from a real astral character and each other"
+ },
+ {
+  "id": "ts-r3--windows-raw-high-escaped-low",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": {
+      "base64": "eyJpZCI6MiwicmVzdWx0IjpbeyJpZCI6MSwia2luZCI6Im5vcm1hbCIsIu2ggFx1ZGMwMCI6MSwi8JCAgCI6MiwiXHVkODAwXHVkYzAwIjozLCJwcm9maWxlTmFtZSI6IlAiLCJ0YWJzIjpbeyJpZCI6MTEsInRpdGxlIjoi7aCAXHVkYzAwIiwidXJsIjoiXHVkODAwXHVkYzAwIn1dfV19Cg=="
+     }
+    }
+   }
+  },
+  "note": "json.loads keeps a surrogate it read separately apart from its neighbour, so these keys stay distinct from a real astral character and each other"
+ },
+ {
+  "id": "ts-r3--windows---json-raw-high-escaped-low",
+  "command": "windows",
+  "argv": [
+   "windows",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": {
+      "base64": "eyJpZCI6MiwicmVzdWx0IjpbeyJpZCI6MSwia2luZCI6Im5vcm1hbCIsIu2ggFx1ZGMwMCI6MSwi8JCAgCI6MiwiXHVkODAwXHVkYzAwIjozLCJwcm9maWxlTmFtZSI6IlAiLCJ0YWJzIjpbeyJpZCI6MTEsInRpdGxlIjoi7aCAXHVkYzAwIiwidXJsIjoiXHVkODAwXHVkYzAwIn1dfV19Cg=="
+     }
+    }
+   }
+  },
+  "note": "json.loads keeps a surrogate it read separately apart from its neighbour, so these keys stay distinct from a real astral character and each other"
+ },
+ {
+  "id": "ts-r3--windows-escaped-high-raw-ffff",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": {
+      "base64": "eyJpZCI6MiwicmVzdWx0IjpbeyJpZCI6MSwia2luZCI6Im5vcm1hbCIsIlx1ZDgwMO+/vyI6MSwiXHVkODAwXHVmZmZmIjoyLCJcdWQ4MDAiOjMsInByb2ZpbGVOYW1lIjoiUCIsInRhYnMiOlt7ImlkIjoxMSwidGl0bGUiOiJcdWQ4MDDvv78iLCJ1cmwiOiJcdWQ4MDAifV19XX0K"
+     }
+    }
+   }
+  },
+  "note": "json.loads keeps a surrogate it read separately apart from its neighbour, so these keys stay distinct from a real astral character and each other"
+ },
+ {
+  "id": "ts-r3--windows---json-escaped-high-raw-ffff",
+  "command": "windows",
+  "argv": [
+   "windows",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": {
+      "base64": "eyJpZCI6MiwicmVzdWx0IjpbeyJpZCI6MSwia2luZCI6Im5vcm1hbCIsIlx1ZDgwMO+/vyI6MSwiXHVkODAwXHVmZmZmIjoyLCJcdWQ4MDAiOjMsInByb2ZpbGVOYW1lIjoiUCIsInRhYnMiOlt7ImlkIjoxMSwidGl0bGUiOiJcdWQ4MDDvv78iLCJ1cmwiOiJcdWQ4MDAifV19XX0K"
+     }
+    }
+   }
+  },
+  "note": "json.loads keeps a surrogate it read separately apart from its neighbour, so these keys stay distinct from a real astral character and each other"
+ },
+ {
+  "id": "ts-r3--commands-split-surrogate-width",
+  "command": "commands",
+  "argv": [
+   "commands"
+  ],
+  "control": {
+   "replies": {
+    "commands": {
+     "raw": {
+      "base64": "eyJpZCI6MiwicmVzdWx0IjpbeyJpZCI6Ilx1ZDgwMO2wgCIsInRpdGxlIjoic3BsaXQifSx7ImlkIjoi8JCAgCIsInRpdGxlIjoiYXN0cmFsIn0seyJpZCI6ImFiIiwidGl0bGUiOiJ0d28ifV19Cg=="
+     }
+    }
+   }
+  },
+  "note": "an escaped high surrogate before a raw low one is two characters to Python, so the id column is two wide"
  }
 ]
