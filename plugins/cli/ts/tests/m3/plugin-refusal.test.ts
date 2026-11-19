@@ -5,7 +5,7 @@ import { Daemon } from "../../src/browse/daemon/server.ts";
 import { daemonEnvironment } from "../../src/browse/daemon/spawn.ts";
 import { credentialId, pluginSessionKey } from "../../src/browse/plugin/key.ts";
 import { dumps, type Value } from "../../src/json.ts";
-import { ask, config, type Scratch, scratch, socketFile, until } from "./daemon-helpers.ts";
+import { ask, config, quietWatchdog, type Scratch, scratch, socketFile, until } from "./daemon-helpers.ts";
 import { CREDENTIAL, OTHER_CREDENTIAL } from "./plugin-world.ts";
 
 setDefaultTimeout(30_000);
@@ -23,6 +23,7 @@ afterEach(async () => {
 });
 
 async function started(daemon: Daemon, found: Scratch): Promise<Daemon> {
+  quietWatchdog(daemon);
   running.push({ daemon, done: daemon.run() });
   await until(() => fs.existsSync(socketFile(found.data, daemon.key)), 5000);
   return daemon;
