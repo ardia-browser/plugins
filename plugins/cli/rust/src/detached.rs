@@ -206,3 +206,40 @@ mod platform {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_scan_marks_a_descriptor_above_a_lowered_soft_limit() {
+        let child = unsafe { libc::fork() };
+        assert!(child >= 0);
+        if child == 0 {
+            unsafe {
+                let mut limit: libc::rlimit = std::mem::zeroed();
+                libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit);
+                let high = (limit.rlim_cur.min(4096) as libc::c_int) - 1;
+                let mut ends = [0; 2];
+                let opened = high > 40 && libc::pipe(ends.as_mut_ptr()) == 0 && libc::dup2(ends[1], high) == high;
+                let lowered = libc::rlimit {
+                    rlim_cur: 32,
+                    rlim_max: limit.rlim_max,
+                };
+                let ready = opened && libc::setrlimit(libc::RLIMIT_NOFILE, &lowered) == 0;
+                if ready {
+                    mark_close_on_exec_by_scan(3);
+                }
+                let flags = libc::fcntl(high, libc::F_GETFD);
+                libc::_exit(match (ready, flags >= 0 && flags & libc::FD_CLOEXEC != 0) {
+                    (false, _) => 2,
+                    (true, true) => 0,
+                    (true, false) => 1,
+                });
+            }
+        }
+        let mut status = 0;
+        assert_eq!(unsafe { libc::waitpid(child, &mut status, 0) }, child);
+        assert!(libc::WIFEXITED(status), "{status}");
+        assert_eq!(libc::WEXITSTATUS(status), 0, "1: not marked, 2: couldn't set up");
+    }
+}
