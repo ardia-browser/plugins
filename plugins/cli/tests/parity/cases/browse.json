@@ -1,0 +1,865 @@
+[
+ {
+  "id": "browse--get-title",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "Example Domain\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--get-url-json",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--json",
+   "get",
+   "url"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\": true, \"data\": {\"url\": \"https://example.com/\"}}\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--json-after",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "url",
+   "--json"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\": true}\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--snapshot",
+  "command": "browse snapshot",
+  "argv": [
+   "browse",
+   "snapshot",
+   "-i"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "- heading \"Example\" [ref=e1]\n- link \"More\" [ref=e2]\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--not-found",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "click",
+   "@e9"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "\u2717 no element @e9 in the last snapshot\n",
+     "exit": 1,
+     "code": "not_found"
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--exit-code-string",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "x\n",
+     "err": "",
+     "exit": "2"
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "a non-int exit"
+ },
+ {
+  "id": "browse--exit-missing",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "x\n"
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--control-chars",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "text",
+   "body"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "a\u001b[31mred\u0007 \u009b2J\u0085 \u00e9 \u65e5\u672c\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--metrics",
+  "command": "browse snapshot",
+  "argv": [
+   "browse",
+   "snapshot"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "- x\n",
+     "err": "",
+     "exit": 0,
+     "metrics": {
+      "refs": 3,
+      "chars": 120,
+      "bogus": "text"
+     }
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--token-query-masked",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "url"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "ws://127.0.0.1:9/devtools/browser/abc?token=sekrit-value-123456&x=1\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--ws-secret-masked",
+  "command": "browse",
+  "argv": [
+   "browse",
+   "--ws",
+   "ws://127.0.0.1:9/devtools/browser/abc?k=SECRETVALUE0123456789",
+   "get",
+   "url"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "got SECRETVALUE0123456789 and SECRETVALUE0123456789%2F\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "ws": "ws://127.0.0.1:9/devtools/browser/abc?k=SECRETVALUE0123456789"
+   },
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--closed-read",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    "close"
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "the daemon hangs up on a read-only command"
+ },
+ {
+  "id": "browse--closed-mutating",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "click",
+   "@e1"
+  ],
+  "daemon": {
+   "replies": [
+    "close"
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "the daemon hangs up after taking a click: outcome unknown"
+ },
+ {
+  "id": "browse--raw-no-newline",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "raw": "{\"out\": \"x\"}"
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--raw-not-json",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "raw": "nope\n"
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--session-flag",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "work",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "W\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "work",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--session-env",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "E\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "envs",
+   "namespace": ""
+  },
+  "env": {
+   "AGENT_BROWSER_SESSION": "envs"
+  }
+ },
+ {
+  "id": "browse--namespace",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--namespace",
+   "proj",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "N\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": "proj"
+  }
+ },
+ {
+  "id": "browse--bad-session",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "bad name",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--port-flag",
+  "command": "browse",
+  "argv": [
+   "browse",
+   "--port",
+   "9333",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "P\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "port": 9333
+   },
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--port-hoisted",
+  "command": "browse",
+  "argv": [
+   "--port",
+   "9333",
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "P\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "port": 9333
+   },
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--port-env",
+  "command": "browse",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "P\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "port": 9444
+   },
+   "session": "default",
+   "namespace": ""
+  },
+  "env": {
+   "ARDIA_PORT": "9444"
+  }
+ },
+ {
+  "id": "browse--port-not-number",
+  "command": "browse",
+  "argv": [
+   "browse",
+   "--port",
+   "abc",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--cdp-env-number",
+  "command": "browse",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "C\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "port": 9555
+   },
+   "session": "default",
+   "namespace": ""
+  },
+  "env": {
+   "AGENT_BROWSER_CDP": "9555"
+  }
+ },
+ {
+  "id": "browse--max-output-bad",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--max-output",
+   "abc",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--max-output",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--max-output",
+   "5",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "abcdefghij\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--launch-only",
+  "command": "browse other",
+  "argv": [
+   "browse",
+   "--headed",
+   "open",
+   "https://example.com"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--value-missing",
+  "command": "browse other",
+  "argv": [
+   "browse",
+   "get",
+   "title",
+   "--session"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--help",
+  "command": "browse help",
+  "argv": [
+   "browse",
+   "--help"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--help-bare",
+  "command": "browse help",
+  "argv": [
+   "browse"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--help-topic",
+  "command": "browse help",
+  "argv": [
+   "browse",
+   "help",
+   "snapshot"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--help-after",
+  "command": "browse snapshot",
+  "argv": [
+   "browse",
+   "snapshot",
+   "--help"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--version",
+  "command": "browse version",
+  "argv": [
+   "browse",
+   "--version"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--eval-stdin",
+  "command": "browse eval",
+  "argv": [
+   "browse",
+   "eval",
+   "--stdin"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "2\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "stdin": "1+1"
+ },
+ {
+  "id": "browse--json-env",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\": true}\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "env": {
+   "AGENT_BROWSER_JSON": "1"
+  }
+ },
+ {
+  "id": "browse--agent-env-forwarded",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "T\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "env": {
+   "AGENT_BROWSER_DEFAULT_TIMEOUT": "4000",
+   "AGENT_BROWSER_HUMANIZE": "0",
+   "AGENT_BROWSER_ENABLE": "a,b"
+  }
+ },
+ {
+  "id": "browse--err-and-out",
+  "command": "browse open",
+  "argv": [
+   "browse",
+   "open",
+   "https://example.com"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "\u2713 Example Domain\n  https://example.com/\n",
+     "err": "note: slow\n",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--shared-flag-rejected",
+  "command": "none",
+  "argv": [
+   "--timeout",
+   "5",
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--double-dash",
+  "command": "browse eval",
+  "argv": [
+   "browse",
+   "eval",
+   "--",
+   "--x"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "1\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ }
+]

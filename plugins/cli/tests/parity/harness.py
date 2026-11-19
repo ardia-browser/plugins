@@ -151,6 +151,7 @@ class Case:
     consent: dict = field(default_factory=dict)
     files: dict = field(default_factory=dict)
     helpers: dict = field(default_factory=dict)
+    daemon: dict | None = None
     fallback: bool = False
     normalize: list = field(default_factory=list)
     source: str = ""
@@ -169,7 +170,7 @@ class Case:
     def to_dict(self) -> dict:
         row = {"id": self.id, "command": self.command, "argv": self.argv}
         defaults = Case(id="", command="", argv=[])
-        for name in ("stdin", "env", "control", "consent", "files", "helpers", "fallback", "normalize", "note"):
+        for name in ("stdin", "env", "control", "daemon", "consent", "files", "helpers", "fallback", "normalize", "note"):
             value = getattr(self, name)
             if value != getattr(defaults, name):
                 row[name] = value
@@ -368,6 +369,97 @@ class FakeArdia:
         self.stopped.set()
 
 
+class FakeDaemon:
+    def __init__(self, data: Path, spec: dict):
+        if str(CLI) not in sys.path:
+            sys.path.insert(0, str(CLI))
+        from ardia_cli.browse import client, paths
+
+        endpoint = spec.get("endpoint", "token")
+        if isinstance(endpoint, dict) and "port" in endpoint:
+            key_source = client.endpoint_key(None, int(endpoint["port"]), data)
+        elif isinstance(endpoint, dict) and "ws" in endpoint:
+            key_source = client.endpoint_key(endpoint["ws"], None, data)
+        else:
+            key_source = client.endpoint_key(None, None, data)
+        key = paths.session_key(spec.get("namespace", ""), key_source[0], spec.get("session", "default"))
+        browse = data / paths.DIR_NAME
+        browse.mkdir(mode=0o700, exist_ok=True)
+        browse.chmod(0o700)
+        self.path = browse / f"{key}.sock"
+        self.replies = list(spec.get("replies") or [{"out": "", "err": "", "exit": 0}])
+        self.requests = []
+        self.talkers = []
+        self.lock = threading.Lock()
+        self.server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.server.bind(str(self.path))
+        self.path.chmod(0o600)
+        self.server.listen(16)
+        self.server.settimeout(0.1)
+        self.stopped = threading.Event()
+        self.closing = threading.Event()
+        self.thread = threading.Thread(target=self.accept, daemon=True)
+        self.thread.start()
+
+    def accept(self):
+        while not self.closing.is_set():
+            try:
+                connection, _ = self.server.accept()
+            except socket.timeout:
+                continue
+            except OSError:
+                return
+            self.serve(connection)
+
+    def serve(self, connection):
+        talker = threading.Thread(target=self.talk, args=(connection,), daemon=True)
+        with self.lock:
+            self.talkers.append(talker)
+        talker.start()
+
+    def talk(self, connection):
+        try:
+            with connection, connection.makefile("rb") as lines:
+                line = lines.readline()
+                try:
+                    payload = json.loads(line)
+                except ValueError:
+                    payload = {"<not json>": line.decode("utf-8", "backslashreplace")}
+                with self.lock:
+                    self.requests.append(payload)
+                    reply = self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
+                if reply == "close":
+                    return
+                if isinstance(reply, dict) and "raw" in reply:
+                    connection.sendall(decode_blob(reply["raw"]))
+                    return
+                if isinstance(reply, dict) and "hang" in reply:
+                    self.stopped.wait(float(reply["hang"]))
+                    return
+                connection.sendall(json.dumps(reply, ensure_ascii=False).encode() + b"\n")
+        except OSError:
+            pass
+
+    def close(self):
+        self.closing.set()
+        self.thread.join(2)
+        self.server.setblocking(False)
+        while True:
+            try:
+                connection, _ = self.server.accept()
+            except (BlockingIOError, OSError):
+                break
+            connection.setblocking(True)
+            self.serve(connection)
+        self.server.close()
+        deadline = time.monotonic() + DRAIN_TIMEOUT
+        with self.lock:
+            talkers = list(self.talkers)
+        for talker in talkers:
+            talker.join(max(0.0, deadline - time.monotonic()))
+        self.stopped.set()
+
+
 @dataclass
 class Observed:
     stdout: bytes
@@ -380,6 +472,7 @@ class Observed:
     usage: object
     files: dict
     helpers: list
+    daemon_requests: list = field(default_factory=list)
     flush: object = None
     route: str = "rust"
     timed_out: bool = False
@@ -697,12 +790,15 @@ def read_telemetry(box: Path, data: Path, window: tuple[float, float]):
 
 
 def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[Observed, list]:
+    if case.daemon is None and ("browse" in case.argv or "notes" in case.argv):
+        raise UnsafeCase(f"case {case.id}: a browse or notes case needs a daemon, or the client starts a real one")
     places = materialize(box, case)
     control = case.control
     fake = None
     if control is not None:
         fake = FakeArdia(box / "data" / "ArdiaControl.sock", expand(control.get("hello", DEFAULT_HELLO), places),
                          expand(control.get("replies", {}), places), expand(control.get("events", []), places))
+    daemon = FakeDaemon(box / "data", expand(case.daemon, places)) if case.daemon is not None else None
     before = tree(box)
     started = time.time()
     stdin = decode_blob(expand(case.stdin, places) if isinstance(case.stdin, str) else case.stdin)
@@ -714,6 +810,8 @@ def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[O
     except UnsafeCase:
         if fake:
             fake.close()
+        if daemon:
+            daemon.close()
         raise
     try:
         process = subprocess.Popen(install.confined(install.command(side) + argv, box), cwd=places["cwd"],
@@ -738,6 +836,8 @@ def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[O
         reap(str(box))
         if fake:
             fake.close()
+        if daemon:
+            daemon.close()
     window = (started, time.time())
     after = tree(box)
     records, queued, served, labels = read_telemetry(box, box / "data", window)
@@ -750,7 +850,7 @@ def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[O
     route_log = box / "route.log"
     route = "python" if route_log.exists() and route_log.read_text().strip() else "rust"
     observed = Observed(stdout, stderr, process.returncode, fake.transcript() if fake else [], records, queued, served, usage,
-                        file_changes(before, after), helpers, flush, route, timed_out, fake.complete if fake else True)
+                        file_changes(before, after), helpers, daemon.requests if daemon else [], flush, route, timed_out, fake.complete if fake else True)
     return apply_normalizers(observed, case, places), labels
 
 
@@ -787,7 +887,7 @@ def text_of(value) -> str:
     return json.dumps(value, indent=1, sort_keys=True, ensure_ascii=False, default=str)
 
 
-FIELDS = ("status", "stdout", "stderr", "requests", "telemetry", "queued", "usage", "flush", "files", "helpers", "timed_out")
+FIELDS = ("status", "stdout", "stderr", "requests", "daemon_requests", "telemetry", "queued", "usage", "flush", "files", "helpers", "timed_out")
 
 
 def read_only(connection: list) -> bool:
