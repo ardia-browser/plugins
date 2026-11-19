@@ -28,7 +28,7 @@ PROTECTED_ENV = frozenset({"HOME", "ARDIA_CLI_HOME", "TMPDIR", "PATH", "ARDIA_TE
                            "HTTP_PROXY", "HTTPS_PROXY", "no_proxy", "NO_PROXY", "ALL_PROXY", "all_proxy", "PYTHONPATH",
                            "PYTHONHOME", "PYTHONSTARTUP", "PYTHONDONTWRITEBYTECODE", "ARDIA_PARITY_PYTHON_LOG", "ARDIA_PARITY_BOX",
                            "DYLD_INSERT_LIBRARIES", "LD_PRELOAD"})
-VOLATILE = ("uuid", "timestamp")
+VOLATILE = ("uuid",)
 VOLATILE_PROPERTIES = ("$session_id", "total_ms", "startup_ms", "served_by")
 QUEUED = {"uuid": "0190a1b2-c3d4-7e5f-8a9b-000000000001", "event": "cli_command", "distinct_id": INSTALL_ID,
           "timestamp": "2026-01-01T00:00:00.000Z", "properties": {"command": "earlier"}}
@@ -252,6 +252,7 @@ class FakeArdia:
         self.events = events
         self.connections = []
         self.talkers = []
+        self.endings = []
         self.lock = threading.Lock()
         self.server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.server.bind(str(path))
@@ -301,6 +302,7 @@ class FakeArdia:
         return reply() if callable(reply) else reply
 
     def talk(self, connection, transcript):
+        ending = "error"
         try:
             with connection, connection.makefile("rb") as lines:
                 for line in lines:
@@ -317,17 +319,30 @@ class FakeArdia:
                         transcript.append(request)
                     reply = self.next_reply(method)
                     if reply == "close":
+                        ending = "scripted"
                         return
-                    if isinstance(reply, dict) and "raw" in reply:
-                        connection.sendall(decode_blob(reply["raw"]))
-                        continue
                     if isinstance(reply, dict) and "hang" in reply:
                         self.stopped.wait(float(reply["hang"]))
+                        ending = "scripted"
                         return
-                    connection.sendall(json.dumps({"id": request.get("id"), **reply}).encode() + b"\n")
+                    if isinstance(reply, dict) and "raw" in reply:
+                        self.send(connection, decode_blob(reply["raw"]))
+                        continue
+                    self.send(connection, json.dumps({"id": request.get("id"), **reply}).encode() + b"\n")
                     if method == "subscribe":
                         for event in self.events:
-                            connection.sendall(json.dumps(event).encode() + b"\n")
+                            self.send(connection, json.dumps(event).encode() + b"\n")
+                ending = "eof"
+        except OSError:
+            pass
+        finally:
+            with self.lock:
+                self.endings.append(ending)
+
+    @staticmethod
+    def send(connection, payload: bytes) -> None:
+        try:
+            connection.sendall(payload)
         except OSError:
             pass
 
@@ -348,7 +363,8 @@ class FakeArdia:
             talkers = list(self.talkers)
         for talker in talkers:
             talker.join(max(0.0, deadline - time.monotonic()))
-        self.complete = not any(talker.is_alive() for talker in talkers)
+        with self.lock:
+            self.complete = not any(talker.is_alive() for talker in talkers) and "error" not in self.endings
         self.stopped.set()
 
 
@@ -644,7 +660,24 @@ def environment(box: Path, places: dict, case: Case) -> dict:
     return env
 
 
-def read_telemetry(box: Path, data: Path):
+def iso_time(text) -> float | None:
+    from datetime import datetime
+
+    if not isinstance(text, str):
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
+def scrub_timestamp(record: dict, window: tuple[float, float]) -> None:
+    moment = iso_time(record.get("timestamp"))
+    if moment is not None and time_marker(moment, window) != moment:
+        record["timestamp"] = time_marker(moment, window)
+
+
+def read_telemetry(box: Path, data: Path, window: tuple[float, float]):
     local = data / "Telemetry" / "local"
     records = []
     for path in sorted(local.glob("cli-*.jsonl")) if local.exists() and no_links_below(box, local) else []:
@@ -657,6 +690,7 @@ def read_telemetry(box: Path, data: Path):
     for record in records + queued:
         for key in VOLATILE:
             record.pop(key, None)
+        scrub_timestamp(record, window)
         for key in VOLATILE_PROPERTIES:
             record.get("properties", {}).pop(key, None)
     return records, queued, served, labels
@@ -706,7 +740,7 @@ def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[O
             fake.close()
     window = (started, time.time())
     after = tree(box)
-    records, queued, served, labels = read_telemetry(box, box / "data")
+    records, queued, served, labels = read_telemetry(box, box / "data", window)
     usage_text = read_inside(box, box / "cli-home" / "Usage" / "usage.json")
     usage = scrub_times(json.loads(usage_text), window) if usage_text is not None else None
     flush_text = read_inside(box, box / "data" / "Telemetry" / "cli-flush.json")

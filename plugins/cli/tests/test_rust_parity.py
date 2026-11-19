@@ -4,6 +4,7 @@ import os
 import re
 import select
 import shutil
+import socket
 import signal
 import subprocess
 import sys
@@ -125,6 +126,29 @@ class HarnessRules(unittest.TestCase):
             install.close()
             shutil.rmtree(outside, True)
             shutil.rmtree(box.parent, True)
+
+    def test_telemetry_timestamps_are_checked_against_the_run(self):
+        window = (1_763_500_000.0, 1_763_500_001.0)
+        now, stale = {"timestamp": "2025-11-18T21:06:40.500Z"}, {"timestamp": "2000-01-01T00:00:00.000Z"}
+        harness.scrub_timestamp(now, window)
+        harness.scrub_timestamp(stale, window)
+        self.assertEqual(now["timestamp"], "<now float s>")
+        self.assertEqual(stale["timestamp"], "2000-01-01T00:00:00.000Z")
+
+    def test_a_reply_that_cannot_be_written_does_not_hide_the_next_request(self):
+        scratch = Path(tempfile.mkdtemp(prefix="arpsock", dir="/tmp")).resolve()
+        fake = harness.FakeArdia(scratch / "s.sock", harness.DEFAULT_HELLO, {"windows": {"result": ["x" * 65536]}}, [])
+        try:
+            client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            client.connect(str(scratch / "s.sock"))
+            client.shutdown(socket.SHUT_RD)
+            client.sendall(b'{"id":1,"method":"windows"}\n{"id":2,"method":"commands"}\n')
+            client.close()
+        finally:
+            fake.close()
+            shutil.rmtree(scratch, True)
+        self.assertEqual([method for method, _ in fake.requests], ["windows", "commands"])
+        self.assertTrue(fake.complete)
 
     def test_flush_deadlines_compare_as_offsets(self):
         window = (1_763_500_000.0, 1_763_500_001.0)
