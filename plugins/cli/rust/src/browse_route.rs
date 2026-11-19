@@ -99,7 +99,7 @@ pub fn json_requested(raw: &[OsString]) -> bool {
     if tokens.get(index) != Some(&LABEL.as_bytes()) {
         return leading || from_env;
     }
-    leading || browse_json(&tokens[index + 1..]).unwrap_or(false) || from_env
+    browse_json(&tokens[index + 1..]).unwrap_or(leading) || from_env
 }
 
 fn json_string(text: &str) -> String {
@@ -174,6 +174,9 @@ mod tests {
         assert!(!json_requested(&words(&["browse", "--state", "x", "--json", "get"])));
         assert!(json_requested(&words(&["browse", "stream", "--port", "--json"])));
         assert!(!json_requested(&words(&["browse", "get", "--port", "--json"])));
+        assert!(!json_requested(&words(&["--json", "browse", "--json=false", "get"])));
+        assert!(!json_requested(&words(&["--json", "browse", "get", "--json=0"])));
+        assert!(json_requested(&words(&["--json", "browse", "get", "--", "--json=0"])));
         assert_eq!(
             refusal_line("it \"broke\"\n", true),
             "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) runs only on the \

@@ -13,6 +13,9 @@ test("--json counts only where the global parser reads it as the switch", () => 
   assert.equal(jsonIntentOfArgv(["--json", "browse", "get", "title"]), true);
   assert.equal(jsonIntentOfArgv(["--port", "9", "browse", "--session", "--json", "get"]), false);
   assert.equal(jsonIntentOfArgv(["--port"]), false);
+  assert.equal(jsonIntentOfArgv(["--json", "browse", "--json=false", "get"]), false);
+  assert.equal(jsonIntentOfArgv(["--json", "browse", "get", "--json=0"]), false);
+  assert.equal(jsonIntentOfArgv(["--json", "browse", "get", "--", "--json=0"]), true);
   process.env.AGENT_BROWSER_JSON = "1";
   assert.equal(jsonIntent(["--session", "--json", "get"]), true);
   delete process.env.AGENT_BROWSER_JSON;

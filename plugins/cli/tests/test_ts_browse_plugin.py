@@ -347,8 +347,9 @@ class JsonAndStdin(LongDataDirs):
         root = self.box / "bare"
         (root / "bin").mkdir(parents=True)
         shutil.copy2(self.install.root / "bin" / "ardia", root / "bin" / "ardia")
-        for json_mode in (True, False):
-            argv = [str(root / "bin" / "ardia"), "browse", "--session", "plugin-ai", *(["--json"] if json_mode else []), "get", "--", "title"]
+        for json_mode, words in ((True, ["browse", "--session", "plugin-ai", "--json"]), (False, ["browse", "--session", "plugin-ai"]),
+                                 (False, ["--json", "browse", "--session", "plugin-ai", "--json=false"])):
+            argv = [str(root / "bin" / "ardia"), *words, "get", "--", "title"]
             done = subprocess.run(argv, env=self.env(9), cwd=self.box / "tmp", stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
             self.assertEqual(done.returncode, 77)
             if json_mode:
@@ -359,6 +360,26 @@ class JsonAndStdin(LongDataDirs):
             else:
                 self.assertEqual(done.stdout, b"")
                 self.assertTrue(done.stderr.startswith("✗ ardia browse for a plugin".encode()))
+
+
+    def test_a_missing_addon_under_json_is_one_json_line(self):
+        root = self.box / "no-addon"
+        shutil.copytree(self.install.root / "bin", root / "bin")
+        shutil.copytree(self.install.root / "libexec", root / "libexec", symlinks=True)
+        (root / "libexec" / "ardia-libc.so").unlink()
+        for json_mode in (True, False):
+            argv = [str(root / "bin" / "ardia"), "browse", "--session", "plugin-ai", *(["--json"] if json_mode else []), "get", "--", "title"]
+            done = subprocess.run(argv, env=self.env(9), cwd=self.box / "tmp", stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+            self.assertEqual(done.returncode, 252, done.stderr)
+            if json_mode:
+                self.assertEqual(done.stderr, b"")
+                answer = json.loads(done.stdout)
+                self.assertEqual((answer["success"], answer["code"]), (False, "internal_error"))
+                self.assertIn("ardia-libc.so", answer["error"])
+                self.assertEqual(done.stdout.count(b"\n"), 1)
+            else:
+                self.assertEqual(done.stdout, b"")
+                self.assertIn(b"ardia-libc.so", done.stderr)
 
 
 if __name__ == "__main__":

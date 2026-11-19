@@ -86,7 +86,7 @@ export function splitGlobals(argv: readonly string[]): { found: Found; rest: str
   return { found, rest };
 }
 
-export function jsonIntent(browse: readonly string[]): boolean {
+function jsonFlag(browse: readonly string[]): boolean | undefined {
   let found: Found | undefined;
   try {
     found = splitGlobals(browse).found;
@@ -94,7 +94,11 @@ export function jsonIntent(browse: readonly string[]): boolean {
     if (!(error instanceof Usage)) throw error;
     found = error.found;
   }
-  return Boolean(found?.flag("json")) || truthy(process.env.AGENT_BROWSER_JSON);
+  return found?.flag("json");
+}
+
+export function jsonIntent(browse: readonly string[]): boolean {
+  return Boolean(jsonFlag(browse)) || truthy(process.env.AGENT_BROWSER_JSON);
 }
 
 export function jsonIntentOfArgv(argv: readonly string[]): boolean {
@@ -111,7 +115,7 @@ export function jsonIntentOfArgv(argv: readonly string[]): boolean {
     index += 1;
   }
   if (argv[index] !== "browse") return leading || truthy(process.env.AGENT_BROWSER_JSON);
-  return leading || jsonIntent(argv.slice(index + 1));
+  return (jsonFlag(argv.slice(index + 1)) ?? leading) || truthy(process.env.AGENT_BROWSER_JSON);
 }
 
 export function hoist(argv: readonly string[]): string[] | undefined {
