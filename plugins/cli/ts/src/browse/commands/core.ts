@@ -9,6 +9,7 @@ import { flag } from "../metrics.ts";
 import { type Page } from "../state/page.ts";
 import { type State } from "../state/state.ts";
 import { waitUntil } from "../state/wait.ts";
+import { arrival, attach, settled } from "../changes/observe.ts";
 import { type Ctx } from "./ctx.ts";
 import { register, unsupported } from "./index.ts";
 import { need, normalizeUrl, parse } from "./parse.ts";
@@ -291,16 +292,24 @@ export async function cmdOpen(ctx: Ctx, argv: string[]): Promise<Result> {
   await state.connect();
   const url = args.length > 0 ? normalizeUrl(args[0] as string) : null;
   const show = wantsShow(ctx, options);
+  const reporting = Boolean(url) && !ctx.options["no_changes"] && state.topCommand !== "script" && !options["read"];
   const freshTab = !(state.current && state.targetInfos.has(state.current));
+  let cameFrom = "about:blank";
   let page: Page;
-  if (freshTab) page = await newTab(ctx, url, (options["label"] as string | undefined) ?? null, false, show);
+  if (freshTab) page = await newTab(ctx, reporting ? null : url, (options["label"] as string | undefined) ?? null, false, show && !reporting);
   else {
     page = await state.page();
-    if (page.crashed && url) await navigate(ctx, page, "about:blank");
-    if (url) await navigate(ctx, page, url);
+    cameFrom = page.url;
+    if (page.crashed && url) {
+      await navigate(ctx, page, "about:blank");
+      cameFrom = "about:blank";
+    }
   }
+  const target = page;
+  if (reporting) await settled(target, () => navigate(ctx, target, url as string));
+  else if (url && !freshTab) await navigate(ctx, page, url);
   page = await state.reattach(page);
-  if (show && !freshTab) page = await showTab(ctx, page);
+  if (show && (reporting || !freshTab)) page = await showTab(ctx, page);
   const background = freshTab && !show ? await page.takesInput() : null;
   await page.refreshFrames();
   const title = await pageTitle(page);
@@ -319,7 +328,12 @@ export async function cmdOpen(ctx: Ctx, argv: string[]): Promise<Result> {
       text += `\n→ Opened in its own background tab [${tab}]; this Ardia doesn't deliver input there. use: ardia browse tab ${tab} --show (or open <url> --show)`;
     }
   }
-  return new Result(data, text);
+  const result = new Result(data, text);
+  if (reporting) {
+    const report = await arrival(ctx, page, cameFrom);
+    if (report !== null) return attach(result, report);
+  }
+  return result;
 }
 
 export async function cmdGet(ctx: Ctx, argv: string[]): Promise<Result> {

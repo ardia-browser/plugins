@@ -80,6 +80,8 @@ export type DispatchHooks = {
   end?: (ctx: Ctx, step: Step, error: BrowseError | null) => Promise<void>;
   abandon?: (ctx: Ctx, step: Step) => void;
   after?: (ctx: Ctx, name: string, argv: string[], result: Result) => void;
+  afterCommand?: (state: Ctx["state"]) => Promise<void>;
+  closeAfterBatch?: (state: Ctx["state"]) => boolean;
 };
 
 const COMMANDS = new Map<string, Handler>();

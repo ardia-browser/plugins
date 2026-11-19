@@ -44,6 +44,7 @@ export type CallOptions = { frame?: string | null; byValue?: boolean; awaitPromi
 export interface PageInput {
   readonly holding: boolean;
   bind(viewport: Viewport): void;
+  releaseAll?(): Promise<boolean>;
 }
 
 class Unbound implements PageInput {
