@@ -83,6 +83,10 @@ class Incompatible(Unreachable):
         return self
 
 
+class InvalidAnswer(Unreachable):
+    sent = True
+
+
 class MethodError(Exception):
     def __init__(self, code: str, message: str):
         super().__init__(message)
@@ -217,7 +221,7 @@ class Connection:
         self._decides.put_nowait(None)
         self._writer.close()
 
-    async def call(self, method: str, params: dict | None = None, timeout: float | None = CALL_TIMEOUT):
+    async def call(self, method: str, params: dict | None = None, timeout: float | None = CALL_TIMEOUT, require_outcome: bool = False):
         if self._lost:
             raise unreachable(self._lost)
         self._next_id += 1
@@ -251,6 +255,8 @@ class Connection:
         if "error" in reply:
             error = reply["error"] if isinstance(reply["error"], dict) else {}
             raise MethodError(str(error.get("code") or "failed"), str(error.get("message") or "failed"))
+        if require_outcome and "result" not in reply:
+            raise InvalidAnswer(f"Ardia's answer to {method} had neither a result nor an error")
         return reply.get("result")
 
     async def subscribe(self, names, extra: dict | None = None):

@@ -110,6 +110,20 @@ class Call(CallBase):
         self.assertIn("tabs.close may or may not have run", err)
 
 
+    def test_an_answer_with_neither_result_nor_error_is_an_unknown_outcome(self):
+        server = self.serve_methods()
+        for reply in ({}, {"ok": True}):
+            server.replies["tabs.close"] = lambda params, reply=reply: reply
+            for argv in (["call", "tabs.close"], ["call", "tabs.close", "--json"]):
+                status, out, err = self.run_cli(*argv)
+                self.assertEqual((status, out), (2, ""), argv)
+                self.assertIn("tabs.close may or may not have run", err)
+                self.assertIn("neither a result nor an error", err)
+
+    def test_an_explicit_null_result_is_still_done(self):
+        self.serve_methods()
+        self.assertEqual(self.run_cli("call", "tabs.close", "--json")[:2], (0, "null\n"))
+
 class Methods(CallBase):
     def test_lists_what_ardia_offers(self):
         self.serve_methods()

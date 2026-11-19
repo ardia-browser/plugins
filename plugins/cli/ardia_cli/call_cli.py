@@ -16,7 +16,8 @@ Params come from --params (a JSON object, or - to read one from stdin) and -p (r
 string, -p key:=value a JSON value (a number, true, null, an object or a list). -p wins over --params for the same key.
 
 Exit status: 0 done, 1 Ardia refused or failed the method, or the params aren't valid, 2 Ardia can't be reached (or
-the connection dropped after the request went out, so the method may or may not have run).
+the connection dropped after the request went out, or Ardia answered with neither a result nor an error, so the method
+may or may not have run).
 
 Examples:
   ardia methods
@@ -187,7 +188,9 @@ def scalar(value) -> str:
 
 def unreachable_exit(error: Unreachable, method: str | None = None) -> int:
     error.noted()
-    if error.sent and method:
+    if isinstance(error, control.InvalidAnswer) and method:
+        complain(f"ardia call: {error}, so {method} may or may not have run")
+    elif error.sent and method:
         complain(f"ardia call: the connection dropped after the request went out, so {method} may or may not have run ({error})")
     else:
         complain(f"ardia: {error}")
@@ -214,7 +217,7 @@ def cmd_call(args) -> int:
 
     async def work(connection):
         try:
-            return await connection.call(args.method, params, timeout), None
+            return await connection.call(args.method, params, timeout, require_outcome=True), None
         except MethodError as error:
             catalog = None
             if error.code == "unknown_method":

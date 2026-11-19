@@ -124,7 +124,9 @@ you bump a pin.
   sets a string and `-p key:=json` any JSON value, and `-p` wins over `--params` for the same key. A refusal prints
   `ardia call: <Ardia's message>` and exits 1; an unknown method adds the closest name from `methods`, or, on an Ardia
   without `methods`, says to update Ardia. Exit 2 when Ardia can't be reached, or when the connection dropped after
-  the request went out (the method may or may not have run). `ardia_cli/call_cli.py`; the protocol number is unchanged.
+  the request went out, or Ardia's answer had neither a `result` nor an `error` (in both the method may or may not
+  have run). An explicit `"result": null` is a result. Other control commands (`run`, `windows`, `commands`) still
+  take an answer without either as an empty result. `ardia_cli/call_cli.py`; the protocol number is unchanged.
 - `ardia methods [NAME] [--json]` lists what the running Ardia offers over the control socket, from its `methods`
   method: one line per method with `reads` or `changes` and its description; with NAME, that method's description,
   params schema and result. It takes the catalog as a list of `{name, area, description, params, result, mutates}` (the
