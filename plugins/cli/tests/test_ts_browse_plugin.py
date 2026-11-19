@@ -161,6 +161,17 @@ class PluginCredentialProcesses(unittest.TestCase):
 LONG_DATA_DIR = 94
 
 
+def fd_open(fd: int) -> bool:
+    try:
+        os.fstat(fd)
+    except OSError:
+        return False
+    return True
+
+MAX_REQUEST = 16 * 1024 * 1024
+OVERSIZED = "✗ the ardia browse daemon closed the connection before taking the command (see the session log)\n".encode()
+
+
 class RelativeDaemon:
     def __init__(self, browse: Path, key: str, reply: dict, request_wait: float | None = None):
         here = os.open(".", os.O_RDONLY)
@@ -196,8 +207,11 @@ class RelativeDaemon:
                 continue
 
     def close(self):
+        if self.lock is None:
+            return
         self.server.close()
         os.close(self.lock)
+        self.lock = None
 
 
 @unittest.skipUnless(programs(), "build plugins/cli/rust (the router) and plugins/cli/ts first")
@@ -287,6 +301,52 @@ class JsonAndStdin(LongDataDirs):
         out, err = process.communicate(timeout=60)
         self.assertEqual((process.returncode, out, err), (0, b"2\n", b""))
         self.assertEqual([request["stdin"] for request in daemon.requests], ["1+1"])
+
+    def oversized(self, size: int, close_after: bool) -> tuple:
+        daemon = self.live_daemon()
+        reader, writer = os.pipe()
+        process = self.start(["browse", "eval", "--stdin"], self.plain_env(), stdin=reader)
+        os.close(reader)
+
+        def feed():
+            try:
+                with os.fdopen(writer, "wb", closefd=close_after) as pipe:
+                    pipe.write(b"1" * size)
+            except OSError:
+                pass
+
+        threading.Thread(target=feed, daemon=True).start()
+        if not close_after:
+            self.addCleanup(lambda: os.close(writer) if fd_open(writer) else None)
+        out, err = process.communicate(timeout=60)
+        return process.returncode, out, err, daemon.requests
+
+    def test_stdin_over_the_daemons_request_limit_stops_the_read_and_sends_nothing(self):
+        status, out, err, requests = self.oversized(MAX_REQUEST + 1, close_after=False)
+        self.assertEqual((status, out, requests), (2, b"", []))
+        self.assertEqual(err, OVERSIZED)
+
+    def test_a_request_the_envelope_pushes_over_the_limit_is_refused_before_connecting(self):
+        status, out, err, requests = self.oversized(MAX_REQUEST - 64, close_after=True)
+        self.assertEqual((status, out, requests), (2, b"", []))
+        self.assertEqual(err, OVERSIZED)
+
+    def test_a_daemon_gone_while_stdin_was_read_says_the_input_was_used(self):
+        daemon = self.live_daemon()
+        reader, writer = os.pipe()
+        process = self.start(["browse", "eval", "--stdin"], self.plain_env(), stdin=reader)
+        os.close(reader)
+        time.sleep(2)
+        daemon.close()
+        for path in (self.long / "Browse").glob("*.sock"):
+            path.unlink()
+        os.write(writer, b"1+1")
+        os.close(writer)
+        out, err = process.communicate(timeout=60)
+        self.assertEqual((process.returncode, out), (2, b""))
+        self.assertEqual(err, "✗ the ardia browse daemon exited while stdin was being read, and that input was used up, so nothing ran; "
+                              "run the command again with its input\n".encode())
+        self.assertEqual(daemon.requests, [])
 
     def test_ctrl_c_while_stdin_is_read_answers_one_json_line(self):
         self.live_daemon()

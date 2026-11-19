@@ -67,9 +67,11 @@ export async function raceInterrupt<T>(work: Promise<T>): Promise<T> {
   return settled.value;
 }
 
-export async function readStdin(): Promise<Buffer | NodeJS.ErrnoException> {
+export async function readStdin(limit: number): Promise<Buffer | NodeJS.ErrnoException> {
   const chunks: Buffer[] = [];
+  let size = 0;
   for (;;) {
+    if (size > limit) return Buffer.concat(chunks);
     const buffer = Buffer.allocUnsafe(CHUNK);
     const got = await raceInterrupt(readSome(buffer));
     if (typeof got !== "number") {
@@ -78,6 +80,7 @@ export async function readStdin(): Promise<Buffer | NodeJS.ErrnoException> {
     }
     if (got === 0) return Buffer.concat(chunks);
     chunks.push(buffer.subarray(0, got));
+    size += got;
   }
 }
 

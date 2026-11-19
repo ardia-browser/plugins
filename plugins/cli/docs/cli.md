@@ -1901,7 +1901,10 @@ parity harness rather than stripped wholesale:
   steps) reads it to EOF before connecting, as Python does, so a writer slower than the daemon's 30 s request wait
   still works. Without a plugin it first checks that a daemon is live (its socket there and its lock held) and hands
   the call to Python with stdin unread otherwise; if that daemon exits while stdin is read, the client answers
-  `daemon_unreachable` ("run the command again") where Python, holding stdin, would start a new one. Stdin is passed
+  `daemon_unreachable` saying the input was used up and nothing ran, where Python, holding stdin, would start a new one.
+  Stdin is read only up to the daemon's 16 MiB request limit, and a request over it (stdin plus the envelope) is never
+  sent: the client answers what Python's client reports when the daemon drops it ("closed the connection before taking
+  the command", exit 2) without waiting for the writer to finish. Stdin is passed
   as read: Python 3.13 reads it with `newline="\n"` on macOS, so CR and CRLF reach the daemon unchanged on both sides.
 - `ardia browse`: a daemon answer whose exit is 253 ends with status 1: 253 is the router's hand-back status, and
   exiting with it would run the step a second time on Python. A real daemon never answers 253.

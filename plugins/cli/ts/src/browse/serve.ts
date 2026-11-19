@@ -6,7 +6,7 @@ import { type Call, shareable } from "../telemetry.ts";
 import { noGet } from "./answer.ts";
 import { type Found, parseDuration, Usage } from "./args.ts";
 import { answerDeadline } from "./deadline.ts";
-import { builtinCrash, PythonCrash, unreachable } from "./errors.ts";
+import { type BrowseError, builtinCrash, PythonCrash, unreachable } from "./errors.ts";
 import { Absent, connect, exchange, type Link, Stalled } from "./exchange.ts";
 import { encodeError } from "./output.ts";
 import { type Access, accessEndpointKey, accessLabel, accessWs } from "./plugin.ts";
@@ -20,6 +20,8 @@ import { decodeStdin, pythonStdioErrors, readStdin, stdinState } from "./stdio.t
 import { TAKES_OUT } from "./tables.ts";
 
 export const ANSWER_JSON_DEPTH = 9995;
+const MAX_REQUEST = 16 * 1024 * 1024;
+const SURROGATES = /[\ud800-\udfff]/;
 const HAND_BACK_COMMANDS = ["auth", "notes", "flow", "plugin", "read", "session", "script"];
 const BESIDE_PREFIX = 59;
 
@@ -89,7 +91,7 @@ async function openAfterStdin(root: string, key: string, stdinRead: boolean): Pr
   try {
     return await openSession(root, key);
   } catch (error) {
-    if (stdinRead && error instanceof NoDaemon) throw unreachable("the ardia browse daemon exited while stdin was being read; run the command again");
+    if (stdinRead && error instanceof NoDaemon) throw unreachable("the ardia browse daemon exited while stdin was being read, and that input was used up, so nothing ran; run the command again with its input");
     throw error;
   }
 }
@@ -126,21 +128,35 @@ async function pluginSession(root: string, key: string, config: JsonObject, pyth
   return startDaemon(root, key, config, python, call, connect);
 }
 
-async function ask(socket: Link, payload: JsonObject, rest: string[], timeout: Value, call: Call, patient = false): Promise<JsonObject> {
+function oversizedRequest(): BrowseError {
+  return unreachable("the ardia browse daemon closed the connection before taking the command (see the session log)");
+}
+
+function requestLine(payload: JsonObject): Buffer {
+  const line = `${dumps(payload, "spaced")}\n`;
+  const refused = SURROGATES.test(line) ? encodeError(codePoints(line)) : undefined;
+  if (refused !== undefined) throw refused;
+  const bytes = Buffer.from(line, "utf8");
+  if (bytes.length - 1 > MAX_REQUEST) throw oversizedRequest();
+  return bytes;
+}
+
+async function ask(socket: Link, payload: JsonObject, rest: string[], timeout: Value, call: Call, patient = false, built?: Buffer): Promise<JsonObject> {
   const seconds = answerDeadline(rest, timeout, patient);
   if (seconds instanceof PythonCrash) {
     socket.destroy();
     throw seconds;
   }
-  const line = `${dumps(payload, "spaced")}\n`;
-  const refused = encodeError(codePoints(line));
-  if (refused !== undefined) {
+  let line: Buffer;
+  try {
+    line = built ?? requestLine(payload);
+  } catch (error) {
     socket.destroy();
-    throw refused;
+    throw error;
   }
   let raw: Buffer;
   try {
-    raw = await exchange(socket, Buffer.from(line, "utf8"), rest[0] as string, seconds);
+    raw = await exchange(socket, line, rest[0] as string, seconds);
   } catch (error) {
     if (error instanceof Stalled) call.metrics.set("daemon_answer_timed_out", true);
     throw error;
@@ -195,13 +211,13 @@ export async function roundTrip(found: Found, rest: string[], secrets: Secrets, 
   let stdin: Value = null;
   if (stdinWanted && plugin === undefined) checkLive(root, key);
   if (stdinWanted) {
-    const raw = await readStdin();
+    const raw = await readStdin(MAX_REQUEST);
     if (!(raw instanceof Buffer)) throw osFailure(raw);
+    if (raw.length > MAX_REQUEST) throw oversizedRequest();
     const text = decodeStdin(raw, errors);
     if (text instanceof PythonCrash) throw text;
     stdin = text;
   }
-  const socket = plugin === undefined ? await openAfterStdin(root, key, stdinWanted) : await pluginSession(root, key, daemonConfig(found, options, { session, namespace, key, root, plugin }), python, call);
   const payload = object([
     ["argv", rest],
     ["options", options],
@@ -211,7 +227,9 @@ export async function roundTrip(found: Found, rest: string[], secrets: Secrets, 
     ["telemetry", shareable()],
     ["caller", routedCaller()],
   ]);
-  let answer = await ask(socket, payload, rest, timeout, call);
+  const line = requestLine(payload);
+  const socket = plugin === undefined ? await openAfterStdin(root, key, stdinWanted) : await pluginSession(root, key, daemonConfig(found, options, { session, namespace, key, root, plugin }), python, call);
+  let answer = await ask(socket, payload, rest, timeout, call, false, line);
   if (pyTruthy(answer.get("busy_elsewhere"))) answer = await readBeside(payload, rest, { root, namespace, keySource, session, timeout }, call);
   return answer;
 }
