@@ -12,6 +12,7 @@ import tempfile
 import threading
 import time
 import unittest
+import unittest.mock
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -124,6 +125,23 @@ class HarnessRules(unittest.TestCase):
         self.assertEqual(harness.expected_route("rust", served, self.case(command="tabs", argv=["tabs"]), ts_installed=False), "rust")
         self.assertEqual(harness.expected_route("ts", served, self.case(command="tabs", argv=["tabs"]), ts_installed=True), "ts")
         self.assertEqual(harness.expected_route("rust", served, self.case(fallback=True), ts_installed=True), "python")
+
+    @unittest.skipUnless(harness.ts_binary() and harness.binary(), "build plugins/cli/ts and plugins/cli/rust first")
+    def test_the_typescript_addon_comes_from_beside_the_chosen_program(self):
+        with tempfile.TemporaryDirectory() as elsewhere:
+            program = Path(elsewhere) / "ardia-ts"
+            shutil.copy2(harness.ts_binary(), program)
+            with self.assertRaisesRegex(FileNotFoundError, re.escape(str(program.with_name(harness.TS_LIBC)))):
+                harness.Installation(program, entry="ts")
+            shutil.copy2(harness.ts_binary().with_name(harness.TS_LIBC), program.with_name(harness.TS_LIBC))
+            with program.with_name(harness.TS_LIBC).open("ab") as addon:
+                addon.write(b"beside the chosen program")
+            with unittest.mock.patch.object(harness, "sign_for_tests"):
+                install = harness.Installation(program, entry="ts")
+            try:
+                self.assertEqual((install.root / "libexec" / harness.TS_LIBC).read_bytes(), program.with_name(harness.TS_LIBC).read_bytes())
+            finally:
+                install.close()
 
     def test_a_selection_that_matches_no_case_is_an_error(self):
         for selection in (["--case", "no-such-case"], ["--command", "no-such-command"]):

@@ -101,11 +101,12 @@ def ts_binary() -> Path | None:
     return found if found.exists() else None
 
 
-def ts_libc() -> Path:
-    program = ts_binary()
-    if program is None:
-        raise FileNotFoundError("the ts entry loads ts/dist/ardia-libc.so: build plugins/cli/ts or set ARDIA_TS_CLI")
-    return program.with_name(TS_LIBC)
+def ts_libc(program: Path) -> Path:
+    addon = program.with_name(TS_LIBC)
+    if not addon.is_file():
+        raise FileNotFoundError(f"the ts entry loads the addon beside its program, and there is no {addon}: build plugins/cli/ts "
+                                f"(it puts {TS_LIBC} beside ardia-ts) or put one there")
+    return addon
 
 
 def codesign(*words: str) -> None:
@@ -530,13 +531,17 @@ class Installation:
         self.routes.mkdir()
         (self.root / "bin").mkdir(parents=True)
         self.ts_installed = False
-        if entry == "ts":
-            self.install_ts(entry_program, router or binary(), every_row=True)
-        else:
-            shutil.copy2(entry_program, self.root / "bin" / "ardia")
-            typescript = ts_binary()
-            if "ts" in served_table().values() and typescript is not None and typescript.exists():
-                self.install_ts(typescript, None, every_row=False)
+        try:
+            if entry == "ts":
+                self.install_ts(entry_program, router or binary(), every_row=True)
+            else:
+                shutil.copy2(entry_program, self.root / "bin" / "ardia")
+                typescript = ts_binary()
+                if "ts" in served_table().values() and typescript is not None and typescript.exists():
+                    self.install_ts(typescript, None, every_row=False)
+        except BaseException:
+            shutil.rmtree(self.scratch, True)
+            raise
         subprocess.run([sys.executable, "-m", "venv", "--without-pip", str(self.root / "python")], check=True)
         self.python = self.root / "python" / "bin" / "python3"
         self.source = self.scratch / "src"
@@ -558,10 +563,11 @@ class Installation:
             if router is None or not router.exists():
                 raise FileNotFoundError("the ts entry runs behind the Rust router: build plugins/cli/rust or set ARDIA_RUST_CLI")
             shutil.copy2(router, self.root / "bin" / "ardia")
+        addon = ts_libc(program)
         libexec = self.root / "libexec"
         libexec.mkdir()
         shutil.copy2(program, libexec / "ardia-ts.bin")
-        shutil.copy2(ts_libc(), libexec / TS_LIBC)
+        shutil.copy2(addon, libexec / TS_LIBC)
         sign_for_tests(libexec)
         (libexec / "ardia-ts").write_text(TS_PROBE.format(routes=shlex.quote(str(self.routes))))
         (libexec / "ardia-ts").chmod(0o755)

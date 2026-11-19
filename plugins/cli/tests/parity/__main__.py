@@ -21,7 +21,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(prog="python -m tests.parity", description=__doc__.split("\n\n", 1)[1], formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--entry", choices=harness.ENTRIES, default="rust", help="which program runs as bin/ardia (default: rust)")
     parser.add_argument("--program", type=Path, default=None, help="that program (default: $ARDIA_RUST_CLI, else rust/target/{release,debug}/ardia; "
-                        "for ts $ARDIA_TS_CLI, else ts/dist/ardia-ts, behind the Rust router)")
+                        "for ts $ARDIA_TS_CLI, else ts/dist/ardia-ts, behind the Rust router, with the ardia-libc.so beside it)")
     parser.add_argument("--command", action="append", default=[], help="only this command's cases (repeatable)")
     parser.add_argument("--case", action="append", default=[], help="only this case (repeatable)")
     parser.add_argument("--jobs", type=int, default=6)
