@@ -13,7 +13,7 @@ import { Cancelled } from "../../src/browse/cdp/cancel.ts";
 import { browseDir, closeFd, lockHeld, socketIsOurs } from "../../src/browse/paths.ts";
 import { BUILT_LIBC } from "../libc-loaded.ts";
 import { dumps } from "../../src/json.ts";
-import { alive, ask, config, keyOf, PYTHON, raw, type Scratch, scratch, socketFile, staleSocket, start, tsChoice, until } from "./daemon-helpers.ts";
+import { alive, ask, config, keyOf, PYTHON, sessionMeta, raw, type Scratch, scratch, socketFile, staleSocket, start, tsChoice, until, quietWatchdog } from "./daemon-helpers.ts";
 
 setDefaultTimeout(90_000);
 const TS_DIR = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
@@ -76,7 +76,7 @@ function stalledHandshake(): Promise<number> {
 }
 
 function inProcess(found: Scratch, session: string, port: number): Daemon {
-  return new Daemon(parseConfig(dumps(config(found.data, session, {}, port), "spaced")));
+  return quietWatchdog(new Daemon(parseConfig(dumps(config(found.data, session, {}, port), "spaced"))));
 }
 
 function exitOf(child: ChildProcess): Promise<number | null> {
@@ -226,7 +226,7 @@ describe("tokens and the spawn", () => {
     const found = fresh();
     const { key, pid } = await start(found.data, "label", tsChoice(), { endpoint_label: "user:pw@127.0.0.1:9/devtools/browser/x?token=abcdefabcdefabcdef#frag" });
     pids.push(pid);
-    const meta = JSON.parse(fs.readFileSync(path.join(found.browse, `${key}.json`), "utf8"));
+    const meta = await sessionMeta(found.data, key);
     expect(meta.endpoint).toBe("127.0.0.1:9/devtools/browser/x");
     await ask(found.data, key, ["close"]);
   });
@@ -340,7 +340,7 @@ describe.skipIf(!CHROME)("caller attribution against headless Chrome for Testing
     const token = config(found.data, "caller");
     token.set("port", null);
     token.set("endpoint_label", "Ardia");
-    const daemon = new Daemon(parseConfig(dumps(token, "spaced")));
+    const daemon = quietWatchdog(new Daemon(parseConfig(dumps(token, "spaced"))));
     const running = daemon.run();
     await until(() => fs.existsSync(socketFile(found.data, daemon.key)), 5000);
     const page = "data:text/html,<title>Caller</title>";

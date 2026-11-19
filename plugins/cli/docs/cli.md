@@ -1886,26 +1886,39 @@ These are intentional: Python behaves the other way, and the TypeScript daemon f
 - Shutdown deadlines are hard. Endpoint discovery (`/json/version`) honours cancellation and gives up after 3 s in all,
   where Python's 3 s applies to each socket operation, so a server that trickles bytes held Python forever. Shielded
   temp-tab work has its own 10 s deadline. Waiting for `tabs.lock` or `claims/.lock` gives up after 5 s with `lock_busy`;
-  Python waits for as long as another process holds them. A native watchdog thread in the addon, armed once when the
-  stop begins, exits the daemon (status 1) 15 s later whatever JavaScript is doing, even stuck in a synchronous lock
-  wait, after unlinking its own socket with the inode check; it touches no JavaScript, lock or log. Log writes never
+  Python waits for as long as another process holds them. A native watchdog thread in the addon is armed the moment
+  the daemon starts stopping, on every path (`close`, a signal, the idle exit, a lost connection), before anything else
+  runs. 15 s later it exits the daemon (status 1) whatever JavaScript is doing, even stuck in a synchronous lock wait,
+  after unlinking its own socket with the inode check; it touches no JavaScript, lock or log. Firing and disarming
+  exclude each other (one atomic state, armed to firing or armed to disarmed): a clean exit disarms it only if it wins,
+  else it waits for the fire, and the session lock is held until then, so no successor publishes a socket the fire might
+  still unlink. If it can't be armed (a folder descriptor that isn't a folder, no thread), the daemon unlinks its socket
+  with the same check and exits 1 at once instead of cleaning up unguarded. Log writes never
   block: stdout and stderr are made non-blocking at start, and a write that would block is dropped.
 - An attach publishes its session only once `Page.enable` and the frame refresh have succeeded and the session is still
   attached; a crashed tab's session (which skips the enable) is published only if it is still attached. Otherwise the
   page stays unattached and needs enabling, and the half-made CDP session is detached. Losing the session or the tab
-  during the enable is never swallowed. Python keeps the session id and skips the enable on the next command.
-- A temporary tab whose `Target.createTarget` answer arrives after its command was cancelled or ran out of time is
-  closed when the answer comes (and counted in the log). Python waits for the answer however long it takes.
+  during the enable is never swallowed, a lost connection while probing a crashed tab included, and nothing is
+  published once the connection is gone. Python keeps the session id and skips the enable on the next command.
+- A temporary tab is created at `about:blank#ardia-temp-<nonce>` (then navigated by its reader), with the nonce kept in
+  its reservation in the tab registry until `createTarget` answers. An answer that arrives after its command was
+  cancelled or ran out of time closes the tab (counted in the log); one that never arrives (the daemon stopped, or 30 s
+  passed) leaves the reservation, and the daemon's `drain` at exit or the next connect's sweep closes any tab still
+  showing that marker. Python creates the tab at plain `about:blank`, waits for the answer however long it takes, and
+  drops the reservation on any failure. Openers aren't followed: a temporary tab opens nothing before it is recorded.
 - A queued command's `caller` takes effect only once it holds the command lock, so it can't relabel the command that is
   running. Python sets it as the request arrives.
 - `close` waits for the command lock at most as long as a command queued behind a `script` would (300 s), then answers
-  `session_busy` and leaves the session as it was. Python waits without limit.
+  `session_busy` and leaves the session as it was. Python waits without limit. The lock never hands itself to a waiter
+  whose time ran out while the daemon was busy; that waiter gets its `session_busy`.
 - Control-file discovery is checked for cancellation before and after it reads the file.
 - The tab registry's instance for a `ws://` endpoint leaves out any user info, so `user:password@` never reaches
   `tabs-<hash>.json` (the hash is of that cleaned instance). Python keeps the user info in it.
 - The client starts the daemon without `ARDIA_WS`, `ARDIA_PORT`, `ARDIA_CDP_URL` or `AGENT_BROWSER_CDP` in its
   environment, after moving the one the daemon would have used into the config's `ws` or `port`, read by the same
-  parser the daemon's resolver uses (so `ARDIA_PORT=+9222` or `9_222` reads as Python's `int` does). An `ARDIA_PORT` that
+  parser the daemon's resolver uses, which is Python's `int`: surrounding ASCII whitespace or any non-ASCII Unicode
+  space, a sign, underscores between digits and any Unicode decimal digit (`+9222`, `9_222`, full-width digits); the error
+  quotes the value as Python's `repr` does. An `ARDIA_PORT` that
   isn't a valid port stays in the environment, so the daemon still reports it, even with `ARDIA_CDP_URL` set. The daemon writes the
   endpoint label without any query, fragment or user info, whatever the client sent.
 - A request line may be 16 MiB including its newline; one byte more is dropped unanswered.

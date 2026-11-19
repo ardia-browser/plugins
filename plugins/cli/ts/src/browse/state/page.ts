@@ -150,7 +150,7 @@ export class Page {
         await this.send("Inspector.enable", null, { timeout: CRASH_PROBE });
       } catch (error) {
         if (error instanceof Gated) this.crashed = known;
-        else if (!(error instanceof BrowseError)) throw error;
+        else if (!(error instanceof BrowseError) || error instanceof ConnectionLost) throw error;
       }
       if (this.crashed) {
         this.needsEnable = true;
@@ -159,6 +159,7 @@ export class Page {
       }
       await this.enablePage();
       if (this.sessionId !== session) throw new BrowseError(DETACHED, null, "tab_detached");
+      if (!browser.alive) throw new ConnectionLost();
     } catch (error) {
       if (this.attaching === session) {
         this.attaching = null;
@@ -172,6 +173,7 @@ export class Page {
 
   private publish(session: string): void {
     if (this.attaching !== session) throw new BrowseError(DETACHED, null, "tab_detached");
+    if (!this.browser?.alive) throw new ConnectionLost();
     this.sessionId = session;
     this.attaching = null;
   }

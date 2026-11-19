@@ -37,7 +37,7 @@ export function daemonEnvironment(config: JsonObject, env: NodeJS.ProcessEnv = p
   }
   if (found === null) return { config: folded, env: kept };
   if (found.kind === "ws") folded.set("ws", found.url);
-  else if (found.port > 0 && found.port < 65536) folded.set("port", BigInt(found.port));
+  else if (found.port > 0n && found.port < 65536n) folded.set("port", found.port);
   else kept["ARDIA_PORT"] = env["ARDIA_PORT"];
   return { config: folded, env: kept };
 }

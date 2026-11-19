@@ -35,6 +35,7 @@ export const CLEANUP_TIMEOUT = 10.0;
 export const WATCH_INTERVAL = 2.0;
 export const EXIT_GRACE = 3.0;
 export const READ_TIMEOUT = 30.0;
+export const SHUTDOWN_EXIT = 1;
 
 type Request = Record<string, unknown>;
 type Running = { name: string; since: number };
@@ -79,7 +80,8 @@ export class Daemon {
     arm: armWatchdog,
     disarm: disarmWatchdog,
   };
-  private watchdogArmed = false;
+  exit: (code: number) => void = (code) => process.exit(code);
+  private watchdogState: "idle" | "armed" | "failed" = "idle";
   private stopNow: () => void = () => {};
   private readonly stopped: Promise<void>;
   private server: net.Server | null = null;
@@ -190,11 +192,24 @@ export class Daemon {
     } catch {}
   }
 
-  private armWatchdog(): void {
-    if (this.watchdogArmed) return;
-    this.watchdogArmed = true;
+  private enterStopping(): void {
+    this.stopping = true;
+    if (this.watchdogState !== "idle") return;
     const id = this.sockId ?? { dev: 0n, ino: 0n };
-    this.watchdog.arm(this.dirFd, this.sock, id.dev, id.ino, (this.settleTimeout + this.cleanupTimeout) * 1000, 1);
+    let result: number;
+    try {
+      result = this.watchdog.arm(this.dirFd, this.sock, id.dev, id.ino, (this.settleTimeout + this.cleanupTimeout) * 1000, SHUTDOWN_EXIT);
+    } catch {
+      result = -1;
+    }
+    if (result === 0) {
+      this.watchdogState = "armed";
+      return;
+    }
+    this.watchdogState = "failed";
+    log.warning("the shutdown watchdog couldn't be armed; exiting now");
+    this.dropSocket();
+    this.exit(SHUTDOWN_EXIT);
   }
 
   async run(): Promise<number> {
@@ -229,22 +244,26 @@ export class Daemon {
     try {
       await this.stopped;
     } finally {
-      this.stopping = true;
-      this.armWatchdog();
+      this.enterStopping();
       this.server.close();
       clearInterval(idle);
       clearInterval(watch);
-      await this.settle();
-      await this.cleanup();
-      if (this.watchdogArmed) this.watchdog.disarm();
       for (const signal of ["SIGTERM", "SIGHUP", "SIGINT"] as const) process.off(signal, onSignal);
     }
+    if (this.watchdogState === "failed") return SHUTDOWN_EXIT;
+    await this.settle();
+    await this.cleanup();
+    if (this.watchdogState === "armed" && this.watchdog.disarm() !== 0) {
+      log.warning("the shutdown watchdog fired while cleanup finished; waiting for it to exit");
+      await new Promise(() => {});
+    }
+    closeFd(this.lockFd);
     return 0;
   }
 
   beginStop(): void {
-    this.stopping = true;
-    if (this.server !== null) this.armWatchdog();
+    if (this.server !== null) this.enterStopping();
+    else this.stopping = true;
     this.stopNow();
   }
 
@@ -283,7 +302,6 @@ export class Daemon {
     try {
       this.state.registry.forget();
     } catch {}
-    closeFd(this.lockFd);
   }
 
   private async cleanupInner(): Promise<void> {
@@ -523,7 +541,8 @@ export class Daemon {
     state.caller = caller ?? state.caller;
     try {
       if (this.stopping) return this.refuseClosing(ctx.options, "close");
-      this.stopping = true;
+      this.enterStopping();
+      if (this.watchdogState === "failed") return this.refuseClosing(ctx.options, "close");
       const deadline = new AbortController();
       const timer = setTimeout(() => deadline.abort(new Cancelled()), this.closeTimeout * 1000);
       try {

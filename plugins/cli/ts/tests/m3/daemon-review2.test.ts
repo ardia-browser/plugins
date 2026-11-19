@@ -16,7 +16,7 @@ import { closeFd } from "../../src/browse/paths.ts";
 import * as temptabs from "../../src/browse/state/temptabs.ts";
 import { dumps } from "../../src/json.ts";
 import { BUILT_LIBC } from "../libc-loaded.ts";
-import { alive, ask, config, keyOf, lockHolder, PROGRAM, type Scratch, scratch, socketFile, staleSocket, start, until } from "./daemon-helpers.ts";
+import { alive, ask, config, keyOf, lockHolder, PROGRAM, type Scratch, scratch, socketFile, staleSocket, start, until, quietWatchdog } from "./daemon-helpers.ts";
 
 setDefaultTimeout(120_000);
 const CHROME = process.env["ARDIA_M3_CHROME"];
@@ -52,7 +52,7 @@ afterAll(() => {
 });
 
 function inProcess(found: Scratch, session: string, port = 9): Daemon {
-  return new Daemon(parseConfig(dumps(config(found.data, session, {}, port), "spaced")));
+  return quietWatchdog(new Daemon(parseConfig(dumps(config(found.data, session, {}, port), "spaced"))));
 }
 
 function plainConfig(found: Scratch, session: string, extra: Record<string, unknown> = {}, port = 9): string {
@@ -108,7 +108,8 @@ const bad = [
   [dir, "s.sock", 1, info.ino, 300, 3],
   [dir, "s.sock", info.dev, info.ino, 0, 3],
   [dir, "s.sock", info.dev, info.ino, 300, 256],
-  [dir, "s.sock", info.dev, info.ino, 300, 3, 9],
+  [dir, "s.sock", info.dev, info.ino, 300, 3, 20000],
+  [dir, "s.sock", info.dev, info.ino, 300, 3, 0, 1],
 ];
 for (const args of bad) {
   let said;
@@ -123,8 +124,8 @@ setTimeout(() => {}, 5000);`;
     child.stdout?.on("data", (chunk) => (out += chunk));
     expect(await exitOf(child)).toBe(5);
     const lines = out.trim().split("\n");
-    expect(lines.slice(0, 6).every((line) => line === "threw" || Number(line) < 0)).toBe(true);
-    expect(lines[6]).toBe("0");
+    expect(lines.slice(0, 7).every((line) => line === "threw" || Number(line) < 0)).toBe(true);
+    expect(lines[7]).toBe("0");
     expect(fs.existsSync(path.join(found.root, "s.sock"))).toBe(true);
   });
 
@@ -179,6 +180,7 @@ describe("attach", () => {
     const page = new Page(state, "TARGET");
     const sent: string[] = [];
     const browser = {
+      alive: true,
       send(method: string) {
         sent.push(method);
         if (method === "Target.attachToTarget") return Promise.resolve({ sessionId: "SESSION" });
