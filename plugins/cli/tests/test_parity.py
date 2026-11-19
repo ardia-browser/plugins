@@ -441,6 +441,9 @@ class HarnessCatches(unittest.TestCase):
             shutil.rmtree(scratch, True)
 
 
+INHERITED_FD = 42
+
+
 class EntryProcess:
     entry = "rust"
     hand_backs: tuple = ()
@@ -651,6 +654,9 @@ class EntryProcess:
             self.assertEqual((new.returncode, new.stdout, new.stderr), (python.returncode, python.stdout, python.stderr), argv)
             self.assertNotIn("�".encode(), new.stderr)
 
+    def flusher_running(self) -> bool:
+        return bool(subprocess.run(["pgrep", "-f", f"{self.python} .*flush_main"], capture_output=True, text=True).stdout.split())
+
     def flushers_done(self) -> None:
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline:
@@ -704,6 +710,26 @@ class EntryProcess:
                 new = self.ends_with_a_fifo_at(place, [str(self.root / "bin" / "ardia")], hold=False)
                 self.assertEqual(new, python)
 
+    def flusher_keeps_an_inherited_descriptor(self, url: str, soft_limit: int | None) -> bool:
+        reader, writer = os.pipe()
+        os.dup2(writer, INHERITED_FD)
+        os.close(writer)
+
+        def lower_limit():
+            if soft_limit is not None:
+                resource.setrlimit(resource.RLIMIT_NOFILE, (soft_limit, resource.getrlimit(resource.RLIMIT_NOFILE)[1]))
+
+        try:
+            done = subprocess.run([str(self.root / "bin" / "ardia"), "windows"], capture_output=True, pass_fds=(INHERITED_FD,), preexec_fn=lower_limit,
+                                  env=self.environment({"ARDIA_TELEMETRY_URL": url}), timeout=30)
+            os.close(INHERITED_FD)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            if not select.select([reader], [], [], 3)[0]:
+                return True
+            return os.read(reader, 1) != b""
+        finally:
+            os.close(reader)
+
     def test_its_events_reach_the_collector_through_the_python_flusher(self):
         collector = ThreadingHTTPServer(("127.0.0.1", 0), Collector)
         threading.Thread(target=collector.serve_forever, daemon=True).start()
@@ -713,15 +739,9 @@ class EntryProcess:
         (self.case / "home").mkdir()
         (data / "telemetry.json").write_text(json.dumps({"sharing": True, "installId": INSTALL_ID}))
         fake = FakeArdia(data / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "windows": {"result": []}})
-        reader, writer = os.pipe()
+        url = f"http://127.0.0.1:{collector.server_address[1]}/v1/logs"
         try:
-            url = f"http://127.0.0.1:{collector.server_address[1]}/v1/logs"
-            done = subprocess.run([str(self.root / "bin" / "ardia"), "windows"], capture_output=True, pass_fds=(writer,),
-                                  env=self.environment({"ARDIA_TELEMETRY_URL": url}), timeout=30)
-            os.close(writer)
-            self.assertEqual(done.returncode, 0, done.stderr)
-            self.assertTrue(select.select([reader], [], [], 1.5)[0], "the flusher kept a descriptor it inherited")
-            self.assertEqual(os.read(reader, 1), b"")
+            self.assertFalse(self.flusher_keeps_an_inherited_descriptor(url, None), "the flusher kept a descriptor it inherited")
             deadline = time.monotonic() + 20
             while not Collector.bodies and time.monotonic() < deadline:
                 time.sleep(0.1)
@@ -734,10 +754,32 @@ class EntryProcess:
                 time.sleep(0.1)
             self.assertFalse((data / "Telemetry" / "cli-queue.jsonl").exists())
         finally:
-            os.close(reader)
             fake.close()
             collector.shutdown()
             collector.server_close()
+
+    def test_the_flusher_keeps_no_inherited_descriptor_whatever_the_soft_descriptor_limit(self):
+        (self.case / "home").mkdir()
+        silent = socket.socket()
+        silent.bind(("127.0.0.1", 0))
+        silent.listen(8)
+        self.addCleanup(silent.close)
+        url = f"http://127.0.0.1:{silent.getsockname()[1]}/v1/logs"
+        for soft_limit in (None, INHERITED_FD - 10):
+            with self.subTest(soft_fd_limit=soft_limit):
+                data = self.case / "data"
+                shutil.rmtree(data, True)
+                data.mkdir()
+                (data / "telemetry.json").write_text(json.dumps({"sharing": True, "installId": INSTALL_ID}))
+                fake = FakeArdia(data / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "windows": {"result": []}})
+                try:
+                    kept = self.flusher_keeps_an_inherited_descriptor(url, soft_limit)
+                    self.assertTrue(self.flusher_running(), "the flusher was gone before its descriptors were checked")
+                    self.assertFalse(kept, "the flusher kept a descriptor it inherited")
+                finally:
+                    fake.close()
+                    subprocess.run(["pkill", "-f", f"{self.python} .*flush_main"], capture_output=True)
+                    self.flushers_done()
 
     def test_the_lease_is_held_through_the_hand_off_to_python(self):
         leases = self.root / ".leases"
