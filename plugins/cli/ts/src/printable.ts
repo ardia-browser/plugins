@@ -1,4 +1,5 @@
-import { writeSync } from "node:fs";
+import { write, writeSync } from "node:fs";
+import { interrupted as interruptRequested } from "./control.ts";
 
 function escaped(text: string, escape: (code: number) => boolean): string {
   let out = "";
@@ -41,16 +42,56 @@ export function writeAll(fd: number, text: string | Uint8Array): void {
   }
 }
 
+const INTERRUPT_POLL_MS = 50;
+
+type Outcome = { written: number } | { error: unknown };
+
+function writeSome(fd: number, bytes: Buffer, offset: number): Promise<number> {
+  return new Promise((resolve, reject) => {
+    write(fd, bytes, offset, bytes.length - offset, null, (error, written) => (error ? reject(error) : resolve(written)));
+  });
+}
+
+function pause(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export class Output {
   closed = false;
+  interrupted = false;
+  private pending: string[] = [];
   constructor(readonly json: boolean) {}
 
   say(text: string): void {
-    if (this.closed) return;
-    try {
-      writeAll(1, `${this.json ? jsonSafe(text) : inert(text)}\n`);
-    } catch {
-      this.closed = true;
+    if (!this.closed) this.pending.push(`${this.json ? jsonSafe(text) : inert(text)}\n`);
+  }
+
+  async flush(stopped: () => boolean = interruptRequested): Promise<void> {
+    const bytes = Buffer.from(this.pending.join(""), "utf8");
+    this.pending = [];
+    let offset = 0;
+    while (offset < bytes.length && !this.closed) {
+      if (stopped()) {
+        this.interrupted = true;
+        return;
+      }
+      const settled = writeSome(1, bytes, offset).then(
+        (written): Outcome => ({ written }),
+        (error: unknown): Outcome => ({ error }),
+      );
+      let outcome: Outcome | undefined;
+      while ((outcome = await Promise.race([settled, pause(INTERRUPT_POLL_MS).then(() => undefined)])) === undefined) {
+        if (stopped()) {
+          this.interrupted = true;
+          return;
+        }
+      }
+      if ("written" in outcome) offset += outcome.written;
+      else {
+        const code = (outcome.error as NodeJS.ErrnoException).code;
+        if (code === "EAGAIN") await pause(1);
+        else if (code !== "EINTR") this.closed = true;
+      }
     }
   }
 

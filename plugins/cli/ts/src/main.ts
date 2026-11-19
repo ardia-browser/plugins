@@ -1,9 +1,12 @@
 import { writeSync } from "node:fs";
-import { bundledPython, dropLease, handOff, installRoot, takeLease } from "./handoff.ts";
+import { catchInterrupts } from "./control.ts";
+import { bundledPython, installRoot } from "./install.ts";
+import { HAND_BACK, takeMarker } from "./routed.ts";
 import { servesNatively } from "./served.ts";
 import { cliVersion } from "./version.ts";
 
-const LOSSY = "\ufffd";
+const LOSSY = "�";
+const NOT_ROUTED = "ardia-ts: this program runs only as part of ardia; run ardia instead\n";
 
 function asksForVersion(argv: string[]): boolean {
   return argv.length === 1 && argv[0] === "--version";
@@ -27,22 +30,24 @@ async function serve(argv: string[], python: string | null): Promise<number | un
   }
 }
 
-async function main(argv: string[]): Promise<number> {
-  const root = installRoot();
-  const python = bundledPython(root);
-  const lease = takeLease(root);
-  try {
-    if (argv.some((word) => word.includes(LOSSY))) return await handOff(argv, python, lease);
-    if (asksForVersion(argv) && servesNatively("--version")) {
-      try {
-        writeSync(1, `ardia ${cliVersion()}\n`);
-      } catch {}
-      return 0;
-    }
-    return (await serve(argv, python)) ?? (await handOff(argv, python, lease));
-  } finally {
-    dropLease(lease);
+async function main(words: string[]): Promise<number> {
+  const routed = takeMarker(words);
+  if (routed === undefined) {
+    try {
+      writeSync(2, NOT_ROUTED);
+    } catch {}
+    return 2;
   }
+  if (!routed.interruptsIgnored) catchInterrupts();
+  const argv = routed.argv;
+  if (argv.some((word) => word.includes(LOSSY))) return HAND_BACK;
+  if (asksForVersion(argv) && servesNatively("--version")) {
+    try {
+      writeSync(1, `ardia ${cliVersion()}\n`);
+    } catch {}
+    return 0;
+  }
+  return (await serve(argv, bundledPython(installRoot()))) ?? HAND_BACK;
 }
 
-process.exitCode = await main(process.argv.slice(2));
+process.exit(await main(process.argv.slice(2)));
