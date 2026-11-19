@@ -58,4 +58,4 @@ def answer_deadline(payload: dict) -> float:
     timeout = float(options.get("timeout_ms") or DEFAULT_TIMEOUT_MS) / 1000
     name, rest = str(argv[0]), [str(arg) for arg in argv[1:]]
     waits = max(queue_wait(name, rest, patient=bool(payload.get("patient_queue"))), BEHIND_SCRIPT_WAIT)
-    return waits + command_limit(name, rest, timeout) + LIMIT_MARGIN
+    return min(waits + command_limit(name, rest, timeout) + LIMIT_MARGIN, MAX_GIVEN)

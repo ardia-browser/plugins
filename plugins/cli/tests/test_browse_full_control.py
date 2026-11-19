@@ -379,6 +379,14 @@ class CheckedBeforeConnecting(unittest.TestCase):
             self.assertEqual(status, 1, argv)
             self.assertIn("--target", err)
 
+    def test_the_client_deadline_is_capped_at_a_day(self):
+        from ardia_cli.browse import limits
+
+        for payload in ({"argv": ["script", "--timeout", "1d"]}, {"argv": ["script", "--timeout", "9" * 400]},
+                        {"argv": ["wait", "x"], "options": {"timeout_ms": "inf"}}, {"argv": ["cdp", "Page.x"], "options": {"timeout_ms": "1e400"}}):
+            self.assertLessEqual(limits.answer_deadline(payload), limits.MAX_GIVEN, payload)
+        self.assertEqual(limits.answer_deadline({"argv": ["get", "url"], "options": {"timeout_ms": "inf"}}), 450.0)
+
     def test_a_huge_timeout_never_overflows_the_client_deadline(self):
         import math
 
