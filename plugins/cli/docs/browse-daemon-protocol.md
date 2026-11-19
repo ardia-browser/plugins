@@ -182,6 +182,14 @@ and never by Python's or by the person's own session. The TypeScript daemon only
   same-site with the top document (same scheme and registrable domain, approximated as the host's last two labels).
   Cross-site frames (out-of-process iframes) aren't read; when any frame is skipped the snapshot ends with one line,
   `N embedded frame(s) not read`, and `--json` carries `framesNotRead`. Refs inside a read frame work like any other.
+- **Protected fields.** The daemon never returns a password field's value: not in `snapshot`, `get value`, `get text`,
+  `get attr … value`, `get html` (a password input's `value` attribute is removed), `find` or any change report. A field
+  is protected when the AX tree marks it `protected`, when its AX value is all mask characters, or when `DOM.describeNode`
+  shows `<input type=password>`; on Chrome 158 only the DOM signal is reliable (the AX tree carries no `protected`
+  property and masks the value with one bullet per character). It shows as present, with its role, name and
+  `(password field)` and no value. `fill`, `type` and `find … fill|type` into one answer exit 77 `protected_field`
+  ("Password fields are filled by the password manager, not by plugins") before any input goes out, and the answer's
+  metrics count it (`plugin_protected_refused`). Owner mode is unchanged.
 - **Refs.** A step acts only on the picked tab: a ref taken on another tab is stale, answering exit 1 `stale_ref` like
   any other stale ref, and nothing is sent.
 - **Document check.** With `options.expect_loader`, the daemon compares the picked tab's main-frame loader before the

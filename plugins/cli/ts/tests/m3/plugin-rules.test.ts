@@ -3,6 +3,7 @@ import { type Entry } from "./canon.ts";
 import { pluginViolations } from "./plugin-rules.ts";
 import { type Browser } from "../../src/browse/cdp/browser.ts";
 import { PluginLink } from "../../src/browse/plugin/link.ts";
+import { scrubPasswordValues } from "../../src/browse/plugin/protected.ts";
 import { checkRequest, PluginPolicy } from "../../src/browse/plugin/policy.ts";
 import { comboEvents, editingCommand } from "../../src/browse/plugin/input.ts";
 import { PluginRefused } from "../../src/browse/plugin/session.ts";
@@ -172,5 +173,15 @@ describe("the daemon's own policy", () => {
     expect(key).not.toBe(pluginSessionKey("", `${CREDENTIAL.slice(0, -1)}x`, "plugin-ai"));
     expect(sameCredential(CREDENTIAL, credentialId(CREDENTIAL))).toBe(true);
     expect(sameCredential(`${CREDENTIAL.slice(0, -1)}x`, credentialId(CREDENTIAL))).toBe(false);
+  });
+});
+
+describe("protected fields", () => {
+  test("password inputs lose their value attribute in HTML, whatever the quoting; other inputs keep theirs", () => {
+    const html = `<input type="password" value="s1"><INPUT TYPE=PASSWORD VALUE=s2 id=a><input value='s3' type='password'/><input type="text" value="keep"><input value="s4" data-x=">" type="password">`;
+    const scrubbed = scrubPasswordValues(html);
+    for (const secret of ["s1", "s2", "s3", "s4"]) expect(scrubbed).not.toContain(secret);
+    expect(scrubbed).toContain('value="keep"');
+    expect(scrubbed).toContain('type="password"');
   });
 });

@@ -28,6 +28,14 @@ export const CONTRACT = `<!doctype html><title>Form page</title>
 <button onclick="document.title='Pressed'; document.body.insertAdjacentHTML('beforeend', '<p>Saved</p>')">Save</button>
 <a href="/done">Next</a>
 <div id="list" style="height:40px;overflow:auto"><div style="height:200px"></div></div>`;
+export const SECRET = "hunter2-SECRET-7731";
+export const LOGIN = `<!doctype html><title>Form page</title><form id="login">
+<label>Username <input id="user" autocomplete="username"></label>
+<label>Password <input id="pw" type="password" value="attr-${SECRET}"></label>
+</form><iframe src="/login-frame"></iframe>
+<script>document.getElementById('user').value = 'ada'; document.getElementById('pw').value = '${SECRET}';</script>`;
+export const LOGIN_FRAME = `<!doctype html><title>Frame login</title><label>Frame password <input id="fpw" type="text" value="attr-${SECRET}"></label>
+<script>const field = document.getElementById('fpw'); field.type = 'password'; field.value = '${SECRET}';</script>`;
 export const FAR = `<!doctype html><title>Form page</title><h1>Far</h1><div style="height:2500px"></div>
 <button onclick="document.title='Far pressed'">Far</button>
 <button style="position:fixed;left:10px;top:5000px">Stuck</button>`;
@@ -76,7 +84,7 @@ export async function startWorld(base: number, credential = CREDENTIAL, session 
   const [chromePort, tapPort, sitePort] = [base, base + 1, base + 2];
   const children: ChildProcess[] = [];
   const site = http.createServer((request, response) => {
-    const body = request.url === "/done" ? DONE : request.url === "/contract" ? CONTRACT : request.url === "/frames" ? framesPage(sitePort) : request.url === "/child" ? CHILD : request.url === "/far" ? FAR : form;
+    const body = request.url === "/done" ? DONE : request.url === "/contract" ? CONTRACT : request.url === "/frames" ? framesPage(sitePort) : request.url === "/child" ? CHILD : request.url === "/far" ? FAR : request.url === "/login" ? LOGIN : request.url === "/login-frame" ? LOGIN_FRAME : form;
     response.writeHead(200, { "content-type": "text/html" });
     response.end(body);
   });

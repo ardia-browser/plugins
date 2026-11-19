@@ -9,6 +9,7 @@ import { diff as diffViews } from "../changes/report.ts";
 import { asData, renderReport } from "../changes/text.ts";
 import { type Node, walk } from "../snapshot/tree.ts";
 import { type PluginPage } from "./page.ts";
+import { refuseProtected } from "./protected.ts";
 import { attach, collect, framesNotRead, keepRefs, noteShown, observe, onlyTheFieldChanged, previous, remember } from "./ax.ts";
 import { center, describe, editable, type Element, focus, locate, notEditable } from "./dom.ts";
 import { buttonOf, clearField, clickAt, comboEvents, pressCombo, typeText } from "./input.ts";
@@ -155,6 +156,7 @@ async function cmdFill(ctx: PluginCtx, argv: string[]): Promise<Result> {
 
 export async function fillElement(ctx: PluginCtx, element: Element, text: string, humanize: boolean, shown = element.label): Promise<Result> {
   const described = await describe(element);
+  await refuseProtected(element, described);
   if (!editable(described)) throw new BrowseError(notEditable(element, described), null, "not_editable");
   const [, report] = await observe(ctx.session, element.page, ctx.options, async () => {
     await focus(element);

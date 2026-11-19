@@ -58,7 +58,8 @@ export function line(node: Node, depth: number, urls: boolean, near?: string | n
   if (node.name) out += ` ${quoted(node.role === "StaticText" ? node.name : shownName(node.name))}`;
   const shown = attrs(node, urls);
   if (shown.length) out += ` [${shown.join(", ")}]`;
-  if (node.value && node.value !== node.name && node.role !== "StaticText" && node.role !== "link" && node.role !== "heading") out += `: ${node.value.replaceAll("\n", " ")}`;
+  if (node.props.get("pluginProtected")) out += " (password field)";
+  else if (node.value && node.value !== node.name && node.role !== "StaticText" && node.role !== "link" && node.role !== "heading") out += `: ${node.value.replaceAll("\n", " ")}`;
   if (node.hints && node.hints.length) out += ` clickable [${node.hints.join(", ")}]`;
   if (near) out += ` (near ${quoted(near)})`;
   return out;

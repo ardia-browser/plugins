@@ -6,6 +6,7 @@ import { clock, flag, spent } from "../metrics.ts";
 import { Result } from "../daemon/render.ts";
 import { REF_ROLES, type AxNode, buildTree, isAxList, type Node, walk } from "../snapshot/tree.ts";
 import { type PluginPage } from "./page.ts";
+import { markProtectedFields } from "./protected.ts";
 import { type PluginSession, type Ref } from "./session.ts";
 
 export const FIRST_QUIET = 0.05;
@@ -85,6 +86,7 @@ export async function collect(session: PluginSession, page: PluginPage, scope: n
   const nodes = buildTree(await axNodes(page), scope);
   assignRefs(session, page, nodes, page.mainFrame ?? "");
   await readFrames(session, page, nodes, counted, new Set());
+  await markProtectedFields(page, nodes);
   spent("snapshot_build_ms", started);
   return nodes;
 }

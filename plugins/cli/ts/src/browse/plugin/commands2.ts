@@ -11,6 +11,7 @@ import { boxOf, center, describe, type Element, focus, locate } from "./dom.ts";
 import { comboEvents, typeText, wheelAt } from "./input.ts";
 import { type PluginPage } from "./page.ts";
 import { ForeignRef, PluginRefused, type PluginSession } from "./session.ts";
+import { isProtected, passwordInput, PROTECTED_NOTE, refuseProtected, scrubPasswordValues } from "./protected.ts";
 
 export const SCROLL_DEFAULT = 300;
 export const FIND_WAIT = 1.5;
@@ -155,10 +156,11 @@ async function cmdGet(ctx: PluginCtx, argv: string[]): Promise<Result> {
   }
   if (what === "html") {
     const outer = String((await element.page.send("DOM.getOuterHTML", { backendNodeId: element.backend }))["outerHTML"] ?? "");
-    const value = innerHtml(outer);
+    const value = innerHtml(scrubPasswordValues(outer));
     return new Result({ origin, html: value }, value, true);
   }
   if (what === "value") {
+    if (await isProtected(element)) return new Result({ value: null, protected: true }, PROTECTED_NOTE, true);
     const node = await partialAx(element);
     const held = (node?.["value"] as Record<string, unknown> | undefined)?.["value"];
     const value = held === undefined || held === null ? null : String(held);
@@ -166,7 +168,9 @@ async function cmdGet(ctx: PluginCtx, argv: string[]): Promise<Result> {
   }
   if (what === "attr") {
     need(args, 3, "get attr <selector> <name>");
-    const value = (await describe(element)).attributes.get((args[2] as string).toLowerCase()) ?? null;
+    const described = await describe(element);
+    const name = (args[2] as string).toLowerCase();
+    const value = name === "value" && passwordInput(described) ? null : (described.attributes.get(name) ?? null);
     return new Result({ attribute: args[2], value }, value ?? "", true);
   }
   const box = await boxOf(element);
@@ -207,6 +211,7 @@ async function cmdType(ctx: PluginCtx, argv: string[]): Promise<Result> {
 }
 
 async function typeInto(ctx: PluginCtx, element: Element, text: string, delay: number, humanize: boolean, shown = element.label): Promise<Result> {
+  await refuseProtected(element);
   const [, report] = await observe(ctx.session, element.page, ctx.options, async () => {
     await focus(element);
     await typeText(element.page, text, delay, humanize);
