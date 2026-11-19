@@ -70,7 +70,7 @@ static bool take_args(napi_env env, napi_callback_info info, size_t wanted, Call
   call->env = env;
   call->argc = MAX_ARGS;
   if (napi_get_cb_info(env, info, &call->argc, call->argv, NULL, NULL) != napi_ok) return false;
-  return call->argc >= wanted;
+  return call->argc == wanted;
 }
 
 static bool int_arg(Call *call, size_t index, int32_t *out) {
@@ -164,7 +164,8 @@ static napi_value peer_uid(napi_env env, napi_callback_info info) {
 static napi_value interrupts_ignored(napi_env env, napi_callback_info info) {
   struct sigaction current;
   napi_value result = NULL;
-  (void)info;
+  Call call;
+  if (!take_args(env, info, 0, &call)) return status(env, -EINVAL);
   memset(&current, 0, sizeof(current));
   if (sigaction(SIGINT, NULL, &current) != 0) return status(env, failed());
   napi_get_boolean(env, current.sa_handler == SIG_IGN, &result);
@@ -269,6 +270,7 @@ static napi_value connect_at(napi_env env, napi_callback_info info) {
   char name[PATH_MAX];
   if (!take_args(env, info, 3, &call)) return status(env, -EINVAL);
   if (!int_arg(&call, 0, &dir) || !int_arg(&call, 2, &wait_ms)) return NULL;
+  if (dir < 0) return status(env, -EBADF);
   int checked = name_arg(&call, 1, name, sizeof(name));
   if (checked != 0) return status(env, checked);
   int fd = connect_unix(dir, name, now_ms() + (wait_ms < 0 ? 0 : wait_ms));
@@ -285,6 +287,7 @@ static napi_value socket_info_at(napi_env env, napi_callback_info info) {
   if (!int_arg(&call, 0, &dir)) return NULL;
   int checked = name_arg(&call, 1, name, sizeof(name));
   if (checked != 0) return status(env, checked);
+  if (dir < 0) return status(env, -EBADF);
   if (!basename_only(name)) return status(env, -EINVAL);
   if (fstatat(dir, name, &found, AT_SYMLINK_NOFOLLOW) != 0) return status(env, failed());
   if (napi_create_array(env, &result) != napi_ok || napi_set_element(env, result, 0, number(env, (double)found.st_mode)) != napi_ok
