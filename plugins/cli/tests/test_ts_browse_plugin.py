@@ -446,6 +446,7 @@ class PluginTelemetry(PluginCredentialProcesses):
         os.close(writer)
         moved = ["/bin/sh", "-c", f'exec {FD}<&{reader} {reader}<&-; exec "$@"', "sh"] if reader != FD else []
         command = [*moved, str(self.install.root / "bin" / "ardia"), "browse", "--session", "plugin-ai", "--json", "get", "--", "title"]
+        self.before = self.tree()
         process = subprocess.run(command, env=env, cwd=self.box / "tmp", stdin=subprocess.DEVNULL, capture_output=True,
                                  pass_fds=(reader,), timeout=60)
         os.close(reader)
@@ -454,16 +455,37 @@ class PluginTelemetry(PluginCredentialProcesses):
         events = [json.loads(line) for line in spool.read_text().splitlines()] if spool.exists() else []
         return process, heard, events, (data / "Telemetry" / "cli-flush.json").exists()
 
-    def test_with_sharing_on_a_plugin_call_spools_its_event_and_starts_no_flusher(self):
+    def tree(self) -> dict:
+        found = {}
+        for path in sorted(self.box.rglob("*")):
+            if path.is_relative_to(self.box / "tmp"):
+                continue
+            info = path.lstat()
+            found[str(path.relative_to(self.box))] = (info.st_mode, info.st_size, info.st_mtime_ns)
+        return found
+
+    def test_with_sharing_on_a_plugin_call_records_no_telemetry_or_usage(self):
         process, heard, events, flushed = self.run_with_sharing(None)
         self.assertEqual(process.returncode, 77, process.stderr)
-        self.assertFalse(heard, "a plugin call reached the network")
-        self.assertFalse(flushed, "a plugin call started a flush")
-        commands = [event for event in events if event.get("event") == "cli_command" or event.get("body", {}).get("event") == "cli_command"
-                    or "cli_command" in json.dumps(event)]
-        self.assertEqual(len(commands), 1, events)
-        self.assertIn('"plugin_mode": true', json.dumps(commands[0]))
-        self.assertNotIn(CREDENTIAL[2:], json.dumps(events))
+        self.assertEqual((heard, events, flushed), (False, [], False))
+        self.assertEqual(self.tree(), self.before)
+
+    def test_a_refused_leading_data_dir_writes_nothing_anywhere(self):
+        elsewhere = self.box / "elsewhere"
+        (elsewhere / "Telemetry").mkdir(parents=True, mode=0o700)
+        elsewhere.chmod(0o700)
+        (elsewhere / "telemetry.json").write_text(json.dumps({"sharing": True, "installId": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"}))
+        listener = Listener()
+        self.addCleanup(listener.close)
+        env = {key: value for key, value in self.env(9).items() if key != "ARDIA_TELEMETRY"}
+        env["ARDIA_TELEMETRY_URL"] = f"http://127.0.0.1:{listener.port}/v1/logs"
+        before = self.tree()
+        process = subprocess.run([str(self.install.root / "bin" / "ardia"), "--data-dir", str(elsewhere), "browse", "--session", "plugin-ai", "--json", "get", "title"],
+                                 env=env, cwd=self.box / "tmp", stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+        self.assertEqual(process.returncode, 77, process.stderr)
+        self.assertEqual(json.loads(process.stdout)["code"], "plugin_refused")
+        self.assertFalse(listener.heard.wait(2))
+        self.assertEqual(self.tree(), before)
 
     def test_with_telemetry_off_a_plugin_call_records_nothing(self):
         process, heard, events, flushed = self.run_with_sharing("0")

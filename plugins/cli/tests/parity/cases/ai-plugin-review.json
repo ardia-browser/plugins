@@ -2611,7 +2611,7 @@
   "intentional": {
    "why": "under --json exactly one JSON line with a code goes to stdout, whatever fails (AI plugin contract §3); the client can't look up another account's home in plugin mode, so it refuses",
    "stdout": {
-    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) needs text paths and readable telemetry consent; nothing was sent\",\"code\":\"plugin_refused\"}\n"
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) needs text paths it can read without looking up another account; nothing was sent\",\"code\":\"plugin_refused\"}\n"
    },
    "stderr": {
     "text": ""

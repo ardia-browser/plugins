@@ -18,13 +18,14 @@ function asksForVersion(argv: string[]): boolean {
 let browseServed = false;
 
 async function serveBrowse(argv: string[], python: string | null): Promise<number | undefined> {
-  const [browse, paths, { consentUnreadable, dataDirArg, leadingTokens }] = await Promise.all([
+  const [browse, paths, { consentUnreadable, dataDirArg, leadingTokens }, { pluginMode }] = await Promise.all([
     import("./browse/index.ts"),
     import("./paths.ts"),
     import("./telemetry.ts"),
+    import("./browse/route.ts"),
   ]);
   const named = [process.env.ARDIA_DATA_DIR, process.env.ARDIA_CLI_HOME, dataDirArg(leadingTokens(argv))];
-  if (!paths.pathsAreText() || named.some(paths.needsAccountLookup) || consentUnreadable(argv)) return browse.refuseOrHandBack(argv, python);
+  if (!paths.pathsAreText() || named.some(paths.needsAccountLookup) || (!pluginMode() && consentUnreadable(argv))) return browse.refuseOrHandBack(argv, python);
   try {
     return await browse.serveBrowse(argv, python);
   } catch (error) {

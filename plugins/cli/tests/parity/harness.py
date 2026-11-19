@@ -1190,6 +1190,13 @@ def intended(python: "Observed", case: Case, places: dict | None = None) -> tupl
     return replace(python, **changes), problems
 
 
+def without_cli_records(python: "Observed") -> "Observed":
+    from dataclasses import replace
+
+    files = {name: change for name, change in python.files.items() if not name.startswith(("cli-home/Usage", "data/Telemetry"))}
+    return replace(python, usage=None, telemetry=[], files=files)
+
+
 @dataclass
 class Outcome:
     case: Case
@@ -1248,6 +1255,8 @@ def check_case(install: Installation, case: Case, served: dict[str, str], keep: 
         python, intent_problems = intended(python, case, places_of(box))
         problems += intent_problems
         applied = True
+    if case.env.get("ARDIA_BROWSE_FOR_PLUGIN") and expected == "ts":
+        python = without_cli_records(python)
     for side, seen in ((install.entry, new), ("python", python)):
         if not seen.transcript_complete:
             problems.append(f"the {side} side left a control connection open past the drain deadline, so its transcript may be cut short")

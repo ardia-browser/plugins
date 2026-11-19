@@ -142,14 +142,13 @@ function browseCall(argv: string[], browse: readonly string[] | undefined): Call
     call.subcommand = commandName(browse);
     call.allowedFlags = allowedFlags(call.subcommand);
   }
-  if (pluginMode()) call.metrics.set("plugin_mode", true);
   return call;
 }
 
 export function refuseOrHandBack(argv: string[], python: string | null): number | undefined {
   if (!pluginMode()) return undefined;
   dropCredential();
-  return refuse(jsonIntentOfArgv(argv), "needs text paths and readable telemetry consent", browseCall(argv, undefined), python);
+  return refuse(jsonIntentOfArgv(argv), "needs text paths it can read without looking up another account", browseCall(argv, undefined), python);
 }
 
 function unreadableBeforeBrowse(argv: string[], python: string | null): number {

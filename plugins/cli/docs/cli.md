@@ -1125,10 +1125,11 @@ their places in the table now expect `plugin_daemon_unavailable`.
   --read`.
 - On Linux plugin mode reads the locale like macOS, except that it treats a UTF-8 locale name as installed: glibc keeps
   locales in one archive the client can't check cheaply, and the app always sets an installed `en_US.UTF-8`.
-- `cli_command` carries `plugin_mode: true` from the TypeScript client. With sharing on, a plugin call appends its one
-  consented `cli_command` event (counts and flags only) to the spool and stops there: it never starts a flusher, Python
-  or TypeScript, and starts no child process at all, so nothing reaches the network from a plugin call. The person's
-  next ordinary `ardia` command flushes the spool. With `ARDIA_TELEMETRY=0` nothing is recorded.
+- **Plugin mode records no CLI telemetry and no usage at all**, whatever the environment or argv: it never reads the
+  consent file, never writes the spool or the usage history, never starts a flusher and touches no telemetry file, even
+  for a refused `--data-dir`. The AI app sets `ARDIA_TELEMETRY=0` and counts plugin activity in its own plugin telemetry.
+  `cli_command` has no `plugin_mode` field. The parity harness applies this to every plugin case: the TypeScript side
+  is expected to leave no usage entry or telemetry file where Python's plugin client does.
 
 #### What F1-early's daemon must do (the spec)
 
