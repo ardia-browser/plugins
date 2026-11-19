@@ -104,7 +104,15 @@ const GLOBAL_CORPUS = [
 test("the client's global split agrees with Python's on every case, rejections included", () => {
   const corpus = [...GLOBAL_CORPUS, ...caseArgvs()];
   const expected = python(["split"], corpus) as unknown[];
-  corpus.forEach((browse, index) => assert.deepEqual(tsSplit(browse), expected[index], JSON.stringify(browse)));
+  corpus.forEach((browse, index) => {
+    const ours = tsSplit(browse) as { rest?: string[] };
+    const command = ours.rest?.find((word) => !word.startsWith("-"));
+    if (command === "wait" && (ours.rest ?? []).some((word) => word === "--state" || word.startsWith("--state="))) {
+      assert.match((expected[index] as { usage?: string }).usage ?? "", /--state doesn't apply to Ardia/, JSON.stringify(browse));
+      return;
+    }
+    assert.deepEqual(ours, expected[index], JSON.stringify(browse));
+  });
 });
 
 type PythonParse = { command: string; known: boolean; usage?: string; options?: Record<string, unknown>; positionals?: string[] };

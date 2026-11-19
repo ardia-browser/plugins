@@ -8,6 +8,8 @@ const SESSION_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const COMMAND_PATTERN = new RegExp(COMMAND_NAME);
 const PY_INT_MAX_STR_DIGITS = 4300;
 
+const COMMAND_LAUNCH_NAMES: Readonly<Record<string, readonly string[]>> = { wait: ["--state"] };
+
 export class Usage extends Error {
   constructor(
     message: string,
@@ -73,6 +75,10 @@ export function splitGlobals(argv: readonly string[]): { found: Found; rest: str
     }
     if (BOOL_FLAGS.includes(name) && !owned) {
       found.flags.set(keyOf(name), inline === undefined ? true : truthy(inline));
+      continue;
+    }
+    if (command !== undefined && COMMAND_LAUNCH_NAMES[command]?.includes(name)) {
+      rest.push(token);
       continue;
     }
     const hint = LAUNCH_HINTS[name];

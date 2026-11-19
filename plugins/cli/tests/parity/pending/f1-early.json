@@ -2542,5 +2542,52 @@
    "namespace": ""
   },
   "note": "round 2: only a whole line is reworded"
+ },
+ {
+  "id": "contract--1-wait",
+  "command": "browse wait",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "wait",
+   "--text=Saved",
+   "--url=**/done",
+   "--load=load",
+   "--state=visible",
+   "--timeout=5000",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§1 grammar: options, then --, then positionals"
  }
 ]

@@ -32,6 +32,7 @@ pub fn for_plugin() -> bool {
 }
 
 pub const REFUSED_CODE: &str = "plugin_refused";
+const COMMAND_LAUNCH_NAMES: [(&str, &str); 1] = [("wait", "--state")];
 
 fn truthy(value: &[u8]) -> bool {
     let text = String::from_utf8_lossy(value);
@@ -67,6 +68,13 @@ fn browse_json(tokens: &[&[u8]]) -> Option<bool> {
         }
         if name == b"--json" {
             json = Some(inline.is_none_or(truthy));
+            continue;
+        }
+        if command.is_some_and(|command| {
+            COMMAND_LAUNCH_NAMES
+                .iter()
+                .any(|(owner, flag)| owner.as_bytes() == command && flag.as_bytes() == name)
+        }) {
             continue;
         }
         if browse_tables::LAUNCH_STOPS.iter().any(|flag| flag.as_bytes() == name) {
@@ -177,6 +185,8 @@ mod tests {
         assert!(!json_requested(&words(&["--json", "browse", "--json=false", "get"])));
         assert!(!json_requested(&words(&["--json", "browse", "get", "--json=0"])));
         assert!(json_requested(&words(&["--json", "browse", "get", "--", "--json=0"])));
+        assert!(json_requested(&words(&["browse", "wait", "--state", "visible", "--json", "#x"])));
+        assert!(!json_requested(&words(&["browse", "get", "--state", "x", "--json"])));
         assert_eq!(
             refusal_line("it \"broke\"\n", true),
             "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) runs only on the \

@@ -1945,6 +1945,11 @@ parity harness rather than stripped wholesale:
   sent: the client answers what Python's client reports when the daemon drops it ("closed the connection before taking
   the command", exit 2) without waiting for the writer to finish. Stdin is passed
   as read: Python 3.13 reads it with `newline="\n"` on macOS, so CR and CRLF reach the daemon unchanged on both sides.
+- `ardia browse wait --state <state>`: the TypeScript client reads a `--state` after `wait` as `wait`'s own option, as
+  the daemon does; Python's global parser rejects it as agent-browser's `--state <file>` launch option, so
+  `wait --state` can't run on Python (plugins#18). Before the command, `--state` is still refused as a launch option on
+  both. The AI plugin sends `wait --state=`. Tests: `json-intent.test.ts`, the grammar test's one recorded split
+  difference, and the router's `json_requested` test.
 - `ardia browse`: stdin over the daemon's 16 MiB request limit, or a request line the envelope pushes over it, fails
   before the client connects; Python's client connects, sends, and reports the daemon dropping it. Both answer "closed
   the connection before taking the command" with exit 2, but only Python's leaves the daemon a dropped connection

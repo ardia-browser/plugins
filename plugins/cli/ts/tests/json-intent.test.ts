@@ -20,3 +20,13 @@ test("--json counts only where the global parser reads it as the switch", () => 
   assert.equal(jsonIntent(["--session", "--json", "get"]), true);
   delete process.env.AGENT_BROWSER_JSON;
 });
+
+test("--state after wait is wait's own option, not a launch option (plugins#18)", async () => {
+  const { splitGlobals } = await import("../src/browse/args.ts");
+  assert.deepEqual(splitGlobals(["--json", "wait", "--state=visible", "#x"]).rest, ["wait", "--state=visible", "#x"]);
+  assert.deepEqual(splitGlobals(["wait", "--state", "hidden", "#x"]).rest, ["wait", "--state", "hidden", "#x"]);
+  assert.throws(() => splitGlobals(["--state", "x", "wait", "#x"]), /launch options have no effect/);
+  assert.throws(() => splitGlobals(["get", "--state=x", "title"]), /launch options have no effect/);
+  assert.equal(jsonIntent(["wait", "--state", "visible", "--json", "#x"]), true);
+});
+

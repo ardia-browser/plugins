@@ -714,20 +714,20 @@
    "session": "plugin-ai",
    "namespace": ""
   },
-  "note": "§1 grammar: options, then --, then positionals",
+  "note": "§1 grammar: options, then --, then positionals; plugin_daemon_unavailable until F1-early",
   "intentional": {
-   "why": "in plugin mode an option the client can't read is a plugin refusal (77), never a usage error",
+   "why": "plugin mode never reaches the Python daemon, which reads pages through page script that plugin credentials can't run (ardia#2808); until the TypeScript plugin daemon (F1-early) lands, every plugin step answers plugin_daemon_unavailable",
    "stdout": {
     "text": ""
    },
    "stderr": {
-    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't read its options (--state doesn't apply to Ardia: ardia browse drives the browser you're running, so launch options have no effect); nothing was sent\n"
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) has no plugin daemon yet: plugin steps will run on a TypeScript daemon that reads pages through DOM, accessibility and input only (M3 F1); nothing was sent\n"
    },
    "status": 77,
    "daemon_requests": [],
    "usage": {
     "recent": [
-     "browse other (exit 77)"
+     "browse wait (exit 77)"
     ],
     "tasks": {}
    }
