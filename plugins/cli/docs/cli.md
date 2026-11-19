@@ -1792,6 +1792,23 @@ parity harness rather than stripped wholesale:
   `KeyboardInterrupt` and an `Exception ignored on flushing sys.stdout` block. The native side dies by SIGINT at once and
   prints nothing more. A listing still ends as Python's does, with `ardia <command>: interrupted` and status 130.
 
+The TypeScript browse daemon's CDP link (M3, not served yet) differs from Python's in these ways, each covered by
+`ts/tests/m3/link.test.ts`, `browser.test.ts` or the link scenarios (`docs/m3-harness.md`):
+
+- The 256 MB message cap is checked once a frame has arrived, so the frame is already in memory; Python stops reading
+  at the cap. Chromium is the only peer, and it never sends a frame over 268,435,456 bytes.
+- No send-stall check: Bun's WebSocket shows no backpressure, so Python's "the browser read nothing for 30 s" can't be
+  reproduced. A stalled browser is caught by the command's own timeout.
+- A failed connection's detail text, shown only for an explicit endpoint (`can't connect to --port N (…)`): a refused
+  port reads `Failed to connect` (Python: `[Errno 61] Connect call failed (…)`); a refused handshake reads
+  `server rejected WebSocket connection (Expected 101 status code)` (Python names the HTTP status). Both raise the
+  same `Unreachable` error with the same exit status.
+- Frames Chromium never sends: a reply whose `id` is written `1.0` answers command 1 (Python ignores a float id); a
+  message holding `NaN` or `Infinity` is dropped (Python accepts it); a binary frame must be UTF-8 (Python's
+  `json.loads` also takes UTF-16 and UTF-32), else it's skipped, as Python skips one it can't decode; a text frame
+  that isn't UTF-8 closes with 1003 (Python 1007), and both end in `connection_lost`.
+- Cancellation is explicit: an abandoned command stops at its next CDP call or `sleep`, not at any `await`.
+
 ## Linux
 
 The same CLI, with these differences:

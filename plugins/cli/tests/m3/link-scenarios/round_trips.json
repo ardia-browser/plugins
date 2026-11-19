@@ -1,0 +1,142 @@
+{
+ "ops": [
+  {
+   "op": "open"
+  },
+  {
+   "op": "send",
+   "method": "Browser.getVersion",
+   "keep": "keys"
+  },
+  {
+   "op": "send",
+   "method": "Target.createTarget",
+   "params": {
+    "url": "about:blank"
+   },
+   "save": "target",
+   "keep": "keys"
+  },
+  {
+   "op": "send",
+   "method": "Target.attachToTarget",
+   "params": {
+    "targetId": "@target.targetId",
+    "flatten": true
+   },
+   "save": "page",
+   "keep": "keys"
+  },
+  {
+   "op": "send",
+   "method": "Runtime.evaluate",
+   "params": {
+    "expression": "1+1",
+    "returnByValue": true
+   },
+   "session": "@page.sessionId"
+  },
+  {
+   "op": "send",
+   "method": "Runtime.evaluate",
+   "params": {
+    "expression": "'é😀 ' + String.fromCharCode(0xD800)",
+    "returnByValue": true
+   },
+   "session": "@page.sessionId"
+  },
+  {
+   "op": "send",
+   "method": "Nope.nope"
+  },
+  {
+   "op": "send",
+   "method": "Runtime.evaluate",
+   "params": {
+    "expression": "1",
+    "contextId": 987654
+   },
+   "session": "@page.sessionId"
+  },
+  {
+   "op": "send",
+   "method": "Browser.close"
+  },
+  {
+   "op": "send",
+   "method": "Browser.crash"
+  },
+  {
+   "op": "send",
+   "method": "Browser.crashGpuProcess"
+  },
+  {
+   "op": "guard",
+   "message": "[{\"id\":1,\"method\":\"Page.enable\"},{\"id\":2,\"method\":\"Browser.crashGpuProcess\"}]"
+  },
+  {
+   "op": "guard",
+   "message": "not json"
+  },
+  {
+   "op": "send",
+   "method": "Page.enable",
+   "session": "@page.sessionId"
+  },
+  {
+   "op": "send",
+   "method": "Page.navigate",
+   "params": {
+    "url": "data:text/html,<title>t</title>"
+   },
+   "session": "@page.sessionId",
+   "keep": "keys"
+  },
+  {
+   "op": "sleep",
+   "seconds": 1.5
+  },
+  {
+   "op": "events",
+   "names": [
+    "Page.frameNavigated",
+    "Page.loadEventFired",
+    "Page.domContentEventFired",
+    "Runtime.consoleAPICalled"
+   ]
+  },
+  {
+   "op": "send",
+   "method": "Runtime.evaluate",
+   "params": {
+    "expression": "document.title",
+    "returnByValue": true
+   },
+   "session": "@page.sessionId"
+  },
+  {
+   "op": "send",
+   "method": "Target.detachFromTarget",
+   "params": {
+    "sessionId": "@page.sessionId"
+   }
+  },
+  {
+   "op": "send",
+   "method": "Target.closeTarget",
+   "params": {
+    "targetId": "@target.targetId"
+   }
+  },
+  {
+   "op": "close"
+  },
+  {
+   "op": "send",
+   "method": "Browser.getVersion"
+  },
+  {
+   "op": "alive"
+  }
+ ]
+}

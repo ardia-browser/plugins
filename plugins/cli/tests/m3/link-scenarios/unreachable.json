@@ -1,0 +1,32 @@
+{
+ "type_only": [
+  0,
+  1
+ ],
+ "ops": [
+  {
+   "op": "open",
+   "url": "ws://127.0.0.1:9/devtools/browser/x"
+  },
+  {
+   "op": "open",
+   "url": "ws://127.0.0.1:{tap}/devtools/page/missing"
+  },
+  {
+   "op": "open",
+   "url": "http://127.0.0.1:{tap}/devtools/browser/x"
+  },
+  {
+   "op": "open",
+   "url": "ws:///devtools/browser/x"
+  },
+  {
+   "op": "open"
+  },
+  {
+   "op": "send",
+   "method": "Browser.getVersion",
+   "keep": "keys"
+  }
+ ]
+}

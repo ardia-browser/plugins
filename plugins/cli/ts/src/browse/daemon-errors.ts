@@ -104,7 +104,12 @@ export class CdpError extends BrowseError {
   readonly method: string;
   readonly cdpMessage: string;
 
-  constructor(method: string, message: string, override?: { text: string; code: string }) {
+  constructor(
+    method: string,
+    message: string,
+    override?: { text: string; code: string } | null,
+    readonly cdpCode: unknown = null,
+  ) {
     super(override ? override.text : `${method}: ${message}`, null, override?.code ?? null);
     this.method = method;
     this.cdpMessage = message;

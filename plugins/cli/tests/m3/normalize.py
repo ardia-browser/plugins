@@ -40,7 +40,7 @@ def load(path: Path) -> list[dict]:
     raw = path.read_bytes()
     if path.suffix == ".gz":
         raw = gzip.decompress(raw)
-    return [json.loads(line) for line in raw.decode("utf-8").splitlines() if line]
+    return [json.loads(line) for line in raw.decode("utf-8").split("\n") if line]
 
 
 def canonical(value) -> str:

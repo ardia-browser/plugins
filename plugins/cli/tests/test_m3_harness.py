@@ -9,7 +9,7 @@ from pathlib import Path
 CLI = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CLI))
 
-from tests.m3 import compare, infra, normalize, runner
+from tests.m3 import compare, infra, linkrun, normalize, runner
 
 
 def message(**fields) -> str:
@@ -96,6 +96,36 @@ class Replay(unittest.TestCase):
         result = self.harness.replay(changed)
         self.assertFalse(result["ok"])
         self.assertTrue(any("tap: unexpected request" in line or "answers" in line for line in result["differences"]), result["differences"])
+
+
+def link_replayable() -> list[str]:
+    return [name for name in linkrun.names([]) if linkrun.recording(name).exists() and not linkrun.load(name).get("live_only")]
+
+
+@unittest.skipUnless(shutil.which("bun") or (Path.home() / ".bun" / "bin" / "bun").exists(), "the replay tap needs bun")
+class LinkReplay(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.harness = linkrun.LinkHarness()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.harness.close()
+
+    def test_every_link_recording_replays_identically_against_both_implementations(self):
+        names = link_replayable()
+        self.assertGreaterEqual(len(names), 4)
+        for impl in ("python", "ts"):
+            failed = [result for result in (self.harness.replay(linkrun.load(name), impl) for name in names) if not result["ok"]]
+            self.assertEqual(failed, [], "\n".join(f"{impl} {result['name']}: {result['differences'][:3]}" for result in failed))
+
+    def test_link_replay_catches_a_changed_request(self):
+        scenario = linkrun.load("round_trips")
+        changed = copy.deepcopy(scenario)
+        changed["ops"][4]["params"]["expression"] = "1+2"
+        result = self.harness.replay(changed, "ts")
+        self.assertFalse(result["ok"])
+        self.assertTrue(any(line.startswith("tap: ") for line in result["differences"]), result["differences"])
 
 
 if __name__ == "__main__":

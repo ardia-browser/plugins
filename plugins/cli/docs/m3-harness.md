@@ -134,3 +134,28 @@ Route the test class's `browse()` through `browse_driver.browse`. Call `browse_d
 writes into `tests/m3/scenarios/<group>/`, then `record` them. `test_browse_act.ActInChrome` and
 `test_browse_read.ReadListsInChrome` are converted this way. `test_browse_e2e.py` and `test_browse_pages_e2e.py` need
 Ardia.app; they convert the same way once a hidden instance runs them.
+
+## The CDP link (slice D1)
+
+`ts/src/browse/cdp/link.ts` and `browser.ts` port `wsclient.py`, `guard.py`, `cdp.py` and `browse/connection.py`
+(with plugins#11's attach rules). Their link-level harness runs before any daemon exists:
+
+| Piece | File | What it does |
+|---|---|---|
+| Drivers | `tests/m3/link_driver.py`, `ts/tests/m3/link-driver.ts` | Run one op script (`open`, `send`, `gather`, `pipeline`, `cancel`, `fault`, `close`, …) through Python's `Browser` and the TS `Browser`, and print each op's outcome (result, or error class, message and code). |
+| Scenarios | `tests/m3/link-scenarios/*.json` | `ops`, plus `live_only` (a reason), `type_only` (ops whose error is compared by class only) and `pace`. |
+| Recordings | `tests/m3/link-transcripts/` | The Python run's transcript and outcomes. |
+| Runner | `python -m tests.m3.linkrun record\|replay\|live` | Same tap, normalizer and comparison as the daemon runner. Replay compares outcomes, requests in order and sources; live compares outcomes and request sets on twin Chromiums. |
+| Unit tests | `ts/tests/m3/link.test.ts`, `browser.test.ts` (fake peers in `rawpeer.ts`) | What a live Chromium can't produce: the exact 256 MiB boundary, invalid UTF-8, binary frames, close codes, burst ordering, ids, cancellation, and the attach cap. |
+
+`tests.test_m3_harness` replays every recording that isn't live-only against both drivers. Live mode also runs the
+faults (`fault_kill`, `fault_stop`, `fault_close`, `fault_drop_error`), the 256 MB scenario and the timeouts.
+
+Chromium's DevTools server never sends a frame over 268,435,456 bytes: it logs "Too large write data is pending" and
+drops the reply without closing. So a reply over the link's 256 MiB cap can only come from a fake peer; from Chromium
+the command times out, in both implementations.
+
+The link settles a reply in the reader (pending entry, timer, attach slot) but resumes its caller with
+`setImmediate`. Bun runs microtasks between the messages of one socket read; Python's reader handles every buffered
+message before a waiter resumes. Deferring the resume keeps that order: an event that arrives in the same read as a
+reply reaches its handlers before the command that waited goes on.
