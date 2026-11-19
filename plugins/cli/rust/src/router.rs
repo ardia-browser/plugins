@@ -1,13 +1,16 @@
 use crate::caller::Caller;
 use crate::json::{self, Style};
 use std::ffi::{CString, OsString};
+use std::io::Read;
 use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicI32, Ordering};
 
 pub const HAND_BACK: i32 = 253;
 pub const MARKER_VERSION: u32 = 1;
 const COMPILED: &str = include_str!("../../served.txt");
+const TABLE_LIMIT: u64 = 64 * 1024;
 const FORWARDED: [libc::c_int; 2] = [libc::SIGTERM, libc::SIGHUP];
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -48,7 +51,7 @@ impl Table {
     }
 
     pub fn load(root: Option<&Path>) -> Table {
-        root.and_then(|root| std::fs::read_to_string(root.join("served.txt")).ok())
+        root.and_then(|root| read_table(&root.join("served.txt")))
             .and_then(|text| Table::parse(&text))
             .unwrap_or_else(Table::compiled)
     }
@@ -56,6 +59,21 @@ impl Table {
     pub fn side(&self, label: &str) -> Option<Side> {
         self.0.iter().find(|(known, _)| known == label).map(|(_, side)| *side)
     }
+}
+
+fn read_table(path: &Path) -> Option<String> {
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK | libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(path)
+        .ok()?;
+    let found = file.metadata().ok()?;
+    if !found.file_type().is_file() || found.len() > TABLE_LIMIT {
+        return None;
+    }
+    let mut text = String::new();
+    file.take(TABLE_LIMIT + 1).read_to_string(&mut text).ok()?;
+    (text.len() as u64 <= TABLE_LIMIT).then_some(text)
 }
 
 pub fn ts_program(root: Option<&Path>) -> Option<PathBuf> {
@@ -255,6 +273,29 @@ mod tests {
         assert_eq!(Table::load(Some(&dir)).side("tabs"), None);
         std::fs::remove_dir_all(&dir).unwrap();
         assert_eq!(Table::load(Some(&dir)), Table::compiled());
+    }
+
+    #[test]
+    fn a_table_that_is_not_a_regular_file_falls_back_without_blocking() {
+        let dir = std::env::temp_dir().join(format!("ardia-router-fifo-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let table = dir.join("served.txt");
+        let name = CString::new(table.as_os_str().as_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let place = dir.clone();
+        std::thread::spawn(move || sender.send(Table::load(Some(&place))).unwrap());
+        let loaded = receiver.recv_timeout(std::time::Duration::from_secs(5));
+        let _ = std::fs::OpenOptions::new().write(true).custom_flags(libc::O_NONBLOCK).open(&table);
+        assert_eq!(loaded.ok(), Some(Table::compiled()));
+        std::fs::remove_file(&table).unwrap();
+        std::fs::write(dir.join("real.txt"), "windows ts\n").unwrap();
+        std::os::unix::fs::symlink(dir.join("real.txt"), &table).unwrap();
+        assert_eq!(Table::load(Some(&dir)), Table::compiled());
+        std::fs::remove_file(&table).unwrap();
+        std::fs::write(&table, format!("windows ts\n{}", " ".repeat(TABLE_LIMIT as usize))).unwrap();
+        assert_eq!(Table::load(Some(&dir)), Table::compiled());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
