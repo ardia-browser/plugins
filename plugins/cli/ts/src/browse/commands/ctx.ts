@@ -13,21 +13,81 @@ function expandUser(value: string): string {
   return home === undefined ? value : home.replace(/\/+$/u, "") + (cut < 0 ? "" : value.slice(cut)) || "/";
 }
 
-export function pyResolve(target: string): string {
-  const absolute = path.resolve(target);
-  const tail: string[] = [];
-  let head = absolute;
-  for (;;) {
-    try {
-      const real = fs.realpathSync(head);
-      return tail.length === 0 ? real : path.join(real, ...tail.reverse());
-    } catch {
-      const parent = path.dirname(head);
-      if (parent === head) return absolute;
-      tail.push(path.basename(head));
-      head = parent;
-    }
+function joinPath(head: string, tail: string): string {
+  if (tail.startsWith("/")) return tail;
+  if (head === "" || head.endsWith("/")) return head + tail;
+  return `${head}/${tail}`;
+}
+
+function splitPath(target: string): [string, string] {
+  const cut = target.lastIndexOf("/") + 1;
+  let head = target.slice(0, cut);
+  if (head !== "" && !/^\/+$/u.test(head)) head = head.replace(/\/+$/u, "");
+  return [head, target.slice(cut)];
+}
+
+function lstatLink(target: string): boolean {
+  try {
+    return fs.lstatSync(target).isSymbolicLink();
+  } catch {
+    return false;
   }
+}
+
+function joinRealpath(start: string, given: string, seen: Map<string, string | null>): [string, boolean] {
+  let current = start;
+  let rest = given;
+  if (rest.startsWith("/")) {
+    rest = rest.slice(1);
+    current = "/";
+  }
+  while (rest) {
+    const cut = rest.indexOf("/");
+    const name = cut < 0 ? rest : rest.slice(0, cut);
+    rest = cut < 0 ? "" : rest.slice(cut + 1);
+    if (name === "" || name === ".") continue;
+    if (name === "..") {
+      if (current) {
+        const [head, tail] = splitPath(current);
+        current = tail === ".." ? joinPath(joinPath(head, ".."), "..") : head;
+      } else current = "..";
+      continue;
+    }
+    const next = joinPath(current, name);
+    if (!lstatLink(next)) {
+      current = next;
+      continue;
+    }
+    if (seen.has(next)) {
+      const known = seen.get(next);
+      if (known !== null && known !== undefined) {
+        current = known;
+        continue;
+      }
+      return [joinPath(next, rest), false];
+    }
+    seen.set(next, null);
+    const [resolved, ok] = joinRealpath(current, fs.readlinkSync(next), seen);
+    current = resolved;
+    if (!ok) return [joinPath(current, rest), false];
+    seen.set(next, current);
+  }
+  return [current, true];
+}
+
+function normpath(target: string): string {
+  const leading = target.startsWith("//") && !target.startsWith("///") ? "//" : target.startsWith("/") ? "/" : "";
+  const parts: string[] = [];
+  for (const part of target.split("/")) {
+    if (part === "" || part === ".") continue;
+    if (part !== ".." || (!leading && parts.length === 0) || parts.at(-1) === "..") parts.push(part);
+    else if (parts.length > 0) parts.pop();
+  }
+  return leading + parts.join("/") || leading || ".";
+}
+
+export function pyResolve(target: string): string {
+  return normpath(joinRealpath("", target, new Map())[0]);
 }
 
 export class Ctx {
@@ -49,7 +109,7 @@ export class Ctx {
   }
 
   path(value: string): string {
-    return pyResolve(path.resolve(this.cwd, expandUser(value)));
+    return pyResolve(joinPath(this.cwd, expandUser(value)));
   }
 }
 

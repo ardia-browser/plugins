@@ -3,7 +3,7 @@ import net from "node:net";
 import path from "node:path";
 import { peerUid } from "../../libc.ts";
 import { uid } from "../../paths.ts";
-import { untilCancelled } from "../cdp/cancel.ts";
+import { Cancelled, currentSignal } from "../cdp/cancel.ts";
 import { BrowseError } from "../daemon-errors.ts";
 import { announcePath, type Caller, PROTOCOL, SOCKET_FILE, wire } from "../daemon/announce.ts";
 import type { Endpoint } from "../endpoint.ts";
@@ -64,21 +64,32 @@ function usable(file: string): boolean {
   }
 }
 
-export function controlCall(file: string, caller: Caller | null, method: string, params: Record<string, unknown> | null, timeout: number): Promise<unknown> {
+export function controlCall(
+  file: string,
+  caller: Caller | null,
+  method: string,
+  params: Record<string, unknown> | null,
+  timeout: number,
+  signal: AbortSignal | null = currentSignal(),
+): Promise<unknown> {
+  if (signal?.aborted) return Promise.reject(new Cancelled());
   if (!usable(file)) return Promise.reject(new ControlRefused("unreachable", "the control socket isn't there"));
   return new Promise<unknown>((resolve, reject) => {
     const socket = net.connect(file);
-    let buffer = "";
+    let buffer = Buffer.alloc(0);
     let finished = false;
+    const cancel = () => finish(new Cancelled());
     const finish = (error: Error | null, value?: unknown) => {
       if (finished) return;
       finished = true;
       clearTimeout(timer);
+      signal?.removeEventListener("abort", cancel);
       socket.destroy();
       if (error) reject(error);
       else resolve(value);
     };
     const timer = setTimeout(() => finish(new ControlRefused("timeout", `the control socket didn't answer ${method} in time`)), timeout * 1000);
+    signal?.addEventListener("abort", cancel, { once: true });
     socket.on("error", (error) => finish(new ControlRefused("unreachable", error.message)));
     socket.on("close", () => finish(new ControlRefused("unreachable", "the control socket closed")));
     socket.once("connect", () => {
@@ -96,14 +107,14 @@ export function controlCall(file: string, caller: Caller | null, method: string,
       socket.write(`${JSON.stringify({ id: 1, method: "hello", params: hello })}\n`);
     });
     socket.on("data", (chunk: Buffer) => {
-      buffer += chunk.toString("utf8");
+      buffer = Buffer.concat([buffer, chunk]);
       if (buffer.length > MAX_LINE) {
         finish(new ControlRefused("too_long", "the control socket's answer is too long"));
         return;
       }
-      for (let at = buffer.indexOf("\n"); at >= 0; at = buffer.indexOf("\n")) {
-        const line = buffer.slice(0, at);
-        buffer = buffer.slice(at + 1);
+      for (let at = buffer.indexOf(0x0a); at >= 0; at = buffer.indexOf(0x0a)) {
+        const line = buffer.subarray(0, at).toString("utf8");
+        buffer = buffer.subarray(at + 1);
         let reply: Record<string, unknown>;
         try {
           reply = record(JSON.parse(line));
@@ -133,7 +144,7 @@ export function controlCall(file: string, caller: Caller | null, method: string,
 export async function appCall(state: AppTabState, method: string, params: Record<string, unknown> | null, timeout = WINDOWS_TIMEOUT): Promise<unknown> {
   const file = controlSocket(state);
   if (file === null) throw new ControlRefused("unreachable", "this connection has no control socket");
-  return untilCancelled(controlCall(file, state.caller, method, params, timeout));
+  return controlCall(file, state.caller, method, params, timeout);
 }
 
 export async function appWindows(state: AppTabState): Promise<unknown[] | null> {
@@ -141,7 +152,7 @@ export async function appWindows(state: AppTabState): Promise<unknown[] | null> 
   if (file === null) return null;
   let windows: unknown;
   try {
-    windows = await untilCancelled(controlCall(file, state.caller, "windows", null, WINDOWS_TIMEOUT * 2));
+    windows = await controlCall(file, state.caller, "windows", null, WINDOWS_TIMEOUT * 2);
   } catch (error) {
     if (error instanceof ControlRefused) return null;
     throw error;

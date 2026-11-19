@@ -9,7 +9,7 @@ import { type Endpoint, unreachableMessage } from "../endpoint.ts";
 import { clock, flag, spent } from "../metrics.ts";
 import { wallSeconds } from "../tokens.ts";
 import { APP_TAB, appTabError, appTabTarget } from "./apptabs.ts";
-import { type Element, Page, WORLD_NAME } from "./page.ts";
+import { type Element, Page, quiet, WORLD_NAME } from "./page.ts";
 import { type Json, record } from "./records.ts";
 import { parseRef, Refs } from "./refs.ts";
 import { Registry } from "./registry.ts";
@@ -167,6 +167,7 @@ export class State extends Refs implements temptabs.TempTabState {
   caller: Caller | null = null;
   announced: Caller | null = null;
   private currentTarget: string | null = null;
+  private discovering = false;
 
   constructor(
     readonly config: StateConfig,
@@ -193,7 +194,11 @@ export class State extends Refs implements temptabs.TempTabState {
   }
 
   get connected(): boolean {
-    return this.browser !== null && this.browser.alive;
+    return this.browser !== null && this.browser.alive && !this.discovering;
+  }
+
+  makeBrowser(endpoint: Endpoint): Browser {
+    return new Browser(endpoint, (method, params, session) => this.onEvent(method, params, session), (error) => unreachableMessage(endpoint, error));
   }
 
   addNotice(notice: string): void {
@@ -216,7 +221,7 @@ export class State extends Refs implements temptabs.TempTabState {
         "browser_restarted",
       );
     }
-    const browser = new Browser(endpoint, (method, params, session) => this.onEvent(method, params, session), (error) => unreachableMessage(endpoint, error));
+    const browser = this.makeBrowser(endpoint);
     this.announced = null;
     const announcing = this.announceCaller(endpoint);
     try {
@@ -225,19 +230,32 @@ export class State extends Refs implements temptabs.TempTabState {
       await shield(() => browser.close());
       throw error;
     } finally {
-      await shield(() => announcing);
+      await announcing;
     }
     this.browser = browser;
     this.endpoint = endpoint;
     this.instance = endpoint.instance;
     for (const page of this.pages.values()) page.detach();
     this.sessions.clear();
+    this.discovering = true;
     try {
-      await browser.send("Target.setDiscoverTargets", { discover: true });
+      try {
+        await browser.send("Target.setDiscoverTargets", { discover: true });
+      } catch (error) {
+        if (!quiet(error)) throw error;
+      }
+      await this.refreshTargets();
     } catch (error) {
-      if (!(error instanceof BrowseError)) throw error;
+      if (browser.alive) {
+        this.browser = null;
+        for (const page of this.pages.values()) page.detach();
+        this.sessions.clear();
+        await shield(() => browser.close());
+      }
+      throw error;
+    } finally {
+      this.discovering = false;
     }
-    await this.refreshTargets();
     await temptabs.sweep(this);
     spent("connect_ms", started);
   }
@@ -246,7 +264,7 @@ export class State extends Refs implements temptabs.TempTabState {
     const caller = this.caller;
     if (caller === null || sameCaller(caller, this.announced) || endpoint === null || endpoint.explicit) return;
     this.announced = caller;
-    await announce(announcePath(endpoint.source), caller);
+    await announce(announcePath(endpoint.source), caller, undefined, currentSignal());
   }
 
   async disconnect(): Promise<void> {
@@ -391,7 +409,7 @@ export class State extends Refs implements temptabs.TempTabState {
       page = new Page(this, targetId);
       this.pages.set(targetId, page);
     }
-    if (page.sessionId === null || page.browser !== this.browser) await page.attach(this.browser as Browser);
+    if (page.session === null || page.browser !== this.browser) await page.attach(this.browser as Browser);
     if (page.needsEnable && !page.crashed) await page.enablePage();
     this.hadTab = true;
     spent("attach_ms", started);
@@ -399,7 +417,7 @@ export class State extends Refs implements temptabs.TempTabState {
   }
 
   async reattach(page: Page): Promise<Page> {
-    if (page.sessionId !== null && page.browser === this.browser) return page;
+    if (page.session !== null && page.browser === this.browser) return page;
     const detached = () =>
       new BrowseError(
         "Ardia detached this tab from the ardia command while it was in use (the tab closed, crashed, went to sleep or moved to a window Ardia keeps for itself). Run the command again",
@@ -523,8 +541,8 @@ export class State extends Refs implements temptabs.TempTabState {
     try {
       attached = await browser.send("Target.attachToTarget", { targetId, flatten: true }, { timeout: PROBE_TIMEOUT });
     } catch (error) {
-      if (error instanceof BrowseError) return error.code === "attaches_unanswered" ? null : [false, false];
-      throw error;
+      if (!quiet(error)) throw error;
+      return (error as BrowseError).code === "attaches_unanswered" ? null : [false, false];
     }
     const session = String(attached["sessionId"]);
     try {
@@ -541,7 +559,7 @@ export class State extends Refs implements temptabs.TempTabState {
       if (!Array.isArray(value) || value.length !== 2) return [false, false];
       return [Boolean(value[0]), Boolean(value[1])];
     } catch (error) {
-      if (error instanceof BrowseError) return [false, false];
+      if (quiet(error)) return [false, false];
       throw error;
     } finally {
       await shield(() => browser.send("Target.detachFromTarget", { sessionId: session }, { timeout: PROBE_TIMEOUT, signal: null }).catch(() => ({})));
