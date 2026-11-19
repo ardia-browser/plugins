@@ -1,8 +1,9 @@
-"""Usage: python plugin_grammar.py grammar <command>... | parse  (argv lists as JSON on stdin)
+"""Usage: python plugin_grammar.py grammar <command>... | parse | split  (argv lists as JSON on stdin)
 
 Reads ardia browse's daemon-side option grammar from the real command functions in ardia_cli/browse/commands.py
-(the flags and aliases each passes to parse()), and runs the real parse() on daemon argvs, so the TypeScript plugin
-guard can be checked against both. Prints JSON.
+(the flags and aliases each passes to parse()), runs the real parse() on daemon argvs, and runs the client's real
+global split (cli.split_globals) on browse argvs, so the TypeScript plugin guard can be checked against all three.
+Prints JSON.
 """
 import asyncio
 import json
@@ -54,9 +55,22 @@ def parsed(argv: list) -> dict:
     return {"command": name, "known": True, "options": options, "positionals": positionals}
 
 
+def split(argv: list) -> dict:
+    from ardia_cli.browse import cli
+
+    try:
+        found, rest = cli.split_globals(list(argv))
+    except Usage as error:
+        return {"usage": error.message}
+    return {"found": found, "rest": rest}
+
+
 def main() -> int:
     if sys.argv[1:2] == ["grammar"]:
         print(json.dumps({name: grammar(name) for name in sys.argv[2:]}, sort_keys=True))
+        return 0
+    if sys.argv[1:2] == ["split"]:
+        print(json.dumps([split(argv) for argv in json.load(sys.stdin)]))
         return 0
     if sys.argv[1:2] == ["parse"]:
         print(json.dumps([parsed(argv) for argv in json.load(sys.stdin)]))

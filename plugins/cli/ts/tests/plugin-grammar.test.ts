@@ -54,21 +54,58 @@ const BYPASSES = [
   ["get", "-\u00b2", "title"],
 ];
 
+function browseArgv(argv: readonly string[]): string[] {
+  const at = argv.indexOf("browse");
+  return argv.slice(at + 1);
+}
+
 function caseArgvs(): string[][] {
   const out: string[][] = [];
   for (const file of ["ai-plugin-contract.json", "ai-plugin-review.json"]) {
     const rows = JSON.parse(readFileSync(path.join(CLI, "tests", "parity", "cases", file), "utf8")) as { argv: string[] }[];
-    for (const row of rows) {
-      try {
-        const { rest } = splitGlobals(row.argv.slice(1));
-        if (rest.length > 0 && !CLIENT_WORDS.includes(rest[0] as string) && !rest.includes("--help") && !rest.includes("-h")) out.push(rest);
-      } catch (error) {
-        if (!(error instanceof Usage)) throw error;
-      }
-    }
+    for (const row of rows) out.push(browseArgv(row.argv));
   }
   return out;
 }
+
+function tsSplit(browse: readonly string[]): unknown {
+  try {
+    const { found, rest } = splitGlobals(browse);
+    const merged: Record<string, unknown> = { ...Object.fromEntries(found.values), ...Object.fromEntries(found.flags) };
+    if (found.enable !== undefined) merged.enable = found.enable;
+    if (found.initScript !== undefined) merged.init_script = found.initScript;
+    return { found: merged, rest };
+  } catch (error) {
+    if (!(error instanceof Usage)) throw error;
+    return { usage: error.message };
+  }
+}
+
+function daemonArgvs(): string[][] {
+  const out: string[][] = [];
+  for (const browse of caseArgvs()) {
+    const split = tsSplit(browse) as { rest?: string[] };
+    const rest = split.rest;
+    if (rest !== undefined && rest.length > 0 && !CLIENT_WORDS.includes(rest[0] as string) && !rest.includes("--help") && !rest.includes("-h")) out.push(rest);
+  }
+  return out;
+}
+
+const GLOBAL_CORPUS = [
+  ["wait", "--state=visible", "#x"],
+  ["wait", "--state", "visible", "#x"],
+  ["--json", "get", "--", "title"],
+  ["--session", "--json", "get", "title"],
+  ["get", "--session"],
+  ["--max-output", "--", "get", "title"],
+  ["--data-dir", "x", "get", "title"],
+];
+
+test("the client's global split agrees with Python's on every case, rejections included", () => {
+  const corpus = [...GLOBAL_CORPUS, ...caseArgvs()];
+  const expected = python(["split"], corpus) as unknown[];
+  corpus.forEach((browse, index) => assert.deepEqual(tsSplit(browse), expected[index], JSON.stringify(browse)));
+});
 
 type PythonParse = { command: string; known: boolean; usage?: string; options?: Record<string, unknown>; positionals?: string[] };
 
@@ -78,7 +115,7 @@ test("the guard's grammar table is the daemon's, read from its command functions
 });
 
 test("the guard parses every daemon argv exactly as Python's parse() does", () => {
-  const corpus = [...BYPASSES, ...caseArgvs()];
+  const corpus = [...BYPASSES, ...daemonArgvs()];
   const expected = python(["parse"], corpus) as PythonParse[];
   corpus.forEach((rest, index) => {
     const want = expected[index] as PythonParse;
