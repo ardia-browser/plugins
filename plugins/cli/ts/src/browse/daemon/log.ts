@@ -3,17 +3,24 @@ import { RedactingStream } from "../../redact.ts";
 import { linkLog } from "../cdp/link.ts";
 
 const LOGGER = "ardia_cli.browse";
+const INTERRUPTED_TRIES = 3;
 
 function sinkFor(fd: number) {
   return {
     write(text: string) {
       const data = Buffer.from(text.toWellFormed(), "utf8");
       let offset = 0;
+      let interrupted = 0;
       while (offset < data.length) {
         try {
-          offset += fs.writeSync(fd, data, offset, data.length - offset);
+          const wrote = fs.writeSync(fd, data, offset, data.length - offset);
+          if (wrote <= 0) return;
+          offset += wrote;
         } catch (error) {
-          if ((error as NodeJS.ErrnoException).code === "EAGAIN" || (error as NodeJS.ErrnoException).code === "EINTR") continue;
+          if ((error as NodeJS.ErrnoException).code === "EINTR" && interrupted < INTERRUPTED_TRIES) {
+            interrupted += 1;
+            continue;
+          }
           return;
         }
       }

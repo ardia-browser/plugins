@@ -129,30 +129,43 @@ describe("shutdown", () => {
     await pending;
   });
 
-  test("a cleanup step that never finishes is cut off at its deadline", async () => {
+  test("a cleanup step that never finishes is cut off at its deadline, and the watchdog is disarmed", async () => {
     const found = fresh();
     const daemon = inProcess(found, "cutoff", 9);
-    const exits: number[] = [];
-    Object.assign(daemon, { settleTimeout: 0.2, cleanupTimeout: 0.3, exit: (code: number) => exits.push(code), cleanupInner: () => new Promise(() => {}) });
+    const calls: string[] = [];
+    Object.assign(daemon, {
+      settleTimeout: 0.2,
+      cleanupTimeout: 0.3,
+      watchdog: { arm: () => (calls.push("arm"), 0), disarm: () => (calls.push("disarm"), 0) },
+      cleanupInner: () => new Promise(() => {}),
+    });
     const running = daemon.run();
     await until(() => fs.existsSync(socketFile(found.data, daemon.key)), 5000);
     daemon.beginStop();
     expect(await Promise.race([running, new Promise((resolve) => setTimeout(() => resolve("stuck"), 5000))])).toBe(0);
-    expect(exits).toEqual([]);
+    expect(calls).toEqual(["arm", "disarm"]);
     expect(fs.existsSync(socketFile(found.data, daemon.key))).toBe(false);
   });
 
-  test("a final watchdog exits once settle and cleanup run out, after unlinking its own socket", async () => {
+  test("stopping arms the native watchdog once, on the bound socket, for settle plus cleanup, and a hung stop never disarms it", async () => {
     const found = fresh();
     const daemon = inProcess(found, "watchdog", 9);
-    const exits: number[] = [];
-    Object.assign(daemon, { settleTimeout: 0.2, cleanupTimeout: 0.3, exit: (code: number) => exits.push(code), cleanup: () => new Promise(() => {}) });
+    const armed: unknown[][] = [];
+    let disarmed = 0;
+    Object.assign(daemon, {
+      settleTimeout: 0.2,
+      cleanupTimeout: 0.3,
+      watchdog: { arm: (...args: unknown[]) => (armed.push(args), 0), disarm: () => ((disarmed += 1), 0) },
+      cleanup: () => new Promise(() => {}),
+    });
     void daemon.run();
     await until(() => fs.existsSync(socketFile(found.data, daemon.key)), 5000);
+    const bound = fs.lstatSync(socketFile(found.data, daemon.key), { bigint: true });
     daemon.beginStop();
-    expect(await until(() => exits.length > 0, 5000)).toBe(true);
-    expect(exits[0]).toBe(1);
-    expect(fs.existsSync(socketFile(found.data, daemon.key))).toBe(false);
+    daemon.beginStop();
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    expect(armed).toEqual([[daemon.dirFd, `${daemon.key}.sock`, bound.dev, bound.ino, 500, 1]]);
+    expect(disarmed).toBe(0);
   });
 });
 

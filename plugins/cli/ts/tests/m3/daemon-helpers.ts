@@ -107,7 +107,9 @@ export function raw(file: string, payload: Buffer | string, options: { end?: boo
     });
     socket.once("error", (error) => {
       clearTimeout(timer);
-      if (chunks.length === 0 && (error as NodeJS.ErrnoException).code !== "EPIPE" && (error as NodeJS.ErrnoException).code !== "ECONNRESET") reject(error);
+      const code = (error as NodeJS.ErrnoException).code;
+      if (chunks.length === 0 && code !== "EPIPE" && code !== "ECONNRESET") reject(error);
+      else resolve({ text: Buffer.concat(chunks).toString("utf8"), closed: true });
     });
     socket.once("connect", () => {
       socket.write(payload);
