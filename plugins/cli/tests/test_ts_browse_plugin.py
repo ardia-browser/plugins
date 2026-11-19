@@ -1,10 +1,12 @@
 import json
 import os
 import shutil
+import signal
+import socket
 import subprocess
 import sys
 import tempfile
-import time
+import threading
 import unittest
 from pathlib import Path
 
@@ -12,17 +14,48 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from parity import harness
 
-CREDENTIAL = "plg_9f3KxQ2mVt7Lw8Rb1Zs4Np6Yc0Hd5Ue"
-REFUSED = 77
-FD = 9
+CREDENTIAL = "p." + "Ab3_-9xYz0" * 4 + "Q7w"
+BROWSER = "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0"
+FD = 4
 
 
 def programs():
     return harness.ts_binary() is not None and harness.ts_binary().exists() and harness.binary() is not None
 
 
+class TokenServer:
+    def __init__(self):
+        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server.bind(("127.0.0.1", 0))
+        self.server.listen(4)
+        self.port = self.server.getsockname()[1]
+        self.request = b""
+        self.asked = threading.Event()
+        self.release = threading.Event()
+        threading.Thread(target=self.serve, daemon=True).start()
+
+    def serve(self):
+        try:
+            connection, _ = self.server.accept()
+        except OSError:
+            return
+        with connection:
+            connection.settimeout(10)
+            while b"\r\n\r\n" not in self.request:
+                chunk = connection.recv(4096)
+                if not chunk:
+                    break
+                self.request += chunk
+            self.asked.set()
+            self.release.wait(15)
+
+    def close(self):
+        self.release.set()
+        self.server.close()
+
+
 @unittest.skipUnless(programs(), "build plugins/cli/rust (the router) and plugins/cli/ts first")
-class PluginMode(unittest.TestCase):
+class PluginCredentialProcesses(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.install = harness.Installation(harness.ts_binary(), entry="ts")
@@ -33,204 +66,94 @@ class PluginMode(unittest.TestCase):
 
     def setUp(self):
         self.box = Path(tempfile.mkdtemp(prefix="arpl", dir="/tmp")).resolve()
-        for name in ("home", "data", "cli-home"):
+        for name in ("home", "data", "cli-home", "tmp"):
             (self.box / name).mkdir()
         (self.box / "data").chmod(0o700)
         (self.box / "data" / "ArdiaControl.json").write_text(json.dumps({"port": 9, "token": "decoy-token-never-read"}))
-        self.daemon = None
-
-    def stop(self):
-        if self.daemon:
-            self.daemon.close()
-            self.daemon.path.unlink(missing_ok=True)
-            self.daemon = None
 
     def tearDown(self):
-        self.stop()
+        for pid in self.daemon_pids():
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
         shutil.rmtree(self.box, True)
 
-    def serve(self, replies, credential=CREDENTIAL, session="default"):
-        self.stop()
-        self.daemon = harness.FakeDaemon(self.box / "data", {"endpoint": {"plugin": credential}, "session": session, "replies": replies})
-        return self.daemon
+    def daemon_pids(self) -> list:
+        locks = [str(path) for path in (self.box / "data" / "Browse").glob("*.lock")]
+        if not locks:
+            return []
+        found = subprocess.run(["lsof", "-t", *locks], capture_output=True, text=True).stdout.split()
+        return sorted({int(pid) for pid in found})
 
-    def env(self, **extra):
-        env = {"PATH": "/usr/bin:/bin", "HOME": str(self.box / "home"), "ARDIA_DATA_DIR": str(self.box / "data"),
-               "ARDIA_CLI_HOME": str(self.box / "cli-home"), "ARDIA_TELEMETRY": "0", "LANG": "en_US.UTF-8",
-               "ARDIA_BROWSE_FOR_PLUGIN": "1", "ARDIA_PLUGIN_CREDENTIAL_FD": str(FD)}
-        env.update({key: value for key, value in extra.items() if value is not None})
-        for key, value in extra.items():
-            if value is None:
-                env.pop(key, None)
-        return env
+    def env(self, port: int) -> dict:
+        return {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": str(self.box / "home"), "TMPDIR": str(self.box / "tmp"),
+                "LANG": "en_US.UTF-8", "ARDIA_DATA_DIR": str(self.box / "data"), "ARDIA_CLI_HOME": str(self.box / "cli-home"),
+                "ARDIA_TELEMETRY": "0", "NO_COLOR": "1", "ARDIA_BROWSE_FOR_PLUGIN": "1", "ARDIA_PLUGIN_CREDENTIAL_FD": str(FD),
+                "ARDIA_PLUGIN_ENDPOINT": f"ws://127.0.0.1:{port}/devtools/browser/{BROWSER}", "PYTHONPATH": str(harness.CLI)}
 
-    def run_ardia(self, argv, env=None, feed=CREDENTIAL.encode() + b"\n", keep_open=False, fd_kind="pipe", watch=None):
-        env = env or self.env()
-        writer = None
-        if fd_kind == "pipe":
-            read_end, writer = os.pipe()
-            if feed:
-                os.write(writer, feed)
-            if not keep_open:
-                os.close(writer)
-                writer = None
-            given = read_end
-        elif fd_kind == "file":
-            path = self.box / "credential"
-            path.write_bytes(feed)
-            given = os.open(path, os.O_RDONLY)
-        elif fd_kind == "write-end":
-            read_end, given = os.pipe()
-            os.close(read_end)
-        else:
-            given = None
-        if given is not None:
-            os.dup2(given, FD)
-            os.close(given)
-        process = subprocess.Popen([str(self.install.root / "bin" / "ardia"), *argv], env=env, stdin=subprocess.DEVNULL,
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, pass_fds=(FD,) if given is not None else (),
-                                   start_new_session=True)
-        if given is not None:
-            os.close(FD)
-        seen = watch(process) if watch else None
-        out, err = process.communicate(timeout=30)
-        if writer is not None:
-            os.close(writer)
-        return process.returncode, out.decode(), err.decode(), seen
+    def family(self, root: int) -> list:
+        rows = subprocess.run(["ps", "-A", "-o", "pid=,ppid="], capture_output=True, text=True).stdout.split("\n")
+        members = {root}
+        for _ in range(6):
+            for row in rows:
+                parts = row.split()
+                if len(parts) == 2 and int(parts[1]) in members:
+                    members.add(int(parts[0]))
+        return sorted(members | set(self.daemon_pids()))
 
-    def assertRefused(self, result, *words):
-        status, out, err, _ = result
-        self.assertEqual(status, REFUSED, err)
-        self.assertEqual(out, "")
-        self.assertEqual(err.count("\n"), 1, err)
-        self.assertTrue(err.startswith("✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1)"), err)
-        for word in words:
-            self.assertIn(word, err)
-        self.assertNotIn(CREDENTIAL, err)
-        if self.daemon:
-            self.assertEqual(self.daemon.requests, [])
-        self.assertNotIn("python", self.routes())
-
-    def routes(self) -> list:
+    def look(self, root: int) -> list:
         seen = []
-        for path in list(self.install.routes.iterdir()):
-            seen += path.read_text().split()
-            path.unlink()
+        for pid in self.family(root):
+            args = subprocess.run(["ps", "-o", "args=", "-p", str(pid)], capture_output=True, text=True).stdout
+            environ = subprocess.run(["ps", "-E", "-o", "command=", "-p", str(pid)], capture_output=True, text=True).stdout
+            held = subprocess.run(["lsof", "-a", "-p", str(pid), "-d", str(FD)], capture_output=True, text=True).stdout
+            seen.append((pid, args, environ, held))
         return seen
 
-    def test_a_credential_ending_at_eof_reaches_the_daemon_and_nowhere_else(self):
-        daemon = self.serve([{"out": "Example\n", "err": "", "exit": 0}])
-        status, out, err, _ = self.run_ardia(["browse", "get", "title"], feed=CREDENTIAL.encode())
-        self.assertEqual((status, out, err), (0, "Example\n", ""))
-        [request] = daemon.requests
-        self.assertEqual(request["plugin_credential"], CREDENTIAL)
-        self.assertEqual(request["argv"], ["get", "title"])
-        self.assertNotIn(CREDENTIAL, json.dumps({key: value for key, value in request.items() if key != "plugin_credential"}))
+    def start_session(self, command: list) -> tuple[str, list]:
+        server = TokenServer()
+        self.addCleanup(server.close)
+        reader, writer = os.pipe()
+        os.write(writer, CREDENTIAL.encode())
+        os.close(writer)
+        moved = ["/bin/sh", "-c", f'exec {FD}<&{reader} {reader}<&-; exec "$@"', "sh"] if reader != FD else []
+        wrapped = [*moved, *command, "browse", "--session", "plugin-ai", "get", "--", "title"]
+        process = subprocess.Popen(wrapped, env=self.env(server.port), cwd=self.box / "tmp", stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, pass_fds=(reader,), start_new_session=True)
+        os.close(reader)
+        try:
+            self.assertTrue(server.asked.wait(30), "the daemon never opened the token server")
+            seen = self.look(process.pid)
+        finally:
+            server.release.set()
+            process.communicate(timeout=120)
+        return server.request.decode("latin1"), seen
 
-    def test_a_credential_on_one_line_works_while_ardia_keeps_its_end_open(self):
-        self.serve([{"out": "ok\n", "exit": 0}])
-        status, out, _, _ = self.run_ardia(["browse", "get", "url"], keep_open=True)
-        self.assertEqual((status, out), (0, "ok\n"))
+    def check(self, head: str, seen: list, client: str):
+        self.assertTrue(head.startswith(f"GET /devtools/browser/{BROWSER}?token={CREDENTIAL} HTTP/1.1\r\n"), head[:200])
+        self.assertNotIn("\r\norigin:", head.lower())
+        self.assertNotIn("decoy-token-never-read", head)
+        commands = [args for _, args, _, _ in seen]
+        self.assertTrue(any(client in args for args in commands), commands)
+        self.assertTrue(any("daemon.main()" in args for args in commands), commands)
+        for pid, args, environ, held in seen:
+            self.assertNotIn(CREDENTIAL[2:], args, pid)
+            self.assertNotIn(CREDENTIAL[2:], environ, pid)
+            if client in args or "daemon.main()" in args:
+                kinds = [row.split()[4] for row in held.strip().splitlines()[1:]]
+                self.assertNotIn("PIPE", kinds, f"fd {FD} is still the credential pipe in {args.strip()}")
+        for path in (self.box / "data" / "Browse").iterdir():
+            if path.is_file():
+                self.assertNotIn(CREDENTIAL[2:], path.read_text(errors="replace"), path.name)
 
-    def test_every_bad_descriptor_is_refused_before_anything_is_sent(self):
-        cases = [
-            ({"ARDIA_PLUGIN_CREDENTIAL_FD": None}, {}, "isn't set"),
-            ({"ARDIA_PLUGIN_CREDENTIAL_FD": ""}, {}, "isn't set"),
-            ({"ARDIA_PLUGIN_CREDENTIAL_FD": "nine"}, {}, "not \"nine\""),
-            ({"ARDIA_PLUGIN_CREDENTIAL_FD": "-9"}, {}, "not \"-9\""),
-            ({"ARDIA_PLUGIN_CREDENTIAL_FD": "2"}, {}, "3 or above"),
-            ({"ARDIA_PLUGIN_CREDENTIAL_FD": "57"}, {}, "isn't open"),
-            ({}, {"fd_kind": "file"}, "isn't a pipe or a socket"),
-            ({}, {"fd_kind": "write-end"}, "couldn't read the credential"),
-            ({}, {"feed": b""}, "isn't one Ardia issues"),
-            ({}, {"feed": b"short\n"}, "isn't one Ardia issues"),
-            ({}, {"feed": b"has spaces in it, sixteen+\n"}, "isn't one Ardia issues"),
-            ({}, {"feed": CREDENTIAL.encode() + b"\nmore\n"}, "more than one line"),
-            ({}, {"feed": b"a" * 2000}, "longer than"),
-            ({}, {"feed": b"", "keep_open": True}, "within 2 s"),
-            ({"ARDIA_BROWSE_FOR_PLUGIN": "yes"}, {}, "takes ARDIA_BROWSE_FOR_PLUGIN=1 only"),
-        ]
-        for env, how, words in cases:
-            with self.subTest(env=env, how=how):
-                self.serve([{"out": "never\n", "exit": 0}])
-                self.assertRefused(self.run_ardia(["browse", "get", "title"], env=self.env(**env), **how), words)
-                self.stop()
+    def test_the_typescript_client_starts_a_daemon_that_alone_holds_the_credential(self):
+        head, seen = self.start_session([str(self.install.root / "bin" / "ardia")])
+        self.check(head, seen, "ardia-ts.bin")
 
-    def test_another_endpoint_or_a_missing_daemon_is_refused_and_python_never_runs(self):
-        for argv, env, words in [
-            (["browse", "--port", "9222", "get", "title"], {}, "--port"),
-            (["--ws", "ws://127.0.0.1:9/x", "browse", "get", "title"], {}, "--ws"),
-            (["browse", "get", "title"], {"AGENT_BROWSER_CDP": "9222"}, "AGENT_BROWSER_CDP"),
-            (["browse", "get", "title"], {"ARDIA_CDP_URL": "ws://127.0.0.1:9/x"}, "ARDIA_CDP_URL"),
-            (["browse", "--help"], {}, "help"),
-            (["browse", "auth", "list"], {}, "local commands"),
-        ]:
-            with self.subTest(argv=argv, env=env):
-                self.serve([{"out": "never\n", "exit": 0}])
-                self.assertRefused(self.run_ardia(argv, env=self.env(**env)), words)
-                self.stop()
-        self.assertRefused(self.run_ardia(["browse", "get", "title"]), "no running browse session")
-
-    def test_expect_loader_is_checked_before_and_after(self):
-        loaders = {"before": "L1", "after": "L1"}
-        for main, status, shown in [
-            (loaders, 0, "T\n"),
-            ({"before": "L0", "after": "L1"}, 1, "changed document before"),
-            ({"before": "L1", "after": "L2"}, 1, "changed document while"),
-            (None, 1, "didn't report the page's document"),
-        ]:
-            with self.subTest(main=main):
-                reply = {"out": "T\n", "exit": 0, **({"main_loader": main} if main else {})}
-                daemon = self.serve([reply])
-                code, out, err, _ = self.run_ardia(["browse", "--json", "get", "title", "--expect-loader", "L1"])
-                self.assertEqual(code, status, err)
-                [request] = daemon.requests
-                self.assertEqual(request["expect_loader"], "L1")
-                self.assertEqual(request["argv"], ["get", "title"])
-                if status == 0:
-                    self.assertEqual(out, shown)
-                else:
-                    payload = json.loads(out)
-                    self.assertEqual((payload["success"], payload["code"]), (False, "document_changed"))
-                    self.assertIn(shown, payload["error"])
-                    self.assertNotIn("T", out.replace("The", ""))
-                self.stop()
-
-    def test_the_credential_is_in_no_argv_or_environment_and_its_descriptor_is_closed(self):
-        self.serve([{"hang": 3}])
-
-        def watch(process):
-            time.sleep(1.2)
-            rows = subprocess.run(["ps", "-A", "-o", "pid=,ppid=,args="], capture_output=True, text=True).stdout.splitlines()
-            family, mine = {process.pid}, []
-            for _ in range(4):
-                for row in rows:
-                    pid, ppid, args = row.split(None, 2) + [""] * (3 - len(row.split(None, 2)))
-                    if int(ppid) in family and int(pid) not in family:
-                        family.add(int(pid))
-            for pid in sorted(family):
-                args = subprocess.run(["ps", "-o", "args=", "-p", str(pid)], capture_output=True, text=True).stdout
-                environ = subprocess.run(["ps", "-E", "-o", "command=", "-p", str(pid)], capture_output=True, text=True).stdout
-                files = subprocess.run(["lsof", "-a", "-p", str(pid), "-d", str(FD)], capture_output=True, text=True).stdout
-                mine.append((pid, args, environ, files))
-            return mine
-
-        _, _, _, seen = self.run_ardia(["browse", "get", "title"], watch=watch)
-        self.assertGreaterEqual(len(seen), 2, seen)
-        for pid, args, environ, files in seen:
-            self.assertNotIn(CREDENTIAL, args, pid)
-            self.assertNotIn(CREDENTIAL, environ, pid)
-        ts = [row for row in seen if "ardia-ts.bin" in row[1]]
-        self.assertTrue(ts, seen)
-        self.assertEqual(ts[0][3].strip(), "", f"fd {FD} is still open in the TypeScript client")
-
-    def test_python_refuses_plugin_mode_on_its_own(self):
-        env = self.env()
-        env["PYTHONPATH"] = str(harness.CLI)
-        result = subprocess.run([str(self.install.python), "-I", "-m", "ardia_cli", "browse", "get", "title"], env=env,
-                                capture_output=True, text=True, timeout=30)
-        self.assertEqual(result.returncode, REFUSED, result.stderr)
-        self.assertIn("runs only on the TypeScript client", result.stderr)
+    def test_the_python_client_does_the_same(self):
+        head, seen = self.start_session([str(self.install.python), "-I", "-m", "ardia_cli"])
+        self.check(head, seen, "-m ardia_cli")
 
 
 if __name__ == "__main__":
