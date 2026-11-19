@@ -1,9 +1,14 @@
+import { writeSync } from "node:fs";
 import type { Socket } from "node:net";
 import { dumps, field, object, parse, type Value } from "./json.ts";
 import { errnoOf, strerror } from "./paths.ts";
 import { MAX_LINE_BYTES } from "./protocol.ts";
 
+const HIGH_WATER = 64 * 1024;
+const LOW_WATER = 16 * 1024;
 const POLL_MS = 100;
+const RETRY_WRITE_MS = 1;
+const EAGAIN = new Set(["EAGAIN", "EWOULDBLOCK"]);
 
 type Pending = { reply?: Value; lost?: string };
 
@@ -21,6 +26,10 @@ export class Connection {
   private nextId = 0n;
   private lost: string | undefined;
   private pending = new Map<bigint, Pending>();
+  private unsent: Buffer[] = [];
+  private unsentBytes = 0;
+  private writeFailure: string | undefined;
+  private pumpTimer: ReturnType<typeof setTimeout> | undefined;
   private wake: (() => void) | undefined;
 
   constructor(
@@ -71,6 +80,46 @@ export class Connection {
     if (this.buffer.length > MAX_LINE_BYTES + 2) this.lose("Ardia sent a line longer than 1 MB");
   }
 
+  private pump(): void {
+    this.pumpTimer = undefined;
+    while (this.unsent.length > 0 && this.writeFailure === undefined) {
+      const head = this.unsent[0] as Buffer;
+      let written: number;
+      try {
+        written = writeSync(this.fd, head);
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code ?? "";
+        if (EAGAIN.has(code)) break;
+        if (code === "EINTR") continue;
+        this.writeFailure = `the connection broke (${strerror(errnoOf(error))})`;
+        this.unsent = [];
+        this.unsentBytes = 0;
+        this.lose(this.writeFailure);
+        this.notify();
+        return;
+      }
+      this.unsentBytes -= written;
+      if (written === head.length) this.unsent.shift();
+      else this.unsent[0] = head.subarray(written);
+    }
+    if (this.unsent.length > 0 && this.writeFailure === undefined) this.pumpTimer = setTimeout(() => this.pump(), RETRY_WRITE_MS);
+    this.notify();
+  }
+
+  private send(line: Buffer): void {
+    if (this.writeFailure !== undefined || this.lost !== undefined) throw new Stop("the connection broke (Connection lost)", "lost");
+    this.unsent.push(line);
+    this.unsentBytes += line.length;
+    if (this.pumpTimer === undefined) this.pump();
+  }
+
+  private async drain(): Promise<void> {
+    if (this.writeFailure !== undefined) throw new Stop("the connection broke (Connection lost)", "lost");
+    if (this.unsentBytes <= HIGH_WATER) return;
+    await this.until(() => this.writeFailure !== undefined || this.unsentBytes <= LOW_WATER, undefined);
+    if (this.writeFailure !== undefined) throw new Stop(this.writeFailure, "lost");
+  }
+
   private async until(done: () => boolean, deadline: number | undefined): Promise<boolean> {
     for (;;) {
       if (done()) return true;
@@ -104,7 +153,13 @@ export class Connection {
     if (line.length > MAX_LINE_BYTES) throw new Stop("the request is longer than 1 MB", "too_long");
     const waiting: Pending = {};
     this.pending.set(ident, waiting);
-    this.socket.write(line);
+    try {
+      this.send(line);
+      await this.drain();
+    } catch (error) {
+      this.pending.delete(ident);
+      throw error;
+    }
     const answered = await this.until(() => waiting.reply !== undefined || waiting.lost !== undefined, performance.now() + timeout * 1000);
     if (waiting.reply !== undefined) return waiting.reply;
     if (waiting.lost !== undefined) throw new Stop(waiting.lost, "lost");
@@ -113,6 +168,8 @@ export class Connection {
   }
 
   close(): void {
+    if (this.pumpTimer !== undefined) clearTimeout(this.pumpTimer);
+    this.pumpTimer = undefined;
     this.socket.destroy();
   }
 }
