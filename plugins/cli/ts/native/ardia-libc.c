@@ -461,32 +461,28 @@ static napi_value error_text(napi_env env, napi_callback_info info) {
   return result;
 }
 
-static int write_whole(int fd, const char *bytes, size_t length) {
-  while (length > 0) {
+static ssize_t write_once(int fd, const char *bytes, size_t length) {
+  for (;;) {
     ssize_t wrote = write(fd, bytes, length);
-    if (wrote >= 0) {
-      bytes += wrote;
-      length -= (size_t)wrote;
-      continue;
-    }
-    if (errno == EINTR) continue;
-    if (errno != EAGAIN && errno != EWOULDBLOCK) return failed();
-    struct pollfd ready = {.fd = fd, .events = POLLOUT, .revents = 0};
-    if (poll(&ready, 1, -1) < 0 && errno != EINTR) return failed();
+    if (wrote >= 0) return wrote;
+    if (errno != EINTR) return failed();
   }
-  return 0;
 }
 
-static napi_value write_all(napi_env env, napi_callback_info info) {
+static napi_value write_some(napi_env env, napi_callback_info info) {
   Call call;
-  int32_t fd;
+  int32_t fd, offset;
   void *data = NULL;
   size_t length = 0;
   bool is_buffer = false;
-  if (!take_args(env, info, 2, &call)) return status(env, -EINVAL);
-  if (!int_arg(&call, 0, &fd)) return NULL;
+  if (!take_args(env, info, 3, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &fd) || !int_arg(&call, 2, &offset)) return NULL;
   if (napi_is_buffer(env, call.argv[1], &is_buffer) != napi_ok || !is_buffer || napi_get_buffer_info(env, call.argv[1], &data, &length) != napi_ok) {
     napi_throw_type_error(env, NULL, "ardia-libc: expected a buffer");
+    return NULL;
+  }
+  if (offset < 0 || (size_t)offset > length) {
+    napi_throw_range_error(env, NULL, "ardia-libc: offset outside the buffer");
     return NULL;
   }
   struct sigaction kept, plain;
@@ -496,9 +492,9 @@ static napi_value write_all(napi_env env, napi_callback_info info) {
   sigemptyset(&plain.sa_mask);
   if (sigaction(SIGINT, NULL, &kept) != 0) return status(env, failed());
   bool swapped = kept.sa_handler != SIG_IGN && sigaction(SIGINT, &plain, NULL) == 0;
-  int result = write_whole(fd, data, length);
+  ssize_t result = write_once(fd, (const char *)data + offset, length - (size_t)offset);
   if (swapped) sigaction(SIGINT, &kept, NULL);
-  return status(env, result);
+  return number(env, (double)result);
 }
 
 static void *watch_lifeline_thread(void *argument) {
@@ -549,7 +545,7 @@ __attribute__((visibility("default"))) napi_value napi_register_module_v1(napi_e
       && define(env, exports, "listAt", list_at)
       && define(env, exports, "lock", lock)
       && define(env, exports, "watchLifeline", watch_lifeline)
-      && define(env, exports, "writeAll", write_all)
+      && define(env, exports, "writeSome", write_some)
       && define(env, exports, "strerror", error_text);
   return ok ? exports : NULL;
 }

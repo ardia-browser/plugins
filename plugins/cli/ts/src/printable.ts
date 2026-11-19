@@ -1,6 +1,6 @@
 import { fstatSync, write } from "node:fs";
 import { interrupted as interruptRequested } from "./control.ts";
-import { writeWhole } from "./libc.ts";
+import { writeSome, writeWhole, writtenBefore } from "./libc.ts";
 import { codeOf, errnoOf, strerror } from "./paths.ts";
 import { utf8 } from "./pystr.ts";
 import { constants } from "node:os";
@@ -34,6 +34,28 @@ export function writeAll(fd: number, text: string | Uint8Array): void {
   writeWhole(fd, typeof text === "string" ? utf8(text) : text);
 }
 
+let stderrLeft: Buffer = Buffer.alloc(0);
+
+export function toStderr(text: string | Uint8Array): number | undefined {
+  stderrLeft = Buffer.concat([stderrLeft, typeof text === "string" ? utf8(text) : text]);
+  try {
+    writeWhole(2, stderrLeft);
+    stderrLeft = Buffer.alloc(0);
+    return undefined;
+  } catch (error) {
+    stderrLeft = stderrLeft.subarray(writtenBefore(error));
+    return errnoOf(error) || constants.errno.EIO;
+  }
+}
+
+export function settleStderr(status: number): number {
+  return stderrLeft.length > 0 && toStderr("") !== undefined ? 120 : status;
+}
+
+export function exceptionLine(errno: number): string {
+  return `${pythonOsError(errno)}: [Errno ${errno}] ${strerror(errno)}\n`;
+}
+
 const INTERRUPT_POLL_MS = 50;
 let abandoned = false;
 
@@ -47,14 +69,10 @@ export function abandonedOutput(): boolean {
 
 type Outcome = { written: number } | { error: unknown };
 
-function writeSome(fd: number, bytes: Buffer, offset: number): Promise<number> {
+function writeSomeAsync(fd: number, bytes: Uint8Array, offset: number): Promise<number> {
   return new Promise((resolve, reject) => {
     write(fd, bytes, offset, bytes.length - offset, null, (error, written) => (error ? reject(error) : resolve(written)));
   });
-}
-
-function pause(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function raceWithTick<T>(settled: Promise<T>, ms: number): Promise<T | undefined> {
@@ -71,15 +89,6 @@ async function raceWithTick<T>(settled: Promise<T>, ms: number): Promise<T | und
 
 const PYTHON_DEFAULT_BUFFER = 8192;
 
-function lineAt(ends: number[], offset: number): number {
-  let start = 0;
-  for (const end of ends) {
-    if (offset < end) return end - start;
-    start = end;
-  }
-  return 0;
-}
-
 export function pythonStdoutBuffer(): number {
   try {
     const size = fstatSync(1).blksize;
@@ -89,65 +98,113 @@ export function pythonStdoutBuffer(): number {
   }
 }
 
+export type Stop = { kind: "closed" } | { kind: "failed"; errno: number; unwritten: Uint8Array };
+
+export class PythonBufferedLine {
+  private offset = 0;
+  private direct: boolean;
+  constructor(
+    readonly bytes: Uint8Array,
+    readonly buffer: number,
+  ) {
+    this.direct = bytes.length >= buffer;
+  }
+
+  get done(): boolean {
+    return this.offset >= this.bytes.length;
+  }
+
+  get at(): number {
+    this.direct = this.direct && this.bytes.length - this.offset >= this.buffer;
+    return this.offset;
+  }
+
+  wrote(count: number): void {
+    this.offset += count;
+  }
+
+  failed(error: unknown): Stop | undefined {
+    const code = codeOf(error);
+    if (code === "EINTR") return undefined;
+    if (code === "EPIPE" || code === "ESHUTDOWN") return { kind: "closed" };
+    const errno = errnoOf(error) || constants.errno.EIO;
+    const rest = this.bytes.subarray(this.offset);
+    if (!this.direct) return { kind: "failed", errno, unwritten: rest };
+    return { kind: "failed", errno, unwritten: errno === constants.errno.EAGAIN ? rest.subarray(0, this.buffer) : rest.subarray(0, 0) };
+  }
+}
+
+export function writeAsPythonBuffers(bytes: Uint8Array, buffer = pythonStdoutBuffer()): Stop | undefined {
+  const line = new PythonBufferedLine(bytes, buffer);
+  while (!line.done) {
+    try {
+      line.wrote(writeSome(1, bytes, line.at));
+    } catch (error) {
+      const stop = line.failed(error);
+      if (stop !== undefined) return stop;
+    }
+  }
+  return undefined;
+}
+
 export class Output {
   closed = false;
   interrupted = false;
-  failed: { errno: number; line: number } | undefined;
+  failed: { errno: number; unwritten: Uint8Array } | undefined;
   private pending: string[] = [];
   constructor(readonly json: boolean) {}
 
   say(text: string): void {
-    if (!this.closed) this.pending.push(`${this.json ? jsonSafe(text) : inert(text)}\n`);
+    if (!this.closed) this.pending.push(`${this.json ? text : inert(text)}\n`);
   }
 
-  pythonCrash(): { errno: number; exit: number } | undefined {
-    if (this.failed === undefined) return undefined;
-    const { errno, line } = this.failed;
-    return { errno, exit: reportCrash(errno, line <= pythonStdoutBuffer()) };
+  reportCrash(): number {
+    return this.failed === undefined ? 1 : reportCrash(this.failed.errno, this.failed.unwritten);
   }
 
   async flush(stopped: () => boolean = interruptRequested): Promise<void> {
-    const lines = this.pending.map((line) => utf8(line));
-    const ends: number[] = [];
-    let total = 0;
-    for (const line of lines) ends.push((total += line.length));
-    const bytes = Buffer.concat(lines);
+    const lines = this.pending;
     this.pending = [];
-    let offset = 0;
-    while (offset < bytes.length && !this.closed && this.failed === undefined) {
-      if (stopped()) {
-        this.interrupted = true;
-        return;
-      }
-      const settled = writeSome(1, bytes, offset).then(
-        (written): Outcome => ({ written }),
-        (error: unknown): Outcome => ({ error }),
-      );
-      let outcome: Outcome | undefined;
-      while ((outcome = await raceWithTick(settled, INTERRUPT_POLL_MS)) === undefined) {
+    const buffer = pythonStdoutBuffer();
+    for (const text of lines) {
+      const bytes = utf8(text);
+      const line = new PythonBufferedLine(bytes, buffer);
+      while (!line.done) {
         if (stopped()) {
           this.interrupted = true;
-          abandoned = true;
           return;
         }
-      }
-      if ("written" in outcome) offset += outcome.written;
-      else {
-        const code = codeOf(outcome.error);
-        if (code === "EAGAIN") await pause(1);
-        else if (code === "EPIPE" || code === "ESHUTDOWN") this.closed = true;
-        else if (code !== "EINTR") {
-          this.failed = { errno: errnoOf(outcome.error), line: lineAt(ends, offset) };
+        const settled = writeSomeAsync(1, bytes, line.at).then(
+          (written): Outcome => ({ written }),
+          (error: unknown): Outcome => ({ error }),
+        );
+        let outcome: Outcome | undefined;
+        while ((outcome = await raceWithTick(settled, INTERRUPT_POLL_MS)) === undefined) {
+          if (stopped()) {
+            this.interrupted = true;
+            abandoned = true;
+            return;
+          }
+        }
+        if ("written" in outcome) {
+          line.wrote(outcome.written);
+          continue;
+        }
+        const stop = line.failed(outcome.error);
+        if (stop?.kind === "closed") {
+          this.closed = true;
+          return;
+        }
+        if (stop !== undefined) {
+          this.failed = stop;
           return;
         }
       }
     }
   }
 
-  complain(text: string): void {
-    try {
-      writeAll(2, `${inert(text)}\n`);
-    } catch {}
+  complain(text: string): number | undefined {
+    return toStderr(`${inert(text)}\n`);
   }
 }
 
@@ -178,24 +235,27 @@ export function pythonOsError(errno: number): string {
   return PYTHON_OS_ERRORS[ERRNO_NAMES.get(errno) ?? ""] ?? "OSError";
 }
 
-export function reportCrash(errno: number, flushFailsAgain: boolean): number {
-  const exception = `${pythonOsError(errno)}: [Errno ${errno}] ${strerror(errno)}\n`;
+export function reportCrash(errno: number, unwritten: Uint8Array): number {
+  toStderr(exceptionLine(errno));
   try {
-    writeAll(2, flushFailsAgain ? `${exception}Exception ignored on flushing sys.stdout:\n${exception}` : exception);
-  } catch {}
-  return flushFailsAgain ? 120 : 1;
+    writeWhole(1, unwritten);
+  } catch (error) {
+    toStderr(`Exception ignored on flushing sys.stdout:\n${exceptionLine(errnoOf(error) || constants.errno.EIO)}`);
+    return 120;
+  }
+  return 1;
 }
 
 export function versionWriteFailed(error: unknown): number {
-  return codeOf(error) !== "EBADF" && isatty(1) ? reportCrash(errnoOf(error), true) : stdoutFlushFailed(error);
+  if (codeOf(error) === "EBADF" || !isatty(1)) return stdoutFlushFailed(error);
+  toStderr(exceptionLine(errnoOf(error)));
+  return stdoutFlushFailed(error);
 }
 
 export function stdoutFlushFailed(error: unknown): number {
   const code = codeOf(error) ?? "";
   if (code === "EBADF") return 0;
   const errno = errnoOf(error);
-  try {
-    writeAll(2, `Exception ignored on flushing sys.stdout:\n${pythonOsError(errno)}: [Errno ${errno}] ${strerror(errno)}\n`);
-  } catch {}
+  toStderr(`Exception ignored on flushing sys.stdout:\n${exceptionLine(errno)}`);
   return 120;
 }

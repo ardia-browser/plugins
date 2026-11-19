@@ -1,9 +1,10 @@
+import { constants } from "node:os";
 import { call as callControl, ControlFailure, errorCode, type Failure, interrupted } from "./control.ts";
 import { render as renderHelp } from "./help.ts";
 import type { Value } from "./json.ts";
 import { failed, type Kind, type Listing, methodFailed, methodOf, paramsOf, type Rendered } from "./listing.ts";
 import { codeOf, errnoOf, NeedsPython } from "./paths.ts";
-import { inert, Output, pythonStdoutBuffer, reportCrash, stdoutFlushFailed, writeAll } from "./printable.ts";
+import { exceptionLine, inert, Output, reportCrash, stdoutFlushFailed, toStderr, writeAll, writeAsPythonBuffers } from "./printable.ts";
 import { utf8 } from "./pystr.ts";
 import { Unsupported } from "./py.ts";
 import { render } from "./render.ts";
@@ -21,23 +22,25 @@ export function serveHelp(argv: string[], python: string | null): number | undef
   const call = new Call(argv);
   call.allowedFlags = TOP_FLAGS;
   const shown = utf8(inert(text));
-  try {
-    writeAll(1, shown);
-  } catch (error) {
-    if (argv.length > 0) {
-      finish(call, 0, python);
-      return stdoutFlushFailed(error);
-    }
-    const code = codeOf(error);
-    if (code === "EPIPE" || code === "ESHUTDOWN") {
+  if (argv.length === 0) {
+    const stop = writeAsPythonBuffers(shown);
+    if (stop?.kind === "closed") {
       call.noteErrorCode("stdout_closed");
       finish(call, 141, python);
       return 141;
     }
-    const errno = errnoOf(error);
-    const exit = reportCrash(errno, shown.length <= pythonStdoutBuffer());
-    finish(call, 1, python, osCrash(errno));
-    return exit;
+    if (stop !== undefined) {
+      finish(call, 1, python, osCrash(stop.errno));
+      return reportCrash(stop.errno, stop.unwritten);
+    }
+    finish(call, 0, python);
+    return 0;
+  }
+  try {
+    writeAll(1, shown);
+  } catch (error) {
+    finish(call, 0, python);
+    return stdoutFlushFailed(error);
   }
   finish(call, 0, python);
   return 0;
@@ -108,18 +111,32 @@ export async function serveListing(kind: Kind, listing: Listing, argv: string[],
   await out.flush();
   if (out.interrupted) {
     status = 130;
-    out.complain(`ardia ${kind}: interrupted`);
+    const errno = out.complain(`ardia ${kind}: interrupted`);
+    if (errno !== undefined) return complaintFailed(call, errno, python);
   } else if (out.closed) {
     call.noteErrorCode("stdout_closed");
     status = 141;
   } else {
-    const crashed = out.pythonCrash();
-    if (crashed !== undefined) {
-      finish(call, 1, python, osCrash(crashed.errno));
-      return crashed.exit;
+    if (out.failed !== undefined) {
+      finish(call, 1, python, osCrash(out.failed.errno));
+      return out.reportCrash();
     }
-    if (shown.complaint !== undefined) out.complain(shown.complaint);
+    const errno = shown.complaint === undefined ? undefined : out.complain(shown.complaint);
+    if (errno !== undefined) return complaintFailed(call, errno, python);
   }
   finish(call, status, python);
   return status;
+}
+
+const BROKEN_PIPE = new Set(["EPIPE", "ESHUTDOWN"].map((name) => (constants.errno as Record<string, number>)[name]));
+
+function complaintFailed(call: Call, errno: number, python: string | null): number {
+  if (BROKEN_PIPE.has(errno)) {
+    call.noteErrorCode("stdout_closed");
+    finish(call, 141, python);
+    return 141;
+  }
+  finish(call, 1, python, osCrash(errno));
+  toStderr(exceptionLine(errno));
+  return 1;
 }

@@ -1,5 +1,5 @@
 import { decodeJsonBytes } from "./json-bytes.ts";
-import { codePoints, isHigh, joinPy, SPLIT_TEXT, splitsAfterHigh } from "./pystr.ts";
+import { codePoints, isHigh, SPLIT_TEXT, splitsAfterHigh } from "./pystr.ts";
 
 export class Float {
   constructor(readonly value: number) {}
@@ -73,6 +73,27 @@ export function parseText(text: string, depthLimit = Number.POSITIVE_INFINITY): 
 }
 
 const HEX = /^[0-9a-fA-F]{4}$/;
+
+class PyStringParts {
+  private parts: string[] = [];
+  private last = -1;
+
+  join(piece: string): void {
+    if (piece === "") return;
+    if (this.last >= 0 && isHigh(this.last) && splitsAfterHigh(piece.charCodeAt(0))) this.parts.push(SPLIT_TEXT);
+    this.append(piece);
+  }
+
+  append(piece: string): void {
+    if (piece === "") return;
+    this.parts.push(piece);
+    this.last = piece.charCodeAt(piece.length - 1);
+  }
+
+  text(): string {
+    return this.parts.length === 1 ? (this.parts[0] as string) : this.parts.join("");
+  }
+}
 
 class Parser {
   at = 0;
@@ -182,7 +203,7 @@ class Parser {
 
   string(): string | undefined {
     this.at += 1;
-    let out = "";
+    const parts = new PyStringParts();
     for (;;) {
       const start = this.at;
       while (this.at < this.text.length) {
@@ -190,12 +211,12 @@ class Parser {
         if (code === 0x22 || code === 0x5c || code < 0x20) break;
         this.at += 1;
       }
-      out = joinPy(out, this.text.slice(start, this.at));
+      parts.join(this.text.slice(start, this.at));
       const next = this.peek();
       if (next === undefined) return undefined;
       if (next === '"') {
         this.at += 1;
-        return out;
+        return parts.text();
       }
       if (next !== "\\") return undefined;
       this.at += 1;
@@ -203,7 +224,7 @@ class Parser {
       this.at += 1;
       const simple = escape === undefined ? undefined : ESCAPES[escape];
       if (simple !== undefined) {
-        out += simple;
+        parts.append(simple);
         continue;
       }
       if (escape !== "u") return undefined;
@@ -214,12 +235,12 @@ class Parser {
         this.at += 2;
         const low = this.hex4();
         if (low !== undefined && low >= 0xdc00 && low < 0xe000) {
-          out = joinPy(out, String.fromCodePoint(0x10000 + ((unit - 0xd800) << 10) + (low - 0xdc00)));
+          parts.join(String.fromCodePoint(0x10000 + ((unit - 0xd800) << 10) + (low - 0xdc00)));
           continue;
         }
         this.at = saved;
       }
-      out = joinPy(out, String.fromCharCode(unit));
+      parts.join(String.fromCharCode(unit));
     }
   }
 
@@ -291,14 +312,18 @@ function hex4(unit: number): string {
   return `\\u${unit.toString(16).padStart(4, "0")}`;
 }
 
-export function quote(text: string, ensureAscii: boolean): string {
+function c1Control(code: number): boolean {
+  return code >= 0x7f && code <= 0x9f;
+}
+
+export function quote(text: string, ensureAscii: boolean, c1Escaped = false): string {
   const out: string[] = ['"'];
   let afterLoneHigh = false;
   for (const point of codePoints(text)) {
     const code = point.charCodeAt(0);
     const short = point.length === 1 ? SHORT_ESCAPES[code] : undefined;
     if (short !== undefined) out.push(short);
-    else if (code < 0x20) out.push(hex4(code));
+    else if (code < 0x20 || (c1Escaped && point.length === 1 && c1Control(code))) out.push(hex4(code));
     else if (ensureAscii && code > 0x7e) {
       for (let index = 0; index < point.length; index += 1) out.push(hex4(point.charCodeAt(index)));
     } else {
@@ -317,16 +342,19 @@ export type Style = "compact" | "spaced" | "indented";
 
 type Frame = { entries: [string | undefined, Value][]; next: number; depth: number; close: string };
 
-export function dumps(value: Value, style: Style, ensureAscii = false): string {
+export function dumps(value: Value, style: Style, ensureAscii = false, c1Escaped = false): string {
   const out: string[] = [];
   const item = style === "spaced" ? ", " : ",";
   const pair = style === "compact" ? ":" : ": ";
+  const indents: string[] = ["\n"];
   const newline = (level: number) => {
-    if (style === "indented") out.push(`\n${"  ".repeat(level)}`);
+    if (style !== "indented") return;
+    while (indents.length <= level) indents.push(`${indents[indents.length - 1]}  `);
+    out.push(indents[level] as string);
   };
   const stack: Frame[] = [];
   const emit = (child: Value, depth: number) => {
-    const scalar = scalarJson(child, ensureAscii);
+    const scalar = scalarJson(child, ensureAscii, c1Escaped);
     if (scalar !== undefined) {
       out.push(scalar);
       return;
@@ -354,18 +382,18 @@ export function dumps(value: Value, style: Style, ensureAscii = false): string {
     if (frame.next > 0) out.push(item);
     frame.next += 1;
     newline(frame.depth + 1);
-    if (key !== undefined) out.push(quote(key, ensureAscii), pair);
+    if (key !== undefined) out.push(quote(key, ensureAscii, c1Escaped), pair);
     emit(child, frame.depth + 1);
   }
   return out.join("");
 }
 
-function scalarJson(value: Value, ensureAscii: boolean): string | undefined {
+function scalarJson(value: Value, ensureAscii: boolean, c1Escaped: boolean): string | undefined {
   if (value === null) return "null";
   if (value === true) return "true";
   if (value === false) return "false";
   if (typeof value === "bigint") return value.toString();
   if (value instanceof Float) return jsonFloat(value.value);
-  if (typeof value === "string") return quote(value, ensureAscii);
+  if (typeof value === "string") return quote(value, ensureAscii, c1Escaped);
   return undefined;
 }

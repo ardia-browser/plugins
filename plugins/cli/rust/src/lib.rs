@@ -214,23 +214,29 @@ fn serve_help(argv: &[String], python: Option<&Path>) -> Option<i32> {
     let text = help::render()?;
     let mut call = telemetry::Call::new(argv);
     call.allowed_flags = TOP_FLAGS;
-    let mut stdout = std::io::stdout().lock();
     let shown = printable::inert(&text);
+    if argv.is_empty() {
+        let exit = match printable::write_as_python_buffers(shown.as_bytes(), printable::python_stdout_buffer(), || false) {
+            Err(printable::Stopped::Failed { errno, unwritten }) => {
+                telemetry::finish_crashed(&call, errno, python);
+                printable::report_crash(errno, &unwritten)
+            }
+            Err(_) => {
+                call.note_error_code("stdout_closed");
+                telemetry::finish(&call, 141, python);
+                141
+            }
+            Ok(()) => {
+                telemetry::finish(&call, 0, python);
+                0
+            }
+        };
+        return Some(exit);
+    }
+    let mut stdout = std::io::stdout().lock();
     let written = stdout.write_all(shown.as_bytes()).and_then(|_| stdout.flush());
     drop(stdout);
-    let closed = |error: &std::io::Error| matches!(error.raw_os_error(), Some(libc::EPIPE | libc::ESHUTDOWN));
     let exit = match written {
-        Err(error) if argv.is_empty() && closed(&error) => {
-            call.note_error_code("stdout_closed");
-            telemetry::finish(&call, 141, python);
-            141
-        }
-        Err(error) if argv.is_empty() => {
-            let errno = error.raw_os_error().unwrap_or(libc::EIO);
-            let exit = printable::report_crash(errno, shown.len() <= printable::python_stdout_buffer());
-            telemetry::finish_crashed(&call, errno, python);
-            exit
-        }
         Err(error) => {
             telemetry::finish(&call, 0, python);
             printable::stdout_flush_failed(&error)
@@ -295,18 +301,32 @@ fn serve_listing(kind: Kind, listing: &Listing, argv: &[String], python: Option<
     drop(interrupts);
     if out.interrupted() {
         status = 130;
-        out.complain(&format!("ardia {}: interrupted", kind.name()));
+        if let Some(errno) = out.complain(&format!("ardia {}: interrupted", kind.name())) {
+            return Some(complaint_failed(&mut call, errno, python));
+        }
     } else if out.closed() {
         call.note_error_code("stdout_closed");
         status = 141;
-    } else if let Some((errno, exit)) = out.python_crash() {
+    } else if let Some(errno) = out.failed() {
         telemetry::finish_crashed(&call, errno, python);
-        return Some(exit);
-    } else if let Some(complaint) = &rendered.complaint {
-        out.complain(complaint);
+        return Some(out.report_crash());
+    } else if let Some(errno) = rendered.complaint.as_deref().and_then(|complaint| out.complain(complaint)) {
+        return Some(complaint_failed(&mut call, errno, python));
     }
     telemetry::finish(&call, status, python);
     Some(status as i32)
+}
+
+fn complaint_failed(call: &mut telemetry::Call, errno: i32, python: Option<&Path>) -> i32 {
+    if matches!(errno, libc::EPIPE | libc::ESHUTDOWN) {
+        printable::quiet_stdout();
+        call.note_error_code("stdout_closed");
+        telemetry::finish(call, 141, python);
+        return 141;
+    }
+    telemetry::finish_crashed(call, errno, python);
+    let _ = printable::to_stderr(printable::exception_line(errno).as_bytes());
+    1
 }
 
 enum Handled {
@@ -368,7 +388,7 @@ fn handle(root: Option<&Path>, raw: &[OsString], python: Option<&Path>) -> Handl
         None if browse_route::invoked(raw) => browse_route::LABEL,
         None => return Handled::Python,
     };
-    if standard_fds::any_closed_at_start() || printable::stdout_unusable() {
+    if standard_fds::any_closed_at_start() || standard_fds::any_is_a_directory() || printable::stdout_unusable() || printable::stderr_unusable() {
         return Handled::Python;
     }
     match router::Table::load(root).side(label) {
@@ -388,7 +408,7 @@ pub fn run() -> i32 {
     let python = root.as_ref().map(|root| root.join("python").join("bin").join("python3"));
     let lease = Lease::take(root.as_deref());
     match handle(root.as_deref(), &raw, python.as_deref()) {
-        Handled::Status(status) => status,
+        Handled::Status(status) => printable::settle_stderr(status),
         Handled::Python => {
             router::restore_file_size_signal(&file_size);
             pass_through(python.as_deref(), &raw)

@@ -3,6 +3,7 @@ import fcntl
 import json
 import os
 import re
+import resource
 import select
 import shutil
 import socket
@@ -75,6 +76,47 @@ class RustParityTable(ParityTable, unittest.TestCase):
 
 @harness.requires(both_programs(), ("rust", "ts"), "build plugins/cli/rust (the router) and plugins/cli/ts (bun run build), or set ARDIA_RUST_CLI and ARDIA_TS_CLI")
 class TsParityTable(ParityTable, unittest.TestCase):
+    entry = "ts"
+
+
+DEEP_FIXTURE_CPU_S = 5
+DEEP_FIXTURE_WALL_S = harness.TIMEOUT / 2
+
+
+def children_cpu() -> float:
+    used = resource.getrusage(resource.RUSAGE_CHILDREN)
+    return used.ru_utime + used.ru_stime
+
+
+class DeepFixtures:
+    entry = "rust"
+
+    def test_each_deep_fixture_finishes_well_inside_the_harness_timeout(self):
+        install = harness.Installation(harness.entry_binary(self.entry), entry=self.entry)
+        try:
+            for case in [case for case in harness.load_cases() if case.id.startswith("ts-r3--") and case.id.endswith("-deep")]:
+                with self.subTest(case=case.id):
+                    box = install.box()
+                    started, cpu = time.monotonic(), children_cpu()
+                    try:
+                        observed, _ = harness.run_side(install, "new", case, box)
+                    finally:
+                        elapsed, cpu = time.monotonic() - started, children_cpu() - cpu
+                        shutil.rmtree(box, True)
+                    self.assertFalse(observed.timed_out)
+                    self.assertLess(cpu, DEEP_FIXTURE_CPU_S, f"{case.id} used {cpu:.1f} s of CPU")
+                    self.assertLess(elapsed, DEEP_FIXTURE_WALL_S, f"{case.id} took {elapsed:.1f} s")
+        finally:
+            install.close()
+
+
+@harness.requires(binary(), ("rust",), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
+class RustDeepFixtures(DeepFixtures, unittest.TestCase):
+    entry = "rust"
+
+
+@harness.requires(both_programs(), ("rust", "ts"), "build plugins/cli/rust (the router) and plugins/cli/ts (bun run build), or set ARDIA_RUST_CLI and ARDIA_TS_CLI")
+class TsDeepFixtures(DeepFixtures, unittest.TestCase):
     entry = "ts"
 
 
@@ -399,6 +441,9 @@ class HarnessCatches(unittest.TestCase):
             shutil.rmtree(scratch, True)
 
 
+INHERITED_FD = 42
+
+
 class EntryProcess:
     entry = "rust"
     hand_backs: tuple = ()
@@ -609,6 +654,9 @@ class EntryProcess:
             self.assertEqual((new.returncode, new.stdout, new.stderr), (python.returncode, python.stdout, python.stderr), argv)
             self.assertNotIn("�".encode(), new.stderr)
 
+    def flusher_running(self) -> bool:
+        return bool(subprocess.run(["pgrep", "-f", f"{self.python} .*flush_main"], capture_output=True, text=True).stdout.split())
+
     def flushers_done(self) -> None:
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline:
@@ -662,6 +710,26 @@ class EntryProcess:
                 new = self.ends_with_a_fifo_at(place, [str(self.root / "bin" / "ardia")], hold=False)
                 self.assertEqual(new, python)
 
+    def flusher_keeps_an_inherited_descriptor(self, url: str, soft_limit: int | None) -> bool:
+        reader, writer = os.pipe()
+        os.dup2(writer, INHERITED_FD)
+        os.close(writer)
+
+        def lower_limit():
+            if soft_limit is not None:
+                resource.setrlimit(resource.RLIMIT_NOFILE, (soft_limit, resource.getrlimit(resource.RLIMIT_NOFILE)[1]))
+
+        try:
+            done = subprocess.run([str(self.root / "bin" / "ardia"), "windows"], capture_output=True, pass_fds=(INHERITED_FD,), preexec_fn=lower_limit,
+                                  env=self.environment({"ARDIA_TELEMETRY_URL": url}), timeout=30)
+            os.close(INHERITED_FD)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            if not select.select([reader], [], [], 3)[0]:
+                return True
+            return os.read(reader, 1) != b""
+        finally:
+            os.close(reader)
+
     def test_its_events_reach_the_collector_through_the_python_flusher(self):
         collector = ThreadingHTTPServer(("127.0.0.1", 0), Collector)
         threading.Thread(target=collector.serve_forever, daemon=True).start()
@@ -671,15 +739,9 @@ class EntryProcess:
         (self.case / "home").mkdir()
         (data / "telemetry.json").write_text(json.dumps({"sharing": True, "installId": INSTALL_ID}))
         fake = FakeArdia(data / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "windows": {"result": []}})
-        reader, writer = os.pipe()
+        url = f"http://127.0.0.1:{collector.server_address[1]}/v1/logs"
         try:
-            url = f"http://127.0.0.1:{collector.server_address[1]}/v1/logs"
-            done = subprocess.run([str(self.root / "bin" / "ardia"), "windows"], capture_output=True, pass_fds=(writer,),
-                                  env=self.environment({"ARDIA_TELEMETRY_URL": url}), timeout=30)
-            os.close(writer)
-            self.assertEqual(done.returncode, 0, done.stderr)
-            self.assertTrue(select.select([reader], [], [], 1.5)[0], "the flusher kept a descriptor it inherited")
-            self.assertEqual(os.read(reader, 1), b"")
+            self.assertFalse(self.flusher_keeps_an_inherited_descriptor(url, None), "the flusher kept a descriptor it inherited")
             deadline = time.monotonic() + 20
             while not Collector.bodies and time.monotonic() < deadline:
                 time.sleep(0.1)
@@ -692,10 +754,32 @@ class EntryProcess:
                 time.sleep(0.1)
             self.assertFalse((data / "Telemetry" / "cli-queue.jsonl").exists())
         finally:
-            os.close(reader)
             fake.close()
             collector.shutdown()
             collector.server_close()
+
+    def test_the_flusher_keeps_no_inherited_descriptor_whatever_the_soft_descriptor_limit(self):
+        (self.case / "home").mkdir()
+        silent = socket.socket()
+        silent.bind(("127.0.0.1", 0))
+        silent.listen(8)
+        self.addCleanup(silent.close)
+        url = f"http://127.0.0.1:{silent.getsockname()[1]}/v1/logs"
+        for soft_limit in (None, INHERITED_FD - 10):
+            with self.subTest(soft_fd_limit=soft_limit):
+                data = self.case / "data"
+                shutil.rmtree(data, True)
+                data.mkdir()
+                (data / "telemetry.json").write_text(json.dumps({"sharing": True, "installId": INSTALL_ID}))
+                fake = FakeArdia(data / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "windows": {"result": []}})
+                try:
+                    kept = self.flusher_keeps_an_inherited_descriptor(url, soft_limit)
+                    self.assertTrue(self.flusher_running(), "the flusher was gone before its descriptors were checked")
+                    self.assertFalse(kept, "the flusher kept a descriptor it inherited")
+                finally:
+                    fake.close()
+                    subprocess.run(["pkill", "-f", f"{self.python} .*flush_main"], capture_output=True)
+                    self.flushers_done()
 
     def test_the_lease_is_held_through_the_hand_off_to_python(self):
         leases = self.root / ".leases"
@@ -1039,6 +1123,35 @@ class TsProcess(EntryProcess, unittest.TestCase):
                     self.assertEqual(done.stderr.count(b"\n"), 1, done.stderr)
                     self.assertTrue((bare / "ts-ran").exists())
                     self.assertFalse(log.exists(), "Python ran")
+
+    def test_a_missing_addon_never_leaves_the_typescript_program_behind_a_killed_router(self):
+        bare = self.bare_install(self.logging_python(self.case / "exec.log"))
+        (bare / "libexec" / harness.TS_LIBC).unlink()
+        reader, writer = full_blocking_pipe()
+        try:
+            router = subprocess.Popen([str(bare / "bin" / "ardia"), "windows"], env=self.environment({}), stdin=subprocess.DEVNULL,
+                                      stdout=subprocess.DEVNULL, stderr=writer, preexec_fn=os.setsid)
+            os.close(writer)
+            writer = None
+            child = self.ts_child(router.pid)
+            time.sleep(0.5)
+            self.assertIsNone(router.poll(), "ardia ended before its stderr was drained")
+            os.kill(router.pid, signal.SIGKILL)
+            router.wait(5)
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                try:
+                    os.kill(child, 0)
+                except ProcessLookupError:
+                    break
+                time.sleep(0.05)
+            else:
+                os.kill(child, signal.SIGKILL)
+                self.fail("the TypeScript program ran on after the router died")
+        finally:
+            if writer is not None:
+                os.close(writer)
+            os.close(reader)
 
     def test_an_invalid_served_table_falls_back_to_the_compiled_one(self):
         data = self.case / "data"

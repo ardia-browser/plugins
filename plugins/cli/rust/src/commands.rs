@@ -170,12 +170,20 @@ fn commands(listing: &Listing, result: &Value) -> Shape<Rendered> {
 
 const DEEPEST_GROUP_PYTHON_SURELY_WALKS: usize = 500;
 
-fn walk(items: &Value, depth: usize, into: &mut Vec<(Value, usize)>) -> Shape<()> {
-    for item in iterate_or_empty(items)? {
-        let Value::Object(fields) = &item else { continue };
-        let kind = fields.get("type").cloned();
-        into.push((item.clone(), depth));
-        if matches!(kind.as_ref().and_then(Value::as_str), Some("group" | "folder")) {
+fn objects_in(items: &Value) -> Shape<&[Value]> {
+    match items {
+        _ if !truthy(items) => Ok(&[]),
+        Value::Array(items) => Ok(items),
+        Value::Str(_) | Value::Object(_) => Ok(&[]),
+        _ => Err(Unsupported),
+    }
+}
+
+fn walk<'a>(items: &'a Value, depth: usize, into: &mut Vec<(&'a Value, usize)>) -> Shape<()> {
+    for item in objects_in(items)? {
+        let Value::Object(fields) = item else { continue };
+        into.push((item, depth));
+        if matches!(fields.get("type").and_then(Value::as_str), Some("group" | "folder")) {
             if depth >= DEEPEST_GROUP_PYTHON_SURELY_WALKS {
                 return Err(Unsupported);
             }
@@ -223,7 +231,7 @@ fn flat_tabs(tree: &Value) -> Shape<Vec<Value>> {
             for (item, _) in walked {
                 if item.get("type") == Some(&Value::str("tab")) {
                     out.push(merged(
-                        &item,
+                        item,
                         vec![
                             ("window", get_or_null(&window, "id")?.clone()),
                             ("profile", get_or_null(&space, "profile")?.clone()),
@@ -244,17 +252,16 @@ fn flat_groups(tree: &Value) -> Shape<Vec<Value>> {
         for (_, key) in SECTIONS {
             let mut walked = Vec::new();
             walk(get_or_null(&space, key)?, 0, &mut walked)?;
-            for (item, depth) in walked {
+            for (index, &(item, depth)) in walked.iter().enumerate() {
                 if item.get("type") == Some(&Value::str("group")) {
-                    let mut inner = Vec::new();
-                    walk(item.get("items").unwrap_or(&Value::Null), 0, &mut inner)?;
-                    let tabs = inner
+                    let tabs = walked[index + 1..]
                         .iter()
+                        .take_while(|(_, inner)| *inner > depth)
                         .filter(|(tab, _)| tab.get("type") == Some(&Value::str("tab")))
                         .map(|(tab, _)| tab.get("id").cloned().unwrap_or(Value::Null))
                         .collect();
                     out.push(merged(
-                        &item,
+                        item,
                         vec![
                             ("window", get_or_null(&window, "id")?.clone()),
                             ("profile", get_or_null(&space, "profile")?.clone()),
@@ -474,7 +481,7 @@ fn print_tree(out: &mut Rendered, tree: &Value) -> Shape<()> {
                 for (item, depth) in walked {
                     let indent = format!("      {}", "    ".repeat(depth));
                     match item.get("type").and_then(Value::as_str) {
-                        Some("tab") => out.say(format!("{indent}{}", tab_line(&item, "")?)),
+                        Some("tab") => out.say(format!("{indent}{}", tab_line(item, "")?)),
                         Some("folder") => {
                             let name = item.get("name").filter(|name| truthy(name)).cloned().unwrap_or(Value::str(""));
                             out.say(format!(
@@ -483,7 +490,7 @@ fn print_tree(out: &mut Rendered, tree: &Value) -> Shape<()> {
                                 shown(&json::dumps(&name, Style::Spaced, false))
                             ));
                         }
-                        _ => out.say(group_line(&item, &format!("{indent}  "))?),
+                        _ => out.say(group_line(item, &format!("{indent}  "))?),
                     }
                 }
             }
