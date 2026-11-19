@@ -1,0 +1,11 @@
+(el) => {
+  el = el || document.activeElement;
+  if (!el || el === document.body || el === document.documentElement || !el.getAttribute) return null;
+  const attr = (name) => el.getAttribute(name) || "";
+  const type = attr("type").toLowerCase(), auto = attr("autocomplete").toLowerCase();
+  const label = (el.labels && el.labels[0] && el.labels[0].textContent || "").trim();
+  const words = [attr("name"), el.id || "", attr("aria-label"), attr("placeholder"), label].join(" ").toLowerCase();
+  const secret = type === "password" || /(^|\s)(current-password|new-password|one-time-code|cc-[a-z-]+)(\s|$)/.test(auto)
+    || /pass|secret|token|otp|\bpin\b|cvv|cvc|card/.test(words);
+  return { secret, field: attr("name") || el.id || attr("aria-label") || attr("placeholder") || label };
+}

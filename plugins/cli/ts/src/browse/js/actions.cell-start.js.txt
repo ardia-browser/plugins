@@ -1,0 +1,26 @@
+(cell) => {
+  globalThis.ardiaCellFocusBefore = document.activeElement;
+  const editable = (n) => !n.disabled && (n.tagName === "SELECT" || n.isContentEditable
+    || ((n.tagName === "INPUT" || n.tagName === "TEXTAREA") && !n.readOnly && n.type !== "hidden"));
+  const grid = cell.closest("[role=grid], [role=treegrid], [role=table], table");
+  const row = cell.closest("[role=row], tr");
+  const rows = grid ? Array.from(grid.querySelectorAll("[role=row], tr")) : [];
+  globalThis.ardiaCellSpot = {
+    cell, grid, id: cell.id || null,
+    row: row && row.getAttribute("aria-rowindex"), column: cell.getAttribute("aria-colindex"),
+    rowIndex: row ? rows.indexOf(row) : -1, cellIndex: row ? Array.from(row.children).indexOf(cell) : -1,
+  };
+  const was = (cell.innerText || cell.textContent || "").trim();
+  let active = document.activeElement;
+  while (active && active.shadowRoot && active.shadowRoot.activeElement) active = active.shadowRoot.activeElement;
+  const box = cell.getBoundingClientRect();
+  const hit = box.width && box.height ? document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2) : null;
+  if (active && editable(active) && (cell.contains(active) || hit && (hit === active || active.contains(hit)))) {
+    globalThis.ardiaCellInner = active;
+    return { was, inner: true, open: true };
+  }
+  const inner = Array.from(cell.querySelectorAll("input, textarea, select, [contenteditable=true], [role=combobox], [role=textbox]"))
+    .find((n) => editable(n) || n.getAttribute("role") === "combobox");
+  globalThis.ardiaCellInner = inner || null;
+  return { was, inner: !!inner, open: false };
+}

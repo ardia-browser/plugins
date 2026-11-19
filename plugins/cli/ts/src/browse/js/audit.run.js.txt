@@ -1,0 +1,15 @@
+
+async (context, tags) => {
+  const options = { resultTypes: ["violations", "incomplete"], iframes: false };
+  if (tags && tags.length) options.runOnly = { type: "tag", values: tags };
+  const target = context ? document.querySelector(context) : document;
+  if (context && !target) throw new Error("No element matches " + context);
+  const result = await axe.run(target, options);
+  const shape = (items) => items.map((item) => ({
+    id: item.id, impact: item.impact, help: item.help, helpUrl: item.helpUrl, tags: item.tags, nodeCount: item.nodes.length,
+    nodes: item.nodes.slice(0, 10).map((node) => ({ target: node.target, html: node.html, failureSummary: node.failureSummary })),
+  }));
+  return { violations: shape(result.violations), incomplete: shape(result.incomplete),
+    counts: { violations: result.violations.length, incomplete: result.incomplete.length, passes: (result.passes || []).length,
+      inapplicable: (result.inapplicable || []).length } };
+}

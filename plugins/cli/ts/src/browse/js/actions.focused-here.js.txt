@@ -1,0 +1,1 @@
+() => document.hasFocus() && !['IFRAME', 'FRAME', 'EMBED', 'OBJECT'].includes((document.activeElement || {}).tagName)

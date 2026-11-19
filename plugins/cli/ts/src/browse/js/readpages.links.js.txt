@@ -1,0 +1,9 @@
+() => {
+  const out = [];
+  for (const a of document.querySelectorAll("a[href]")) {
+    let url;
+    try { url = new URL(a.getAttribute("href"), document.baseURI); } catch (e) { continue; }
+    if (url.protocol === "http:" || url.protocol === "https:") out.push(url.href);
+  }
+  return out;
+}

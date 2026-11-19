@@ -1,0 +1,14 @@
+() => {
+  const out = [];
+  let total = 0;
+  for (const script of document.querySelectorAll("script:not([src])")) {
+    const text = script.textContent || "";
+    if (!text.trim() || text.length > 8000000 || total + text.length > 24000000) continue;
+    const type = (script.getAttribute("type") || "").toLowerCase();
+    if (type && !type.includes("json") && !["text/javascript", "application/javascript", "module"].includes(type)) continue;
+    if (!type.includes("json") && !/^\s*(?:window\.|self\.|globalThis\.|var |let |const )?[\w$.\[\]"']+\s*=\s*[\[{]/.test(text.slice(0, 400))) continue;
+    total += text.length;
+    out.push({ id: script.id || "", type, text });
+  }
+  return out;
+}

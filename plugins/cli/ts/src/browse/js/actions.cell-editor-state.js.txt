@@ -1,0 +1,11 @@
+(editor) => {
+  let active = document.activeElement;
+  while (active && active.shadowRoot && active.shadowRoot.activeElement) active = active.shadowRoot.activeElement;
+  const open = editor.isConnected && active === editor;
+  if (!open) return { open: false };
+  const ids = (editor.getAttribute("aria-errormessage") || "") + " " + (editor.getAttribute("aria-describedby") || "");
+  const said = ids.split(/\s+/).filter(Boolean).map((id) => document.getElementById(id)).filter(Boolean)
+    .map((n) => (n.innerText || n.textContent || "").trim()).filter(Boolean);
+  const message = said.join(" ") || editor.validationMessage || "";
+  return { open: true, invalid: editor.getAttribute("aria-invalid") === "true" || !!editor.validationMessage, message };
+}

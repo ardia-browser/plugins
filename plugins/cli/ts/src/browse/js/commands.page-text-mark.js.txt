@@ -1,0 +1,6 @@
+() => {
+  const text = document.body ? document.body.innerText : "";
+  let hash = 0;
+  for (let index = 0; index < text.length; index++) hash = (hash * 31 + text.charCodeAt(index)) | 0;
+  return [text.length, hash];
+}

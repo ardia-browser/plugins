@@ -1,0 +1,9 @@
+(cell) => {
+  let active = document.activeElement;
+  while (active && active.shadowRoot && active.shadowRoot.activeElement) active = active.shadowRoot.activeElement;
+  if (!active || active === document.body || active === document.documentElement) return null;
+  const editable = !active.disabled && (active.tagName === "SELECT" || active.isContentEditable
+    || ((active.tagName === "INPUT" || active.tagName === "TEXTAREA") && !active.readOnly));
+  if (!editable) return null;
+  return cell.contains(active) || active !== globalThis.ardiaCellFocusBefore ? active : null;
+}

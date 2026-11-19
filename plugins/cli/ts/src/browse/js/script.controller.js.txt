@@ -1,0 +1,61 @@
+
+(() => {
+  if (globalThis.__ardiaScript) return globalThis.__ardiaScript;
+  const LOG_LIMIT = %(log_limit)d;
+  const pending = [];
+  const logs = [];
+  let logSize = 0;
+  let logsDropped = 0;
+  let wake = null;
+  let finished = null;
+  let state = null;
+  let worker = null;
+  let ready = false;
+  const signal = () => { if (wake) { const resolve = wake; wake = null; resolve(); } };
+  const finish = (result) => { if (!finished) finished = result; signal(); };
+  const keep = (line) => {
+    if (logSize + line.length > LOG_LIMIT) { logsDropped += 1; return; }
+    logs.push(line);
+    logSize += line.length + 1;
+  };
+  const api = {
+    start(source, offset) {
+      worker = new Worker(URL.createObjectURL(new Blob([source], { type: "text/javascript" })));
+      worker.onmessage = (event) => {
+        const message = event.data || {};
+        if (message.type === "ready") ready = true;
+        else if (message.type === "log") keep(String(message.line));
+        else if (message.type === "request") { pending.push(message.request); signal(); }
+        else if (message.type === "state") state = message.value;
+        else if (message.type === "done") finish(message.result);
+      };
+      worker.onerror = (event) => {
+        event.preventDefault();
+        const text = String(event.message || "error").replace(/^Uncaught /, "");
+        const line = event.lineno ? Math.max(event.lineno - offset, 1) : null;
+        finish({ kind: "error", message: text, name: "", line, code: ready ? null : "script_syntax" });
+      };
+      return true;
+    },
+    async next() {
+      while (true) {
+        if (finished) return { ...finished, unawaited: pending.length, logs, logsDropped, state };
+        if (pending.length) return { kind: "request", ...pending.shift() };
+        await new Promise((resolve) => { wake = resolve; });
+      }
+    },
+    reply(id, answer) {
+      if (worker) worker.postMessage({ type: "reply", id, answer });
+      return true;
+    },
+    stop() {
+      if (worker) worker.terminate();
+      worker = null;
+      finish({ kind: "stopped" });
+      return { logs, logsDropped, state };
+    },
+  };
+  globalThis.__ardiaScript = api;
+  document.title = %(title)s;
+  return api;
+})()

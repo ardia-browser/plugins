@@ -1,0 +1,59 @@
+(selector, action, to) => {
+  const ROW = "[role=option], [role=row], [role=listitem], [role=treeitem], [role=article], [role=feed] > *, li, tr, article";
+  const LOADING = /^\s*loading(\.\.\.|…)?\s*$/i;
+  const found = (typeof selector === "string" ? ardiaBrowse.queryAll(selector) : [selector]).filter((el) => el && el.nodeType === 1);
+  if (!found.length) return { missing: true };
+  const outermost = (hits, within) => {
+    const set = new Set(hits);
+    return hits.filter((el) => { for (let p = el.parentElement; p && p !== within; p = p.parentElement) if (set.has(p)) return false; return true; });
+  };
+  const rowsIn = (list) => {
+    const hits = outermost(Array.from(list.querySelectorAll(ROW)), list);
+    if (hits.length) return hits;
+    let box = list;
+    for (;;) {
+      const kids = Array.from(box.children).filter((child) => (child.innerText || "").trim());
+      if (kids.length === 1 && kids[0].children.length) box = kids[0];
+      else return kids;
+    }
+  };
+  const list = found.find((el) => ardiaBrowse.visible(el)) || found[0];
+  const rows = found.length > 1 && !list.querySelector(ROW) ? found : rowsIn(list);
+  const page = document.scrollingElement || document.documentElement;
+  const scrolls = (el) => /(auto|scroll|overlay)/.test(getComputedStyle(el).overflowY) && el.scrollHeight > el.clientHeight + 1;
+  const scrollerFrom = (start) => {
+    for (let node = start; node && node !== document.body && node !== document.documentElement; node = node.parentElement) if (scrolls(node)) return node;
+    return null;
+  };
+  const inside = () => {
+    const walker = document.createTreeWalker(list, NodeFilter.SHOW_ELEMENT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) if (scrolls(node)) return node;
+    return null;
+  };
+  const scroller = scrollerFrom(rows[0] || list) || scrollerFrom(list) || inside() || page;
+  const whole = scroller === page || scroller === document.body;
+  const position = () => whole ? window.scrollY : scroller.scrollTop;
+  const view = whole ? window.innerHeight : scroller.clientHeight;
+  const height = whole ? Math.max(page.scrollHeight, document.body ? document.body.scrollHeight : 0) : scroller.scrollHeight;
+  const moveTo = (y) => { if (whole) window.scrollTo(window.scrollX, y); else scroller.scrollTop = y; };
+  const before = position();
+  const base = whole ? 0 : scroller.getBoundingClientRect().top;
+  const lastRendered = () => rows.reduce((far, row) => Math.max(far, row.getBoundingClientRect().top - base + before), 0);
+  if (action === "start") moveTo(0);
+  else if (action === "next") moveTo(Math.max(before + Math.max(view * 0.9, 40), Math.min(lastRendered(), before + view * 20)));
+  else if (action === "restore") moveTo(to);
+  const top = position();
+  const out = [];
+  for (const row of rows) {
+    const text = ardiaBrowse.readable(row).split("\n").map((line) => line.trim()).filter(Boolean).join(" · ");
+    if (!text || LOADING.test(text) || row.getAttribute("aria-busy") === "true") continue;
+    const raw = row.getAttribute("aria-posinset") || row.getAttribute("aria-rowindex") || row.getAttribute("data-index") || row.getAttribute("data-row-index");
+    const index = raw != null && raw !== "" && Number.isFinite(Number(raw)) ? Number(raw) : null;
+    const id = row.getAttribute("data-id") || row.getAttribute("data-key") || row.id || "";
+    out.push({ text, index, id, offset: Math.round(row.getBoundingClientRect().top - base + top) });
+  }
+  const busy = !!list.querySelector("[aria-busy=true]") || list.getAttribute("aria-busy") === "true"
+    || Array.from(scroller.children).some((child) => LOADING.test(child.textContent || ""));
+  return { rows: out, before, position: top, moved: Math.abs(top - before) > 1, height, view, busy,
+           atEnd: top + view >= height - 2, scroller: ardiaBrowse.describe(scroller), hidden: document.visibilityState === "hidden" };
+}
