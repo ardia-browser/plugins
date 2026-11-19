@@ -77,16 +77,24 @@ jobs:
       - name: Size
         run: |
           echo "ardia-ts binary: $(wc -c < dist/ardia-ts) bytes" >> "$GITHUB_STEP_SUMMARY"
+      - name: Rust
+        run: |
+          command -v rustup >/dev/null || curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: The Rust router that starts it
+        working-directory: plugins/cli/rust
+        run: cargo build --locked --release
       - name: uv
         run: curl -LsSf https://astral.sh/uv/0.12.15/install.sh | sh
       - name: Parity with the Python CLI
         working-directory: plugins/cli
         env:
           ARDIA_TS_CLI: ${{ github.workspace }}/plugins/cli/ts/dist/ardia-ts
+          ARDIA_RUST_CLI: ${{ github.workspace }}/plugins/cli/rust/target/release/ardia
         run: |
           ~/.local/bin/uv venv --python 3.13 "$RUNNER_TEMP/venv"
           VIRTUAL_ENV="$RUNNER_TEMP/venv" ~/.local/bin/uv pip install --quiet --require-hashes --no-build -r requirements.lock
-          "$RUNNER_TEMP/venv/bin/python" -m unittest -v tests.test_parity.TsParityTable tests.test_parity.ServedTable tests.test_parity.ProtocolAgrees
+          "$RUNNER_TEMP/venv/bin/python" -m unittest -v tests.test_parity.TsParityTable tests.test_parity.TsProcess tests.test_parity.ServedTable tests.test_parity.ProtocolAgrees tests.test_closed_stdout.TsClosedStdout
 
   python:
     name: Python tests on ${{ matrix.os }}
