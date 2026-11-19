@@ -18,7 +18,7 @@ function python(program: string, input: unknown): unknown {
   return JSON.parse(run.stdout);
 }
 
-const NUMBERS = ["7", " 7 ", "+007", "-0", "1_000", "1__0", "_1", "abc", "", "1.5", "٣", "١٢٣", "²", "9".repeat(4301), "1e3", ".5", "5.", "inf", "-Infinity", "nan", "1_0.5", "1e1_0", "e5", "0x10", " 　 42 "];
+const NUMBERS = ["7", " 7 ", "+007", "-0", "1_000", "1__0", "_1", "abc", "", "1.5", "٣", "١٢٣", "²", "9".repeat(4301), "1e3", ".5", "5.", "inf", "-Infinity", "nan", "1_0.5", "1e1_0", "e5", "0x10", " 　 42 ", "\x1c7", "7\x1f", "\x1d7\x1e", "\x857", "7\u2028", "\u00a07\u00a0", "\x1c1.5", "1.5\x1f", "\x851.5", "\u30001.5\u2029", "\x0b7\x0c"];
 
 test("int() and float() read text exactly as Python does", () => {
   const expected = python(

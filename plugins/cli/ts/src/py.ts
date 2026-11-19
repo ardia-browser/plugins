@@ -148,6 +148,13 @@ export function isSpace(ch: string): boolean {
   return SPACES.has(ch.codePointAt(0) ?? 0);
 }
 
+const INFORMATION_SEPARATORS = new Set([0x1c, 0x1d, 0x1e, 0x1f]);
+
+export function isNumberSpace(ch: string): boolean {
+  const point = ch.codePointAt(0) ?? 0;
+  return SPACES.has(point) && !INFORMATION_SEPARATORS.has(point);
+}
+
 export function rstrip(text: string, strip: (ch: string) => boolean = isSpace): string {
   const chars = codePoints(text);
   let end = chars.length;

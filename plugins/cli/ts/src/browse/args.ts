@@ -1,5 +1,5 @@
 import { decimalDigit } from "../pystr.ts";
-import { isSpace, strip } from "../py.ts";
+import { isNumberSpace, isSpace, strip } from "../py.ts";
 import { BOOL_FLAGS, COMMAND_FLAGS, COMMAND_NAME, COMMAND_OWNS, LAUNCH_HINTS, LAUNCH_ONLY, VALUE_FLAGS } from "./tables.ts";
 
 const SHARED_VALUE_FLAGS = ["--port", "--ws", "--data-dir", "--timeout"];
@@ -226,7 +226,7 @@ function underscored(text: string): string | undefined {
 export type PyInt = { value: bigint } | { invalid: true };
 
 export function pythonInt(text: string): PyInt {
-  const body = strip(text, isSpace);
+  const body = strip(text, isNumberSpace);
   const sign = body.startsWith("-") ? -1n : 1n;
   const unsigned = body.startsWith("-") || body.startsWith("+") ? body.slice(1) : body;
   const digits = underscored(unsigned);
@@ -235,7 +235,7 @@ export function pythonInt(text: string): PyInt {
 }
 
 export function pythonFloat(text: string): number | undefined {
-  const body = strip(text, isSpace);
+  const body = strip(text, isNumberSpace);
   const sign = body.startsWith("-") ? -1 : 1;
   const unsigned = (body.startsWith("-") || body.startsWith("+") ? body.slice(1) : body).toLowerCase();
   if (unsigned === "inf" || unsigned === "infinity") return sign * Number.POSITIVE_INFINITY;
