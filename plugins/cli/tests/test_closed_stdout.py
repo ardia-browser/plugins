@@ -114,6 +114,48 @@ def run_to(command: list[str], home: Path, kind: str) -> tuple:
     return process.returncode, TRACEBACK.sub(b"", stderr), telemetry_of(home)
 
 
+STDERR_KINDS = ("closed pipe", "read-only file", "full non-blocking pipe", "hung-up terminal")
+
+
+def failing_stderr(home: Path, kind: str) -> tuple:
+    if kind == "read-only file":
+        target = home / "read-only-stderr"
+        target.touch()
+        return None, os.open(target, os.O_RDONLY)
+    if kind == "full non-blocking pipe":
+        return full_pipe()
+    keep, stderr = pty.openpty() if kind == "hung-up terminal" else os.pipe()
+    os.close(keep)
+    return None, stderr
+
+
+def left_in(keep: int) -> bytes:
+    fcntl.fcntl(keep, fcntl.F_SETFL, fcntl.fcntl(keep, fcntl.F_GETFL) | os.O_NONBLOCK)
+    tail = b""
+    try:
+        while chunk := os.read(keep, 65536):
+            tail = (tail + chunk)[-65536:]
+    except BlockingIOError:
+        pass
+    return tail.rstrip(b"x")
+
+
+def run_with_stderr(command: list[str], home: Path, kind: str) -> tuple:
+    keep, stderr = failing_stderr(home, kind)
+    try:
+        process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=stderr, env=environment(home, telemetry=True))
+    finally:
+        os.close(stderr)
+    try:
+        stdout = process.communicate(timeout=60)[0]
+    finally:
+        tail = b""
+        if keep is not None:
+            tail = left_in(keep)
+            os.close(keep)
+    return process.returncode, stdout, TRACEBACK.sub(b"", tail), telemetry_of(home)
+
+
 def run_limited(command: list[str], home: Path, limit: int, ignored: bool, telemetry: bool) -> tuple:
     out = home / "out"
     stdout = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -184,6 +226,28 @@ class ClosedStdout:
                                 self.assertEqual(new, python)
                 finally:
                     fake.close()
+        finally:
+            install.close()
+
+    def test_a_listing_ends_like_python_whatever_stderr_fails_with(self):
+        install = harness.Installation(harness.entry_binary(self.entry), entry=self.entry)
+        try:
+            with tempfile.TemporaryDirectory() as scratch:
+                home = Path(scratch)
+                (home / "data").mkdir()
+                for replies, argv in ((None, ["windows"]), ({"windows": {"error": {"code": "boom", "message": "it broke"}}}, ["windows"]),
+                                      ({"workspace": {"error": {"code": "boom", "message": "it broke"}}}, ["tabs", "--json"])):
+                    (home / "data" / "ArdiaControl.sock").unlink(missing_ok=True)
+                    fake = None if replies is None else FakeArdia(home / "data" / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, **replies})
+                    try:
+                        for kind in STDERR_KINDS:
+                            with self.subTest(argv=argv, control=replies is not None, stderr=kind):
+                                python = run_with_stderr([sys.executable, "-m", "ardia_cli", *argv], home, kind)
+                                new = run_with_stderr([*install.command("new"), *argv], home, kind)
+                                self.assertEqual(new, python)
+                    finally:
+                        if fake is not None:
+                            fake.close()
         finally:
             install.close()
 

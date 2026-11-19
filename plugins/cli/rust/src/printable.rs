@@ -1,5 +1,52 @@
 use std::fmt::Write as _;
 use std::io::Write;
+use std::sync::Mutex;
+
+static STDERR_LEFT: Mutex<Vec<u8>> = Mutex::new(Vec::new());
+
+fn last_errno() -> i32 {
+    std::io::Error::last_os_error().raw_os_error().unwrap_or(libc::EIO)
+}
+
+fn write_some(fd: i32, bytes: &[u8]) -> Result<usize, i32> {
+    loop {
+        let written = unsafe { libc::write(fd, bytes.as_ptr().cast(), bytes.len()) };
+        if written > 0 || (written == 0 && bytes.is_empty()) {
+            return Ok(written as usize);
+        }
+        let errno = if written == 0 { libc::EIO } else { last_errno() };
+        if errno != libc::EINTR {
+            return Err(errno);
+        }
+    }
+}
+
+pub fn to_stderr(bytes: &[u8]) -> Result<(), i32> {
+    let mut left = STDERR_LEFT.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    left.extend_from_slice(bytes);
+    while !left.is_empty() {
+        let written = write_some(2, &left)?;
+        left.drain(..written);
+    }
+    Ok(())
+}
+
+pub fn settle_stderr(status: i32) -> i32 {
+    if to_stderr(b"").is_err() {
+        120
+    } else {
+        status
+    }
+}
+
+pub fn stderr_unusable() -> bool {
+    let flags = unsafe { libc::fcntl(2, libc::F_GETFL) };
+    flags < 0 || flags & libc::O_ACCMODE == libc::O_RDONLY || flags & libc::O_NONBLOCK != 0
+}
+
+pub fn exception_line(errno: i32) -> String {
+    format!("{}: [Errno {errno}] {}\n", python_os_error(errno), crate::paths::strerror(errno))
+}
 
 fn escaped(text: &str, escape: impl Fn(u32) -> bool) -> String {
     let mut out = String::with_capacity(text.len());
@@ -119,23 +166,21 @@ impl Output {
         }
     }
 
-    pub fn complain(&mut self, text: &str) {
+    pub fn complain(&mut self, text: &str) -> Option<i32> {
         let _ = std::io::stdout().flush();
-        let mut stderr = std::io::stderr().lock();
-        let _ = stderr.write_all(inert(&crate::pystr::well_formed(text)).as_bytes());
-        let _ = stderr.write_all(b"\n");
-        let _ = stderr.flush();
+        let mut line = inert(&crate::pystr::well_formed(text));
+        line.push('\n');
+        to_stderr(line.as_bytes()).err()
     }
 }
 
 pub fn report_crash(errno: i32, flush_fails_again: bool) -> i32 {
-    let exception = format!("{}: [Errno {errno}] {}\n", python_os_error(errno), crate::paths::strerror(errno));
-    let mut stderr = std::io::stderr().lock();
-    let _ = stderr.write_all(exception.as_bytes());
+    let exception = exception_line(errno);
+    let _ = to_stderr(exception.as_bytes());
     if !flush_fails_again {
         return 1;
     }
-    let _ = write!(stderr, "Exception ignored on flushing sys.stdout:\n{exception}");
+    let _ = to_stderr(format!("Exception ignored on flushing sys.stdout:\n{exception}").as_bytes());
     120
 }
 
@@ -185,16 +230,11 @@ pub fn stdout_flush_failed(error: &std::io::Error) -> i32 {
     if errno == libc::EBADF {
         return 0;
     }
-    let _ = write!(
-        std::io::stderr(),
-        "Exception ignored on flushing sys.stdout:\n{}: [Errno {errno}] {}\n",
-        python_os_error(errno),
-        crate::paths::strerror(errno)
-    );
+    let _ = to_stderr(format!("Exception ignored on flushing sys.stdout:\n{}", exception_line(errno)).as_bytes());
     120
 }
 
-fn quiet_stdout() {
+pub fn quiet_stdout() {
     let null = std::ffi::CString::new("/dev/null").unwrap_or_default();
     unsafe {
         let sink = libc::open(null.as_ptr(), libc::O_WRONLY);

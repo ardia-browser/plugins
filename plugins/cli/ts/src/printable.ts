@@ -1,6 +1,6 @@
 import { fstatSync, write } from "node:fs";
 import { interrupted as interruptRequested } from "./control.ts";
-import { writeWhole } from "./libc.ts";
+import { writeWhole, writtenBefore } from "./libc.ts";
 import { codeOf, errnoOf, strerror } from "./paths.ts";
 import { utf8 } from "./pystr.ts";
 import { constants } from "node:os";
@@ -32,6 +32,28 @@ export function sleepMs(ms: number): void {
 
 export function writeAll(fd: number, text: string | Uint8Array): void {
   writeWhole(fd, typeof text === "string" ? utf8(text) : text);
+}
+
+let stderrLeft: Buffer = Buffer.alloc(0);
+
+export function toStderr(text: string | Uint8Array): number | undefined {
+  stderrLeft = Buffer.concat([stderrLeft, typeof text === "string" ? utf8(text) : text]);
+  try {
+    writeWhole(2, stderrLeft);
+    stderrLeft = Buffer.alloc(0);
+    return undefined;
+  } catch (error) {
+    stderrLeft = stderrLeft.subarray(writtenBefore(error));
+    return errnoOf(error) || constants.errno.EIO;
+  }
+}
+
+export function settleStderr(status: number): number {
+  return stderrLeft.length > 0 && toStderr("") !== undefined ? 120 : status;
+}
+
+export function exceptionLine(errno: number): string {
+  return `${pythonOsError(errno)}: [Errno ${errno}] ${strerror(errno)}\n`;
 }
 
 const INTERRUPT_POLL_MS = 50;
@@ -140,10 +162,8 @@ export class Output {
     }
   }
 
-  complain(text: string): void {
-    try {
-      writeAll(2, `${inert(text)}\n`);
-    } catch {}
+  complain(text: string): number | undefined {
+    return toStderr(`${inert(text)}\n`);
   }
 }
 
@@ -175,10 +195,9 @@ export function pythonOsError(errno: number): string {
 }
 
 export function reportCrash(errno: number, flushFailsAgain: boolean): number {
-  const exception = `${pythonOsError(errno)}: [Errno ${errno}] ${strerror(errno)}\n`;
-  try {
-    writeAll(2, flushFailsAgain ? `${exception}Exception ignored on flushing sys.stdout:\n${exception}` : exception);
-  } catch {}
+  const exception = exceptionLine(errno);
+  toStderr(exception);
+  if (flushFailsAgain) toStderr(`Exception ignored on flushing sys.stdout:\n${exception}`);
   return flushFailsAgain ? 120 : 1;
 }
 
@@ -190,8 +209,6 @@ export function stdoutFlushFailed(error: unknown): number {
   const code = codeOf(error) ?? "";
   if (code === "EBADF") return 0;
   const errno = errnoOf(error);
-  try {
-    writeAll(2, `Exception ignored on flushing sys.stdout:\n${pythonOsError(errno)}: [Errno ${errno}] ${strerror(errno)}\n`);
-  } catch {}
+  toStderr(`Exception ignored on flushing sys.stdout:\n${exceptionLine(errno)}`);
   return 120;
 }

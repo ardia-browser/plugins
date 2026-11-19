@@ -1,9 +1,10 @@
+import { constants } from "node:os";
 import { call as callControl, ControlFailure, errorCode, type Failure, interrupted } from "./control.ts";
 import { render as renderHelp } from "./help.ts";
 import type { Value } from "./json.ts";
 import { failed, type Kind, type Listing, methodFailed, methodOf, paramsOf, type Rendered } from "./listing.ts";
 import { codeOf, errnoOf, NeedsPython } from "./paths.ts";
-import { inert, Output, pythonStdoutBuffer, reportCrash, stdoutFlushFailed, writeAll } from "./printable.ts";
+import { exceptionLine, inert, Output, pythonStdoutBuffer, reportCrash, stdoutFlushFailed, toStderr, writeAll } from "./printable.ts";
 import { utf8 } from "./pystr.ts";
 import { Unsupported } from "./py.ts";
 import { render } from "./render.ts";
@@ -107,7 +108,8 @@ export async function serveListing(kind: Kind, listing: Listing, argv: string[],
   await out.flush();
   if (out.interrupted) {
     status = 130;
-    out.complain(`ardia ${kind}: interrupted`);
+    const errno = out.complain(`ardia ${kind}: interrupted`);
+    if (errno !== undefined) return complaintFailed(call, errno, python);
   } else if (out.closed) {
     call.noteErrorCode("stdout_closed");
     status = 141;
@@ -117,8 +119,22 @@ export async function serveListing(kind: Kind, listing: Listing, argv: string[],
       finish(call, 1, python, crashed.errno);
       return crashed.exit;
     }
-    if (shown.complaint !== undefined) out.complain(shown.complaint);
+    const errno = shown.complaint === undefined ? undefined : out.complain(shown.complaint);
+    if (errno !== undefined) return complaintFailed(call, errno, python);
   }
   finish(call, status, python);
   return status;
+}
+
+const BROKEN_PIPE = new Set(["EPIPE", "ESHUTDOWN"].map((name) => (constants.errno as Record<string, number>)[name]));
+
+function complaintFailed(call: Call, errno: number, python: string | null): number {
+  if (BROKEN_PIPE.has(errno)) {
+    call.noteErrorCode("stdout_closed");
+    finish(call, 141, python);
+    return 141;
+  }
+  finish(call, 1, python, errno);
+  toStderr(exceptionLine(errno));
+  return 1;
 }

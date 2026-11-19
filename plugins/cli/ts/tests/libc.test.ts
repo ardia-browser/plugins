@@ -272,3 +272,24 @@ test("listAt sees what os.listdir sees in a folder opened before its files were 
     fs.closeSync(mine);
   }
 });
+
+test("a write to a full non-blocking pipe fails with EAGAIN at once and never waits", () => {
+  const script = path.join(scratch, "write-full.ts");
+  fs.writeFileSync(script, `import { loadLibc, writeWhole, writtenBefore } from ${JSON.stringify(path.resolve(CLI, "ts", "src", "libc.ts"))};
+loadLibc(${JSON.stringify(BUILT_LIBC)});
+try { writeWhole(1, Buffer.alloc(1 << 20, 121)); process.exit(3); } catch (error) { process.exitCode = Math.abs((error as NodeJS.ErrnoException).errno ?? 0) === ${os.constants.errno.EAGAIN} && writtenBefore(error) === 0 ? 0 : 4; }
+`);
+  const filler = [
+    "import fcntl, os, subprocess, sys",
+    "r, w = os.pipe()",
+    "fcntl.fcntl(w, fcntl.F_SETFL, fcntl.fcntl(w, fcntl.F_GETFL) | os.O_NONBLOCK)",
+    "for size in (65536, 1):",
+    "    while True:",
+    "        try: os.write(w, b'x' * size)",
+    "        except BlockingIOError: break",
+    "child = subprocess.run([sys.argv[1], sys.argv[2]], stdout=w, timeout=20)",
+    "sys.exit(child.returncode)",
+  ].join("\n");
+  const ran = spawnSync(PYTHON, ["-c", filler, process.execPath, script], { timeout: 30000 });
+  assert.equal(ran.status, 0, ran.stderr?.toString());
+});
