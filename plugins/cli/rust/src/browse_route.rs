@@ -62,9 +62,7 @@ fn json_string(text: &str) -> String {
             '\n' => out.push_str("\\n"),
             '\r' => out.push_str("\\r"),
             '\t' => out.push_str("\\t"),
-            control if (control as u32) < 0x20 || (0x7f..=0x9f).contains(&(control as u32)) => {
-                out.push_str(&format!("\\u{:04x}", control as u32))
-            }
+            control if (control as u32) < 0x20 || (0x7f..=0x9f).contains(&(control as u32)) => out.push_str(&format!("\\u{:04x}", control as u32)),
             other => out.push(other),
         }
     }
