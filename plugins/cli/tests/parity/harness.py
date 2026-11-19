@@ -1,6 +1,7 @@
 import base64
 import difflib
 import functools
+import fcntl
 import hashlib
 import json
 import os
@@ -531,6 +532,8 @@ class FakeDaemon:
         browse.mkdir(mode=0o700, parents=True, exist_ok=True)
         browse.chmod(0o700)
         self.path = browse / f"{key}.sock"
+        self.lock_fd = os.open(browse / f"{key}.lock", os.O_RDWR | os.O_CREAT, 0o600)
+        fcntl.flock(self.lock_fd, fcntl.LOCK_EX)
         self.replies = list(spec.get("replies") or [{"out": "", "err": "", "exit": 0}])
         self.requests = []
         self.talkers = []
@@ -598,6 +601,7 @@ class FakeDaemon:
             connection.setblocking(True)
             self.serve(connection)
         self.server.close()
+        os.close(self.lock_fd)
         deadline = time.monotonic() + DRAIN_TIMEOUT
         with self.lock:
             talkers = list(self.talkers)
@@ -1164,7 +1168,7 @@ def compare(new: Observed, python: Observed, fallback: bool = False, label: str 
     return mismatches
 
 
-INTENTIONAL_KEYS = frozenset({"why", "stdout", "stderr", "status", "daemon_requests", "usage"})
+INTENTIONAL_KEYS = frozenset({"why", "stdout", "stderr", "status", "daemon_requests", "usage", "files"})
 
 
 def intended(python: "Observed", case: Case, places: dict | None = None) -> tuple["Observed", list[str]]:
@@ -1173,12 +1177,12 @@ def intended(python: "Observed", case: Case, places: dict | None = None) -> tupl
     spec = case.intentional or {}
     problems = []
     if set(spec) - INTENTIONAL_KEYS or not isinstance(spec.get("why"), str) or len(spec) < 2:
-        return python, [f"intentional takes why and at least one of stdout, stderr, status, daemon_requests, usage, not {sorted(spec)}"]
+        return python, [f"intentional takes why and at least one of stdout, stderr, status, daemon_requests, usage, files, not {sorted(spec)}"]
     changes = {}
     for name in ("stdout", "stderr"):
         if name in spec:
             changes[name] = file_bytes(spec[name], places or {})
-    for name in ("status", "daemon_requests", "usage"):
+    for name in ("status", "daemon_requests", "usage", "files"):
         if name in spec:
             changes[name] = spec[name]
     if all(getattr(python, name) == value for name, value in changes.items()):

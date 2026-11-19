@@ -14,7 +14,7 @@ const POLL_MS = 30;
 const LOG_TAIL = 2000;
 const DAEMON = "from ardia_cli.browse import daemon; daemon.main()";
 
-function lockHeld(dir: Dir, key: string): boolean {
+export function lockHeld(dir: Dir, key: string): boolean {
   let fd: number;
   try {
     fd = openPrivateFile(`${key}.lock`, dir, O_RDONLY);

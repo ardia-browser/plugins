@@ -1,3 +1,4 @@
+import fcntl
 import json
 import os
 import shutil
@@ -7,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -84,7 +86,7 @@ class PluginCredentialProcesses(unittest.TestCase):
         if not locks:
             return []
         found = subprocess.run(["lsof", "-t", *locks], capture_output=True, text=True).stdout.split()
-        return sorted({int(pid) for pid in found})
+        return sorted({int(pid) for pid in found} - {os.getpid()})
 
     def env(self, port: int) -> dict:
         return {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": str(self.box / "home"), "TMPDIR": str(self.box / "tmp"),
@@ -160,9 +162,12 @@ LONG_DATA_DIR = 94
 
 
 class RelativeDaemon:
-    def __init__(self, browse: Path, key: str, reply: dict):
+    def __init__(self, browse: Path, key: str, reply: dict, request_wait: float | None = None):
         here = os.open(".", os.O_RDONLY)
         browse.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self.lock = os.open(browse / f"{key}.lock", os.O_RDWR | os.O_CREAT, 0o600)
+        fcntl.flock(self.lock, fcntl.LOCK_EX)
+        self.request_wait = request_wait
         self.server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
             os.chdir(browse)
@@ -182,12 +187,17 @@ class RelativeDaemon:
                 connection, _ = self.server.accept()
             except OSError:
                 return
-            with connection, connection.makefile("rb") as lines:
-                self.requests.append(json.loads(lines.readline()))
-                connection.sendall(json.dumps(self.reply).encode() + b"\n")
+            connection.settimeout(self.request_wait)
+            try:
+                with connection, connection.makefile("rb") as lines:
+                    self.requests.append(json.loads(lines.readline()))
+                    connection.sendall(json.dumps(self.reply).encode() + b"\n")
+            except OSError:
+                continue
 
     def close(self):
         self.server.close()
+        os.close(self.lock)
 
 
 @unittest.skipUnless(programs(), "build plugins/cli/rust (the router) and plugins/cli/ts first")
@@ -207,7 +217,7 @@ class LongDataDirs(PluginCredentialProcesses):
         if not locks:
             return []
         found = subprocess.run(["lsof", "-t", *locks], capture_output=True, text=True).stdout.split()
-        return sorted({int(pid) for pid in found})
+        return sorted({int(pid) for pid in found} - {os.getpid()})
 
     def env(self, port: int) -> dict:
         return {**super().env(port), "ARDIA_DATA_DIR": str(self.long)}
@@ -247,6 +257,89 @@ class LongDataDirs(PluginCredentialProcesses):
         self.assertEqual((process.returncode, out, err), (0, b"Long dirs work\n", b""))
         self.assertEqual(len(daemon.requests), 1)
         self.assertEqual((self.install.routes / str(process.pid)).read_text(), "ts\n")
+
+
+@unittest.skipUnless(programs(), "build plugins/cli/rust (the router) and plugins/cli/ts first")
+class JsonAndStdin(LongDataDirs):
+    def plain_env(self) -> dict:
+        return {key: value for key, value in self.env(9).items() if not key.startswith(("ARDIA_BROWSE", "ARDIA_PLUGIN"))}
+
+    def live_daemon(self, request_wait=None) -> RelativeDaemon:
+        if str(harness.CLI) not in sys.path:
+            sys.path.insert(0, str(harness.CLI))
+        from ardia_cli.browse import client, paths
+
+        key = paths.session_key("", client.endpoint_key(None, None, self.long)[0], "default")
+        daemon = RelativeDaemon(self.long / "Browse", key, {"exit": 0, "out": "2\n", "err": ""}, request_wait)
+        self.addCleanup(daemon.close)
+        return daemon
+
+    def start(self, argv: list, env: dict, **extra) -> subprocess.Popen:
+        return subprocess.Popen([str(self.install.root / "bin" / "ardia"), *argv], env=env, cwd=self.box / "tmp", stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, start_new_session=True, **extra)
+
+    def test_a_slow_stdin_writer_is_read_to_the_end_before_the_daemon_is_asked(self):
+        daemon = self.live_daemon(request_wait=1.5)
+        process = self.start(["browse", "eval", "--stdin"], self.plain_env(), stdin=subprocess.PIPE)
+        time.sleep(3)
+        process.stdin.write(b"1+1")
+        process.stdin.close()
+        out, err = process.communicate(timeout=60)
+        self.assertEqual((process.returncode, out, err), (0, b"2\n", b""))
+        self.assertEqual([request["stdin"] for request in daemon.requests], ["1+1"])
+
+    def test_ctrl_c_while_stdin_is_read_answers_one_json_line(self):
+        self.live_daemon()
+        reader, writer = os.pipe()
+        self.addCleanup(os.close, writer)
+        process = self.start(["browse", "--json", "eval", "--stdin"], self.plain_env(), stdin=reader)
+        os.close(reader)
+        time.sleep(2)
+        os.killpg(process.pid, signal.SIGINT)
+        out, err = process.communicate(timeout=30)
+        self.assertEqual(process.returncode, 130, err)
+        self.assertEqual(json.loads(out), {"success": False, "data": None, "error": "interrupted", "code": "interrupted"})
+        self.assertEqual(out.count(b"\n"), 1)
+        self.assertEqual(err, b"")
+
+    def credential_never_ends(self, json_mode: bool) -> tuple:
+        reader, writer = os.pipe()
+        self.addCleanup(os.close, writer)
+        moved = ["/bin/sh", "-c", f'exec {FD}<&{reader} {reader}<&-; exec "$@"', "sh"] if reader != FD else []
+        argv = ["browse", "--session", "plugin-ai", *(["--json"] if json_mode else []), "get", "--", "title"]
+        process = subprocess.Popen([*moved, str(self.install.root / "bin" / "ardia"), *argv], env=self.env(9), cwd=self.box / "tmp",
+                                   stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, pass_fds=(reader,), start_new_session=True)
+        os.close(reader)
+        time.sleep(0.7)
+        started = time.monotonic()
+        os.killpg(process.pid, signal.SIGINT)
+        out, err = process.communicate(timeout=30)
+        return process.returncode, out, err, time.monotonic() - started
+
+    def test_ctrl_c_ends_the_credential_read(self):
+        status, out, err, waited = self.credential_never_ends(False)
+        self.assertEqual((status, out, err), (130, b"", "✗ interrupted\n".encode()))
+        self.assertLess(waited, 1.2)
+        status, out, err, _ = self.credential_never_ends(True)
+        self.assertEqual((status, err), (130, b""))
+        self.assertEqual(json.loads(out)["code"], "interrupted")
+
+    def test_the_router_refuses_in_json_when_there_is_no_typescript_client(self):
+        root = self.box / "bare"
+        (root / "bin").mkdir(parents=True)
+        shutil.copy2(self.install.root / "bin" / "ardia", root / "bin" / "ardia")
+        for json_mode in (True, False):
+            argv = [str(root / "bin" / "ardia"), "browse", "--session", "plugin-ai", *(["--json"] if json_mode else []), "get", "--", "title"]
+            done = subprocess.run(argv, env=self.env(9), cwd=self.box / "tmp", stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
+            self.assertEqual(done.returncode, 77)
+            if json_mode:
+                self.assertEqual(done.stderr, b"")
+                answer = json.loads(done.stdout)
+                self.assertEqual((answer["success"], answer["code"]), (False, "plugin_refused"))
+                self.assertIn("this ardia has no TypeScript client", answer["error"])
+            else:
+                self.assertEqual(done.stdout, b"")
+                self.assertTrue(done.stderr.startswith("✗ ardia browse for a plugin".encode()))
 
 
 if __name__ == "__main__":

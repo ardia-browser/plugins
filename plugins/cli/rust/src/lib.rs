@@ -343,13 +343,13 @@ fn run_rust(route: Route, argv: &[String], python: Option<&Path>) -> Handled {
 
 fn run_for_plugin(root: Option<&Path>, raw: &[OsString]) -> Handled {
     let Some(program) = router::ts_program(root) else {
-        return Handled::Status(browse_route::refuse("this ardia has no TypeScript client"));
+        return Handled::Status(browse_route::refuse(raw, "this ardia has no TypeScript client"));
     };
     let interrupts_ignored = router::interrupts_ignored();
     let caller = caller::current();
     match router::run_child(&program, |lifeline| router::marker(interrupts_ignored, lifeline, &caller), raw) {
-        router::Ended::NotStarted => Handled::Status(browse_route::refuse("its TypeScript client didn't start")),
-        router::Ended::Exited(router::HAND_BACK) => Handled::Status(browse_route::refuse("its TypeScript client asked for Python")),
+        router::Ended::NotStarted => Handled::Status(browse_route::refuse(raw, "its TypeScript client didn't start")),
+        router::Ended::Exited(router::HAND_BACK) => Handled::Status(browse_route::refuse(raw, "its TypeScript client asked for Python")),
         router::Ended::Exited(status) => Handled::Status(status),
         router::Ended::Signaled(signal) => Handled::Signaled(signal),
     }

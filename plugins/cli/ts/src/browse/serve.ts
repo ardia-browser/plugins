@@ -13,7 +13,7 @@ import { type Access, accessEndpointKey, accessLabel, accessWs } from "./plugin.
 import { loadAnswer } from "./pyjson.ts";
 import type { Secrets } from "./redact.ts";
 import { agentEnv, endpointChoice, endpointKey, namespaceName, optionsFrom, rootOf, sessionKey, sessionName, urlsWithSecrets } from "./request.ts";
-import { startDaemon } from "./spawn.ts";
+import { lockHeld, startDaemon } from "./spawn.ts";
 import { closeDir } from "../privatefs.ts";
 import { checkSocket, NoDaemon, openBrowseDir, osFailure, socketPath } from "./session.ts";
 import { decodeStdin, pythonStdioErrors, readStdin, stdinState } from "./stdio.ts";
@@ -72,6 +72,25 @@ async function openSession(root: string, key: string): Promise<Link> {
     throw error;
   } finally {
     closeDir(dir);
+  }
+}
+
+function checkLive(root: string, key: string): void {
+  const dir = openBrowseDir(root);
+  try {
+    checkSocket(socketPath(root, key), `${key}.sock`);
+    if (!lockHeld(dir, key)) throw new NoDaemon("no daemon holds the session's lock");
+  } finally {
+    closeDir(dir);
+  }
+}
+
+async function openAfterStdin(root: string, key: string, stdinRead: boolean): Promise<Link> {
+  try {
+    return await openSession(root, key);
+  } catch (error) {
+    if (stdinRead && error instanceof NoDaemon) throw unreachable("the ardia browse daemon exited while stdin was being read; run the command again");
+    throw error;
   }
 }
 
@@ -173,20 +192,16 @@ export async function roundTrip(found: Found, rest: string[], secrets: Secrets, 
   if (errors === undefined) throw new HandBack("stdin's encoding isn't UTF-8");
   checkIdle(found);
   const key = sessionKey(namespace, keySource, session, process.env.ARDIA_BROWSE_FOR_PLUGIN === "1");
-  const socket = plugin === undefined ? await openSession(root, key) : await pluginSession(root, key, daemonConfig(found, options, { session, namespace, key, root, plugin }), python, call);
   let stdin: Value = null;
-  try {
-    if (stdinWanted) {
-      const raw = await readStdin();
-      if (!(raw instanceof Buffer)) throw osFailure(raw);
-      const text = decodeStdin(raw, errors);
-      if (text instanceof PythonCrash) throw text;
-      stdin = text;
-    }
-  } catch (error) {
-    socket.destroy();
-    throw error;
+  if (stdinWanted && plugin === undefined) checkLive(root, key);
+  if (stdinWanted) {
+    const raw = await readStdin();
+    if (!(raw instanceof Buffer)) throw osFailure(raw);
+    const text = decodeStdin(raw, errors);
+    if (text instanceof PythonCrash) throw text;
+    stdin = text;
   }
+  const socket = plugin === undefined ? await openAfterStdin(root, key, stdinWanted) : await pluginSession(root, key, daemonConfig(found, options, { session, namespace, key, root, plugin }), python, call);
   const payload = object([
     ["argv", rest],
     ["options", options],

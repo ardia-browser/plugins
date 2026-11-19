@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { closeSync, fstatSync, read } from "node:fs";
 import { isatty } from "node:tty";
 import { PLUGIN_MODE } from "./route.ts";
+import { raceInterrupt } from "./stdio.ts";
 import { ALIASES, VALUE_FLAGS } from "./tables.ts";
 
 export { pluginMode } from "./route.ts";
@@ -12,7 +13,8 @@ export const REFUSED = 77;
 export const CODE = "plugin_refused";
 export const NESTED_CODE = "nested_commands_refused";
 const CREDENTIAL = /^p\.[A-Za-z0-9_-]{43}$/;
-const TOKEN_SERVER = /^ws:\/\/127\.0\.0\.1:[0-9]{1,5}\/devtools\/browser\/[A-Za-z0-9._-]{1,128}$/;
+const TOKEN_SERVER = /^ws:\/\/127\.0\.0\.1:([1-9][0-9]{0,4})\/devtools\/browser\/[A-Za-z0-9._-]{1,128}$/;
+const MAX_PORT = 65535;
 const FD_NUMBER = /^[0-9]{1,5}$/;
 const MAX_READ = 256;
 const READ_DEADLINE_MS = 2000;
@@ -62,7 +64,7 @@ async function readAll(fd: number): Promise<Buffer> {
     const late = new Promise<"late">((resolve) => {
       timer = setTimeout(() => resolve("late"), Math.max(1, deadline - performance.now()));
     });
-    const got = await Promise.race([readSome(fd, buffer, size), late]);
+    const got = await raceInterrupt(Promise.race([readSome(fd, buffer, size), late]));
     clearTimeout(timer);
     if (got === "late") throw new PluginRefusal(`got no credential on fd ${fd} within ${READ_DEADLINE_MS / 1000} s (Ardia closes its end after writing it)`);
     if (typeof got !== "number") {
@@ -107,7 +109,8 @@ function tokenServer(): string {
   const endpoint = process.env[ENDPOINT];
   if (endpoint === undefined) throw new PluginRefusal(`needs ${ENDPOINT}, the token server Ardia gives with the credential, and it isn't set`);
   if (endpoint === "") throw new PluginRefusal(`was given an empty ${ENDPOINT}: Ardia's token server is off, so turn on browser control and start the activity again`);
-  if (!TOKEN_SERVER.test(endpoint)) throw new PluginRefusal(`needs ${ENDPOINT} to be ws://127.0.0.1:<port>/devtools/browser/<id>, not ${pyJson(endpoint)}`);
+  const port = TOKEN_SERVER.exec(endpoint)?.[1];
+  if (port === undefined || Number(port) > MAX_PORT) throw new PluginRefusal(`needs ${ENDPOINT} to be ws://127.0.0.1:<port>/devtools/browser/<id>, not ${pyJson(endpoint)}`);
   return endpoint;
 }
 

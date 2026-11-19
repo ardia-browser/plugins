@@ -773,5 +773,566 @@
    "namespace": ""
   },
   "note": "finding 5: only document_changed is reworded"
+ },
+ {
+  "id": "review--6-malformed-reply-json",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--json",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "raw": "nope\n"
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 6: a reply that isn't JSON",
+  "intentional": {
+   "why": "under --json every error is one JSON line with a code on stdout (AI plugin contract §3); text mode stays Python's",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)\",\"code\":\"internal_error\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review--6-malformed-reply-text",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "raw": "nope\n"
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 6: text mode keeps Python's crash line"
+ },
+ {
+  "id": "review--6-not-object-json",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--json",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "raw": "[1, 2]\n"
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 6: a reply that isn't an object",
+  "intentional": {
+   "why": "under --json every error is one JSON line with a code on stdout (AI plugin contract §3); text mode stays Python's",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"AttributeError: 'list' object has no attribute 'get'\",\"code\":\"internal_error\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review--6-router-hand-back-json",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "get",
+   "--",
+   "ti�tle"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 6: the router's refusal when the client hands back",
+  "intentional": {
+   "why": "under --json every error is one JSON line with a code on stdout (AI plugin contract §3); text mode stays Python's",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) runs only on the TypeScript client, and its TypeScript client asked for Python; nothing was sent\",\"code\":\"plugin_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": null,
+   "files": {}
+  }
+ },
+ {
+  "id": "review--7-port-zero",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:0/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 7: port zero",
+  "intentional": {
+   "why": "the endpoint's port must be 1 to 65535 (the WebSocket client reads port 0 as 80); Python's reference accepts it",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) needs ARDIA_PLUGIN_ENDPOINT to be ws://127.0.0.1:<port>/devtools/browser/<id>, not \\\"ws://127.0.0.1:0/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\\\"; nothing was sent\",\"code\":\"plugin_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse get (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--7-port-leading-zero",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:080/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 7: port leading zero",
+  "intentional": {
+   "why": "the endpoint's port must be 1 to 65535 (the WebSocket client reads port 0 as 80); Python's reference accepts it",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) needs ARDIA_PLUGIN_ENDPOINT to be ws://127.0.0.1:<port>/devtools/browser/<id>, not \\\"ws://127.0.0.1:080/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\\\"; nothing was sent\",\"code\":\"plugin_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse get (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--7-port-too-big",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:65536/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 7: port too big",
+  "intentional": {
+   "why": "the endpoint's port must be 1 to 65535 (the WebSocket client reads port 0 as 80); Python's reference accepts it",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) needs ARDIA_PLUGIN_ENDPOINT to be ws://127.0.0.1:<port>/devtools/browser/<id>, not \\\"ws://127.0.0.1:65536/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\\\"; nothing was sent\",\"code\":\"plugin_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse get (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--7-port-five-nines",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:99999/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 7: port five nines",
+  "intentional": {
+   "why": "the endpoint's port must be 1 to 65535 (the WebSocket client reads port 0 as 80); Python's reference accepts it",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) needs ARDIA_PLUGIN_ENDPOINT to be ws://127.0.0.1:<port>/devtools/browser/<id>, not \\\"ws://127.0.0.1:99999/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\\\"; nothing was sent\",\"code\":\"plugin_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse get (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--7-port-highest",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:65535/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":true,\"data\":{\"title\":\"T\"},\"error\":null}\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 7: 65535 is a port"
+ },
+ {
+  "id": "review--8-eval-crlf",
+  "command": "browse eval",
+  "argv": [
+   "browse",
+   "eval",
+   "--stdin"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "2\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "stdin": "1+\r\n1\r\n",
+  "note": "finding 8: Python 3.13 on macOS reads stdin with newline=\"\\n\", so CRLF reaches the daemon unchanged"
+ },
+ {
+  "id": "review--8-eval-bare-cr",
+  "command": "browse eval",
+  "argv": [
+   "browse",
+   "eval",
+   "--stdin"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "2\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "stdin": "1+\r1\r",
+  "note": "finding 8: a bare CR stays a CR"
+ },
+ {
+  "id": "review--8-eval-cr-at-end-of-crlf",
+  "command": "browse eval",
+  "argv": [
+   "browse",
+   "eval",
+   "--stdin"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "2\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "stdin": "a\r\r\nb\n\r",
+  "note": "finding 8: CR CR LF stays as sent"
+ },
+ {
+  "id": "review--8-batch-crlf",
+  "command": "browse batch",
+  "argv": [
+   "browse",
+   "batch"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "2\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "stdin": "get title\r\nget url\r\n",
+  "note": "finding 8: batch lines from stdin"
  }
 ]

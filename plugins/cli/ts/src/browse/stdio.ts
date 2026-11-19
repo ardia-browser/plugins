@@ -44,7 +44,7 @@ function readSome(buffer: Buffer): Promise<number | NodeJS.ErrnoException> {
   return new Promise((resolve) => read(0, buffer, 0, buffer.length, null, (error, count) => resolve(error ?? count)));
 }
 
-async function raceInterrupt<T>(work: Promise<T>): Promise<T> {
+export async function raceInterrupt<T>(work: Promise<T>): Promise<T> {
   let settled: { value: T } | undefined;
   work.then((value) => {
     settled = { value };

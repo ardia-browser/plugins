@@ -21,6 +21,7 @@ const HELP_WORDS = ["help", "--help", "-h"];
 const CLOSED = 141;
 const INTERRUPTED = 130;
 const RESERVED_STATUS = 253;
+const INTERNAL_ERROR = "internal_error";
 
 type Outcome = { status: number | bigint; crash?: PythonCrash | undefined };
 
@@ -37,7 +38,18 @@ function printError(error: BrowseError, asJson: boolean, secrets: Secrets, print
   return error.exit;
 }
 
-function jsonRequested(browse: readonly string[]): boolean {
+export function sayInterrupted(printer: Printer, asJson: boolean): void {
+  if (asJson) printer.out(renderError(new BrowseError("interrupted", INTERRUPTED, "interrupted"), true, new Secrets()).out);
+  else printer.err("✗ interrupted\n");
+}
+
+function sayCrash(printer: Printer, crash: PythonCrash, asJson: boolean): number {
+  if (!asJson || printer.stopped) return printer.sayCrash(crash);
+  printer.out(renderError(new BrowseError(crash.line, 1, INTERNAL_ERROR), true, new Secrets()).out);
+  return printer.stopped ? printer.sayCrash(crash) : 1;
+}
+
+export function jsonRequested(browse: readonly string[]): boolean {
   let wanted = truthy(process.env.AGENT_BROWSER_JSON);
   let flagged = false;
   for (const token of browse) {
@@ -100,7 +112,7 @@ async function run(browse: string[], printer: Printer, call: Call, plugin: Acces
     if (error instanceof PythonCrash) return { status: 1, crash: error };
     if (error instanceof Interrupted) {
       abandonWork();
-      printer.err("✗ interrupted\n");
+      sayInterrupted(printer, asJson);
       return { status: INTERRUPTED };
     }
     if (error instanceof BrowseError) return { status: printError(error, asJson, secrets, printer, call) };
@@ -169,6 +181,12 @@ async function pluginAccess(browse: string[], call: Call, python: string | null)
     return access;
   } catch (error) {
     if (error instanceof PluginRefusal) return refuse(browse, error.message, call, python, error.code);
+    if (error instanceof Interrupted) {
+      abandonWork();
+      sayInterrupted(new Printer("strict"), jsonRequested(browse));
+      finish(call, INTERRUPTED, python);
+      return INTERRUPTED;
+    }
     throw error;
   }
 }
@@ -202,7 +220,7 @@ export async function serveBrowse(argv: string[], python: string | null): Promis
   }
   if (outcome === undefined) return plugin ? refuse(browse, "can't run this here", call, python) : undefined;
   let exit = typeof outcome.status === "bigint" ? processStatus(outcome.status) : outcome.status;
-  if (outcome.crash !== undefined) exit = printer.sayCrash(outcome.crash);
+  if (outcome.crash !== undefined) exit = sayCrash(printer, outcome.crash, jsonRequested(browse));
   finish(call, outcome.status, python, outcome.crash?.crash);
   return exit === RESERVED_STATUS ? 1 : exit;
 }

@@ -1097,8 +1097,9 @@ it relies on is `tests/parity/cases/ai-plugin-contract.json` (one case per item)
   engine's filtered target list, so `tab <id>` still answers `tab_not_found`.
 - Refused with status 77 and one line (JSON with code `plugin_refused` under `--json`), before anything is sent:
   `ARDIA_BROWSE_FOR_PLUGIN` other than `1`; a missing, non-numeric, closed, terminal or unreadable descriptor; anything
-  but a well-formed credential (a trailing newline included); no read within 2 s; a missing, empty or non-loopback
-  endpoint; `--ws`, `--port`, `--cdp`, `ARDIA_WS`, `ARDIA_PORT`, `ARDIA_CDP_URL` or `AGENT_BROWSER_CDP`; a session flag
+  but a well-formed credential (a trailing newline included); no read within 2 s (Ctrl-C ends the wait with status
+  130 and `interrupted`); a missing or empty endpoint, or one whose host isn't exactly `127.0.0.1` or whose port isn't
+  1 to 65535 without a leading zero (Python's reference accepts port 0, which the WebSocket client reads as 80); `--ws`, `--port`, `--cdp`, `ARDIA_WS`, `ARDIA_PORT`, `ARDIA_CDP_URL` or `AGENT_BROWSER_CDP`; a session flag
   after the command (`--session --namespace --data-dir --port --ws --cdp --screenshot-* --idle-timeout --init-script
   --enable --headers --color-scheme --download-path --annotate --no-auto-dialog --pin-tab --no-pin-tab --debug
   --capture-console --show --content-boundaries --out --stdin`); and `auth`, `notes`, `flow`, `plugin`, `read`,
@@ -1143,8 +1144,13 @@ Python has none:
 | `unknown_command` | the daemon's `Unknown command: …` |
 | `command_failed` | any other daemon error line without a code |
 | `plugin_refused` | a plugin-mode refusal (status 77) |
+| `interrupted` | Ctrl-C while the client waited: on stdin, the credential, the connection or the answer (status 130) |
+| `internal_error` | the client crashed as Python's would, for instance on a reply that isn't JSON or isn't an object; `error` holds Python's crash line (status 1). If stdout itself failed, the crash line stays on stderr |
 | `tab_out_of_scope` | the engine's `ardia: tab_out_of_scope` refusal: the tab moved to another window or profile mid-step |
 | `nested_commands_refused` | plugin mode and a command that runs other commands (`batch`, `open --read`; status 77) |
+
+The Rust router's own plugin refusals (no TypeScript client, it didn't start, or it asked for Python) follow the same
+rule: one JSON line with `plugin_refused` on stdout under `--json` or `AGENT_BROWSER_JSON`, `✗ …` on stderr otherwise.
 
 Telemetry's `error_code` stays Python's. Each such case in the parity table is marked `intentional`, holds the output
 the TypeScript client must print instead of Python's, and is counted apart in the report.
@@ -1873,9 +1879,11 @@ parity harness rather than stripped wholesale:
   `KeyboardInterrupt` and an `Exception ignored on flushing sys.stdout` block. The native side dies by SIGINT at once and
   prints nothing more. A listing still ends as Python's does, with `ardia <command>: interrupted` and status 130.
 - `ardia browse`: a command that reads stdin (`eval`/`addinitscript --stdin`, `eval` with no code, `batch` with no
-  steps) connects to its session before reading stdin, so a stale socket still hands the call to Python with stdin
-  unread. An interrupted or undecodable stdin therefore leaves the daemon one empty connection that Python's order
-  wouldn't open.
+  steps) reads it to EOF before connecting, as Python does, so a writer slower than the daemon's 30 s request wait
+  still works. Without a plugin it first checks that a daemon is live (its socket there and its lock held) and hands
+  the call to Python with stdin unread otherwise; if that daemon exits while stdin is read, the client answers
+  `daemon_unreachable` ("run the command again") where Python, holding stdin, would start a new one. Stdin is passed
+  as read: Python 3.13 reads it with `newline="\n"` on macOS, so CR and CRLF reach the daemon unchanged on both sides.
 - `ardia browse`: a daemon answer whose exit is 253 ends with status 1: 253 is the router's hand-back status, and
   exiting with it would run the step a second time on Python. A real daemon never answers 253.
 - `ardia browse`: a daemon that asks a non-`read` command to run beside a busy session (`busy_elsewhere`) whose side
