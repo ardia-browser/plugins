@@ -1089,16 +1089,18 @@ class PlainDevToolsServer(unittest.TestCase):
 
     def dialog_once_open(self, session):
         deadline = time.monotonic() + 15
-        while time.monotonic() < deadline:
-            left = deadline - time.monotonic()
+        while (left := deadline - time.monotonic()) > 0:
             try:
-                done = self.browse("dialog", "status", "--json", session=session, timeout=max(left, 0.1))
+                done = self.browse("dialog", "status", "--json", session=session, timeout=min(90, left))
             except subprocess.TimeoutExpired:
                 break
             status = json.loads(done.stdout)["data"]
             if status.get("hasDialog"):
                 return status
-            time.sleep(0.2)
+            left = deadline - time.monotonic()
+            if left <= 0:
+                break
+            time.sleep(min(0.2, left))
         self.fail(f"{session} never saw the dialog open")
 
     def test_webui_tab_is_listed(self):
