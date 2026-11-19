@@ -8,7 +8,8 @@ import { Result } from "../daemon/render.ts";
 import { flag } from "../metrics.ts";
 import { type Page } from "../state/page.ts";
 import { type State } from "../state/state.ts";
-import { waitUntil } from "../state/wait.ts";
+import { monotonic, waitUntil } from "../state/wait.ts";
+import { afterSameDocument, beforeNavigating } from "../read/settle.ts";
 import { type Ctx } from "./ctx.ts";
 import { register, unsupported } from "./index.ts";
 import { need, normalizeUrl, parse } from "./parse.ts";
@@ -16,7 +17,7 @@ import { need, normalizeUrl, parse } from "./parse.ts";
 const DROPPED_CONNECTION = /ERR_(EMPTY_RESPONSE|CONNECTION_(RESET|CLOSED|REFUSED|TIMED_OUT)|TIMED_OUT|HTTP2_PROTOCOL_ERROR|SSL_PROTOCOL_ERROR|QUIC_PROTOCOL_ERROR)/u;
 const FAILED_HOSTS_KEPT = 50;
 const SHOWN_HOLD = 0.3;
-const HTTPS_ONLY_NOTE =
+export const HTTPS_ONLY_NOTE =
   "Ardia loads http:// addresses over https and blocks the page when the site has no working https, which is what this " +
   "error usually means for an http:// address. Try the https:// address; if that fails too, say the site couldn't be reached";
 
@@ -88,7 +89,7 @@ function failedNavigation(state: State, url: string, errorText: string): BrowseE
   return new BrowseError(message, null, "navigation_failed");
 }
 
-function siteSilent(url: string, timeout: number, error: OutcomeUnknown): BrowseError {
+export function siteSilent(url: string, timeout: number, error: OutcomeUnknown): BrowseError {
   if (!error.text.includes("didn't answer Page.navigate")) return error;
   flag("navigation_site_silent", true);
   const host = hostnameOf(urlsplit(url).netloc) || url;
@@ -100,11 +101,6 @@ function siteSilent(url: string, timeout: number, error: OutcomeUnknown): Browse
     null,
     "timeout",
   );
-}
-
-function sameDocument(page: Page, url: string): boolean {
-  const current = page.url || "";
-  return url.includes("#") && !current.startsWith("about:") && current.split("#")[0] === url.split("#")[0];
 }
 
 async function sendNavigate(ctx: Ctx, page: Page, url: string): Promise<Record<string, unknown>> {
@@ -128,19 +124,21 @@ export async function navigate(ctx: Ctx, page: Page, url: string, until = "load"
     await page.recovered(ctx.timeout);
     return;
   }
-  if (sameDocument(page, url)) throw unsupported("A same-document navigation");
+  const before = await beforeNavigating(page, url);
   const result = await sendNavigate(ctx, page, url);
   const loader = typeof result["loaderId"] === "string" && result["loaderId"] ? result["loaderId"] : null;
   ctx.state.loadNote = null;
-  if (loader === null) throw unsupported("A same-document navigation");
-  try {
-    await waitForLoad(page, loader, ctx.timeout, until);
-  } catch (error) {
-    if (!(error instanceof BrowseError) || error.code !== "timeout" || until !== "load" || !(await showsContent(page, loader))) throw error;
-    flag("open_still_loading", true);
-    ctx.state.loadNote =
-      `The page hadn't finished loading after ${formatG(ctx.timeout)} s (something on it is still loading); ` +
-      "its content so far is here, and `wait --load load` waits for the rest";
+  if (loader === null) await afterSameDocument(page, before, monotonic() + ctx.timeout);
+  else {
+    try {
+      await waitForLoad(page, loader, ctx.timeout, until);
+    } catch (error) {
+      if (!(error instanceof BrowseError) || error.code !== "timeout" || until !== "load" || !(await showsContent(page, loader))) throw error;
+      flag("open_still_loading", true);
+      ctx.state.loadNote =
+        `The page hadn't finished loading after ${formatG(ctx.timeout)} s (something on it is still loading); ` +
+        "its content so far is here, and `wait --load load` waits for the rest";
+    }
   }
   await ctx.state.reattach(page);
   await page.refreshFrames();
@@ -322,20 +320,6 @@ export async function cmdOpen(ctx: Ctx, argv: string[]): Promise<Result> {
   return new Result(data, text);
 }
 
-export async function cmdGet(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [, args] = parse(argv);
-  need(args, 1, "get text|html|value|attr|title|url|count|box|styles|cdp-url [selector]");
-  const what = args[0] as string;
-  if (what !== "title" && what !== "url") refuse(`\`get ${what}\``);
-  const page = await ctx.state.page();
-  if (what === "title") {
-    const title = await pageTitle(page);
-    return new Result({ title }, title, true);
-  }
-  await page.refreshFrames();
-  return new Result({ url: page.url }, page.url);
-}
-
 function globMatch(pattern: string, url: string): boolean {
   if (pattern === url || (url.includes(pattern) && !pattern.includes("*"))) return true;
   let regex = "";
@@ -418,6 +402,5 @@ export async function cmdSession(ctx: Ctx, argv: string[]): Promise<Result> {
 }
 
 register("open", cmdOpen);
-register("get", cmdGet);
 register("wait", cmdWait);
 register("session", cmdSession);

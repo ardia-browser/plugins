@@ -1,0 +1,133 @@
+{
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/login.html",
+    "--no-changes"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "find",
+    "text",
+    "Bottom text",
+    "text"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "find",
+    "label",
+    "Email",
+    "text"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "find",
+    "placeholder",
+    "Message",
+    "text"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "find",
+    "testid",
+    "go",
+    "text"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "find",
+    "role",
+    "button",
+    "text",
+    "--name",
+    "Continue"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "find",
+    "first",
+    "a",
+    "text"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "find",
+    "last",
+    "a",
+    "text"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "find",
+    "nth",
+    "1",
+    "a",
+    "text"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "find",
+    "role",
+    "button",
+    "--name",
+    "Nope",
+    "text"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "find",
+    "role",
+    "link",
+    "text"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "find",
+    "alt",
+    "Logo",
+    "text"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "find",
+    "bogus",
+    "x"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "find",
+    "text",
+    "Bottom text",
+    "fly"
+   ],
+   "session": "d4"
+  }
+ ]
+}

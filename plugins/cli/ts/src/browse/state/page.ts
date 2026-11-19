@@ -5,6 +5,7 @@ import { BrowseError, CdpError, CdpTimeout, ConnectionLost, Gated, NotFocusable,
 import { LIBRARY, PAGE_FOCUS_INSIDE } from "../js/index.ts";
 import { flag } from "../metrics.ts";
 import { whereAppHas } from "./apptabs.ts";
+import * as oopif from "./oopif.ts";
 import { CONSOLE_LIMIT, consoleEntry, ERROR_LIMIT, errorEntry, type Json, NetworkLog, record, Ring } from "./records.ts";
 import type { State } from "./state.ts";
 import { monotonic, waitUntil } from "./wait.ts";
@@ -38,7 +39,7 @@ const STALE_CONTEXT = ["Cannot find context", "Execution context was destroyed",
 export type Frame = { id: string; url: string; loader: string | null; parent: string | null; name: string; origin: string };
 export type Lifecycle = { loader: string | null; names: Set<string> };
 export type Viewport = [number, number] | null;
-export type SendOptions = { timeout?: number; mutation?: boolean; inputEvent?: boolean };
+export type SendOptions = { timeout?: number; mutation?: boolean; inputEvent?: boolean; session?: string | null };
 export type CallOptions = { frame?: string | null; byValue?: boolean; awaitPromise?: boolean; timeout?: number; read?: boolean };
 
 export interface PageInput {
@@ -60,7 +61,7 @@ export class Element {
     readonly frame: string,
     public objectId: string,
     readonly backendId: number,
-    readonly label: string,
+    public label: string,
   ) {}
 }
 
@@ -88,6 +89,8 @@ export class Page {
   frames = new Map<string, Frame>();
   mainFrame: string | null = null;
   readonly worlds = new Map<string, [string | null, number]>();
+  readonly frameSessions = new Map<string, string>();
+  readonly oopifs = new Map<string, oopif.Oopif>();
   readonly lifecycle = new Map<string, Lifecycle>();
   dialog: Json | null = null;
   readonly console = new Ring(CONSOLE_LIMIT);
@@ -123,11 +126,16 @@ export class Page {
     return this.sessionId ?? this.attaching;
   }
 
+  sessionFor(frame: string | null | undefined): string | null {
+    return (frame ? this.frameSessions.get(frame) : undefined) ?? this.session;
+  }
+
   async attach(browser: Browser): Promise<void> {
     if (this.sessionId !== null) this.state.sessions.delete(this.sessionId);
     this.sessionId = null;
     this.browser = browser;
     this.worlds.clear();
+    oopif.forgetAll(this);
     let result: CdpResult;
     try {
       result = await browser.send("Target.attachToTarget", { targetId: this.targetId, flatten: true });
@@ -183,6 +191,7 @@ export class Page {
     this.needsEnable = true;
     await this.send("Page.enable");
     await this.send("Page.setLifecycleEventsEnabled", { enabled: true });
+    await oopif.autoAttach(this, this.session);
     await this.refreshFrames();
     if (pending !== null) this.publish(pending);
     if (this.runtimeOn) {
@@ -324,12 +333,13 @@ export class Page {
     this.sessionId = null;
     this.attaching = null;
     this.worlds.clear();
+    oopif.forgetAll(this);
     for (const call of this.calls) call.abort(new Cancelled());
   }
 
   async send(method: string, params: CdpResult | null = null, options: SendOptions = {}): Promise<CdpResult> {
-    const session = this.session;
-    if (session === null) throw new BrowseError(DETACHED, null, "tab_detached");
+    const session = options.session ?? this.session;
+    if (session === null || this.session === null) throw new BrowseError(DETACHED, null, "tab_detached");
     if (this.crashed && !CRASH_SAFE.has(method)) throw new BrowseError(CRASHED, null, "tab_crashed");
     if (this.unansweredAt && monotonic() - this.unansweredAt < BUSY_MEMORY) await this.stillBusy(method);
     const timeout = options.timeout ?? 30;
@@ -369,6 +379,7 @@ export class Page {
       for (const child of Array.isArray(children) ? children : []) walk(record(child), frame.id);
     };
     walk(tree, null);
+    if (this.oopifs.size > 0) await oopif.childFrames(this, frames, frameOf);
     this.frames = frames;
     this.mainFrame = String(record(tree["frame"])["id"]);
     this.url = frames.get(this.mainFrame)?.url ?? "";
@@ -388,9 +399,10 @@ export class Page {
     const loader = this.loader(frame);
     const cached = this.worlds.get(frame);
     if (cached && cached[0] === loader) return cached[1];
-    const result = await this.send("Page.createIsolatedWorld", { frameId: frame, worldName: WORLD_NAME });
+    const session = this.sessionFor(frame);
+    const result = await this.send("Page.createIsolatedWorld", { frameId: frame, worldName: WORLD_NAME }, { session });
     const context = Number(result["executionContextId"]);
-    await this.send("Runtime.evaluate", { expression: LIBRARY, contextId: context, returnByValue: true });
+    await this.send("Runtime.evaluate", { expression: LIBRARY, contextId: context, returnByValue: true }, { session });
     this.worlds.set(frame, [loader, context]);
     return context;
   }
@@ -410,7 +422,7 @@ export class Page {
       };
       let result: CdpResult;
       try {
-        result = await this.send("Runtime.callFunctionOn", params, { timeout: options.timeout ?? 30, mutation: !read });
+        result = await this.send("Runtime.callFunctionOn", params, { timeout: options.timeout ?? 30, mutation: !read, session: this.sessionFor(frame || this.mainFrame) });
       } catch (error) {
         if (!(error instanceof CdpError)) throw error;
         const message = error.cdpMessage;
@@ -442,7 +454,7 @@ export class Page {
     for (const element of elements) {
       let result: CdpResult;
       try {
-        result = await this.send("DOM.resolveNode", { backendNodeId: element.backendId, executionContextId: context });
+        result = await this.send("DOM.resolveNode", { backendNodeId: element.backendId, executionContextId: context }, { session: this.sessionFor(element.frame) });
       } catch (error) {
         if (error instanceof CdpError) return false;
         throw error;
@@ -458,14 +470,15 @@ export class Page {
   async elementFrom(remote: unknown, frame: string, label: string): Promise<Element | null> {
     const found = record(remote);
     if (found["subtype"] === "null" || found["type"] === "undefined" || typeof found["objectId"] !== "string") return null;
-    const node = record((await this.send("DOM.describeNode", { objectId: found["objectId"] }))["node"]);
+    const node = record((await this.send("DOM.describeNode", { objectId: found["objectId"] }, { session: this.sessionFor(frame) }))["node"]);
     return new Element(frame, found["objectId"], Number(node["backendNodeId"]), label);
   }
 
   async elementsFrom(remote: unknown, frame: string, label: string, limit = 300): Promise<Element[]> {
     const found = record(remote);
     if (typeof found["objectId"] !== "string") return [];
-    const props = await this.send("Runtime.getProperties", { objectId: found["objectId"], ownProperties: true });
+    const session = this.sessionFor(frame);
+    const props = await this.send("Runtime.getProperties", { objectId: found["objectId"], ownProperties: true }, { session });
     const indexed: [number, string][] = [];
     for (const prop of Array.isArray(props["result"]) ? props["result"] : []) {
       const name = String(record(prop)["name"] ?? "");
@@ -474,7 +487,7 @@ export class Page {
     }
     indexed.sort((a, b) => a[0] - b[0]);
     const kept = indexed.slice(0, limit);
-    const described = await Promise.all(kept.map(([, objectId]) => this.send("DOM.describeNode", { objectId })));
+    const described = await Promise.all(kept.map(([, objectId]) => this.send("DOM.describeNode", { objectId }, { session })));
     return kept.map(([, objectId], index) => new Element(frame, objectId, Number(record(record(described[index])["node"])["backendNodeId"]), label));
   }
 
@@ -482,7 +495,7 @@ export class Page {
     const context = await this.world(frame);
     let result: CdpResult;
     try {
-      result = await this.send("DOM.resolveNode", { backendNodeId: backendId, executionContextId: context });
+      result = await this.send("DOM.resolveNode", { backendNodeId: backendId, executionContextId: context }, { session: this.sessionFor(frame) });
     } catch (error) {
       if (error instanceof CdpError) return null;
       throw error;
@@ -526,7 +539,7 @@ export class Page {
 
   async focusElement(element: Element): Promise<void> {
     try {
-      await this.send("DOM.focus", { backendNodeId: element.backendId });
+      await this.send("DOM.focus", { backendNodeId: element.backendId }, { session: this.sessionFor(element.frame) });
     } catch (error) {
       if (!(error instanceof CdpError) || !error.cdpMessage.includes("focusable")) throw error;
       let landed: unknown = false;
@@ -552,8 +565,14 @@ export class Page {
     this.networkOn = true;
   }
 
+  onChildEvent(session: string, method: string, params: Json): void {
+    oopif.childEvent(this, session, method, params);
+  }
+
   onEvent(method: string, params: Json): void {
-    if (method === "Page.lifecycleEvent") {
+    if (method === "Target.attachedToTarget" || method === "Target.detachedFromTarget") {
+      if (this.session !== null) oopif.childEvent(this, this.session, method, params);
+    } else if (method === "Page.lifecycleEvent") {
       const frame = String(params["frameId"]);
       const loader = typeof params["loaderId"] === "string" ? params["loaderId"] : null;
       const name = String(params["name"]);

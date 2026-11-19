@@ -11,7 +11,32 @@ DIVERGENCES = {
               "Page.createIsolatedWorld first when that world isn't known for the current document",
         "why": "a main-world evaluation is visible to the page (ardia#2812 row 8); the isolated world shares the document but not its JS",
     },
+    "oopif-auto-attach": {
+        "row": 13,
+        "commands": "every page session the TS daemon attaches (always applied)",
+        "python": "nothing: Python never sees out-of-process iframes",
+        "ts": 'Target.setAutoAttach {"autoAttach": true, "waitForDebuggerOnStart": false, "flatten": true, "filter": iframes only} on the page '
+              "session after Page.setLifecycleEventsEnabled, and on each iframe session it attaches; replay answers it with an empty result",
+        "why": "reads and snapshots reach out-of-process iframes in their own sessions (ardia#2812 rows 13, 21)",
+    },
+    "temp-tab-marker": {
+        "row": None,
+        "commands": "read <url>... (temporary reader tabs), always applied",
+        "python": 'Target.createTarget {"url": "about:blank", "background": true} for a reader tab',
+        "ts": 'Target.createTarget {"url": "about:blank#ardia-temp-<nonce>", "background": true}, D2\'s marked temporary tabs that a later sweep can find',
+        "why": "D2 review: a temporary tab lost at shutdown is closed by the next sweep only if it is marked (docs/cli.md accepted differences)",
+    },
+    "shadow-pierce": {
+        "row": 12,
+        "commands": "a selector that matches nothing in the document (get, is, snapshot -s, read -s, get count), always applied",
+        "python": "nothing: the command fails with not_found",
+        "ts": 'DOM.getDocument {"depth": -1, "pierce": true}, then each open or closed shadow root resolved into the isolated world and searched',
+        "why": "selectors reach elements inside closed shadow roots (ardia#2812 row 12)",
+    },
 }
+ALWAYS = ("oopif-auto-attach", "temp-tab-marker", "shadow-pierce")
+TEMP_MARKER = "about:blank#ardia-temp-"
+AUTO_ATTACH = "Target.setAutoAttach"
 
 UNANSWERING_FAULTS = ("drop", "stop")
 PAGE_SESSION_ENABLES = ("Runtime.enable", "Debugger.enable", "Console.enable")
@@ -27,6 +52,14 @@ def busy_probe(message: dict) -> bool:
 
 
 def rewrite(form: str, names: list[str]) -> str:
+    parsed = json.loads(form)
+    if "oopif-auto-attach" in names and parsed.get("method") == AUTO_ATTACH:
+        return ""
+    if "shadow-pierce" in names and parsed.get("method") == "DOM.getDocument" and (parsed.get("params") or {}).get("pierce") is True:
+        return ""
+    if "temp-tab-marker" in names and parsed.get("method") == "Target.createTarget" and str((parsed.get("params") or {}).get("url", "")).startswith(TEMP_MARKER):
+        parsed["params"] = {**parsed["params"], "url": "about:blank"}
+        return normalize.canonical(parsed)
     if "busy-probe-isolated" not in names:
         return form
     message = json.loads(form)
@@ -39,8 +72,7 @@ def rewrite(form: str, names: list[str]) -> str:
 
 
 def apply(shaped: dict, names: list[str] | None) -> dict:
-    if not names:
-        return shaped
+    names = list(names or []) + [name for name in ALWAYS if name not in (names or [])]
     unknown = [name for name in names if name not in DIVERGENCES]
     if unknown:
         raise ValueError(f"unknown divergence(s): {unknown}")

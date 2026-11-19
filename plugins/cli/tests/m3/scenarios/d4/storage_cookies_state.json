@@ -1,0 +1,163 @@
+{
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/login.html",
+    "--no-changes"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "storage",
+    "local",
+    "set",
+    "alpha",
+    "one",
+    "two"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "storage",
+    "local"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "storage",
+    "local",
+    "get",
+    "alpha"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "storage",
+    "session",
+    "set",
+    "beta",
+    "2"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "storage",
+    "session"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "storage",
+    "local",
+    "remove",
+    "alpha"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "storage",
+    "local",
+    "clear"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "storage",
+    "elsewhere"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "cookies",
+    "set",
+    "flavor",
+    "oat"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "cookies"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "cookies",
+    "set",
+    "x",
+    "y",
+    "--sameSite",
+    "lax"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "cookies",
+    "get"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "state",
+    "save",
+    "{home}/state.json"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "cookies",
+    "clear"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "cookies"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "state",
+    "load",
+    "{home}/state.json"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "cookies"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "state",
+    "load",
+    "{home}/missing.json"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "cookies",
+    "eat"
+   ],
+   "session": "d4"
+  }
+ ]
+}

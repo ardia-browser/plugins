@@ -29,6 +29,7 @@ const STALL_MS = 10000;
 const HOIST_MS = 50;
 const HOIST_WINDOW = 400;
 const RESPONSE_ID = /^\{"id":(\d+),/;
+const SYNTHESIZED = new Set(["Target.setAutoAttach"]);
 
 export class ReplayConn {
   private readonly requests: Recorded[] = [];
@@ -99,6 +100,11 @@ export class ReplayConn {
     if (!message || message.id === undefined || !message.method) return;
     const session = message.sessionId ?? "";
     const form = requestForm(message);
+    if (SYNTHESIZED.has(message.method)) {
+      this.hooks.note("synthesized", form);
+      this.hooks.batch(() => this.hooks.send(JSON.stringify({ id: message.id, result: {}, ...(message.sessionId ? { sessionId: message.sessionId } : {}) })));
+      return;
+    }
     const found = this.find(session, form);
     if (!found) {
       this.fail(session, form);

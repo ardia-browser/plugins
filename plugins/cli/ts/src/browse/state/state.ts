@@ -10,6 +10,7 @@ import { clock, flag, spent } from "../metrics.ts";
 import { wallSeconds } from "../tokens.ts";
 import { APP_TAB, appTabError, appTabTarget } from "./apptabs.ts";
 import { type Element, Page, WORLD_NAME } from "./page.ts";
+import * as pierce from "./pierce.ts";
 import { type Json, record } from "./records.ts";
 import { parseRef, Refs } from "./refs.ts";
 import { Registry } from "./registry.ts";
@@ -332,6 +333,10 @@ export class State extends Refs implements temptabs.TempTabState {
     if (typeof sessionId === "string" && sessionId) {
       const page = this.sessions.get(sessionId);
       if (page === undefined) return;
+      if (page.oopifs.has(sessionId)) {
+        page.onChildEvent(sessionId, method, params);
+        return;
+      }
       if (method === "Inspector.detached") {
         flag("renderer_exit_kept_session", true);
         return;
@@ -583,7 +588,8 @@ export class State extends Refs implements temptabs.TempTabState {
         if (error.code !== "page_script_error") throw error;
         throw new BrowseError(`Invalid selector ${selector}: ${error.text}`);
       }
-      const element = await here.elementFrom(remote, frame, selector);
+      const last = monotonic() + APPEAR_POLL > deadline;
+      const element = (await here.elementFrom(remote, frame, selector)) ?? (last ? await pierce.queryOne(here, frame, selector) : null);
       if (element !== null) {
         if (polled) flag("waited_for_element", true);
         return [here, element];

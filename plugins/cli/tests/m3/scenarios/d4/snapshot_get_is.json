@@ -1,0 +1,192 @@
+{
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/login.html",
+    "--no-changes"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "snapshot"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "snapshot",
+    "-i"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "snapshot",
+    "-c",
+    "-d",
+    "2"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "snapshot",
+    "-s",
+    "#f"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "snapshot",
+    "-i",
+    "--urls"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "get",
+    "text",
+    "h1"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "get",
+    "html",
+    "label"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "get",
+    "value",
+    "#email"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "get",
+    "attr",
+    "#email",
+    "placeholder"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "get",
+    "count",
+    "button"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "get",
+    "box",
+    "h1"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "get",
+    "title"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "get",
+    "url"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "is",
+    "visible",
+    "#bottom"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "is",
+    "enabled",
+    "button[disabled]"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "is",
+    "checked",
+    "#agree"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "get",
+    "text",
+    "#nope"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "get",
+    "count",
+    "##bad"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "snapshot",
+    "-s",
+    ".missing"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "snapshot",
+    "--diff"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "get",
+    "text",
+    "@e1"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "is",
+    "sideways",
+    "h1"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "snapshot",
+    "-d",
+    "x"
+   ],
+   "session": "d4"
+  }
+ ]
+}

@@ -14,7 +14,7 @@ export const COUNTS = new Set([
 export const READ_FLAGS = new Set([
   "read_data", "read_data_shaped", "read_scrolled", "read_matched", "read_virtualized_grid", "read_pdf", "read_waited_for_content", "read_beside_busy",
   "read_bot_check", "read_scroll_guessed", "read_scope_shown", "read_scope_empty", "read_waited_for_requests", "read_partial_page", "read_frame_text",
-  "read_scroll_waited_at_end",
+  "read_scroll_waited_at_end", "read_oopif_frames", "snapshot_oopif_frames", "selector_in_shadow_root", "oopif_attach_refused",
 ]);
 export const ACT_FLAGS = new Set([
   "waited_for_enabled", "fill_picked_option", "fill_inserted_text", "drag_side_given", "drag_list_position", "select_opened_list", "press_targeted",

@@ -1,0 +1,62 @@
+{
+ "unstable_steps": {
+  "steps": [
+   5
+  ],
+  "why": "vitals prints the page's own load timings (ttfb, fcp, lcp), which differ between any two loads"
+ },
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/login.html",
+    "--no-changes"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "snapshot",
+    "-i"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "diff",
+    "snapshot"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "diff",
+    "snapshot",
+    "-i"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "diff",
+    "url",
+    "{fixture}/login.html",
+    "{fixture}/probe.html"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "vitals"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "diff",
+    "nothing"
+   ],
+   "session": "d4"
+  }
+ ]
+}
