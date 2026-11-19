@@ -103,7 +103,7 @@ jobs:
         run: |
           ~/.local/bin/uv venv --python 3.13 "$RUNNER_TEMP/venv"
           VIRTUAL_ENV="$RUNNER_TEMP/venv" ~/.local/bin/uv pip install --quiet --require-hashes --no-build -r requirements.lock
-          "$RUNNER_TEMP/venv/bin/python" -m unittest -v tests.test_parity.TsParityTable tests.test_parity.TsProcess tests.test_parity.ServedTable tests.test_parity.ProtocolAgrees tests.test_closed_stdout.TsClosedStdout
+          "$RUNNER_TEMP/venv/bin/python" -m unittest -v tests.test_parity.TsParityTable tests.test_parity.TsProcess tests.test_parity.HarnessCatches tests.test_parity.ServedTable tests.test_parity.ProtocolAgrees tests.test_closed_stdout.TsClosedStdout
 
   python:
     name: Python tests on ${{ matrix.os }}

@@ -303,6 +303,7 @@ class HarnessCatches(unittest.TestCase):
             with self.subTest(launch=launch):
                 self.impostor_fails(launch)
 
+    @unittest.skipUnless(harness.ts_binary(), "build plugins/cli/ts (bun run build) or set ARDIA_TS_CLI")
     def test_a_typescript_program_that_runs_python_as_its_child_proves_nothing(self):
         scratch = Path(tempfile.mkdtemp(prefix="arh", dir="/tmp"))
         try:
@@ -335,10 +336,13 @@ class HarnessCatches(unittest.TestCase):
             impostor = scratch / "ardia"
             impostor.write_text('#!/bin/sh\nhere=$(cd "$(dirname "$0")/.." && pwd)\nexec ' + prefix + '"$here/python/bin/python3" ' + launch + '\n')
             impostor.chmod(0o755)
-            shutil.copy2(harness.ts_libc(harness.ts_binary()), scratch / harness.TS_LIBC)
+            entries = ["rust"]
+            if harness.ts_binary():
+                shutil.copy2(harness.ts_libc(harness.ts_binary()), scratch / harness.TS_LIBC)
+                entries.append("ts")
             cases = [case for case in harness.load_cases() if case.id in ("version--version", "windows--windows") or case.id.startswith("tabs--tabs-json")]
             self.assertTrue(cases)
-            for entry in harness.ENTRIES:
+            for entry in entries:
                 outcomes, install = harness.run_all(cases, impostor, entry=entry)
                 install.close()
                 self.assertTrue(all(not outcome.passed for outcome in outcomes), [outcome.case.id for outcome in outcomes if outcome.passed])
