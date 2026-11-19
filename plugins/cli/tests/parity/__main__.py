@@ -38,6 +38,9 @@ def main() -> int:
         cases = [case for case in cases if case.command in args.command]
     if args.case:
         cases = [case for case in cases if case.id in args.case]
+    if (args.command or args.case) and not cases:
+        sys.stderr.write(f"no parity case matches {' '.join([*(f'--command {name}' for name in args.command), *(f'--case {name}' for name in args.case)])}\n")
+        return 2
 
     def progress(outcome):
         if not args.report:

@@ -116,6 +116,23 @@ class HarnessRules(unittest.TestCase):
         self.case(argv=["theme", "check", "../evil"])
         self.case(argv=["plugins", "call", "x", '{"who": "you/../me"}'])
 
+    def test_the_rust_entry_expects_what_its_installation_does_with_a_typescript_row(self):
+        case = self.case()
+        served = {"windows": "ts", "tabs": "rust"}
+        self.assertEqual(harness.expected_route("rust", served, case, ts_installed=False), "python")
+        self.assertEqual(harness.expected_route("rust", served, case, ts_installed=True), "ts")
+        self.assertEqual(harness.expected_route("rust", served, self.case(command="tabs", argv=["tabs"]), ts_installed=False), "rust")
+        self.assertEqual(harness.expected_route("ts", served, self.case(command="tabs", argv=["tabs"]), ts_installed=True), "ts")
+        self.assertEqual(harness.expected_route("rust", served, self.case(fallback=True), ts_installed=True), "python")
+
+    def test_a_selection_that_matches_no_case_is_an_error(self):
+        for selection in (["--case", "no-such-case"], ["--command", "no-such-command"]):
+            with self.subTest(selection=selection):
+                done = subprocess.run([sys.executable, "-m", "parity", "--program", sys.executable, *selection], cwd=CLI / "tests",
+                                      capture_output=True, text=True, timeout=60)
+                self.assertEqual(done.returncode, 2, done.stdout + done.stderr)
+                self.assertIn("no parity case", done.stderr)
+
     def test_a_fallback_may_only_ask_read_only_questions_first(self):
         python = [[{"id": 1, "method": "hello", "params": {"protocol": 4}}, {"id": 2, "method": "apply", "params": {"ops": []}}]]
         read_first = [[{"id": 1, "method": "hello", "params": {"protocol": 4}}, {"id": 2, "method": "workspace"}]] + python

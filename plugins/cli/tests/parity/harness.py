@@ -139,10 +139,11 @@ def route_from(lines: list[str]) -> str:
     return "ts" if "ts" in lines else "rust"
 
 
-def expected_route(entry: str, served: dict[str, str], case: "Case") -> str:
+def expected_route(entry: str, served: dict[str, str], case: "Case", ts_installed: bool) -> str:
     if case.fallback or case.command not in served:
         return "python"
-    return "ts" if entry == "ts" else served[case.command]
+    side = "ts" if entry == "ts" else served[case.command]
+    return "python" if side == "ts" and not ts_installed else side
 
 
 _blob_store = {}
@@ -502,10 +503,14 @@ class Installation:
         self.routes = self.scratch / "routes"
         self.routes.mkdir()
         (self.root / "bin").mkdir(parents=True)
+        self.ts_installed = False
         if entry == "ts":
-            self.install_ts(entry_program, router or binary())
+            self.install_ts(entry_program, router or binary(), every_row=True)
         else:
             shutil.copy2(entry_program, self.root / "bin" / "ardia")
+            typescript = ts_binary()
+            if "ts" in served_table().values() and typescript is not None and typescript.exists():
+                self.install_ts(typescript, None, every_row=False)
         subprocess.run([sys.executable, "-m", "venv", "--without-pip", str(self.root / "python")], check=True)
         self.python = self.root / "python" / "bin" / "python3"
         self.source = self.scratch / "src"
@@ -522,10 +527,11 @@ class Installation:
         self.counter = 0
         self.counter_lock = threading.Lock()
 
-    def install_ts(self, program: Path, router: Path | None):
-        if router is None or not router.exists():
-            raise FileNotFoundError("the ts entry runs behind the Rust router: build plugins/cli/rust or set ARDIA_RUST_CLI")
-        shutil.copy2(router, self.root / "bin" / "ardia")
+    def install_ts(self, program: Path, router: Path | None, every_row: bool):
+        if every_row:
+            if router is None or not router.exists():
+                raise FileNotFoundError("the ts entry runs behind the Rust router: build plugins/cli/rust or set ARDIA_RUST_CLI")
+            shutil.copy2(router, self.root / "bin" / "ardia")
         libexec = self.root / "libexec"
         libexec.mkdir()
         shutil.copy2(program, libexec / "ardia-ts.bin")
@@ -534,7 +540,9 @@ class Installation:
                            check=True, capture_output=True)
         (libexec / "ardia-ts").write_text(TS_PROBE.format(routes=shlex.quote(str(self.routes))))
         (libexec / "ardia-ts").chmod(0o755)
-        (self.root / "served.txt").write_text("".join(f"{name} ts\n" for name in served_table()))
+        self.ts_installed = True
+        if every_row:
+            (self.root / "served.txt").write_text("".join(f"{name} ts\n" for name in served_table()))
 
     def stray_routes(self) -> list[str]:
         return sorted(path.name for path in self.routes.iterdir())
@@ -948,7 +956,7 @@ def check_case(install: Installation, case: Case, served: dict[str, str], keep: 
         problems.append(f"this call is {named!r}, the case says {case.command!r}")
     if python.route != "python":
         problems.append("the Python side never started the bundled Python")
-    expected = expected_route(install.entry, served, case)
+    expected = expected_route(install.entry, served, case, install.ts_installed)
     if new.route != expected:
         problems.append(f"expected {expected} to serve it, but {new.route} did")
     if new.served_by and new.served_by[-1] != new.route:
