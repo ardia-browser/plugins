@@ -71,18 +71,20 @@ function usableSocket(file: string): boolean {
   }
 }
 
-export function announce(file: string, caller: Caller, timeout = ANNOUNCE_TIMEOUT): Promise<void> {
-  if (!usableSocket(file)) return Promise.resolve();
+export function announce(file: string, caller: Caller, timeout = ANNOUNCE_TIMEOUT, signal: AbortSignal | null = null): Promise<void> {
+  if (signal?.aborted || !usableSocket(file)) return Promise.resolve();
   return new Promise<void>((resolve) => {
     const socket = net.connect(file);
     let buffer = "";
     let stage = 0;
     const done = () => {
       clearTimeout(timer);
+      signal?.removeEventListener("abort", done);
       socket.destroy();
       resolve();
     };
     const timer = setTimeout(done, timeout * 1000);
+    signal?.addEventListener("abort", done, { once: true });
     socket.on("error", done);
     socket.on("close", done);
     socket.once("connect", () => {

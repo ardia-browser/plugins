@@ -1942,6 +1942,25 @@ Its page core (slice D3: `browse/state/page.ts`, `state.ts`, `refs.ts`, `apptabs
   tabs at once and reads a refusal as inactive.
 - Ardia's tab list (`windows`, for the app tab ids and following a replaced page) is asked over the control socket in
   one exchange with a 6 s deadline; Python allows 3 s to connect and 3 s for the answer.
+- A ref resolves only to the backend node it was issued for. Python follows a ref whose page reloaded the same address,
+  or whose element was redrawn, to the one node with the same role and name; TypeScript fails it as a stale ref, with
+  the same `stale_ref` code, exit status and wording (naming the likely successor's ref), so a command never acts on a
+  node it wasn't given. `followed_redrawn_ref` and `followed_ref_after_reload` never fire.
+- A page call is bound to the document and frame its isolated world was made for: if the frame navigates while the world
+  is created, while the helper library goes in, or before the call is sent, the call isn't sent and fails with
+  `document_changed` (a read retries once). An element from another frame is never re-homed into this frame's world.
+  Python can run such a call on the new document.
+- A lost connection is never read as an answer: a page title, a visibility check, the busy probe, the active-tab
+  probe and the setup restore pass `connection_lost` on, where Python's catch-all reads it as an empty title, a
+  visible tab, an inactive tab or lost setup (releasing the route claim).
+- Setup restored after a reattach is done in full or left to be done again: a cancel or lost connection partway keeps
+  it pending, and the next use replays the steps not yet applied on that session.
+- A tab that had crashed before the session attached keeps its CDP session as a handle for `reload` only; the session
+  counts as attached once `Page.enable` and the frame refresh finish. A connection whose target discovery was cancelled
+  or failed is dropped, so the next command connects and discovers again.
+- When `set viewport`'s tab leaves its off-screen copy and the replacement tab fails to load, the replacement is closed
+  and the session's tab, label and pin go back to the original (`offscreen_handoff_rolled_back`). Python leaves the
+  session on the half-made tab.
 
 ## Linux
 

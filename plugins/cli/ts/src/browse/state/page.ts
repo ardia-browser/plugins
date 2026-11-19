@@ -1,6 +1,6 @@
 import { formatG } from "../../pylib/format.ts";
 import { type Browser, type CdpResult, DETACH_WAIT, isMutation } from "../cdp/browser.ts";
-import { Cancelled, sleep } from "../cdp/cancel.ts";
+import { Cancelled, currentSignal, sleep } from "../cdp/cancel.ts";
 import { BrowseError, CdpError, CdpTimeout, ConnectionLost, Gated, NotFocusable, OutcomeUnknown, PageBusy } from "../daemon-errors.ts";
 import { LIBRARY, PAGE_FOCUS_INSIDE } from "../js/index.ts";
 import { flag } from "../metrics.ts";
@@ -38,7 +38,7 @@ const STALE_CONTEXT = ["Cannot find context", "Execution context was destroyed",
 export type Frame = { id: string; url: string; loader: string | null; parent: string | null; name: string; origin: string };
 export type Lifecycle = { loader: string | null; names: Set<string> };
 export type Viewport = [number, number] | null;
-export type SendOptions = { timeout?: number; mutation?: boolean; inputEvent?: boolean };
+export type SendOptions = { timeout?: number; mutation?: boolean; inputEvent?: boolean; guard?: () => void };
 export type CallOptions = { frame?: string | null; byValue?: boolean; awaitPromise?: boolean; timeout?: number; read?: boolean };
 
 export interface PageInput {
@@ -66,6 +66,18 @@ export class Element {
 
 function ignorable(error: unknown): boolean {
   return error instanceof BrowseError && !(error instanceof ConnectionLost) && error.code !== "tab_detached" && error.code !== "tab_crashed";
+}
+
+export function quiet(error: unknown): boolean {
+  return error instanceof BrowseError && !(error instanceof ConnectionLost);
+}
+
+export const DOCUMENT_CHANGED = "The page changed document before this could run, so it wasn't applied; snapshot again";
+
+class StaleWorld extends BrowseError {
+  constructor() {
+    super(DOCUMENT_CHANGED, null, "document_changed");
+  }
 }
 
 function frameOf(frame: Json, parent: string | null): Frame {
@@ -111,6 +123,7 @@ export class Page {
   awake = false;
   unansweredAt = 0;
   private readonly calls = new Set<AbortController>();
+  private restoring: { session: string; done: Set<string> } | null = null;
 
   constructor(
     readonly state: State,
@@ -125,7 +138,9 @@ export class Page {
 
   async attach(browser: Browser): Promise<void> {
     if (this.sessionId !== null) this.state.sessions.delete(this.sessionId);
+    if (this.attaching !== null) this.state.sessions.delete(this.attaching);
     this.sessionId = null;
+    this.attaching = null;
     this.browser = browser;
     this.worlds.clear();
     let result: CdpResult;
@@ -154,7 +169,8 @@ export class Page {
       }
       if (this.crashed) {
         this.needsEnable = true;
-        this.publish(session);
+        if (this.attaching !== session) throw new BrowseError(DETACHED, null, "tab_detached");
+        if (!browser.alive) throw new ConnectionLost();
         return;
       }
       await this.enablePage();
@@ -212,15 +228,18 @@ export class Page {
     const deadline = monotonic() + BUSY_PROBE;
     const left = () => Math.max(0.001, deadline - monotonic());
     try {
-      const main = this.mainFrame;
-      const cached = main === null ? undefined : this.worlds.get(main);
+      let main = this.mainFrame;
       if (main === null) {
-        await browser.send("Page.getFrameTree", null, { session, timeout: BUSY_PROBE });
-      } else {
+        const tree = await browser.send("Page.getFrameTree", null, { session, timeout: left() });
+        const found = record(record(tree["frameTree"])["frame"])["id"];
+        main = typeof found === "string" ? found : null;
+      }
+      if (main !== null) {
+        const cached = this.worlds.get(main);
         const context =
           cached && cached[0] === this.loader(main)
             ? cached[1]
-            : Number((await browser.send("Page.createIsolatedWorld", { frameId: main, worldName: WORLD_NAME }, { session, timeout: BUSY_PROBE }))["executionContextId"]);
+            : Number((await browser.send("Page.createIsolatedWorld", { frameId: main, worldName: WORLD_NAME }, { session, timeout: left() }))["executionContextId"]);
         await browser.send("Runtime.evaluate", { expression: "1", contextId: context, returnByValue: true }, { session, timeout: left() });
       }
     } catch (error) {
@@ -228,7 +247,7 @@ export class Page {
         flag("page_busy_fast_fail", true);
         throw new PageBusy(method, BUSY_PROBE, BUSY_WHY(BUSY_PROBE));
       }
-      if (!(error instanceof BrowseError)) throw error;
+      if (!quiet(error)) throw error;
     }
     this.unansweredAt = 0;
   }
@@ -247,10 +266,14 @@ export class Page {
   }
 
   async restoreSetup(): Promise<void> {
-    this.needsRestore = false;
+    const session = this.session as string;
+    if (this.restoring?.session !== session) this.restoring = { session, done: new Set() };
+    const done = this.restoring.done;
     const lost: string[] = [];
     let restored = 0;
     for (const visible of [...this.initScripts.keys()]) {
+      const step = `script\u0000${visible}`;
+      if (done.has(step)) continue;
       const source = this.scriptSources.get(visible);
       try {
         if (source === undefined) throw new BrowseError("no source kept");
@@ -258,36 +281,43 @@ export class Page {
         this.scriptIds.set(visible, String(result["identifier"]));
         restored += 1;
       } catch (error) {
-        if (!(error instanceof BrowseError)) throw error;
+        if (!ignorable(error)) throw error;
         lost.push(`init script ${visible}`);
         this.initScripts.delete(visible);
         this.scriptSources.delete(visible);
         this.scriptIds.delete(visible);
       }
+      done.add(step);
     }
     for (const [method, params] of [...this.overrides]) {
+      const step = `override\u0000${method}`;
+      if (done.has(step)) continue;
       try {
         await this.send(method, params);
         restored += 1;
       } catch (error) {
-        if (!(error instanceof BrowseError)) throw error;
+        if (!ignorable(error)) throw error;
         lost.push(SETUP_NAMES[method] ?? method);
         this.overrides.delete(method);
       }
+      done.add(step);
     }
-    if (this.state.claims.has(this.targetId, "route")) {
+    if (this.state.claims.has(this.targetId, "route") && !done.has("route")) {
       const params: CdpResult = { patterns: ROUTE_PATTERNS };
       if (this.state.credentials) params["handleAuthRequests"] = true;
       try {
         await this.send("Fetch.enable", params);
         restored += 1;
       } catch (error) {
-        if (!(error instanceof BrowseError)) throw error;
+        if (!ignorable(error)) throw error;
         lost.push("network routes and HTTP credentials");
         this.state.claims.delete(this.targetId, "route");
         this.state.releaseClaim(this.targetId, "route");
       }
+      done.add("route");
     }
+    this.needsRestore = false;
+    this.restoring = null;
     if (lost.length > 0) {
       flag("setup_restore_failed", true);
       throw new BrowseError(
@@ -332,18 +362,22 @@ export class Page {
     if (session === null) throw new BrowseError(DETACHED, null, "tab_detached");
     if (this.crashed && !CRASH_SAFE.has(method)) throw new BrowseError(CRASHED, null, "tab_crashed");
     if (this.unansweredAt && monotonic() - this.unansweredAt < BUSY_MEMORY) await this.stillBusy(method);
+    options.guard?.();
+    if (this.session !== session) throw new BrowseError(DETACHED, null, "tab_detached");
     const timeout = options.timeout ?? 30;
     const dropped = new AbortController();
     this.calls.add(dropped);
     const unknown = Boolean(options.inputEvent || options.mutation || isMutation(method));
+    const outer = currentSignal();
+    const signal = outer === null ? dropped.signal : AbortSignal.any([outer, dropped.signal]);
     try {
-      const sending = (this.browser as Browser).send(method, params, { session, timeout });
+      const sending = (this.browser as Browser).send(method, params, { session, timeout, signal });
       return await new Promise<CdpResult>((resolve, reject) => {
-        dropped.signal.addEventListener("abort", () => reject(dropped.signal.reason), { once: true });
+        dropped.signal.addEventListener("abort", () => reject(new Cancelled()), { once: true });
         sending.then(resolve, reject);
       });
     } catch (error) {
-      if (error instanceof Cancelled && dropped.signal.aborted) {
+      if (error instanceof Cancelled && dropped.signal.aborted && !outer?.aborted) {
         if (unknown) throw new OutcomeUnknown(`\`${method}\``, `Ardia detached the tab before it answered ${method}`);
         if (this.crashed) throw new BrowseError(CRASHED, null, "tab_crashed");
         throw new BrowseError(DETACHED, null, "tab_detached");
@@ -353,6 +387,7 @@ export class Page {
         if (unknown) throw new OutcomeUnknown(`\`${method}\``, `Ardia didn't answer ${method} in ${formatG(timeout)}s after it was sent`);
         throw new PageBusy(method, timeout, BUSY_WHY(BUSY_PROBE));
       }
+      if (error instanceof OutcomeUnknown && error.text.includes(`didn't answer ${method} in `)) this.unansweredAt = monotonic();
       throw error;
     } finally {
       this.calls.delete(dropped);
@@ -380,6 +415,14 @@ export class Page {
   }
 
   async world(frameId: string | null = null): Promise<number> {
+    return (await this.worldOf(frameId)).context;
+  }
+
+  private stillCurrent(frame: string, loader: string | null, context: number): boolean {
+    return this.frames.has(frame) && this.loader(frame) === loader && this.worlds.get(frame)?.[1] === context;
+  }
+
+  async worldOf(frameId: string | null = null): Promise<{ frame: string; loader: string | null; context: number }> {
     const frame = frameId || this.mainFrame;
     if (frame === null || !this.frames.has(frame)) {
       await this.refreshFrames();
@@ -387,43 +430,62 @@ export class Page {
     }
     const loader = this.loader(frame);
     const cached = this.worlds.get(frame);
-    if (cached && cached[0] === loader) return cached[1];
+    if (cached && cached[0] === loader) return { frame, loader, context: cached[1] };
     const result = await this.send("Page.createIsolatedWorld", { frameId: frame, worldName: WORLD_NAME });
     const context = Number(result["executionContextId"]);
-    await this.send("Runtime.evaluate", { expression: LIBRARY, contextId: context, returnByValue: true });
+    const fresh = () => this.frames.has(frame) && this.loader(frame) === loader;
+    if (!fresh()) throw new StaleWorld();
+    await this.send("Runtime.evaluate", { expression: LIBRARY, contextId: context, returnByValue: true }, { guard: () => { if (!fresh()) throw new StaleWorld(); } });
+    if (!fresh()) throw new StaleWorld();
     this.worlds.set(frame, [loader, context]);
-    return context;
+    return { frame, loader, context };
   }
 
   async call(fn: string, args: unknown[] = [], options: CallOptions = {}): Promise<unknown> {
-    const frame = options.frame || this.state.frameFor(this);
+    const wanted = options.frame || this.state.frameFor(this);
     const byValue = options.byValue ?? true;
     const read = options.read ?? false;
+    const elements = args.some((arg) => arg instanceof Element);
     for (const attempt of [0, 1]) {
-      const context = await this.world(frame);
-      const params = {
-        functionDeclaration: fn,
-        executionContextId: context,
-        arguments: args.map((arg) => (arg instanceof Element ? { objectId: arg.objectId } : { value: arg })),
-        returnByValue: byValue,
-        awaitPromise: options.awaitPromise ?? true,
-      };
+      let world: { frame: string; loader: string | null; context: number } | undefined;
       let result: CdpResult;
       try {
-        result = await this.send("Runtime.callFunctionOn", params, { timeout: options.timeout ?? 30, mutation: !read });
+        world = await this.worldOf(wanted);
+        const { frame, loader, context } = world;
+        const params = {
+          functionDeclaration: fn,
+          executionContextId: context,
+          arguments: args.map((arg) => (arg instanceof Element ? { objectId: arg.objectId } : { value: arg })),
+          returnByValue: byValue,
+          awaitPromise: options.awaitPromise ?? true,
+        };
+        result = await this.send("Runtime.callFunctionOn", params, {
+          timeout: options.timeout ?? 30,
+          mutation: !read,
+          guard: () => {
+            if (!this.stillCurrent(frame, loader, context)) throw new StaleWorld();
+          },
+        });
       } catch (error) {
-        if (!(error instanceof CdpError)) throw error;
+        if (error instanceof StaleWorld) {
+          if (read && attempt === 0 && !elements) {
+            await this.refreshFrames();
+            continue;
+          }
+          throw error;
+        }
+        if (!(error instanceof CdpError) || world === undefined) throw error;
         const message = error.cdpMessage;
-        if (message.includes(OTHER_WORLD) && attempt === 0 && (await this.rehome(args, context))) continue;
+        const { frame, context } = world;
+        if (message.includes(OTHER_WORLD) && attempt === 0 && (await this.rehome(args, context, frame))) continue;
         if (!message.includes(OTHER_WORLD) && !STALE_CONTEXT.some((marker) => message.includes(marker))) throw error;
-        const stale = frame || this.mainFrame;
-        if (stale !== null) this.worlds.delete(stale);
-        if (read && attempt === 0 && !args.some((arg) => arg instanceof Element)) {
+        this.worlds.delete(frame);
+        if (read && attempt === 0 && !elements) {
           await this.refreshFrames();
           continue;
         }
         if (!read && message.includes("destroyed")) throw new OutcomeUnknown("the page script", "the page changed document while it ran");
-        throw new BrowseError("The page changed document before this could run, so it wasn't applied; snapshot again", null, "document_changed");
+        throw new BrowseError(DOCUMENT_CHANGED, null, "document_changed");
       }
       if (Object.hasOwn(result, "exceptionDetails")) {
         const details = record(result["exceptionDetails"]);
@@ -436,9 +498,9 @@ export class Page {
     throw new BrowseError("the page navigated while reading it; try again", null, "page_navigated");
   }
 
-  async rehome(args: unknown[], context: number): Promise<boolean> {
+  async rehome(args: unknown[], context: number, frame: string): Promise<boolean> {
     const elements = args.filter((arg): arg is Element => arg instanceof Element);
-    if (elements.length === 0) return false;
+    if (elements.length === 0 || elements.some((element) => element.frame !== frame)) return false;
     for (const element of elements) {
       let result: CdpResult;
       try {
@@ -495,7 +557,7 @@ export class Page {
     try {
       return Boolean(await this.call("() => document.visibilityState === 'hidden'", [], { frame: this.mainFrame, read: true }));
     } catch (error) {
-      if (error instanceof BrowseError) return false;
+      if (quiet(error)) return false;
       throw error;
     }
   }
@@ -533,7 +595,7 @@ export class Page {
       try {
         landed = await this.call(PAGE_FOCUS_INSIDE, [element], { frame: element.frame });
       } catch (inner) {
-        if (!(inner instanceof BrowseError)) throw inner;
+        if (!quiet(inner)) throw inner;
       }
       if (!landed) throw new NotFocusable(element.label);
       flag("focused_inner_field", true);

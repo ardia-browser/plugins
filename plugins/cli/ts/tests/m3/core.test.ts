@@ -64,7 +64,8 @@ describe("attach (row 8)", () => {
     page.crashed = true;
     state.pages.set("TARGET", page);
     await page.attach(browser as never);
-    expect(page.sessionId).toBe("SESSION-1");
+    expect(page.sessionId).toBeNull();
+    expect(page.session).toBe("SESSION-1");
     expect(page.needsEnable).toBe(true);
     expect(browser.methods("SESSION-1")).toEqual(["Inspector.enable"]);
     const refused = await page.send("Page.getFrameTree").catch((error: unknown) => error);
