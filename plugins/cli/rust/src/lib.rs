@@ -209,14 +209,16 @@ fn serve_help(argv: &[String], python: Option<&Path>) -> Option<i32> {
     let mut stdout = std::io::stdout().lock();
     let written = stdout.write_all(printable::inert(&text).as_bytes()).and_then(|_| stdout.flush());
     drop(stdout);
-    let status = if written.is_err() && argv.is_empty() {
-        call.note_error_code("stdout_closed");
-        141
-    } else {
-        0
+    let (status, exit) = match written {
+        Err(_) if argv.is_empty() => {
+            call.note_error_code("stdout_closed");
+            (141, 141)
+        }
+        Err(error) => (0, printable::stdout_flush_failed(&error)),
+        Ok(()) => (0, 0),
     };
     telemetry::finish(&call, status, python);
-    Some(status as i32)
+    Some(exit)
 }
 
 fn serve_listing(kind: Kind, listing: &Listing, argv: &[String], python: Option<&Path>) -> Option<i32> {
@@ -299,10 +301,10 @@ fn run_rust(route: Route, argv: &[String], python: Option<&Path>) -> Handled {
         return Handled::Python;
     }
     let served = match route {
-        Route::Version => {
-            let _ = writeln!(std::io::stdout(), "ardia {}", telemetry::version());
-            Some(0)
-        }
+        Route::Version => match writeln!(std::io::stdout(), "ardia {}", telemetry::version()).and_then(|_| std::io::stdout().flush()) {
+            Ok(()) => Some(0),
+            Err(error) => Some(printable::stdout_flush_failed(&error)),
+        },
         Route::Help => serve_help(argv, python),
         Route::Listing(kind, listing) => serve_listing(kind, &listing, argv, python),
         Route::Python => None,

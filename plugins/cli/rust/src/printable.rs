@@ -65,6 +65,31 @@ impl Output {
     }
 }
 
+pub fn stdout_flush_failed(error: &std::io::Error) -> i32 {
+    let errno = error.raw_os_error().unwrap_or(0);
+    if errno == libc::EBADF {
+        return 0;
+    }
+    let name = match errno {
+        libc::EPIPE | libc::ESHUTDOWN => "BrokenPipeError",
+        libc::ECONNRESET => "ConnectionResetError",
+        libc::ECONNABORTED => "ConnectionAbortedError",
+        libc::ECONNREFUSED => "ConnectionRefusedError",
+        libc::EACCES | libc::EPERM => "PermissionError",
+        libc::ETIMEDOUT => "TimeoutError",
+        libc::ENOENT => "FileNotFoundError",
+        libc::EISDIR => "IsADirectoryError",
+        libc::ENOTDIR => "NotADirectoryError",
+        _ => "OSError",
+    };
+    let _ = write!(
+        std::io::stderr(),
+        "Exception ignored on flushing sys.stdout:\n{name}: [Errno {errno}] {}\n",
+        crate::paths::strerror(errno)
+    );
+    120
+}
+
 fn quiet_stdout() {
     let null = std::ffi::CString::new("/dev/null").unwrap_or_default();
     unsafe {
