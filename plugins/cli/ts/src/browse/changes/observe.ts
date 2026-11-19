@@ -10,13 +10,25 @@ import { clock, count, flag, spent } from "../metrics.ts";
 import { type Node, walk } from "../snapshot/tree.ts";
 import type { Element, Page } from "../state/page.ts";
 import type { Json } from "../state/records.ts";
+import { Refs } from "../state/refs.ts";
 import type { Listener, State } from "../state/state.ts";
 import { monotonic } from "../state/wait.ts";
 import { tokenHex } from "../tokens.ts";
 import { cleanUrl } from "./urls.ts";
 import { diff, freshRows, moved, NAVIGATED_TEXT, OPENED_TEXT, type Report, type TextBlock, type View, type Write } from "./report.ts";
 import { addsText, asData, openedAnchors, renderReport } from "./text.ts";
-import { adoptRefs, collect, markShown, remember, view, viewFrame } from "./views.ts";
+import { markShown, remember, view, viewFrame } from "./views.ts";
+
+async function collect(state: State, page: Page): Promise<Node[]> {
+  const snapshots = Refs.snapshots;
+  if (snapshots === null) throw new BrowseError("The page's accessibility snapshot isn't served by the TypeScript daemon yet (it arrives with a later slice of the port)", null, "unsupported");
+  return (await snapshots.collect(state, page)) as Node[];
+}
+
+function adoptRefs(state: State, page: Page, nodes: Node[]): void {
+  const snapshots = Refs.snapshots;
+  if (snapshots !== null) state.setRefs(snapshots.refsOf(state, page, nodes), null, page);
+}
 
 export const SETTLE_LIMIT = 1.5;
 export const REACTION_WINDOW = 0.6;

@@ -20,6 +20,12 @@ export function shownOf(state: State): Map<string, string> {
   return shown;
 }
 
+async function snapshotNodes(state: State, page: Page): Promise<Node[]> {
+  const snapshots = Refs.snapshots;
+  if (snapshots === null) throw unsupportedSnapshots();
+  return (await snapshots.collect(state, page)) as Node[];
+}
+
 export function viewFrame(state: State, page: Page): string {
   return (state.frameFor(page) || page.mainFrame) as string;
 }
@@ -35,20 +41,8 @@ export async function titleOf(page: Page): Promise<string> {
   return typeof title === "string" ? title : "";
 }
 
-export async function collect(state: State, page: Page): Promise<Node[]> {
-  const snapshots = Refs.snapshots;
-  if (snapshots === null) throw unsupportedSnapshots();
-  return (await snapshots.collect(state, page)) as Node[];
-}
-
-export function adoptRefs(state: State, page: Page, nodes: Node[]): void {
-  const snapshots = Refs.snapshots;
-  if (snapshots === null) throw unsupportedSnapshots();
-  state.setRefs(snapshots.refsOf(state, page, nodes), null, page);
-}
-
 export async function view(state: State, page: Page, given: Node[] | null = null): Promise<View> {
-  const nodes = given ?? (await collect(state, page));
+  const nodes = given ?? (await snapshotNodes(state, page));
   return {
     target: page.targetId,
     loader: page.loader(viewFrame(state, page)) || "",
