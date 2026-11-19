@@ -7,7 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { BUILT_LIBC } from "./libc-loaded.ts";
-import { closeOnExecFrom, dlopenReason, errnoError, flock, interruptsIgnored, LibcUnavailable, listAt, loadLibc, mkdirAt, openAt, peerUid, sizeAt as rawSizeAt, strerror, unlinkAt, watchLifeline } from "../src/libc.ts";
+import { dlopenReason, errnoError, flock, interruptsIgnored, LibcUnavailable, listAt, loadLibc, mkdirAt, openAt, peerUid, sizeAt as rawSizeAt, strerror, unlinkAt, watchLifeline } from "../src/libc.ts";
 import { close, closeDir, listDir, openPrivate, openPrivateFile, PathError, readPrivate, renameIn, sizeAt, takeLock, unlinkQuietly, writePrivate } from "../src/privatefs.ts";
 
 const CLI = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -292,30 +292,5 @@ try { writeWhole(1, Buffer.alloc(1 << 20, 121)); process.exit(3); } catch (error
     "sys.exit(child.returncode)",
   ].join("\n");
   const ran = spawnSync(PYTHON, ["-c", filler, process.execPath, script], { timeout: 30000 });
-  assert.equal(ran.status, 0, ran.stderr?.toString());
-});
-
-test("closeOnExecFrom takes only an integer descriptor of 3 or above", () => {
-  for (const wrong of [2, -1, 1.5, Number.NaN, 2 ** 31]) assert.throws(() => closeOnExecFrom(wrong), RangeError, String(wrong));
-  assert.throws(() => closeOnExecFrom("3" as unknown as number), TypeError);
-  assert.ok(closeOnExecFrom(3) >= 0);
-});
-
-test("closeOnExecFrom marks a descriptor above the soft limit that the caller left open", () => {
-  const script = path.join(scratch, "mark-high.ts");
-  fs.writeFileSync(script, `import { closeOnExecFrom, loadLibc } from ${JSON.stringify(path.resolve(CLI, "ts", "src", "libc.ts"))};
-loadLibc(${JSON.stringify(BUILT_LIBC)});
-process.exitCode = closeOnExecFrom(3) >= 1 ? 0 : 5;
-`);
-  const wrapper = [
-    "import os, resource, subprocess, sys",
-    "r, w = os.pipe()",
-    "os.dup2(w, 42)",
-    "os.close(w)",
-    "def lower(): resource.setrlimit(resource.RLIMIT_NOFILE, (32, resource.getrlimit(resource.RLIMIT_NOFILE)[1]))",
-    "child = subprocess.run([sys.argv[1], sys.argv[2]], pass_fds=(42,), preexec_fn=lower, timeout=30)",
-    "sys.exit(child.returncode)",
-  ].join("\n");
-  const ran = spawnSync(PYTHON, ["-c", wrapper, process.execPath, script], { timeout: 60000 });
   assert.equal(ran.status, 0, ran.stderr?.toString());
 });
