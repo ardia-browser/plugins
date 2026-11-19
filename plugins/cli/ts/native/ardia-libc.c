@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <math.h>
+#include <poll.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -44,6 +45,7 @@ napi_status napi_get_value_string_utf8(napi_env env, napi_value value, char *buf
 napi_status napi_create_int32(napi_env env, int32_t value, napi_value *result);
 napi_status napi_create_double(napi_env env, double value, napi_value *result);
 napi_status napi_get_boolean(napi_env env, bool value, napi_value *result);
+napi_status napi_get_null(napi_env env, napi_value *result);
 napi_status napi_create_string_utf8(napi_env env, const char *str, size_t length, napi_value *result);
 napi_status napi_create_array(napi_env env, napi_value *result);
 napi_status napi_is_buffer(napi_env env, napi_value value, bool *result);
@@ -181,6 +183,53 @@ static napi_value open_at(napi_env env, napi_callback_info info) {
   }
 }
 
+static napi_value not_regular(napi_env env) {
+  napi_value result = NULL;
+  napi_get_null(env, &result);
+  return result;
+}
+
+static bool waiting_fifo(int dir, const char *name) {
+  struct stat found;
+  return fstatat(dir, name, &found, AT_SYMLINK_NOFOLLOW) == 0 && S_ISFIFO(found.st_mode);
+}
+
+static napi_value open_file_at(napi_env env, napi_callback_info info) {
+  Call call;
+  int32_t dir, flags, mode;
+  char name[PATH_MAX];
+  if (!take_args(env, info, 4, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &dir) || !int_arg(&call, 2, &flags) || !int_arg(&call, 3, &mode)) return NULL;
+  int checked = name_arg(&call, 1, name, sizeof(name));
+  if (checked != 0) return status(env, checked);
+  int fd;
+  do {
+    fd = openat(dir, name, flags | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC, (mode_t)mode);
+  } while (fd < 0 && errno == EINTR);
+  if (fd < 0) {
+    int error = failed();
+    if (error == -ENXIO && waiting_fifo(dir, name)) return not_regular(env);
+    return status(env, error);
+  }
+  struct stat found;
+  if (fstat(fd, &found) != 0) {
+    int error = failed();
+    close(fd);
+    return status(env, error);
+  }
+  if (!S_ISREG(found.st_mode)) {
+    close(fd);
+    return not_regular(env);
+  }
+  int now = fcntl(fd, F_GETFL);
+  if (now < 0 || fcntl(fd, F_SETFL, now & ~O_NONBLOCK) != 0) {
+    int error = failed();
+    close(fd);
+    return status(env, error);
+  }
+  return owned_fd(env, fd);
+}
+
 static napi_value mkdir_at(napi_env env, napi_callback_info info) {
   Call call;
   int32_t dir, mode;
@@ -301,6 +350,46 @@ static napi_value error_text(napi_env env, napi_callback_info info) {
   return result;
 }
 
+static int write_whole(int fd, const char *bytes, size_t length) {
+  while (length > 0) {
+    ssize_t wrote = write(fd, bytes, length);
+    if (wrote >= 0) {
+      bytes += wrote;
+      length -= (size_t)wrote;
+      continue;
+    }
+    if (errno == EINTR) continue;
+    if (errno != EAGAIN && errno != EWOULDBLOCK) return failed();
+    struct pollfd ready = {.fd = fd, .events = POLLOUT, .revents = 0};
+    if (poll(&ready, 1, -1) < 0 && errno != EINTR) return failed();
+  }
+  return 0;
+}
+
+static napi_value write_all(napi_env env, napi_callback_info info) {
+  Call call;
+  int32_t fd;
+  void *data = NULL;
+  size_t length = 0;
+  bool is_buffer = false;
+  if (!take_args(env, info, 2, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &fd)) return NULL;
+  if (napi_is_buffer(env, call.argv[1], &is_buffer) != napi_ok || !is_buffer || napi_get_buffer_info(env, call.argv[1], &data, &length) != napi_ok) {
+    napi_throw_type_error(env, NULL, "ardia-libc: expected a buffer");
+    return NULL;
+  }
+  struct sigaction kept, plain;
+  memset(&kept, 0, sizeof(kept));
+  memset(&plain, 0, sizeof(plain));
+  plain.sa_handler = SIG_DFL;
+  sigemptyset(&plain.sa_mask);
+  if (sigaction(SIGINT, NULL, &kept) != 0) return status(env, failed());
+  bool swapped = kept.sa_handler != SIG_IGN && sigaction(SIGINT, &plain, NULL) == 0;
+  int result = write_whole(fd, data, length);
+  if (swapped) sigaction(SIGINT, &kept, NULL);
+  return status(env, result);
+}
+
 static void *watch_lifeline_thread(void *argument) {
   int fd = (int)(intptr_t)argument;
   char sink[64];
@@ -339,6 +428,7 @@ __attribute__((visibility("default"))) napi_value napi_register_module_v1(napi_e
   bool ok = define(env, exports, "peerUid", peer_uid)
       && define(env, exports, "interruptsIgnored", interrupts_ignored)
       && define(env, exports, "openAt", open_at)
+      && define(env, exports, "openFileAt", open_file_at)
       && define(env, exports, "mkdirAt", mkdir_at)
       && define(env, exports, "renameAt", rename_at)
       && define(env, exports, "unlinkAt", unlink_at)
@@ -346,6 +436,7 @@ __attribute__((visibility("default"))) napi_value napi_register_module_v1(napi_e
       && define(env, exports, "listAt", list_at)
       && define(env, exports, "lock", lock)
       && define(env, exports, "watchLifeline", watch_lifeline)
+      && define(env, exports, "writeAll", write_all)
       && define(env, exports, "strerror", error_text);
   return ok ? exports : NULL;
 }

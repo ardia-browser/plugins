@@ -1,5 +1,6 @@
-import { fstatSync, write, writeSync } from "node:fs";
+import { fstatSync, write } from "node:fs";
 import { interrupted as interruptRequested } from "./control.ts";
+import { writeWhole } from "./libc.ts";
 import { codeOf, errnoOf, strerror } from "./paths.ts";
 import { utf8 } from "./pystr.ts";
 import { constants } from "node:os";
@@ -29,17 +30,7 @@ export function sleepMs(ms: number): void {
 }
 
 export function writeAll(fd: number, text: string | Uint8Array): void {
-  const bytes = typeof text === "string" ? utf8(text) : text;
-  let offset = 0;
-  while (offset < bytes.length) {
-    try {
-      offset += writeSync(fd, bytes, offset, bytes.length - offset);
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code === "EAGAIN") sleepMs(1);
-      else if (code !== "EINTR") throw error;
-    }
-  }
+  writeWhole(fd, typeof text === "string" ? utf8(text) : text);
 }
 
 const INTERRUPT_POLL_MS = 50;

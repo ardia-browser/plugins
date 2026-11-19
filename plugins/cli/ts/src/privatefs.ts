@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { constants } from "node:os";
-import { flock, listAt, mkdirAt, type Name, openAt, renameAt, sizeAt as statSizeAt, unlinkAt } from "./libc.ts";
+import { flock, listAt, mkdirAt, type Name, openAt, openFileAt, renameAt, sizeAt as statSizeAt, unlinkAt } from "./libc.ts";
 import { codeOf, errnoOf, uid } from "./paths.ts";
 import { sleepMs } from "./printable.ts";
 
@@ -95,7 +95,9 @@ function openRetrying(dir: Dir, name: string, flags: number): number {
   let retries = flags & O_CREAT ? CREATE_RETRIES : 0;
   for (;;) {
     try {
-      return openAt(dir.fd, name, flags | O_NOFOLLOW, 0o600);
+      const fd = openFileAt(dir.fd, name, flags, 0o600);
+      if (fd === null) throw new PathError();
+      return fd;
     } catch (error) {
       if (!notFound(error) || retries === 0) throw error;
       retries -= 1;

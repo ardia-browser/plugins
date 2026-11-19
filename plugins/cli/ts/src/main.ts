@@ -1,6 +1,6 @@
 import { writeSync } from "node:fs";
 import { catchInterrupts } from "./control.ts";
-import { interruptsIgnored, LIBC_UNAVAILABLE, LibcUnavailable, loadLibc, watchLifeline } from "./libc.ts";
+import { interruptsIgnored, LIBC_UNAVAILABLE, LibcUnavailable, loadLibc, watchLifeline, writeWhole } from "./libc.ts";
 import { bundledPython, installRoot } from "./install.ts";
 import { abandonedOutput } from "./printable.ts";
 import { HAND_BACK, takeMarker } from "./routed.ts";
@@ -56,7 +56,7 @@ async function main(words: string[]): Promise<number> {
   if (argv.some((word) => word.includes(LOSSY))) return HAND_BACK;
   if (asksForVersion(argv) && servesNatively("--version")) {
     try {
-      writeSync(1, `ardia ${cliVersion()}\n`);
+      writeWhole(1, Buffer.from(`ardia ${cliVersion()}\n`));
     } catch (error) {
       return (await import("./printable.ts")).stdoutFlushFailed(error);
     }

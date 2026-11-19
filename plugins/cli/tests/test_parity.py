@@ -462,6 +462,35 @@ class EntryProcess:
         self.assertEqual(new, python)
         self.assertEqual(new, (True, 130, b"ardia tabs: interrupted\n"))
 
+    def test_ctrl_c_ends_a_call_whose_output_is_blocked(self):
+        import fcntl
+
+        for argv, blocked in (([], "stdout"), (["--help"], "stdout"), (["--version"], "stdout"), (["windows"], "stderr")):
+            with self.subTest(argv=argv, blocked=blocked):
+                reader, writer = os.pipe()
+                fcntl.fcntl(writer, fcntl.F_SETFL, os.O_NONBLOCK)
+                try:
+                    while True:
+                        os.write(writer, b"x" * 4096)
+                except BlockingIOError:
+                    fcntl.fcntl(writer, fcntl.F_SETFL, 0)
+                streams = {"stdout": writer, "stderr": subprocess.PIPE} if blocked == "stdout" else {"stdout": subprocess.PIPE, "stderr": writer}
+                process = subprocess.Popen([str(self.root / "bin" / "ardia"), *argv], env=self.environment({}), stdin=subprocess.DEVNULL,
+                                           preexec_fn=os.setsid, **streams)
+                os.close(writer)
+                try:
+                    time.sleep(1)
+                    self.assertIsNone(process.poll(), "the output should fill the pipe and block")
+                    self.ctrl_c(process)
+                    process.wait(5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    self.fail("Ctrl-C didn't end a call blocked on its output")
+                finally:
+                    os.close(reader)
+                    process.communicate()
+                self.assertEqual(process.returncode, -signal.SIGINT)
+
     def slow_listing(self, release: threading.Event, first=None):
         asked = []
 
@@ -556,6 +585,59 @@ class EntryProcess:
             python = subprocess.run([str(self.python), "-I", "-m", "ardia_cli", *argv], env=env, capture_output=True, timeout=30)
             self.assertEqual((new.returncode, new.stdout, new.stderr), (python.returncode, python.stdout, python.stderr), argv)
             self.assertNotIn("�".encode(), new.stderr)
+
+    def flushers_done(self) -> None:
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline:
+            running = subprocess.run(["pgrep", "-f", f"{self.python} .*flush_main"], capture_output=True, text=True).stdout.split()
+            if not running:
+                return
+            time.sleep(0.1)
+        self.fail("a telemetry flusher outlived its deadline")
+
+    def ends_with_a_fifo_at(self, place: str, program: list, hold: bool) -> tuple:
+        case = Path(tempfile.mkdtemp(prefix="f", dir=self.scratch))
+        data, usage, local = case / "data", case / "cli-home" / "Usage", case / "data" / "Telemetry" / "local"
+        for folder in (local, usage, case / "home"):
+            folder.mkdir(parents=True, mode=0o700)
+        for folder in (data / "Telemetry", case / "cli-home"):
+            folder.chmod(0o700)
+        (data / "telemetry.json").write_text(json.dumps({"sharing": True, "installId": INSTALL_ID}))
+        (data / "Telemetry" / "cli-flush.json").write_text(json.dumps({"failures": 0, "next_at": 9e9}))
+        (data / "Telemetry" / "cli-flush.json").chmod(0o600)
+        fifo = case / place.format(today=time.strftime("%Y-%m-%d", time.gmtime()))
+        fifo.unlink(missing_ok=True)
+        os.mkfifo(fifo, 0o600)
+        held = os.open(fifo, os.O_RDWR | os.O_NONBLOCK) if hold else None
+        fake = FakeArdia(data / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "windows": {"result": [{"id": "w-1"}]}})
+        env = {**self.environment({}), "HOME": str(case / "home"), "ARDIA_CLI_HOME": str(case / "cli-home"), "ARDIA_DATA_DIR": str(data)}
+        started = time.time()
+        try:
+            done = subprocess.run([*program, "windows", "--json"], env=env, capture_output=True, timeout=20)
+            self.flushers_done()
+        finally:
+            fake.close()
+            if held is not None:
+                os.close(held)
+        window = (started, time.time())
+        kind = "fifo" if fifo.is_fifo() else "file" if fifo.is_file() else "gone"
+        if kind == "fifo":
+            fifo.unlink()
+        records, queued, _, _ = harness.read_telemetry(case, data, window)
+        found = {}
+        for name in (data / "Telemetry" / "cli-flush.json", usage / "usage.json"):
+            text = harness.read_inside(case, name) if name.is_file() else None
+            found[name.name] = harness.scrub_times(json.loads(text), window) if text else text
+        return done.returncode, done.stdout, done.stderr, records, queued, found, kind
+
+    def test_a_private_file_that_is_a_fifo_never_blocks_and_ends_as_python_would_once_it_opened(self):
+        for place in ("data/Telemetry/cli-queue.jsonl", "data/Telemetry/cli-queue.lock", "data/Telemetry/cli-flush-claim.lock",
+                      "data/Telemetry/cli-flush.json", "data/Telemetry/local/cli-{today}.jsonl", "data/Telemetry/local/cli-local.lock",
+                      "cli-home/Usage/usage.json", "cli-home/Usage/usage.lock"):
+            with self.subTest(fifo=place):
+                python = self.ends_with_a_fifo_at(place, [str(self.python), "-I", "-m", "ardia_cli"], hold=True)
+                new = self.ends_with_a_fifo_at(place, [str(self.root / "bin" / "ardia")], hold=False)
+                self.assertEqual(new, python)
 
     def test_its_events_reach_the_collector_through_the_python_flusher(self):
         collector = ThreadingHTTPServer(("127.0.0.1", 0), Collector)

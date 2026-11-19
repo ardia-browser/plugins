@@ -1712,7 +1712,8 @@ its mode; the hardened runtime's library validation then loads it only into a pr
 | --- | --- | --- | --- |
 | `peerUid` | `getsockopt` `LOCAL_PEERCRED` (`struct xucred`) on macOS, `SO_PEERCRED` on Linux | no socket credential API | `control.ts`: refuse a control socket served by another user |
 | `interruptsIgnored` | `sigaction(SIGINT, NULL, …)` | can read no signal disposition | `main.ts`: leave an inherited ignored SIGINT ignored |
-| `openAt` | `openat` (always `O_CLOEXEC`) | `fs` opens by path only | `privatefs.ts`: folders and private files under an open folder |
+| `openAt` | `openat` (always `O_CLOEXEC`) | `fs` opens by path only | `privatefs.ts`: folders under an open folder |
+| `openFileAt` | `openat` with `O_NONBLOCK\|O_NOFOLLOW\|O_CLOEXEC`, `fstat`, then `fcntl(F_SETFL)` to clear `O_NONBLOCK`; `null` when the name is not a regular file (one that opened, or a FIFO with no reader, `ENXIO`) | `fs` opens by path only, and a blocking open can't be interrupted | `privatefs.ts`: every private file (spool, local copies, usage, flush state, locks), never blocking on a FIFO; `null` becomes the `PathError` Python's `open_private_file` raises for a file that isn't regular |
 | `mkdirAt` | `mkdirat` | path only | `privatefs.ts`: create `Telemetry`, `Local` and the usage folder |
 | `renameAt` | `renameat` | path only | `privatefs.ts`: the temp-then-rename writes |
 | `unlinkAt` | `unlinkat` (a name is a string or a `Buffer` of raw bytes, as for `sizeAt`) | path only | `privatefs.ts`: drop the spool and pruned copies |
@@ -1720,6 +1721,7 @@ its mode; the hardened runtime's library validation then loads it only into a pr
 | `listAt` | what CPython 3.13's `os.listdir(fd)` does: `fcntl(F_DUPFD_CLOEXEC)` (sharing the folder's open file and its offset), `fdopendir`, `readdir` from that offset, then `rewinddir` and `closedir`; names as raw-byte `Buffer`s. So it sees what Python sees on every filesystem (on overlayfs, not a file made after the folder was opened) and leaves the offset where Python leaves it | no directory listing from a descriptor | `privatefs.ts`: prune the local copies |
 | `lock` | `flock` | no `flock`; `O_EXLOCK` is Darwin-only | `privatefs.ts`: the same lock Python's `fcntl.flock` takes, on macOS and Linux |
 | `strerror` | `strerror_r` (GNU form on glibc, XSI elsewhere) | Node's messages are libuv's, not libc's | `paths.ts`, `libc.ts`: every OS error text, as Python's `os.strerror` gives it on that platform |
+| `writeAll` | `write` until all is written (`poll` for `POLLOUT` on `EAGAIN`), with SIGINT at its default disposition for the duration unless it was ignored | a synchronous `writeSync` blocked on a full pipe or a paused terminal can't be ended by Ctrl-C while Bun's own SIGINT handler is installed | `printable.ts`, `main.ts`: help, `--version` and every line on stderr |
 | `watchLifeline` | `fcntl(FD_CLOEXEC)`, a detached `pthread` blocking in `read`, `kill(getpid(), SIGKILL)` at EOF or error | a JS watcher can't run while the JS thread is blocked in a synchronous call | `main.ts`: end at once when the router dies |
 
 Every integer argument must be a number that is exactly a 32-bit integer, and a boolean a boolean; anything else throws
@@ -1754,6 +1756,14 @@ parity harness rather than stripped wholesale:
 - With a `MIMALLOC_*` variable set (in any case), Python's own bundled mimalloc prints its diagnostics on stderr, while
   a natively served call prints none: the router keeps those variables from the TypeScript program so Bun's mimalloc
   can't change what it prints or how it runs, and the Rust side has no mimalloc.
+- A private file the CLI opens (the telemetry spool, a local copy, the usage file, the flush state, any of their locks)
+  that is a FIFO: Python's open blocks until something opens the other end, forever if nothing does, and a Ctrl-C then
+  ends it by KeyboardInterrupt. The native side opens it without blocking and treats it as Python treats a file that
+  opened but isn't regular (`PathError`), so the call ends as Python's would have once the FIFO opened.
+- Ctrl-C while stdout or stderr is blocked (a full pipe nobody reads, a paused terminal): Python raises
+  KeyboardInterrupt, then blocks again flushing stdout as it exits, so only a second signal ends it, and it prints
+  `KeyboardInterrupt` and an `Exception ignored on flushing sys.stdout` block. The native side dies by SIGINT at once and
+  prints nothing more. A listing still ends as Python's does, with `ardia <command>: interrupted` and status 130.
 
 ## Linux
 

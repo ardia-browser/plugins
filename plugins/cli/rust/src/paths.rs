@@ -342,16 +342,35 @@ pub fn open_child_dir(dir: &OwnedFd, name: &str, check_mode: bool) -> Result<Own
     Ok(fd)
 }
 
+fn waiting_fifo(dir: &OwnedFd, name: &str) -> bool {
+    let Ok(name) = cname(name) else { return false };
+    let mut found: libc::stat = unsafe { std::mem::zeroed() };
+    unsafe { libc::fstatat(dir.as_raw_fd(), name.as_ptr(), &mut found, libc::AT_SYMLINK_NOFOLLOW) == 0 && found.st_mode & libc::S_IFMT == libc::S_IFIFO }
+}
+
+fn open_regular(name: &str, dir: &OwnedFd, flags: libc::c_int) -> Result<OwnedFd, Failure> {
+    let fd = match openat(dir, name, flags | libc::O_NOFOLLOW | libc::O_NONBLOCK, 0o600) {
+        Err(error) if error.raw_os_error() == Some(libc::ENXIO) && waiting_fifo(dir, name) => return Err(Failure::Path(PathError)),
+        other => other?,
+    };
+    if !metadata(&fd)?.is_file() {
+        return Err(Failure::Path(PathError));
+    }
+    let now = check(unsafe { libc::fcntl(fd.as_raw_fd(), libc::F_GETFL) })?;
+    check(unsafe { libc::fcntl(fd.as_raw_fd(), libc::F_SETFL, now & !libc::O_NONBLOCK) })?;
+    Ok(fd)
+}
+
 pub fn open_private_file(name: &str, dir: &OwnedFd, flags: libc::c_int) -> Result<OwnedFd, Failure> {
     let mut retries = if flags & libc::O_CREAT != 0 { 4 } else { 0 };
     let fd = loop {
-        match openat(dir, name, flags | libc::O_NOFOLLOW, 0o600) {
-            Err(error) if error.kind() == io::ErrorKind::NotFound && retries > 0 => retries -= 1,
+        match open_regular(name, dir, flags) {
+            Err(error) if error.not_found() && retries > 0 => retries -= 1,
             other => break other?,
         }
     };
     let info = metadata(&fd)?;
-    if !info.is_file() || info.uid() != uid() {
+    if info.uid() != uid() {
         return Err(Failure::Path(PathError));
     }
     if info.permissions().mode() & 0o077 != 0 {
