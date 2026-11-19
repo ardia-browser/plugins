@@ -5,41 +5,53 @@ import type { Process } from "./caller.ts";
 export type Facts = { interruptsIgnored: boolean; peerUid: number | undefined; chain: Process[] };
 
 const FACTS_SCRIPT = String.raw`
-import json, signal, socket, struct, sys
+import ctypes, os, struct, sys
+
+LINUX = sys.platform.startswith("linux")
+SIGINT_BIT = 1 << 1
+libc = ctypes.CDLL(None, use_errno=True)
+libc.getsockopt.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
 
 def peer_uid():
-    try:
-        sock = socket.socket(fileno=3)
-    except OSError:
+    level, option, size = (1, 17, 12) if LINUX else (0, 1, 76)
+    buffer = ctypes.create_string_buffer(size)
+    length = ctypes.c_uint32(size)
+    if libc.getsockopt(3, level, option, buffer, ctypes.byref(length)) != 0:
         return None
-    try:
-        if sys.platform.startswith("linux"):
-            raw = sock.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12)
-            return struct.unpack_from("=iII", raw)[1] if len(raw) >= 12 else None
-        raw = sock.getsockopt(0, 1, 76)
-        return struct.unpack_from("=II", raw)[1] if len(raw) >= 8 else None
-    except OSError:
+    if length.value < (12 if LINUX else 8):
         return None
-    finally:
-        sock.detach()
+    return struct.unpack_from("=I", buffer.raw, 4)[0]
+
+def sysctl(mib, size):
+    buffer = ctypes.create_string_buffer(size)
+    length = ctypes.c_size_t(size)
+    if libc.sysctl((ctypes.c_int * len(mib))(*mib), len(mib), buffer, ctypes.byref(length), None, ctypes.c_size_t(0)) != 0:
+        return None
+    return buffer.raw[: length.value]
+
+def interrupts_ignored(pid):
+    if LINUX:
+        try:
+            for line in open(f"/proc/{pid}/status"):
+                if line.startswith("SigIgn:"):
+                    return bool(int(line.split()[1], 16) & SIGINT_BIT)
+        except (OSError, ValueError, IndexError):
+            return False
+        return False
+    info = sysctl([1, 14, 1, pid], 1024)
+    return info is not None and len(info) >= 236 and bool(struct.unpack_from("=I", info, 232)[0] & SIGINT_BIT)
 
 class LibProc:
     def __init__(self):
-        import ctypes
-        self.ctypes = ctypes
         self.lib = ctypes.CDLL("/usr/lib/libproc.dylib", use_errno=True)
-        self.libc = ctypes.CDLL(None, use_errno=True)
         self.info = ctypes.create_string_buffer(64)
         self.path_buffer = ctypes.create_string_buffer(4096)
-        value = ctypes.c_int(0)
-        size = ctypes.c_size_t(ctypes.sizeof(value))
-        mib = (ctypes.c_int * 2)(1, 8)
-        failed = self.libc.sysctl(mib, 2, ctypes.byref(value), ctypes.byref(size), None, ctypes.c_size_t(0)) != 0 or value.value <= 0
-        self.args_size = 256 * 1024 if failed else min(value.value, 256 * 1024)
-        self.args = ctypes.create_string_buffer(self.args_size)
+        most = sysctl([1, 8], ctypes.sizeof(ctypes.c_int))
+        value = struct.unpack("=i", most)[0] if most is not None and len(most) == 4 else 0
+        self.args_size = 256 * 1024 if value <= 0 else min(value, 256 * 1024)
 
     def parent(self, pid):
-        if self.lib.proc_pidinfo(pid, 13, self.ctypes.c_uint64(0), self.info, 64) != 64:
+        if self.lib.proc_pidinfo(pid, 13, ctypes.c_uint64(0), self.info, 64) != 64:
             return None
         return struct.unpack_from("=I", self.info.raw, 4)[0]
 
@@ -48,12 +60,9 @@ class LibProc:
         return self.path_buffer.raw[:size] if size > 0 else b""
 
     def argv(self, pid):
-        ctypes = self.ctypes
-        mib = (ctypes.c_int * 3)(1, 49, pid)
-        size = ctypes.c_size_t(self.args_size)
-        if self.libc.sysctl(mib, 3, self.args, ctypes.byref(size), None, ctypes.c_size_t(0)) != 0 or size.value < 4:
+        raw = sysctl([1, 49, pid], self.args_size)
+        if raw is None or len(raw) < 4:
             return []
-        raw = self.args.raw[: size.value]
         argc = struct.unpack_from("=i", raw, 0)[0]
         rest = raw[4:]
         end = rest.find(b"\0")
@@ -65,13 +74,11 @@ class ProcFs:
     def parent(self, pid):
         try:
             raw = open(f"/proc/{pid}/stat", "rb").read()
-            fields = raw[raw.rindex(b")") + 1:].split()
-            return int(fields[1])
+            return int(raw[raw.rindex(b")") + 1:].split()[1])
         except (OSError, ValueError, IndexError):
             return None
 
     def path(self, pid):
-        import os
         try:
             target = os.readlink(f"/proc/{pid}/exe".encode())
         except OSError:
@@ -85,55 +92,34 @@ class ProcFs:
             return []
         return [word for word in raw.split(b"\0")[:2] if word]
 
-def interrupts_ignored(pid):
-    if sys.platform.startswith("linux"):
-        try:
-            for line in open(f"/proc/{pid}/status"):
-                if line.startswith("SigIgn:"):
-                    return bool(int(line.split()[1], 16) & (1 << (signal.SIGINT - 1)))
-        except (OSError, ValueError, IndexError):
-            return False
-        return False
-    import ctypes
-    libc = ctypes.CDLL(None, use_errno=True)
-    buffer = ctypes.create_string_buffer(1024)
-    size = ctypes.c_size_t(1024)
-    mib = (ctypes.c_int * 4)(1, 14, 1, pid)
-    if libc.sysctl(mib, 4, buffer, ctypes.byref(size), None, ctypes.c_size_t(0)) != 0 or size.value < 236:
-        return False
-    return bool(struct.unpack_from("=I", buffer.raw, 232)[0] & (1 << (signal.SIGINT - 1)))
-
 def chain(start):
     try:
-        reader = ProcFs() if sys.platform.startswith("linux") else LibProc()
+        reader = ProcFs() if LINUX else LibProc()
     except OSError:
-        return []
-    out, seen, pid = [], set(), start
-    while pid > 1 and pid not in seen and len(out) < 64:
+        return
+    seen, pid, depth = set(), start, 0
+    while pid > 1 and pid not in seen and depth < 64:
         seen.add(pid)
         ppid = reader.parent(pid)
         if ppid is None:
-            break
-        out.append([pid, ppid, reader.path(pid).hex(), [word.hex() for word in reader.argv(pid)]])
+            return
+        words = reader.argv(pid)
+        yield " ".join([str(pid), str(ppid), "x" + reader.path(pid).hex(), str(len(words)), *("x" + word.hex() for word in words)])
         pid = ppid
-    return out
+        depth += 1
 
-me = int(sys.argv[1])
-sys.stdout.write(json.dumps({"ignored": interrupts_ignored(me), "peer": peer_uid(), "chain": chain(int(sys.argv[2]))}))
+peer = peer_uid()
+head = ("1" if interrupts_ignored(int(sys.argv[1])) else "0") + " " + ("-" if peer is None else str(peer))
+sys.stdout.write("\n".join([head, *chain(int(sys.argv[2]))]) + "\n")
 `;
 
-function text(hex: unknown): string {
-  return typeof hex === "string" ? new TextDecoder().decode(Buffer.from(hex, "hex")) : "";
+function text(word: string | undefined): string {
+  return new TextDecoder().decode(Buffer.from((word ?? "x").slice(1), "hex"));
 }
 
-function chainOf(rows: unknown): Process[] {
-  if (!Array.isArray(rows)) return [];
-  return rows.map((row: unknown[]) => ({
-    pid: Number(row[0]),
-    ppid: Number(row[1]),
-    path: text(row[2]),
-    argv: Array.isArray(row[3]) ? row[3].map(text) : [],
-  }));
+function processOf(line: string): Process {
+  const [pid, ppid, path, count, ...argv] = line.split(" ");
+  return { pid: Number(pid), ppid: Number(ppid), path: text(path), argv: argv.slice(0, Number(count)).map(text) };
 }
 
 export function askPython(python: string | null, socketFd: number): Facts | undefined {
@@ -145,14 +131,8 @@ export function askPython(python: string | null, socketFd: number): Facts | unde
     timeout: 20_000,
   });
   if (done.status !== 0 || done.stdout === null) return undefined;
-  try {
-    const answer = JSON.parse(done.stdout.toString("utf8")) as { ignored?: unknown; peer?: unknown; chain?: unknown };
-    return {
-      interruptsIgnored: answer.ignored === true,
-      peerUid: typeof answer.peer === "number" ? answer.peer : undefined,
-      chain: chainOf(answer.chain),
-    };
-  } catch {
-    return undefined;
-  }
+  const [head = "", ...rest] = done.stdout.toString("latin1").split("\n").filter((line) => line !== "");
+  const [ignored, peer] = head.split(" ");
+  if ((ignored !== "0" && ignored !== "1") || peer === undefined || (peer !== "-" && !/^[0-9]+$/.test(peer))) return undefined;
+  return { interruptsIgnored: ignored === "1", peerUid: peer === "-" ? undefined : Number(peer), chain: rest.map(processOf) };
 }
