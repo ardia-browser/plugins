@@ -2,7 +2,6 @@ import { NeedsPython } from "../paths.ts";
 import { abandonWork } from "../printable.ts";
 import { Call, finish } from "../telemetry.ts";
 import { cliVersion } from "../version.ts";
-import { commandHelp } from "./help.ts";
 import { cleanMetrics, exitOf, outputChars, processStatus, textOf } from "./answer.ts";
 import { allowedFlags, commandName, hoist, hoistFailure, splitGlobals, truthy, Usage } from "./args.ts";
 import { BrowseError, PythonCrash } from "./errors.ts";
@@ -97,6 +96,7 @@ async function run(browse: string[], printer: Printer, call: Call, plugin: Acces
   const asJson = Boolean(found.flag("json")) || truthy(process.env.AGENT_BROWSER_JSON);
   const help = rest.length === 0 || HELP_WORDS.includes(rest[0] as string) ? rest[1] : rest.slice(1).some((word) => word === "--help" || word === "-h") && !["--version", "-V"].includes(rest[0] as string) ? rest[0] : null;
   if (help !== null) {
+    const { commandHelp } = await import("./help.ts");
     printer.out(`${commandHelp(help)}\n`);
     return { status: printer.closed ? CLOSED : 0, crash: printer.crash };
   }

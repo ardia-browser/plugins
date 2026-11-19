@@ -15,6 +15,8 @@ function asksForVersion(argv: string[]): boolean {
   return argv.length === 1 && argv[0] === "--version";
 }
 
+let browseServed = false;
+
 async function serveBrowse(argv: string[], python: string | null): Promise<number | undefined> {
   const [browse, paths, { consentUnreadable, dataDirArg, leadingTokens }] = await Promise.all([
     import("./browse/index.ts"),
@@ -33,7 +35,10 @@ async function serveBrowse(argv: string[], python: string | null): Promise<numbe
 
 async function serve(argv: string[], python: string | null): Promise<number | undefined> {
   const { invokesBrowse, pluginMode } = await import("./browse/route.ts");
-  if (invokesBrowse(argv) && (pluginMode() || servesNatively("browse"))) return serveBrowse(argv, python);
+  if (invokesBrowse(argv) && (pluginMode() || servesNatively("browse"))) {
+    browseServed = true;
+    return serveBrowse(argv, python);
+  }
   const [{ route }, paths] = await Promise.all([import("./route.ts"), import("./paths.ts")]);
   const chosen = route(argv);
   if (chosen.kind === "python" || chosen.kind === "version") return undefined;
@@ -86,3 +91,4 @@ async function main(words: string[]): Promise<number> {
 const status = await main(process.argv.slice(2));
 process.exitCode = status;
 if (abandonedOutput()) setTimeout(() => process.exit(status), ABANDONED_WRITE_GRACE_MS).unref();
+else if (browseServed) process.exit(status);

@@ -12,16 +12,25 @@ export class Interrupted extends Error {}
 
 export class Absent extends Error {}
 
+const EVENTS = ["connect", "data", "end", "close", "error", "drain"] as const;
+let waking: (() => void) | undefined;
+
+function wake(): void {
+  waking?.();
+}
+
 function wait(socket: Socket | undefined, until: number): Promise<void> {
   return new Promise((resolve) => {
     const finish = () => {
       clearTimeout(timer);
-      socket?.off("data", finish).off("end", finish).off("close", finish).off("error", finish).off("drain", finish);
+      for (const event of EVENTS) socket?.off(event, finish);
+      if (waking === finish) waking = undefined;
       wakeOnInterrupt(undefined);
       resolve();
     };
     const timer = setTimeout(finish, Math.max(1, Math.min(POLL_MS, until - performance.now())));
-    socket?.on("data", finish).on("end", finish).on("close", finish).on("error", finish).on("drain", finish);
+    for (const event of EVENTS) socket?.on(event, finish);
+    waking = finish;
     wakeOnInterrupt(finish);
   });
 }
@@ -92,6 +101,7 @@ export async function exchange(socket: Socket, line: Uint8Array, command: string
   let flushed = false;
   socket.write(line, () => {
     flushed = true;
+    wake();
   });
   socket.resume();
   try {
