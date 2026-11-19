@@ -66,10 +66,6 @@ def failure(method: str, error) -> Exception:
     return CdpError(method, detail, error.code)
 
 
-def late_attaches(browser) -> set:
-    return browser.__dict__.setdefault("late_attaches", set())
-
-
 def detach_unclaimed(browser, attaching: asyncio.Future, session: str | None = None) -> None:
     if attaching.cancelled() or attaching.exception() is not None:
         return
@@ -82,20 +78,22 @@ def detach_unclaimed(browser, attaching: asyncio.Future, session: str | None = N
 async def claimed_attach(browser, method: str, params: dict | None = None, wait: float | None = None, session: str | None = None,
                          unknown: bool = False) -> dict:
     wait = ATTACH_WAIT if wait is None else wait
-    late = late_attaches(browser)
-    if len(late) >= MAX_LATE_ATTACHES:
-        raise BrowseError(
-            f"{method} wasn't sent: {len(late)} earlier DevTools attaches on this connection never answered. Try again once Ardia "
-            "catches up, or `ardia browse close` this session to start its connection over",
-            code="attaches_unanswered",
-        )
-    attaching = asyncio.ensure_future(browser.send(method, params, session, timeout=None))
+    link = browser.link if isinstance(browser, Browser) else None
+    if link is None:
+        attaching = asyncio.ensure_future(browser.send(method, params, session, timeout=None))
+    else:
+        ident = link.reserve_attach(MAX_LATE_ATTACHES)
+        if ident is None:
+            raise BrowseError(
+                f"{method} wasn't sent: {len(link.attaching)} DevTools attaches on this connection haven't been answered. Try again "
+                "once Ardia catches up, or `ardia browse close` this session to start its connection over",
+                code="attaches_unanswered",
+            )
+        attaching = asyncio.ensure_future(browser.send(method, params, session, timeout=None, ident=ident))
+        attaching.add_done_callback(lambda done: link.attaching.discard(ident))
     try:
         return await asyncio.wait_for(asyncio.shield(attaching), wait)
     except (asyncio.CancelledError, asyncio.TimeoutError) as error:
-        if not attaching.done():
-            late.add(attaching)
-            attaching.add_done_callback(late.discard)
         attaching.add_done_callback(lambda done: detach_unclaimed(browser, done, session))
         if isinstance(error, asyncio.TimeoutError):
             if unknown:
@@ -138,7 +136,8 @@ class Browser:
     def alive(self) -> bool:
         return self.link is not None and not self.link.lost.is_set()
 
-    async def send(self, method: str, params: dict | None = None, session: str | None = None, timeout: float | None = 30, mutation: bool = False):
+    async def send(self, method: str, params: dict | None = None, session: str | None = None, timeout: float | None = 30, mutation: bool = False,
+                   ident: int | None = None):
         from ardia_cli import cdp
 
         method = getattr(method, "value", method)
@@ -149,7 +148,7 @@ class Browser:
             command["sessionId"] = session
         started = command_metrics.clock()
         try:
-            response = await self.link.execute_command(command, timeout=timeout)
+            response = await self.link.execute_command(command, timeout=timeout, ident=ident)
         except cdp.CommandFailed as error:
             raise failure(method, error) from None
         except cdp.CommandTimeout:

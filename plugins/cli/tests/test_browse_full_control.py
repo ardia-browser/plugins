@@ -465,9 +465,36 @@ class RawCdp(unittest.TestCase):
         refused, before, after = asyncio.run(run())
         self.assertNotIsInstance(refused, CdpTimeout)
         self.assertEqual(refused.code, "attaches_unanswered")
-        self.assertIn("never answered", refused.message)
+        self.assertIn("haven't been answered", refused.message)
         self.assertEqual((before, after), (16, 17))
         self.assertEqual(connection.MAX_LATE_ATTACHES, 16)
+
+    def test_parallel_tab_probes_stay_under_the_attach_cap(self):
+        from unittest import mock
+
+        from ardia_cli.browse import connection, state as browse_state
+
+        def answer(message):
+            return None if message["method"] == "Target.attachToTarget" else {}
+
+        async def run():
+            state = browse_state.State.__new__(browse_state.State)
+            state.browser, sock = linked_browser(answer)
+            state.target_infos = {f"T{index}": {"url": f"https://example.com/{index}"} for index in range(32)}
+
+            async def refresh_targets():
+                return list(state.target_infos.values())
+
+            state.refresh_targets = refresh_targets
+            with mock.patch.object(browse_state, "PROBE_TIMEOUT", 0.02):
+                shown = await state.shown_target()
+            sent = len(sock.methods("Target.attachToTarget"))
+            await state.browser.close()
+            return shown, sent
+
+        shown, sent = asyncio.run(run())
+        self.assertIsNone(shown)
+        self.assertLessEqual(sent, connection.MAX_LATE_ATTACHES)
 
     def test_a_raw_attach_answered_late_is_detached_on_its_session(self):
         from ardia_cli.browse.errors import OutcomeUnknown

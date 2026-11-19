@@ -45,6 +45,7 @@ class Connection:
         self.socket = None
         self.ids = itertools.count(1)
         self.pending: dict[int, asyncio.Future] = {}
+        self.attaching: set[int] = set()
         self.handlers: dict[str, list] = {}
         self.listeners: list = []
         self.reader: asyncio.Task | None = None
@@ -79,6 +80,7 @@ class Connection:
             log.debug("CDP reader stopped", exc_info=True)
         finally:
             self.lost.set()
+            self.attaching.clear()
             pending = list(self.pending.values())
             self.pending.clear()
             for future in pending:
@@ -99,13 +101,20 @@ class Connection:
         if self.socket is None or self.lost.is_set():
             raise ConnectionLost()
 
-    async def execute_command(self, command: dict, timeout: float | None = 60) -> dict:
+    def reserve_attach(self, limit: int) -> int | None:
+        if len(self.attaching) >= limit:
+            return None
+        ident = next(self.ids)
+        self.attaching.add(ident)
+        return ident
+
+    async def execute_command(self, command: dict, timeout: float | None = 60, ident: int | None = None) -> dict:
         from ardia_cli import wsclient
 
         guard.check_command(command)
         self._usable()
         method = command.get("method")
-        ident = next(self.ids)
+        ident = next(self.ids) if ident is None else ident
         future = asyncio.get_running_loop().create_future()
         self.pending[ident] = future
         loop = asyncio.get_running_loop()
@@ -119,6 +128,7 @@ class Connection:
             raise ConnectionLost() from None
         finally:
             self.pending.pop(ident, None)
+            self.attaching.discard(ident)
             _settle(future)
         if "error" in reply:
             raise CommandFailed(method, reply["error"])

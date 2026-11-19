@@ -17,6 +17,7 @@ PAGE_SCHEMES = ("http:", "https:", "about:", "data:", "blob:", "file:", "chrome:
 ACTIVE_TIMEOUT = 3.0
 APPEAR_POLL = 0.15
 PROBE_TIMEOUT = 3.0
+PROBE_FANOUT = 8
 UNKNOWN = object()
 NO_PAGE = (
     "The user isn't on a web page right now (New Tab or another Ardia view). "
@@ -373,7 +374,13 @@ class State:
     async def shown_target(self) -> str | None:
         await self.refresh_targets()
         candidates = [target_id for target_id, info in self.target_infos.items() if info.get("url") != "about:blank"]
-        probes = await asyncio.gather(*(self.probe(target_id) for target_id in candidates))
+        gate = asyncio.Semaphore(PROBE_FANOUT)
+
+        async def gated(target_id):
+            async with gate:
+                return await self.probe(target_id)
+
+        probes = await asyncio.gather(*(gated(target_id) for target_id in candidates))
         focused = [target_id for target_id, (visible, has_focus) in zip(candidates, probes) if visible and has_focus]
         visible = [target_id for target_id, (shown, _) in zip(candidates, probes) if shown]
         return (focused or visible or [None])[0]
