@@ -1966,6 +1966,7 @@ async def cmd_clipboard(ctx: Ctx, argv):
 
 CDP_METHOD = re.compile(r"^[A-Z][A-Za-z0-9]*\.[a-z][A-Za-z0-9]*$")
 CDP_USAGE = "cdp <Domain.method> [--params <json>|-] [--param k=v | k:=json] [--target browser|<tab>] [--timeout 30s]"
+CDP_FLAGS = {"--params": "value", "--param": "multi", "--target": "value", "--timeout": "value"}
 
 
 @command("cdp")
@@ -1975,7 +1976,7 @@ async def cmd_cdp(ctx: Ctx, argv):
     from ardia_cli.browse.script import parse_timeout
     from ardia_cli.call_cli import ParamsError, build_params
 
-    options, args = parse(argv, {"--params": "value", "--param": "multi", "--target": "value", "--timeout": "value"})
+    options, args = parse(argv, CDP_FLAGS)
     need(args, 1, CDP_USAGE)
     if len(args) > 1:
         raise Usage(f"Usage: ardia browse {CDP_USAGE} (params go in --params or --param)")

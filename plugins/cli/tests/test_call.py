@@ -124,6 +124,49 @@ class Call(CallBase):
         self.serve_methods()
         self.assertEqual(self.run_cli("call", "tabs.close", "--json")[:2], (0, "null\n"))
 
+    def test_a_timeout_must_be_finite_positive_and_bounded(self):
+        server = self.serve_methods()
+        for value in ("0", "-1", "nan", "inf", "-inf", "1e400", "601", "abc"):
+            status, out, err = self.run_cli("call", "windows", "--timeout", value)
+            self.assertEqual((status, out), (2, ""), value)
+            self.assertIn("--timeout", err)
+        self.assertEqual(server.requests, [])
+        self.assertEqual(self.run_cli("call", "windows", "--timeout", "600")[0], 0)
+        self.assertEqual(self.run_cli("call", "windows", "--timeout", "0.5")[0], 0)
+
+    def test_the_hint_lookup_stays_inside_the_budget(self):
+        self.serve_methods()
+        seen = []
+        real = control.Connection.call
+
+        async def spy(connection, method, params=None, timeout=control.CALL_TIMEOUT, **kwargs):
+            seen.append((method, timeout))
+            return await real(connection, method, params, timeout, **kwargs)
+
+        with mock.patch.object(control.Connection, "call", spy):
+            status, _, err = self.run_cli("call", "history.serch", "--timeout", "2")
+        self.assertEqual(status, 1)
+        self.assertIn("did you mean history.search", err)
+        method, timeout = seen[-1]
+        self.assertEqual(method, "methods")
+        self.assertTrue(0 < timeout <= 2, timeout)
+
+    def test_no_hint_lookup_when_methods_itself_is_unknown(self):
+        server = self.serve()
+        status, _, err = self.run_cli("call", "methods")
+        self.assertEqual(status, 1)
+        self.assertEqual([m for m, _ in server.requests], ["hello", "methods"])
+        self.assertIn("update Ardia", err)
+
+    def test_no_hint_lookup_once_the_budget_is_spent(self):
+        server = self.serve_methods()
+        clock = iter([100.0, 200.0, 300.0, 400.0])
+        with mock.patch.object(call_cli, "monotonic", side_effect=lambda: next(clock)):
+            status, _, err = self.run_cli("call", "history.serch", "--timeout", "5")
+        self.assertEqual(status, 1)
+        self.assertNotIn("methods", [m for m, _ in server.requests])
+        self.assertNotIn("did you mean", err)
+
 class Methods(CallBase):
     def test_lists_what_ardia_offers(self):
         self.serve_methods()

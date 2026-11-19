@@ -121,7 +121,9 @@ you bump a pin.
   any method to `<data dir>/ArdiaControl.sock` (`hello` first, as every control command does) and prints the result:
   JSON with `--json`, otherwise a readable `key: value` / `- item` outline with control characters escaped, or
   `✓ METHOD` for a null result. `--params` is a JSON object (`-` reads it from stdin, up to 1 MB); `-p key=value`
-  sets a string and `-p key:=json` any JSON value, and `-p` wins over `--params` for the same key. A refusal prints
+  sets a string and `-p key:=json` any JSON value, and `-p` wins over `--params` for the same key. `--timeout` is seconds
+  above 0 and up to 600 (default 30), checked before connecting; an unknown method's nearest-name lookup (`methods`)
+  runs only inside what is left of it, and not at all when the unknown method is `methods` itself. A refusal prints
   `ardia call: <Ardia's message>` and exits 1; an unknown method adds the closest name from `methods`, or, on an Ardia
   without `methods`, says to update Ardia. Exit 2 when Ardia can't be reached, or when the connection dropped after
   the request went out, or Ardia's answer had neither a `result` nor an `error` (in both the method may or may not
@@ -970,7 +972,7 @@ DevTools server, and nothing in the command changes.
 ### Raw CDP
 
 `ardia browse cdp <Domain.method> [--params <json>|-] [--param k=v]… [--param k:=json]… [--target browser|<tab>]
-[--timeout 30s]` sends one DevTools method and prints its result as JSON (`--json`: `{method, target, result}` in
+[--timeout 30s]` (above 0 and up to 10m, checked before the daemon starts) sends one DevTools method and prints its result as JSON (`--json`: `{method, target, result}` in
 `data`), or `✓ <method>` for an empty result. It goes to the session's tab, to the tab `--target` names (`t1`,
 `tab-…`, a label or a targetId, as `tab` takes them; attached without becoming the session's tab), or with
 `--target browser` to the browser connection itself (`Browser.*`, `Target.*`, `Storage.*`, `SystemInfo.*`). Params

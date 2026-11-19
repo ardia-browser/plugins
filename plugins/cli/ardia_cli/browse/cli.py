@@ -343,6 +343,15 @@ def params_from_stdin(args: list[str]) -> bool:
     return "--params=-" in args or any(a == "--params" and b == "-" for a, b in zip(args, args[1:]))
 
 
+def check_cdp(args: list[str]) -> None:
+    from ardia_cli.browse.commands import CDP_FLAGS, parse
+    from ardia_cli.browse.script import parse_timeout
+
+    options, _ = parse(args, CDP_FLAGS)
+    if options.get("timeout") is not None:
+        parse_timeout(options["timeout"])
+
+
 def read_stdin_text() -> str:
     from ardia_cli import notes
 
@@ -524,6 +533,8 @@ def run(argv: list[str]) -> int:
                 raise Usage("--params from stdin is over 1 MB")
         elif command == "read":
             stdin = read_stdin_urls(args)
+        if command == "cdp":
+            check_cdp(args)
         elif command == "script":
             stdin = script_source(args, os.getcwd())
         if command == "close" and "--all" in args:

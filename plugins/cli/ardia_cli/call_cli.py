@@ -1,6 +1,9 @@
+import argparse
 import asyncio
 import json
+import math
 import sys
+from time import monotonic
 
 from ardia_cli import control
 from ardia_cli.control import MethodError, Unreachable
@@ -45,6 +48,7 @@ FAMILIES = frozenset({
     "peek", "sidebar", "command", "config", "plugins", "sync", "import", "certificates", "cache", "browser", "engine",
 })
 MAX_STDIN_PARAMS = 1024 * 1024
+MAX_TIMEOUT = 600.0
 PROTOCOL_CODES = frozenset({"bad_request", "unknown_method", "unknown_command", "refused", "no_window", "failed", "unsupported_protocol"})
 
 
@@ -55,6 +59,16 @@ class ParamsError(Exception):
 def family(method: str) -> str:
     head = method.split(".", 1)[0].split("/", 1)[0].lower()
     return head if head in FAMILIES else "other"
+
+
+def timeout_seconds(text: str) -> float:
+    try:
+        value = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"takes seconds, like 30 or 2.5, not {text}") from None
+    if not math.isfinite(value) or value <= 0 or value > MAX_TIMEOUT:
+        raise argparse.ArgumentTypeError(f"takes seconds above 0 and up to {MAX_TIMEOUT:g}, not {text}")
+    return value
 
 
 def recorded_code(code) -> str:
@@ -94,7 +108,8 @@ def add_parsers(commands, formatter):
     call.add_argument("method", metavar="METHOD", help="a method name (see ardia methods)")
     call.add_argument("--params", metavar="JSON", help="the params, a JSON object (- reads it from stdin)")
     call.add_argument("-p", "--param", dest="pairs", action="append", default=[], metavar="KEY=VALUE", help="one param: key=value for a string, key:=json for any JSON value; repeatable")
-    call.add_argument("--timeout", type=float, default=control.CALL_TIMEOUT, metavar="S", help=f"how long to wait for the answer (default {control.CALL_TIMEOUT:g})")
+    call.add_argument("--timeout", type=timeout_seconds, default=control.CALL_TIMEOUT, metavar="S",
+                      help=f"how long to wait for the answer, in seconds (default {control.CALL_TIMEOUT:g}, at most {MAX_TIMEOUT:g})")
     call.add_argument("--json", action="store_true", help="print the result as JSON")
     call.add_argument("--data-dir", metavar="DIR", help=DATA_DIR_HELP)
 
@@ -213,16 +228,18 @@ def cmd_call(args) -> int:
         telemetry.note_error_code("bad_params")
         complain(f"ardia call: {error}")
         return 1
-    timeout = args.timeout if args.timeout and args.timeout > 0 else None
+    timeout = args.timeout
 
     async def work(connection):
+        started = monotonic()
         try:
             return await connection.call(args.method, params, timeout, require_outcome=True), None
         except MethodError as error:
             catalog = None
-            if error.code == "unknown_method":
+            left = timeout - (monotonic() - started)
+            if error.code == "unknown_method" and args.method != "methods" and left > 0:
                 try:
-                    catalog = await connection.call("methods")
+                    catalog = await connection.call("methods", timeout=left)
                 except (MethodError, Unreachable):
                     catalog = None
             return error, catalog

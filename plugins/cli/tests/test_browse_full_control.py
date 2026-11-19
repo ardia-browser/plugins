@@ -133,6 +133,42 @@ class RawCdp(unittest.TestCase):
         self.assertIn("Raw CDP:", browse_help.OVERVIEW)
 
 
+
+class CheckedBeforeConnecting(unittest.TestCase):
+    def setUp(self):
+        self.temp = Path(tempfile.mkdtemp(prefix="cdpcheck"))
+        self.addCleanup(shutil.rmtree, self.temp, True)
+
+    def browse(self, *argv, stdin=""):
+        import contextlib
+        import io
+        from unittest import mock
+
+        from ardia_cli.browse import cli as browse_cli, client
+
+        err = io.StringIO()
+        fake_stdin = io.TextIOWrapper(io.BytesIO(stdin if isinstance(stdin, bytes) else stdin.encode("utf-8", "surrogatepass")), encoding="utf-8")
+        with mock.patch.dict(os.environ, {"ARDIA_DATA_DIR": str(self.temp), "ARDIA_TELEMETRY": "0"}), \
+                mock.patch.object(client, "ensure_daemon", side_effect=AssertionError("connected")), \
+                mock.patch("sys.stdin", fake_stdin), contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            status = browse_cli.run(["--port", "9", *argv])
+        return status, err.getvalue()
+
+    def test_bad_timeouts_fail_before_connecting(self):
+        for value in ("0", "-1", "nan", "inf", "9" * 400, "601s", "11m"):
+            status, err = self.browse("cdp", "Page.getLayoutMetrics", "--timeout", value)
+            self.assertEqual(status, 1, value)
+            self.assertIn("--timeout", err)
+
+    def test_a_huge_timeout_never_overflows_the_client_deadline(self):
+        import math
+
+        from ardia_cli.browse import limits
+
+        for argv in (["cdp", "Page.x", "--timeout", "9" * 400], ["wait", "--timeout", "9" * 300], ["script", "--timeout", "1e5"]):
+            self.assertTrue(math.isfinite(limits.answer_deadline({"argv": argv})), argv)
+            self.assertLess(limits.answer_deadline({"argv": argv}), 10 ** 7)
+
 class OlderEngine(unittest.TestCase):
     def test_upload_and_download_say_update_ardia(self):
         for method, command in (("DOM.setFileInputFiles", "upload"), ("Browser.setDownloadBehavior", "download"),

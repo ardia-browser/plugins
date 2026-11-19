@@ -1,3 +1,4 @@
+import math
 import re
 
 QUEUE_WAIT = 30.0
@@ -7,6 +8,7 @@ LIMIT_MARGIN = 30.0
 SCRIPT_DEFAULT = 90.0
 DEFAULT_TIMEOUT_MS = 25000
 LONG_COMMANDS = {"batch": 600.0, "read": 600.0, "record": 600.0}
+MAX_GIVEN = 24 * 3600.0
 
 
 def seconds_of(text: str | None) -> float | None:
@@ -16,7 +18,8 @@ def seconds_of(text: str | None) -> float | None:
     if not match:
         return None
     number, unit = float(match.group(1)), match.group(2) or "ms"
-    return number * {"ms": 0.001, "s": 1, "m": 60}[unit]
+    seconds = number * {"ms": 0.001, "s": 1, "m": 60}[unit]
+    return min(seconds, MAX_GIVEN) if math.isfinite(seconds) else MAX_GIVEN
 
 
 def given_timeout(argv: list[str]) -> float | None:
