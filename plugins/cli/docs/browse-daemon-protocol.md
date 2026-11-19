@@ -152,13 +152,18 @@ and never by Python's or by the person's own session. The TypeScript daemon only
 - **Commands.** Only `tab <id>` (the pick) and `tab`/`tab list`, `snapshot`, `click`, `fill`, `press`/`key`, `type`,
   `scroll`, `wait`, `find`, `is` and `get`; anything else (and `close`'s tab closing) answers 77 `plugin_refused`.
   They read pages through DOM, accessibility and Input only: no `Runtime`, `DOM.resolveNode`, `DOM.performSearch`,
-  `Page.createIsolatedWorld` or drag method is ever sent (the daemon checks every outgoing method against its list, and
+  `Page.createIsolatedWorld`, `DOM.focus`, `Page.captureScreenshot` or drag method is ever sent (the daemon checks every outgoing method against its list, and
   the harness checks the transcript). A click is one `Ardia.dispatchClick {x, y, button, clickCount, modifiers}`, which
   the engine presses and releases in one browser task; `Input.dispatchMouseEvent` is only ever a buttonless
   `mouseMoved` or a `mouseWheel`, never a press, a release or a held button. At most one input command
   (`Input.dispatch*`, `Input.insertText` or `Ardia.dispatchClick`) is outstanding: each is sent
   only after the previous one was answered, and one left unanswered (10 s, `outcome_unknown`) holds back the next step's
   input for up to 10 s more (`input_unanswered`).
+- **Focus and the act lease.** `fill`, `type`, `press <selector> <key>` and `find … focus` focus their element by
+  clicking it (`Ardia.dispatchClick` at its first content quad's centre). `DOM.scrollIntoViewIfNeeded` (and
+  `Emulation.setFocusEmulationEnabled`, which the daemon doesn't use) need a live act lease, so only acting steps send
+  them: `click`, `fill`, `type`, `press`, `scroll` and `find` with an action other than `text`; `snapshot`, `get`, `is`,
+  `wait` and `find … text` never do.
 - **Keys.** Key events follow ardia#2808's key policy, whose key table the daemon carries as generated data
   (`ts/scripts/plugin-key-table.ts`, checked against the engine's compiled validator by `plugin-keys.test.ts`). A
   `press` the engine would refuse (Meta+C, Meta+V, Meta+Z, Shift+Delete, a character no key types) answers 77

@@ -1,4 +1,5 @@
 import { BrowseError } from "../daemon-errors.ts";
+import { clickAt } from "./input.ts";
 import { unavailable } from "./link.ts";
 import { type PluginPage } from "./page.ts";
 import { type PluginSession } from "./session.ts";
@@ -115,5 +116,6 @@ export async function boxOf(element: Element): Promise<Box | null> {
 }
 
 export async function focus(element: Element): Promise<void> {
-  await element.page.send("DOM.focus", { backendNodeId: element.backend });
+  const [x, y] = await center(element);
+  await clickAt(element.page, x, y, "left");
 }

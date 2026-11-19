@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import fs from "node:fs";
 import { methodsBetweenMarks, pluginViolations } from "./plugin-rules.ts";
-import { CHROME, entries, pageTarget, startWorld, step, stopWorld, tap, type World } from "./plugin-world.ts";
+import { CHROME, CREDENTIAL, entries, pageTarget, startWorld, step, stopWorld, tap, type World } from "./plugin-world.ts";
 
 setDefaultTimeout(120_000);
 const BASE = Number(process.env["ARDIA_F1_PORTS"] ?? "9660") + 5;
@@ -11,8 +11,7 @@ describe.skipIf(!CHROME)("plugin mode phase 2 against headless Chrome for Testin
   let loader = "";
 
   async function marked(name: string, argv: string[], options: Record<string, unknown> = {}) {
-    await tap(world, "mark", { step: name });
-    return step(world, argv, { expect_loader: loader, ...options });
+    return step(world, argv, { expect_loader: loader, ...options }, CREDENTIAL, world.key, name);
   }
 
   beforeAll(async () => {

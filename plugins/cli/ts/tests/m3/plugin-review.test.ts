@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { methodsBetweenMarks, pluginViolations } from "./plugin-rules.ts";
-import { CHROME, entries, openTab, pageTarget, resetPage, startWorld, step, stopWorld, tap, type World } from "./plugin-world.ts";
+import { CHROME, CREDENTIAL, entries, openTab, pageTarget, resetPage, startWorld, step, stopWorld, tap, type World } from "./plugin-world.ts";
 
 setDefaultTimeout(120_000);
 const BASE = Number(process.env["ARDIA_F1_PORTS"] ?? "9660") + 15;
@@ -16,8 +16,7 @@ describe.skipIf(!CHROME)("plugins#21 review round 1, against headless Chrome for
   }
 
   async function marked(name: string, argv: string[], options: Record<string, unknown> = {}) {
-    await tap(world, "mark", { step: name });
-    return step(world, argv, options);
+    return step(world, argv, options, CREDENTIAL, world.key, name);
   }
 
   const sentIn = (name: string) => methodsBetweenMarks(entries(world)).get(name) ?? [];

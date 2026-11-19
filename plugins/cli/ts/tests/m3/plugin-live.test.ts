@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import fs from "node:fs";
 import { methodsBetweenMarks, pluginViolations } from "./plugin-rules.ts";
-import { CHROME, entries, OTHER_CREDENTIAL, pageTarget, startWorld, step, stopWorld, tap, type World } from "./plugin-world.ts";
+import { CHROME, CREDENTIAL, entries, OTHER_CREDENTIAL, pageTarget, startWorld, step, stopWorld, tap, type World } from "./plugin-world.ts";
 
 setDefaultTimeout(120_000);
 const BASE = Number(process.env["ARDIA_F1_PORTS"] ?? "9660");
@@ -15,8 +15,7 @@ describe.skipIf(!CHROME)("plugin mode against headless Chrome for Testing, throu
   const sent = new Map<string, string[]>();
 
   async function marked(name: string, argv: string[], options: Record<string, unknown> = {}, credential?: string | null) {
-    await tap(world, "mark", { step: name });
-    return credential === undefined ? step(world, argv, options) : step(world, argv, options, credential);
+    return step(world, argv, options, credential === undefined ? CREDENTIAL : credential, world.key, name);
   }
 
   beforeAll(async () => {

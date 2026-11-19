@@ -458,6 +458,13 @@ async function cmdFind(ctx: PluginCtx, argv: string[]): Promise<Result> {
   return new Result({ ref: element.label, text }, text, true);
 }
 
+export function findAction(argv: string[]): string {
+  const [options, given] = parse(argv, { "--name": "value", "--exact": "bool", "--partial": "bool", "--no-humanize": "bool" });
+  if (given.length === 0) return "click";
+  const [locator, args] = findArguments(given, (options["name"] as string | undefined) ?? null);
+  return (locator === "nth" ? args[2] : args[1]) ?? "click";
+}
+
 export const PHASE_TWO: Record<string, PluginHandler> = {
   get: cmdGet,
   is: cmdIs,

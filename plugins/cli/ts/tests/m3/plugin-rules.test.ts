@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { type Entry } from "./canon.ts";
-import { pluginViolations } from "./plugin-rules.ts";
+import { actingStep, pluginViolations } from "./plugin-rules.ts";
 import { checkRequest, PluginPolicy } from "../../src/browse/plugin/policy.ts";
 import { comboEvents, editingCommand } from "../../src/browse/plugin/input.ts";
 import { PluginRefused } from "../../src/browse/plugin/session.ts";
@@ -13,6 +13,7 @@ const CREDENTIAL = "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w";
 describe("the tap checks", () => {
   test("a clean click passes", () => {
     const entries = [
+      { k: "mark", step: "click", argv: ["click", "--", "@e3"] } as Entry,
       out(1, "DOM.scrollIntoViewIfNeeded"), answer(1),
       out(2, "DOM.getContentQuads"), answer(2),
       out(3, "Ardia.dispatchClick", { x: 5, y: 5, button: "left", clickCount: 1, modifiers: 0 }), answer(3),
@@ -70,9 +71,34 @@ describe("the tap checks", () => {
   });
 });
 
+describe("the act-lease rules", () => {
+  const mark = (argv: string[]): Entry => ({ k: "mark", step: argv.join(" "), argv });
+
+  test("DOM.focus and Page.captureScreenshot are forbidden", () => {
+    const found = pluginViolations([out(1, "DOM.focus", { backendNodeId: 3 }), answer(1), out(2, "Page.captureScreenshot"), answer(2)]);
+    expect(found.map((item) => [item.rule, item.method])).toEqual([["forbidden", "DOM.focus"], ["forbidden", "Page.captureScreenshot"]]);
+  });
+
+  test("lease-gated methods go out only during acting steps", () => {
+    const scroll = (id: number) => out(id, "DOM.scrollIntoViewIfNeeded", { backendNodeId: 3 });
+    const found = pluginViolations([
+      mark(["click", "--", "@e3"]), scroll(1), answer(1),
+      mark(["fill", "@e2", "x"]), scroll(2), answer(2),
+      mark(["find", "--name=Save", "--", "role", "button", "click"]), scroll(3), answer(3),
+      mark(["snapshot", "-c"]), scroll(4), answer(4),
+      mark(["get", "box", "@e3"]), scroll(5), answer(5),
+      mark(["find", "text", "three", "text"]), scroll(6), answer(6),
+      mark(["wait", "--text=x"]), out(7, "Emulation.setFocusEmulationEnabled", { enabled: true }), answer(7),
+    ]);
+    expect(found.filter((item) => item.rule === "lease").map((item) => item.at)).toEqual([10, 13, 16, 19]);
+    expect(actingStep(["key", "Enter"])).toBe(true);
+    expect(actingStep(["is", "visible", "@e1"])).toBe(false);
+  });
+});
+
 describe("the daemon's own policy", () => {
   test("refuses what the engine refuses before anything is sent", () => {
-    for (const method of ["Runtime.evaluate", "Runtime.enable", "DOM.resolveNode", "Page.createIsolatedWorld", "DOM.performSearch", "Input.dispatchDragEvent", "Network.enable"]) {
+    for (const method of ["DOM.focus", "Page.captureScreenshot", "Runtime.evaluate", "Runtime.enable", "DOM.resolveNode", "Page.createIsolatedWorld", "DOM.performSearch", "Input.dispatchDragEvent", "Network.enable"]) {
       expect(() => checkRequest(method, {})).toThrow(PluginPolicy);
     }
     expect(() => checkRequest("DOM.getBoxModel", { objectId: "1" })).toThrow(PluginPolicy);

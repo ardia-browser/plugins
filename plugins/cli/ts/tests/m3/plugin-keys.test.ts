@@ -34,9 +34,21 @@ function validator(): (events: Event[]) => string[] {
   const binary = path.join(work, "check");
   const built = spawnSync("clang++", ["-std=c++20", "-O1", `-I${ENGINE}`, path.join(ENGINE, "check.cc"), path.join(POLICY, "ac_cli_plugin_input.cc"), "-o", binary], { encoding: "utf8" });
   if (built.status !== 0) throw new Error(`the engine's key validator didn't build:\n${built.stderr}`);
+  let batch = 0;
   return (events) => {
-    const ran = spawnSync(binary, [], { input: events.map(line).join("\n") + "\n", encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-    return ran.stdout.trimEnd().split("\n");
+    batch += 1;
+    const input = path.join(work, `events-${batch}.tsv`);
+    fs.writeFileSync(input, events.map(line).join("\n") + "\n");
+    const fd = fs.openSync(input, "r");
+    let ran;
+    try {
+      ran = spawnSync(binary, [], { stdio: [fd, "pipe", "pipe"], encoding: "utf8", maxBuffer: 64 * 1024 * 1024, timeout: 60_000 });
+    } finally {
+      fs.closeSync(fd);
+    }
+    const answers = ran.stdout.trimEnd().split("\n");
+    if (ran.status !== 0 || answers.length !== events.length) throw new Error(`the validator answered ${answers.length} of ${events.length} events (status ${String(ran.status)}, signal ${String(ran.signal)})`);
+    return answers;
   };
 }
 
@@ -89,7 +101,10 @@ describe("plugin key events follow ardia#2808's key policy", () => {
     const answers = check(sent);
     const rejected = sent.map((event, index) => [JSON.stringify(event), answers[index]]).filter(([, answer]) => answer !== "ok");
     expect(rejected).toEqual([]);
-    const overRefused = refusedRaw.filter(([, raw]) => check(raw).every((answer) => answer === "ok")).map(([combo]) => combo);
+    const flat = refusedRaw.flatMap(([combo, raw]) => raw.map((event) => [combo, event] as const));
+    const verdicts = check(flat.map(([, event]) => event));
+    const engineRefused = new Set(flat.filter((_, index) => verdicts[index] !== "ok").map(([combo]) => combo));
+    const overRefused = refusedRaw.map(([combo]) => combo).filter((combo) => !engineRefused.has(combo));
     expect(overRefused).toEqual([]);
     expect(sent.every((event) => keyRefusal(event) === null)).toBe(true);
     expect(combos).toBeGreaterThan(1000);

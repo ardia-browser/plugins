@@ -127,7 +127,8 @@ export async function pageTarget(world: World): Promise<string> {
 
 export type Asked = { exit: number; out: string; err: string; code?: string; loader?: string; metrics?: Record<string, unknown> };
 
-export async function step(world: World, argv: string[], options: Record<string, unknown> = {}, credential: string | null = CREDENTIAL, key = world.key): Promise<Asked> {
+export async function step(world: World, argv: string[], options: Record<string, unknown> = {}, credential: string | null = CREDENTIAL, key = world.key, name = argv.join(" ")): Promise<Asked> {
+  await tap(world, "mark", { step: name, argv });
   const request: Record<string, unknown> = { argv, options: { humanize: false, timeout_ms: 25000, ...options }, cwd: "/", env: {}, stdin: null };
   if (credential !== null) request["credential"] = credential;
   const { text } = await raw(path.join(world.found.browse, `${key}.sock`), `${JSON.stringify(request)}\n`, { timeoutMs: 60_000 });

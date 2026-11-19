@@ -20,7 +20,6 @@ export const SENT_METHODS: ReadonlySet<string> = new Set([
   "DOM.getBoxModel",
   "DOM.getContentQuads",
   "DOM.scrollIntoViewIfNeeded",
-  "DOM.focus",
   "Accessibility.getFullAXTree",
   "Accessibility.getPartialAXTree",
   "Input.dispatchMouseEvent",
@@ -44,7 +43,11 @@ export const FORBIDDEN_METHODS: ReadonlySet<string> = new Set([
   "Input.setInterceptDrags",
   "Input.dispatchTouchEvent",
   "Input.emulateTouchFromMouseEvent",
+  "DOM.focus",
+  "Page.captureScreenshot",
 ]);
+
+export const LEASE_GATED: ReadonlySet<string> = new Set(["DOM.scrollIntoViewIfNeeded", "Emulation.setFocusEmulationEnabled"]);
 
 
 const MOUSE_TYPES = new Set(["mouseMoved", "mouseWheel"]);

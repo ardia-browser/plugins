@@ -1,7 +1,22 @@
 import { type Entry, type Message } from "./canon.ts";
-import { forbidden, INPUT_METHODS, KEY_COMMANDS, mouseViolation, SENT_METHODS } from "../../src/browse/plugin/policy.ts";
+import { canonical } from "../../src/browse/daemon/names.ts";
+import { findAction } from "../../src/browse/plugin/commands2.ts";
+import { forbidden, INPUT_METHODS, KEY_COMMANDS, LEASE_GATED, mouseViolation, SENT_METHODS } from "../../src/browse/plugin/policy.ts";
 
-export type Violation = { rule: "forbidden" | "unlisted" | "pipelined" | "key_params"; at: number; method: string; detail: string };
+export type Violation = { rule: "forbidden" | "unlisted" | "pipelined" | "key_params" | "lease"; at: number; method: string; detail: string };
+
+const ACTING = new Set(["click", "fill", "type", "press", "scroll"]);
+
+export function actingStep(argv: readonly string[]): boolean {
+  const name = canonical(String(argv[0] ?? ""));
+  if (ACTING.has(name)) return true;
+  if (name !== "find") return false;
+  try {
+    return findAction(argv.slice(1).map(String)) !== "text";
+  } catch {
+    return true;
+  }
+}
 
 function parsed(text: string | undefined): Message | null {
   if (text === undefined) return null;
@@ -24,7 +39,14 @@ function keyViolation(params: Record<string, unknown>): string | null {
 export function pluginViolations(entries: readonly Entry[]): Violation[] {
   const found: Violation[] = [];
   const outstanding = new Map<number, Map<number, string>>();
+  let acting: boolean | null = null;
+  let stepName = "";
   entries.forEach((entry, at) => {
+    if (entry.k === "mark") {
+      stepName = String(entry.step ?? "");
+      acting = Array.isArray(entry["argv"]) ? actingStep(entry["argv"] as string[]) : null;
+      return;
+    }
     const conn = entry.c ?? 0;
     const message = parsed(entry.m);
     if (message === null) return;
@@ -38,6 +60,7 @@ export function pluginViolations(entries: readonly Entry[]): Violation[] {
     if (entry.k !== "out" || typeof message.method !== "string") return;
     const method = message.method;
     const params = (message.params ?? {}) as Record<string, unknown>;
+    if (LEASE_GATED.has(method) && acting !== true) found.push({ rule: "lease", at, method, detail: `sent during ${acting === false ? "a read" : "a step the harness didn't classify"} (${stepName || "before any step"}); it needs a live act lease, so only acting steps send it` });
     if (forbidden(method)) found.push({ rule: "forbidden", at, method, detail: "never sent in plugin mode" });
     else if (!SENT_METHODS.has(method)) found.push({ rule: "unlisted", at, method, detail: "not on the plugin daemon's method list" });
     if (!INPUT_METHODS.has(method)) return;

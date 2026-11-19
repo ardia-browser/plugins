@@ -277,7 +277,7 @@ async function control(request: Request, path: string): Promise<Response> {
     return json({ ok: true, released: was !== null });
   }
   if (path === "/tap/mark") {
-    record({ k: "mark", t: now(), step: body["step"] as number | string });
+    record({ k: "mark", t: now(), step: body["step"] as number | string, ...(Array.isArray(body["argv"]) ? { argv: body["argv"] } : {}) });
     return json({ ok: true });
   }
   if (path === "/tap/quit") {
