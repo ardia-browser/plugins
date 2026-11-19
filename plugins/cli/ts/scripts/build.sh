@@ -39,10 +39,6 @@ mkdir -p "$(dirname "$out")"
 cd "$here"
 addon=$(dirname "$out")/ardia-libc.so
 warnings="-std=c11 -Wall -Wextra -Werror"
-if [ -n "$headers" ]; then
-  [ -f "$headers/node_api.h" ] || { echo "build.sh: no node_api.h in $headers" >&2; exit 64; }
-  cc $warnings -fsyntax-only -include "$headers/node_api.h" native/ardia-libc.c
-fi
 case $(uname -s) in
   Darwin)
     case $target in
@@ -50,13 +46,21 @@ case $(uname -s) in
       bun-darwin-arm64) arch=arm64 ;;
       *) arch=$(uname -m) ;;
     esac
-    xcrun clang $warnings -O2 -bundle -undefined dynamic_lookup -arch "$arch" -mmacosx-version-min=13.0 \
-      -o "$addon" native/ardia-libc.c ;;
+    compiler="xcrun clang"
+    platform="-arch $arch -mmacosx-version-min=13.0"
+    link="-bundle -undefined dynamic_lookup" ;;
   Linux)
     [ -z "$target" ] || { echo "build.sh: on Linux the target is the host's" >&2; exit 64; }
-    cc $warnings -D_GNU_SOURCE -O2 -shared -fPIC -Wl,--build-id=none -o "$addon" native/ardia-libc.c ;;
+    compiler=cc
+    platform=-D_GNU_SOURCE
+    link="-shared -fPIC -Wl,--build-id=none" ;;
   *) echo "build.sh: the addon builds on macOS and Linux" >&2; exit 64 ;;
 esac
+if [ -n "$headers" ]; then
+  [ -f "$headers/node_api.h" ] || { echo "build.sh: no node_api.h in $headers" >&2; exit 64; }
+  $compiler $warnings $platform -fsyntax-only -include "$headers/node_api.h" native/ardia-libc.c
+fi
+$compiler $warnings $platform -O2 $link -o "$addon" native/ardia-libc.c
 "$bun" build src/main.ts --compile --minify \
   --no-compile-autoload-dotenv --no-compile-autoload-bunfig \
   --no-compile-autoload-tsconfig --no-compile-autoload-package-json \
