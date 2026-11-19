@@ -398,10 +398,7 @@ class Daemon:
                 return
             gone.cancel()
             code, out, err = execute.result()
-            fields = command_metrics.answer_fields(request)
-            if request.get("busy_elsewhere"):
-                fields["busy_elsewhere"] = True
-            writer.write(encode_answer(code, out, err, fields, command_name(request)))
+            writer.write(encode_reply(request, code, out, err))
             await writer.drain()
         except Exception:
             log.exception("request failed")
@@ -596,19 +593,29 @@ def command_name(request) -> str:
     return ALIASES.get(first, first)
 
 
-def encode_answer(code: int, out: str, err: str, fields: dict | None = None, name: str = "") -> bytes:
+def encode_reply(request: dict, code: int, out: str, err: str) -> bytes:
+    fields = command_metrics.answer_fields(request)
+    if request.get("busy_elsewhere"):
+        fields["busy_elsewhere"] = True
+    as_json = bool((request.get("options") or {}).get("json"))
+    return encode_answer(code, out, err, fields, command_name(request), as_json)
+
+
+def encode_answer(code: int, out: str, err: str, fields: dict | None = None, name: str = "", as_json: bool = False) -> bytes:
     from ardia_cli.printable import well_formed
 
     data = (well_formed(json.dumps({"exit": code, "out": out, "err": err, **(fields or {})}, ensure_ascii=False)) + "\n").encode()
     if len(data) <= MAX_RESPONSE:
         return data
     if name == "cdp":
-        message = (f"✗ The result of `cdp` is {len(data):,} bytes once encoded for the answer, over the {MAX_RESPONSE:,} bytes the "
-                   "daemon sends back, so it wasn't printed; it did run, so check before running it again. Ask for less: "
-                   "narrower params (DOM.getDocument --param depth:=1, a smaller Network.getResponseBody), or IO.read in chunks\n")
-        return (json.dumps({"exit": 1, "out": "", "err": message, "code": "result_too_large"}) + "\n").encode()
-    message = f"✗ The answer was too large ({len(data)} bytes, the limit is {MAX_RESPONSE}); narrow it (snapshot -s, -d, --max-output)\n"
-    return (json.dumps({"exit": 1, "out": "", "err": message}) + "\n").encode()
+        error = BrowseError(f"The result of `cdp` is {len(data):,} bytes once encoded for the answer, over the {MAX_RESPONSE:,} bytes the "
+                            "daemon sends back, so it wasn't printed; it did run, so check before running it again. Ask for less: "
+                            "narrower params (DOM.getDocument --param depth:=1, a smaller Network.getResponseBody), or IO.read in chunks",
+                            code="result_too_large")
+    else:
+        error = BrowseError(f"The answer was too large ({len(data)} bytes, the limit is {MAX_RESPONSE}); narrow it (snapshot -s, -d, --max-output)")
+    exit_code, out, err = _render({"json": as_json}, error=error)
+    return (json.dumps({"exit": exit_code, "out": out, "err": err, **({"code": error.code} if error.code else {})}) + "\n").encode()
 
 
 def take_lease():

@@ -493,6 +493,43 @@ class LargeResults(unittest.TestCase):
             other = json.loads(daemon.encode_answer(0, "z" * 2000, "", name="snapshot"))
             self.assertIn("snapshot -s", other["err"])
 
+    def test_json_callers_get_result_too_large_as_an_error_object(self):
+        import contextlib
+        import io
+        from unittest import mock
+
+        from ardia_cli.browse import cli as browse_cli, client, daemon
+
+        temp = Path(tempfile.mkdtemp(prefix="cdpbig"))
+        self.addCleanup(shutil.rmtree, temp, True)
+
+        def fake_daemon(*_):
+            ours, theirs = socket.socketpair()
+
+            def serve():
+                with theirs, theirs.makefile("rb") as reader:
+                    request = json.loads(reader.readline())
+                    theirs.sendall(daemon.encode_reply(request, 0, "z" * 2000, ""))
+
+            threading.Thread(target=serve, daemon=True).start()
+            return ours
+
+        for as_json in (True, False):
+            out, err = io.StringIO(), io.StringIO()
+            with mock.patch.dict(os.environ, {"ARDIA_DATA_DIR": str(temp), "ARDIA_TELEMETRY": "0"}), \
+                    mock.patch.object(client, "ensure_daemon", fake_daemon), mock.patch.object(daemon, "MAX_RESPONSE", 1000), \
+                    contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                status = browse_cli.run(["--port", "9", "cdp", "Runtime.evaluate", *(["--json"] if as_json else [])])
+            self.assertEqual(status, 1)
+            if as_json:
+                said = json.loads(out.getvalue())
+                self.assertEqual((said["success"], said["code"]), (False, "result_too_large"))
+                self.assertIn("it did run", said["error"])
+                self.assertEqual(err.getvalue(), "")
+            else:
+                self.assertEqual(out.getvalue(), "")
+                self.assertIn("it did run", err.getvalue())
+
 class OlderEngine(unittest.TestCase):
     def test_upload_and_download_say_update_ardia(self):
         for method, command in (("DOM.setFileInputFiles", "upload"), ("Browser.setDownloadBehavior", "download"),
