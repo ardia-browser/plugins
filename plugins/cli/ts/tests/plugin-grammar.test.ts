@@ -148,6 +148,15 @@ test("flags hidden behind a value that is -- are still refused", () => {
   assert.equal(pluginVerdict(["upload", "@e1", "/etc/hosts"]).allowed, false);
 });
 
+test("nothing that only works through page script is allowed: snapshot --cursor and get styles read computed styles", () => {
+  for (const rest of [["snapshot", "--cursor"], ["snapshot", "-C"], ["snapshot", "-i", "-C"], ["get", "styles", "@e1"]]) {
+    assert.equal(pluginVerdict(rest).allowed, false, JSON.stringify(rest));
+  }
+  for (const rest of [["snapshot", "-c", "-u"], ["get", "box", "@e1"], ["get", "count", "li"], ["wait", "--text", "Done"]]) {
+    assert.equal(pluginVerdict(rest).allowed, true, JSON.stringify(rest));
+  }
+});
+
 test("a token Python reads as a negative number never hides a flag, and anything the guard can't parse is refused", () => {
   assert.equal(pluginVerdict(["wait", "-\u0663", "--download", "x"]).allowed, false);
   assert.equal(pluginVerdict(["click", "-\u0661", "--new-tab", "@e1"]).allowed, false);

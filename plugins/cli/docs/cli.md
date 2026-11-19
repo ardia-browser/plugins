@@ -1114,7 +1114,7 @@ it relies on is `tests/parity/cases/ai-plugin-contract.json` (one case per item)
   `session`, `script`, `cdp`, `clipboard` and `close --all`. The router sends a plugin's browse call only to the TypeScript client and
   refuses (77) rather than hand it to Python.
 - **Plugin mode is an allowlist.** Only these commands and flags reach the daemon, the AI plugin contract's §1 list:
-  `snapshot` (`-i -c -d -s -u -C --diff`), `get` (`text html value attr title url count box styles`), `click`
+  `snapshot` (`-i -c -d -s -u --diff`), `get` (`text html value attr title url count box`), `click`
   (`--button --no-humanize`), `fill`, `press`/`key` (`--no-humanize`), `type` (`--delay --no-humanize`), `scroll`
   (`-s --no-humanize`), `wait` (`-t -u -l --state --timeout`), `find` (`--name --exact --partial --no-humanize`), `is`,
   and `tab` as the pick (`tab <id>`) or the list. Everything else is refused with status 77 and `plugin_refused` before
@@ -1132,6 +1132,25 @@ it relies on is `tests/parity/cases/ai-plugin-contract.json` (one case per item)
   `tests/plugin_grammar.py` reads that grammar from the real functions, and `plugin-grammar.test.ts` checks the table
   and runs every case's argv through both parsers. One daemon-side write stays: an answer over the output cap is also
   saved to a private file in the daemon's temp folder (`spill`), which M3 F1 must turn off for a plugin session.
+- Nothing on the allowlist needs page script. ardia#2808 removes `Runtime` from plugin credentials (no `evaluate`, no
+  `callFunctionOn`, no isolated worlds), so `snapshot --cursor` and `get styles`, which read computed styles, are
+  refused. **M3 F1's daemon serves each allowed command from plain DOM and AX reads plus Input** (the AI plugin
+  thread's mapping, the F1 spec):
+
+  | command | served from |
+  |---|---|
+  | `tab <id>`, the pick | Target, scoped to the credential |
+  | `snapshot -c` | the AX tree; `--urls` from `DOM.getAttributes` |
+  | `get` | the AX name or value, or `DOM.getOuterHTML` parsed in the daemon |
+  | `click` | `DOM.scrollIntoViewIfNeeded`, `DOM.getContentQuads`, then a mouse event |
+  | `fill` | `DOM.focus`, the `selectAll` and `deleteBackward` key commands, then `Input.insertText` |
+  | `type`, `press` | Input |
+  | `scroll` | `mouseWheel` |
+  | `is` | `DOM.getBoxModel` and the AX tree |
+  | `wait` | AX or `DOM.performSearch` polling, target info, lifecycle events and `DOM.getBoxModel` |
+  | `find` | an AX search |
+  | dialogs | `Page.handleJavaScriptDialog` |
+
 - Commands that run other commands are refused with status 77 and code `nested_commands_refused`, before anything is
   sent: `batch` (and its aliases) and `open --read` (or `goto`/`navigate --read`, which runs `read`). `script` and
   `flow`, the other two, are refused above. The rules here are checked by the client on the outer command only; the

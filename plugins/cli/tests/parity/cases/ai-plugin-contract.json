@@ -136,7 +136,6 @@
    "--depth=3",
    "--selector=#form",
    "--urls",
-   "--cursor",
    "--diff",
    "--expect-loader",
    "BC8D78A4AEFDD527B1433946AF6B12C3",
@@ -170,7 +169,7 @@
    "session": "plugin-ai",
    "namespace": ""
   },
-  "note": "§1 grammar: options, then --, then positionals"
+  "note": "§1 grammar: options, then --, then positionals; --cursor left the contract in round 3 (computed styles need page script)"
  },
  {
   "id": "contract--1-get-title",

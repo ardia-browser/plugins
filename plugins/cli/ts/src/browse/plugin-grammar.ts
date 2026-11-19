@@ -29,7 +29,7 @@ export const DAEMON_GRAMMAR: Readonly<Record<string, Grammar>> = {
 };
 
 export const PLUGIN_FLAGS: Readonly<Record<string, readonly string[]>> = {
-  snapshot: ["--compact", "--cursor", "--depth", "--diff", "--interactive", "--selector", "--urls"],
+  snapshot: ["--compact", "--depth", "--diff", "--interactive", "--selector", "--urls"],
   get: [],
   click: ["--button", "--no-humanize"],
   fill: ["--no-humanize"],
@@ -42,7 +42,7 @@ export const PLUGIN_FLAGS: Readonly<Record<string, readonly string[]>> = {
   tab: [],
 };
 
-const GET_KINDS = ["text", "html", "value", "attr", "title", "url", "count", "box", "styles"];
+const GET_KINDS = ["text", "html", "value", "attr", "title", "url", "count", "box"];
 const TAB_ACTIONS = ["new", "close", "active"];
 const NEGATIVE_NUMBER = /^-\p{Nd}/u;
 
