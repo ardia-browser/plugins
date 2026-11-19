@@ -85,6 +85,24 @@ class ProcFs:
             return []
         return [word for word in raw.split(b"\0")[:2] if word]
 
+def interrupts_ignored(pid):
+    if sys.platform.startswith("linux"):
+        try:
+            for line in open(f"/proc/{pid}/status"):
+                if line.startswith("SigIgn:"):
+                    return bool(int(line.split()[1], 16) & (1 << (signal.SIGINT - 1)))
+        except (OSError, ValueError, IndexError):
+            return False
+        return False
+    import ctypes
+    libc = ctypes.CDLL(None, use_errno=True)
+    buffer = ctypes.create_string_buffer(1024)
+    size = ctypes.c_size_t(1024)
+    mib = (ctypes.c_int * 4)(1, 14, 1, pid)
+    if libc.sysctl(mib, 4, buffer, ctypes.byref(size), None, ctypes.c_size_t(0)) != 0 or size.value < 236:
+        return False
+    return bool(struct.unpack_from("=I", buffer.raw, 232)[0] & (1 << (signal.SIGINT - 1)))
+
 def chain(start):
     try:
         reader = ProcFs() if sys.platform.startswith("linux") else LibProc()
@@ -100,8 +118,8 @@ def chain(start):
         pid = ppid
     return out
 
-ignored = signal.getsignal(signal.SIGINT) == signal.SIG_IGN
-sys.stdout.write(json.dumps({"ignored": ignored, "peer": peer_uid(), "chain": chain(int(sys.argv[1]))}))
+me = int(sys.argv[1])
+sys.stdout.write(json.dumps({"ignored": interrupts_ignored(me), "peer": peer_uid(), "chain": chain(int(sys.argv[2]))}))
 `;
 
 function text(hex: unknown): string {
@@ -120,7 +138,7 @@ function chainOf(rows: unknown): Process[] {
 
 export function askPython(python: string | null, socketFd: number): Facts | undefined {
   if (python === null || !existsSync(python)) return undefined;
-  const done = spawnSync(python, ["-I", "-S", "-c", FACTS_SCRIPT, String(process.ppid)], {
+  const done = spawnSync(python, ["-I", "-S", "-c", FACTS_SCRIPT, String(process.pid), String(process.ppid)], {
     stdio: ["ignore", "pipe", "ignore", socketFd],
     cwd: "/",
     env: {},
