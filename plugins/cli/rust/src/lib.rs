@@ -1,3 +1,4 @@
+pub mod browse_route;
 pub mod caller;
 pub mod clock;
 pub mod commands;
@@ -324,13 +325,32 @@ fn run_rust(route: Route, argv: &[String], python: Option<&Path>) -> Handled {
     served.map_or(Handled::Python, Handled::Status)
 }
 
+fn run_for_plugin(root: Option<&Path>, raw: &[OsString]) -> Handled {
+    let Some(program) = router::ts_program(root) else {
+        return Handled::Status(browse_route::refuse("this ardia has no TypeScript client"));
+    };
+    let interrupts_ignored = router::interrupts_ignored();
+    let caller = caller::current();
+    match router::run_child(&program, |lifeline| router::marker(interrupts_ignored, lifeline, &caller), raw) {
+        router::Ended::NotStarted => Handled::Status(browse_route::refuse("its TypeScript client didn't start")),
+        router::Ended::Exited(router::HAND_BACK) => Handled::Status(browse_route::refuse("its TypeScript client asked for Python")),
+        router::Ended::Exited(status) => Handled::Status(status),
+        router::Ended::Signaled(signal) => Handled::Signaled(signal),
+    }
+}
+
 fn handle(root: Option<&Path>, raw: &[OsString], python: Option<&Path>) -> Handled {
+    if browse_route::for_plugin() && browse_route::invoked(raw) {
+        return run_for_plugin(root, raw);
+    }
     let Some(argv) = raw.iter().map(|arg| arg.to_str().map(str::to_string)).collect::<Option<Vec<String>>>() else {
         return Handled::Python;
     };
     let route = parse_route(&argv);
-    let Some(label) = route.label() else {
-        return Handled::Python;
+    let label = match route.label() {
+        Some(label) => label,
+        None if browse_route::invoked(raw) => browse_route::LABEL,
+        None => return Handled::Python,
     };
     if printable::stdout_unusable() {
         return Handled::Python;
