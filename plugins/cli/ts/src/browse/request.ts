@@ -63,6 +63,7 @@ export function optionsFrom(found: Found): Options {
     ["humanize", humanize],
     ["timeout_ms", timeout],
     ["max_output", maxOutput],
+    ["expect_loader", found.value("expect_loader") ?? null],
     ["full", Boolean(found.flag("full"))],
     ["no_changes", Boolean(found.flag("no_changes"))],
     ["no_text", Boolean(found.flag("no_text"))],
@@ -199,8 +200,9 @@ export function endpointKey(endpoint: Endpoint, root: string): string {
   return `token:${root}`;
 }
 
-export function sessionKey(namespace: string, endpointKey: string, session: string): string {
-  return createHash("sha256").update(`${namespace}\0${endpointKey}\0${session}`, "utf8").digest("hex").slice(0, 24);
+export function sessionKey(namespace: string, endpointKey: string, session: string, forPlugin = false): string {
+  const raw = `${namespace}\0${endpointKey}\0${session}${forPlugin ? "\0plugin" : ""}`;
+  return createHash("sha256").update(raw, "utf8").digest("hex").slice(0, 24);
 }
 
 export function agentEnv(): JsonObject {

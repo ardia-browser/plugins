@@ -1,34 +1,42 @@
 import { createHash } from "node:crypto";
 import { closeSync, fstatSync, read } from "node:fs";
-import { field, type JsonObject, type Value } from "../json.ts";
-import { BrowseError } from "./errors.ts";
-
+import { isatty } from "node:tty";
 import { PLUGIN_MODE } from "./route.ts";
+import { VALUE_FLAGS } from "./tables.ts";
 
 export { pluginMode } from "./route.ts";
 
-export function pluginModeValueOk(): boolean {
-  return process.env[PLUGIN_MODE] === "1";
-}
 export const CREDENTIAL_FD = "ARDIA_PLUGIN_CREDENTIAL_FD";
+export const ENDPOINT = "ARDIA_PLUGIN_ENDPOINT";
 export const REFUSED = 77;
-const CREDENTIAL = /^[A-Za-z0-9._~+/=-]{16,1024}$/;
-const MAX_CREDENTIAL = 1025;
+export const CODE = "plugin_refused";
+const CREDENTIAL = /^p\.[A-Za-z0-9_-]{43}$/;
+const TOKEN_SERVER = /^ws:\/\/127\.0\.0\.1:[0-9]{1,5}\/devtools\/browser\/[A-Za-z0-9._-]{1,128}$/;
+const FD_NUMBER = /^[0-9]{1,5}$/;
+const MAX_READ = 256;
 const READ_DEADLINE_MS = 2000;
 const FIRST_FREE_FD = 3;
 const MAX_FD = 65535;
 const ENDPOINT_FLAGS = ["ws", "port", "cdp"];
 const ENDPOINT_ENV = ["ARDIA_WS", "ARDIA_PORT", "ARDIA_CDP_URL", "AGENT_BROWSER_CDP"];
-const EXPECT_LOADER = "--expect-loader";
-const LOADER = /^[A-Za-z0-9._:-]{1,128}$/;
-const CHANGED_BEFORE = "The page changed document before this could run, so it wasn't applied; snapshot again";
-const CHANGED_DURING = "The page changed document while this ran, so its result belongs to another page; snapshot again";
-const UNCHECKED = "The browse daemon didn't report the page's document, so --expect-loader couldn't be checked and the result was dropped; update ardia";
+const SESSION_FLAGS = [
+  "--session", "--namespace", "--data-dir", "--port", "--ws", "--cdp", "--screenshot-dir", "--screenshot-format",
+  "--screenshot-quality", "--idle-timeout", "--init-script", "--enable", "--headers", "--color-scheme", "--download-path",
+  "--annotate", "--no-auto-dialog", "--pin-tab", "--no-pin-tab", "--debug", "--capture-console", "--show",
+  "--content-boundaries", "--out", "--stdin",
+];
+const LOCAL_COMMANDS = ["auth", "notes", "flow", "plugin", "read", "session", "script"];
 
 export class PluginRefusal extends Error {}
 
-export function refusal(why: string): string {
-  return `✗ ardia browse for a plugin (${PLUGIN_MODE}=1) ${why}; nothing was sent\n`;
+export type Access = { credential: string; endpoint: string };
+
+export function message(why: string): string {
+  return `ardia browse for a plugin (${PLUGIN_MODE}=1) ${why}; nothing was sent`;
+}
+
+function pyJson(text: string | undefined): string {
+  return text === undefined ? "null" : JSON.stringify(text);
 }
 
 function readSome(fd: number, buffer: Buffer, offset: number): Promise<number | NodeJS.ErrnoException> {
@@ -36,7 +44,7 @@ function readSome(fd: number, buffer: Buffer, offset: number): Promise<number | 
 }
 
 async function readAll(fd: number): Promise<Buffer> {
-  const buffer = Buffer.alloc(MAX_CREDENTIAL + 1);
+  const buffer = Buffer.alloc(MAX_READ + 1);
   let size = 0;
   const deadline = performance.now() + READ_DEADLINE_MS;
   for (;;) {
@@ -53,20 +61,15 @@ async function readAll(fd: number): Promise<Buffer> {
     }
     if (got === 0) return buffer.subarray(0, size);
     size += got;
-    if (size > MAX_CREDENTIAL) throw new PluginRefusal(`got a credential on fd ${fd} longer than ${MAX_CREDENTIAL - 1} bytes`);
-    const end = buffer.subarray(0, size).indexOf(0x0a);
-    if (end >= 0) {
-      if (end !== size - 1) throw new PluginRefusal(`got more than one line on fd ${fd}; Ardia writes the credential alone`);
-      return buffer.subarray(0, size);
-    }
+    if (size > MAX_READ) throw new PluginRefusal(`got more than ${MAX_READ} bytes on fd ${fd}, which no credential is`);
   }
 }
 
-export async function takeCredential(): Promise<string> {
+async function takeCredential(): Promise<string> {
   const named = process.env[CREDENTIAL_FD];
-  if (named === undefined || named === "") throw new PluginRefusal(`needs ${CREDENTIAL_FD}, the descriptor Ardia passes the activity's credential on, and it isn't set`);
-  if (!/^[0-9]{1,5}$/.test(named) || Number(named) < FIRST_FREE_FD || Number(named) > MAX_FD) {
-    throw new PluginRefusal(`needs ${CREDENTIAL_FD} to name an inherited descriptor (3 or above), not ${JSON.stringify(named)}`);
+  if (!named) throw new PluginRefusal(`needs ${CREDENTIAL_FD}, the descriptor Ardia passes the activity's credential on, and it isn't set`);
+  if (!FD_NUMBER.test(named) || Number(named) < FIRST_FREE_FD || Number(named) > MAX_FD) {
+    throw new PluginRefusal(`needs ${CREDENTIAL_FD} to name an inherited descriptor (3 or above), not ${pyJson(named)}`);
   }
   const fd = Number(named);
   try {
@@ -76,10 +79,12 @@ export async function takeCredential(): Promise<string> {
     } catch {
       throw new PluginRefusal(`was given fd ${fd} for its credential, and that descriptor isn't open`);
     }
-    if (!kind.isFIFO() && !kind.isSocket()) throw new PluginRefusal(`was given fd ${fd} for its credential, and it isn't a pipe or a socket`);
-    const raw = (await readAll(fd)).toString("latin1");
-    const text = raw.endsWith("\n") ? raw.slice(0, -1) : raw;
-    if (!CREDENTIAL.test(text)) throw new PluginRefusal(`got a credential on fd ${fd} that isn't one Ardia issues`);
+    if (isatty(fd)) throw new PluginRefusal(`was given fd ${fd} for its credential, and it's a terminal`);
+    if (!kind.isFIFO() && !kind.isSocket() && !kind.isFile()) throw new PluginRefusal(`was given fd ${fd} for its credential, and it isn't a pipe, socket or file`);
+    const text = (await readAll(fd)).toString("latin1");
+    if (!CREDENTIAL.test(text)) {
+      throw new PluginRefusal(`got ${text.length} bytes on fd ${fd} that aren't a credential (exactly p. and 43 base64url characters, no newline)`);
+    }
     return text;
   } finally {
     try {
@@ -88,51 +93,69 @@ export async function takeCredential(): Promise<string> {
   }
 }
 
+function tokenServer(): string {
+  const endpoint = process.env[ENDPOINT];
+  if (endpoint === undefined) throw new PluginRefusal(`needs ${ENDPOINT}, the token server Ardia gives with the credential, and it isn't set`);
+  if (endpoint === "") throw new PluginRefusal(`was given an empty ${ENDPOINT}: Ardia's token server is off, so turn on browser control and start the activity again`);
+  if (!TOKEN_SERVER.test(endpoint)) throw new PluginRefusal(`needs ${ENDPOINT} to be ws://127.0.0.1:<port>/devtools/browser/<id>, not ${pyJson(endpoint)}`);
+  return endpoint;
+}
+
 export function dropCredential(): void {
   const named = process.env[CREDENTIAL_FD] ?? "";
-  if (!/^[0-9]{1,5}$/.test(named) || Number(named) < FIRST_FREE_FD) return;
+  if (!FD_NUMBER.test(named) || Number(named) < FIRST_FREE_FD) return;
   try {
     closeSync(Number(named));
   } catch {}
 }
 
-export function checkEndpointFree(values: Map<string, string>): void {
+export async function takeAccess(): Promise<Access> {
+  if (process.env[PLUGIN_MODE] !== "1") {
+    dropCredential();
+    throw new PluginRefusal(`takes ${PLUGIN_MODE}=1 only, not ${pyJson(process.env[PLUGIN_MODE])}`);
+  }
+  const credential = await takeCredential();
+  return { credential, endpoint: tokenServer() };
+}
+
+function afterCommand(argv: readonly string[]): string[] {
+  for (let index = 0; index < argv.length; ) {
+    const token = argv[index] as string;
+    if (token === "--") return [];
+    if (token.startsWith("-")) {
+      index += VALUE_FLAGS.includes(token) ? 2 : 1;
+      continue;
+    }
+    const tail = argv.slice(index + 1);
+    const end = tail.indexOf("--");
+    return end < 0 ? tail : tail.slice(0, end);
+  }
+  return [];
+}
+
+export function checkRequest(argv: readonly string[], values: Map<string, string>, rest: readonly string[]): void {
+  const command = rest[0] ?? "";
+  if (LOCAL_COMMANDS.includes(command) || (command === "close" && rest.slice(1).includes("--all"))) {
+    throw new PluginRefusal(`can't run \`${command}\` for a plugin, only page steps`);
+  }
+  for (const token of afterCommand(argv)) {
+    const name = token.split("=")[0] as string;
+    if (SESSION_FLAGS.includes(name)) throw new PluginRefusal(`doesn't take ${name} after the command`);
+  }
   const flag = ENDPOINT_FLAGS.find((key) => values.has(key));
   if (flag !== undefined) throw new PluginRefusal(`reaches the browser only through the activity's credential, so it doesn't take --${flag}`);
   const variable = ENDPOINT_ENV.find((name) => process.env[name]);
   if (variable !== undefined) throw new PluginRefusal(`reaches the browser only through the activity's credential, so ${variable} must be unset`);
 }
 
-export function pluginEndpointKey(credential: string): string {
-  return `plugin:${createHash("sha256").update(credential, "utf8").digest("hex").slice(0, 32)}`;
+export function accessEndpointKey(access: Access): string {
+  return `plugin:${createHash("sha256").update(access.credential, "utf8").digest("hex").slice(0, 32)}`;
 }
 
-export function takeExpectLoader(rest: string[]): { argv: string[]; loader: string | undefined } {
-  const argv: string[] = [];
-  let loader: string | undefined;
-  for (let index = 0; index < rest.length; index += 1) {
-    const token = rest[index] as string;
-    if (token === "--") {
-      argv.push(...rest.slice(index));
-      break;
-    }
-    if (token === EXPECT_LOADER || token.startsWith(`${EXPECT_LOADER}=`)) {
-      const value = token === EXPECT_LOADER ? rest[(index += 1)] : token.slice(EXPECT_LOADER.length + 1);
-      if (value === undefined || !LOADER.test(value)) throw new PluginRefusal(`takes ${EXPECT_LOADER} <loaderId>, the main frame's loader id from snapshot`);
-      loader = value;
-      continue;
-    }
-    argv.push(token);
-  }
-  return { argv, loader };
+export function accessWs(access: Access): string {
+  return `${access.endpoint}?token=${access.credential}`;
 }
 
-export function loaderRefusal(answer: JsonObject, expected: string): BrowseError | undefined {
-  const seen: Value | undefined = answer.get("main_loader");
-  const before = field(seen, "before");
-  const after = field(seen, "after");
-  if (typeof before !== "string" || typeof after !== "string") return new BrowseError(UNCHECKED, 1, "document_changed");
-  if (before !== expected) return new BrowseError(CHANGED_BEFORE, 1, "document_changed");
-  if (after !== expected) return new BrowseError(CHANGED_DURING, 1, "document_changed");
-  return undefined;
+export function accessLabel(access: Access): string {
+  return access.endpoint.slice("ws://".length);
 }

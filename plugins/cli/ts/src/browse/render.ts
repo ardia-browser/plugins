@@ -21,7 +21,7 @@ export function renderError(error: BrowseError, asJson: boolean, secrets: Secret
       ["data", null],
       ["error", error.text],
     ]);
-    if (error.code) payload.set("code", error.code);
+    payload.set("code", error.code || error.fallback);
     const rendered = `${jsonSafe(dumps(sanitize(payload, secrets), "compact"))}\n`;
     return { out: secrets.redact(secrets.redact(rendered)), err: "" };
   }

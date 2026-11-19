@@ -6,6 +6,7 @@ from pathlib import Path
 
 CLI = Path(__file__).resolve().parents[1]
 TABLES = CLI / "ts" / "src" / "browse" / "tables.ts"
+HELP = CLI / "ts" / "src" / "browse" / "help-text.ts"
 REGENERATE = "python -c 'from tests.test_ts_browse_tables import ts_tables; print(ts_tables(), end=\"\")' > ts/src/browse/tables.ts"
 
 
@@ -71,7 +72,21 @@ def ts_tables() -> str:
     )
 
 
+def ts_help() -> str:
+    if str(CLI) not in sys.path:
+        sys.path.insert(0, str(CLI))
+    from ardia_cli.browse import help as browse_help
+
+    rows = "".join(f"  {json.dumps(name)}: {json.dumps(text, ensure_ascii=False)},\n" for name, text in browse_help.COMMANDS.items())
+    return (f"export const OVERVIEW = {json.dumps(browse_help.OVERVIEW, ensure_ascii=False)};\n"
+            f"export const COMMANDS: Readonly<Record<string, string>> = {{\n{rows}}};\n")
+
+
 class TsBrowseTables(unittest.TestCase):
+    def test_help_matches_python(self):
+        self.assertEqual(HELP.read_text(), ts_help(), "ts/src/browse/help-text.ts is stale; regenerate it: "
+                         "python -c 'from tests.test_ts_browse_tables import ts_help; print(ts_help(), end=\"\")' > ts/src/browse/help-text.ts")
+
     def test_tables_match_python(self):
         self.assertEqual(TABLES.read_text(), ts_tables(), f"ts/src/browse/tables.ts is stale; regenerate it: {REGENERATE}")
 

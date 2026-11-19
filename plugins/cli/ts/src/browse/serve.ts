@@ -10,10 +10,11 @@ import { answerDeadline } from "./deadline.ts";
 import { builtinCrash, PythonCrash, unreachable } from "./errors.ts";
 import { Absent, connect, exchange, Stalled } from "./exchange.ts";
 import { encodeError } from "./output.ts";
-import { checkEndpointFree, loaderRefusal, pluginEndpointKey, takeExpectLoader } from "./plugin.ts";
+import { type Access, accessEndpointKey, accessLabel, accessWs } from "./plugin.ts";
 import { loadAnswer } from "./pyjson.ts";
 import type { Secrets } from "./redact.ts";
 import { agentEnv, endpointChoice, endpointKey, namespaceName, optionsFrom, rootOf, sessionKey, sessionName, urlsWithSecrets } from "./request.ts";
+import { startDaemon } from "./spawn.ts";
 import { checkSocket, NoDaemon, openBrowseDir, osFailure, socketPath } from "./session.ts";
 import { decodeStdin, pythonStdioErrors, readStdin, stdinState } from "./stdio.ts";
 import { TAKES_OUT } from "./tables.ts";
@@ -73,6 +74,38 @@ async function openSession(root: string, key: string): Promise<Socket> {
   }
 }
 
+type Where = { session: string; namespace: string; key: string; root: string; plugin: Access };
+
+function daemonConfig(found: Found, options: JsonObject, where: Where): JsonObject {
+  const idle = found.value("idle_timeout") || process.env.AGENT_BROWSER_IDLE_TIMEOUT_MS;
+  const parsed = idle ? parseDuration(idle) : undefined;
+  return object([
+    ["session", where.session],
+    ["namespace", where.namespace],
+    ["key", where.key],
+    ["data_root", where.root],
+    ["ws", accessWs(where.plugin)],
+    ["port", null],
+    ["data_dir", found.value("data_dir") ?? null],
+    ["endpoint_label", accessLabel(where.plugin)],
+    ["idle_timeout_ms", parsed !== undefined && "ms" in parsed ? parsed.ms : null],
+    ["debug", Boolean(found.flag("debug"))],
+    ["no_auto_dialog", options.get("no_auto_dialog") ?? false],
+    ["pin_tab", options.get("pin_tab") ?? null],
+    ["for_plugin", true],
+  ]);
+}
+
+async function pluginSession(root: string, key: string, config: JsonObject, python: string | null, call: Call): Promise<Socket> {
+  const connect = () => openSession(root, key);
+  try {
+    return await connect();
+  } catch (error) {
+    if (!(error instanceof NoDaemon)) throw error;
+  }
+  return startDaemon(root, key, config, python, call, connect);
+}
+
 async function ask(socket: Socket, payload: JsonObject, rest: string[], timeout: Value, call: Call, patient = false): Promise<JsonObject> {
   const seconds = answerDeadline(rest, timeout, patient);
   if (seconds instanceof PythonCrash) {
@@ -123,28 +156,23 @@ async function readBeside(payload: JsonObject, rest: string[], beside: Beside, c
   return answer;
 }
 
-export async function roundTrip(found: Found, given: string[], secrets: Secrets, call: Call, credential: string | undefined): Promise<JsonObject> {
-  const plugin = credential !== undefined;
-  let rest = given;
-  let loader: string | undefined;
-  if (plugin) {
-    checkEndpointFree(found.values);
-    ({ argv: rest, loader } = takeExpectLoader(rest));
-  }
+export async function roundTrip(found: Found, rest: string[], secrets: Secrets, call: Call, plugin: Access | undefined, python: string | null): Promise<JsonObject> {
   const { entries: options, timeout } = optionsFrom(found);
   const session = sessionName(found);
   const namespace = namespaceName(found);
-  const endpoint = endpointChoice(found);
+  const chosen = endpointChoice(found);
+  const endpoint = plugin === undefined ? chosen : { ...chosen, ws: accessWs(plugin), port: undefined };
   for (const secret of urlsWithSecrets(endpoint.ws)) secrets.add(secret);
   const root = rootOf(endpoint);
-  const keySource = credential === undefined ? endpointKey(endpoint, root) : pluginEndpointKey(credential);
+  const keySource = plugin === undefined ? endpointKey(endpoint, root) : accessEndpointKey(plugin);
   options.set("_session", session);
   const command = rest[0] as string;
   const stdinWanted = wantsStdin(command, rest.slice(1));
   const errors = stdinWanted ? pythonStdioErrors() : "strict";
   if (errors === undefined) throw new HandBack("stdin's encoding isn't UTF-8");
   checkIdle(found);
-  const socket = await openSession(root, sessionKey(namespace, keySource, session));
+  const key = sessionKey(namespace, keySource, session, process.env.ARDIA_BROWSE_FOR_PLUGIN === "1");
+  const socket = plugin === undefined ? await openSession(root, key) : await pluginSession(root, key, daemonConfig(found, options, { session, namespace, key, root, plugin }), python, call);
   let stdin: Value = null;
   try {
     if (stdinWanted) {
@@ -167,13 +195,7 @@ export async function roundTrip(found: Found, given: string[], secrets: Secrets,
     ["telemetry", shareable()],
     ["caller", routedCaller()],
   ]);
-  if (credential !== undefined) payload.set("plugin_credential", credential);
-  if (loader !== undefined) payload.set("expect_loader", loader);
   let answer = await ask(socket, payload, rest, timeout, call);
   if (pyTruthy(answer.get("busy_elsewhere"))) answer = await readBeside(payload, rest, { root, namespace, keySource, session, timeout }, call);
-  if (loader !== undefined) {
-    const refused = loaderRefusal(answer, loader);
-    if (refused !== undefined) throw refused;
-  }
   return answer;
 }

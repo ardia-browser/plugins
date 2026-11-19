@@ -6,6 +6,7 @@ export class BrowseError extends Error {
     readonly text: string,
     readonly exit: number = 1,
     readonly code?: string,
+    readonly fallback: string = "browse_error",
   ) {
     super(text);
   }
@@ -25,7 +26,7 @@ export function builtinCrash(kind: string, message: string): PythonCrash {
 }
 
 export function unreachable(message: string): BrowseError {
-  return new BrowseError(message, 2);
+  return new BrowseError(message, 2, undefined, "daemon_unreachable");
 }
 
 export function outcomeUnknown(action: string, why: string): BrowseError {
@@ -46,7 +47,7 @@ export function gone(command: string): BrowseError {
 export function stalled(command: string, seconds: number): BrowseError {
   const { name, mutating } = commandOf(command);
   const why = `the ardia browse daemon didn't answer in ${formatG(seconds)} s (see the session log)`;
-  return mutating ? outcomeUnknown(`\`${name}\``, why) : unreachable(why);
+  return mutating ? outcomeUnknown(`\`${name}\``, why) : new BrowseError(why, 2, undefined, "daemon_timeout");
 }
 
 function exactDigits(value: number): { digits: string; point: number } {

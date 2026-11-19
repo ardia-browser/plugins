@@ -23,12 +23,12 @@ function rootRefusal(root: string): BrowseError | undefined {
   try {
     info = lstatSync(root);
   } catch (error) {
-    if (errnoOf(error) === ENOENT) return new BrowseError(`${root} doesn't exist`);
-    if (errnoOf(error) === ENOTDIR) return new BrowseError(`${root} is a symbolic link or not a folder`);
+    if (errnoOf(error) === ENOENT) return new BrowseError(`${root} doesn't exist`, 1, undefined, "unsafe_path");
+    if (errnoOf(error) === ENOTDIR) return new BrowseError(`${root} is a symbolic link or not a folder`, 1, undefined, "unsafe_path");
     throw osFailure(error);
   }
-  if (info.isSymbolicLink() || !info.isDirectory()) return new BrowseError(`${root} is a symbolic link or not a folder`);
-  if (info.uid !== uid()) return new BrowseError(`${root} belongs to another user`);
+  if (info.isSymbolicLink() || !info.isDirectory()) return new BrowseError(`${root} is a symbolic link or not a folder`, 1, undefined, "unsafe_path");
+  if (info.uid !== uid()) return new BrowseError(`${root} belongs to another user`, 1, undefined, "unsafe_path");
   return undefined;
 }
 
@@ -37,13 +37,13 @@ function browseRefusal(root: string): BrowseError | undefined {
   try {
     info = lstatSync(join(root, DIR_NAME));
   } catch (error) {
-    if (errnoOf(error) === ELOOP || errnoOf(error) === ENOTDIR) return new BrowseError(`${DIR_NAME} is a symbolic link or not a folder`);
+    if (errnoOf(error) === ELOOP || errnoOf(error) === ENOTDIR) return new BrowseError(`${DIR_NAME} is a symbolic link or not a folder`, 1, undefined, "unsafe_path");
     throw osFailure(error);
   }
-  if (info.isSymbolicLink()) return new BrowseError(`${DIR_NAME} is a symbolic link or not a folder`);
-  if (!info.isDirectory()) return new BrowseError(`${DIR_NAME} is a symbolic link or not a folder`);
-  if (info.uid !== uid()) return new BrowseError(`${DIR_NAME} belongs to another user`);
-  if ((info.mode & 0o077) !== 0) return new BrowseError(`${DIR_NAME} must be private (mode 0700)`);
+  if (info.isSymbolicLink()) return new BrowseError(`${DIR_NAME} is a symbolic link or not a folder`, 1, undefined, "unsafe_path");
+  if (!info.isDirectory()) return new BrowseError(`${DIR_NAME} is a symbolic link or not a folder`, 1, undefined, "unsafe_path");
+  if (info.uid !== uid()) return new BrowseError(`${DIR_NAME} belongs to another user`, 1, undefined, "unsafe_path");
+  if ((info.mode & 0o077) !== 0) return new BrowseError(`${DIR_NAME} must be private (mode 0700)`, 1, undefined, "unsafe_path");
   return undefined;
 }
 
@@ -52,10 +52,10 @@ export function openBrowseDir(root: string): void {
     closeDir(openPrivate(root, [DIR_NAME], true));
   } catch (error) {
     if (!(error instanceof PathError)) {
-      if (codeOf(error) === "ENOENT") throw new BrowseError(`${root} doesn't exist`);
+      if (codeOf(error) === "ENOENT") throw new BrowseError(`${root} doesn't exist`, 1, undefined, "unsafe_path");
       throw osFailure(error);
     }
-    throw rootRefusal(root) ?? browseRefusal(root) ?? new BrowseError(`${root} is a symbolic link or not a folder`);
+    throw rootRefusal(root) ?? browseRefusal(root) ?? new BrowseError(`${root} is a symbolic link or not a folder`, 1, undefined, "unsafe_path");
   }
 }
 
@@ -77,5 +77,5 @@ export function checkSocket(path: string, name: string): void {
   if (!info.isSocket()) why = `${name} isn't a socket`;
   else if (info.uid !== uid()) why = `${name} belongs to another user`;
   else if ((info.mode & 0o077) !== 0) why = `${name} must be mode 0600`;
-  if (why !== undefined) throw new BrowseError(`Refusing the session socket: ${why}`);
+  if (why !== undefined) throw new BrowseError(`Refusing the session socket: ${why}`, 1, undefined, "socket_refused");
 }

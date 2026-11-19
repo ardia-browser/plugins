@@ -25,7 +25,7 @@ function utf8Codeset(name: string): boolean {
 export function pythonStdioErrors(): Errors | undefined {
   if (LINUX) return undefined;
   const name = localeName();
-  if (name === "" || name === "C" || name === "POSIX") return "surrogateescape";
+  if (["", "C", "POSIX", "C.UTF-8", "C.utf8", "UTF-8"].includes(name)) return "surrogateescape";
   if (name.includes("/") || name.includes("..")) return undefined;
   if (!existsSync(`/usr/share/locale/${name}/LC_CTYPE`)) return "surrogateescape";
   return utf8Codeset(name) ? "strict" : undefined;

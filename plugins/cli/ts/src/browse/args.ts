@@ -121,6 +121,26 @@ export function hoist(argv: readonly string[]): string[] | undefined {
   return browse;
 }
 
+export function hoistFailure(argv: readonly string[]): { status: number; text: string } {
+  let index = 0;
+  const leading: string[] = [];
+  while (index < argv.length) {
+    const token = argv[index] as string;
+    const name = token.split("=")[0] as string;
+    if (SHARED_VALUE_FLAGS.includes(name)) {
+      if (token.includes("=")) index += 1;
+      else if (index + 1 >= argv.length) return { status: 2, text: `ardia: ${name} needs a value\n` };
+      else index += 2;
+      leading.push(name);
+      continue;
+    }
+    if (token !== "--json") break;
+    index += 1;
+  }
+  const refused = leading.find((name) => !BROWSE_SHARED_FLAGS.includes(name)) ?? "";
+  return { status: 1, text: `✗ ardia browse doesn't take ${refused}\n` };
+}
+
 export function commandName(browse: readonly string[]): string {
   let rest: string[];
   try {

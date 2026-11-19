@@ -62,7 +62,7 @@ export async function connect(path: string): Promise<Socket> {
   }
   if (peer !== uid()) {
     socket.destroy();
-    throw new BrowseError("The session socket isn't served by your user; refusing it");
+    throw new BrowseError("The session socket isn't served by your user; refusing it", 1, undefined, "socket_refused");
   }
   return socket;
 }
@@ -105,7 +105,7 @@ export async function exchange(socket: Socket, line: Uint8Array, command: string
       await wait(socket, deadline);
     }
     for (;;) {
-      if (tooLarge) throw new BrowseError("The daemon's answer was too large");
+      if (tooLarge) throw new BrowseError("The daemon's answer was too large", 1, undefined, "answer_too_large");
       if (got.lineEnded || got.ended) break;
       if (got.failure !== undefined) throw gone(command);
       if (interrupted()) throw new Interrupted();
@@ -124,5 +124,5 @@ export class Stalled extends BrowseError {}
 
 function stalledAnswer(command: string, seconds: number): BrowseError {
   const error = stalled(command, seconds);
-  return new Stalled(error.text, error.exit, error.code);
+  return new Stalled(error.text, error.exit, error.code, error.fallback);
 }

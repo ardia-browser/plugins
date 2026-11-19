@@ -2,13 +2,15 @@ import { NeedsPython } from "../paths.ts";
 import { abandonWork } from "../printable.ts";
 import { Call, finish } from "../telemetry.ts";
 import { cliVersion } from "../version.ts";
+import { commandHelp } from "./help.ts";
 import { cleanMetrics, exitOf, outputChars, processStatus, textOf } from "./answer.ts";
-import { allowedFlags, commandName, hoist, splitGlobals, truthy, Usage } from "./args.ts";
+import { allowedFlags, commandName, hoist, hoistFailure, splitGlobals, truthy, Usage } from "./args.ts";
 import { BrowseError, PythonCrash } from "./errors.ts";
 import { Interrupted } from "./exchange.ts";
 import { Printer } from "./output.ts";
-import { dropCredential, pluginMode, pluginModeValueOk, PluginRefusal, REFUSED, refusal, takeCredential } from "./plugin.ts";
-import { PLUGIN_MODE } from "./route.ts";
+import { type Access, checkRequest, CODE, dropCredential, message, pluginMode, PluginRefusal, REFUSED, takeAccess } from "./plugin.ts";
+import { dumps, object, parseText, type Value } from "../json.ts";
+import { ANSWER_JSON_DEPTH } from "./serve.ts";
 import { Secrets } from "./redact.ts";
 import { renderError } from "./render.ts";
 import { environmentIsText, Refused, Unported } from "./request.ts";
@@ -36,7 +38,36 @@ function printError(error: BrowseError, asJson: boolean, secrets: Secrets, print
   return error.exit;
 }
 
-function printAnswer(answer: Map<string, import("../json.ts").Value>, secrets: Secrets, printer: Printer, call: Call): Outcome {
+function jsonRequested(browse: readonly string[]): boolean {
+  let wanted = truthy(process.env.AGENT_BROWSER_JSON);
+  let flagged = false;
+  for (const token of browse) {
+    if (token === "--") break;
+    if (token === "--json") flagged = true;
+    else if (token.startsWith("--json=")) flagged = truthy(token.slice("--json=".length));
+    else continue;
+    wanted = flagged || truthy(process.env.AGENT_BROWSER_JSON);
+  }
+  return wanted;
+}
+
+function codedLine(out: Value | undefined, exit: Value | undefined): Value | undefined {
+  const status = exitOf(exit);
+  if (typeof out !== "string" || status instanceof PythonCrash || status === 0n || !out.endsWith("\n") || out.indexOf("\n") !== out.length - 1) return out;
+  let parsed: Value | undefined;
+  try {
+    parsed = parseText(out.slice(0, -1), ANSWER_JSON_DEPTH);
+  } catch {
+    return out;
+  }
+  if (!(parsed instanceof Map) || parsed.get("success") !== false || parsed.has("code")) return out;
+  const error = parsed.get("error");
+  parsed.set("code", typeof error === "string" && error.startsWith("Unknown command:") ? "unknown_command" : "command_failed");
+  return `${dumps(parsed, "compact")}\n`;
+}
+
+function printAnswer(answer: Map<string, Value>, secrets: Secrets, printer: Printer, call: Call, asJson: boolean): Outcome {
+  if (asJson) answer.set("out", codedLine(answer.get("out"), answer.get("exit")) ?? null);
   const code = answer.get("code");
   if (typeof code === "string") call.noteErrorCode(code);
   for (const [key, value] of cleanMetrics(answer.get("metrics"))) call.metrics.set(key, value);
@@ -53,31 +84,36 @@ function printAnswer(answer: Map<string, import("../json.ts").Value>, secrets: S
   return status instanceof PythonCrash ? { status: 1, crash: status } : { status };
 }
 
-async function run(browse: string[], printer: Printer, call: Call, credential: string | undefined): Promise<Outcome | undefined> {
+async function run(browse: string[], printer: Printer, call: Call, plugin: Access | undefined, python: string | null): Promise<Outcome | undefined> {
   let parsed;
   try {
     parsed = splitGlobals(browse);
   } catch (error) {
     if (!(error instanceof Usage)) throw error;
-    printer.err(`✗ ${error.message}\n`);
+    printError(new BrowseError(error.message, 1, undefined, "usage_error"), jsonRequested(browse), new Secrets(), printer, call);
     return { status: 1 };
   }
   const { found, rest } = parsed;
   const asJson = Boolean(found.flag("json")) || truthy(process.env.AGENT_BROWSER_JSON);
-  if (rest.length === 0 || HELP_WORDS.includes(rest[0] as string)) return undefined;
+  const help = rest.length === 0 || HELP_WORDS.includes(rest[0] as string) ? rest[1] : rest.slice(1).some((word) => word === "--help" || word === "-h") && !["--version", "-V"].includes(rest[0] as string) ? rest[0] : null;
+  if (help !== null) {
+    printer.out(`${commandHelp(help)}\n`);
+    return { status: printer.closed ? CLOSED : 0, crash: printer.crash };
+  }
   if (rest[0] === "--version" || rest[0] === "-V") {
     printer.out(`ardia browse ${cliVersion()}\n`);
     return { status: printer.closed ? CLOSED : 0, crash: printer.crash };
   }
-  if (rest.slice(1).includes("--help") || rest.slice(1).includes("-h")) return undefined;
   if (handedBack(rest, browse) !== undefined) return undefined;
   const secrets = new Secrets();
   try {
-    const answer = await roundTrip(found, rest, secrets, call, credential);
-    return printAnswer(answer, secrets, printer, call);
+    const answer = await roundTrip(found, rest, secrets, call, plugin, python);
+    const chars = outputChars(answer);
+    const outcome = printAnswer(answer, secrets, printer, call, asJson);
+    call.metrics.set("output_chars", chars);
+    return outcome;
   } catch (error) {
     if (handBackReason(error) !== undefined) throw error;
-    if (error instanceof PluginRefusal) throw error;
     if (error instanceof PythonCrash) return { status: 1, crash: error };
     if (error instanceof Interrupted) {
       abandonWork();
@@ -85,73 +121,103 @@ async function run(browse: string[], printer: Printer, call: Call, credential: s
       return { status: INTERRUPTED };
     }
     if (error instanceof BrowseError) return { status: printError(error, asJson, secrets, printer, call) };
-    if (error instanceof Usage || error instanceof Refused) return { status: printError(new BrowseError(error.message), asJson, secrets, printer, call) };
+    if (error instanceof Usage) return { status: printError(new BrowseError(error.message, 1, undefined, "usage_error"), asJson, secrets, printer, call) };
+    if (error instanceof Refused) return { status: printError(new BrowseError(error.message, 1, undefined, "invalid_name"), asJson, secrets, printer, call) };
     throw error;
   }
 }
 
-function refuse(why: string, call: Call | undefined, python: string | null): number {
+function refuse(browse: readonly string[] | undefined, why: string, call: Call, python: string | null): number {
   const printer = new Printer("strict");
-  printer.err(refusal(why));
-  if (call !== undefined) {
-    call.noteErrorCode("plugin_refused");
-    finish(call, REFUSED, python);
+  let asJson = false;
+  if (browse !== undefined) {
+    try {
+      asJson = Boolean(splitGlobals(browse).found.flag("json")) || truthy(process.env.AGENT_BROWSER_JSON);
+    } catch (error) {
+      if (!(error instanceof Usage)) throw error;
+    }
   }
+  call.noteErrorCode(CODE);
+  if (asJson) {
+    const payload = object([["success", false], ["data", null], ["error", message(why)], ["code", CODE]]);
+    printer.out(`${dumps(payload, "compact")}\n`);
+  } else printer.err(`✗ ${message(why)}\n`);
+  finish(call, REFUSED, python);
   return REFUSED;
 }
 
-function pluginCall(argv: string[]): Call {
+function browseCall(argv: string[], browse: readonly string[] | undefined): Call {
   const call = new Call(argv);
   call.command = "browse";
-  call.metrics.set("plugin_mode", true);
+  if (browse !== undefined) {
+    call.subcommand = commandName(browse);
+    call.allowedFlags = allowedFlags(call.subcommand);
+  }
+  if (pluginMode()) call.metrics.set("plugin_mode", true);
   return call;
 }
 
 export function refuseOrHandBack(argv: string[], python: string | null): number | undefined {
   if (!pluginMode()) return undefined;
   dropCredential();
-  const call = pluginCall(argv);
-  return refuse("needs text paths and readable telemetry consent", call, python);
+  return refuse(undefined, "needs text paths and readable telemetry consent", browseCall(argv, undefined), python);
+}
+
+function topLevelError(argv: string[], python: string | null): number {
+  const failure = hoistFailure(argv);
+  const call = new Call(argv);
+  const printer = new Printer("strict");
+  printer.err(failure.text);
+  finish(call, failure.status, python);
+  return failure.status;
+}
+
+async function pluginAccess(browse: string[], call: Call, python: string | null): Promise<Access | number> {
+  try {
+    const access = await takeAccess();
+    let parsed;
+    try {
+      parsed = splitGlobals(browse);
+    } catch (error) {
+      if (!(error instanceof Usage)) throw error;
+      return access;
+    }
+    checkRequest(browse, parsed.found.values, parsed.rest);
+    return access;
+  } catch (error) {
+    if (error instanceof PluginRefusal) return refuse(browse, error.message, call, python);
+    throw error;
+  }
 }
 
 export async function serveBrowse(argv: string[], python: string | null): Promise<number | undefined> {
   const plugin = pluginMode();
-  let credential: string | undefined;
-  if (plugin) {
-    if (!pluginModeValueOk()) {
-      dropCredential();
-      return refuse(`takes ${PLUGIN_MODE}=1 only, not ${JSON.stringify(process.env[PLUGIN_MODE])}`, pluginCall(argv), python);
-    }
-    try {
-      credential = await takeCredential();
-    } catch (error) {
-      if (error instanceof PluginRefusal) return refuse(error.message, pluginCall(argv), python);
-      throw error;
-    }
-  }
   const browse = hoist(argv);
-  if (browse === undefined) return plugin ? refuse("can't read these arguments", undefined, python) : undefined;
-  const call = new Call(argv);
-  call.command = "browse";
-  call.subcommand = commandName(browse);
-  call.allowedFlags = allowedFlags(call.subcommand);
-  if (plugin) call.metrics.set("plugin_mode", true);
-  if (!environmentIsText()) return plugin ? refuse("needs text environment variables", call, python) : undefined;
+  if (browse === undefined) {
+    if (!plugin) return undefined;
+    dropCredential();
+    return topLevelError(argv, python);
+  }
+  const call = browseCall(argv, browse);
+  let access: Access | undefined;
+  if (plugin) {
+    const taken = await pluginAccess(browse, call, python);
+    if (typeof taken === "number") return taken;
+    access = taken;
+  }
+  if (!environmentIsText()) return plugin ? refuse(browse, "needs text environment variables", call, python) : undefined;
   const errors = pythonStdioErrors();
-  if (errors === undefined) return plugin ? refuse("needs a UTF-8 locale", call, python) : undefined;
+  if (errors === undefined) return plugin ? refuse(browse, "needs a UTF-8 locale", call, python) : undefined;
   const printer = new Printer(errors);
   let outcome: Outcome | undefined;
   try {
-    outcome = await run(browse, printer, call, credential);
+    outcome = await run(browse, printer, call, access, python);
   } catch (error) {
-    if (error instanceof PluginRefusal) return refuse(error.message, call, python);
     const reason = handBackReason(error);
     if (reason === undefined) throw error;
-    if (!plugin) return undefined;
-    if (error instanceof NoDaemon) return refuse("found no running browse session for this activity (Ardia starts it for the plugin)", call, python);
-    return refuse(`can't run this yet (${reason})`, call, python);
+    return plugin ? refuse(browse, `can't run this here (${reason})`, call, python) : undefined;
   }
-  if (outcome === undefined) return plugin ? refuse("doesn't serve help or local commands yet", call, python) : undefined;
+  if (outcome === undefined) return plugin ? refuse(browse, "can't run this here", call, python) : undefined;
   let exit = typeof outcome.status === "bigint" ? processStatus(outcome.status) : outcome.status;
   if (outcome.crash !== undefined) exit = printer.sayCrash(outcome.crash);
   finish(call, outcome.status, python, outcome.crash?.crash);
