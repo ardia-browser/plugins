@@ -58,7 +58,14 @@ pub struct Output {
     json: bool,
     closed: bool,
     interrupted: bool,
-    failed: Option<(i32, usize)>,
+    failed: Option<Failed>,
+}
+
+#[derive(Clone, Copy)]
+struct Failed {
+    errno: i32,
+    line: usize,
+    buffer: usize,
 }
 
 impl Output {
@@ -75,16 +82,9 @@ impl Output {
         self.closed || self.interrupted || self.failed.is_some()
     }
 
-    pub fn python_crash(&self) -> Option<i32> {
-        let (errno, line) = self.failed?;
-        let exception = format!("{}: [Errno {errno}] {}\n", python_os_error(errno), crate::paths::strerror(errno));
-        let mut stderr = std::io::stderr().lock();
-        let _ = stderr.write_all(exception.as_bytes());
-        if line > python_stdout_buffer() {
-            return Some(1);
-        }
-        let _ = write!(stderr, "Exception ignored on flushing sys.stdout:\n{exception}");
-        Some(120)
+    pub fn python_crash(&self) -> Option<(i32, i32)> {
+        let failed = self.failed?;
+        Some((failed.errno, report_crash(failed.errno, failed.line <= failed.buffer)))
     }
 
     pub fn closed(&self) -> bool {
@@ -106,7 +106,13 @@ impl Output {
             Ok(()) => {}
             Err(Stopped::Closed) => self.closed = true,
             Err(Stopped::Interrupted) => self.interrupted = true,
-            Err(Stopped::Failed(errno)) => self.failed = Some((errno, line.len())),
+            Err(Stopped::Failed(errno)) => {
+                self.failed = Some(Failed {
+                    errno,
+                    line: line.len(),
+                    buffer: python_stdout_buffer(),
+                })
+            }
         }
         if self.stopped() {
             quiet_stdout();
@@ -122,7 +128,18 @@ impl Output {
     }
 }
 
-fn python_os_error(errno: i32) -> &'static str {
+pub fn report_crash(errno: i32, flush_fails_again: bool) -> i32 {
+    let exception = format!("{}: [Errno {errno}] {}\n", python_os_error(errno), crate::paths::strerror(errno));
+    let mut stderr = std::io::stderr().lock();
+    let _ = stderr.write_all(exception.as_bytes());
+    if !flush_fails_again {
+        return 1;
+    }
+    let _ = write!(stderr, "Exception ignored on flushing sys.stdout:\n{exception}");
+    120
+}
+
+pub fn python_os_error(errno: i32) -> &'static str {
     match errno {
         libc::EPIPE | libc::ESHUTDOWN => "BrokenPipeError",
         libc::EAGAIN | libc::EALREADY | libc::EINPROGRESS => "BlockingIOError",
@@ -142,7 +159,7 @@ fn python_os_error(errno: i32) -> &'static str {
     }
 }
 
-fn python_stdout_buffer() -> usize {
+pub fn python_stdout_buffer() -> usize {
     let mut info: libc::stat = unsafe { std::mem::zeroed() };
     if unsafe { libc::fstat(1, &mut info) } == 0 && info.st_blksize > 1 {
         info.st_blksize as usize
@@ -154,6 +171,13 @@ fn python_stdout_buffer() -> usize {
 pub fn stdout_unusable() -> bool {
     let flags = unsafe { libc::fcntl(1, libc::F_GETFL) };
     flags < 0 || flags & libc::O_ACCMODE == libc::O_RDONLY || flags & libc::O_NONBLOCK != 0
+}
+
+pub fn version_write_failed(error: &std::io::Error) -> i32 {
+    match error.raw_os_error() {
+        Some(errno) if errno != libc::EBADF && unsafe { libc::isatty(1) } == 1 => report_crash(errno, true),
+        _ => stdout_flush_failed(error),
+    }
 }
 
 pub fn stdout_flush_failed(error: &std::io::Error) -> i32 {

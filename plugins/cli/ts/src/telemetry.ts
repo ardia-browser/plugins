@@ -7,6 +7,7 @@ import { O_NOFOLLOW, O_NONBLOCK, O_RDONLY, readFd } from "./privatefs.ts";
 import { isSpace, strip } from "./py.ts";
 import { appendToSpool, discardSpool, keepLocalCopy, startFlush } from "./spool.ts";
 import { recordUsage } from "./usage.ts";
+import { exceptionProperties } from "./crash.ts";
 import { cliVersion, isDevBuild } from "./version.ts";
 
 export const SERVED_BY = "ts";
@@ -224,8 +225,25 @@ function errorCodeOk(code: string): boolean {
   return code.length <= 41 && /^[a-z][a-z0-9_]*$/.test(code);
 }
 
-function commandRecord(call: Call, status: number, distinctId: string, environment: string, doc: JsonObject | undefined): JsonObject {
-  const code = call.errorCode !== undefined && errorCodeOk(call.errorCode) ? call.errorCode : null;
+function commonProperties(into: [string, Value][], doc: JsonObject | undefined, session: string): void {
+  into.push(["$session_id", session]);
+  const report = doc !== undefined && sharingId(doc) !== undefined ? watchReport(doc) : undefined;
+  if (report !== undefined) into.push(["watch_report", report]);
+}
+
+function event(name: string, distinctId: string, properties: [string, Value][]): JsonObject {
+  return object([
+    ["uuid", uuid7()],
+    ["event", name],
+    ["distinct_id", distinctId],
+    ["timestamp", iso(now())],
+    ["properties", object(properties)],
+  ]);
+}
+
+function commandRecord(call: Call, status: number, crashed: boolean, distinctId: string, environment: string): [string, Value][] {
+  const given = crashed ? "unhandled_exception" : call.errorCode;
+  const code = given !== undefined && errorCodeOk(given) ? given : null;
   const properties: [string, Value][] = [
     ["command", call.command],
     ["subcommand", call.subcommand ?? null],
@@ -234,39 +252,39 @@ function commandRecord(call: Call, status: number, distinctId: string, environme
     ["flags", flagNames(call.argv, call.allowedFlags)],
   ];
   timings(call, properties);
-  properties.push(["cli_version", cliVersion()], ["$environment", environment], ["served_by", SERVED_BY], ["$session_id", sessionId(doc)]);
-  const report = doc !== undefined && sharingId(doc) !== undefined ? watchReport(doc) : undefined;
-  if (report !== undefined) properties.push(["watch_report", report]);
-  return object([
-    ["uuid", uuid7()],
-    ["event", "cli_command"],
-    ["distinct_id", distinctId],
-    ["timestamp", iso(now())],
-    ["properties", object(properties)],
-  ]);
+  properties.push(["cli_version", cliVersion()], ["$environment", environment], ["served_by", SERVED_BY]);
+  return properties;
 }
 
-export function finish(call: Call, status: number, python: string | null): void {
+export function finish(call: Call, status: number, python: string | null, crash?: number): void {
   recordUsage(call, status);
   try {
-    record(call, status, python);
+    record(call, status, python, crash);
   } catch (error) {
     if (!(error instanceof TooDeep)) throw error;
   }
 }
 
-function record(call: Call, status: number, python: string | null): void {
+function record(call: Call, status: number, python: string | null, crash: number | undefined): void {
   const target = cliTarget(call.argv);
   if (target === undefined) return;
   const doc = readConsent(target.root);
   if (doc !== undefined && (unreadableExpiry(doc) || expiryOverflows(doc))) return;
   const installId = sharingId(doc);
-  const record = commandRecord(call, status, installId ?? LOCAL_ONLY_ID, target.environment, doc);
-  keepLocalCopy(target.root, record, installId !== undefined);
+  const distinctId = installId ?? LOCAL_ONLY_ID;
+  const session = sessionId(doc);
+  const shaped: [string, [string, Value][]][] = [];
+  if (crash !== undefined) shaped.push(["$exception", exceptionProperties(crash, target.environment)]);
+  shaped.push(["cli_command", commandRecord(call, status, crash !== undefined, distinctId, target.environment)]);
+  const records = shaped.map(([name, properties]) => {
+    commonProperties(properties, doc, session);
+    return event(name, distinctId, properties);
+  });
+  keepLocalCopy(target.root, records, installId !== undefined);
   if (installId === undefined) {
     discardSpool(target.root);
     return;
   }
-  const spooled = appendToSpool(target.root, record);
+  const spooled = appendToSpool(target.root, records);
   if (spooled !== undefined) startFlush(spooled, target, python);
 }

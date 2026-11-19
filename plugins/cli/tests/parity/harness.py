@@ -1,5 +1,6 @@
 import base64
 import difflib
+import functools
 import hashlib
 import json
 import os
@@ -15,6 +16,7 @@ import sys
 import tempfile
 import threading
 import time
+import unittest
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -47,6 +49,7 @@ PLACES = ("box", "home", "cli_home", "data", "cwd", "tmp", "outside", "cli")
 HARNESS_FILES = ("helpers.log", "stubs")
 FLUSH_FILE = "data/Telemetry/cli-flush.json"
 CONTENT_APART = ("data/Telemetry/local", "data/Telemetry/cli-queue.jsonl", FLUSH_FILE, "cli-home/Usage/usage.json")
+NATIVE_ATTEMPTS = 1
 READ_ONLY_METHODS = frozenset({"hello", "workspace", "windows", "commands"})
 PATH_ENV = frozenset({"ARDIA_DATA_DIR", "ARDIA_CONFIG_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME",
                       "XDG_RUNTIME_DIR"})
@@ -99,6 +102,34 @@ def ts_binary() -> Path | None:
         return Path(named)
     found = TS_PROJECT / "dist" / "ardia-ts"
     return found if found.exists() else None
+
+
+def ci_prerequisites() -> frozenset:
+    return frozenset(name for name in os.environ.get("ARDIA_TEST_REQUIRES", "").split(",") if name)
+
+
+def requires(available, needs: tuple, reason: str):
+    if available:
+        return lambda item: item
+    if not set(needs) <= ci_prerequisites():
+        return unittest.skip(reason)
+    complaint = f"{reason}; ARDIA_TEST_REQUIRES={','.join(sorted(ci_prerequisites()))} says this job built it"
+
+    def missing(item):
+        if isinstance(item, type):
+            def refuse(cls):
+                raise RuntimeError(complaint)
+
+            item.setUpClass = classmethod(refuse)
+            return item
+
+        @functools.wraps(item)
+        def refuse_test(*args, **kwargs):
+            raise AssertionError(complaint)
+
+        return refuse_test
+
+    return missing
 
 
 def ts_libc(program: Path) -> Path:
@@ -915,8 +946,7 @@ def read_only(connection: list) -> bool:
 
 
 def fallback_requests(new: list, python: list) -> list:
-    extra = len(new) - len(python)
-    if extra > 0 and exact(new[extra:]) == exact(python) and all(read_only(connection) for connection in new[:extra]):
+    if len(new) == len(python) + NATIVE_ATTEMPTS and exact(new[NATIVE_ATTEMPTS:]) == exact(python) and read_only(new[0]):
         return python
     return new
 

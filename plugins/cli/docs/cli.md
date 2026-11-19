@@ -1651,6 +1651,22 @@ HOME=/tmp/ardia-cli-home ARDIA_CLI_URL=file:///tmp/ardia-cli-out/ardia-cli-0.0.1
 
 Any Chromium works for `--port`: `chromium --headless=new --remote-debugging-port=<port> --user-data-dir=<scratch>`.
 
+A test that needs the Rust router or the TypeScript program skips when it isn't built, except where
+`ARDIA_TEST_REQUIRES` (comma-separated: `rust`, `ts`) says the job built it: there a missing program fails the test.
+CI (`.github/workflows/cli.yml`) sets it, so nothing that should run there is skipped silently:
+
+| Tests | Job |
+| --- | --- |
+| `cargo test` (with the Python CLI for the listing check) | Rust, macOS and Ubuntu |
+| `RustParityTable`, `RustProcess`, `RustClosedStdout`, and the Rust-only checks in `HarnessRules` and `HarnessCatches` | Rust (`ARDIA_TEST_REQUIRES=rust`) |
+| `bun test` | TypeScript |
+| `TsParityTable`, `TsProcess`, `TsClosedStdout`, `HarnessRules`, `HarnessCatches` | TypeScript (`ARDIA_TEST_REQUIRES=rust,ts`) |
+| `ServedTable`, `ProtocolAgrees`, `BuildSmoke` | Rust, TypeScript and Python |
+| every other `tests/*.py` | Python (`unittest discover`); the parity classes skip there, no program being built |
+| `ProductionSigning` | none: it needs the Developer ID identity in the keychain, so it runs on a release Mac |
+
+macOS-only checks (`sandbox-exec`, the argument size rule) run in the macOS legs.
+
 ### Rust parity
 
 The command is moving from Python to Rust one command at a time (ardia-browser/ardia#2703). The Rust entry serves a
@@ -1667,23 +1683,32 @@ system services are still allowed. Elsewhere it runs only on a throwaway machine
 that carries the case's folder in its command line or environment, or runs from the harness's own install. It compares stdout, stderr, exit code, each control-socket connection's requests (ids and
 params as sent), telemetry, usage, the flush state, the files written (with modes) and the helpers started (each argument whole), byte for byte, with a diff
 for each mismatch, and it knows which side served a call from whether the bundled Python's `ardia_cli.cli` was imported, not from telemetry. A
-case marked `fallback` is one Rust must hand to Python; before handing off, Rust may only have asked read-only questions
-(`hello`, `workspace`, `windows`, `commands`). `--command NAME` and `--case ID` narrow a run, `--keep` keeps both
+case marked `fallback` is one Rust must hand to Python; before handing off, the native side may have opened at most one
+connection of its own, asking only read-only questions (`hello`, `workspace`, `windows`, `commands`); a second extra
+connection, or one in a case not marked `fallback`, is a mismatch. `--command NAME` and `--case ID` narrow a run, `--keep` keeps both
 sandboxes, and `--report` prints the table as JSON (per command: cases, passing, native, served) for a given commit.
 
 The Rust entry stays `bin/ardia` and routes. A call whose stdout is closed, open read-only or non-blocking goes to Python
-whatever its row says, since Python's failure there is an unhandled exception native code can't reproduce; a listing
-whose stdout later fails with anything but EPIPE ends as Python's would after its traceback: the exception line, then,
-when the failed line fit Python's stdout buffer (`st_blksize`), `Exception ignored on flushing sys.stdout:` and status
-120, else status 1. A command whose row in `served.txt` says `rust` it serves itself; one that
+whatever its row says, since Python's failure there is an unhandled exception native code can't reproduce, and so does
+a call started with fd 0, 1 or 2 closed (noted by a constructor that runs before Rust's runtime reopens them on
+`/dev/null`; Python then gets them closed again). A listing whose stdout later fails with anything but EPIPE ends as
+Python's would after its traceback: the exception line, then, when the failed line fit Python's stdout buffer
+(`st_blksize`, read before the failed stdout is pointed at `/dev/null`), `Exception ignored on flushing sys.stdout:` and
+status 120, else status 1; bare `ardia` (help) follows the same rule for its whole text (on a hung-up Linux terminal,
+whose `st_blksize` is 1024, that is status 1), `--version` prints both on a terminal and the second alone elsewhere. Telemetry records what Python's crash records: a `$exception` event (`cli_unhandled`,
+fatal, the `OSError` subclass and `[Errno N] text`) before the `cli_command` event, which carries exit code 1 and
+`unhandled_exception`. Both entries ignore SIGXFSZ as Python does at startup, so a file-size limit gives `EFBIG`, not
+death by signal; the router restores the caller's disposition before it execs Python, and the flusher starts with it at
+its default, as Python's `subprocess` starts it. A command whose row in `served.txt` says `rust` it serves itself; one that
 says `ts` it runs as a child, `<root>/libexec/ardia-ts`, whose first argument `--ardia-routed=2:<sigint>:<fd>:<hex caller>`
 carries whether SIGINT was ignored when ardia started, the lifeline descriptor and the caller's hello JSON, since Bun by
 itself can learn none of them. The lifeline is the read end of a pipe whose write end only the router holds: the child sees EOF on it
 only if the router dies, and then kills itself with SIGKILL from a thread of the addon's (`watchLifeline`), so it ends
 even while its JavaScript is blocked in a system call (opening a FIFO, say), and a killed ardia never leaves its child writing to the caller's output
 or talking to Ardia. The child starts with ardia's own signal mask and SIGINT disposition, SIGCHLD at its default (the
-router has to reap it), ardia's environment minus every variable named `BUN_*`, `JSC_*`, `NODE_*`, `UV_*` or `MIMALLOC_*`
-(Bun, its JavaScriptCore, its Node layer, libuv and mimalloc read those at startup, and `BUN_BE_BUN` or `BUN_OPTIONS` alone
+router has to reap it), ardia's environment minus every variable named `BUN_*`, `JSC_*`, `NODE_*`, `UV_*` or `MIMALLOC_*`,
+the last in any case (Bun, its JavaScriptCore, its Node layer, libuv and mimalloc read those at startup, mimalloc
+matching names without regard to case, and `BUN_BE_BUN` or `BUN_OPTIONS` alone
 would turn the program into the Bun CLI or change what it runs; the Python flusher it may start reads none of them), and
 the same descriptors plus the lifeline; while it runs the router passes SIGINT, SIGTERM and
 SIGHUP on unless they were ignored (a Ctrl-C to the whole group reaches the child twice, which its sticky interrupt flag
@@ -1710,14 +1735,16 @@ its mode; the hardened runtime's library validation then loads it only into a pr
 | --- | --- | --- | --- |
 | `peerUid` | `getsockopt` `LOCAL_PEERCRED` (`struct xucred`) on macOS, `SO_PEERCRED` on Linux | no socket credential API | `control.ts`: refuse a control socket served by another user |
 | `interruptsIgnored` | `sigaction(SIGINT, NULL, …)` | can read no signal disposition | `main.ts`: leave an inherited ignored SIGINT ignored |
-| `openAt` | `openat` (always `O_CLOEXEC`) | `fs` opens by path only | `privatefs.ts`: folders and private files under an open folder |
+| `openAt` | `openat` (always `O_CLOEXEC`) | `fs` opens by path only | `privatefs.ts`: folders under an open folder |
+| `openFileAt` | `openat` with `O_NONBLOCK\|O_NOFOLLOW\|O_CLOEXEC`, `fstat`, then `fcntl(F_SETFL)` to clear `O_NONBLOCK`; `null` when the name is not a regular file (one that opened, or a FIFO with no reader, `ENXIO`) | `fs` opens by path only, and a blocking open can't be interrupted | `privatefs.ts`: every private file (spool, local copies, usage, flush state, locks), never blocking on a FIFO; `null` becomes the `PathError` Python's `open_private_file` raises for a file that isn't regular |
 | `mkdirAt` | `mkdirat` | path only | `privatefs.ts`: create `Telemetry`, `Local` and the usage folder |
 | `renameAt` | `renameat` | path only | `privatefs.ts`: the temp-then-rename writes |
 | `unlinkAt` | `unlinkat` (a name is a string or a `Buffer` of raw bytes, as for `sizeAt`) | path only | `privatefs.ts`: drop the spool and pruned copies |
 | `sizeAt` | `fstatat(…, AT_SYMLINK_NOFOLLOW)` | path only | `privatefs.ts`: spool and local-copy sizes |
-| `listAt` | `openat(fd, ".", O_RDONLY\|O_DIRECTORY\|O_CLOEXEC)`, `fdopendir`, `readdir`; names as raw-byte `Buffer`s, the folder's own descriptor left at offset 0 as `os.listdir(fd)` leaves it | no directory listing from a descriptor | `privatefs.ts`: prune the local copies |
+| `listAt` | what CPython 3.13's `os.listdir(fd)` does: `fcntl(F_DUPFD_CLOEXEC)` (sharing the folder's open file and its offset), `fdopendir`, `readdir` from that offset, then `rewinddir` and `closedir`; names as raw-byte `Buffer`s. So it sees what Python sees on every filesystem (on overlayfs, not a file made after the folder was opened) and leaves the offset where Python leaves it | no directory listing from a descriptor | `privatefs.ts`: prune the local copies |
 | `lock` | `flock` | no `flock`; `O_EXLOCK` is Darwin-only | `privatefs.ts`: the same lock Python's `fcntl.flock` takes, on macOS and Linux |
 | `strerror` | `strerror_r` (GNU form on glibc, XSI elsewhere) | Node's messages are libuv's, not libc's | `paths.ts`, `libc.ts`: every OS error text, as Python's `os.strerror` gives it on that platform |
+| `writeAll` | `write` until all is written (`poll` for `POLLOUT` on `EAGAIN`), with SIGINT at its default disposition for the duration unless it was ignored | a synchronous `writeSync` blocked on a full pipe or a paused terminal can't be ended by Ctrl-C while Bun's own SIGINT handler is installed | `printable.ts`, `main.ts`: help, `--version` and every line on stderr |
 | `watchLifeline` | `fcntl(FD_CLOEXEC)`, a detached `pthread` blocking in `read`, `kill(getpid(), SIGKILL)` at EOF or error | a JS watcher can't run while the JS thread is blocked in a synchronous call | `main.ts`: end at once when the router dies |
 
 Every integer argument must be a number that is exactly a 32-bit integer, and a boolean a boolean; anything else throws
@@ -1739,6 +1766,31 @@ test set, and drops a recording that would carry a local path, the host name or 
 table, checks that `served.txt` lists only proven commands, that both sides speak the same control protocol, that the
 harness refuses unsafe cases and catches a binary that hands everything to Python, and keeps the process checks
 (Ctrl-C, leases, the flusher, paths that aren't UTF-8).
+
+#### Accepted differences from the Python implementation
+
+The native entries (the Rust router serving a row itself, and the TypeScript program behind it) match Python's exit
+status, the lines Python prints on stderr for a failure (its final exception line and any `Exception ignored ...`
+block) and the telemetry it records, except for these, each asserted by name in `tests/test_closed_stdout.py` and the
+parity harness rather than stripped wholesale:
+
+- A call Python serves after a native hand-back (status 253) may show one extra control connection before Python's own,
+  holding only read-only questions: the native side asked before it found it couldn't serve the reply exactly.
+- With a `MIMALLOC_*` variable set (in any case), Python's own bundled mimalloc prints its diagnostics on stderr, while
+  a natively served call prints none: the router keeps those variables from the TypeScript program so Bun's mimalloc
+  can't change what it prints or how it runs, and the Rust side has no mimalloc.
+- Python's traceback, the `Traceback (most recent call last):` header and its frames, isn't printed; the exception line
+  and any `Exception ignored ...` block are. A `$exception` telemetry event carries the same type, value, mechanism
+  and level, with an empty `stacktrace.frames`: the frames name Python's own functions and line numbers. So that event
+  is shorter than Python's, and under a file-size limit it can fit where Python's write is cut short.
+- A private file the CLI opens (the telemetry spool, a local copy, the usage file, the flush state, any of their locks)
+  that is a FIFO: Python's open blocks until something opens the other end, forever if nothing does, and a Ctrl-C then
+  ends it by KeyboardInterrupt. The native side opens it without blocking and treats it as Python treats a file that
+  opened but isn't regular (`PathError`), so the call ends as Python's would have once the FIFO opened.
+- Ctrl-C while stdout or stderr is blocked (a full pipe nobody reads, a paused terminal): Python raises
+  KeyboardInterrupt, then blocks again flushing stdout as it exits, so only a second signal ends it, and it prints
+  `KeyboardInterrupt` and an `Exception ignored on flushing sys.stdout` block. The native side dies by SIGINT at once and
+  prints nothing more. A listing still ends as Python's does, with `ardia <command>: interrupted` and status 130.
 
 ## Linux
 
