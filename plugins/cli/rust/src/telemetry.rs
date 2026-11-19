@@ -4,12 +4,9 @@ use crate::json::{self, Map, Style, Value};
 use crate::paths::{self, env, Failure};
 use crate::records;
 use crate::usage;
-use std::io::Write;
 use std::os::fd::OwnedFd;
 use std::os::unix::fs::MetadataExt;
-use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::time::Instant;
 
 pub const LOGS_URL: &str = "https://ardia.dev/otel/v1/logs";
@@ -448,65 +445,17 @@ fn start_flush(dir: &OwnedFd, target: &Target, python: Option<&Path>) {
     }
 }
 
-#[cfg(target_os = "linux")]
-const OPEN_DESCRIPTORS: &str = "/proc/self/fd";
-#[cfg(not(target_os = "linux"))]
-const OPEN_DESCRIPTORS: &str = "/dev/fd";
-
-fn open_descriptors_above_stderr() -> Vec<libc::c_int> {
-    let mut found: Vec<libc::c_int> = std::fs::read_dir(OPEN_DESCRIPTORS)
-        .map(|entries| {
-            entries
-                .filter_map(|entry| entry.ok()?.file_name().to_str()?.parse().ok())
-                .filter(|fd| *fd > 2)
-                .collect()
-        })
-        .unwrap_or_default();
-    if found.is_empty() {
-        let mut limit: libc::rlimit = unsafe { std::mem::zeroed() };
-        let highest = if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) } == 0 {
-            (limit.rlim_cur as i64).clamp(3, 65_536)
-        } else {
-            1024
-        } as libc::c_int;
-        found = (3..highest).collect();
-    }
-    found
-}
-
 fn spawn_flusher(python: &Path, target: &Target) {
     let config = Value::object(vec![
         ("data_root", Value::str(&target.root)),
         ("url", Value::str(&target.url)),
         ("environment", Value::str(target.environment)),
     ]);
-    let mut command = Command::new(python);
-    command
-        .args(["-I", "-c", "from ardia_cli import telemetry; telemetry.flush_main()"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .current_dir("/");
-    let inherited = open_descriptors_above_stderr();
-    unsafe {
-        command.pre_exec(move || {
-            libc::setsid();
-            for &fd in &inherited {
-                let flags = libc::fcntl(fd, libc::F_GETFD);
-                if flags >= 0 {
-                    libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC);
-                }
-            }
-            libc::signal(libc::SIGPIPE, libc::SIG_DFL);
-            libc::signal(libc::SIGXFSZ, libc::SIG_DFL);
-            Ok(())
-        });
-    }
-    if let Ok(mut child) = command.spawn() {
-        if let Some(mut stdin) = child.stdin.take() {
-            let _ = stdin.write_all(json::dumps(&config, Style::Spaced, true).as_bytes());
-        }
-    }
+    crate::detached::spawn_with_input(
+        python,
+        &["-I", "-c", "from ardia_cli import telemetry; telemetry.flush_main()"],
+        json::dumps(&config, Style::Spaced, true).as_bytes(),
+    );
 }
 
 #[cfg(test)]

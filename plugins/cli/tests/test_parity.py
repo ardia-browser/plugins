@@ -442,6 +442,7 @@ class HarnessCatches(unittest.TestCase):
 
 
 INHERITED_FD = 42
+NO_FD_LISTING = '(version 1)(allow default)(deny file-read* (literal "/dev/fd") (subpath "/dev/fd"))'
 
 
 class EntryProcess:
@@ -509,13 +510,20 @@ class EntryProcess:
             events.communicate()
             fake.close()
 
-    def blocked_listing(self, argv: list, program: Path | None = None) -> tuple:
+    def blocked_listing(self, argv: list, program: Path | None = None, prefilled: bool = False) -> tuple:
         tabs = [{"type": "tab", "id": f"tab-{index}", "title": "t" * 40, "url": "https://example.com/" + "p" * 40} for index in range(3000)]
         data = self.case / "data"
         data.mkdir(exist_ok=True)
         fake = FakeArdia(data / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "workspace": {"result": {"windows": [{"id": "w-1", "spaces": [{"profile": "p", "tabs": tabs}]}]}}})
         try:
-            listing = self.start(argv, program=program)
+            if prefilled:
+                reader, writer = full_blocking_pipe()
+                listing = subprocess.Popen([str(program or self.root / "bin" / "ardia"), *argv], env=self.environment({}), stdout=writer,
+                                           stderr=subprocess.PIPE, preexec_fn=os.setsid)
+                os.close(writer)
+                listing.stdout = os.fdopen(reader, "rb")
+            else:
+                listing = self.start(argv, program=program)
             self.wait_for(fake, "workspace")
             time.sleep(1)
             self.assertIsNone(listing.poll(), "the output should fill the pipe and block")
@@ -532,11 +540,14 @@ class EntryProcess:
             fake.close()
 
     def test_ctrl_c_while_blocked_on_output_ends_like_python(self):
-        new = self.blocked_listing(["tabs", "--json"])
-        self.case = Path(tempfile.mkdtemp(prefix="c", dir=self.scratch))
-        python = self.blocked_listing(["-I", "-m", "ardia_cli", "tabs", "--json"], program=self.python)
-        self.assertEqual(new, python)
-        self.assertEqual(new, (True, 130, b"ardia tabs: interrupted\n"))
+        for prefilled in (False, True):
+            with self.subTest(prefilled=prefilled):
+                self.case = Path(tempfile.mkdtemp(prefix="c", dir=self.scratch))
+                new = self.blocked_listing(["tabs", "--json"], prefilled=prefilled)
+                self.case = Path(tempfile.mkdtemp(prefix="c", dir=self.scratch))
+                python = self.blocked_listing(["-I", "-m", "ardia_cli", "tabs", "--json"], program=self.python, prefilled=prefilled)
+                self.assertEqual(new, python)
+                self.assertEqual(new, (True, 130, b"ardia tabs: interrupted\n"))
 
     def test_ctrl_c_ends_a_call_whose_output_is_blocked(self):
         for argv, blocked in (([], "stdout"), (["--help"], "stdout"), (["--version"], "stdout"), (["windows"], "stderr")):
@@ -710,19 +721,24 @@ class EntryProcess:
                 new = self.ends_with_a_fifo_at(place, [str(self.root / "bin" / "ardia")], hold=False)
                 self.assertEqual(new, python)
 
-    def flusher_keeps_an_inherited_descriptor(self, url: str, soft_limit: int | None) -> bool:
+    def flusher_keeps_an_inherited_descriptor(self, url: str, soft_limit: int | None, fd: int = INHERITED_FD, hard_limit: int | None = None,
+                                              without_fd_listing: bool = False) -> bool:
         reader, writer = os.pipe()
-        os.dup2(writer, INHERITED_FD)
+        os.dup2(writer, fd)
         os.close(writer)
 
         def lower_limit():
             if soft_limit is not None:
-                resource.setrlimit(resource.RLIMIT_NOFILE, (soft_limit, resource.getrlimit(resource.RLIMIT_NOFILE)[1]))
+                hard = hard_limit if hard_limit is not None else resource.getrlimit(resource.RLIMIT_NOFILE)[1]
+                resource.setrlimit(resource.RLIMIT_NOFILE, (soft_limit, hard))
 
+        command = [str(self.root / "bin" / "ardia"), "windows"]
+        if without_fd_listing:
+            command = ["/usr/bin/sandbox-exec", "-p", NO_FD_LISTING, *command]
         try:
-            done = subprocess.run([str(self.root / "bin" / "ardia"), "windows"], capture_output=True, pass_fds=(INHERITED_FD,), preexec_fn=lower_limit,
+            done = subprocess.run(command, capture_output=True, pass_fds=(fd,), preexec_fn=lower_limit,
                                   env=self.environment({"ARDIA_TELEMETRY_URL": url}), timeout=30)
-            os.close(INHERITED_FD)
+            os.close(fd)
             self.assertEqual(done.returncode, 0, done.stderr)
             if not select.select([reader], [], [], 3)[0]:
                 return True
@@ -765,15 +781,18 @@ class EntryProcess:
         silent.listen(8)
         self.addCleanup(silent.close)
         url = f"http://127.0.0.1:{silent.getsockname()[1]}/v1/logs"
-        for soft_limit in (None, INHERITED_FD - 10):
-            with self.subTest(soft_fd_limit=soft_limit):
+        cases = [(None, INHERITED_FD, None, False), (INHERITED_FD - 10, INHERITED_FD, None, False)]
+        if sys.platform == "darwin":
+            cases.append((64, 80, 64, True))
+        for soft_limit, fd, hard_limit, without_fd_listing in cases:
+            with self.subTest(soft_fd_limit=soft_limit, fd=fd, hard_fd_limit=hard_limit, fd_listing_denied=without_fd_listing):
                 data = self.case / "data"
                 shutil.rmtree(data, True)
                 data.mkdir()
                 (data / "telemetry.json").write_text(json.dumps({"sharing": True, "installId": INSTALL_ID}))
                 fake = FakeArdia(data / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "windows": {"result": []}})
                 try:
-                    kept = self.flusher_keeps_an_inherited_descriptor(url, soft_limit)
+                    kept = self.flusher_keeps_an_inherited_descriptor(url, soft_limit, fd, hard_limit, without_fd_listing)
                     self.assertTrue(self.flusher_running(), "the flusher was gone before its descriptors were checked")
                     self.assertFalse(kept, "the flusher kept a descriptor it inherited")
                 finally:

@@ -8,15 +8,19 @@ fn last_errno() -> i32 {
     std::io::Error::last_os_error().raw_os_error().unwrap_or(libc::EIO)
 }
 
+fn write_once(fd: i32, bytes: &[u8]) -> Result<usize, i32> {
+    let written = unsafe { libc::write(fd, bytes.as_ptr().cast(), bytes.len()) };
+    if written > 0 || (written == 0 && bytes.is_empty()) {
+        return Ok(written as usize);
+    }
+    Err(if written == 0 { libc::EIO } else { last_errno() })
+}
+
 fn write_some(fd: i32, bytes: &[u8]) -> Result<usize, i32> {
     loop {
-        let written = unsafe { libc::write(fd, bytes.as_ptr().cast(), bytes.len()) };
-        if written > 0 || (written == 0 && bytes.is_empty()) {
-            return Ok(written as usize);
-        }
-        let errno = if written == 0 { libc::EIO } else { last_errno() };
-        if errno != libc::EINTR {
-            return Err(errno);
+        match write_once(fd, bytes) {
+            Err(libc::EINTR) => {}
+            done => return done,
         }
     }
 }
@@ -89,8 +93,9 @@ pub fn write_as_python_buffers(mut bytes: &[u8], buffer: usize, interrupted: imp
         if interrupted() {
             return Err(Stopped::Interrupted);
         }
-        match write_some(1, bytes) {
+        match write_once(1, bytes) {
             Ok(written) => bytes = &bytes[written..],
+            Err(libc::EINTR) => {}
             Err(libc::EPIPE | libc::ESHUTDOWN) => return Err(Stopped::Closed),
             Err(errno) => {
                 let unwritten = match (direct, errno) {
