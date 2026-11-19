@@ -76,7 +76,7 @@ function lineAt(ends: number[], offset: number): number {
   return 0;
 }
 
-function pythonStdoutBuffer(): number {
+export function pythonStdoutBuffer(): number {
   try {
     const size = fstatSync(1).blksize;
     return size > 1 ? size : PYTHON_DEFAULT_BUFFER;
