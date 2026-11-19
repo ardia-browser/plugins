@@ -283,11 +283,12 @@ class HarnessCatches(unittest.TestCase):
             shutil.rmtree(scratch, True)
 
 
-@unittest.skipUnless(binary(), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
-class RustProcess(unittest.TestCase):
+class EntryProcess:
+    entry = "rust"
+
     @classmethod
     def setUpClass(cls):
-        cls.install = harness.Installation(binary())
+        cls.install = harness.Installation(harness.entry_binary(cls.entry), entry=cls.entry)
         cls.scratch = cls.install.scratch
         cls.root = cls.install.root
         cls.python = cls.install.python
@@ -355,6 +356,51 @@ class RustProcess(unittest.TestCase):
             listing.communicate()
             fake.close()
 
+    def slow_listing(self, release: threading.Event):
+        def answer():
+            release.wait(10)
+            return {"result": {"windows": []}}
+
+        data = self.case / "data"
+        data.mkdir()
+        return FakeArdia(data / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "workspace": answer})
+
+    def wait_for_workspace(self, fake):
+        deadline = time.monotonic() + 20
+        while not any(method == "workspace" for method, _ in fake.requests) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertIn("workspace", [method for method, _ in fake.requests])
+
+    def test_ctrl_c_during_the_call_says_interrupted(self):
+        release = threading.Event()
+        fake = self.slow_listing(release)
+        try:
+            listing = subprocess.Popen([str(self.root / "bin" / "ardia"), "tabs"], env=self.environment({}), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.wait_for_workspace(fake)
+            listing.send_signal(signal.SIGINT)
+            out, err = listing.communicate(timeout=10)
+            self.assertEqual((listing.returncode, out, err), (130, b"", b"ardia tabs: interrupted\n"))
+        finally:
+            release.set()
+            fake.close()
+
+    def test_an_ignored_interrupt_stays_ignored_during_a_listing(self):
+        release = threading.Event()
+        fake = self.slow_listing(release)
+        try:
+            listing = subprocess.Popen([str(self.root / "bin" / "ardia"), "tabs"], env=self.environment({}), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                       preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_IGN))
+            self.wait_for_workspace(fake)
+            listing.send_signal(signal.SIGINT)
+            time.sleep(0.5)
+            self.assertIsNone(listing.poll(), "an ignored Ctrl-C stopped the listing")
+            release.set()
+            out, err = listing.communicate(timeout=10)
+            self.assertEqual((listing.returncode, err), (0, b""))
+        finally:
+            release.set()
+            fake.close()
+
     def test_paths_that_are_not_utf8_go_to_python(self):
         lossy = self.case / "data-\ufffd"
         lossy.mkdir()
@@ -362,13 +408,21 @@ class RustProcess(unittest.TestCase):
         try:
             for name, value in (("ARDIA_DATA_DIR", str(self.case / "data-\udcff")), ("ARDIA_CLI_HOME", str(self.case / "home-\udcff"))):
                 env = self.environment({name: value})
-                rust = subprocess.run([str(self.root / "bin" / "ardia"), "windows"], env=env, capture_output=True, timeout=30)
+                new = subprocess.run([str(self.root / "bin" / "ardia"), "windows"], env=env, capture_output=True, timeout=30)
                 python = subprocess.run([str(self.python), "-I", "-m", "ardia_cli", "windows"], env=env, capture_output=True, timeout=30)
-                self.assertEqual((rust.returncode, rust.stdout, rust.stderr), (python.returncode, python.stdout, python.stderr), name)
+                self.assertEqual((new.returncode, new.stdout, new.stderr), (python.returncode, python.stdout, python.stderr), name)
             self.assertEqual(fake.requests, [])
             self.assertFalse((self.case / "home-\ufffd").exists())
         finally:
             fake.close()
+
+    def test_argv_that_is_not_utf8_reaches_python_byte_for_byte(self):
+        env = self.environment({"ARDIA_NOTE": "n\udcfe"})
+        for argv in (["nosuch-\udcff"], ["windows", "--data-dir", str(self.case / "d-\udcff")]):
+            new = subprocess.run([str(self.root / "bin" / "ardia"), *argv], env=env, capture_output=True, timeout=30)
+            python = subprocess.run([str(self.python), "-I", "-m", "ardia_cli", *argv], env=env, capture_output=True, timeout=30)
+            self.assertEqual((new.returncode, new.stdout, new.stderr), (python.returncode, python.stdout, python.stderr), argv)
+            self.assertNotIn("\ufffd".encode(), new.stderr)
 
     def test_its_events_reach_the_collector_through_the_python_flusher(self):
         collector = ThreadingHTTPServer(("127.0.0.1", 0), Collector)
@@ -393,7 +447,7 @@ class RustProcess(unittest.TestCase):
                 time.sleep(0.1)
             self.assertTrue(Collector.bodies, "the flusher never posted")
             attributes = {item["key"]: item["value"] for item in json.loads(Collector.bodies[0])["resourceLogs"][0]["scopeLogs"][0]["logRecords"][0]["attributes"]}
-            self.assertEqual(attributes["served_by"], {"stringValue": "rust"})
+            self.assertEqual(attributes["served_by"], {"stringValue": self.entry})
             self.assertEqual(attributes["command"], {"stringValue": "windows"})
             self.assertEqual(attributes["distinct_id"], {"stringValue": INSTALL_ID})
             while (data / "Telemetry" / "cli-queue.jsonl").exists() and time.monotonic() < deadline:
@@ -428,7 +482,8 @@ class RustProcess(unittest.TestCase):
         bare = self.case / "bare"
         (bare / "bin").mkdir(parents=True)
         (bare / ".leases").mkdir()
-        shutil.copy2(self.root / "bin" / "ardia", bare / "bin" / "ardia")
+        for program in (self.root / "bin").iterdir():
+            shutil.copy2(program, bare / "bin" / program.name)
         done = subprocess.run([str(bare / "bin" / "ardia"), "config", "path"], capture_output=True, env=self.environment({}), timeout=30)
         self.assertEqual(done.returncode, 127)
         self.assertEqual(os.listdir(bare / ".leases"), [])
@@ -455,6 +510,16 @@ class RustProcess(unittest.TestCase):
         self.assertEqual(len(seen), 1)
         self.assertTrue(seen[0].isdigit())
         self.assertEqual(leftover, [])
+
+
+@unittest.skipUnless(binary(), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
+class RustProcess(EntryProcess, unittest.TestCase):
+    entry = "rust"
+
+
+@unittest.skipUnless(harness.ts_binary(), "build plugins/cli/ts first (bun run build) or set ARDIA_TS_CLI")
+class TsProcess(EntryProcess, unittest.TestCase):
+    entry = "ts"
 
 
 class BuildSmoke(unittest.TestCase):
