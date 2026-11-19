@@ -11,6 +11,7 @@ type Native = {
   peerUid(fd: number): number;
   interruptsIgnored(): boolean | number;
   openAt(dir: number, name: string, flags: number, mode: number): number;
+  connectAt(dir: number, name: string): number;
   openFileAt(dir: number, name: string, flags: number, mode: number): number | null;
   mkdirAt(dir: number, name: string, mode: number): number;
   renameAt(dir: number, from: string, to: string): number;
@@ -23,7 +24,7 @@ type Native = {
   strerror(errno: number): string | number;
 };
 
-const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "openFileAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "listAt", "lock", "watchLifeline", "writeAll", "strerror"];
+const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "connectAt", "openFileAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "listAt", "lock", "watchLifeline", "writeAll", "strerror"];
 const ERRNO_NAMES = new Map<number, string>(Object.entries(constants.errno).map(([name, value]) => [value, name]));
 const EWOULDBLOCK = constants.errno.EWOULDBLOCK ?? constants.errno.EAGAIN;
 
@@ -114,6 +115,10 @@ export function interruptsIgnored(): boolean {
 
 export function openAt(dir: number, name: string, flags: number, mode = 0o600): number {
   return checked(native().openAt(dir, name, flags, mode), "openat", name);
+}
+
+export function connectAt(dir: number, name: string): number {
+  return checked(native().connectAt(dir, name), "connect", name);
 }
 
 export function openFileAt(dir: number, name: string, flags: number, mode = 0o600): number | null {

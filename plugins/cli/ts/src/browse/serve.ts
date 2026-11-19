@@ -1,4 +1,3 @@
-import type { Socket } from "node:net";
 import { dumps, type JsonObject, object, type Value } from "../json.ts";
 import { truthy as pyTruthy } from "../py.ts";
 import { codePoints, joinCodePoints } from "../pystr.ts";
@@ -8,13 +7,14 @@ import { noGet } from "./answer.ts";
 import { type Found, parseDuration, Usage } from "./args.ts";
 import { answerDeadline } from "./deadline.ts";
 import { builtinCrash, PythonCrash, unreachable } from "./errors.ts";
-import { Absent, connect, exchange, Stalled } from "./exchange.ts";
+import { Absent, connect, exchange, type Link, Stalled } from "./exchange.ts";
 import { encodeError } from "./output.ts";
 import { type Access, accessEndpointKey, accessLabel, accessWs } from "./plugin.ts";
 import { loadAnswer } from "./pyjson.ts";
 import type { Secrets } from "./redact.ts";
 import { agentEnv, endpointChoice, endpointKey, namespaceName, optionsFrom, rootOf, sessionKey, sessionName, urlsWithSecrets } from "./request.ts";
 import { startDaemon } from "./spawn.ts";
+import { closeDir } from "../privatefs.ts";
 import { checkSocket, NoDaemon, openBrowseDir, osFailure, socketPath } from "./session.ts";
 import { decodeStdin, pythonStdioErrors, readStdin, stdinState } from "./stdio.ts";
 import { TAKES_OUT } from "./tables.ts";
@@ -62,15 +62,16 @@ function checkIdle(found: Found): void {
   if ("infinite" in parsed) throw builtinCrash("OverflowError", "cannot convert float infinity to integer");
 }
 
-async function openSession(root: string, key: string): Promise<Socket> {
-  openBrowseDir(root);
-  const path = socketPath(root, key);
-  checkSocket(path, `${key}.sock`);
+async function openSession(root: string, key: string): Promise<Link> {
+  const dir = openBrowseDir(root);
   try {
-    return await connect(path);
+    checkSocket(socketPath(root, key), `${key}.sock`);
+    return await connect(dir, `${key}.sock`);
   } catch (error) {
     if (error instanceof Absent) throw new NoDaemon("the socket refused the connection");
     throw error;
+  } finally {
+    closeDir(dir);
   }
 }
 
@@ -96,7 +97,7 @@ function daemonConfig(found: Found, options: JsonObject, where: Where): JsonObje
   ]);
 }
 
-async function pluginSession(root: string, key: string, config: JsonObject, python: string | null, call: Call): Promise<Socket> {
+async function pluginSession(root: string, key: string, config: JsonObject, python: string | null, call: Call): Promise<Link> {
   const connect = () => openSession(root, key);
   try {
     return await connect();
@@ -106,7 +107,7 @@ async function pluginSession(root: string, key: string, config: JsonObject, pyth
   return startDaemon(root, key, config, python, call, connect);
 }
 
-async function ask(socket: Socket, payload: JsonObject, rest: string[], timeout: Value, call: Call, patient = false): Promise<JsonObject> {
+async function ask(socket: Link, payload: JsonObject, rest: string[], timeout: Value, call: Call, patient = false): Promise<JsonObject> {
   const seconds = answerDeadline(rest, timeout, patient);
   if (seconds instanceof PythonCrash) {
     socket.destroy();
@@ -135,7 +136,7 @@ type Beside = { root: string; namespace: string; keySource: string; session: str
 
 async function readBeside(payload: JsonObject, rest: string[], beside: Beside, call: Call): Promise<JsonObject> {
   const name = `${joinCodePoints(codePoints(beside.session).slice(0, BESIDE_PREFIX))}-side`;
-  let socket: Socket;
+  let socket: Link;
   try {
     socket = await openSession(beside.root, sessionKey(beside.namespace, beside.keySource, name));
   } catch (error) {

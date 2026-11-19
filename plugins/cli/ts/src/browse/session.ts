@@ -1,14 +1,13 @@
 import { lstatSync, type Stats } from "node:fs";
 import { constants } from "node:os";
 import { codeOf, errnoOf, join, uid } from "../paths.ts";
-import { closeDir, openPrivate, PathError } from "../privatefs.ts";
+import { type Dir, openPrivate, PathError } from "../privatefs.ts";
 import { BrowseError, PythonCrash } from "./errors.ts";
 import { osCrash } from "../crash.ts";
 import { pythonOsError } from "../printable.ts";
 import { strerror } from "../libc.ts";
 
 export const DIR_NAME = "Browse";
-const SUN_PATH_MAX = 103;
 const { ELOOP, ENOTDIR, ENOENT } = constants.errno;
 
 export class NoDaemon extends Error {}
@@ -47,9 +46,9 @@ function browseRefusal(root: string): BrowseError | undefined {
   return undefined;
 }
 
-export function openBrowseDir(root: string): void {
+export function openBrowseDir(root: string): Dir {
   try {
-    closeDir(openPrivate(root, [DIR_NAME], true));
+    return openPrivate(root, [DIR_NAME], true);
   } catch (error) {
     if (!(error instanceof PathError)) {
       if (codeOf(error) === "ENOENT") throw new BrowseError(`${root} doesn't exist`, 1, undefined, "unsafe_path");
@@ -60,9 +59,7 @@ export function openBrowseDir(root: string): void {
 }
 
 export function socketPath(root: string, key: string): string {
-  const path = join(root, DIR_NAME, `${key}.sock`);
-  if (Buffer.byteLength(path) > SUN_PATH_MAX) throw new NoDaemon("the session socket's path is too long to connect to by name");
-  return path;
+  return join(root, DIR_NAME, `${key}.sock`);
 }
 
 export function checkSocket(path: string, name: string): void {

@@ -16,9 +16,11 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <sys/un.h>
+#include <stdlib.h>
 #if defined(__APPLE__)
 #include <sys/ucred.h>
-#include <sys/un.h>
+int pthread_fchdir_np(int fd);
 #endif
 
 #ifndef SRC_JS_NATIVE_API_TYPES_H_
@@ -181,6 +183,58 @@ static napi_value open_at(napi_env env, napi_callback_info info) {
     if (fd >= 0) return owned_fd(env, fd);
     if (errno != EINTR) return status(env, failed());
   }
+}
+
+static int connect_unix(int dir, const char *name) {
+  struct sockaddr_un address;
+  memset(&address, 0, sizeof(address));
+  address.sun_family = AF_UNIX;
+#if defined(__APPLE__)
+  if (strlen(name) >= sizeof(address.sun_path)) return -ENAMETOOLONG;
+  strcpy(address.sun_path, name);
+  int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+  if (fd < 0) return failed();
+  if (fcntl(fd, F_SETFD, FD_CLOEXEC) != 0 || pthread_fchdir_np(dir) != 0) {
+    int error = failed();
+    close(fd);
+    return error;
+  }
+  int connected = connect(fd, (struct sockaddr *)&address, (socklen_t)sizeof(address));
+  int saved = errno;
+  if (pthread_fchdir_np(-1) != 0) abort();
+  errno = saved;
+#else
+  int written = snprintf(address.sun_path, sizeof(address.sun_path), "/proc/self/fd/%d/%s", dir, name);
+  if (written < 0 || (size_t)written >= sizeof(address.sun_path)) return -ENAMETOOLONG;
+  int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+  if (fd < 0) return failed();
+  int connected = connect(fd, (struct sockaddr *)&address, (socklen_t)sizeof(address));
+#endif
+  if (connected == 0) return fd;
+  if (errno == EINTR) {
+    struct pollfd ready = {.fd = fd, .events = POLLOUT};
+    int error = 0;
+    socklen_t size = sizeof(error);
+    while (poll(&ready, 1, -1) < 0 && errno == EINTR) {}
+    if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &size) == 0 && error == 0) return fd;
+    close(fd);
+    return error > 0 ? -error : -EIO;
+  }
+  int error = failed();
+  close(fd);
+  return error;
+}
+
+static napi_value connect_at(napi_env env, napi_callback_info info) {
+  Call call;
+  int32_t dir;
+  char name[PATH_MAX];
+  if (!take_args(env, info, 2, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &dir)) return NULL;
+  int checked = name_arg(&call, 1, name, sizeof(name));
+  if (checked != 0) return status(env, checked);
+  int fd = connect_unix(dir, name);
+  return fd < 0 ? status(env, fd) : owned_fd(env, fd);
 }
 
 static napi_value not_regular(napi_env env) {
@@ -428,6 +482,7 @@ __attribute__((visibility("default"))) napi_value napi_register_module_v1(napi_e
   bool ok = define(env, exports, "peerUid", peer_uid)
       && define(env, exports, "interruptsIgnored", interrupts_ignored)
       && define(env, exports, "openAt", open_at)
+      && define(env, exports, "connectAt", connect_at)
       && define(env, exports, "openFileAt", open_file_at)
       && define(env, exports, "mkdirAt", mkdir_at)
       && define(env, exports, "renameAt", rename_at)
