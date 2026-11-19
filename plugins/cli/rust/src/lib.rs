@@ -13,6 +13,7 @@ pub mod printable;
 pub mod py;
 pub mod pystr;
 pub mod router;
+pub mod standard_fds;
 pub mod telemetry;
 pub mod usage;
 
@@ -192,6 +193,7 @@ fn pass_through(python: Option<&Path>, argv: &[OsString]) -> i32 {
     unsafe {
         libc::signal(libc::SIGPIPE, libc::SIG_DFL);
     }
+    standard_fds::close_those_closed_at_start();
     let error = std::process::Command::new(python)
         .arg0(python)
         .args(["-I", "-m", "ardia_cli"])
@@ -332,7 +334,7 @@ fn handle(root: Option<&Path>, raw: &[OsString], python: Option<&Path>) -> Handl
     let Some(label) = route.label() else {
         return Handled::Python;
     };
-    if printable::stdout_unusable() {
+    if standard_fds::any_closed_at_start() || printable::stdout_unusable() {
         return Handled::Python;
     }
     match router::Table::load(root).side(label) {
