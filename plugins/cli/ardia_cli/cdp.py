@@ -71,6 +71,7 @@ class Connection:
                     continue
                 ident = message.get("id")
                 if isinstance(ident, int):
+                    self.attaching.discard(ident)
                     future = self.pending.pop(ident, None)
                     if future is not None and not future.done():
                         future.set_result(message)

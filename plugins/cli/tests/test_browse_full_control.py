@@ -496,6 +496,28 @@ class RawCdp(unittest.TestCase):
         self.assertIsNone(shown)
         self.assertLessEqual(sent, connection.MAX_LATE_ATTACHES)
 
+    def test_an_attach_answered_at_the_cap_frees_its_slot_at_once(self):
+        from ardia_cli.browse import connection
+
+        def answer(message):
+            if message["method"] == "Target.attachToTarget" and message["params"]["targetId"] == "fresh":
+                return {"sessionId": "S-fresh"}
+            return None if message["method"] == "Target.attachToTarget" else {}
+
+        async def run():
+            browser, sock = linked_browser(answer)
+            for index in range(connection.MAX_LATE_ATTACHES):
+                with self.assertRaises(connection.CdpTimeout):
+                    await connection.claimed_attach(browser, "Target.attachToTarget", {"targetId": f"T{index}"}, 0.01)
+            first = sock.methods("Target.attachToTarget")[0]
+            sock.inbox.put_nowait({"id": first["id"], "result": {"sessionId": "S-late"}})
+            await asyncio.sleep(0)
+            attached = await connection.claimed_attach(browser, "Target.attachToTarget", {"targetId": "fresh"}, 1)
+            await browser.close()
+            return attached
+
+        self.assertEqual(asyncio.run(run()), {"sessionId": "S-fresh"})
+
     def test_a_raw_attach_answered_late_is_detached_on_its_session(self):
         from ardia_cli.browse.errors import OutcomeUnknown
 
