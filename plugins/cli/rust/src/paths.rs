@@ -404,32 +404,42 @@ pub fn size_at(dir: &OwnedFd, name: &str) -> io::Result<u64> {
 }
 
 pub fn list_dir(dir: &OwnedFd) -> io::Result<Vec<String>> {
-    let here = c".";
-    let copy = loop {
-        let fd = unsafe { libc::openat(dir.as_raw_fd(), here.as_ptr(), libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC) };
-        if fd >= 0 || io::Error::last_os_error().raw_os_error() != Some(libc::EINTR) {
-            break check(fd)?;
-        }
-    };
+    let copy = check(unsafe { libc::fcntl(dir.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 0) })?;
     let stream = unsafe { libc::fdopendir(copy) };
     if stream.is_null() {
+        let error = io::Error::last_os_error();
         unsafe { libc::close(copy) };
-        return Err(io::Error::last_os_error());
+        return Err(error);
     }
     let mut names = Vec::new();
-    loop {
+    let failure = loop {
+        unsafe { *errno_location() = 0 };
         let entry = unsafe { libc::readdir(stream) };
         if entry.is_null() {
-            break;
+            let error = io::Error::last_os_error();
+            break (error.raw_os_error() != Some(0)).then_some(error);
         }
         let name = unsafe { CStr::from_ptr((*entry).d_name.as_ptr()) };
         let name = OsStr::from_bytes(name.to_bytes()).to_string_lossy().into_owned();
         if name != "." && name != ".." {
             names.push(name);
         }
+    };
+    unsafe {
+        libc::rewinddir(stream);
+        libc::closedir(stream);
     }
-    unsafe { libc::closedir(stream) };
-    Ok(names)
+    failure.map_or(Ok(names), Err)
+}
+
+#[cfg(target_os = "macos")]
+fn errno_location() -> *mut libc::c_int {
+    unsafe { libc::__error() }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn errno_location() -> *mut libc::c_int {
+    unsafe { libc::__errno_location() }
 }
 
 pub fn write_private(name: &str, dir: &OwnedFd, data: &[u8]) -> Result<(), Failure> {
@@ -511,5 +521,49 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
         assert_eq!(names, ["a", "b", "c"]);
         assert_eq!(offset, 0);
+    }
+
+    fn folder_opened_before_its_files(tag: &str) -> (PathBuf, OwnedFd) {
+        use std::os::fd::FromRawFd;
+        let dir = std::env::temp_dir().join(format!("ardia-list-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("before"), "").unwrap();
+        let path = CString::new(dir.to_str().unwrap()).unwrap();
+        let fd = unsafe { OwnedFd::from_raw_fd(libc::open(path.as_ptr(), libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC)) };
+        for name in ["after-1", "after-2"] {
+            std::fs::write(dir.join(name), "").unwrap();
+        }
+        (dir, fd)
+    }
+
+    #[test]
+    fn lists_what_python_lists_in_a_folder_opened_before_its_files() {
+        use std::os::unix::process::CommandExt;
+        let python = std::env::var("ARDIA_TEST_PYTHON").unwrap_or_else(|_| "python3".into());
+        let (theirs, their_fd) = folder_opened_before_its_files("python");
+        let (mine, my_fd) = folder_opened_before_its_files("rust");
+        let raw = their_fd.as_raw_fd();
+        let script = "import json, os; names = sorted(os.listdir(3)); print(json.dumps([names, os.lseek(3, 0, os.SEEK_CUR)]))";
+        let mut command = std::process::Command::new(&python);
+        command.args(["-I", "-c", script]);
+        unsafe {
+            command.pre_exec(move || {
+                if libc::dup2(raw, 3) == 3 && libc::fcntl(3, libc::F_SETFD, 0) == 0 {
+                    Ok(())
+                } else {
+                    Err(io::Error::last_os_error())
+                }
+            });
+        }
+        let python_saw = command.output().unwrap();
+        assert!(python_saw.status.success(), "{}", String::from_utf8_lossy(&python_saw.stderr));
+        let mut names = list_dir(&my_fd).unwrap();
+        names.sort();
+        let offset = unsafe { libc::lseek(my_fd.as_raw_fd(), 0, libc::SEEK_CUR) };
+        std::fs::remove_dir_all(&theirs).unwrap();
+        std::fs::remove_dir_all(&mine).unwrap();
+        let ours = format!("[{names:?}, {offset}]\n");
+        assert_eq!(String::from_utf8_lossy(&python_saw.stdout), ours);
     }
 }

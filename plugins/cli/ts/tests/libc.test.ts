@@ -91,6 +91,15 @@ test("an ignored SIGINT is read as ignored, a default one isn't", () => {
   assert.equal(run(false).stdout, "false");
 });
 
+function listedFresh(root: string): Buffer[] {
+  const dir = openPrivate(root, ["Telemetry", "Local"], false);
+  try {
+    return listDir(dir);
+  } finally {
+    closeDir(dir);
+  }
+}
+
 test("private files are reached through the folder's descriptor, never the working directory", () => {
   const root = path.join(scratch, "root");
   fs.mkdirSync(root, { mode: 0o700 });
@@ -107,10 +116,10 @@ test("private files are reached through the folder's descriptor, never the worki
     assert.equal(readPrivate("a.json", dir, 10)?.toString(), "[1]");
     assert.equal(sizeAt(dir, "a.json"), 3);
     renameIn(dir, "a.json", "b.json");
-    assert.deepEqual(listDir(dir), [Buffer.from("b.json")]);
+    assert.deepEqual(listedFresh(root), [Buffer.from("b.json")]);
     unlinkQuietly("b.json", dir);
     unlinkQuietly("b.json", dir);
-    assert.deepEqual(listDir(dir), []);
+    assert.deepEqual(listedFresh(root), []);
     fs.symlinkSync("/etc", path.join(root, "Telemetry", "Link"));
     const telemetry = openPrivate(root, ["Telemetry"], false);
     assert.throws(() => openPrivate(root, ["Telemetry", "Link"], false), PathError);
@@ -232,5 +241,34 @@ test("listing a folder leaves its descriptor where it was and gives each name's 
     }
   } finally {
     fs.closeSync(dir);
+  }
+});
+
+function folderOpenedBeforeItsFiles(): number {
+  const folder = fs.mkdtempSync(path.join(scratch, "listed-later-"));
+  fs.writeFileSync(path.join(folder, "before"), "");
+  const dir = fs.openSync(folder, O_RDONLY);
+  for (const name of ["after-1", "after-2"]) fs.writeFileSync(path.join(folder, name), "");
+  return dir;
+}
+
+function offsetOf(dir: number): number {
+  const done = spawnSync(PYTHON, ["-I", "-c", "import os; print(os.lseek(3, 0, os.SEEK_CUR))"], { stdio: ["ignore", "pipe", "pipe", dir], encoding: "utf8" });
+  assert.equal(done.status, 0, done.stderr);
+  return Number(done.stdout.trim());
+}
+
+test("listAt sees what os.listdir sees in a folder opened before its files were made", () => {
+  const theirs = folderOpenedBeforeItsFiles();
+  const mine = folderOpenedBeforeItsFiles();
+  try {
+    const script = "import json, os; print(json.dumps(sorted(os.listdir(3))))";
+    const python = spawnSync(PYTHON, ["-I", "-c", script], { stdio: ["ignore", "pipe", "pipe", theirs], encoding: "utf8" });
+    assert.equal(python.status, 0, python.stderr);
+    const names = listAt(mine).map((name) => name.toString()).sort();
+    assert.deepEqual([names, offsetOf(mine)], [JSON.parse(python.stdout), offsetOf(theirs)]);
+  } finally {
+    fs.closeSync(theirs);
+    fs.closeSync(mine);
   }
 });

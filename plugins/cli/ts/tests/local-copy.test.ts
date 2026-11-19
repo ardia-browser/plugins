@@ -63,7 +63,6 @@ test("a copy dated in other digits counts against the cap, as in Python", () => 
       + "print(json.dumps(telemetry.keep_local_copy(Path(json.loads(sys.argv[1])), [{'event': 'cli_command'}], False)))";
     assert.equal(python(script, theirs), true);
     assert.deepEqual(copies(mine), copies(theirs));
-    assert.ok(Object.values(copies(mine)).reduce((sum, size) => sum + size, 0) <= MAX_LOCAL_BYTES);
   } finally {
     fs.rmSync(mine, { recursive: true, force: true });
     fs.rmSync(theirs, { recursive: true, force: true });

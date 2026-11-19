@@ -228,16 +228,18 @@ static napi_value size_at(napi_env env, napi_callback_info info) {
   return number(env, (double)found.st_size);
 }
 
+static void finish_listing(DIR *stream) {
+  rewinddir(stream);
+  closedir(stream);
+}
+
 static napi_value list_at(napi_env env, napi_callback_info info) {
   Call call;
   int32_t dir;
   napi_value names = NULL;
   if (!take_args(env, info, 1, &call)) return status(env, -EINVAL);
   if (!int_arg(&call, 0, &dir)) return NULL;
-  int copy;
-  do {
-    copy = openat(dir, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-  } while (copy < 0 && errno == EINTR);
+  int copy = fcntl(dir, F_DUPFD_CLOEXEC, 0);
   if (copy < 0) return status(env, failed());
   DIR *stream = fdopendir(copy);
   if (stream == NULL) {
@@ -246,7 +248,7 @@ static napi_value list_at(napi_env env, napi_callback_info info) {
     return status(env, error);
   }
   if (napi_create_array(env, &names) != napi_ok) {
-    closedir(stream);
+    finish_listing(stream);
     return status(env, -ENOMEM);
   }
   uint32_t count = 0;
@@ -257,13 +259,13 @@ static napi_value list_at(napi_env env, napi_callback_info info) {
     if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
     napi_value name = NULL;
     if (napi_create_buffer_copy(env, strlen(entry->d_name), entry->d_name, NULL, &name) != napi_ok || napi_set_element(env, names, count, name) != napi_ok) {
-      closedir(stream);
+      finish_listing(stream);
       return status(env, -ENOMEM);
     }
     count += 1;
   }
   int error = errno;
-  closedir(stream);
+  finish_listing(stream);
   if (error != 0) return status(env, -error);
   return names;
 }
