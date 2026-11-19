@@ -5,6 +5,7 @@ import { Float, type JsonObject, object, parse, TELEMETRY_JSON_DEPTH, TooDeep, t
 import { abspath, envSet, join, realpath, uid } from "./paths.ts";
 import { O_NOFOLLOW, O_NONBLOCK, O_RDONLY, readFd } from "./privatefs.ts";
 import { pluginMode } from "./browse/route.ts";
+import { KNOWN_COMMANDS } from "./browse/tables.ts";
 import { isSpace, strip } from "./py.ts";
 import { appendToSpool, discardSpool, keepLocalCopy, startFlush } from "./spool.ts";
 import { recordUsage } from "./usage.ts";
@@ -254,7 +255,7 @@ function commandRecord(call: Call, status: number | bigint, crashed: boolean, di
   const code = given !== undefined && errorCodeOk(given) ? given : null;
   const properties: [string, Value][] = [
     ["command", call.command],
-    ["subcommand", call.subcommand ?? null],
+    ["subcommand", telemetrySubcommand(call.command, call.subcommand)],
     ["exit_code", BigInt(status)],
     ["error_code", code],
     ["flags", flagNames(call.argv, call.allowedFlags)],
@@ -262,6 +263,15 @@ function commandRecord(call: Call, status: number | bigint, crashed: boolean, di
   timings(call, properties);
   properties.push(["cli_version", cliVersion()], ["$environment", environment], ["served_by", SERVED_BY]);
   return properties;
+}
+
+const PARSE_FAILED = "other";
+const UNKNOWN = "unknown";
+
+export function telemetrySubcommand(command: string | undefined, name: string | undefined): string | null {
+  if (name === undefined) return null;
+  if (command !== "browse" || name === PARSE_FAILED || KNOWN_COMMANDS.includes(name)) return name;
+  return UNKNOWN;
 }
 
 export function finish(call: Call, status: number | bigint, python: string | null, crash?: Crash, withUsage = true): void {

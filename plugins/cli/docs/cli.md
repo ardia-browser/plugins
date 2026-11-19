@@ -1988,6 +1988,11 @@ parity harness rather than stripped wholesale:
   sent: the client answers what Python's client reports when the daemon drops it ("closed the connection before taking
   the command", exit 2) without waiting for the writer to finish. Stdin is passed
   as read: Python 3.13 reads it with `newline="\n"` on macOS, so CR and CRLF reach the daemon unchanged on both sides.
+- `ardia browse`'s `cli_command` event: its `subcommand` is a known browse command name (the daemon's commands, the
+  skipped ones, the help table's, their aliases, `auth`, `help`, `version`), `other` when the arguments don't parse, or
+  `unknown`; an unrecognized name is never recorded. Python writes the typed name into its local copy and spool and maps
+  it to `other` only when it sends. Tests: `subcommand.test.ts`; `KNOWN_COMMANDS` is generated from Python's own list
+  and checked by `test_ts_browse_tables`.
 - `ardia browse wait --state <state>`: the TypeScript client reads a `--state` after `wait` as `wait`'s own option, as
   the daemon does; Python's global parser rejects it as agent-browser's `--state <file>` launch option, so
   `wait --state` can't run on Python (plugins#18). Before the command, `--state` is still refused as a launch option on

@@ -27,6 +27,15 @@ def text(name: str, value: str) -> str:
     return f"export const {name} = {json.dumps(value, ensure_ascii=False)};\n"
 
 
+def known_browse_commands() -> list:
+    if str(CLI) not in sys.path:
+        sys.path.insert(0, str(CLI))
+    from ardia_cli import telemetry
+
+    aliases, known = telemetry.browse_names()
+    return sorted(known | set(aliases))
+
+
 def ts_tables() -> str:
     if str(CLI) not in sys.path:
         sys.path.insert(0, str(CLI))
@@ -48,6 +57,7 @@ def ts_tables() -> str:
         + pairs("LAUNCH_HINTS", browse_cli.LAUNCH_HINTS)
         + f"export const COMMAND_OWNS: Readonly<Record<string, readonly string[]>> = {json.dumps(owns)};\n"
         + f"export const COMMAND_FLAGS: Readonly<Record<string, readonly string[]>> = {json.dumps(local)};\n"
+        + words("KNOWN_COMMANDS", known_browse_commands())
         + words("LOCAL_AUTH", browse_cli.LOCAL_AUTH)
         + words("EVAL_VALUE_FLAGS", browse_cli.EVAL_VALUE_FLAGS)
         + pairs("ALIASES", ALIASES)
