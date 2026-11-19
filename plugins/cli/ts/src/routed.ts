@@ -1,5 +1,5 @@
 import { fstatSync } from "node:fs";
-import { parse, type Value } from "./json.ts";
+import { parse, TooDeep, type Value } from "./json.ts";
 
 export const HAND_BACK = 253;
 const CALLER_DEPTH = 2;
@@ -10,8 +10,17 @@ export type Routed = { interruptsIgnored: boolean; lifeline: number; caller: Val
 
 let current: Value | undefined;
 
+function parsedCaller(hex: string): Value | undefined {
+  try {
+    return parse(Buffer.from(hex, "hex"), CALLER_DEPTH);
+  } catch (error) {
+    if (error instanceof TooDeep) return undefined;
+    throw error;
+  }
+}
+
 function callerOf(hex: string): Value | undefined {
-  const value = parse(Buffer.from(hex, "hex"), CALLER_DEPTH);
+  const value = parsedCaller(hex);
   if (!(value instanceof Map) || typeof value.get("name") !== "string") return undefined;
   for (const [key, field] of value) {
     if ((key !== "name" && key !== "app") || typeof field !== "string") return undefined;

@@ -820,7 +820,8 @@ class TsProcess(EntryProcess, unittest.TestCase):
         for argv in ([], ["windows"], [f"--ardia-routed=2:2:{good}:7b7d", "windows"], [f"--ardia-routed=2:0:{good}:7b7d", "windows"],
                      [f"--ardia-routed=2:0:{good}:zz", "windows"], ["--ardia-routed=1:0:" + caller, "windows"], [f"--ardia-routed=2:0:{caller}", "windows"],
                      ["windows", f"--ardia-routed=2:0:{good}:{caller}"], [f"--ardia-routed=2:0:0:{caller}", "windows"], [f"--ardia-routed=2:0:1:{caller}", "windows"],
-                     [f"--ardia-routed=2:0:{regular}:{caller}", "windows"], [f"--ardia-routed=2:0:900:{caller}", "windows"]):
+                     [f"--ardia-routed=2:0:{regular}:{caller}", "windows"], [f"--ardia-routed=2:0:900:{caller}", "windows"],
+                     [f"--ardia-routed=2:0:{good}:" + b'{"name":[[[]]]}'.hex(), "windows"], [f"--ardia-routed=2:0:{good}:" + (b"[" * 5000).hex(), "windows"]):
             with self.subTest(argv=argv):
                 done = subprocess.run([str(program), *argv], env=self.environment({}), capture_output=True, timeout=30, pass_fds=(read_end, regular))
                 self.assertEqual((done.returncode, done.stdout, done.stderr), (2, b"", self.not_routed))
