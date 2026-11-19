@@ -1,11 +1,13 @@
 import { writeSync } from "node:fs";
 import { catchInterrupts } from "./control.ts";
 import { bundledPython, installRoot } from "./install.ts";
+import { abandonedOutput } from "./printable.ts";
 import { HAND_BACK, takeMarker } from "./routed.ts";
 import { servesNatively } from "./served.ts";
 import { cliVersion } from "./version.ts";
 
-const LOSSY = "�";
+const LOSSY = "\ufffd";
+const ABANDONED_WRITE_GRACE_MS = 200;
 const NOT_ROUTED = "ardia-ts: this program runs only as part of ardia; run ardia instead\n";
 
 function asksForVersion(argv: string[]): boolean {
@@ -50,4 +52,6 @@ async function main(words: string[]): Promise<number> {
   return (await serve(argv, bundledPython(installRoot()))) ?? HAND_BACK;
 }
 
-process.exit(await main(process.argv.slice(2)));
+const status = await main(process.argv.slice(2));
+process.exitCode = status;
+if (abandonedOutput()) setTimeout(() => process.exit(status), ABANDONED_WRITE_GRACE_MS).unref();

@@ -43,6 +43,11 @@ export function writeAll(fd: number, text: string | Uint8Array): void {
 }
 
 const INTERRUPT_POLL_MS = 50;
+let abandoned = false;
+
+export function abandonedOutput(): boolean {
+  return abandoned;
+}
 
 type Outcome = { written: number } | { error: unknown };
 
@@ -83,6 +88,7 @@ export class Output {
       while ((outcome = await Promise.race([settled, pause(INTERRUPT_POLL_MS).then(() => undefined)])) === undefined) {
         if (stopped()) {
           this.interrupted = true;
+          abandoned = true;
           return;
         }
       }
