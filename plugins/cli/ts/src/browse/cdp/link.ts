@@ -1,6 +1,8 @@
+import { isIP } from "node:net";
+import { reprStr } from "../../py.ts";
 import { formatG } from "../../pylib/format.ts";
 import { Cancelled, checkCancelled, currentSignal, later, untilCancelled } from "./cancel.ts";
-import { checkCommand } from "./guard.ts";
+import { ATTACH_METHODS, checkCommand, checkMessage, ForbiddenCommand } from "./guard.ts";
 import { pyText, pyTruthy } from "./pyvalue.ts";
 
 export type Message = Record<string, unknown>;
@@ -21,6 +23,8 @@ export class ConnectionLost extends Error {
 }
 
 export class OpenFailed extends Error {
+  endpoint = "";
+
   constructor(
     readonly pythonType: string,
     message: string,
@@ -70,27 +74,70 @@ export function timerMs(timeout: number | null): number | null {
   return timeout === null || Number.isNaN(timeout) || timeout === Number.POSITIVE_INFINITY ? null : Math.max(0, timeout * 1000);
 }
 
-function checkedUrl(url: string): string {
+export function safeEndpoint(url: string): string {
+  const parts = /^([^:/?#]+:)?(\/\/[^/?#]*)?([^?#]*)/su.exec(url);
+  const scheme = parts?.[1] ?? "";
+  const authority = parts?.[2] ?? "";
+  const host = authority === "" ? "" : `//${authority.slice(authority.lastIndexOf("@") + 1).replace(/^\/\//u, "")}`;
+  return `${scheme}${host}${parts?.[3] ?? ""}`;
+}
+
+function checkedPort(port: string): void {
+  if (port === "") return;
+  if (!/^[0-9]+$/u.test(port)) throw new OpenFailed("ValueError", `Port could not be cast to integer value as ${reprStr(port)}`);
+  if (Number(port) > 65535) throw new OpenFailed("ValueError", "Port out of range 0-65535");
+}
+
+function checkedBracketedHost(host: string): void {
+  if (host.startsWith("v")) {
+    if (!/^v[a-fA-F0-9]+\..+$/su.test(host)) throw new OpenFailed("ValueError", "IPvFuture address is invalid");
+    return;
+  }
+  const kind = isIP(host);
+  if (kind === 0) throw new OpenFailed("ValueError", `${reprStr(host)} does not appear to be an IPv4 or IPv6 address`);
+  if (kind === 4) throw new OpenFailed("ValueError", "An IPv4 address cannot be in brackets");
+}
+
+function checkedUrl(url: string): void {
   const split = /^([A-Za-z][A-Za-z0-9+.-]*):(.*)$/su.exec(url);
   const scheme = split === null ? "" : (split[1] as string).toLowerCase();
   const rest = split === null ? url : (split[2] as string);
   const authority = rest.startsWith("//") ? (rest.slice(2).split(/[/?#]/u)[0] as string) : "";
   const hostPort = authority.slice(authority.lastIndexOf("@") + 1);
   if (authority.includes("[") !== authority.includes("]")) throw new OpenFailed("ValueError", "Invalid IPv6 URL");
-  const host = hostPort.startsWith("[") ? hostPort.slice(1, hostPort.indexOf("]")) : (hostPort.split(":")[0] as string);
+  let host: string;
+  let port: string;
+  if (hostPort.includes("[")) {
+    const before = hostPort.slice(0, hostPort.indexOf("["));
+    const bracketed = hostPort.slice(hostPort.indexOf("[") + 1);
+    host = bracketed.slice(0, bracketed.indexOf("]"));
+    const after = bracketed.slice(bracketed.indexOf("]") + 1);
+    if (before !== "" || (after !== "" && !after.startsWith(":"))) throw new OpenFailed("ValueError", "Invalid IPv6 URL");
+    checkedBracketedHost(host);
+    port = after.slice(1);
+  } else {
+    const colon = hostPort.indexOf(":");
+    host = colon < 0 ? hostPort : hostPort.slice(0, colon);
+    port = colon < 0 ? "" : hostPort.slice(colon + 1);
+  }
   if ((scheme !== "ws" && scheme !== "wss") || host === "") throw new OpenFailed("HandshakeError", `not a ws:// URL: ${scheme}://`);
-  return url;
+  checkedPort(port);
 }
 
 function openFailure(said: string): OpenFailed {
-  const reason = said.includes("failed: ") ? said.slice(said.lastIndexOf("failed: ") + 8) : said;
-  if (/\b101\b/.test(reason)) return new OpenFailed("HandshakeError", `server rejected WebSocket connection (${reason})`);
-  return new OpenFailed("ConnectionError", reason || "the connection failed");
+  if (/\b101\b/u.test(said)) return new OpenFailed("HandshakeError", "server rejected WebSocket connection (Expected 101 status code)");
+  if (said.includes("Failed to connect")) return new OpenFailed("ConnectionError", "Failed to connect");
+  return new OpenFailed("ConnectionError", "the WebSocket connection failed");
+}
+
+function nameOnly(error: unknown): Error {
+  return new Error(error instanceof Error ? error.name : typeof error);
 }
 
 const decoder = new TextDecoder("utf-8", { fatal: true });
 
 type Pending = { settle(reply: Message): void; fail(error: Error): void };
+type State = "idle" | "connecting" | "open" | "closing" | "closed";
 
 export class CdpLink {
   readonly pending = new Map<number, Pending>();
@@ -99,6 +146,10 @@ export class CdpLink {
   closedWith: { code: number; reason: string } | null = null;
   private readonly handlers = new Map<string, EventCallback[]>();
   private socket: WebSocket | null = null;
+  private state: State = "idle";
+  private opening: Promise<void> | null = null;
+  private closing: Promise<void> | null = null;
+  private stopConnecting: (() => void) | null = null;
   private nextId = 1;
   private isLost = false;
   private readonly lostPromise: Promise<void>;
@@ -117,6 +168,14 @@ export class CdpLink {
     return this.isLost;
   }
 
+  get connected(): boolean {
+    return this.state === "open" && !this.isLost;
+  }
+
+  get endpoint(): string {
+    return safeEndpoint(this.url);
+  }
+
   whenLost(): Promise<void> {
     return this.lostPromise;
   }
@@ -125,20 +184,44 @@ export class CdpLink {
     return this.socket === null ? null : this.socket.extensions;
   }
 
-  async open(timeout: number | null = null, signal: AbortSignal | null = currentSignal()): Promise<void> {
-    if (this.socket !== null || this.isLost) throw new ConnectionLost();
+  open(timeout: number | null = null, signal: AbortSignal | null = currentSignal()): Promise<void> {
+    if (this.opening !== null) return this.opening;
+    if (this.state !== "idle" || this.isLost) return Promise.reject(new ConnectionLost());
+    const endpoint = this.endpoint;
+    const opening = this.connect(timeout, signal)
+      .catch((error: unknown) => {
+        if (error instanceof OpenFailed) error.endpoint = endpoint;
+        throw error;
+      })
+      .finally(() => {
+        this.opening = null;
+      });
+    this.opening = opening;
+    return opening;
+  }
+
+  private async connect(timeout: number | null, signal: AbortSignal | null): Promise<void> {
     checkCancelled(signal);
-    const url = checkedUrl(this.url);
-    const socket = new WebSocket(url, { perMessageDeflate: false } as unknown as ConstructorParameters<typeof WebSocket>[1]);
+    const endpoint = this.endpoint;
+    checkedUrl(this.url);
+    let socket: WebSocket;
+    try {
+      socket = new WebSocket(this.url, { perMessageDeflate: false } as unknown as ConstructorParameters<typeof WebSocket>[1]);
+    } catch {
+      throw new OpenFailed("ValueError", `the endpoint isn't a URL a WebSocket can open (${endpoint})`);
+    }
     socket.binaryType = "arraybuffer";
+    this.socket = socket;
+    this.state = "connecting";
     let said = "";
     let stopTimer = () => {};
     const opened = new Promise<void>((resolve, reject) => {
+      this.stopConnecting = () => reject(new ConnectionLost());
       socket.onopen = () => resolve();
       socket.onerror = (event) => {
         said = String((event as { message?: unknown }).message ?? "");
       };
-      socket.onclose = (event) => reject(openFailure(said || event.reason));
+      socket.onclose = (event) => reject(openFailure(`${said} ${event.reason}`));
       const ms = timerMs(timeout);
       if (ms !== null) stopTimer = later(ms, () => reject(new OpenFailed("TimeoutError", "")));
     });
@@ -147,11 +230,20 @@ export class CdpLink {
     } catch (error) {
       socket.onopen = socket.onclose = socket.onerror = null;
       abandon(socket);
+      if (this.state === "connecting") {
+        this.state = "idle";
+        this.socket = null;
+      }
       throw error;
     } finally {
       stopTimer();
+      this.stopConnecting = null;
     }
-    this.socket = socket;
+    if (this.state !== "connecting") {
+      abandon(socket);
+      throw new ConnectionLost();
+    }
+    this.state = "open";
     socket.onerror = null;
     socket.onmessage = (event) => this.received(event.data);
     socket.onclose = (event) => {
@@ -174,25 +266,20 @@ export class CdpLink {
   }
 
   async execute(command: Command, timeout: number | null = 60, ident?: number, signal: AbortSignal | null = currentSignal()): Promise<Message> {
-    checkCommand(command);
-    const socket = this.usable();
-    const method = command.method;
     const id = ident ?? this.nextId++;
-    if (signal?.aborted) {
-      this.attaching.delete(id);
-      throw new Cancelled();
-    }
-    if (timeout !== null && timeout <= 0) {
-      this.attaching.delete(id);
-      throw new CommandTimeout(method, timeout);
-    }
     let text: string;
+    let socket: WebSocket;
     try {
-      text = JSON.stringify({ ...command, id });
+      checkCommand(command);
+      socket = this.usable();
+      if (signal?.aborted) throw new Cancelled();
+      if (timeout !== null && timeout <= 0) throw new CommandTimeout(command.method, timeout);
+      text = this.envelope(command, id, ident !== undefined && this.attaching.has(ident));
     } catch (error) {
       this.attaching.delete(id);
       throw error;
     }
+    const method = command.method;
     return new Promise<Message>((resolve, reject) => {
       let stopTimer = () => {};
       const stop = () => fail(new Cancelled());
@@ -220,28 +307,47 @@ export class CdpLink {
       signal?.addEventListener("abort", stop, { once: true });
       const ms = timerMs(timeout);
       if (ms !== null) stopTimer = later(ms, () => fail(new CommandTimeout(method, timeout as number)));
-      if (socket.readyState !== OPEN || this.isLost) {
+      if (socket.readyState !== OPEN || this.state !== "open") {
         fail(new ConnectionLost());
         return;
       }
-      socket.send(text);
+      try {
+        socket.send(text);
+      } catch (error) {
+        fail(new ConnectionLost());
+        this.drop(error);
+      }
     });
   }
 
   async executeNoWait(command: Command): Promise<void> {
     checkCommand(command);
     const socket = this.usable();
+    const text = this.envelope(command, this.nextId++, false);
     if (socket.readyState !== OPEN) throw new ConnectionLost();
-    socket.send(JSON.stringify({ ...command, id: this.nextId++ }));
+    try {
+      socket.send(text);
+    } catch (error) {
+      this.drop(error);
+      throw new ConnectionLost();
+    }
   }
 
-  async close(): Promise<void> {
+  close(): Promise<void> {
+    if (this.closing === null) this.closing = this.shutdown();
+    return this.closing;
+  }
+
+  private async shutdown(): Promise<void> {
     const socket = this.socket;
-    if (socket !== null && !this.isLost && socket.readyState === OPEN) {
+    const was = this.state;
+    this.state = "closing";
+    if (was === "connecting") this.stopConnecting?.();
+    if (was === "open" && socket !== null && !this.isLost && socket.readyState === OPEN) {
       try {
         socket.close(1000);
       } catch (error) {
-        linkLog.problem("closing the CDP connection failed", error);
+        linkLog.problem("closing the CDP connection failed", nameOnly(error));
       }
       let stopTimer = () => {};
       await Promise.race([this.lostPromise, new Promise<void>((resolve) => (stopTimer = later(CLOSE_WAIT * 1000, resolve)))]);
@@ -251,9 +357,28 @@ export class CdpLink {
     this.lose();
   }
 
+  private envelope(command: Command, id: number, reserved: boolean): string {
+    const text = JSON.stringify({ ...command, id });
+    const sent = checkMessage(text);
+    const only = sent.length === 1 && isObject(sent[0]) ? sent[0] : null;
+    if (only === null || only["id"] !== id) throw new ForbiddenCommand("ardia only sends one whole command at a time");
+    const method = only["method"];
+    if (typeof method === "string" && ATTACH_METHODS.has(method) && !reserved) {
+      throw new ForbiddenCommand(`${method} goes through claimedAttach, which bounds the attaches left unanswered`);
+    }
+    return text;
+  }
+
   private usable(): WebSocket {
-    if (this.socket === null || this.isLost) throw new ConnectionLost();
+    if (this.socket === null || this.isLost || this.state !== "open") throw new ConnectionLost();
     return this.socket;
+  }
+
+  private drop(error: unknown): void {
+    linkLog.problem("sending on the CDP connection failed", nameOnly(error));
+    const socket = this.socket;
+    this.lose();
+    if (socket !== null) abandon(socket);
   }
 
   private received(data: unknown): void {
@@ -311,12 +436,13 @@ export class CdpLink {
     try {
       socket.close(code, truncatedUtf8(reason, 120));
     } catch (error) {
-      linkLog.problem("closing the CDP connection failed", error);
+      linkLog.problem("closing the CDP connection failed", nameOnly(error));
     }
     abandon(socket);
   }
 
   private lose(): void {
+    this.state = "closed";
     if (this.isLost) return;
     this.isLost = true;
     this.attaching.clear();
@@ -334,7 +460,7 @@ function abandon(socket: WebSocket): void {
     if (typeof terminate === "function") terminate.call(socket);
     else socket.close();
   } catch (error) {
-    linkLog.problem("dropping the CDP connection failed", error);
+    linkLog.problem("dropping the CDP connection failed", nameOnly(error));
   }
 }
 

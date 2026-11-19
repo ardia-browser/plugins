@@ -46,6 +46,9 @@ function acceptKey(head: string): string {
 
 export class RawPeer {
   readonly conns: Conn[] = [];
+  readonly accepted: Socket[] = [];
+  readonly held: (() => void)[] = [];
+  holding = false;
   private server: Server | null = null;
   port = 0;
 
@@ -73,26 +76,49 @@ export class RawPeer {
     return this.messages.filter((message) => message["method"] === name);
   }
 
+  release(): void {
+    this.holding = false;
+    for (const answer of this.held.splice(0)) answer();
+  }
+
+  openSockets(): number {
+    return this.accepted.filter((socket) => !socket.destroyed && !socket.readableEnded).length;
+  }
+
   async stop(): Promise<void> {
-    for (const conn of this.conns) conn.socket.destroy();
+    for (const socket of this.accepted) socket.destroy();
     await new Promise<void>((resolve) => (this.server ? this.server.close(() => resolve()) : resolve()));
   }
 
   private accept(socket: Socket): void {
     let buffer: Buffer = Buffer.alloc(0);
     let conn: Conn | null = null;
+    let waiting = false;
+    this.accepted.push(socket);
     socket.on("error", () => {});
+    const complete = (head: string) => {
+      waiting = false;
+      if (socket.destroyed) return;
+      socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${acceptKey(head)}\r\n\r\n`);
+      conn = this.makeConn(socket, head);
+      this.conns.push(conn);
+      buffer = this.parse(conn, buffer);
+    };
     socket.on("data", (chunk: Buffer) => {
       buffer = Buffer.concat([buffer, chunk]);
+      if (waiting) return;
       if (conn === null) {
         const end = buffer.indexOf("\r\n\r\n");
         if (end < 0) return;
         const head = buffer.subarray(0, end + 4).toString("latin1");
         buffer = buffer.subarray(end + 4);
         if (!this.handshake(head, socket)) return;
-        socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${acceptKey(head)}\r\n\r\n`);
-        conn = this.makeConn(socket, head);
-        this.conns.push(conn);
+        if (this.holding) {
+          waiting = true;
+          this.held.push(() => complete(head));
+          return;
+        }
+        return complete(head);
       }
       buffer = this.parse(conn, buffer);
     });

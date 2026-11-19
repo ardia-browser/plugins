@@ -1809,7 +1809,15 @@ The TypeScript browse daemon's CDP link (M3, not served yet) differs from Python
 - A failed connection's detail text, shown only for an explicit endpoint (`can't connect to --port N (…)`): a refused
   port reads `Failed to connect` (Python: `[Errno 61] Connect call failed (…)`); a refused handshake reads
   `server rejected WebSocket connection (Expected 101 status code)` (Python names the HTTP status). Both raise the
-  same `Unreachable` error with the same exit status.
+  same `Unreachable` error with the same exit status. A URL the WebSocket can't open (a host with a space, a bad
+  percent escape) reads `the endpoint isn't a URL a WebSocket can open (<endpoint>)`, where Python reports the lookup's
+  `[Errno 8] …`. No message names the URL's query or user info, so the session token never reaches an error, a log
+  line or telemetry.
+- `close` while the connection is still being set up ends it: the setup fails with `connection_lost` and no socket is
+  left open. Python's setup would finish and keep its socket. A second setup started while one is running waits for
+  that one instead of opening another socket.
+- `Target.attachToTarget` and `Target.attachToBrowserTarget` always go through the attach bookkeeping (the 16-attach cap
+  and the late detach), whoever sends them; the link refuses one sent any other way, before it reaches the wire.
 - Frames Chromium never sends: a reply whose `id` is written `1.0` answers command 1 (Python ignores a float id); a
   message holding `NaN` or `Infinity` is dropped (Python accepts it); a binary frame must be UTF-8 (Python's
   `json.loads` also takes UTF-16 and UTF-32), else it's skipped, as Python skips one it can't decode; a text frame

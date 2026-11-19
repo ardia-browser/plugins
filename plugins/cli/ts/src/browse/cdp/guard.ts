@@ -16,7 +16,9 @@ export function checkCommand(command: unknown): void {
   }
 }
 
-export function checkMessage(message: string | Uint8Array): void {
+export const ATTACH_METHODS: ReadonlySet<string> = new Set(["Target.attachToTarget", "Target.attachToBrowserTarget"]);
+
+export function checkMessage(message: string | Uint8Array): unknown[] {
   const text = typeof message === "string" ? message : new TextDecoder("utf-8").decode(message);
   let payload: unknown;
   try {
@@ -24,5 +26,7 @@ export function checkMessage(message: string | Uint8Array): void {
   } catch {
     throw new ForbiddenCommand("ardia only sends JSON commands");
   }
-  for (const command of Array.isArray(payload) ? payload : [payload]) checkCommand(command);
+  const commands = Array.isArray(payload) ? payload : [payload];
+  for (const command of commands) checkCommand(command);
+  return commands;
 }

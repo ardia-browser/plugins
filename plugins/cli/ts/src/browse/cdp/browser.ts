@@ -12,7 +12,8 @@ import {
 } from "../daemon-errors.ts";
 import { clock, cdpCall } from "../metrics.ts";
 import { Cancelled, checkCancelled, currentSignal, later } from "./cancel.ts";
-import { CdpLink, CommandFailed, CommandTimeout, ConnectionLost as LinkLost, type EventCallback, isObject, linkLog, timerMs } from "./link.ts";
+import { ATTACH_METHODS } from "./guard.ts";
+import { CdpLink, CommandFailed, CommandTimeout, ConnectionLost as LinkLost, type EventCallback, isObject, linkLog, OpenFailed, timerMs } from "./link.ts";
 import { pyText, pyTruthy } from "./pyvalue.ts";
 
 export const MAX_MESSAGE = 256 * 1024 * 1024;
@@ -87,9 +88,10 @@ export type SendOptions = {
   session?: string | null;
   timeout?: number | null;
   mutation?: boolean;
-  ident?: number;
   signal?: AbortSignal | null;
 };
+
+const sendReserved = Symbol("sendReserved");
 
 export function isMutation(method: string): boolean {
   return MUTATING_METHODS.has(method) || method.startsWith("Input.") || method.startsWith("Emulation.");
@@ -120,18 +122,47 @@ export class Browser {
     return this.link !== null && !this.link.lost;
   }
 
-  async open(signal: AbortSignal | null = currentSignal()): Promise<void> {
-    this.link = new CdpLink(this.endpoint.ws, MAX_MESSAGE);
+  private opening: Promise<void> | null = null;
+
+  open(signal: AbortSignal | null = currentSignal()): Promise<void> {
+    if (this.opening !== null) return this.opening;
+    if (this.link?.connected) return Promise.reject(new ConnectionLost());
+    const link = new CdpLink(this.endpoint.ws, MAX_MESSAGE);
+    this.link = link;
+    const opening = this.connect(link, signal).finally(() => {
+      this.opening = null;
+    });
+    this.opening = opening;
+    return opening;
+  }
+
+  private async connect(link: CdpLink, signal: AbortSignal | null): Promise<void> {
     try {
-      await this.link.open(CONNECT_TIMEOUT, signal);
+      await link.open(CONNECT_TIMEOUT, signal);
     } catch (error) {
       if (error instanceof Cancelled) throw error;
-      throw new Unreachable(this.unreachable(error));
+      if (error instanceof LinkLost) throw new ConnectionLost();
+      const safe = error instanceof OpenFailed ? error : new OpenFailed("ConnectionError", "the WebSocket connection failed");
+      safe.endpoint = link.endpoint;
+      throw new Unreachable(this.unreachable(safe));
     }
-    for (const name of EVENTS) this.link.on(name, (method, params, session) => this.event(method, params, session));
+    for (const name of EVENTS) link.on(name, (method, params, session) => this.event(method, params, session));
   }
 
   async send(method: string, params?: CdpResult | null, options: SendOptions = {}): Promise<CdpResult> {
+    if (ATTACH_METHODS.has(method)) {
+      const timeout = options.timeout === undefined ? 30 : options.timeout;
+      return claimedAttach(this, method, params, {
+        wait: timeout === null ? Number.POSITIVE_INFINITY : timeout,
+        session: options.session ?? null,
+        unknown: options.mutation ?? false,
+        signal: options.signal === undefined ? currentSignal() : options.signal,
+      });
+    }
+    return this[sendReserved](method, params, options);
+  }
+
+  async [sendReserved](method: string, params: CdpResult | null | undefined, options: SendOptions, ident?: number): Promise<CdpResult> {
     const link = this.link;
     if (link === null || link.lost) throw new ConnectionLost();
     const command: Record<string, unknown> = { method, params: params ?? {} };
@@ -140,7 +171,7 @@ export class Browser {
     const started = clock();
     let response: Record<string, unknown>;
     try {
-      response = await link.execute(command, timeout, options.ident, options.signal === undefined ? currentSignal() : options.signal);
+      response = await link.execute(command, timeout, ident, options.signal === undefined ? currentSignal() : options.signal);
     } catch (error) {
       if (error instanceof CommandFailed) throw failure(method, error);
       if (error instanceof CommandTimeout) {
@@ -193,7 +224,7 @@ export async function claimedAttach(browser: Browser, method: string, params?: C
   const link = browser.link;
   let attaching: Promise<CdpResult>;
   if (link === null) {
-    attaching = browser.send(method, params, { session, timeout: null, signal: null });
+    attaching = browser[sendReserved](method, params, { session, timeout: null, signal: null });
   } else {
     const ident = link.reserveAttach(MAX_LATE_ATTACHES);
     if (ident === null) {
@@ -204,7 +235,7 @@ export async function claimedAttach(browser: Browser, method: string, params?: C
         "attaches_unanswered",
       );
     }
-    attaching = browser.send(method, params, { session, timeout: null, ident, signal: null });
+    attaching = browser[sendReserved](method, params, { session, timeout: null, signal: null }, ident);
     attaching.then(
       () => link.attaching.delete(ident),
       () => link.attaching.delete(ident),
