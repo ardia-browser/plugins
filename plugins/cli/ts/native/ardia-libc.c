@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -229,6 +230,32 @@ static napi_value lock(napi_env env, napi_callback_info info) {
   }
 }
 
+static void *watch_lifeline_thread(void *argument) {
+  int fd = (int)(intptr_t)argument;
+  char sink[64];
+  for (;;) {
+    ssize_t got = read(fd, sink, sizeof(sink));
+    if (got > 0 || (got < 0 && errno == EINTR)) continue;
+    kill(getpid(), SIGKILL);
+    _exit(137);
+  }
+  return NULL;
+}
+
+static napi_value watch_lifeline(napi_env env, napi_callback_info info) {
+  Call call;
+  int32_t fd;
+  pthread_t thread;
+  pthread_attr_t attributes;
+  if (!take_args(env, info, 1, &call) || !int_arg(&call, 0, &fd) || fd < 0) return status(env, -EINVAL);
+  if (fcntl(fd, F_SETFD, FD_CLOEXEC) != 0) return status(env, failed());
+  if (pthread_attr_init(&attributes) != 0) return status(env, -ENOMEM);
+  pthread_attr_setdetachstate(&attributes, PTHREAD_CREATE_DETACHED);
+  int started = pthread_create(&thread, &attributes, watch_lifeline_thread, (void *)(intptr_t)fd);
+  pthread_attr_destroy(&attributes);
+  return status(env, -started);
+}
+
 static bool define(napi_env env, napi_value exports, const char *name, napi_callback callback) {
   napi_value function = NULL;
   return napi_create_function(env, name, NAPI_AUTO_LENGTH, callback, NULL, &function) == napi_ok
@@ -244,7 +271,8 @@ __attribute__((visibility("default"))) napi_value napi_register_module_v1(napi_e
       && define(env, exports, "unlinkAt", unlink_at)
       && define(env, exports, "sizeAt", size_at)
       && define(env, exports, "listAt", list_at)
-      && define(env, exports, "lock", lock);
+      && define(env, exports, "lock", lock)
+      && define(env, exports, "watchLifeline", watch_lifeline);
   return ok ? exports : NULL;
 }
 

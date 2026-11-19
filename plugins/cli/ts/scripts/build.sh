@@ -52,7 +52,7 @@ case $(uname -s) in
   Linux)
     [ -z "$target" ] || { echo "build.sh: on Linux the target is the host's" >&2; exit 64; }
     compiler=cc
-    platform=-D_GNU_SOURCE
+    platform="-D_GNU_SOURCE -pthread"
     link="-shared -fPIC -Wl,--build-id=none" ;;
   *) echo "build.sh: the addon builds on macOS and Linux" >&2; exit 64 ;;
 esac

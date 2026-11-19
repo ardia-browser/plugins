@@ -16,9 +16,10 @@ type Native = {
   sizeAt(dir: number, name: string): number;
   listAt(dir: number): string[] | number;
   lock(fd: number, exclusive: boolean, wait: boolean): number;
+  watchLifeline(fd: number): number;
 };
 
-const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "listAt", "lock"];
+const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "listAt", "lock", "watchLifeline"];
 const ERRNO_NAMES = new Map<number, string>(Object.entries(constants.errno).map(([name, value]) => [value, name]));
 const EWOULDBLOCK = constants.errno.EWOULDBLOCK ?? constants.errno.EAGAIN;
 
@@ -137,4 +138,8 @@ export function flock(fd: number, exclusive: boolean, wait: boolean): boolean {
   if (result === -EWOULDBLOCK && !wait) return false;
   checked(result, "flock");
   return true;
+}
+
+export function watchLifeline(fd: number): void {
+  checked(native().watchLifeline(fd), "pthread_create");
 }

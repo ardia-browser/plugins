@@ -1675,7 +1675,8 @@ The Rust entry stays `bin/ardia` and routes. A command whose row in `served.txt`
 says `ts` it runs as a child, `<root>/libexec/ardia-ts`, whose first argument `--ardia-routed=2:<sigint>:<fd>:<hex caller>`
 carries whether SIGINT was ignored when ardia started, the lifeline descriptor and the caller's hello JSON, since Bun by
 itself can learn none of them. The lifeline is the read end of a pipe whose write end only the router holds: the child sees EOF on it
-only if the router dies, and then kills itself, so a killed ardia never leaves its child writing to the caller's output
+only if the router dies, and then kills itself with SIGKILL from a thread of the addon's (`watchLifeline`), so it ends
+even while its JavaScript is blocked in a system call (opening a FIFO, say), and a killed ardia never leaves its child writing to the caller's output
 or talking to Ardia. The child starts with ardia's own signal mask and SIGINT disposition, SIGCHLD at its default (the
 router has to reap it) and the same descriptors plus the lifeline; while it runs the router passes SIGINT, SIGTERM and
 SIGHUP on unless they were ignored (a Ctrl-C to the whole group reaches the child twice, which its sticky interrupt flag
@@ -1692,8 +1693,8 @@ counts as Python.
 The TypeScript program does the few libc calls Bun lacks in-process, through a Node-API addon built from one C file
 (`ts/native/ardia-libc.c`) that ships as `<root>/libexec/ardia-libc.so` beside `libexec/ardia-ts`. `ts/scripts/build.sh`
 builds both for one architecture (`--target bun-darwin-arm64` or `bun-darwin-x64`; a separate addon per architecture,
-`-O2 -bundle -undefined dynamic_lookup -arch …` with clang on macOS, `-shared -fPIC` on Linux) and, given
-`--node-headers`, checks the addon's own Node-API declarations against Node's official headers. The `.so` name puts it
+`-O2 -bundle -undefined dynamic_lookup -arch …` with clang on macOS, `-D_GNU_SOURCE -pthread -shared -fPIC` on Linux) and, given
+`--node-headers`, checks the addon's own Node-API declarations against Node's official headers with the same per-platform flags. The `.so` name puts it
 under the plugin signing rule for libraries, which signs it with the app's Developer ID and `--options runtime` whatever
 its mode; the hardened runtime's library validation then loads it only into a program signed by the same team.
 `ts/src/libc.ts` is the only module that touches it:
@@ -1709,6 +1710,7 @@ its mode; the hardened runtime's library validation then loads it only into a pr
 | `sizeAt` | `fstatat(…, AT_SYMLINK_NOFOLLOW)` | path only | `privatefs.ts`: spool and local-copy sizes |
 | `listAt` | `fcntl(F_DUPFD_CLOEXEC)`, `fdopendir`, `readdir` | no directory listing from a descriptor | `privatefs.ts`: prune the local copies |
 | `lock` | `flock` | no `flock`; `O_EXLOCK` is Darwin-only | `privatefs.ts`: the same lock Python's `fcntl.flock` takes, on macOS and Linux |
+| `watchLifeline` | `fcntl(FD_CLOEXEC)`, a detached `pthread` blocking in `read`, `kill(getpid(), SIGKILL)` at EOF or error | a JS watcher can't run while the JS thread is blocked in a synchronous call | `main.ts`: end at once when the router dies |
 
 So nothing changes the working directory and no helper process runs: the private-file code follows Python's `dir_fd`
 code call for call. The caller still comes from the router's marker, which already walked the process ancestry. The

@@ -735,22 +735,29 @@ class TsProcess(EntryProcess, unittest.TestCase):
                     shutil.rmtree(leases, True)
 
     def test_the_typescript_program_ends_when_the_router_is_killed(self):
-        for blocked_on in ("the call", "its output"):
+        for blocked_on in ("the call", "its output", "a private file"):
             with self.subTest(blocked_on=blocked_on):
                 self.case = Path(tempfile.mkdtemp(prefix="c", dir=self.scratch))
                 release = threading.Event()
+                argv = ["tabs", "--json"]
                 if blocked_on == "the call":
                     fake = self.slow_listing(release)
-                else:
+                elif blocked_on == "its output":
                     tabs = [{"type": "tab", "id": f"tab-{index}", "title": "t" * 40, "url": "https://example.com/" + "p" * 40} for index in range(3000)]
                     (self.case / "data").mkdir()
                     fake = FakeArdia(self.case / "data" / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}},
                                      "workspace": {"result": {"windows": [{"id": "w-1", "spaces": [{"profile": "p", "tabs": tabs}]}]}}})
+                else:
+                    fake = self.spool_is_a_fifo()
+                    argv = ["windows", "--json"]
                 try:
-                    listing = self.start(["tabs", "--json"])
-                    self.wait_for(fake, "workspace")
+                    listing = self.start(argv)
+                    self.wait_for(fake, "workspace" if blocked_on != "a private file" else "windows")
                     child = self.ts_child(listing.pid)
+                    if blocked_on == "a private file":
+                        self.assertEqual(listing.stdout.readline(), b"[]\n")
                     time.sleep(0.5)
+                    self.assertIsNone(listing.poll(), f"ardia ended before it was blocked on {blocked_on}")
                     os.kill(listing.pid, signal.SIGKILL)
                     listing.wait(5)
                     deadline = time.monotonic() + 5
@@ -764,11 +771,19 @@ class TsProcess(EntryProcess, unittest.TestCase):
                         os.kill(child, signal.SIGKILL)
                         self.fail("the TypeScript program ran on after the router died")
                     closed = threading.Event()
-                    threading.Thread(target=lambda: (listing.stdout.read(), closed.set()), daemon=True).start()
-                    self.assertTrue(closed.wait(5), "the output pipe stayed open after the router died")
+                    threading.Thread(target=lambda: (listing.stdout.read(), listing.stderr.read(), closed.set()), daemon=True).start()
+                    self.assertTrue(closed.wait(5), "the output pipes stayed open after the router died")
                 finally:
                     release.set()
                     fake.close()
+
+    def spool_is_a_fifo(self):
+        data = self.case / "data"
+        (data / "Telemetry").mkdir(parents=True, mode=0o700)
+        (self.case / "home").mkdir()
+        (data / "telemetry.json").write_text(json.dumps({"sharing": True, "installId": INSTALL_ID}))
+        os.mkfifo(data / "Telemetry" / "cli-queue.jsonl", 0o600)
+        return FakeArdia(data / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "windows": {"result": []}})
 
     def test_a_hand_back_reaches_python_byte_for_byte(self):
         log = self.case / "exec.log"
