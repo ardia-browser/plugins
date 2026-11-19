@@ -644,6 +644,42 @@ class CheckedBeforeConnecting(unittest.TestCase):
             self.assertNotIn("stdin was read", err.getvalue(), argv)
             self.assertIn("--t", err.getvalue(), argv)
 
+    def test_a_long_deadline_is_waited_in_chunks_the_socket_can_hold(self):
+        from unittest import mock
+
+        from ardia_cli.browse import client, limits
+
+        class CappedSocket:
+            def __init__(self):
+                self.ready = time.monotonic() + 0.3
+                self.timeouts = []
+                self.timeout = None
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def settimeout(self, value):
+                self.timeouts.append(value)
+                self.timeout = value
+
+            def sendall(self, data):
+                pass
+
+            def recv(self, size):
+                time.sleep(min(self.timeout, 0.05))
+                if time.monotonic() < self.ready:
+                    raise TimeoutError
+                return b'{"code": 0}\n'
+
+        capped = CappedSocket()
+        with mock.patch.object(limits, "answer_deadline", return_value=5.0), mock.patch.object(client, "RECV_CHUNK", 0.05, create=True):
+            self.assertEqual(client.request(capped, {"argv": ["wait", "x"], "options": {}}), {"code": 0})
+        self.assertLessEqual(max(capped.timeouts), 0.05)
+        self.assertLess(client.RECV_CHUNK, 2 ** 31 / 1000)
+
     def test_a_huge_timeout_never_overflows_the_client_deadline(self):
         import math
 
