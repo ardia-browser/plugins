@@ -57,8 +57,11 @@ def racy_of(scenario: dict) -> list[int] | None:
     return (scenario.get("racy_steps") or {}).get("steps")
 
 
-def shaped_of(result: Run, scenario: dict, unstable: list[int] | None = None) -> dict:
-    return divergences.apply(normalize.run(result, unstable, racy_of(scenario)), scenario.get("divergences"))
+def shaped_of(result: Run, scenario: dict, unstable: list[int] | None = None, fault: Fault | None = None) -> dict:
+    names = list(scenario.get("divergences") or [])
+    if fault is not None and fault.kind in divergences.UNANSWERING_FAULTS and "busy-probe-isolated" not in names:
+        names.append("busy-probe-isolated")
+    return divergences.apply(normalize.run(result, unstable, racy_of(scenario)), names)
 
 
 def checked_rows(result: Run, impl: str, label: str) -> list[str]:
@@ -156,7 +159,7 @@ class Harness:
         if not all(fired):
             return {"name": scenario["name"], "mode": mode, "ok": True, "skipped": f"the fault point was reached on {sum(fired)} of 2 sides"}
         unstable = (scenario.get("unstable_steps") or {}).get("steps")
-        shaped = [shaped_of(side, scenario, unstable) for side in (first, second)]
+        shaped = [shaped_of(side, scenario, unstable, fault) for side in (first, second)]
         for found in shaped:
             for part in ("requests", "request_sets", "sources"):
                 found[part].pop(str(fault.step), None)

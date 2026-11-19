@@ -8,7 +8,8 @@ import { addSecret, redact } from "../redact.ts";
 import { parseQsl, quote, urlsplit } from "../pylib/urllib.ts";
 import { strerror } from "../libc.ts";
 import { closeFd, readFdUpTo } from "./paths.ts";
-import { Cancelled, currentSignal } from "./cdp/cancel.ts";
+import { Cancelled, checkCancelled, currentSignal } from "./cdp/cancel.ts";
+import { reprStr } from "../py.ts";
 
 export const CONTROL_FILE = "ArdiaControl.json";
 const BROWSER_PATH = /^\/devtools\/browser\/[0-9A-Za-z-]{1,128}$/;
@@ -45,7 +46,8 @@ function fromWs(url: string, source: string): Endpoint {
     throw new EndpointError(`${source} must be a ws://host:port/devtools/browser/<id> URL`);
   }
   registerUrlSecrets(url);
-  return { ws: url, source, explicit: true, active: null, instance: `${parts.netloc}${parts.path}` };
+  const host = parts.netloc.slice(parts.netloc.lastIndexOf("@") + 1);
+  return { ws: url, source, explicit: true, active: null, instance: `${host}${parts.path}` };
 }
 
 async function fromPort(port: number, source: string, signal: AbortSignal | null): Promise<Endpoint> {
@@ -110,8 +112,8 @@ function versionBody(port: number, signal: AbortSignal | null): Promise<Buffer> 
   });
 }
 
-function portNumber(text: string): number {
-  if (!/^\s*[+-]?[0-9]+(_[0-9]+)*\s*$/u.test(text)) throw new EndpointError(`ARDIA_PORT must be a port number, not '${text}'`);
+export function portNumber(text: string): number {
+  if (!/^\s*[+-]?[0-9]+(_[0-9]+)*\s*$/u.test(text)) throw new EndpointError(`ARDIA_PORT must be a port number, not ${reprStr(text)}`);
   return Number.parseInt(text.replaceAll("_", ""), 10);
 }
 
@@ -178,18 +180,29 @@ function setting(value: unknown): string | null {
   return typeof value === "string" && value !== "" ? value : null;
 }
 
+export type EnvEndpoint = { kind: "ws"; url: string; source: string } | { kind: "port"; port: number; source: string };
+
+export function envEndpoint(env: NodeJS.ProcessEnv = process.env): EnvEndpoint | null {
+  const ws = env["ARDIA_WS"];
+  if (ws) return { kind: "ws", url: ws, source: "ARDIA_WS" };
+  const port = env["ARDIA_PORT"];
+  if (port) return { kind: "port", port: portNumber(port), source: "ARDIA_PORT" };
+  const cdp = env["ARDIA_CDP_URL"];
+  if (cdp) return { kind: "ws", url: cdp, source: "ARDIA_CDP_URL" };
+  return null;
+}
+
 export async function resolve(config: EndpointConfig, signal: AbortSignal | null = currentSignal()): Promise<Endpoint> {
+  checkCancelled(signal);
   const ws = setting(config.ws);
   if (ws !== null) return fromWs(ws, "--ws");
   if (typeof config.port === "number" || typeof config.port === "bigint") return fromPort(Number(config.port), "--port", signal);
-  const envWs = process.env["ARDIA_WS"];
-  if (envWs) return fromWs(envWs, "ARDIA_WS");
-  const envPort = process.env["ARDIA_PORT"];
-  if (envPort) return fromPort(portNumber(envPort), "ARDIA_PORT", signal);
-  const envCdp = process.env["ARDIA_CDP_URL"];
-  if (envCdp) return fromWs(envCdp, "ARDIA_CDP_URL");
+  const fromEnv = envEndpoint();
+  if (fromEnv !== null) return fromEnv.kind === "ws" ? fromWs(fromEnv.url, fromEnv.source) : fromPort(fromEnv.port, fromEnv.source, signal);
   const dataDir = setting(config.data_dir);
-  return fromControlFile(controlFilePath(dataRoot(dataDir ?? undefined)));
+  const found = fromControlFile(controlFilePath(dataRoot(dataDir ?? undefined)));
+  checkCancelled(signal);
+  return found;
 }
 
 export function unreachableMessage(endpoint: Endpoint, error: unknown): string {

@@ -13,6 +13,7 @@ DIVERGENCES = {
     },
 }
 
+UNANSWERING_FAULTS = ("drop", "stop")
 PAGE_SESSION_ENABLES = ("Runtime.enable", "Debugger.enable", "Console.enable")
 BUSY_PROBE = "1"
 

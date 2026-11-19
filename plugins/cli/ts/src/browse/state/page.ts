@@ -1,7 +1,7 @@
 import { formatG } from "../../pylib/format.ts";
 import { type Browser, type CdpResult, DETACH_WAIT, isMutation } from "../cdp/browser.ts";
 import { Cancelled, sleep } from "../cdp/cancel.ts";
-import { BrowseError, CdpError, CdpTimeout, Gated, NotFocusable, OutcomeUnknown, PageBusy } from "../daemon-errors.ts";
+import { BrowseError, CdpError, CdpTimeout, ConnectionLost, Gated, NotFocusable, OutcomeUnknown, PageBusy } from "../daemon-errors.ts";
 import { LIBRARY, PAGE_FOCUS_INSIDE } from "../js/index.ts";
 import { flag } from "../metrics.ts";
 import { whereAppHas } from "./apptabs.ts";
@@ -62,6 +62,10 @@ export class Element {
     readonly backendId: number,
     readonly label: string,
   ) {}
+}
+
+function ignorable(error: unknown): boolean {
+  return error instanceof BrowseError && !(error instanceof ConnectionLost) && error.code !== "tab_detached" && error.code !== "tab_crashed";
 }
 
 function frameOf(frame: Json, parent: string | null): Frame {
@@ -150,10 +154,11 @@ export class Page {
       }
       if (this.crashed) {
         this.needsEnable = true;
-        this.publish();
+        this.publish(session);
         return;
       }
       await this.enablePage();
+      if (this.sessionId !== session) throw new BrowseError(DETACHED, null, "tab_detached");
     } catch (error) {
       if (this.attaching === session) {
         this.attaching = null;
@@ -165,18 +170,19 @@ export class Page {
     }
   }
 
-  private publish(): void {
-    if (this.attaching === null) return;
-    this.sessionId = this.attaching;
+  private publish(session: string): void {
+    if (this.attaching !== session) throw new BrowseError(DETACHED, null, "tab_detached");
+    this.sessionId = session;
     this.attaching = null;
   }
 
   async enablePage(): Promise<void> {
+    const pending = this.attaching;
     this.needsEnable = true;
     await this.send("Page.enable");
     await this.send("Page.setLifecycleEventsEnabled", { enabled: true });
     await this.refreshFrames();
-    this.publish();
+    if (pending !== null) this.publish(pending);
     if (this.runtimeOn) {
       this.runtimeOn = false;
       await this.enableRuntime();
@@ -192,7 +198,7 @@ export class Page {
       const css = record((await this.send("Page.getLayoutMetrics"))["cssVisualViewport"]);
       viewport = [Number(css["clientWidth"]) || 1280, Number(css["clientHeight"]) || 800];
     } catch (error) {
-      if (!(error instanceof BrowseError)) throw error;
+      if (!ignorable(error)) throw error;
     }
     this.input.bind(viewport);
     this.needsEnable = false;
@@ -231,7 +237,7 @@ export class Page {
     try {
       await this.send("Emulation.setFocusEmulationEnabled", { enabled: true });
     } catch (error) {
-      if (error instanceof BrowseError) return;
+      if (ignorable(error)) return;
       throw error;
     }
     this.awake = true;
