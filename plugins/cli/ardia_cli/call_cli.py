@@ -103,8 +103,30 @@ def add_parsers(commands, formatter):
     methods.add_argument("--data-dir", metavar="DIR", help=DATA_DIR_HELP)
 
 
+DESCRIPTOR_FIELDS = frozenset({"description", "mutates", "mutating", "params", "result", "area"})
+
+
+def is_descriptor(value) -> bool:
+    if not isinstance(value, dict) or not value or not set(value) <= DESCRIPTOR_FIELDS:
+        return False
+    if "description" in value and not isinstance(value["description"], str):
+        return False
+    return all(isinstance(value[key], bool) for key in ("mutates", "mutating") if key in value)
+
+
+def is_wrapper(catalog) -> bool:
+    if not isinstance(catalog, dict) or "methods" not in catalog:
+        return False
+    inner = catalog["methods"]
+    if isinstance(inner, list):
+        return True
+    if not isinstance(inner, dict) or is_descriptor(inner):
+        return False
+    return not any(is_descriptor(value) for key, value in catalog.items() if key != "methods")
+
+
 def entries(catalog) -> list[dict]:
-    if isinstance(catalog, dict) and "methods" in catalog:
+    if is_wrapper(catalog):
         catalog = catalog["methods"]
     rows = []
     if isinstance(catalog, dict):

@@ -127,8 +127,10 @@ you bump a pin.
   the request went out (the method may or may not have run). `ardia_cli/call_cli.py`; the protocol number is unchanged.
 - `ardia methods [NAME] [--json]` lists what the running Ardia offers over the control socket, from its `methods`
   method: one line per method with `reads` or `changes` and its description; with NAME, that method's description,
-  params schema and result. It takes the catalog as a list of `{name, description, params, result, mutates}`, a
-  `{methods: …}` object, or an object keyed by name. An Ardia without `methods` (`unknown_method`) gets
+  params schema and result. It takes the catalog as a list of `{name, area, description, params, result, mutates}` (the
+  app's shape), a `{methods: …}` object whose `methods` is such a list or an object of descriptors, or an object keyed
+  by name, which may list `methods` itself: an object is taken as a wrapper only when its `methods` value isn't a
+  descriptor (`description`, `mutates`, `params`, `result`, `area`) and no other key holds one. An Ardia without `methods` (`unknown_method`) gets
   `this Ardia is too old to list its methods …: update Ardia` and exit 1. Agents discover with `ardia methods` and act
   with `ardia call`.
 - `ardia events [EVENT…]` streams browser events (see `docs/automation.md`).

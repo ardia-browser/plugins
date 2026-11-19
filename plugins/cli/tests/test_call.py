@@ -137,6 +137,20 @@ class Methods(CallBase):
         status, out, _ = self.run_cli("methods", "--json")
         self.assertEqual([(m["name"], m.get("mutates")) for m in json.loads(out)], [("a.b", True), ("c", None)])
 
+    def test_a_name_keyed_catalog_with_its_own_methods_entry_isnt_a_wrapper(self):
+        catalog = {"methods": {"description": "Every method", "mutates": False, "params": {"type": "object"}},
+                   "windows": {"description": "Windows", "mutates": False}}
+        self.assertEqual([(r["name"], r["description"]) for r in call_cli.entries(catalog)], [("methods", "Every method"), ("windows", "Windows")])
+        only_itself = {"methods": {"description": "Every method", "mutates": False, "params": {}, "result": "[…]"}}
+        self.assertEqual([r["name"] for r in call_cli.entries(only_itself)], ["methods"])
+
+    def test_the_three_shapes_still_parse(self):
+        app = [{"name": "tabs.close", "area": "tabs", "mutates": True, "description": "Close tabs", "params": {"type": "object"}, "result": "{ok}"}]
+        self.assertEqual(call_cli.entries(app), app)
+        self.assertEqual([r["name"] for r in call_cli.entries({"methods": app})], ["tabs.close"])
+        keyed = {"methods": {"tabs.close": {"description": "Close tabs", "mutates": True}, "methods": {"description": "All"}}}
+        self.assertEqual([r["name"] for r in call_cli.entries(keyed)], ["tabs.close", "methods"])
+
     def test_an_unknown_name(self):
         self.serve_methods()
         status, _, err = self.run_cli("methods", "tabs.clos")
