@@ -1672,16 +1672,22 @@ case marked `fallback` is one Rust must hand to Python; before handing off, Rust
 sandboxes, and `--report` prints the table as JSON (per command: cases, passing, native, served) for a given commit.
 
 The Rust entry stays `bin/ardia` and routes. A command whose row in `served.txt` says `rust` it serves itself; one that
-says `ts` it runs as a child, `<root>/libexec/ardia-ts`, whose first argument `--ardia-routed=1:<sigint>:<hex caller>`
-carries whether SIGINT was ignored when ardia started and the caller's hello JSON, since Bun can learn neither. The child
-starts with ardia's own signal mask and SIGINT disposition and the same descriptors; while it runs the router ignores
-SIGINT, passes SIGTERM and SIGHUP on, holds the lease, and then ends by the child's signal or with its status. Status 253
-means the TypeScript program couldn't serve the call exactly (it may only have asked read-only questions): the router
-then execs the bundled Python with the original argv and environment, as for any other command. Without
-`libexec/ardia-ts` everything goes where it would without the row. The router reads `<root>/served.txt` when it is there
-and valid, else the table built into it. `--entry ts` installs the router, the TypeScript program behind a probe, and a
-`served.txt` naming `ts` for every row; which side served a call comes from markers keyed by session id, so a Python
-started as anyone's child still counts as Python.
+says `ts` it runs as a child, `<root>/libexec/ardia-ts`, whose first argument `--ardia-routed=2:<sigint>:<fd>:<hex caller>`
+carries whether SIGINT was ignored when ardia started, the lifeline descriptor and the caller's hello JSON, since Bun can
+learn none of them. The lifeline is the read end of a pipe whose write end only the router holds: the child sees EOF on it
+only if the router dies, and then kills itself, so a killed ardia never leaves its child writing to the caller's output
+or talking to Ardia. The child starts with ardia's own signal mask and SIGINT disposition, SIGCHLD at its default (the
+router has to reap it) and the same descriptors plus the lifeline; while it runs the router passes SIGINT, SIGTERM and
+SIGHUP on unless they were ignored (a Ctrl-C to the whole group reaches the child twice, which its sticky interrupt flag
+turns into one), holds the lease, and then ends by the child's signal or with its status. Status 253 means the
+TypeScript program couldn't serve the call exactly (it may only have asked read-only questions): the router then restores
+every disposition it changed and execs the bundled Python with the original argv and environment, as for any other
+command. Without `libexec/ardia-ts` everything goes where it would without the row. The router reads
+`<root>/served.txt` when it is a regular file (not a link) of at most 64 KiB and valid, else the table built into it.
+`--entry ts` installs the router, the TypeScript program behind a probe, and a `served.txt` naming `ts` for every row;
+`--entry rust` installs the shipped layout, the TypeScript program included when a built-in row says `ts` and it is
+built. Which side served a call comes from markers keyed by session id, so a Python started as anyone's child still
+counts as Python.
 
 `python -m tests.parity.record` seeds `tests/parity/cases/seeded/` from the Python tests: it runs them with the entry
 points and the control client wrapped and keeps each in-process call whose replay in the sandbox gives the test's own
