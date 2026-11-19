@@ -4,15 +4,19 @@ BROWSER = "browser"
 SESSION_GONE = ("Session with given id not found", "No session with given id", "no attached session has that sessionId")
 SESSION_NOT_FOUND_CODE = -32001
 ATTACH_TIMEOUT = 10
-RESET_NOTICE = ("→ This session's DevTools connection was reopened since the last cdp call (it closes after 30 s idle), "
-                "so cdp got a fresh session there: domains and settings earlier cdp calls turned on are off again")
+RESET_NOTICES = {
+    "reopened": "→ This session's DevTools connection was reopened since the last cdp call (it closes after 30 s idle), "
+                "so cdp got a fresh session there: domains and settings earlier cdp calls turned on are off again",
+    "replaced": "→ The DevTools session earlier cdp calls used there was gone (the tab or Ardia dropped it), so cdp attached a new one "
+                "on the same DevTools connection: domains and settings earlier cdp calls turned on are off again",
+}
 
 
 class RawSessions:
     def __init__(self):
         self.browser = None
         self.sessions: dict[str, str | None] = {}
-        self.reset: set[str] = set()
+        self.reset: dict[str, str] = {}
 
 
 def of(state) -> RawSessions:
@@ -26,14 +30,14 @@ def forget_session(state, session_id: str | None) -> None:
     for key, held in list(raw.sessions.items()):
         if held == session_id:
             del raw.sessions[key]
-            raw.reset.add(key)
+            raw.reset[key] = "replaced"
 
 
 def forget_target(state, target_id: str | None) -> None:
     raw = state.extras.get("raw_cdp")
     if raw is not None and target_id:
         raw.sessions.pop(target_id, None)
-        raw.reset.discard(target_id)
+        raw.reset.pop(target_id, None)
 
 
 def session_gone(error: CdpError) -> bool:
@@ -64,7 +68,7 @@ async def session_for(state, key: str) -> tuple[str | None, str]:
     raw = of(state)
     if raw.browser is not state.browser:
         if raw.browser is not None:
-            raw.reset |= set(raw.sessions)
+            raw.reset = {held: "reopened" for held in (*raw.reset, *raw.sessions)}
         raw.browser = state.browser
         raw.sessions = {}
     if key in raw.sessions:
@@ -74,9 +78,11 @@ async def session_for(state, key: str) -> tuple[str | None, str]:
     raw.sessions[key] = session
     if session is None:
         return None, "shared"
-    status = "reattached" if key in raw.reset else "attached"
-    raw.reset.discard(key)
-    return session, status
+    reason = raw.reset.pop(key, None)
+    if reason is None:
+        return session, "attached"
+    state.extras["notice"] = "\n".join(part for part in (state.extras.get("notice"), RESET_NOTICES[reason]) if part)
+    return session, "reattached"
 
 
 async def send(state, key: str, method: str, params: dict, timeout: float) -> tuple[dict, str]:

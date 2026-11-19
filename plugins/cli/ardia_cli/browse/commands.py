@@ -2024,8 +2024,6 @@ async def cmd_cdp(ctx: Ctx, argv):
             where = state.tab_id(page.target_id)
     except Gated as error:
         raise error.during("cdp") from None
-    if session == "reattached":
-        state.extras["notice"] = "\n".join(part for part in (state.extras.get("notice"), rawcdp.RESET_NOTICE) if part)
     text = json.dumps(result, indent=2, ensure_ascii=False) if result else f"✓ {method}"
     return Result({"method": method, "target": where, "session": session, "result": result}, text, page_content=bool(result), whole=True)
 

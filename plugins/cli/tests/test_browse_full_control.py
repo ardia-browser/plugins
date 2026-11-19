@@ -429,6 +429,33 @@ class RawCdp(unittest.TestCase):
             self.assertEqual(detached, [{"sessionId": "S-page-late"}], give_up)
             self.assertEqual((sessions, session), ({}, None), give_up)
 
+    def test_the_notice_says_whether_the_connection_or_only_the_session_changed(self):
+        from ardia_cli.browse import rawcdp
+        from ardia_cli.browse.errors import CdpError
+
+        state = FakeState()
+        cdp(state, "Runtime.enable")
+        rawcdp.forget_session(state, "S-T1-1")
+        self.assertEqual(cdp(state, "Runtime.evaluate").data["session"], "reattached")
+        self.assertIn("same DevTools connection", state.extras.pop("notice"))
+        state.browser = type(state.browser)()
+        self.assertEqual(cdp(state, "Runtime.evaluate").data["session"], "reattached")
+        self.assertIn("connection was reopened", state.extras.pop("notice"))
+        state.answers["Runtime.evaluate"] = CdpError("Runtime.evaluate", "No session with given id")
+        original = state.browser.send
+
+        async def send(method, params=None, session=None, timeout=30, mutation=False):
+            if method == "Runtime.evaluate" and session != "S-T1-3":
+                state.browser_sent.append((method, params, session, timeout, mutation))
+                return {"value": 1}
+            return await original(method, params, session, timeout, mutation)
+
+        state.browser.send = send
+        self.assertEqual(cdp(state, "Runtime.evaluate").data["session"], "reattached")
+        notice = state.extras.pop("notice")
+        self.assertIn("same DevTools connection", notice)
+        self.assertNotIn("reopened", notice)
+
     def test_cdp_is_a_known_mutating_command(self):
         self.assertIn("cdp", commands.MUTATING)
         self.assertIn("cdp", browse_help.COMMANDS)
