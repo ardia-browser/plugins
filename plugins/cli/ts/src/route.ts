@@ -4,6 +4,7 @@ import { servedTable, type ServingSide } from "./served.ts";
 export type Route = { kind: "version" } | { kind: "help" } | { kind: "listing"; what: Kind; listing: Listing } | { kind: "python" };
 
 const U64_MAX = (1n << 64n) - 1n;
+const PY_INT_MAX_STR_DIGITS = 4300;
 const KINDS: readonly string[] = ["tabs", "groups", "windows", "commands"];
 
 class Cursor {
@@ -91,7 +92,7 @@ export function parseRoute(argv: string[]): Route {
       if (tabs) {
         const pid = cursor.valueOf("--pid");
         if (pid !== undefined) {
-          if (!/^[0-9]+$/.test(pid) || BigInt(pid) > U64_MAX) return { kind: "python" };
+          if (!/^[0-9]+$/.test(pid) || pid.length > PY_INT_MAX_STR_DIGITS || BigInt(pid) > U64_MAX) return { kind: "python" };
           listing.pid = BigInt(pid);
           continue;
         }

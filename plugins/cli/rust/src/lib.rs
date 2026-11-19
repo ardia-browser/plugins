@@ -20,6 +20,7 @@ use std::io::Write;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 
+const PY_INT_MAX_STR_DIGITS: usize = 4300;
 const TOP_FLAGS: &[&str] = &["-h", "--help", "--version", "--skill"];
 const TABS_FLAGS: &[&str] = &[
     "-h",
@@ -136,7 +137,7 @@ pub fn parse_route(argv: &[String]) -> Route {
                 if tabs {
                     if let Some(value) = value_of(argv, &mut index, "--pid") {
                         let Some(pid) = Some(value)
-                            .filter(|text| !text.is_empty() && text.bytes().all(|b| b.is_ascii_digit()))
+                            .filter(|text| !text.is_empty() && text.len() <= PY_INT_MAX_STR_DIGITS && text.bytes().all(|b| b.is_ascii_digit()))
                             .and_then(|text| text.parse().ok())
                         else {
                             return Route::Python;
@@ -377,6 +378,16 @@ mod tests {
             )
         );
         assert_eq!(
+            routed(&["tabs", "--pid", &"0".repeat(PY_INT_MAX_STR_DIGITS)]),
+            Route::Listing(
+                Kind::Tabs,
+                Listing {
+                    pid: Some(0),
+                    ..Default::default()
+                }
+            )
+        );
+        assert_eq!(
             routed(&["windows", "--data-dir="]),
             Route::Listing(
                 Kind::Windows,
@@ -417,6 +428,7 @@ mod tests {
             &["tabs", "--window", "-1"],
             &["tabs", "--pid", "+5"],
             &["tabs", "--pid", "5_0"],
+            &["tabs", "--pid", &"0".repeat(PY_INT_MAX_STR_DIGITS + 1)],
             &["tabs", "--json=1"],
             &["tabs", "--help"],
             &["tabs", "--"],
