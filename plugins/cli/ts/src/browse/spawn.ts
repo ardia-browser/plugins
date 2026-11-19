@@ -11,6 +11,8 @@ import { DIR_NAME, NoDaemon } from "./session.ts";
 
 const START_TIMEOUT_MS = 15_000;
 const POLL_MS = 30;
+const EAGER_POLL_MS = 5;
+const EAGER_FOR_MS = 1000;
 const LOG_TAIL = 2000;
 const DAEMON = "from ardia_cli.browse import daemon; daemon.main()";
 
@@ -49,6 +51,10 @@ function logTail(dir: Dir, key: string): string {
   }
 }
 
+export function pollDelay(elapsedMs: number): number {
+  return elapsedMs < EAGER_FOR_MS ? EAGER_POLL_MS : POLL_MS;
+}
+
 export async function startDaemon(root: string, key: string, config: JsonObject, python: string | null, call: Call, connect: () => Promise<Link>): Promise<Link> {
   if (python === null) throw unreachable("the ardia browse daemon runs on the bundled Python, which isn't there");
   const dir = openPrivate(root, [DIR_NAME], true);
@@ -85,7 +91,7 @@ export async function startDaemon(root: string, key: string, config: JsonObject,
       if (exited && !lockHeld(dir, key)) {
         throw unreachable(`the ardia browse daemon exited before it listened: ${logTail(dir, key) || "no output"}`);
       }
-      await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+      await new Promise((resolve) => setTimeout(resolve, pollDelay(performance.now() - spawned)));
     }
     throw unreachable("the ardia browse daemon didn't start in 15 s");
   } finally {

@@ -27,3 +27,10 @@ test("output_chars and printing plain text build no code-point arrays", () => {
   expect(write).toHaveBeenCalledTimes(1);
   expect(spy).toHaveBeenCalledTimes(0);
 });
+
+test("a starting daemon is looked for every 5 ms in its first second, then every 30 ms", async () => {
+  const { pollDelay } = await import("../src/browse/spawn.ts");
+  expect(pollDelay(0)).toBe(5);
+  expect(pollDelay(999)).toBe(5);
+  expect(pollDelay(1000)).toBe(30);
+});
