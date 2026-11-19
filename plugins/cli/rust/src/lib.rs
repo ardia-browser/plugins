@@ -288,8 +288,9 @@ enum Handled {
 }
 
 fn run_ts(program: &Path, raw: &[OsString]) -> Handled {
-    let marker = router::marker(router::interrupts_ignored(), &caller::current());
-    match router::run_child(program, &marker, raw) {
+    let interrupts_ignored = router::interrupts_ignored();
+    let caller = caller::current();
+    match router::run_child(program, |lifeline| router::marker(interrupts_ignored, lifeline, &caller), raw) {
         router::Ended::NotStarted | router::Ended::Exited(router::HAND_BACK) => Handled::Python,
         router::Ended::Exited(status) => Handled::Status(status),
         router::Ended::Signaled(signal) => Handled::Signaled(signal),

@@ -720,6 +720,42 @@ class TsProcess(EntryProcess, unittest.TestCase):
                     fake.close()
                     shutil.rmtree(leases, True)
 
+    def test_the_typescript_program_ends_when_the_router_is_killed(self):
+        for blocked_on in ("the call", "its output"):
+            with self.subTest(blocked_on=blocked_on):
+                self.case = Path(tempfile.mkdtemp(prefix="c", dir=self.scratch))
+                release = threading.Event()
+                if blocked_on == "the call":
+                    fake = self.slow_listing(release)
+                else:
+                    tabs = [{"type": "tab", "id": f"tab-{index}", "title": "t" * 40, "url": "https://example.com/" + "p" * 40} for index in range(3000)]
+                    (self.case / "data").mkdir()
+                    fake = FakeArdia(self.case / "data" / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}},
+                                     "workspace": {"result": {"windows": [{"id": "w-1", "spaces": [{"profile": "p", "tabs": tabs}]}]}}})
+                try:
+                    listing = self.start(["tabs", "--json"])
+                    self.wait_for(fake, "workspace")
+                    child = self.ts_child(listing.pid)
+                    time.sleep(0.5)
+                    os.kill(listing.pid, signal.SIGKILL)
+                    listing.wait(5)
+                    deadline = time.monotonic() + 5
+                    while time.monotonic() < deadline:
+                        try:
+                            os.kill(child, 0)
+                        except ProcessLookupError:
+                            break
+                        time.sleep(0.05)
+                    else:
+                        os.kill(child, signal.SIGKILL)
+                        self.fail("the TypeScript program ran on after the router died")
+                    closed = threading.Event()
+                    threading.Thread(target=lambda: (listing.stdout.read(), closed.set()), daemon=True).start()
+                    self.assertTrue(closed.wait(5), "the output pipe stayed open after the router died")
+                finally:
+                    release.set()
+                    fake.close()
+
     def test_a_hand_back_reaches_python_byte_for_byte(self):
         log = self.case / "exec.log"
         bare = self.bare_install(self.logging_python(log))
@@ -764,11 +800,23 @@ class TsProcess(EntryProcess, unittest.TestCase):
 
     def test_the_typescript_program_refuses_to_run_without_the_router(self):
         program = self.root / "libexec" / "ardia-ts.bin"
-        for argv in ([], ["windows"], ["--ardia-routed=1:2:7b7d", "windows"], ["--ardia-routed=1:0:7b7d", "windows"], ["--ardia-routed=1:0:zz", "windows"],
-                     ["--ardia-routed=2:0:" + b'{"name":"x"}'.hex(), "windows"], ["windows", "--ardia-routed=1:0:" + b'{"name":"x"}'.hex()]):
+        caller = b'{"name":"x"}'.hex()
+        read_end, write_end = os.pipe()
+        regular = os.open(self.case / "regular", os.O_CREAT | os.O_RDWR)
+        good = read_end
+        for argv in ([], ["windows"], [f"--ardia-routed=2:2:{good}:7b7d", "windows"], [f"--ardia-routed=2:0:{good}:7b7d", "windows"],
+                     [f"--ardia-routed=2:0:{good}:zz", "windows"], ["--ardia-routed=1:0:" + caller, "windows"], [f"--ardia-routed=2:0:{caller}", "windows"],
+                     ["windows", f"--ardia-routed=2:0:{good}:{caller}"], [f"--ardia-routed=2:0:0:{caller}", "windows"], [f"--ardia-routed=2:0:1:{caller}", "windows"],
+                     [f"--ardia-routed=2:0:{regular}:{caller}", "windows"], [f"--ardia-routed=2:0:900:{caller}", "windows"]):
             with self.subTest(argv=argv):
-                done = subprocess.run([str(program), *argv], env=self.environment({}), capture_output=True, timeout=30)
+                done = subprocess.run([str(program), *argv], env=self.environment({}), capture_output=True, timeout=30, pass_fds=(read_end, regular))
                 self.assertEqual((done.returncode, done.stdout, done.stderr), (2, b"", self.not_routed))
+        done = subprocess.run([str(program), f"--ardia-routed=2:0:{read_end}:{caller}", "--version"], env=self.environment({}), capture_output=True, timeout=30,
+                              pass_fds=(read_end,))
+        self.assertEqual((done.returncode, done.stderr), (0, b""))
+        self.assertTrue(done.stdout.startswith(b"ardia "))
+        for fd in (read_end, write_end, regular):
+            os.close(fd)
 
     def test_an_invalid_served_table_falls_back_to_the_compiled_one(self):
         data = self.case / "data"

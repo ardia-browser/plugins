@@ -1,10 +1,12 @@
+import { fstatSync } from "node:fs";
 import { parse, type Value } from "./json.ts";
 
 export const HAND_BACK = 253;
 const CALLER_DEPTH = 2;
-const MARKER = /^--ardia-routed=1:([01]):((?:[0-9a-f]{2})+)$/;
+const MARKER = /^--ardia-routed=2:([01]):([1-9][0-9]{0,8}):((?:[0-9a-f]{2})+)$/;
+const FIRST_FREE_FD = 3;
 
-export type Routed = { interruptsIgnored: boolean; caller: Value; argv: string[] };
+export type Routed = { interruptsIgnored: boolean; lifeline: number; caller: Value; argv: string[] };
 
 let current: Value | undefined;
 
@@ -17,13 +19,23 @@ function callerOf(hex: string): Value | undefined {
   return value;
 }
 
+function isPipe(fd: number): boolean {
+  if (fd < FIRST_FREE_FD) return false;
+  try {
+    return fstatSync(fd).isFIFO();
+  } catch {
+    return false;
+  }
+}
+
 export function takeMarker(words: string[]): Routed | undefined {
   const found = MARKER.exec(words[0] ?? "");
   if (found === null) return undefined;
-  const caller = callerOf(found[2] ?? "");
-  if (caller === undefined) return undefined;
+  const lifeline = Number(found[2]);
+  const caller = callerOf(found[3] ?? "");
+  if (caller === undefined || !isPipe(lifeline)) return undefined;
   current = caller;
-  return { interruptsIgnored: found[1] === "1", caller, argv: words.slice(1) };
+  return { interruptsIgnored: found[1] === "1", lifeline, caller, argv: words.slice(1) };
 }
 
 export function routedCaller(): Value {

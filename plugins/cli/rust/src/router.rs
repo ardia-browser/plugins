@@ -2,13 +2,15 @@ use crate::caller::Caller;
 use crate::json::{self, Style};
 use std::ffi::{CString, OsString};
 use std::io::Read;
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicI32, Ordering};
 
 pub const HAND_BACK: i32 = 253;
-pub const MARKER_VERSION: u32 = 1;
+pub const MARKER_VERSION: u32 = 2;
+const LIFELINE_FLOOR: libc::c_int = 3;
 const COMPILED: &str = include_str!("../../served.txt");
 const TABLE_LIMIT: u64 = 64 * 1024;
 const FORWARDED: [libc::c_int; 3] = [libc::SIGINT, libc::SIGTERM, libc::SIGHUP];
@@ -80,10 +82,32 @@ pub fn ts_program(root: Option<&Path>) -> Option<PathBuf> {
     root.map(|root| root.join("libexec").join("ardia-ts")).filter(|path| path.exists())
 }
 
-pub fn marker(interrupts_ignored: bool, caller: &Caller) -> String {
+pub fn marker(interrupts_ignored: bool, lifeline: libc::c_int, caller: &Caller) -> String {
     let wire = json::dumps(&caller.wire(), Style::Compact, false);
     let hex: String = wire.bytes().map(|byte| format!("{byte:02x}")).collect();
-    format!("--ardia-routed={MARKER_VERSION}:{}:{hex}", u8::from(interrupts_ignored))
+    format!("--ardia-routed={MARKER_VERSION}:{}:{lifeline}:{hex}", u8::from(interrupts_ignored))
+}
+
+struct Lifeline {
+    child_end: OwnedFd,
+    kept: OwnedFd,
+}
+
+fn above_stdio(fd: &OwnedFd, command: libc::c_int) -> Option<OwnedFd> {
+    let moved = unsafe { libc::fcntl(fd.as_raw_fd(), command, LIFELINE_FLOOR) };
+    (moved >= 0).then(|| unsafe { OwnedFd::from_raw_fd(moved) })
+}
+
+fn lifeline() -> Option<Lifeline> {
+    let mut ends: [libc::c_int; 2] = [-1; 2];
+    if unsafe { libc::pipe(ends.as_mut_ptr()) } != 0 {
+        return None;
+    }
+    let (read, write) = unsafe { (OwnedFd::from_raw_fd(ends[0]), OwnedFd::from_raw_fd(ends[1])) };
+    Some(Lifeline {
+        child_end: above_stdio(&read, libc::F_DUPFD)?,
+        kept: above_stdio(&write, libc::F_DUPFD_CLOEXEC)?,
+    })
 }
 
 fn disposition(signal: libc::c_int) -> libc::sighandler_t {
@@ -202,8 +226,11 @@ fn wait(pid: libc::pid_t) -> Ended {
     }
 }
 
-pub fn run_child(program: &Path, marker: &str, argv: &[OsString]) -> Ended {
-    let Some(words) = words(program, marker, argv) else {
+pub fn run_child(program: &Path, marker: impl FnOnce(libc::c_int) -> String, argv: &[OsString]) -> Ended {
+    let Some(lifeline) = lifeline() else {
+        return Ended::NotStarted;
+    };
+    let Some(words) = words(program, &marker(lifeline.child_end.as_raw_fd()), argv) else {
         return Ended::NotStarted;
     };
     let blocked = signal_set(&FORWARDED);
@@ -215,6 +242,7 @@ pub fn run_child(program: &Path, marker: &str, argv: &[OsString]) -> Ended {
         unsafe { libc::sigprocmask(libc::SIG_SETMASK, &original, std::ptr::null_mut()) };
         return Ended::NotStarted;
     };
+    drop(lifeline.child_end);
     CHILD.store(pid, Ordering::SeqCst);
     let handler: extern "C" fn(libc::c_int) = forward;
     let mut saved = vec![children];
@@ -229,6 +257,7 @@ pub fn run_child(program: &Path, marker: &str, argv: &[OsString]) -> Ended {
     CHILD.store(0, Ordering::SeqCst);
     restore(&saved);
     unsafe { libc::sigprocmask(libc::SIG_SETMASK, &original, std::ptr::null_mut()) };
+    drop(lifeline.kept);
     ended
 }
 
@@ -306,22 +335,35 @@ mod tests {
             name: "Claude Code".into(),
             app: Some("/Applications/É.app".into()),
         };
-        let routed = marker(true, &caller);
-        let rest = routed.strip_prefix("--ardia-routed=1:1:").unwrap();
+        let routed = marker(true, 7, &caller);
+        let rest = routed.strip_prefix("--ardia-routed=2:1:7:").unwrap();
         let bytes: Vec<u8> = (0..rest.len())
             .step_by(2)
             .map(|at| u8::from_str_radix(&rest[at..at + 2], 16).unwrap())
             .collect();
         assert_eq!(String::from_utf8(bytes).unwrap(), r#"{"name":"Claude Code","app":"/Applications/É.app"}"#);
-        assert!(marker(false, &caller).starts_with("--ardia-routed=1:0:"));
+        assert!(marker(false, 12, &caller).starts_with("--ardia-routed=2:0:12:"));
     }
 
     #[test]
     fn reports_how_the_child_ended() {
         let sh = Path::new("/bin/sh");
-        let run = |script: &str| run_child(sh, "-c", &[OsString::from(script)]);
+        let run = |script: &str| run_child(sh, |_| "-c".into(), &[OsString::from(script)]);
         assert_eq!(run("exit 7"), Ended::Exited(7));
         assert_eq!(run("kill -TERM $$"), Ended::Signaled(libc::SIGTERM));
-        assert_eq!(run_child(Path::new("/nonexistent/ardia-ts"), "-c", &[]), Ended::NotStarted);
+        assert_eq!(run_child(Path::new("/nonexistent/ardia-ts"), |_| "-c".into(), &[]), Ended::NotStarted);
+        let script = std::env::temp_dir().join(format!("ardia-lifeline-{}.sh", std::process::id()));
+        let lifeline = |body: &str| {
+            run_child(
+                sh,
+                |fd| {
+                    std::fs::write(&script, body.replace("FD", &fd.to_string())).unwrap();
+                    script.display().to_string()
+                },
+                &[],
+            )
+        };
+        assert_eq!(lifeline("[ -p /dev/fd/FD ] && [ FD -ge 3 ] && exit 4"), Ended::Exited(4));
+        std::fs::remove_file(&script).unwrap();
     }
 }

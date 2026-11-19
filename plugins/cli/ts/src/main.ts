@@ -1,6 +1,7 @@
 import { writeSync } from "node:fs";
 import { catchInterrupts } from "./control.ts";
 import { bundledPython, installRoot } from "./install.ts";
+import { releaseLifeline, watchLifeline } from "./lifeline.ts";
 import { abandonedOutput } from "./printable.ts";
 import { HAND_BACK, takeMarker } from "./routed.ts";
 import { servesNatively } from "./served.ts";
@@ -40,6 +41,7 @@ async function main(words: string[]): Promise<number> {
     } catch {}
     return 2;
   }
+  watchLifeline(routed.lifeline);
   if (!routed.interruptsIgnored) catchInterrupts();
   const argv = routed.argv;
   if (argv.some((word) => word.includes(LOSSY))) return HAND_BACK;
@@ -55,5 +57,6 @@ async function main(words: string[]): Promise<number> {
 }
 
 const status = await main(process.argv.slice(2));
+releaseLifeline();
 process.exitCode = status;
 if (abandonedOutput()) setTimeout(() => process.exit(status), ABANDONED_WRITE_GRACE_MS).unref();
