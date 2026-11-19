@@ -487,7 +487,7 @@ def main() -> int:
     recorder = Recorder()
     install(recorder)
     loader = unittest.TestLoader()
-    names = args.modules or sorted(path.stem for path in tests_dir.glob("test_*.py") if path.stem not in ("test_rust_parity",))
+    names = args.modules or sorted(path.stem for path in tests_dir.glob("test_*.py") if path.stem not in ("test_parity",))
     suite = unittest.TestSuite(loader.loadTestsFromName(name) for name in names)
     with contextlib.redirect_stderr(io.StringIO()) as noise:
         result = unittest.TextTestRunner(stream=noise, verbosity=0).run(suite)
@@ -526,7 +526,7 @@ def main() -> int:
         command = harness.command_of(row["argv"], labels[-1] if labels else None) or label
         if command in served:
             box = root.box()
-            rust_side, _ = harness.run_side(root, "rust", case, box)
+            rust_side, _ = harness.run_side(root, "new", case, box)
             shutil.rmtree(box, True)
             if rust_side.route == "python":
                 row = {**row, "fallback": True}

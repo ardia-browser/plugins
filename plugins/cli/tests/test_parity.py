@@ -30,11 +30,12 @@ def FakeArdia(path: Path, replies: dict):
     return harness.FakeArdia(path, replies.pop("hello", harness.DEFAULT_HELLO), replies, [])
 
 
-@unittest.skipUnless(binary(), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
-class ParityTable(unittest.TestCase):
+class ParityTable:
+    entry = "rust"
+
     @classmethod
     def setUpClass(cls):
-        cls.outcomes, cls.install = harness.run_all(harness.load_cases(), binary())
+        cls.outcomes, cls.install = harness.run_all(harness.load_cases(), harness.entry_binary(cls.entry), entry=cls.entry)
         cls.summary = harness.summarize(cls.outcomes, harness.served_commands())
 
     @classmethod
@@ -45,22 +46,56 @@ class ParityTable(unittest.TestCase):
         failed = [outcome.report() for outcome in self.outcomes if not outcome.passed]
         self.assertFalse(failed, f"{len(failed)} of {len(self.outcomes)} parity cases differ:\n" + "\n".join(failed))
 
-    def test_rust_serves_only_proven_commands(self):
-        self.assertEqual(self.summary["unproven_but_served"], [], "rust/served.txt lists commands without passing parity cases")
+    def test_it_serves_only_proven_commands(self):
+        self.assertEqual(self.summary["unproven_but_served"], [], "served.txt lists commands without passing parity cases")
 
     def test_the_table_has_each_served_command_at_least_once(self):
         for name in harness.served_commands():
             self.assertGreater(self.summary["commands"][name]["cases"], 0, name)
 
 
+@unittest.skipUnless(binary(), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
+class RustParityTable(ParityTable, unittest.TestCase):
+    entry = "rust"
+
+
+@unittest.skipUnless(harness.ts_binary(), "build plugins/cli/ts first (bun run build) or set ARDIA_TS_CLI")
+class TsParityTable(ParityTable, unittest.TestCase):
+    entry = "ts"
+
+
+class ServedTable(unittest.TestCase):
+    def test_each_row_names_a_command_and_who_serves_it_once(self):
+        table = harness.served_table()
+        self.assertTrue(table)
+        self.assertTrue(set(table.values()) <= set(harness.SERVING_SIDES))
+        scratch = Path(tempfile.mkdtemp(prefix="ars", dir="/tmp"))
+        try:
+            for body in ("tabs\n", "tabs go\n", "tabs rust\ntabs ts\n", "tabs rust extra\n"):
+                with self.subTest(body=body):
+                    (scratch / "served.txt").write_text(body)
+                    with self.assertRaises(ValueError):
+                        harness.served_table(scratch / "served.txt")
+        finally:
+            shutil.rmtree(scratch, True)
+
+    def test_the_typescript_entry_embeds_the_same_table(self):
+        source = (CLI / "ts" / "src" / "served.ts").read_text()
+        self.assertIn('import table from "../../served.txt" with { type: "text" };', source)
+
+
 class ProtocolAgrees(unittest.TestCase):
-    def test_rust_and_python_speak_the_same_control_protocol(self):
+    def test_every_side_speaks_the_same_control_protocol(self):
         from ardia_cli import control
 
         rust = (CLI / "rust" / "src" / "control.rs").read_text()
         constants = dict(re.findall(r"pub const (PROTOCOL|MIN_APP_PROTOCOL): i128 = (\d+);", rust))
         self.assertEqual(int(constants["PROTOCOL"]), control.PROTOCOL)
         self.assertEqual(int(constants["MIN_APP_PROTOCOL"]), control.MIN_APP_PROTOCOL)
+        ts = (CLI / "ts" / "src" / "protocol.ts").read_text()
+        spoken = dict(re.findall(r"export const (PROTOCOL|MIN_APP_PROTOCOL) = (\d+);", ts))
+        self.assertEqual(int(spoken["PROTOCOL"]), control.PROTOCOL)
+        self.assertEqual(int(spoken["MIN_APP_PROTOCOL"]), control.MIN_APP_PROTOCOL)
 
 
 class HarnessRules(unittest.TestCase):
@@ -237,12 +272,13 @@ class HarnessCatches(unittest.TestCase):
             impostor.chmod(0o755)
             cases = [case for case in harness.load_cases() if case.id in ("version--version", "windows--windows") or case.id.startswith("tabs--tabs-json")]
             self.assertTrue(cases)
-            outcomes, install = harness.run_all(cases, impostor)
-            install.close()
-            self.assertTrue(all(not outcome.passed for outcome in outcomes), [outcome.case.id for outcome in outcomes if outcome.passed])
-            self.assertTrue(all("expected rust to serve it, but python did" in outcome.problems for outcome in outcomes))
-            summary = harness.summarize(outcomes, ["--version", "windows", "tabs"])
-            self.assertEqual(summary["unproven_but_served"], ["--version", "tabs", "windows"])
+            for entry in harness.ENTRIES:
+                outcomes, install = harness.run_all(cases, impostor, entry=entry)
+                install.close()
+                self.assertTrue(all(not outcome.passed for outcome in outcomes), [outcome.case.id for outcome in outcomes if outcome.passed])
+                self.assertTrue(all(f"expected {entry} to serve it, but python did" in outcome.problems for outcome in outcomes))
+                summary = harness.summarize(outcomes, ["--version", "windows", "tabs"])
+                self.assertEqual(summary["unproven_but_served"], ["--version", "tabs", "windows"])
         finally:
             shutil.rmtree(scratch, True)
 

@@ -1,0 +1,6 @@
+--version rust
+--help rust
+tabs rust
+groups rust
+windows rust
+commands rust

@@ -50,7 +50,43 @@ jobs:
         run: |
           ~/.local/bin/uv venv --python 3.13 "$RUNNER_TEMP/venv"
           VIRTUAL_ENV="$RUNNER_TEMP/venv" ~/.local/bin/uv pip install --quiet --require-hashes --no-build -r requirements.lock
-          "$RUNNER_TEMP/venv/bin/python" -m unittest -v tests.test_rust_parity
+          "$RUNNER_TEMP/venv/bin/python" -m unittest -v tests.test_parity
+
+  typescript:
+    name: TypeScript ardia on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-24.04]
+    defaults:
+      run:
+        working-directory: plugins/cli/ts
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile --ignore-scripts
+      - name: Type check (tsrs)
+        run: ./node_modules/.bin/tsrs --noEmit -p .
+      - run: sh scripts/build.sh
+      - name: Size
+        run: |
+          echo "ardia-ts binary: $(wc -c < dist/ardia-ts) bytes" >> "$GITHUB_STEP_SUMMARY"
+      - name: uv
+        run: curl -LsSf https://astral.sh/uv/0.12.15/install.sh | sh
+      - name: Parity with the Python CLI
+        working-directory: plugins/cli
+        env:
+          ARDIA_TS_CLI: ${{ github.workspace }}/plugins/cli/ts/dist/ardia-ts
+        run: |
+          ~/.local/bin/uv venv --python 3.13 "$RUNNER_TEMP/venv"
+          VIRTUAL_ENV="$RUNNER_TEMP/venv" ~/.local/bin/uv pip install --quiet --require-hashes --no-build -r requirements.lock
+          "$RUNNER_TEMP/venv/bin/python" -m unittest -v tests.test_parity.TsParityTable tests.test_parity.ServedTable tests.test_parity.ProtocolAgrees
 
   python:
     name: Python tests on ${{ matrix.os }}

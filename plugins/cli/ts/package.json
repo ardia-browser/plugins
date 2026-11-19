@@ -1,0 +1,13 @@
+{
+  "name": "ardia-cli",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsrs --noEmit -p .",
+    "build": "sh scripts/build.sh"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "tsrs": "7.1.0-beta.tsrs3"
+  }
+}

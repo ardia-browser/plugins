@@ -19,7 +19,10 @@ from pathlib import Path
 
 CLI = Path(__file__).resolve().parents[2]
 CRATE = CLI / "rust"
-SERVED_TABLE = CRATE / "served.txt"
+TS_PROJECT = CLI / "ts"
+SERVED_TABLE = CLI / "served.txt"
+ENTRIES = ("rust", "ts")
+SERVING_SIDES = ("rust", "ts")
 CASES = Path(__file__).resolve().parent / "cases"
 BLOBS = Path(__file__).resolve().parent / "blobs.json"
 INSTALL_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
@@ -48,7 +51,7 @@ PATH_ENV = frozenset({"ARDIA_DATA_DIR", "ARDIA_CONFIG_HOME", "XDG_CONFIG_HOME", 
 TIME_KEYS = re.compile(r"(_at|At|_ms|time|Time)$")
 TIME_SLACK = 120
 NOW_SLACK = 2
-SIDES = ("rust", "python")
+SIDES = ("new", "python")
 TIMEOUT = 60
 DRAIN_TIMEOUT = 5
 HELPER_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
@@ -60,6 +63,10 @@ SANDBOX_PROFILE = """(version 1)
 (allow network-outbound (remote unix-socket (subpath (param "BOX"))))
 (deny file-write* (require-not (require-any (subpath (param "BOX")) (literal "/dev/null") (literal "/dev/tty") (literal "/dev/dtracehelper") (regex #"^/dev/fd/"))))
 (deny process-exec {denied})
+"""
+TS_PROBE = """#!/bin/sh
+[ -n "$ARDIA_PARITY_PYTHON_LOG" ] && printf 'ts\\n' >>"$ARDIA_PARITY_PYTHON_LOG"
+exec "$(dirname "$0")/ardia-ts.bin" "$@"
 """
 ROUTE_PROBE = "import os as _parity_os\n_parity_os.environ.get('ARDIA_PARITY_PYTHON_LOG') and open(_parity_os.environ['ARDIA_PARITY_PYTHON_LOG'], 'a').write('python\\n')\n"
 
@@ -79,6 +86,18 @@ def binary() -> Path | None:
     return None
 
 
+def ts_binary() -> Path | None:
+    named = os.environ.get("ARDIA_TS_CLI")
+    if named:
+        return Path(named)
+    found = TS_PROJECT / "dist" / "ardia-ts"
+    return found if found.exists() else None
+
+
+def entry_binary(entry: str) -> Path | None:
+    return binary() if entry == "rust" else ts_binary()
+
+
 def sandbox_mode() -> str:
     if sys.platform == "darwin" and Path("/usr/bin/sandbox-exec").exists():
         return "sandbox-exec"
@@ -96,13 +115,26 @@ def command_of(argv: list, python_label: str | None) -> str | None:
     return python_label
 
 
-def served_commands(path: Path = SERVED_TABLE) -> list[str]:
-    rows = []
-    for line in path.read_text().splitlines():
-        line = line.strip()
-        if line:
-            rows.append(line)
+def served_table(path: Path = SERVED_TABLE) -> dict[str, str]:
+    rows = {}
+    for number, line in enumerate(path.read_text().splitlines(), 1):
+        words = line.split()
+        if not words:
+            continue
+        if len(words) != 2 or words[1] not in SERVING_SIDES or words[0] in rows:
+            raise ValueError(f"{path.name}:{number}: each row is a command and who serves it ({' or '.join(SERVING_SIDES)}), once: {line!r}")
+        rows[words[0]] = words[1]
     return rows
+
+
+def served_commands(path: Path = SERVED_TABLE) -> list[str]:
+    return list(served_table(path))
+
+
+def expected_route(entry: str, served: dict[str, str], case: "Case") -> str:
+    if case.fallback or case.command not in served:
+        return "python"
+    return "ts" if entry == "ts" else served[case.command]
 
 
 _blob_store = {}
@@ -381,7 +413,7 @@ class Observed:
     files: dict
     helpers: list
     flush: object = None
-    route: str = "rust"
+    route: str = "new"
     timed_out: bool = False
     transcript_complete: bool = True
 
@@ -444,12 +476,20 @@ def time_marker(value, window: tuple[float, float]):
 
 
 class Installation:
-    def __init__(self, rust_binary: Path, scratch: Path | None = None):
+    def __init__(self, entry_program: Path, scratch: Path | None = None, entry: str = "rust"):
+        if entry not in ENTRIES:
+            raise ValueError(f"the entry is one of {', '.join(ENTRIES)}, not {entry!r}")
+        self.entry = entry
         self.sandbox = sandbox_mode()
         self.scratch = Path(scratch or tempfile.mkdtemp(prefix="arp", dir="/tmp")).resolve()
         self.root = self.scratch / "cli"
         (self.root / "bin").mkdir(parents=True)
-        shutil.copy2(rust_binary, self.root / "bin" / "ardia")
+        if entry == "ts":
+            shutil.copy2(entry_program, self.root / "bin" / "ardia-ts.bin")
+            (self.root / "bin" / "ardia").write_text(TS_PROBE)
+            (self.root / "bin" / "ardia").chmod(0o755)
+        else:
+            shutil.copy2(entry_program, self.root / "bin" / "ardia")
         subprocess.run([sys.executable, "-m", "venv", "--without-pip", str(self.root / "python")], check=True)
         self.python = self.root / "python" / "bin" / "python3"
         self.source = self.scratch / "src"
@@ -471,7 +511,7 @@ class Installation:
         shutil.rmtree(self.scratch, True)
 
     def command(self, side: str) -> list[str]:
-        return [str(self.root / "bin" / "ardia")] if side == "rust" else [str(self.python), "-I", "-m", "ardia_cli"]
+        return [str(self.root / "bin" / "ardia")] if side == "new" else [str(self.python), "-I", "-m", "ardia_cli"]
 
     def confined(self, argv: list[str], box: Path) -> list[str]:
         if self.sandbox == "sandbox-exec":
@@ -748,7 +788,8 @@ def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[O
     log_text = read_inside(box, box / "helpers.log")
     helpers = log_text.splitlines() if log_text else []
     route_log = box / "route.log"
-    route = "python" if route_log.exists() and route_log.read_text().strip() else "rust"
+    route_lines = route_log.read_text().split() if route_log.exists() else []
+    route = route_lines[-1] if route_lines else install.entry
     observed = Observed(stdout, stderr, process.returncode, fake.transcript() if fake else [], records, queued, served, usage,
                         file_changes(before, after), helpers, flush, route, timed_out, fake.complete if fake else True)
     return apply_normalizers(observed, case, places), labels
@@ -794,11 +835,11 @@ def read_only(connection: list) -> bool:
     return bool(connection) and all(request.get("method") in READ_ONLY_METHODS for request in connection)
 
 
-def fallback_requests(rust: list, python: list) -> list:
-    extra = len(rust) - len(python)
-    if extra > 0 and exact(rust[extra:]) == exact(python) and all(read_only(connection) for connection in rust[:extra]):
+def fallback_requests(new: list, python: list) -> list:
+    extra = len(new) - len(python)
+    if extra > 0 and exact(new[extra:]) == exact(python) and all(read_only(connection) for connection in new[:extra]):
         return python
-    return rust
+    return new
 
 
 def exact(value):
@@ -809,16 +850,16 @@ def exact(value):
     return json.dumps(value, sort_keys=True, default=repr)
 
 
-def compare(rust: Observed, python: Observed, fallback: bool = False) -> list[tuple[str, str]]:
+def compare(new: Observed, python: Observed, fallback: bool = False, label: str = "new") -> list[tuple[str, str]]:
     mismatches = []
     for name in FIELDS:
-        left, right = getattr(python, name), getattr(rust, name)
+        left, right = getattr(python, name), getattr(new, name)
         if name == "requests" and fallback:
             right = fallback_requests(right, left)
         if exact(left) == exact(right):
             continue
-        diff = "\n".join(difflib.unified_diff(text_of(left).splitlines(), text_of(right).splitlines(), "python", "rust", lineterm=""))
-        mismatches.append((name, diff or f"python {left!r}\nrust   {right!r}"))
+        diff = "\n".join(difflib.unified_diff(text_of(left).splitlines(), text_of(right).splitlines(), "python", label, lineterm=""))
+        mismatches.append((name, diff or f"python {left!r}\n{label:<6} {right!r}"))
     return mismatches
 
 
@@ -826,7 +867,7 @@ def compare(rust: Observed, python: Observed, fallback: bool = False) -> list[tu
 class Outcome:
     case: Case
     mismatches: list
-    rust_route: str
+    route: str
     python_labels: list
     problems: list
 
@@ -836,7 +877,7 @@ class Outcome:
 
     @property
     def native(self) -> bool:
-        return self.passed and self.rust_route == "rust"
+        return self.passed and self.route != "python"
 
     def report(self) -> str:
         lines = [f"✗ {self.case.id} ({self.case.source}): ardia {' '.join(self.case.argv)}"]
@@ -848,7 +889,7 @@ class Outcome:
         return "\n".join(lines)
 
 
-def check_case(install: Installation, case: Case, served: set[str], keep: bool = False) -> Outcome:
+def check_case(install: Installation, case: Case, served: dict[str, str], keep: bool = False) -> Outcome:
     box = install.box()
     observed = {}
     labels = []
@@ -861,26 +902,27 @@ def check_case(install: Installation, case: Case, served: set[str], keep: bool =
         else:
             shutil.rmtree(box, True)
     problems = []
-    rust, python = observed["rust"], observed["python"]
+    new, python = observed["new"], observed["python"]
     named = command_of(case.argv, labels[-1] if labels else None)
     if named is not None and named != case.command:
         problems.append(f"this call is {named!r}, the case says {case.command!r}")
     if python.route != "python":
         problems.append("the Python side never started the bundled Python")
-    expected = "rust" if case.command in served and not case.fallback else "python"
-    if rust.route != expected:
-        problems.append(f"expected {expected} to serve it, but {rust.route} did")
-    if rust.served_by and rust.served_by[-1] != rust.route:
-        problems.append(f"telemetry says {rust.served_by[-1]} served it, but {rust.route} did")
+    expected = expected_route(install.entry, served, case)
+    if new.route != expected:
+        problems.append(f"expected {expected} to serve it, but {new.route} did")
+    if new.served_by and new.served_by[-1] != new.route:
+        problems.append(f"telemetry says {new.served_by[-1]} served it, but {new.route} did")
     if python.timed_out:
         problems.append(f"Python didn't finish in {TIMEOUT} s")
-    for side, seen in (("rust", rust), ("python", python)):
+    for side, seen in ((install.entry, new), ("python", python)):
         if not seen.transcript_complete:
             problems.append(f"the {side} side left a control connection open past the drain deadline, so its transcript may be cut short")
-    return Outcome(case, compare(rust, python, case.fallback), rust.route, labels, problems)
+    return Outcome(case, compare(new, python, case.fallback, install.entry), new.route, labels, problems)
 
 
-def summarize(outcomes: list[Outcome], served: list[str]) -> dict:
+def summarize(outcomes: list[Outcome], served: list[str] | dict[str, str]) -> dict:
+    served = list(served)
     commands = {}
     for outcome in outcomes:
         row = commands.setdefault(outcome.case.command, {"cases": 0, "passed": 0, "native": 0, "failed": [], "served": outcome.case.command in served})
@@ -897,11 +939,11 @@ def summarize(outcomes: list[Outcome], served: list[str]) -> dict:
     return {"served": served, "proven": proven, "unproven_but_served": sorted(set(served) - set(proven)), "commands": dict(sorted(commands.items()))}
 
 
-def run_all(cases: list[Case], rust_binary: Path, jobs: int = 6, keep: bool = False, progress=None) -> tuple[list[Outcome], Installation]:
+def run_all(cases: list[Case], entry_program: Path, jobs: int = 6, keep: bool = False, progress=None, entry: str = "rust") -> tuple[list[Outcome], Installation]:
     from concurrent.futures import ThreadPoolExecutor
 
-    install = Installation(rust_binary)
-    served = set(served_commands())
+    install = Installation(entry_program, entry=entry)
+    served = served_table()
     with ThreadPoolExecutor(max_workers=jobs) as pool:
         futures = [pool.submit(check_case, install, case, served, keep) for case in cases]
         outcomes = []

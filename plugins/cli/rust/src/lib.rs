@@ -58,10 +58,13 @@ fn value_of<'a>(argv: &'a [String], index: &mut usize, name: &str) -> Option<&'a
     Some(value)
 }
 
-const SERVED: &str = include_str!("../served.txt");
+const SERVED: &str = include_str!("../../served.txt");
 
 pub fn serves(label: &str) -> bool {
-    SERVED.lines().map(str::trim).any(|line| line == label)
+    SERVED.lines().any(|line| {
+        let mut words = line.split_whitespace();
+        words.next() == Some(label) && words.next() == Some("rust") && words.next().is_none()
+    })
 }
 
 impl Route {
