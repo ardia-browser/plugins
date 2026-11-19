@@ -1683,8 +1683,9 @@ itself can learn none of them. The lifeline is the read end of a pipe whose writ
 only if the router dies, and then kills itself with SIGKILL from a thread of the addon's (`watchLifeline`), so it ends
 even while its JavaScript is blocked in a system call (opening a FIFO, say), and a killed ardia never leaves its child writing to the caller's output
 or talking to Ardia. The child starts with ardia's own signal mask and SIGINT disposition, SIGCHLD at its default (the
-router has to reap it), ardia's environment minus every variable named `BUN_*`, `JSC_*`, `NODE_*`, `UV_*` or `MIMALLOC_*`
-(Bun, its JavaScriptCore, its Node layer, libuv and mimalloc read those at startup, and `BUN_BE_BUN` or `BUN_OPTIONS` alone
+router has to reap it), ardia's environment minus every variable named `BUN_*`, `JSC_*`, `NODE_*`, `UV_*` or `MIMALLOC_*`,
+the last in any case (Bun, its JavaScriptCore, its Node layer, libuv and mimalloc read those at startup, mimalloc
+matching names without regard to case, and `BUN_BE_BUN` or `BUN_OPTIONS` alone
 would turn the program into the Bun CLI or change what it runs; the Python flusher it may start reads none of them), and
 the same descriptors plus the lifeline; while it runs the router passes SIGINT, SIGTERM and
 SIGHUP on unless they were ignored (a Ctrl-C to the whole group reaches the child twice, which its sticky interrupt flag
@@ -1750,6 +1751,9 @@ parity harness rather than stripped wholesale:
 
 - A call Python serves after a native hand-back (status 253) may show one extra control connection before Python's own,
   holding only read-only questions: the native side asked before it found it couldn't serve the reply exactly.
+- With a `MIMALLOC_*` variable set (in any case), Python's own bundled mimalloc prints its diagnostics on stderr, while
+  a natively served call prints none: the router keeps those variables from the TypeScript program so Bun's mimalloc
+  can't change what it prints or how it runs, and the Rust side has no mimalloc.
 
 ## Linux
 

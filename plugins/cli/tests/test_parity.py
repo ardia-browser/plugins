@@ -841,7 +841,8 @@ class TsProcess(EntryProcess, unittest.TestCase):
 
     def test_bun_and_node_variables_neither_reach_the_typescript_program_nor_leave_python(self):
         planted = {"BUN_BE_BUN": "1", "BUN_OPTIONS": "--print 7", "NODE_OPTIONS": "--require /nonexistent.js",
-                   "BUN_JSC_useJIT": "0", "JSC_useJIT": "0", "NODE_CHANNEL_FD": "0", "UV_THREADPOOL_SIZE": "1", "BUN_ODD": "x\udcfe"}
+                   "BUN_JSC_useJIT": "0", "JSC_useJIT": "0", "NODE_CHANNEL_FD": "0", "UV_THREADPOOL_SIZE": "1", "BUN_ODD": "x\udcfe",
+                   "mimalloc_verbose": "1", "MiMalloc_Show_Stats": "1"}
         data = self.case / "data"
         data.mkdir()
         fake = FakeArdia(data / "ArdiaControl.sock", {"hello": {"result": {"app": "Ardia"}}, "windows": {"result": []}})

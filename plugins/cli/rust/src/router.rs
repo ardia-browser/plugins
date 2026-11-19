@@ -14,7 +14,8 @@ const LIFELINE_FLOOR: libc::c_int = 3;
 const COMPILED: &str = include_str!("../../served.txt");
 const TABLE_LIMIT: u64 = 64 * 1024;
 const FORWARDED: [libc::c_int; 3] = [libc::SIGINT, libc::SIGTERM, libc::SIGHUP];
-const RUNTIME_PREFIXES: [&[u8]; 5] = [b"BUN_", b"JSC_", b"NODE_", b"UV_", b"MIMALLOC_"];
+const RUNTIME_PREFIXES: [&[u8]; 4] = [b"BUN_", b"JSC_", b"NODE_", b"UV_"];
+const RUNTIME_PREFIXES_ANY_CASE: [&[u8]; 1] = [b"MIMALLOC_"];
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Side {
@@ -183,6 +184,9 @@ fn environment() -> *const *mut libc::c_char {
 fn read_by_runtime(entry: &[u8]) -> bool {
     let name = entry.split(|byte| *byte == b'=').next().unwrap_or(entry);
     RUNTIME_PREFIXES.iter().any(|prefix| name.starts_with(prefix))
+        || RUNTIME_PREFIXES_ANY_CASE
+            .iter()
+            .any(|prefix| name.len() >= prefix.len() && name[..prefix.len()].eq_ignore_ascii_case(prefix))
 }
 
 fn child_environment() -> Vec<*mut libc::c_char> {
@@ -310,6 +314,8 @@ mod tests {
             b"JSC_useJIT=0",
             b"UV_THREADPOOL_SIZE=1",
             b"MIMALLOC_VERBOSE=1",
+            b"mimalloc_verbose=1",
+            b"MiMalloc_Show_Stats=1",
             b"BUN_",
         ] {
             assert!(read_by_runtime(entry), "{entry:?}");
@@ -319,6 +325,10 @@ mod tests {
             b"ARDIA_DATA_DIR=BUN_X",
             b"XBUN_BE_BUN=1",
             b"bun_be_bun=1",
+            b"jsc_useJIT=0",
+            b"node_options=x",
+            b"MIMALLOC=1",
+            b"XMIMALLOC_VERBOSE=1",
             b"PATH=/bin",
             b"NODE",
         ] {
