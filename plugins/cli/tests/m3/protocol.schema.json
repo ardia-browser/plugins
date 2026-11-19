@@ -20,7 +20,8 @@
         "debug": {"type": "boolean"},
         "no_auto_dialog": {"type": ["boolean", "null"]},
         "pin_tab": {"type": ["boolean", "null"]},
-        "harness_seed": {"type": "integer", "minimum": 0}
+        "harness_seed": {"type": "integer", "minimum": 0},
+        "plugin": {"type": ["string", "null"], "pattern": "^[0-9a-f]{32}$"}
       }
     },
     "caller": {
@@ -49,7 +50,8 @@
         "enable": {"type": "array", "items": {"type": "string"}},
         "init_scripts": {"type": "array", "items": {"type": "string"}},
         "pin_tab": {"type": ["boolean", "null"]},
-        "_session": {"type": "string"}
+        "_session": {"type": "string"},
+        "expect_loader": {"type": ["string", "null"]}
       }
     },
     "request": {
@@ -64,7 +66,8 @@
         "telemetry": {"type": ["boolean", "null"]},
         "caller": {"anyOf": [{"$ref": "#/$defs/caller"}, {"type": "null"}]},
         "beside_if_busy": {"type": ["boolean", "null"]},
-        "patient_queue": {"type": ["boolean", "null"]}
+        "patient_queue": {"type": ["boolean", "null"]},
+        "credential": {"type": "string", "pattern": "^p\\.[A-Za-z0-9_-]{43}$"}
       }
     },
     "answer": {
@@ -77,7 +80,8 @@
         "code": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,40}$"},
         "metrics": {"type": "object", "additionalProperties": {"type": ["integer", "number", "boolean"]}},
         "busy_elsewhere": {"const": true},
-        "daemon": {"type": "string", "pattern": "^ts/[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,4}([-.][a-z0-9.]{1,24})?$"}
+        "daemon": {"type": "string", "pattern": "^ts/[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,4}([-.][a-z0-9.]{1,24})?$"},
+        "loader": {"type": "string", "pattern": "^[0-9A-Za-z]{1,64}$"}
       }
     }
   },

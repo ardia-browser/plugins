@@ -3,7 +3,7 @@ import type { ServerWebSocket } from "bun";
 import { type Entry, parse, readTranscript } from "./canon.ts";
 import { type Elastic, ReplayConn } from "./replay.ts";
 
-type Fault = { at: number; kind: "kill" | "stop" | "close" | "drop" | "error" | "hold"; seconds?: number; code?: number; method?: string };
+type Fault = { at: number; kind: "kill" | "stop" | "close" | "drop" | "error" | "hold"; seconds?: number; code?: number; method?: string; message?: string };
 type Link = { conn: number; upstream: WebSocket | null; queue: string[]; replay: ReplayConn | null; dropId: number | null };
 
 const MAX_PAYLOAD = 512 * 1024 * 1024;
@@ -97,9 +97,12 @@ function injected(link: Link, text: string, socket: ServerWebSocket<Link>): bool
     case "hold":
       held = { link, text };
       return true;
-    case "error":
-      socket.send(JSON.stringify({ id: message.id, ...(message.sessionId ? { sessionId: message.sessionId } : {}), error: { code: -32000, message: "Injected by the harness" } }));
+    case "error": {
+      const answer = JSON.stringify({ id: message.id, ...(message.sessionId ? { sessionId: message.sessionId } : {}), error: { code: -32000, message: fault.message ?? "Injected by the harness" } });
+      record({ k: "in", c: link.conn, t: now(), m: answer, injected: true });
+      socket.send(answer);
       return true;
+    }
     case "close":
       socket.close(fault.code ?? 1011, "injected");
       return true;

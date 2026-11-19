@@ -64,6 +64,7 @@ client then polls for the socket for up to 15 s; if the child exits and the lock
 | `debug` | boolean | log at INFO instead of WARNING |
 | `no_auto_dialog`, `pin_tab` | boolean or null | session defaults |
 | `harness_seed` | integer, harness only | seeds the daemon's randomness (`docs/m3-harness.md`) |
+| `plugin` | 32 lowercase hex digits or null | makes this a plugin daemon (below): the activity's credential id, `sha256(credential)[:32]` |
 
 ## Request
 
@@ -82,8 +83,9 @@ isn't a JSON object, or a client that sends nothing for 30 s gets the connection
 | `caller` | `{"name", "app"?}` or null | the program that ran `ardia` |
 | `beside_if_busy` | true, optional | answer `busy_elsewhere` at once instead of queueing |
 | `patient_queue` | true, optional | a `read` that may queue as long as its own limit |
+| `credential` | `p.` and 43 base64url characters, plugin mode only | the activity's credential (below) |
 
-Planned: `credential` (plugin mode, F1).
+`options` also carries `expect_loader` (string or null): plugin mode's document check (below).
 
 After the request line the daemon watches the connection: any further byte or the client closing it (Ctrl-C) cancels
 the command, and then no answer is written.
@@ -101,8 +103,7 @@ One line of JSON (UTF-8, `\n`), at most 256 MiB. An answer over that is replaced
 | `metrics` | object of numbers and booleans, optional | the command's telemetry counts, timings and flags |
 | `busy_elsewhere` | true, optional | the session was busy and the request had `beside_if_busy` |
 | `daemon` | `ts/<version>`, optional | sent only by the TypeScript daemon; its absence means Python's |
-
-Planned: `loader` (plugin mode, F1).
+| `loader` | string, optional | plugin mode: the picked tab's main-frame loader after the step, so the plugin can chain |
 
 ## Serving
 
@@ -118,3 +119,44 @@ Planned: `loader` (plugin mode, F1).
   `idle_timeout_ms` (1 h) while disconnected, it exits. A connection the browser closes is terminal: the daemon ends.
   On SIGTERM, SIGHUP or SIGINT it lets running commands finish for up to 5 s, cancels the rest, then cleans up within
   10 s (tabs it must close, the connection, the socket, `<key>.json`, its claims and registry entries).
+
+## Plugin mode
+
+A plugin's steps (`ARDIA_BROWSE_FOR_PLUGIN=1`, `docs/cli.md` › Plugin mode) are served by a TypeScript plugin daemon
+and never by Python's or by the person's own session. The TypeScript daemon only; Python's has no plugin mode.
+
+- **Key.** `<key>` is `sha256(namespace + "\0" + "plugin:" + <credential id> + "\0" + session + "\0plugin")`, first 24
+  hex characters, where the credential id is `sha256(credential)` in hex, first 32 characters. So a plugin session never
+  shares a daemon, a socket or any state with the person's session of the same name, with another activity, or with a
+  client that doesn't know plugin mode.
+- **Spawn.** As above (`<ardia-ts> daemon`, always TypeScript's, whatever `served.txt` says), with `plugin` set to the
+  credential id, `ws` set to the token server exactly as `ARDIA_PLUGIN_ENDPOINT` gave it (`ws://127.0.0.1:<port>/devtools/browser/<id>`,
+  no query), `port`, `data_dir` and `endpoint_label` null. The credential itself is never in the config, argv or the
+  environment: the client strips `ARDIA_WS`, `ARDIA_PORT`, `ARDIA_CDP_URL`, `AGENT_BROWSER_CDP` and
+  `ARDIA_PLUGIN_CREDENTIAL_FD` from the child's environment and closes the credential descriptor before spawning. A
+  config with `plugin` and any other endpoint is refused (exit 2).
+- **Requests.** Every request carries `credential`. The plugin daemon checks `sha256(credential)[:32]` against its
+  `plugin` (in constant time) before anything else and answers status 77, code `plugin_refused`, with nothing sent, when
+  it's missing or different. A daemon without `plugin` answers the same to any request that carries `credential`, so a
+  person's session never serves a plugin step. The daemon holds the credential only while that request runs; it
+  registers it for redaction and never writes it.
+- **Connection.** On a step's first CDP need the daemon connects to `<ws>?token=<credential>` with no `Origin` header.
+  It drops the connection after 30 s idle like any session, and the next step reconnects with that step's credential. A
+  connection the token server closes (the activity ended, control went off) ends the daemon.
+- **Commands.** Only `tab <id>` (the pick) and `tab`/`tab list`, `snapshot`, `click`, `fill`, `press`/`key`, `type`,
+  `scroll`, `wait`, `find`, `is` and `get`; anything else (and `close`'s tab closing) answers 77 `plugin_refused`.
+  They read pages through DOM, accessibility and Input only: no `Runtime`, `DOM.resolveNode`, `DOM.performSearch`,
+  `Page.createIsolatedWorld` or drag method is ever sent (the daemon checks every outgoing method against its list, and
+  the harness checks the transcript). At most one `Input.dispatch*` or `Input.insertText` is outstanding: each is sent
+  only after the previous one was answered, and one left unanswered (10 s, `outcome_unknown`) holds back the next step's
+  input for up to 10 s more (`input_unanswered`).
+- **Document check.** With `options.expect_loader`, the daemon compares the picked tab's main-frame loader before the
+  step (a mismatch answers code `document_changed`, exit 1, and nothing ran) and after it (a mismatch answers code
+  `document_changed_after`, exit 1, `data.ran: true`: the step ran). The pick ignores it. Every answer whose tab is
+  attached carries `loader`.
+- **Engine codes.** A CDP error whose own message starts `ardia: tab_out_of_scope` answers code `tab_out_of_scope`, and
+  one that starts `ardia: document_changed` (the act lease) answers `document_changed`. Codes never come from page text.
+- **State.** Tab numbers live in the daemon's memory, per credential; the shared `tabs-*.json` registry, claims, the
+  temporary-tab sweep and `using` are never touched. Nothing is written in `Browse/` beyond the session's socket, lock and
+  log (no `<key>.json`), and an answer over the output cap is cut, not spilled.
+

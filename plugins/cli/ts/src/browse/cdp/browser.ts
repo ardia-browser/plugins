@@ -38,6 +38,8 @@ export const EVENTS: readonly string[] = [
   "Page.javascriptDialogOpening",
   "Page.javascriptDialogClosed",
   "Page.frameDetached",
+  "Page.frameStartedLoading",
+  "Page.frameStoppedLoading",
   "Page.screencastFrame",
   "Input.dragIntercepted",
   "Runtime.consoleAPICalled",

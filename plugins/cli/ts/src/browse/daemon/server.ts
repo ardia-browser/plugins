@@ -25,6 +25,9 @@ import { COMMANDS, Ctx, LATER_SLICE } from "./stub/commands.ts";
 import { StubState } from "./stub/state.ts";
 import { reportException } from "../../telemetry.ts";
 import { cliVersion } from "../../version.ts";
+import { runPluginCommand } from "../plugin/commands.ts";
+import { sameCredential } from "../plugin/key.ts";
+import { PluginRefused, PluginSession } from "../plugin/session.ts";
 
 export const CONNECTED_IDLE = 30.0;
 export const DEFAULT_DAEMON_IDLE = 3600.0;
@@ -63,6 +66,7 @@ export class Daemon {
   readonly sock: string;
   readonly lockFd: number | null;
   readonly state: StubState;
+  readonly plugin: PluginSession | null;
   readonly lock = new FifoLock();
   pending = 0;
   last = monotonic();
@@ -89,9 +93,11 @@ export class Daemon {
       throw error;
     }
     this.state = new StubState(
-      { session: config.session, key: config.key, browseFd: this.dirFd, noAutoDialog: config.noAutoDialog, pinTab: config.pinTab },
+      { session: config.session, key: config.key, browseFd: config.plugin === null ? this.dirFd : null, noAutoDialog: config.noAutoDialog, pinTab: config.pinTab },
       () => this.resolveEndpoint(),
     );
+    this.plugin =
+      config.plugin === null ? null : new PluginSession({ session: config.session, endpoint: config.ws ?? "", credentialId: config.plugin, autoDialog: !config.noAutoDialog });
     this.idleLimit = (config.idleTimeoutMs || DEFAULT_DAEMON_IDLE * 1000) / 1000;
     this.stopped = new Promise((resolve) => {
       this.stopNow = resolve;
@@ -107,8 +113,12 @@ export class Daemon {
     }
   }
 
+  get live(): StubState | PluginSession {
+    return this.plugin ?? this.state;
+  }
+
   leases(): Set<string> {
-    return this.state.activeLeases();
+    return this.live.activeLeases();
   }
 
   private enterFolder(): void {
@@ -140,7 +150,7 @@ export class Daemon {
     if (socketIsOurs(this.sock, this.dirFd)) unlinkQuietly(this.sock, this.dirFd);
     this.server = await this.listen();
     this.sockId = socketIsOurs(this.sock, this.dirFd);
-    writePrivateJson(
+    if (this.plugin === null) writePrivateJson(
       `${this.key}.json`,
       this.dirFd,
       new Map<string, Value>([
@@ -218,31 +228,38 @@ export class Daemon {
     try {
       unlinkQuietly(`${this.key}.json`, this.dirFd);
     } catch {}
-    try {
-      releaseClaims(this.dirFd, this.key);
-    } catch {}
-    try {
-      this.state.registry.forget();
-    } catch {}
+    if (this.plugin === null) {
+      try {
+        releaseClaims(this.dirFd, this.key);
+      } catch {}
+      try {
+        this.state.registry.forget();
+      } catch {}
+    }
     closeFd(this.lockFd);
   }
 
   private async cleanupInner(): Promise<void> {
+    if (this.plugin !== null) {
+      await shield(() => (this.plugin as PluginSession).disconnect());
+      return;
+    }
     await temptabs.drain(this.state);
     await shield(() => this.state.disconnect());
   }
 
   async idleTick(): Promise<void> {
     const now = monotonic();
-    if (this.state.lost || this.state.restarted) {
+    const live = this.live;
+    if (live.lost || live.restarted) {
       if (this.pending === 0 || now - this.last > EXIT_GRACE) this.stopNow();
       return;
     }
-    if (this.state.connected) {
-      if (this.pending === 0 && !this.lock.locked && this.leases().size === 0 && !this.state.holding() && now - this.last > this.connectedIdle) {
+    if (live.connected) {
+      if (this.pending === 0 && !this.lock.locked && this.leases().size === 0 && !live.holding() && now - this.last > this.connectedIdle) {
         await this.lock.acquire();
         try {
-          if (this.pending === 0 && this.leases().size === 0 && !this.state.holding()) await this.state.disconnect();
+          if (this.pending === 0 && this.leases().size === 0 && !live.holding()) await live.disconnect();
         } finally {
           this.lock.release();
         }
@@ -251,12 +268,14 @@ export class Daemon {
   }
 
   async watchTick(): Promise<void> {
-    const browser = this.state.browser;
+    const live = this.live;
+    const browser = live.browser;
     if (browser !== null && browser.link !== null && browser.link.lost && !browser.closedByUs) {
-      this.state.lost = true;
+      live.lost = true;
       log.info("Ardia closed the connection; this daemon ends");
       return;
     }
+    if (this.plugin !== null) return;
     if (browser === null && this.state.instance !== null && this.pending === 0) {
       let endpoint: Endpoint;
       try {
@@ -313,6 +332,8 @@ export class Daemon {
       if (extra.metrics) fields.push(["metrics", new Map([...extra.metrics].map(([key, value]): [string, Value] => [key, typeof value === "number" ? BigInt(value) : value]))]);
       if (extra.code) fields.push(["code", extra.code]);
       if (request["busy_elsewhere"]) fields.push(["busy_elsewhere", true]);
+      const loader = this.plugin?.loader;
+      if (loader) fields.push(["loader", loader]);
       fields.push(["daemon", `ts/${cliVersion()}`]);
       await writeAnswer(socket, encodeAnswer(code, out, err, fields));
     } catch (error) {
@@ -327,12 +348,15 @@ export class Daemon {
   async execute(request: Request): Promise<Answer> {
     const argv = Array.isArray(request["argv"]) ? (request["argv"] as unknown[]) : [];
     const options = record(request["options"]);
+    if (this.plugin !== null) options["no_spill"] = true;
     const name = argv.length > 0 ? canonical(String(argv[0])) : "";
     const cwd = typeof request["cwd"] === "string" && request["cwd"] ? request["cwd"] : (process.env["HOME"] ?? "/");
     const ctx = new Ctx(this.state, options, cwd, record(request["env"]), typeof request["stdin"] === "string" ? request["stdin"] : null, name);
     if (options["no_auto_dialog"]) this.state.autoDialog = false;
     if (options["pin_tab"] !== undefined && options["pin_tab"] !== null) this.state.pinTab = Boolean(options["pin_tab"]);
     if (this.stopping) return this.refuseClosing(options, name);
+    const refused = this.refusedCredential(request);
+    if (refused !== null) return render(options, null, refused, name);
     if (name === "close") return this.close(ctx);
     if (request["beside_if_busy"] && this.lock.locked) {
       request["busy_elsewhere"] = true;
@@ -352,18 +376,20 @@ export class Daemon {
     let closeAfter = false;
     try {
       if (this.stopping || this.closing) return this.refuseClosing(options, name);
-      if (this.state.lost) return render(options, null, new ConnectionLost(), name);
-      this.state.notice = null;
+      if (this.live.lost) return render(options, null, new ConnectionLost(), name);
+      this.live.notice = null;
+      this.plugin?.useCredential(request["credential"] as string);
       this.closeAfterBatch = false;
       this.running = { name, since: monotonic() };
       const limit = commandLimit(name, words, ctx.timeout);
       answer = await this.withinLimit(limit, options, name, () => this.answer(ctx, name, words, options));
-      const notice = this.state.notice;
-      this.state.notice = null;
+      const notice = this.live.notice;
+      this.live.notice = null;
       answer = [answer[0], answer[1], (notice ? `${redact(notice)}\n` : "") + answer[2]];
       closeAfter = this.closeAfterBatch && name === "batch" && answer[0] === 0;
       this.closeAfterBatch = false;
     } finally {
+      this.plugin?.useCredential(null);
       this.running = null;
       this.lock.release();
     }
@@ -424,12 +450,13 @@ export class Daemon {
       if (thrown instanceof Cancelled) throw thrown;
       if (thrown instanceof BrowseError) {
         let error = thrown;
-        const browser = this.state.browser;
+        const live = this.live;
+        const browser = live.browser;
         if (error instanceof ConnectionLost || (browser !== null && !browser.alive && !browser.closedByUs)) {
-          this.state.lost = true;
+          live.lost = true;
           error = error instanceof ConnectionLost ? error : new ConnectionLost();
         }
-        if (error instanceof Unreachable && this.state.instance === null) this.state.restarted = true;
+        if (error instanceof Unreachable && live.instance === null) live.restarted = true;
         return render(options, null, error, name);
       }
       log.exception(`command ${name} crashed`, thrown);
@@ -442,6 +469,7 @@ export class Daemon {
   }
 
   async dispatch(ctx: Ctx, name: string, argv: string[]): Promise<Result> {
+    if (this.plugin !== null) return runPluginCommand(this.plugin, ctx.options, name, argv);
     if (name === "auth") {
       if (argv[0] !== "login") throw new Usage("auth save|list|show|delete run without the daemon");
       throw new BrowseError(`\`auth login\` ${LATER_SLICE}`, null, "unsupported");
@@ -464,7 +492,29 @@ export class Daemon {
     }
   }
 
+  refusedCredential(request: Request): BrowseError | null {
+    const given = request["credential"];
+    if (this.plugin === null) {
+      return given === undefined || given === null ? null : new PluginRefused("ardia browse sent a plugin credential to a session that isn't a plugin's; nothing ran");
+    }
+    if (typeof given !== "string" || !sameCredential(given, this.config.plugin as string)) {
+      return new PluginRefused("ardia browse sent this plugin session a step without its activity's credential; nothing ran");
+    }
+    return null;
+  }
+
   async close(ctx: Ctx): Promise<Answer> {
+    if (this.plugin !== null) {
+      await this.lockForClose();
+      try {
+        if (this.stopping) return this.refuseClosing(ctx.options, "close");
+        this.stopping = true;
+      } finally {
+        this.lock.release();
+      }
+      this.stopNow();
+      return render(ctx.options, new Result({ closed: true, tabs: 0, keptOpen: [] }, `✓ Session ${this.plugin.session} closed (0 tabs it opened)`), null, "close");
+    }
     const state = this.state;
     let closed = 0;
     const kept: string[] = [];

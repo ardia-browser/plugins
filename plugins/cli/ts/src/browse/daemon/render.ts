@@ -128,7 +128,7 @@ export function cap(text: string, options: Options, name = "", fallback: number 
     }
   }
   const cut = found >= limit * 0.8 ? found : limit;
-  const saved = spill(text);
+  const saved = options["no_spill"] ? null : spill(text);
   const where = saved ? `; all of it is in ${saved}` : "";
   const total = points.length;
   return (
