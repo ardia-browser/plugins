@@ -277,8 +277,8 @@ describe("the link", () => {
     const timedOut = await new CdpLink(silent.url).open(0.3).catch((error: unknown) => error);
     expect([(timedOut as OpenFailed).name, (timedOut as Error).message]).toEqual(["TimeoutError", ""]);
     expect(performance.now() - started).toBeLessThan(3000);
-    for (const [url, scheme] of [["http://127.0.0.1:9/x", "http"], ["ws:///x", "ws"], ["127.0.0.1:9", ""]]) {
-      expect(await new CdpLink(url as string).open(1).catch((error: unknown) => (error as Error).message)).toBe(`not a ws:// URL: ${scheme}://`);
+    for (const [url, shown] of [["http://127.0.0.1:9/x", " (http://127.0.0.1:9)"], ["ws:///x", ""], ["127.0.0.1:9", ""]]) {
+      expect(await new CdpLink(url as string).open(1).catch((error: unknown) => (error as Error).message)).toBe(`the endpoint isn't a ws:// or wss:// URL${shown}`);
     }
     expect(await new CdpLink("WS://[::1/x").open(1).catch((error: unknown) => [(error as Error).name, (error as Error).message])).toEqual(["ValueError", "Invalid IPv6 URL"]);
   });

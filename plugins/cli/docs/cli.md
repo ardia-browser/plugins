@@ -1814,6 +1814,14 @@ The TypeScript browse daemon's CDP link (M3, not served yet) differs from Python
   lookup's `[Errno 8] …`. An endpoint is only ever described by the scheme, host and port of a successful URL parse,
   else as `<invalid endpoint>`, so the session token and any user info never reach an error, a log line or telemetry.
 - Once `close` starts, the connection is done for good: a later `open` fails with `connection_lost` and opens nothing.
+- A malformed endpoint is refused with a fixed message that names the problem without repeating the URL's text: `the
+  endpoint's port isn't a number`, `the endpoint's bracketed host isn't an IPv4 or IPv6 address`, `the endpoint isn't a
+  ws:// or wss:// URL` (Python quotes the port, the host or the scheme). An endpoint is described only when the URL
+  parser and Python's split agree on its host.
+- A command with a timeout of zero, or one already cancelled, fails as a plain timeout or cancellation before anything
+  is sent, mutating or not (Python reports a zero-timeout mutation as `outcome_unknown` though it never sent it).
+- Each command is read once when it's sent: a method that isn't a string is refused, and the params are serialized once,
+  so a getter or `toJSON` can't change what goes out or send a second command with the same id.
 - `close` while the connection is still being set up ends it: the setup fails with `connection_lost` and no socket is
   left open. Python's setup would finish and keep its socket. A second setup started while one is running waits for
   that one instead of opening another socket.

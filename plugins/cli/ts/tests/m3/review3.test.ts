@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { Browser, MAX_LATE_ATTACHES } from "../../src/browse/cdp/browser.ts";
-import { ForbiddenCommand } from "../../src/browse/cdp/guard.ts";
+import { checkEnvelope, ForbiddenCommand } from "../../src/browse/cdp/guard.ts";
 import { CdpLink, CommandTimeout, ConnectionLost as LinkLost, linkLog, safeEndpoint } from "../../src/browse/cdp/link.ts";
 import { Cancelled } from "../../src/browse/cdp/cancel.ts";
-import { CdpTimeout, ConnectionLost, OutcomeUnknown } from "../../src/browse/daemon-errors.ts";
+import { CdpTimeout, ConnectionLost } from "../../src/browse/daemon-errors.ts";
 import { type Conn, echo, RawPeer, until } from "./rawpeer.ts";
 
 setDefaultTimeout(30_000);
@@ -110,7 +110,7 @@ describe("review round 3", () => {
     cleanup.push(() => browser.close());
     await browser.open();
     expect(await caught(browser.send("Target.attachToTarget", { targetId: "T" }, { timeout: 0 }))).toBeInstanceOf(CdpTimeout);
-    expect(await caught(browser.send("Target.attachToBrowserTarget", null, { timeout: 0, mutation: true }))).toBeInstanceOf(OutcomeUnknown);
+    expect(await caught(browser.send("Target.attachToBrowserTarget", null, { timeout: 0, mutation: true }))).toBeInstanceOf(CdpTimeout);
     const aborted = new AbortController();
     aborted.abort();
     expect(await caught(browser.send("Target.attachToTarget", { targetId: "T" }, { signal: aborted.signal }))).toBeInstanceOf(Cancelled);
@@ -137,11 +137,14 @@ describe("review round 3", () => {
   });
 
   test("the envelope must be one JSON object, never an array", async () => {
+    expect(() => checkEnvelope('[{"method":"Page.enable","id":2}]')).toThrow(ForbiddenCommand);
+    expect(() => checkEnvelope("[]")).toThrow(ForbiddenCommand);
+    expect(() => checkEnvelope('"x"')).toThrow(ForbiddenCommand);
+    expect(checkEnvelope('{"method":"Page.enable","id":2}')).toEqual({ method: "Page.enable", id: 2 });
     const on = await peer();
     const opened = await link(on);
-    const listed = { method: "Page.enable", toJSON: () => [{ method: "Page.enable", id: 2 }] };
-    expect(await caught(opened.execute(listed))).toBeInstanceOf(ForbiddenCommand);
-    expect(await caught(opened.executeNoWait(listed))).toBeInstanceOf(ForbiddenCommand);
-    expect(on.messages).toEqual([]);
+    const listed = { method: "Test.listed", toJSON: () => [{ method: "Page.enable", id: 2 }] };
+    await opened.execute(listed);
+    expect(on.messages.map((message) => [Array.isArray(message), message["method"]])).toEqual([[false, "Test.listed"]]);
   });
 });

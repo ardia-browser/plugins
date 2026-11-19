@@ -47,15 +47,6 @@
    "mutation": true
   },
   {
-   "op": "send",
-   "method": "Emulation.setFocusEmulationEnabled",
-   "params": {
-    "enabled": false
-   },
-   "session": "@page.sessionId",
-   "timeout": 0
-  },
-  {
    "op": "cancel",
    "after": 0.2,
    "send": {

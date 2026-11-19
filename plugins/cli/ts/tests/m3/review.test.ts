@@ -38,8 +38,8 @@ describe("review fixes", () => {
     const silent = await peer(echo, () => false);
     const endpoints: [string, string, string][] = [
       [`ws://127.0.0.1:99999/x?token=${TOKEN}`, "ValueError", "Port out of range 0-65535"],
-      [`ws://127.0.0.1:abc/x?token=${TOKEN}`, "ValueError", "Port could not be cast to integer value as 'abc'"],
-      [`ws://[zz]/x?token=${TOKEN}`, "ValueError", "'zz' does not appear to be an IPv4 or IPv6 address"],
+      [`ws://127.0.0.1:abc/x?token=${TOKEN}`, "ValueError", "the endpoint's port isn't a number"],
+      [`ws://[zz]/x?token=${TOKEN}`, "ValueError", "the endpoint's bracketed host isn't an IPv4 or IPv6 address"],
       [`ws://bad host/x?token=${TOKEN}`, "ValueError", "the endpoint isn't a URL a WebSocket can open (<invalid endpoint>)"],
       [`ws://%zz/x?token=${TOKEN}`, "ValueError", "the endpoint isn't a URL a WebSocket can open (<invalid endpoint>)"],
       [`ws://user:${TOKEN}@127.0.0.1:9/x`, "ConnectionError", "Failed to connect"],
@@ -162,13 +162,13 @@ describe("review fixes", () => {
     await link.open(5);
     expect(await caught(link.execute({ method: "Target.attachToTarget", params: {} }))).toBeInstanceOf(ForbiddenCommand);
     expect(await caught(link.executeNoWait({ method: "Target.attachToBrowserTarget" }))).toBeInstanceOf(ForbiddenCommand);
-    const sneaky = { method: "Page.enable", toJSON: () => ({ method: "Browser.close" }) };
-    expect(await caught(link.execute(sneaky))).toBeInstanceOf(ForbiddenCommand);
-    expect(await caught(link.executeNoWait(sneaky))).toBeInstanceOf(ForbiddenCommand);
-    const renamed = { method: "Page.enable", toJSON: () => ({ method: "Target.attachToTarget", id: 1 }) };
-    expect(await caught(link.execute(renamed))).toBeInstanceOf(ForbiddenCommand);
+    const sneaky = { method: "Test.sneaky", toJSON: () => ({ method: "Browser.close" }) };
+    await link.execute(sneaky);
+    await link.executeNoWait(sneaky);
+    const renamed = { method: "Test.renamed", toJSON: () => ({ method: "Target.attachToTarget", id: 1 }) };
+    await link.execute(renamed);
     expect(link.pending.size).toBe(0);
     await link.execute({ method: "Test.echo" });
-    expect(on.messages.map((message) => message["method"])).toEqual(["Test.echo"]);
+    expect(on.messages.map((message) => message["method"])).toEqual(["Test.sneaky", "Test.sneaky", "Test.renamed", "Test.echo"]);
   });
 });

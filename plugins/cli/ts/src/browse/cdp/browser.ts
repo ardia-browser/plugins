@@ -12,7 +12,7 @@ import {
 } from "../daemon-errors.ts";
 import { clock, cdpCall } from "../metrics.ts";
 import { Cancelled, checkCancelled, currentSignal, later } from "./cancel.ts";
-import { ATTACH_METHODS } from "./guard.ts";
+import { ATTACH_METHODS, ForbiddenCommand } from "./guard.ts";
 import { CdpLink, CommandFailed, CommandTimeout, ConnectionLost as LinkLost, type EventCallback, isObject, OpenFailed, report, timerMs } from "./link.ts";
 import { pyText, pyTruthy } from "./pyvalue.ts";
 
@@ -93,6 +93,18 @@ export type SendOptions = {
 
 const sendReserved = Symbol("sendReserved");
 
+type TakenOptions = { session: string | null; timeout: number | null; mutation: boolean; signal: AbortSignal | null };
+
+function readOptions(options: SendOptions): TakenOptions {
+  const { session, timeout, mutation, signal } = options;
+  return {
+    session: session ?? null,
+    timeout: timeout === undefined ? 30 : timeout,
+    mutation: mutation ?? false,
+    signal: signal === undefined ? currentSignal() : signal,
+  };
+}
+
 export function isMutation(method: string): boolean {
   return MUTATING_METHODS.has(method) || method.startsWith("Input.") || method.startsWith("Emulation.");
 }
@@ -124,32 +136,39 @@ export class Browser {
 
   private state: "idle" | "connecting" | "open" | "closed" = "idle";
   private opening: Promise<void> | null = null;
+  private attempt = 0;
 
   open(signal: AbortSignal | null = currentSignal()): Promise<void> {
     if (this.state === "connecting" && this.opening !== null) return this.opening;
     if (this.state === "closed" || this.link?.connected) return Promise.reject(new ConnectionLost());
+    this.attempt += 1;
+    const attempt = this.attempt;
     const link = new CdpLink(this.endpoint.ws, MAX_MESSAGE);
     this.link = link;
     this.state = "connecting";
-    const opening = this.connect(link, signal).finally(() => {
-      this.opening = null;
-    });
+    const opening = this.connect(link, attempt, signal);
     this.opening = opening;
     return opening;
   }
 
-  private async connect(link: CdpLink, signal: AbortSignal | null): Promise<void> {
+  private async connect(link: CdpLink, attempt: number, signal: AbortSignal | null): Promise<void> {
+    let failure: unknown = null;
     try {
       await link.open(CONNECT_TIMEOUT, signal);
     } catch (error) {
-      if (this.state === "connecting") this.state = "idle";
-      if (error instanceof Cancelled) throw error;
-      if (error instanceof LinkLost) throw new ConnectionLost();
-      const safe = error instanceof OpenFailed ? error : new OpenFailed("ConnectionError", "the WebSocket connection failed");
+      failure = error;
+    }
+    const current = attempt === this.attempt;
+    if (current) this.opening = null;
+    if (failure !== null) {
+      if (current && this.state === "connecting") this.state = "idle";
+      if (failure instanceof Cancelled) throw failure;
+      if (failure instanceof LinkLost) throw new ConnectionLost();
+      const safe = failure instanceof OpenFailed ? failure : new OpenFailed("ConnectionError", "the WebSocket connection failed");
       safe.endpoint = link.endpoint;
       throw new Unreachable(this.unreachable(safe));
     }
-    if (this.state !== "connecting") {
+    if (!current || this.state !== "connecting") {
       await link.close();
       throw new ConnectionLost();
     }
@@ -158,39 +177,36 @@ export class Browser {
   }
 
   async send(method: string, params?: CdpResult | null, options: SendOptions = {}): Promise<CdpResult> {
+    const taken = readOptions(options);
+    if (typeof method !== "string") throw new ForbiddenCommand("a CDP command's method must be a string");
     if (ATTACH_METHODS.has(method)) {
-      const timeout = options.timeout === undefined ? 30 : options.timeout;
-      const signal = options.signal === undefined ? currentSignal() : options.signal;
-      checkCancelled(signal);
-      if (this.link === null || this.link.lost) throw new ConnectionLost();
-      if (timeout !== null && timeout <= 0) {
-        if (options.mutation) throw new OutcomeUnknown(`\`${method}\``, `Ardia didn't answer ${method} in ${formatG(timeout)}s after it was sent`);
-        throw new CdpTimeout(method, timeout);
-      }
       return claimedAttach(this, method, params, {
-        wait: timeout === null ? Number.POSITIVE_INFINITY : timeout,
-        session: options.session ?? null,
-        unknown: options.mutation ?? false,
-        signal,
+        wait: taken.timeout === null ? Number.POSITIVE_INFINITY : taken.timeout,
+        session: taken.session,
+        unknown: taken.mutation,
+        signal: taken.signal,
       });
     }
-    return this[sendReserved](method, params, options);
+    return this[sendReserved](method, params, taken);
   }
 
   async [sendReserved](method: string, params: CdpResult | null | undefined, options: SendOptions, ident?: number): Promise<CdpResult> {
+    const { session, timeout, mutation, signal } = readOptions(options);
     const link = this.link;
-    if (link === null || link.lost) throw new ConnectionLost();
+    if (link === null || link.lost) {
+      if (ident !== undefined) link?.attaching.delete(ident);
+      throw new ConnectionLost();
+    }
     const command: Record<string, unknown> = { method, params: params ?? {} };
-    if (options.session) command["sessionId"] = options.session;
-    const timeout = options.timeout === undefined ? 30 : options.timeout;
+    if (session) command["sessionId"] = session;
     const started = clock();
     let response: Record<string, unknown>;
     try {
-      response = await link.execute(command, timeout, ident, options.signal === undefined ? currentSignal() : options.signal);
+      response = await link.execute(command, timeout, ident, signal);
     } catch (error) {
       if (error instanceof CommandFailed) throw failure(method, error);
       if (error instanceof CommandTimeout) {
-        if (options.mutation || isMutation(method)) {
+        if (error.sent && (mutation || isMutation(method))) {
           throw new OutcomeUnknown(`\`${method}\``, `Ardia didn't answer ${method} in ${formatG(timeout as number)}s after it was sent`);
         }
         throw new CdpTimeout(method, timeout as number);
@@ -233,11 +249,16 @@ export function detachUnclaimed(browser: Browser, result: unknown, session: stri
 export type AttachOptions = { wait?: number | null; session?: string | null; unknown?: boolean; signal?: AbortSignal | null };
 
 export async function claimedAttach(browser: Browser, method: string, params?: CdpResult | null, options: AttachOptions = {}): Promise<CdpResult> {
-  const wait = options.wait ?? ATTACH_WAIT;
-  const session = options.session ?? null;
-  const signal = options.signal === undefined ? currentSignal() : options.signal;
+  const given = { wait: options.wait, session: options.session, unknown: options.unknown, signal: options.signal };
+  const wait = given.wait ?? ATTACH_WAIT;
+  const session = given.session ?? null;
+  const unknown = given.unknown ?? false;
+  const signal = given.signal === undefined ? currentSignal() : given.signal;
+  if (typeof method !== "string") throw new ForbiddenCommand("a CDP command's method must be a string");
   checkCancelled(signal);
+  if (wait <= 0) throw new CdpTimeout(method, wait);
   const link = browser.link;
+  if (link !== null && !link.connected) throw new ConnectionLost();
   let attaching: Promise<CdpResult>;
   if (link === null) {
     attaching = browser[sendReserved](method, params, { session, timeout: null, signal: null });
@@ -266,7 +287,7 @@ export async function claimedAttach(browser: Browser, method: string, params?: C
       stopTimer = later(ms, () =>
         resolve({
           kind: "late",
-          error: options.unknown
+          error: unknown
             ? new OutcomeUnknown(`\`${method}\``, `Ardia didn't answer ${method} in ${formatG(wait)}s after it was sent`)
             : new CdpTimeout(method, wait),
         }),

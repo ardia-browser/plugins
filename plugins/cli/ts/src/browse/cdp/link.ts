@@ -1,12 +1,12 @@
 import { isIP } from "node:net";
-import { reprStr } from "../../py.ts";
 import { formatG } from "../../pylib/format.ts";
 import { Cancelled, checkCancelled, currentSignal, later, untilCancelled } from "./cancel.ts";
-import { ATTACH_METHODS, checkCommand, checkEnvelope, ForbiddenCommand } from "./guard.ts";
+import { ATTACH_METHODS, checkEnvelope, checkMethod, ForbiddenCommand } from "./guard.ts";
 import { pyText, pyTruthy } from "./pyvalue.ts";
 
 export type Message = Record<string, unknown>;
-export type Command = { method?: unknown; params?: unknown; sessionId?: unknown; [key: string]: unknown };
+export type Command = { method?: unknown; params?: unknown; sessionId?: unknown };
+type Snapshot = { method: string; params: string | undefined; sessionId: string | undefined };
 export type EventCallback = (method: string, params: unknown, session: unknown) => void;
 
 const OPEN = 1;
@@ -43,6 +43,7 @@ export class CommandTimeout extends CdpFailure {
   constructor(
     readonly method: unknown,
     readonly timeout: number,
+    readonly sent = true,
   ) {
     super(`${pyText(method)} got no answer in ${formatG(timeout)}s`);
   }
@@ -75,6 +76,17 @@ export function timerMs(timeout: number | null): number | null {
 }
 
 export const INVALID_ENDPOINT = "<invalid endpoint>";
+const DESCRIBED_SCHEMES: ReadonlySet<string> = new Set(["ws:", "wss:", "http:", "https:"]);
+
+function splitHost(url: string): string {
+  const split = /^([A-Za-z][A-Za-z0-9+.-]*):(.*)$/su.exec(url);
+  const rest = split === null ? url : (split[2] as string);
+  const authority = rest.startsWith("//") ? (rest.slice(2).split(/[/?#]/u)[0] as string) : "";
+  const hostPort = authority.slice(authority.lastIndexOf("@") + 1);
+  if (hostPort.startsWith("[")) return hostPort.slice(1, Math.max(1, hostPort.indexOf("]"))).toLowerCase();
+  const colon = hostPort.indexOf(":");
+  return (colon < 0 ? hostPort : hostPort.slice(0, colon)).toLowerCase();
+}
 
 export function safeEndpoint(url: string): string {
   let parsed: URL;
@@ -83,7 +95,8 @@ export function safeEndpoint(url: string): string {
   } catch {
     return INVALID_ENDPOINT;
   }
-  if (!/^[a-z][a-z0-9+.-]*:$/u.test(parsed.protocol) || parsed.hostname === "") return INVALID_ENDPOINT;
+  const host = parsed.hostname.startsWith("[") ? parsed.hostname.slice(1, -1) : parsed.hostname;
+  if (!DESCRIBED_SCHEMES.has(parsed.protocol) || host === "" || host !== splitHost(url)) return INVALID_ENDPOINT;
   return `${parsed.protocol}//${parsed.host}`;
 }
 
@@ -95,20 +108,25 @@ export function report(what: string, error: unknown): void {
   }
 }
 
-function checkedPort(port: string): void {
-  if (port === "") return;
-  if (!/^[0-9]+$/u.test(port)) throw new OpenFailed("ValueError", `Port could not be cast to integer value as ${reprStr(port)}`);
-  if (Number(port) > 65535) throw new OpenFailed("ValueError", "Port out of range 0-65535");
+function refused(pythonType: string, problem: string, url: string): OpenFailed {
+  const endpoint = safeEndpoint(url);
+  return new OpenFailed(pythonType, endpoint === INVALID_ENDPOINT ? problem : `${problem} (${endpoint})`);
 }
 
-function checkedBracketedHost(host: string): void {
+function checkedPort(port: string, url: string): void {
+  if (port === "") return;
+  if (!/^[0-9]+$/u.test(port)) throw refused("ValueError", "the endpoint's port isn't a number", url);
+  if (Number(port) > 65535) throw refused("ValueError", "Port out of range 0-65535", url);
+}
+
+function checkedBracketedHost(host: string, url: string): void {
   if (host.startsWith("v")) {
-    if (!/^v[a-fA-F0-9]+\..+$/su.test(host)) throw new OpenFailed("ValueError", "IPvFuture address is invalid");
+    if (!/^v[a-fA-F0-9]+\..+$/su.test(host)) throw refused("ValueError", "IPvFuture address is invalid", url);
     return;
   }
   const kind = isIP(host);
-  if (kind === 0) throw new OpenFailed("ValueError", `${reprStr(host)} does not appear to be an IPv4 or IPv6 address`);
-  if (kind === 4) throw new OpenFailed("ValueError", "An IPv4 address cannot be in brackets");
+  if (kind === 0) throw refused("ValueError", "the endpoint's bracketed host isn't an IPv4 or IPv6 address", url);
+  if (kind === 4) throw refused("ValueError", "An IPv4 address cannot be in brackets", url);
 }
 
 function checkedUrl(url: string): void {
@@ -117,7 +135,7 @@ function checkedUrl(url: string): void {
   const rest = split === null ? url : (split[2] as string);
   const authority = rest.startsWith("//") ? (rest.slice(2).split(/[/?#]/u)[0] as string) : "";
   const hostPort = authority.slice(authority.lastIndexOf("@") + 1);
-  if (authority.includes("[") !== authority.includes("]")) throw new OpenFailed("ValueError", "Invalid IPv6 URL");
+  if (authority.includes("[") !== authority.includes("]")) throw refused("ValueError", "Invalid IPv6 URL", url);
   let host: string;
   let port: string;
   if (hostPort.includes("[")) {
@@ -125,16 +143,31 @@ function checkedUrl(url: string): void {
     const bracketed = hostPort.slice(hostPort.indexOf("[") + 1);
     host = bracketed.slice(0, bracketed.indexOf("]"));
     const after = bracketed.slice(bracketed.indexOf("]") + 1);
-    if (before !== "" || (after !== "" && !after.startsWith(":"))) throw new OpenFailed("ValueError", "Invalid IPv6 URL");
-    checkedBracketedHost(host);
+    if (before !== "" || (after !== "" && !after.startsWith(":"))) throw refused("ValueError", "Invalid IPv6 URL", url);
+    checkedBracketedHost(host, url);
     port = after.slice(1);
   } else {
     const colon = hostPort.indexOf(":");
     host = colon < 0 ? hostPort : hostPort.slice(0, colon);
     port = colon < 0 ? "" : hostPort.slice(colon + 1);
   }
-  if ((scheme !== "ws" && scheme !== "wss") || host === "") throw new OpenFailed("HandshakeError", `not a ws:// URL: ${scheme}://`);
-  checkedPort(port);
+  if ((scheme !== "ws" && scheme !== "wss") || host === "") throw refused("HandshakeError", "the endpoint isn't a ws:// or wss:// URL", url);
+  checkedPort(port, url);
+}
+
+function snapshot(command: Command): Snapshot {
+  const method = command.method;
+  const params = command.params;
+  const sessionId = command.sessionId;
+  if (typeof method !== "string") throw new ForbiddenCommand("a CDP command's method must be a string");
+  checkMethod(method);
+  if (sessionId !== undefined && typeof sessionId !== "string") throw new ForbiddenCommand("a CDP session id must be a string");
+  let serialized: string | undefined;
+  if (params !== undefined) {
+    serialized = JSON.stringify(params);
+    if (typeof serialized !== "string") throw new ForbiddenCommand("a CDP command's params must be JSON");
+  }
+  return { method, params: serialized, sessionId };
 }
 
 function openFailure(said: string): OpenFailed {
@@ -273,7 +306,7 @@ export class CdpLink {
   }
 
   reserveAttach(limit: number): number | null {
-    if (this.attaching.size >= limit) return null;
+    if (!this.connected || this.attaching.size >= limit) return null;
     const ident = this.nextId++;
     this.attaching.add(ident);
     this.unsent.add(ident);
@@ -281,22 +314,30 @@ export class CdpLink {
   }
 
   async execute(command: Command, timeout: number | null = 60, ident?: number, signal: AbortSignal | null = currentSignal()): Promise<Message> {
-    if (ident !== undefined && !this.unsent.has(ident)) throw new ForbiddenCommand("an attach reservation is used by one send only");
-    const id = ident ?? this.nextId++;
+    let consumed = false;
+    let id = 0;
     let text: string;
     let socket: WebSocket;
+    let method: string;
     try {
-      checkCommand(command);
-      socket = this.usable();
+      const taken = snapshot(command);
+      method = taken.method;
       if (signal?.aborted) throw new Cancelled();
-      if (timeout !== null && timeout <= 0) throw new CommandTimeout(command.method, timeout);
-      text = this.envelope(command, id, ident !== undefined);
+      if (timeout !== null && timeout <= 0) throw new CommandTimeout(method, timeout, false);
+      socket = this.usable();
+      if (ident !== undefined) {
+        if (!this.unsent.has(ident)) throw new ForbiddenCommand("an attach reservation is used by one send only");
+        this.unsent.delete(ident);
+        consumed = true;
+      }
+      id = ident ?? this.nextId++;
+      text = this.envelope(taken, id, consumed);
+      if (signal?.aborted) throw new Cancelled();
     } catch (error) {
-      this.release(id);
+      if (consumed) this.attaching.delete(id);
+      else if (ident !== undefined) this.release(ident);
       throw error;
     }
-    this.unsent.delete(id);
-    const method = command.method;
     return new Promise<Message>((resolve, reject) => {
       let stopTimer = () => {};
       const stop = () => fail(new Cancelled());
@@ -338,9 +379,9 @@ export class CdpLink {
   }
 
   async executeNoWait(command: Command): Promise<void> {
-    checkCommand(command);
+    const taken = snapshot(command);
     const socket = this.usable();
-    const text = this.envelope(command, this.nextId++, false);
+    const text = this.envelope(taken, this.nextId++, false);
     if (socket.readyState !== OPEN) throw new ConnectionLost();
     try {
       socket.send(text);
@@ -374,13 +415,14 @@ export class CdpLink {
     this.lose();
   }
 
-  private envelope(command: Command, id: number, reserved: boolean): string {
-    const text = JSON.stringify({ ...command, id });
+  private envelope(taken: Snapshot, id: number, reserved: boolean): string {
+    const params = taken.params === undefined ? "" : `,"params":${taken.params}`;
+    const session = taken.sessionId === undefined ? "" : `,"sessionId":${JSON.stringify(taken.sessionId)}`;
+    const text = `{"method":${JSON.stringify(taken.method)}${params}${session},"id":${id}}`;
     const sent = checkEnvelope(text);
-    if (sent["id"] !== id) throw new ForbiddenCommand("ardia only sends one whole command at a time");
-    const method = sent["method"];
-    if (typeof method === "string" && ATTACH_METHODS.has(method) && !reserved) {
-      throw new ForbiddenCommand(`${method} goes through claimedAttach, which bounds the attaches left unanswered`);
+    if (sent["id"] !== id || sent["method"] !== taken.method) throw new ForbiddenCommand("ardia only sends one whole command at a time");
+    if (ATTACH_METHODS.has(taken.method) && !reserved) {
+      throw new ForbiddenCommand(`${taken.method} goes through claimedAttach, which bounds the attaches left unanswered`);
     }
     return text;
   }
