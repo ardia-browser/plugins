@@ -4,6 +4,7 @@ import { interrupted, wakeOnInterrupt } from "../control.ts";
 import { LINUX } from "../paths.ts";
 import { builtinCrash, type PythonCrash } from "./errors.ts";
 import { Interrupted } from "./exchange.ts";
+import { pluginMode } from "./route.ts";
 
 const CHUNK = 64 * 1024;
 const POLL_MS = 100;
@@ -22,13 +23,17 @@ function utf8Codeset(name: string): boolean {
   return /^utf-?8$/i.test(name) || /\.utf-?8(@.*)?$/i.test(name);
 }
 
-export function pythonStdioErrors(): Errors | undefined {
-  if (LINUX) return undefined;
-  const name = localeName();
+export function stdioErrorsFor(platform: string, name: string, plugin: boolean, installed: (name: string) => boolean): Errors | undefined {
+  const linux = platform === "linux";
+  if (linux && !plugin) return undefined;
   if (["", "C", "POSIX", "C.UTF-8", "C.utf8", "UTF-8"].includes(name)) return "surrogateescape";
   if (name.includes("/") || name.includes("..")) return undefined;
-  if (!existsSync(`/usr/share/locale/${name}/LC_CTYPE`)) return "surrogateescape";
+  if (!linux && !installed(name)) return "surrogateescape";
   return utf8Codeset(name) ? "strict" : undefined;
+}
+
+export function pythonStdioErrors(): Errors | undefined {
+  return stdioErrorsFor(LINUX ? "linux" : "darwin", localeName(), pluginMode(), (name) => existsSync(`/usr/share/locale/${name}/LC_CTYPE`));
 }
 
 export function stdinState(): "tty" | "other" | "closed" {

@@ -6,7 +6,7 @@ import { BrowseError, formatG, gone, stalled, unreachable } from "./errors.ts";
 
 export const MAX_RESPONSE = 256 * 1024 * 1024;
 const POLL_MS = 100;
-const ABSENT = new Set(["ECONNREFUSED", "ENOENT"]);
+const ABSENT = new Set(["ECONNREFUSED", "ENOENT", "ETIMEDOUT"]);
 export const CONNECT_WAIT_MS = 15_000;
 
 export class Interrupted extends Error {}
@@ -89,18 +89,18 @@ function wait(link: Link | undefined, until: number): Promise<void> {
   });
 }
 
-function connectedFd(dir: Dir, name: string): number {
+function connectedFd(dir: Dir, name: string, deadline: number): number {
   try {
-    return connectAt(dir.fd, name, CONNECT_WAIT_MS);
+    return connectAt(dir.fd, name, deadline - performance.now());
   } catch (error) {
     if (ABSENT.has(codeOf(error) ?? "")) throw new Absent();
     throw error;
   }
 }
 
-export async function connect(dir: Dir, name: string): Promise<Link> {
+export async function connect(dir: Dir, name: string, deadline: number): Promise<Link> {
   if (interrupted()) throw new Interrupted();
-  const fd = connectedFd(dir, name);
+  const fd = connectedFd(dir, name, deadline);
   let peer: number | undefined;
   try {
     peer = peerUid(fd);

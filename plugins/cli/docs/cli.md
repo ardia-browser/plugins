@@ -1100,7 +1100,9 @@ it relies on is `tests/parity/cases/ai-plugin-contract.json` (one case per item)
   verified: `fstatat` without following links for the socket's type, owner and mode, then a connect by its bare name
   (`connectAt` refuses anything with a `/`, `.` or `..`). On macOS the connect runs with the calling thread's working
   directory set to that folder; on Linux it goes through `/proc/self/fd/<n>/<name>`, non-blocking, polled within the
-  CLI's 15 s start deadline (CI's Ubuntu job runs that path; it isn't run on a Mac).
+  CLI's 15 s start deadline, one deadline shared by every attempt while a daemon starts. On Linux plugin mode reads the
+  locale as on macOS (a UTF-8 `LC_ALL`/`LC_CTYPE`/`LANG`, or C/POSIX), where other Linux browse calls go to Python.
+  CI's Ubuntu job runs the plugin process tests (`tests/test_ts_browse_plugin.py`); none of it runs Linux on a Mac.
 - Refused with status 77 and one line (JSON with code `plugin_refused` under `--json`), before anything is sent:
   `ARDIA_BROWSE_FOR_PLUGIN` other than `1`; a missing, non-numeric, closed, terminal or unreadable descriptor; anything
   but a well-formed credential (a trailing newline included); no read within 2 s (Ctrl-C ends the wait with status

@@ -55,7 +55,7 @@ export function pollDelay(elapsedMs: number): number {
   return elapsedMs < EAGER_FOR_MS ? EAGER_POLL_MS : POLL_MS;
 }
 
-export async function startDaemon(root: string, key: string, config: JsonObject, python: string | null, call: Call, connect: () => Promise<Link>): Promise<Link> {
+export async function startDaemon(root: string, key: string, config: JsonObject, python: string | null, call: Call, connect: (deadline: number) => Promise<Link>): Promise<Link> {
   if (python === null) throw unreachable("the ardia browse daemon runs on the bundled Python, which isn't there");
   const dir = openPrivate(root, [DIR_NAME], true);
   try {
@@ -76,13 +76,14 @@ export async function startDaemon(root: string, key: string, config: JsonObject,
     child.stdin?.end(utf8(dumps(config, "spaced")));
     child.unref();
     const spawned = performance.now();
+    const deadline = spawned + START_TIMEOUT_MS;
     const started = () => {
       call.metrics.set("daemon_spawned", true);
       call.metrics.set("daemon_start_ms", BigInt(Math.round(performance.now() - spawned)));
     };
     while (performance.now() - spawned < START_TIMEOUT_MS) {
       try {
-        const socket = await connect();
+        const socket = await connect(deadline);
         started();
         return socket;
       } catch (error) {

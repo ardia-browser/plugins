@@ -21,6 +21,40 @@ BROWSER = "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0"
 FD = 4
 
 
+def holders(paths: list) -> set:
+    if shutil.which("lsof"):
+        found = subprocess.run(["lsof", "-t", *paths], capture_output=True, text=True).stdout.split()
+        return {int(pid) for pid in found}
+    wanted = {os.path.realpath(path) for path in paths}
+    found = set()
+    for fd_dir in Path("/proc").glob("[0-9]*/fd"):
+        try:
+            if any(os.path.realpath(os.readlink(link)) in wanted for link in fd_dir.iterdir()):
+                found.add(int(fd_dir.parent.name))
+        except OSError:
+            continue
+    return found
+
+
+def environment_of(pid: int) -> str:
+    if sys.platform == "darwin":
+        return subprocess.run(["ps", "-E", "-o", "command=", "-p", str(pid)], capture_output=True, text=True).stdout
+    try:
+        return Path(f"/proc/{pid}/environ").read_bytes().decode(errors="replace")
+    except OSError:
+        return ""
+
+
+def descriptor_of(pid: int, fd: int) -> str:
+    if shutil.which("lsof"):
+        return subprocess.run(["lsof", "-a", "-p", str(pid), "-d", str(fd)], capture_output=True, text=True).stdout
+    try:
+        target = os.readlink(f"/proc/{pid}/fd/{fd}")
+    except OSError:
+        return ""
+    return f"COMMAND PID USER FD TYPE\nproc {pid} user {fd}u {'PIPE' if target.startswith('pipe:') else 'OTHER'}\n"
+
+
 def programs():
     return harness.ts_binary() is not None and harness.ts_binary().exists() and harness.binary() is not None
 
@@ -85,8 +119,7 @@ class PluginCredentialProcesses(unittest.TestCase):
         locks = [str(path) for path in (self.box / "data" / "Browse").glob("*.lock")]
         if not locks:
             return []
-        found = subprocess.run(["lsof", "-t", *locks], capture_output=True, text=True).stdout.split()
-        return sorted({int(pid) for pid in found} - {os.getpid()})
+        return sorted(holders(locks) - {os.getpid()})
 
     def env(self, port: int) -> dict:
         return {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": str(self.box / "home"), "TMPDIR": str(self.box / "tmp"),
@@ -108,8 +141,8 @@ class PluginCredentialProcesses(unittest.TestCase):
         seen = []
         for pid in self.family(root):
             args = subprocess.run(["ps", "-o", "args=", "-p", str(pid)], capture_output=True, text=True).stdout
-            environ = subprocess.run(["ps", "-E", "-o", "command=", "-p", str(pid)], capture_output=True, text=True).stdout
-            held = subprocess.run(["lsof", "-a", "-p", str(pid), "-d", str(FD)], capture_output=True, text=True).stdout
+            environ = environment_of(pid)
+            held = descriptor_of(pid, FD)
             seen.append((pid, args, environ, held))
         return seen
 
@@ -230,8 +263,7 @@ class LongDataDirs(PluginCredentialProcesses):
         locks = [str(path) for path in (self.box / "data").rglob("*.lock")]
         if not locks:
             return []
-        found = subprocess.run(["lsof", "-t", *locks], capture_output=True, text=True).stdout.split()
-        return sorted({int(pid) for pid in found} - {os.getpid()})
+        return sorted(holders(locks) - {os.getpid()})
 
     def env(self, port: int) -> dict:
         return {**super().env(port), "ARDIA_DATA_DIR": str(self.long)}

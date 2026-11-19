@@ -7,7 +7,7 @@ import { noGet } from "./answer.ts";
 import { type Found, parseDuration, Usage } from "./args.ts";
 import { answerDeadline } from "./deadline.ts";
 import { type BrowseError, builtinCrash, PythonCrash, unreachable } from "./errors.ts";
-import { Absent, connect, exchange, type Link, Stalled } from "./exchange.ts";
+import { Absent, CONNECT_WAIT_MS, connect, exchange, type Link, Stalled } from "./exchange.ts";
 import { encodeError } from "./output.ts";
 import { type Access, accessEndpointKey, accessLabel, accessWs } from "./plugin.ts";
 import { loadAnswer } from "./pyjson.ts";
@@ -64,11 +64,11 @@ function checkIdle(found: Found): void {
   if ("infinite" in parsed) throw builtinCrash("OverflowError", "cannot convert float infinity to integer");
 }
 
-async function openSession(root: string, key: string): Promise<Link> {
+async function openSession(root: string, key: string, deadline = performance.now() + CONNECT_WAIT_MS): Promise<Link> {
   const dir = openBrowseDir(root);
   try {
     checkSocket(dir, `${key}.sock`);
-    return await connect(dir, `${key}.sock`);
+    return await connect(dir, `${key}.sock`, deadline);
   } catch (error) {
     if (error instanceof Absent) throw new NoDaemon("the socket refused the connection");
     throw error;
@@ -119,7 +119,7 @@ function daemonConfig(found: Found, options: JsonObject, where: Where): JsonObje
 }
 
 async function pluginSession(root: string, key: string, config: JsonObject, python: string | null, call: Call): Promise<Link> {
-  const connect = () => openSession(root, key);
+  const connect = (deadline?: number) => openSession(root, key, deadline);
   try {
     return await connect();
   } catch (error) {
