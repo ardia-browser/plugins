@@ -1,4 +1,5 @@
 import { closeSync, constants, mkdtempSync, openSync, readFileSync, rmdirSync, unlinkSync, writeSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -40,12 +41,66 @@ except OSError as error:
     give_up(os.strerror(error.errno))
 `;
 
-const POINTER = 8;
-const DARWIN_USER_TEMP_DIR = 65537;
-const PATH_MAX = 1024;
+const WRITER = String.raw`
+import ctypes, os, struct, sys
 
-type RawProcess = { argv: Buffer[]; env: Buffer[] };
-type Found = { raw: RawProcess; privateRoot: string | undefined };
+def private_root():
+    try:
+        libc = ctypes.CDLL(None)
+        buffer = ctypes.create_string_buffer(1024)
+        size = libc.confstr(65537, buffer, 1024)
+        if 1 < size <= 1024:
+            return buffer.value
+    except OSError:
+        pass
+    return None
+
+def parent_argv(pid):
+    libc = ctypes.CDLL(None, use_errno=True)
+    most = ctypes.c_int(0)
+    size = ctypes.c_size_t(ctypes.sizeof(most))
+    if libc.sysctl((ctypes.c_int * 2)(1, 8), 2, ctypes.byref(most), ctypes.byref(size), None, ctypes.c_size_t(0)) != 0 or most.value <= 0:
+        return None
+    buffer = ctypes.create_string_buffer(most.value)
+    size = ctypes.c_size_t(most.value)
+    if libc.sysctl((ctypes.c_int * 3)(1, 49, pid), 3, buffer, ctypes.byref(size), None, ctypes.c_size_t(0)) != 0 or size.value < 4:
+        return None
+    raw = buffer.raw[: size.value]
+    argc = struct.unpack_from("=i", raw, 0)[0]
+    rest = raw[4:]
+    end = rest.find(b"\0")
+    if argc < 1 or end < 0:
+        return None
+    words = rest[end:].lstrip(b"\0").split(b"\0")
+    return words[:argc] if len(words) > argc else None
+
+argv = parent_argv(os.getppid())
+if argv is None:
+    sys.exit(3)
+body = b"".join([str(len(argv) - 1).encode(), b"\0", *(word + b"\0" for word in argv[1:]), *(key + b"=" + value + b"\0" for key, value in os.environb.items())])
+for root in (private_root(), os.environb.get(b"TMPDIR"), b"/tmp"):
+    if not root:
+        continue
+    try:
+        import tempfile
+        folder = tempfile.mkdtemp(prefix=b"ardia-handoff-", dir=root)
+    except OSError:
+        continue
+    try:
+        fd = os.open(os.path.join(folder, b"parcel"), os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, "wb") as sink:
+            sink.write(body)
+    except OSError:
+        for path, remove in ((os.path.join(folder, b"parcel"), os.unlink), (folder, os.rmdir)):
+            try:
+                remove(path)
+            except OSError:
+                pass
+        continue
+    sys.stdout.buffer.write(folder.hex().encode())
+    sys.exit(0)
+sys.exit(4)
+`;
 
 function nulSeparated(data: Buffer): Buffer[] {
   const words: Buffer[] = [];
@@ -57,43 +112,6 @@ function nulSeparated(data: Buffer): Buffer[] {
   return words;
 }
 
-async function darwinProcess(): Promise<Found> {
-  const { dlopen, FFIType, ptr, read, toBuffer } = await import("bun:ffi");
-  const libc = dlopen("/usr/lib/libSystem.B.dylib", {
-    _NSGetArgc: { args: [], returns: FFIType.ptr },
-    _NSGetArgv: { args: [], returns: FFIType.ptr },
-    _NSGetEnviron: { args: [], returns: FFIType.ptr },
-    strlen: { args: [FFIType.ptr], returns: FFIType.u64 },
-    confstr: { args: [FFIType.i32, FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
-  });
-  try {
-    const text = (at: number) => Buffer.from(toBuffer(at, 0, Number(libc.symbols.strlen(at))));
-    const argcAt = libc.symbols._NSGetArgc();
-    const argvAt = libc.symbols._NSGetArgv();
-    const environAt = libc.symbols._NSGetEnviron();
-    if (argcAt === null || argvAt === null || environAt === null) throw new Error("no process arguments");
-    const argvList = read.ptr(argvAt, 0);
-    const argv = Array.from({ length: read.i32(argcAt, 0) }, (_, index) => text(read.ptr(argvList, index * POINTER)));
-    const environ = read.ptr(environAt, 0);
-    const env: Buffer[] = [];
-    for (let index = 0, at = read.ptr(environ, 0); at; index += 1, at = read.ptr(environ, index * POINTER)) env.push(text(at));
-    const root = Buffer.alloc(PATH_MAX);
-    const length = Number(libc.symbols.confstr(DARWIN_USER_TEMP_DIR, ptr(root), BigInt(PATH_MAX)));
-    const privateRoot = length > 1 && length <= PATH_MAX ? root.subarray(0, length - 1).toString("utf8") : undefined;
-    return { raw: { argv, env }, privateRoot: privateRoot?.includes("�") ? undefined : privateRoot };
-  } finally {
-    libc.close();
-  }
-}
-
-async function rawProcess(): Promise<Found> {
-  if (process.platform === "darwin") return darwinProcess();
-  return {
-    raw: { argv: nulSeparated(readFileSync("/proc/self/cmdline")), env: nulSeparated(readFileSync("/proc/self/environ")) },
-    privateRoot: process.env.XDG_RUNTIME_DIR,
-  };
-}
-
 function removeParcel(folder: string): void {
   for (const remove of [() => unlinkSync(join(folder, "parcel")), () => rmdirSync(folder)]) {
     try {
@@ -102,13 +120,33 @@ function removeParcel(folder: string): void {
   }
 }
 
-function writeParcel(root: string, raw: RawProcess): string {
+function argvMatches(folder: string): boolean {
+  const words = nulSeparated(readFileSync(join(folder, "parcel")));
+  const count = Number(words[0]?.toString("latin1"));
+  const args = words.slice(1, 1 + count).map((word) => word.toString("utf8"));
+  const expected = process.argv.slice(2);
+  return args.length === expected.length && args.every((word, index) => word === expected[index]);
+}
+
+function darwinParcel(python: string): string | undefined {
+  const done = spawnSync(python, ["-I", "-S", "-c", WRITER], { stdio: ["ignore", "pipe", "ignore"], timeout: 15_000 });
+  if (done.status !== 0 || done.stdout === null || done.stdout.length === 0) return undefined;
+  const folder = Buffer.from(done.stdout.toString("latin1"), "hex").toString("utf8");
+  if (folder.includes("�")) return undefined;
+  try {
+    if (argvMatches(folder)) return folder;
+  } catch {}
+  removeParcel(folder);
+  return undefined;
+}
+
+function writeParcel(root: string, argv: Buffer[], env: Buffer[]): string {
   const folder = mkdtempSync(join(root, "ardia-handoff-"));
   try {
     const fd = openSync(join(folder, "parcel"), constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
     try {
-      const args = raw.argv.slice(1);
-      const body = Buffer.concat([Buffer.from(`${args.length}\0`), ...[...args, ...raw.env].flatMap((word) => [word, Buffer.of(0)])]);
+      const args = argv.slice(1);
+      const body = Buffer.concat([Buffer.from(`${args.length}\0`), ...[...args, ...env].flatMap((word) => [word, Buffer.of(0)])]);
       for (let written = 0; written < body.length; ) written += writeSync(fd, body, written);
     } finally {
       closeSync(fd);
@@ -120,18 +158,25 @@ function writeParcel(root: string, raw: RawProcess): string {
   }
 }
 
-export async function parcelRawWords(): Promise<string | undefined> {
-  try {
-    const { raw, privateRoot } = await rawProcess();
-    if (raw.argv.length === 0) return undefined;
-    for (const root of [privateRoot, tmpdir(), "/tmp"]) {
-      if (root === undefined || root === "") continue;
-      try {
-        return writeParcel(root, raw);
-      } catch {}
-    }
-  } catch {}
+function linuxParcel(): string | undefined {
+  const argv = nulSeparated(readFileSync("/proc/self/cmdline"));
+  const env = nulSeparated(readFileSync("/proc/self/environ"));
+  if (argv.length === 0) return undefined;
+  for (const root of [process.env.XDG_RUNTIME_DIR, tmpdir(), "/tmp"]) {
+    if (root === undefined || root === "") continue;
+    try {
+      return writeParcel(root, argv, env);
+    } catch {}
+  }
   return undefined;
+}
+
+export async function parcelRawWords(python: string): Promise<string | undefined> {
+  try {
+    return process.platform === "darwin" ? darwinParcel(python) : linuxParcel();
+  } catch {
+    return undefined;
+  }
 }
 
 const hex = (text: string) => Buffer.from(text, "utf8").toString("hex");

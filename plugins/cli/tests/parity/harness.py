@@ -489,6 +489,9 @@ class Installation:
         (self.root / "bin").mkdir(parents=True)
         if entry == "ts":
             shutil.copy2(entry_program, self.root / "bin" / "ardia-ts.bin")
+            if sys.platform == "darwin":
+                subprocess.run(["/usr/bin/codesign", "--force", "--sign", "-", "--options", "runtime", str(self.root / "bin" / "ardia-ts.bin")],
+                               check=True, capture_output=True)
             (self.root / "bin" / "ardia").write_text(TS_PROBE.format(routes=shlex.quote(str(self.routes))))
             (self.root / "bin" / "ardia").chmod(0o755)
         else:

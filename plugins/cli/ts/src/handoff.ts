@@ -67,7 +67,7 @@ export async function handOff(argv: string[], python: string | null = bundledPyt
   try {
     if (blocked === undefined && decodedLossily(argv)) {
       const raw = await import("./raw-handoff.ts");
-      const folder = await raw.parcelRawWords();
+      const folder = await raw.parcelRawWords(python);
       if (folder !== undefined) raw.execTrampoline(python, folder, lease);
     }
     const words = [python, "-I", "-m", "ardia_cli", ...argv];
