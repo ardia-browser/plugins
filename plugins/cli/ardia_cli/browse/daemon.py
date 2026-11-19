@@ -144,7 +144,7 @@ def _render(options: dict, result=None, error: BrowseError | None = None, name: 
     text = result.text
     if text is None:
         return code, "", ""
-    text = cap(redact_text(text), options, name, getattr(result, "output_cap", None))
+    text = redact_text(text) if getattr(result, "whole", False) else cap(redact_text(text), options, name, getattr(result, "output_cap", None))
     notice = cap_notice(text)
     if result.page_content and options.get("content_boundaries"):
         text = boundary(text)
@@ -401,7 +401,7 @@ class Daemon:
             fields = command_metrics.answer_fields(request)
             if request.get("busy_elsewhere"):
                 fields["busy_elsewhere"] = True
-            writer.write(encode_answer(code, out, err, fields))
+            writer.write(encode_answer(code, out, err, fields, command_name(request)))
             await writer.drain()
         except Exception:
             log.exception("request failed")
@@ -588,12 +588,25 @@ def timed_out(name: str, limit: float) -> BrowseError:
     return BrowseError(f"`{name}` didn't finish within {limit:g} s and was stopped{unknown}. Snapshot to see where the page is", code="command_timeout")
 
 
-def encode_answer(code: int, out: str, err: str, fields: dict | None = None) -> bytes:
+def command_name(request) -> str:
+    from ardia_cli.browse.commands import ALIASES
+
+    argv = request.get("argv") if isinstance(request, dict) else None
+    first = str(argv[0]) if isinstance(argv, list) and argv else ""
+    return ALIASES.get(first, first)
+
+
+def encode_answer(code: int, out: str, err: str, fields: dict | None = None, name: str = "") -> bytes:
     from ardia_cli.printable import well_formed
 
     data = (well_formed(json.dumps({"exit": code, "out": out, "err": err, **(fields or {})}, ensure_ascii=False)) + "\n").encode()
     if len(data) <= MAX_RESPONSE:
         return data
+    if name == "cdp":
+        message = (f"✗ The result of `cdp` is {len(data):,} bytes once encoded for the answer, over the {MAX_RESPONSE:,} bytes the "
+                   "daemon sends back, so it wasn't printed; it did run, so check before running it again. Ask for less: "
+                   "narrower params (DOM.getDocument --param depth:=1, a smaller Network.getResponseBody), or IO.read in chunks\n")
+        return (json.dumps({"exit": 1, "out": "", "err": message, "code": "result_too_large"}) + "\n").encode()
     message = f"✗ The answer was too large ({len(data)} bytes, the limit is {MAX_RESPONSE}); narrow it (snapshot -s, -d, --max-output)\n"
     return (json.dumps({"exit": 1, "out": "", "err": message}) + "\n").encode()
 

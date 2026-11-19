@@ -34,6 +34,7 @@ class Result:
     data: dict = field(default_factory=dict)
     text: str | None = "✓ Done"
     page_content: bool = False
+    whole: bool = False
 
 
 @dataclass
@@ -2020,7 +2021,7 @@ async def cmd_cdp(ctx: Ctx, argv):
     if session == "reattached":
         state.extras["notice"] = "\n".join(part for part in (state.extras.get("notice"), rawcdp.RESET_NOTICE) if part)
     text = json.dumps(result, indent=2, ensure_ascii=False) if result else f"✓ {method}"
-    return Result({"method": method, "target": where, "session": session, "result": result}, text, page_content=bool(result))
+    return Result({"method": method, "target": where, "session": session, "result": result}, text, page_content=bool(result), whole=True)
 
 
 @command("addinitscript")

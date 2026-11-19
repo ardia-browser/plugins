@@ -378,7 +378,7 @@ COMMANDS = {
            "Calls run on a DevTools session of their own, so Runtime.disable and the like never touch the session's\n"
            "console, network or snapshots. Domains enabled through cdp stay on while the daemon stays connected; after\n"
            "30 s idle it reconnects and they are off again: --json's data.session is then `reattached` (else `attached`\n"
-           "or `kept`), and text mode says so. Events aren't printed.\n\n"
+           "or `kept`), and text mode says so. Events aren't printed. The whole result prints, never cut by --max-output.\n\n"
            "Examples:\n"
            "  ardia browse cdp Page.getLayoutMetrics\n"
            "  ardia browse cdp Storage.getCookies --target browser\n"

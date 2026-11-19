@@ -1004,8 +1004,13 @@ it; text mode also prints a `→ …off again` notice on stderr), or `shared` (a
 `attachToBrowserTarget`: browser calls then go on the daemon's own browser connection, as before). Effects outside
 the session itself, such as a navigation, a cookie or a download setting, aren't undone by a reconnect. Events
 aren't printed. A
-method name that isn't `Domain.method` is a usage error. Its result is page content (`--content-boundaries` wraps it)
-and goes through the output cap. Telemetry: the browse command event's `subcommand` `cdp`, with `error_code`
+method name that isn't `Domain.method` is a usage error. Its result is page content (`--content-boundaries` wraps it).
+Text mode prints the whole result, as `--json` does: it skips the output cap (`--max-output` doesn't cut it), because
+part of a JSON value is no use, and failing instead would come after a call that may have changed something, inviting
+a retry that repeats it. Ask for less with params when a result would be large. An answer over the daemon's 256 MiB
+(`MAX_RESPONSE`, measured once the result is JSON-escaped and wrapped in the answer) fails with exit 1 and
+`code: "result_too_large"`, saying the call did run and how to ask for less; a single DevTools message over 256 MiB
+still ends the connection (`connection_lost`), as for every command. Telemetry: the browse command event's `subcommand` `cdp`, with `error_code`
 `policy_refused` from an older engine.
 
 WebUI pages are tabs too: `tab list`, `tab <id>` and `open` take `chrome://`, `chrome-extension://`,

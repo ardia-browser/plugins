@@ -359,6 +359,36 @@ class TargetHold(unittest.TestCase):
         cdp(state, "Runtime.evaluate")
         self.assertEqual([row for row in held if row[0] != "send"], [])
 
+
+class LargeResults(unittest.TestCase):
+    def test_text_mode_prints_the_whole_result_never_part_of_it(self):
+        from ardia_cli.browse import daemon
+
+        state = FakeState({"Runtime.evaluate": {"result": {"type": "string", "value": "x" * 20000}}})
+        result = cdp(state, "Runtime.evaluate")
+        for options in ({}, {"max_output": 100}):
+            code, out, err = daemon.render(options, result=result, name="cdp")
+            self.assertEqual((code, err), (0, ""))
+            self.assertNotIn(daemon.CAP_NOTICE, out)
+            self.assertEqual(json.loads(out)["result"]["value"], "x" * 20000)
+        code, out, err = daemon.render({}, result=commands.Result({}, "y" * 20000), name="get")
+        self.assertIn(daemon.CAP_NOTICE, out)
+
+    def test_an_answer_over_the_daemon_limit_says_what_cdp_did(self):
+        from unittest import mock
+
+        from ardia_cli.browse import daemon
+
+        with mock.patch.object(daemon, "MAX_RESPONSE", 1000):
+            answer = json.loads(daemon.encode_answer(0, "z" * 2000, "", name="cdp"))
+            self.assertEqual(answer["exit"], 1)
+            self.assertEqual(answer.get("code"), "result_too_large")
+            self.assertIn("The result of `cdp`", answer["err"])
+            self.assertIn("it did run", answer["err"])
+            self.assertNotIn("snapshot -s", answer["err"])
+            other = json.loads(daemon.encode_answer(0, "z" * 2000, "", name="snapshot"))
+            self.assertIn("snapshot -s", other["err"])
+
 class OlderEngine(unittest.TestCase):
     def test_upload_and_download_say_update_ardia(self):
         for method, command in (("DOM.setFileInputFiles", "upload"), ("Browser.setDownloadBehavior", "download"),
@@ -427,7 +457,7 @@ class PlainDevToolsServer(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        for session in ("warm", "warm-again", "up", "dl", "raw", "ui", "fw", "fk", "bo", "bb", "ho", "hc", "rs"):
+        for session in ("warm", "warm-again", "up", "dl", "raw", "ui", "fw", "fk", "bo", "bb", "ho", "hc", "rs", "big"):
             cls.browse("close", session=session, check=False)
         cls.chromium.terminate()
         try:
@@ -524,6 +554,12 @@ class PlainDevToolsServer(unittest.TestCase):
         self.browse("cdp", "Runtime.disable", session="rs")
         self.browse("eval", "console.log('after-raw-disable')", session="rs")
         self.assertIn("after-raw-disable", self.browse("console", session="rs").stdout)
+
+    def test_a_large_raw_result_prints_whole(self):
+        self.browse("open", self.url + "?big", session="big")
+        done = self.browse("cdp", "Runtime.evaluate", "--param", "expression='x'.repeat(20000)", "--param", "returnByValue:=true", session="big")
+        self.assertNotIn("output capped", done.stdout + done.stderr)
+        self.assertEqual(json.loads(done.stdout)["result"]["value"], "x" * 20000)
 
     def test_webui_tab_is_listed(self):
         self.browse("tab", "new", "chrome://version", session="ui")
