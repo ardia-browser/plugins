@@ -197,3 +197,22 @@ commands from their own files and import them in `all.ts`; a name registered twi
 | Racy steps | `racy_steps` in a scenario: only the exit status is compared, for a step where Chromium decides which of two errors one request gets |
 | Human tier | `python -m tests.m3.human_core --pages <plugins#13 tests/human> --chrome <Chrome for Testing> [--impl ts\|python]`: rows 7 to 11 through `ardia browse`, with a full Chrome for Testing in `--headless=new` (chrome-headless-shell is old-mode headless and sets `navigator.webdriver`). Clicks D5 doesn't serve yet are made by the tier and named in the row's notes |
 | Unit tests | `ts/tests/m3/core.test.ts` (attach order, publish after the frame refresh, busy probe world, worlds per document, re-homing, crash and detach, setup restore, the probe rules, refs, the table) and `core-ported.test.ts` (`test_browse_crash` and `test_browse_detach`, same names) |
+
+## The act side (slice D5)
+
+`ts/src/browse/act/` holds what `actions.py` did: `common.ts` (the delivery check, viewport, `overFrame`), `pointer.ts`
+(target point, cover handling, click, hover, the DOM-click fallback, `click --touch`), `fields.ts` (fill, type, check,
+select, suggestions, grid cells), `drag.ts` (the drag-intercept flow), `scroll.ts`, `react.ts` and `find-act.ts` (the
+actions `find` hands over). `ts/src/browse/input/` adds `input.ts` (`Input`: held keys and buttons, `gesture`,
+`pressCombo` with the macOS editing commands), `mouse.ts` and `keyboard.ts` on top of P2's `human.ts` and `keys.ts`.
+`ts/src/browse/changes/observe.ts` is the change report's observer (network watch, settle, the settle reaction,
+`open`'s arrival report), `state/frames.ts` the frame-offset helper D4 shares. The commands are in
+`commands/act.ts` and `commands/batch.ts`.
+
+| What | How it's run |
+|---|---|
+| Scenarios `act/d5_*` | `live 'act/d5_*' --a python --b ts --keep` on a fixture (`act-input.html`) whose title reports what the page saw. `replay act/d5_pointer act/d5_drag_scroll --impl ts`; `d5_fields`, `d5_keys` and `d5_batch` wait for D7's flow log (Python probes the focused field after each step), and `d5_changes` also for D4's snapshot. `d5_batch_close` is live only |
+| Faults | `cancel act/d5_drag_scroll --step 1 --impl ts --kind interrupt\|error\|drop`: the HTML5 drag's cleanup (drag cancel, button release, interception off) at every CDP call |
+| Human tier | `python -m tests.m3.human_act --pages <plugins#13 tests/human> --chrome <Chrome for Testing> [--impl ts\|python]`: rows 1, 2, 4, 5, 6, 20 and 21. The tier turns touch emulation on for row 1 (standing in for `set device`), sends row 5's IME composition and drops row 6's files, since the CLI has no command for them; row 21 needs D4's closed-shadow selectors |
+| Transcript checks | every TS run also fails on a touch event sent before touch emulation or the page's touch probe (row 1) and, on macOS, a Meta editing shortcut without its command (row 20) |
+| Unit tests | `ts/tests/m3/act-ported.test.ts`: `test_browse_act`, `test_browse_drag`, `test_browse`'s held input and `test_browse_changes`' network watch, same names, plus the editing commands per platform |

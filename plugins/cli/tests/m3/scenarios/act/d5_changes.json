@@ -87,14 +87,6 @@
     "{fixture}/form.html"
    ],
    "session": "d5c"
-  },
-  {
-   "argv": [
-    "batch",
-    "click #go",
-    "fill #name y"
-   ],
-   "session": "d5c"
   }
  ]
 }

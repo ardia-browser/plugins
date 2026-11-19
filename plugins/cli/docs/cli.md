@@ -1962,6 +1962,33 @@ Its page core (slice D3: `browse/state/page.ts`, `state.ts`, `refs.ts`, `apptabs
   and the session's tab, label and pin go back to the original (`offscreen_handoff_rolled_back`). Python leaves the
   session on the half-made tab.
 
+Its act side (slice D5: `browse/act/`, `browse/input/{input,mouse,keyboard}.ts`, `browse/changes/observe.ts` and the
+commands in `browse/commands/act.ts` and `batch.ts`) follows `actions.py`, `inputs.py`, `human.py`, `changes.py`'s
+observer, `react.py` and `batch`, except for these, each covered by `ts/tests/m3/act-ported.test.ts`, the `act/d5_*`
+harness scenarios or the human tier (`tests/m3/human_act.py`):
+
+- On macOS every editing shortcut carries its editing command on `Input.dispatchKeyEvent` (ardia#2812 row 20): Meta
+  with a, c, x, v and z (`selectAll`, `copy`, `cut`, `paste`, `undo`), Shift+Meta+z (`redo`), Meta and Alt with the
+  arrows (line and word movement, with `AndModifySelection` under Shift), and with Backspace and Delete (line and word
+  deletion). Linux and Windows send none, and Control is not an editing modifier on macOS. Python sends `selectAll`,
+  `undo` and `redo` for Control or Meta with a, z, y and Shift+z on every platform. The harness compares this through
+  the `editing-commands` divergence and fails a TS run that sends a macOS Meta shortcut without its command.
+- `click --touch` (new) taps only when the page itself reports touch (`navigator.maxTouchPoints` above 0 and
+  `ontouchstart` present, so whichever client turned emulation on); otherwise it is a mouse click and the answer says
+  so (ardia#2812 row 1). No other command sends a touch event, and the harness fails a TS run that sends one before
+  touch emulation or that probe.
+- Element boxes, hit tests and frame offsets go through `browse/state/frames.ts`: an element inside an out-of-process
+  iframe is measured in its own CDP session and placed at the sum of each frame owner's offset up to the top session,
+  where the click is sent (ardia#2812 rows 12, 13, 21). Python has no out-of-process frames.
+- A command's whole-number coordinates and deltas go out as JSON integers (`91`), where Python's floats print `91.0`;
+  Chromium reads both the same. The harness compares them as equal (`whole-floats`).
+- `batch` reads a line's `wait --state` as `wait`'s own flag, as the TypeScript client does; Python's splitter refuses
+  it as a launch option. A line's own `--out` saves the text of `get` and `snapshot`; for `eval`, `read` and `script`
+  it answers that the save isn't served yet.
+- The drag's interception cleanup, the network watch's `Network.disable` and held keys and buttons run under
+  `shield()` and finish before the command answers, also when it is cancelled or cut short, as Python's do; the harness
+  compares the cleanup traffic at every CDP call of `act/d5_drag_scroll`'s HTML5 drag.
+
 ## Linux
 
 The same CLI, with these differences:
