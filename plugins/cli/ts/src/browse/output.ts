@@ -1,4 +1,5 @@
-import { fstatSync, writeSync } from "node:fs";
+import { fstatSync } from "node:fs";
+import { writeWhole } from "../libc.ts";
 import { osCrash } from "../crash.ts";
 import { codeOf, errnoOf, strerror } from "../paths.ts";
 import { inert, jsonSafe, pythonOsError } from "../printable.ts";
@@ -58,16 +59,7 @@ function stdoutBuffer(): number {
 }
 
 function writeAll(fd: number, bytes: Uint8Array): void {
-  let offset = 0;
-  while (offset < bytes.length) {
-    try {
-      offset += writeSync(fd, bytes, offset, bytes.length - offset);
-    } catch (error) {
-      const code = codeOf(error);
-      if (code === "EAGAIN") Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1);
-      else if (code !== "EINTR") throw error;
-    }
-  }
+  writeWhole(fd, bytes);
 }
 
 export class Printer {
