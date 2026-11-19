@@ -1,6 +1,6 @@
 import { pyLen } from "../../pylib/str.ts";
 import { sleep } from "../cdp/cancel.ts";
-import { Usage } from "../daemon-errors.ts";
+import { BrowseError, Usage } from "../daemon-errors.ts";
 import { pauseAfter } from "../input/human.ts";
 import { MODIFIER_BITS, MODIFIER_KEYS, parseCombo, parseKey } from "../input/keys.ts";
 import { type PluginPage } from "./page.ts";
@@ -138,6 +138,22 @@ export async function clickAt(page: PluginPage, x: number, y: number, button: st
   await page.send(CLICK_METHOD, { x, y, button, clickCount, modifiers: 0 });
 }
 
+export const WHEEL_BUSY_WAITS = [0.1, 0.2, 0.3, 0.4, 0.5];
+export const HIDDEN_TAB = "The tab is hidden and can't be scrolled";
+export const TAB_IN_USE = "Ardia didn't scroll the tab because the person is using it right now; wait a moment and run the step again";
+
 export async function wheelAt(page: PluginPage, x: number, y: number, deltaX: number, deltaY: number): Promise<void> {
-  await page.send("Input.dispatchMouseEvent", { type: "mouseWheel", x, y, deltaX, deltaY, button: "none", buttons: 0 });
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await page.send("Input.dispatchMouseEvent", { type: "mouseWheel", x, y, deltaX, deltaY, button: "none", buttons: 0 });
+      return;
+    } catch (error) {
+      if (!(error instanceof BrowseError)) throw error;
+      if (error.code === "page_hidden") throw new BrowseError(HIDDEN_TAB, null, "outside_viewport");
+      if (error.code !== "busy") throw error;
+      const wait = WHEEL_BUSY_WAITS[attempt];
+      if (wait === undefined) throw new BrowseError(TAB_IN_USE, null, "busy");
+      await sleep(wait);
+    }
+  }
 }

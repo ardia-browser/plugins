@@ -167,11 +167,16 @@ and never by Python's or by the person's own session. The TypeScript daemon only
   the browser session. The daemon refuses to send one anywhere else, and the harness checks it as acceptance check (c).
 - **Focus and scrolling.** Focus comes only from clicks: `fill`, `type`, `press <selector> <key>` and `find … focus`
   click their element (`Ardia.dispatchClick` at its first content quad's centre), which focuses the page the way a
-  person's click does; moves and wheels never focus. To bring an element into view the daemon does what a person does:
-  it reads the element's content quad and the layout viewport (`Page.getLayoutMetrics`), and while the quad's middle is
-  outside the viewport it sends one buttonless `mouseWheel` at the viewport's centre with the delta that would centre
-  it, up to 4 times; if it's still outside, the step answers code `outside_viewport` and nothing is clicked. The owner
-  session keeps `DOM.scrollIntoViewIfNeeded`.
+  person's click does; moves and wheels never focus. The engine holds the tab visible only while the plugin acts (its
+  act lease turns the hold on), so the daemon scrolls only inside acting steps (`click`, `fill`, `type`, `press`,
+  `scroll`, and `find` with an action other than `text`): it reads the element's content quad and the layout viewport
+  (`Page.getLayoutMetrics`), and while the quad's middle is outside the viewport it sends one buttonless `mouseWheel` at
+  the viewport's centre with the delta that would centre it, up to 4 times; still outside answers `outside_viewport`
+  and nothing is clicked. Reads (`snapshot`, `get`, `is`, `find … text`, `wait`) never scroll, and the daemon's link
+  refuses a wheel outside an acting step. A wheel the engine answers `ardia: busy` (the person used that tab in the last
+  500 ms) is retried after 100, 200, 300, 400 and 500 ms, then the step answers `busy` ("Ardia didn't scroll the tab
+  because the person is using it right now …"); `ardia: page_hidden` answers `outside_viewport` ("The tab is hidden and
+  can't be scrolled"). The owner session keeps `DOM.scrollIntoViewIfNeeded`.
 - **Keys.** Key events follow ardia#2808's key policy, whose key table the daemon carries as generated data
   (`ts/scripts/plugin-key-table.ts`, checked against the engine's compiled validator by `plugin-keys.test.ts`). A
   `press` the engine would refuse (Meta+C, Meta+V, Meta+Z, Shift+Delete, a character no key types) answers 77

@@ -3,6 +3,9 @@ import { type Entry } from "./canon.ts";
 import { pluginViolations } from "./plugin-rules.ts";
 import { type Browser } from "../../src/browse/cdp/browser.ts";
 import { PluginLink } from "../../src/browse/plugin/link.ts";
+import { HIDDEN_TAB, TAB_IN_USE, WHEEL_BUSY_WAITS, wheelAt } from "../../src/browse/plugin/input.ts";
+import { actingStep } from "../../src/browse/plugin/acting.ts";
+import { BrowseError } from "../../src/browse/daemon-errors.ts";
 import { scrubPasswordValues } from "../../src/browse/plugin/protected.ts";
 import { checkRequest, PluginPolicy } from "../../src/browse/plugin/policy.ts";
 import { comboEvents, editingCommand } from "../../src/browse/plugin/input.ts";
@@ -77,7 +80,7 @@ describe("the tap checks", () => {
       out(3, "Input.dispatchMouseEvent", { type: "mouseReleased", x: 9, y: 9, button: "left" }), answer(3),
       out(4, "Input.dispatchMouseEvent", { type: "mouseWheel", x: 9, y: 9, button: "none", buttons: 0, deltaY: 10 }), answer(4),
     ]);
-    expect(found.map((item) => [item.rule, item.at])).toEqual([["forbidden", 0], ["forbidden", 2], ["forbidden", 4]]);
+    expect(found.filter((item) => item.rule === "forbidden").map((item) => [item.rule, item.at])).toEqual([["forbidden", 0], ["forbidden", 2], ["forbidden", 4]]);
   });
 
   test("(b) Ardia.dispatchClick is one input command: nothing else may go out before it's answered", () => {
@@ -183,5 +186,71 @@ describe("protected fields", () => {
     for (const secret of ["s1", "s2", "s3", "s4"]) expect(scrubbed).not.toContain(secret);
     expect(scrubbed).toContain('value="keep"');
     expect(scrubbed).toContain('type="password"');
+  });
+});
+
+describe("(e) wheels only inside an act", () => {
+  const mark = (argv: string[]): Entry => ({ k: "mark", step: argv.join(" "), argv });
+  const wheel = (id: number): Entry => ({ k: "out", c: 0, m: JSON.stringify({ id, method: "Input.dispatchMouseEvent", sessionId: "S", params: { type: "mouseWheel", x: 1, y: 1, deltaX: 0, deltaY: 5, button: "none", buttons: 0 } }) });
+
+  test("a wheel in click, scroll or find-click passes; in snapshot, get, wait or find-text it fails", () => {
+    const found = checked([
+      mark(["click", "--", "@e3"]), wheel(1), answer(1),
+      mark(["scroll", "down"]), wheel(2), answer(2),
+      mark(["find", "--name=Save", "--", "role", "button", "click"]), wheel(3), answer(3),
+      mark(["snapshot", "-c"]), wheel(4), answer(4),
+      mark(["get", "box", "@e3"]), wheel(5), answer(5),
+      mark(["wait", "--text=x"]), wheel(6), answer(6),
+      mark(["find", "text", "three", "text"]), wheel(7), answer(7),
+    ]);
+    expect(found.filter((item) => item.rule === "wheel_outside_act").map((item) => item.at)).toEqual([10, 13, 16, 19]);
+  });
+
+  test("a wheel the page saw while hidden must have been refused with page_hidden", () => {
+    const refused: Entry = { k: "in", c: 0, m: JSON.stringify({ id: 1, sessionId: "S", error: { code: -32000, message: "ardia: page_hidden: page hidden" } }) };
+    expect(checked([mark(["scroll", "down"]), wheel(1), { k: "visibility", c: 0, wheel: 1, state: "hidden" }, refused])).toEqual([]);
+    expect(checked([mark(["scroll", "down"]), wheel(2), { k: "visibility", c: 0, wheel: 2, state: "hidden" }, answer(2)]).map((item) => item.rule)).toEqual(["hidden_wheel"]);
+  });
+});
+
+describe("plugin wheels: busy and page hidden", () => {
+  function fakePage(replies: (BrowseError | null)[]) {
+    let sent = 0;
+    return {
+      sent: () => sent,
+      page: {
+        async send(): Promise<Record<string, unknown>> {
+          sent += 1;
+          const next = replies.shift() ?? null;
+          if (next !== null) throw next;
+          return {};
+        },
+      } as never,
+    };
+  }
+  const busy = () => new BrowseError("Input.dispatchMouseEvent: ardia: busy", null, "busy");
+
+  test("busy is retried after 100, 200, 300, 400 and 500 ms, then the wheel goes out", async () => {
+    const fake = fakePage([busy(), busy(), null]);
+    const started = performance.now();
+    await wheelAt(fake.page, 1, 1, 0, 10);
+    expect(fake.sent()).toBe(3);
+    expect(performance.now() - started).toBeGreaterThanOrEqual(290);
+    expect(WHEEL_BUSY_WAITS).toEqual([0.1, 0.2, 0.3, 0.4, 0.5]);
+  });
+
+  test("busy after every wait answers busy; page hidden answers outside_viewport with the hidden-tab wording", async () => {
+    await expect(wheelAt(fakePage([busy(), busy(), busy(), busy(), busy(), busy()]).page, 1, 1, 0, 10)).rejects.toMatchObject({ code: "busy", text: TAB_IN_USE });
+    await expect(wheelAt(fakePage([new BrowseError("x", null, "page_hidden")]).page, 1, 1, 0, 10)).rejects.toMatchObject({ code: "outside_viewport", text: HIDDEN_TAB });
+  });
+
+  test("the daemon's link never sends a wheel outside an acting step", async () => {
+    let acting = false;
+    const link = new PluginLink({} as Browser, () => acting);
+    link.pageSessions.add("S");
+    await expect(link.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 1, y: 1, deltaX: 0, deltaY: 1, button: "none", buttons: 0 }, "S")).rejects.toThrow(PluginPolicy);
+    acting = true;
+    expect(actingStep(["scroll", "down"])).toBe(true);
+    expect(actingStep(["snapshot"])).toBe(false);
   });
 });

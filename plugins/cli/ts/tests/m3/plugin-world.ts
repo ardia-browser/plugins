@@ -52,7 +52,10 @@ function answers(port: number): Promise<boolean> {
       resolve(response.statusCode === 200);
     });
     request.on("error", () => resolve(false));
-    request.on("timeout", () => request.destroy());
+    request.on("timeout", () => {
+      request.destroy();
+      resolve(false);
+    });
   });
 }
 
@@ -79,7 +82,9 @@ export type World = {
   site: http.Server;
 };
 
-export async function startWorld(base: number, credential = CREDENTIAL, session = "plugin-ai", form = FORM): Promise<World> {
+export const FULL_CHROME = process.env["ARDIA_F1_CHROME"];
+
+export async function startWorld(base: number, credential = CREDENTIAL, session = "plugin-ai", form = FORM, full = false): Promise<World> {
   const found = scratch();
   const [chromePort, tapPort, sitePort] = [base, base + 1, base + 2];
   const children: ChildProcess[] = [];
@@ -90,15 +95,15 @@ export async function startWorld(base: number, credential = CREDENTIAL, session 
   });
   await new Promise<void>((resolve) => site.listen(sitePort, "127.0.0.1", resolve));
   const chrome = spawn(
-    CHROME as string,
-    ["--headless", "--no-first-run", "--no-default-browser-check", "--disable-background-networking", "--disable-component-update", "--disable-sync", "--mute-audio",
+    (full ? FULL_CHROME : CHROME) as string,
+    [full ? "--headless=new" : "--headless", "--no-first-run", "--no-default-browser-check", "--disable-background-networking", "--disable-component-update", "--disable-sync", "--mute-audio",
       "--window-size=1000,800", `--remote-debugging-port=${chromePort}`, `--user-data-dir=${path.join(found.root, "profile")}`, `http://127.0.0.1:${sitePort}/form`],
     { stdio: "ignore", detached: true },
   );
   children.push(chrome);
   await waitFor(() => answers(chromePort), 30_000, "headless Chrome");
   const transcript = path.join(found.root, "transcript.jsonl");
-  const tap = spawn(process.execPath, [path.join(TS_DIR, "tests", "m3", "tap.ts"), "--listen", String(tapPort), "--out", transcript, "--upstream", String(chromePort), "--chrome-pid", String(chrome.pid), "--emulate-dispatch-click", "1"], {
+  const tap = spawn(process.execPath, [path.join(TS_DIR, "tests", "m3", "tap.ts"), "--listen", String(tapPort), "--out", transcript, "--upstream", String(chromePort), "--chrome-pid", String(chrome.pid), "--emulate-dispatch-click", "1", "--emulate-act-hold", "1", "--emulate-hidden-wheel-refusal", "1"], {
     stdio: ["ignore", "pipe", "inherit"],
     detached: true,
   });
@@ -144,6 +149,14 @@ export type Asked = { exit: number; out: string; err: string; code?: string; loa
 
 export async function step(world: World, argv: string[], options: Record<string, unknown> = {}, credential: string | null = CREDENTIAL, key = world.key, name = argv.join(" ")): Promise<Asked> {
   await tap(world, "mark", { step: name, argv });
+  try {
+    return await asked(world, argv, options, credential, key);
+  } finally {
+    await tap(world, "unhold");
+  }
+}
+
+async function asked(world: World, argv: string[], options: Record<string, unknown>, credential: string | null, key: string): Promise<Asked> {
   const request: Record<string, unknown> = { argv, options: { humanize: false, timeout_ms: 25000, ...options }, cwd: "/", env: {}, stdin: null };
   if (credential !== null) request["credential"] = credential;
   const { text } = await raw(path.join(world.found.browse, `${key}.sock`), `${JSON.stringify(request)}\n`, { timeoutMs: 60_000 });

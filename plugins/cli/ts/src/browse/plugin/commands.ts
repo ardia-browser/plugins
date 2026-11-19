@@ -10,6 +10,7 @@ import { asData, renderReport } from "../changes/text.ts";
 import { type Node, walk } from "../snapshot/tree.ts";
 import { type PluginPage } from "./page.ts";
 import { refuseProtected } from "./protected.ts";
+import { actingStep } from "./acting.ts";
 import { attach, collect, framesNotRead, keepRefs, noteShown, observe, onlyTheFieldChanged, previous, remember } from "./ax.ts";
 import { center, describe, editable, type Element, focus, locate, notEditable } from "./dom.ts";
 import { buttonOf, clearField, clickAt, comboEvents, pressCombo, typeText } from "./input.ts";
@@ -219,38 +220,43 @@ async function loaderNow(session: PluginSession): Promise<string | null> {
 }
 
 export async function runPluginCommand(session: PluginSession, options: Options, name: string, argv: string[], commands: Record<string, PluginHandler> = PLUGIN_COMMANDS): Promise<Result> {
-  const handler = Object.hasOwn(commands, name) ? commands[name] : undefined;
-  if (handler === undefined) throw new PluginRefused(`\`${name}\` isn't available to plugins`);
-  const ctx = new PluginCtx(session, options, name);
-  const expected = typeof options["expect_loader"] === "string" && options["expect_loader"] ? options["expect_loader"] : null;
-  if (expected !== null && name !== "tab") {
-    await session.page();
-    if ((await loaderNow(session)) !== expected) {
-      flag("plugin_loader_before", true);
-      throw new BrowseError(DOCUMENT_CHANGED, null, "document_changed");
-    }
-  }
-  let failure: unknown = null;
-  let result: Result | null = null;
+  session.acting = actingStep([name, ...argv]);
   try {
-    result = await handler(ctx, argv);
-  } catch (error) {
-    if (error instanceof Cancelled) throw error;
-    failure = error;
-  }
-  if (expected !== null && name !== "tab" && !(failure instanceof ConnectionLost)) {
-    let now: string | null;
+    const handler = Object.hasOwn(commands, name) ? commands[name] : undefined;
+    if (handler === undefined) throw new PluginRefused(`\`${name}\` isn't available to plugins`);
+    const ctx = new PluginCtx(session, options, name);
+    const expected = typeof options["expect_loader"] === "string" && options["expect_loader"] ? options["expect_loader"] : null;
+    if (expected !== null && name !== "tab") {
+      await session.page();
+      if ((await loaderNow(session)) !== expected) {
+        flag("plugin_loader_before", true);
+        throw new BrowseError(DOCUMENT_CHANGED, null, "document_changed");
+      }
+    }
+    let failure: unknown = null;
+    let result: Result | null = null;
     try {
-      now = await loaderNow(session);
+      result = await handler(ctx, argv);
     } catch (error) {
-      if (failure !== null) throw failure;
-      throw error;
+      if (error instanceof Cancelled) throw error;
+      failure = error;
     }
-    if (now !== expected) {
-      flag("plugin_loader_after", true);
-      throw new BrowseError(DOCUMENT_CHANGED_AFTER, { ran: true }, "document_changed_after");
+    if (expected !== null && name !== "tab" && !(failure instanceof ConnectionLost)) {
+      let now: string | null;
+      try {
+        now = await loaderNow(session);
+      } catch (error) {
+        if (failure !== null) throw failure;
+        throw error;
+      }
+      if (now !== expected) {
+        flag("plugin_loader_after", true);
+        throw new BrowseError(DOCUMENT_CHANGED_AFTER, { ran: true }, "document_changed_after");
+      }
     }
+    if (failure !== null) throw failure;
+    return result as Result;
+  } finally {
+    session.acting = false;
   }
-  if (failure !== null) throw failure;
-  return result as Result;
 }

@@ -44,6 +44,7 @@ export class PluginSession {
   autoDialog: boolean;
   pinTab = false;
   credential: string | null = null;
+  acting = false;
   current: string | null = null;
   readonly pages = new Map<string, PluginPage>();
   readonly routes = new Map<string, PluginPage>();
@@ -95,7 +96,7 @@ export class PluginSession {
     }
     for (const name of LOADING_EVENTS) browser.link?.on(name, (method, params, session) => this.onEvent(method, params, session));
     this.browser = browser;
-    this.link = new PluginLink(browser);
+    this.link = new PluginLink(browser, () => this.acting);
     this.instance = this.config.endpoint;
     for (const page of this.pages.values()) page.detach();
     this.routes.clear();

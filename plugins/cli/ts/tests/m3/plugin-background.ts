@@ -16,7 +16,8 @@ const FORM = `<!doctype html><title>Background form</title>
 <input id="field" aria-label="Field"></form>
 <p id="log">nothing yet</p>
 <div style="height:3000px"></div>
-<div id="lower" style="height:200px;overflow:auto"><p>lower area</p></div>`;
+<div id="lower" style="height:200px;overflow:auto"><p>lower area</p><button id="low" onclick="document.getElementById('lowlog').textContent = 'clicked'">Low</button></div>
+<p id="lowlog">not clicked</p>`;
 const FRONT = `<!doctype html><title>Front</title><p>visible tab</p>`;
 
 type Msg = { id?: number; method?: string; params?: Record<string, unknown>; result?: Record<string, unknown>; error?: { message: string }; sessionId?: string };
@@ -87,6 +88,21 @@ try {
     await sleep(50);
   }
   results["visibility_before"] = await visibility();
+  const front = String(((await owner.send("Target.getTargets"))["targetInfos"] as { targetId: string; type: string; url: string }[]).find((info) => info.type === "page" && info.url.endsWith("/front"))?.targetId);
+  const holds: { act: string; during: string; after: string }[] = [];
+  const act = async <T>(name: string, run: () => Promise<T>): Promise<T> => {
+    await owner.send("Target.activateTarget", { targetId: target });
+    await sleep(150);
+    const during = await visibility();
+    try {
+      return await run();
+    } finally {
+      await owner.send("Target.activateTarget", { targetId: front });
+      await sleep(150);
+      holds.push({ act: name, during, after: await visibility() });
+    }
+  };
+  results["hold"] = "emulated by the harness: Target.activateTarget on the owner session around each act (the engine's act visibility hold)";
   const targets = ((await plugin.send("Target.getTargets"))["targetInfos"] as { targetId: string; type: string; attached: boolean; url: string }[]).filter((info) => info.type === "page").map((info) => ({ url: info.url, front: info.targetId !== target }));
   results["tabs"] = targets;
 
@@ -116,57 +132,51 @@ try {
   };
 
   const field = await backendOf("#field");
-  const [x, y] = center(await boxOf(field));
-  const hit = await p("DOM.getNodeForLocation", { x: Math.round(x), y: Math.round(y), includeUserAgentShadowDOM: false, ignorePointerEventsNone: false });
-  results["hit_test_found_field_without_fresh_layout"] = hit["backendNodeId"] === field;
-  results["field_focused_before_click"] = (await axProps(field)).focused;
-  await p("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", buttons: 1, clickCount: 1 });
-  await p("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", buttons: 0, clickCount: 1 });
-  results["click_stand_in"] = "Input.dispatchMouseEvent pressed+released (stock Chrome has no Ardia.dispatchClick)";
-  results["field_focused_before_insert"] = (await axProps(field)).focused;
-  await p("Input.insertText", { text: "hello" });
-  await p("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r", unmodifiedText: "\r" });
-  await p("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
-  await sleep(200);
-
+  await act("type and submit", async () => {
+    const [x, y] = center(await boxOf(field));
+    const hit = await p("DOM.getNodeForLocation", { x: Math.round(x), y: Math.round(y), includeUserAgentShadowDOM: false, ignorePointerEventsNone: false });
+    results["hit_test_found_field_without_fresh_layout"] = hit["backendNodeId"] === field;
+    results["field_focused_before_click"] = (await axProps(field)).focused;
+    await p("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", buttons: 1, clickCount: 1 });
+    await p("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", buttons: 0, clickCount: 1 });
+    results["click_stand_in"] = "Input.dispatchMouseEvent pressed+released (stock Chrome has no Ardia.dispatchClick)";
+    results["field_focused_before_insert"] = (await axProps(field)).focused;
+    await p("Input.insertText", { text: "hello" });
+    await p("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r", unmodifiedText: "\r" });
+    await p("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+    await sleep(200);
+  });
   results["field_value_after_enter"] = (await axProps(field)).value;
-  const earlyLog = await backendOf("#log");
-  results["submission_after_enter"] = String((await p("DOM.getOuterHTML", { backendNodeId: earlyLog }))["outerHTML"]).replace(/<[^>]+>/gu, "");
-  results["visibility_after_enter"] = await visibility();
   try {
-  const lower = await backendOf("#lower");
-  const metrics = async () => (await p("Page.getLayoutMetrics"))["cssLayoutViewport"] as { pageY: number; clientHeight: number; clientWidth: number };
-  const startY = (await metrics()).pageY;
-  let inView = false;
-  let tries = 0;
-  for (; tries < 8 && !inView; tries += 1) {
-    const view = await metrics();
-    const border = await boxOf(lower);
-    const top = Math.min(at(border, 1), at(border, 3), at(border, 5), at(border, 7));
-    const bottom = Math.max(at(border, 1), at(border, 3), at(border, 5), at(border, 7));
-    if (top >= 0 && bottom <= view.clientHeight) {
-      inView = true;
-      break;
-    }
-    const delta = top < 0 ? top - 20 : bottom - view.clientHeight + 20;
-    await p("Input.dispatchMouseEvent", { type: "mouseWheel", x: view.clientWidth / 2, y: view.clientHeight / 2, deltaX: 0, deltaY: delta, button: "none", buttons: 0 });
-    await sleep(150);
-  }
-  const endY = (await metrics()).pageY;
-  results["scroll"] = { startY, endY, inView, wheels: tries };
+    await act("scroll into view and click", async () => {
+      const low = await backendOf("#low");
+      const metrics = async () => (await p("Page.getLayoutMetrics"))["cssLayoutViewport"] as { pageY: number; clientHeight: number; clientWidth: number };
+      const startY = (await metrics()).pageY;
+      let point = center(await boxOf(low));
+      let view = await metrics();
+      let wheels = 0;
+      const inside = () => point[0] >= 2 && point[1] >= 2 && point[0] <= view.clientWidth - 2 && point[1] <= view.clientHeight - 2;
+      while (!inside() && wheels < 4) {
+        await p("Input.dispatchMouseEvent", { type: "mouseWheel", x: view.clientWidth / 2, y: view.clientHeight / 2, deltaX: 0, deltaY: point[1] - view.clientHeight / 2, button: "none", buttons: 0 });
+        wheels += 1;
+        await sleep(150);
+        point = center(await boxOf(low));
+        view = await metrics();
+      }
+      const inView = inside();
+      if (inView) {
+        await p("Input.dispatchMouseEvent", { type: "mousePressed", x: point[0], y: point[1], button: "left", buttons: 1, clickCount: 1 });
+        await p("Input.dispatchMouseEvent", { type: "mouseReleased", x: point[0], y: point[1], button: "left", buttons: 0, clickCount: 1 });
+        await sleep(200);
+      }
+      const lowlog = await backendOf("#lowlog");
+      const clicked = String((await p("DOM.getOuterHTML", { backendNodeId: lowlog }))["outerHTML"]).replace(/<[^>]+>/gu, "");
+      results["scroll"] = { startY, endY: (await metrics()).pageY, inView, wheels, clicked };
+    });
   } catch (error) {
     results["scroll_error"] = String(error);
-    results["pageY_after_unanswered_wheel"] = ((await p("Page.getLayoutMetrics"))["cssLayoutViewport"] as { pageY: number }).pageY;
-    try {
-      await p("Input.dispatchKeyEvent", { type: "keyDown", key: "Shift", code: "ShiftLeft", windowsVirtualKeyCode: 16, modifiers: 8 });
-      await p("Input.dispatchKeyEvent", { type: "keyUp", key: "Shift", code: "ShiftLeft", windowsVirtualKeyCode: 16 });
-      results["key_after_unanswered_wheel"] = "answered";
-    } catch (keyError) {
-      results["key_after_unanswered_wheel"] = String(keyError);
-    }
-    const after = await new Promise<string>((resolve) => setTimeout(async () => resolve(String(await visibility())), 0));
-    results["visibility_at_scroll_error"] = after;
   }
+  results["holds"] = holds;
 
   results["field_value"] = (await axProps(field)).value;
   const log = await backendOf("#log");
@@ -177,8 +187,11 @@ try {
   results["checks"] = {
     field_holds_hello: results["field_value"] === "hello",
     submission_recorded: results["submission"] === "submitted:hello",
-    scroll_moved: Boolean((results["scroll"] as { endY?: number; startY?: number; inView?: boolean } | undefined)?.inView),
-    tab_stayed_hidden: results["visibility_before"] === "hidden" && results["visibility_after"] === "hidden",
+    wheeled_into_view_and_clicked: (() => {
+      const scroll = results["scroll"] as { endY?: number; startY?: number; inView?: boolean; clicked?: string; wheels?: number } | undefined;
+      return Boolean(scroll?.inView) && (scroll?.endY ?? 0) > (scroll?.startY ?? 0) && scroll?.clicked === "clicked" && (scroll?.wheels ?? 9) <= 4;
+    })(),
+    hidden_before_and_after_every_act: results["visibility_before"] === "hidden" && results["visibility_after"] === "hidden" && holds.length === 2 && holds.every((held) => held.during === "visible" && held.after === "hidden"),
     no_runtime_on_plugin_session: !sent.some((method) => method.startsWith("Runtime.")),
   };
   plugin.close();

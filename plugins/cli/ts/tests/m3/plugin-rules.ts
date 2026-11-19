@@ -1,7 +1,8 @@
 import { type Entry, type Message } from "./canon.ts";
+import { actingStep } from "../../src/browse/plugin/acting.ts";
 import { forbidden, INPUT_METHODS, KEY_COMMANDS, mouseViolation, PAGE_SESSION_ONLY, SENT_METHODS } from "../../src/browse/plugin/policy.ts";
 
-export type Violation = { rule: "forbidden" | "unlisted" | "pipelined" | "key_params" | "session"; at: number; method: string; detail: string };
+export type Violation = { rule: "forbidden" | "unlisted" | "pipelined" | "key_params" | "session" | "wheel_outside_act" | "hidden_wheel"; at: number; method: string; detail: string };
 
 type Wire = { asked: Map<number, Message>; pageTargets: Set<string>; pageSessions: Set<string> };
 
@@ -50,8 +51,19 @@ export function pluginViolations(entries: readonly Entry[]): Violation[] {
   const found: Violation[] = [];
   const outstanding = new Map<number, Map<number, string>>();
   const wires = new Map<number, Wire>();
+  const hiddenWheels = new Set<string>();
+  let acting: boolean | null = null;
+  let stepName = "";
   entries.forEach((entry, at) => {
-    if (entry.k === "mark") return;
+    if (entry.k === "mark") {
+      stepName = String(entry.step ?? "");
+      acting = Array.isArray(entry["argv"]) ? actingStep(entry["argv"] as unknown[]) : null;
+      return;
+    }
+    if (entry.k === "visibility") {
+      if (entry["state"] === "hidden") hiddenWheels.add(`${entry.c ?? 0}:${String(entry["wheel"])}`);
+      return;
+    }
     const conn = entry.c ?? 0;
     const message = parsed(entry.m);
     if (message === null) return;
@@ -61,6 +73,10 @@ export function pluginViolations(entries: readonly Entry[]): Violation[] {
     wires.set(conn, wire);
     if (entry.k === "emulated") return;
     if (entry.k === "in" && typeof message.id === "number") {
+      if (hiddenWheels.delete(`${conn}:${message.id}`)) {
+        const said = String((message.error as { message?: unknown } | undefined)?.message ?? "");
+        if (!said.startsWith("ardia: page_hidden")) found.push({ rule: "hidden_wheel", at, method: "Input.dispatchMouseEvent", detail: "a wheel reached a hidden page instead of being refused" });
+      }
       waiting.delete(message.id);
       noteAnswer(wire, message);
       return;
@@ -73,6 +89,9 @@ export function pluginViolations(entries: readonly Entry[]): Violation[] {
     const method = message.method;
     const params = (message.params ?? {}) as Record<string, unknown>;
     if (typeof message.id === "number") wire.asked.set(message.id, message);
+    if (method === "Input.dispatchMouseEvent" && params["type"] === "mouseWheel" && acting !== true) {
+      found.push({ rule: "wheel_outside_act", at, method, detail: `a wheel during ${acting === false ? "a read" : "a step the harness didn't classify"} (${stepName || "before any step"})` });
+    }
     if (PAGE_SESSION_ONLY.has(method) && (message.sessionId === undefined || !wire.pageSessions.has(message.sessionId))) {
       found.push({ rule: "session", at, method, detail: message.sessionId === undefined ? "sent on the browser session, not a page target's own" : `sent on session ${message.sessionId}, which isn't a page target's own` });
     }

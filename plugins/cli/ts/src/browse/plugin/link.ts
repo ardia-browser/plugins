@@ -10,6 +10,8 @@ export const EARLIER_INPUT_WAIT = 10;
 export const ENGINE_CODES: readonly (readonly [string, string, string])[] = [
   ["ardia: tab_out_of_scope", "tab_out_of_scope", "plugin_out_of_scope"],
   ["ardia: document_changed", "document_changed", "plugin_lease_refused"],
+  ["ardia: page_hidden", "page_hidden", "plugin_page_hidden"],
+  ["ardia: busy", "busy", "plugin_engine_busy"],
 ];
 
 export function unavailable(error: unknown): error is CdpError {
@@ -40,7 +42,10 @@ export class PluginLink {
   private inputOutstanding = false;
   readonly pageSessions = new Set<string>();
 
-  constructor(readonly browser: Browser) {}
+  constructor(
+    readonly browser: Browser,
+    readonly acting: () => boolean = () => true,
+  ) {}
 
   get inputInFlight(): boolean {
     return this.inputOutstanding;
@@ -48,6 +53,9 @@ export class PluginLink {
 
   async send(method: string, params: CdpResult = {}, session: string | null = null, timeout = 30): Promise<CdpResult> {
     checkRequest(method, params);
+    if (method === "Input.dispatchMouseEvent" && params["type"] === "mouseWheel" && !this.acting()) {
+      throw new PluginPolicy("plugin mode never scrolls outside an acting step");
+    }
     if (PAGE_SESSION_ONLY.has(method) && (session === null || !this.pageSessions.has(session))) {
       throw new PluginPolicy(`plugin mode sends ${method} only on a page target's own session`);
     }

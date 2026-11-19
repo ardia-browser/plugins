@@ -193,9 +193,18 @@ Testing through the tap, and check the transcript instead of comparing two sides
 | Scenarios | `ts/tests/m3/plugin-live.test.ts`, `plugin-live2.test.ts` | Every verb, the document check before and after, engine refusals injected as CDP errors (`/tap/fault` with `message`), a held input event that must hold back the next one, credential refusals, the files left in `Browse/`, then (a) and (b) on the whole transcript. Skipped without `ARDIA_M3_CHROME`. |
 | Pending cases | `ts/tests/m3/plugin-pending.ts <f1-early.json> [--phase 1\|2]` | Runs M1's pending F1-early cases against a fresh plugin daemon each and compares the answer with the recorded reply: `pass` (equal), `designed` (a listed difference, with its reason), `ran` (the reply was a placeholder and the step ran), `n/a` (client-only), `fail`. |
 
-Stock Chrome has no `Ardia.dispatchClick` (ardia#2808), so the plugin world starts the tap with the test-only
-`--emulate-dispatch-click 1`: the tap answers each `Ardia.dispatchClick` itself after sending Chromium a press, waiting
-for its answer, then a release. Those two events are written as `{"k": "emulated"}`, which the rules don't read as the
+Stock Chrome has none of ardia#2808's plugin additions, so the plugin world starts the tap with three test-only fakes:
+`--emulate-dispatch-click 1` answers each `Ardia.dispatchClick` itself after sending Chromium a press, waiting for its
+answer, then a release; `--emulate-act-hold 1` stands in for the engine's act visibility hold: after `POST /tap/hold
+{target, front}`, the mark of an acting step makes the tap activate `target` through its own owner connection
+(`Target.activateTarget`) before the step runs, and `/tap/unhold`, which the harness posts after every step,
+activates `front` again (both written as `{"k": "hold"}`); `--emulate-hidden-wheel-refusal 1` reads
+`document.visibilityState` before forwarding a `mouseWheel`, writes `{"k": "visibility"}`, and refuses the wheel with
+`ardia: page_hidden` when the page is hidden. Check (e) fails a wheel during a step that doesn't act (or before any
+step) and a wheel a hidden page saw that wasn't refused with `ardia: page_hidden`. Scenarios that need a fake say so in
+their names (`[tap emulates Ardia.dispatchClick]`, `[tap emulates the act visibility hold]`). `plugin-hidden.test.ts`
+acts on a really hidden tab and needs a full Chrome for Testing (`ARDIA_F1_CHROME`, `--headless=new`);
+chrome-headless-shell never hides a tab. Those two events are written as `{"k": "emulated"}`, which the rules don't read as the
 daemon's traffic. Scenarios whose clicks need it say so in their names (`[tap emulates Ardia.dispatchClick]`); against
 a real plugin engine the flag stays off.
 
@@ -207,8 +216,10 @@ step sent.
 `ts/tests/m3/plugin-background.ts` (run with Bun; `ARDIA_F1_CHROME` names a full Chrome for Testing, run
 `--headless=new`, since chrome-headless-shell never hides a tab) opens a form in a background tab
 (`Target.createTarget {background: true}`) behind a visible one and acts on it the plugin's way over raw CDP: a click
-(a buttoned press and release stands in for `Ardia.dispatchClick` on stock Chrome), `Input.insertText`, Enter, and a
-wheel to bring a lower area into view. It reads the results through DOM and the AX tree (no Runtime on the plugin's
+(a buttoned press and release stands in for `Ardia.dispatchClick` on stock Chrome), `Input.insertText`, Enter, and, in a
+second act, wheels (at most 4) that bring a button in a lower area into view and a click on it. Each act holds the tab
+visible the way the engine's act hold will (the harness activates it on the owner session, then the front tab again),
+and the report checks the tab is hidden before and after every act. It reads the results through DOM and the AX tree (no Runtime on the plugin's
 session), reads `visibilityState` through a separate owner session, and prints a JSON report, including whether hit
 testing found the field and whether the field had focus before the insert. Rerun it against the ardia#2808 build
 (engine/next) when it exists, where `Ardia.dispatchClick` is real.

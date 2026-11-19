@@ -5,6 +5,7 @@ import { unavailable } from "./link.ts";
 import { Result } from "../daemon/render.ts";
 import { need, parse, waitUntil } from "../daemon/stub/commands.ts";
 import { type AxNode, buildTree, isAxList, type Node, ROLE_NAMES } from "../snapshot/tree.ts";
+import { FIND_ACTIONS, findArguments } from "./acting.ts";
 import { attach, axNodes, observe } from "./ax.ts";
 import { clickElement, fillElement, type PluginCtx, PLUGIN_COMMANDS, type PluginHandler, pressIn } from "./commands.ts";
 import { boxOf, center, describe, type Element, focus, locate } from "./dom.ts";
@@ -17,9 +18,7 @@ export const SCROLL_DEFAULT = 300;
 export const FIND_WAIT = 1.5;
 export const MAX_CANDIDATES = 8;
 const BLOCK_ROLES = new Set(["paragraph", "heading", "listitem", "list", "row", "table", "article", "region", "main", "navigation", "banner", "contentinfo", "form", "dialog", "alertdialog", "blockquote", "figure", "section", "Section", "LineBreak"]);
-const FIND_ACTIONS = ["click", "fill", "type", "press", "check", "uncheck", "select", "hover", "focus", "dblclick", "text"];
 const PLUGIN_FIND_ACTIONS = new Set(["click", "fill", "type", "press", "focus", "text"]);
-const FIND_LOCATORS = ["role", "text", "label", "placeholder", "alt", "title", "testid", "first", "last", "nth"];
 const LABELLED = new Set(["textbox", "searchbox", "combobox", "checkbox", "radio", "switch", "slider", "spinbutton", "listbox"]);
 const HIDDEN_REASONS = new Set(["notRendered", "notVisible"]);
 
@@ -311,20 +310,6 @@ async function cmdWait(ctx: PluginCtx, argv: string[]): Promise<Result> {
   return new Result({ selector, waited: "selector" });
 }
 
-function findArguments(given: string[], name: string | null): [string, string[], string | null] {
-  let locator = given[0] as string;
-  const args = given.slice(1);
-  if (locator.includes("=") && FIND_LOCATORS.includes(locator.slice(0, locator.indexOf("=")))) {
-    args.unshift(locator.slice(locator.indexOf("=") + 1));
-    locator = locator.slice(0, locator.indexOf("="));
-  }
-  if (locator === "role" && args[0] !== undefined && FIND_ACTIONS.includes(args[0]) && args.length > 1 && !FIND_ACTIONS.includes(args[1] as string)) {
-    [args[0], args[1]] = [args[1] as string, args[0]];
-  }
-  if (locator === "role" && name === null && args.length >= 2 && !FIND_ACTIONS.includes(args[1] as string)) name = args.splice(1, 1)[0] as string;
-  return [locator, args, name];
-}
-
 type Candidate = { backend: number; role: string; name: string };
 
 function axCandidates(raw: readonly AxNode[], keep: (role: string, name: string) => boolean): Candidate[] {
@@ -463,13 +448,6 @@ async function cmdFind(ctx: PluginCtx, argv: string[]): Promise<Result> {
   }
   const text = await elementText(element);
   return new Result({ ref: element.label, text }, text, true);
-}
-
-export function findAction(argv: string[]): string {
-  const [options, given] = parse(argv, { "--name": "value", "--exact": "bool", "--partial": "bool", "--no-humanize": "bool" });
-  if (given.length === 0) return "click";
-  const [locator, args] = findArguments(given, (options["name"] as string | undefined) ?? null);
-  return (locator === "nth" ? args[2] : args[1]) ?? "click";
 }
 
 export const PHASE_TWO: Record<string, PluginHandler> = {
