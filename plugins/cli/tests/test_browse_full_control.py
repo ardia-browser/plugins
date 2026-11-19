@@ -473,6 +473,7 @@ class RawCdp(unittest.TestCase):
         from unittest import mock
 
         from ardia_cli.browse import connection, state as browse_state
+        from ardia_cli.browse.errors import BrowseError
 
         def answer(message):
             return None if message["method"] == "Target.attachToTarget" else {}
@@ -498,17 +499,90 @@ class RawCdp(unittest.TestCase):
                     probing["now"] -= 1
 
             state.probe = counted
-            with mock.patch.object(browse_state, "PROBE_TIMEOUT", 0.02):
-                shown = await state.shown_target()
+            with mock.patch.object(browse_state, "PROBE_TIMEOUT", 0.02), mock.patch.object(browse_state, "PROBE_BACKOFF", 0.01):
+                with self.assertRaises(BrowseError) as refused:
+                    await state.shown_target()
             sent = len(sock.methods("Target.attachToTarget"))
             await state.browser.close()
-            return shown, sent, probing["peak"]
+            return refused.exception.code, sent, probing["peak"]
 
-        shown, sent, peak = asyncio.run(run())
-        self.assertIsNone(shown)
+        code, sent, peak = asyncio.run(run())
+        self.assertEqual(code, "attaches_unanswered")
         self.assertLessEqual(sent, connection.MAX_LATE_ATTACHES)
         self.assertLessEqual(peak, 8)
         self.assertGreater(peak, 1)
+
+    def probe_state(self, answer, targets):
+        from ardia_cli.browse import state as browse_state
+
+        state = browse_state.State.__new__(browse_state.State)
+        state.browser, sock = linked_browser(answer)
+        state.target_infos = {target: {"url": f"https://example.com/{target}"} for target in targets}
+
+        async def refresh_targets():
+            return list(state.target_infos.values())
+
+        state.refresh_targets = refresh_targets
+        return state, sock
+
+    def test_a_probe_refused_at_the_cap_is_retried_not_taken_as_inactive(self):
+        from unittest import mock
+
+        from ardia_cli.browse import connection, state as browse_state
+
+        def answer(message):
+            method, params = message["method"], message["params"]
+            if method == "Target.attachToTarget":
+                if params["targetId"] in ("TA", "TF"):
+                    return {"sessionId": "S-" + params["targetId"]}
+                return None
+            if method == "Page.getFrameTree":
+                return {"frameTree": {"frame": {"id": "F"}}}
+            if method == "Page.createIsolatedWorld":
+                return {"executionContextId": 1}
+            if method == "Runtime.evaluate":
+                return {"result": {"value": [True, True] if message.get("sessionId") == "S-TF" else [False, False]}}
+            return {}
+
+        async def run():
+            state, sock = self.probe_state(answer, ["TA", "TF"])
+            for index in range(connection.MAX_LATE_ATTACHES - 1):
+                with self.assertRaises(connection.CdpTimeout):
+                    await connection.claimed_attach(state.browser, "Target.attachToTarget", {"targetId": f"X{index}"}, 0.01)
+            with mock.patch.object(browse_state, "PROBE_BACKOFF", 0.01):
+                shown = await state.shown_target()
+            await state.browser.close()
+            return shown, [message["params"]["targetId"] for message in sock.methods("Target.attachToTarget")]
+
+        shown, asked = asyncio.run(run())
+        self.assertEqual(shown, "TF")
+        self.assertEqual(asked.count("TF"), 1)
+
+    def test_probes_still_refused_after_the_retries_say_so(self):
+        from unittest import mock
+
+        from ardia_cli.browse import connection, state as browse_state
+        from ardia_cli.browse.errors import BrowseError
+
+        def answer(message):
+            return None if message["method"] == "Target.attachToTarget" else {}
+
+        async def run():
+            state, sock = self.probe_state(answer, ["TA", "TF"])
+            for index in range(connection.MAX_LATE_ATTACHES):
+                with self.assertRaises(connection.CdpTimeout):
+                    await connection.claimed_attach(state.browser, "Target.attachToTarget", {"targetId": f"X{index}"}, 0.01)
+            with mock.patch.object(browse_state, "PROBE_BACKOFF", 0.01):
+                try:
+                    await state.shown_target()
+                except BrowseError as error:
+                    return error
+                finally:
+                    await state.browser.close()
+
+        error = asyncio.run(run())
+        self.assertIsInstance(error, Exception)
+        self.assertEqual(error.code, "attaches_unanswered")
 
     def test_an_attach_answered_at_the_cap_frees_its_slot_at_once(self):
         from ardia_cli.browse import connection

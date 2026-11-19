@@ -18,6 +18,8 @@ ACTIVE_TIMEOUT = 3.0
 APPEAR_POLL = 0.15
 PROBE_TIMEOUT = 3.0
 PROBE_FANOUT = 8
+PROBE_PASSES = 3
+PROBE_BACKOFF = 0.25
 UNKNOWN = object()
 NO_PAGE = (
     "The user isn't on a web page right now (New Tab or another Ardia view). "
@@ -380,19 +382,36 @@ class State:
             async with gate:
                 return await self.probe(target_id)
 
-        probes = await asyncio.gather(*(gated(target_id) for target_id in candidates))
-        focused = [target_id for target_id, (visible, has_focus) in zip(candidates, probes) if visible and has_focus]
-        visible = [target_id for target_id, (shown, _) in zip(candidates, probes) if shown]
-        return (focused or visible or [None])[0]
+        found: dict[str, tuple[bool, bool]] = {}
+        skipped = candidates
+        for attempt in range(PROBE_PASSES):
+            if attempt:
+                await asyncio.sleep(PROBE_BACKOFF * attempt)
+            probes = await asyncio.gather(*(gated(target_id) for target_id in skipped))
+            found.update((target_id, probed) for target_id, probed in zip(skipped, probes) if probed is not None)
+            skipped = [target_id for target_id, probed in zip(skipped, probes) if probed is None]
+            if not skipped or (True, True) in found.values():
+                break
+        focused = [target_id for target_id in candidates if found.get(target_id, (False, False)) == (True, True)]
+        visible = [target_id for target_id in candidates if found.get(target_id, (False, False))[0]]
+        if focused or visible:
+            return (focused or visible)[0]
+        if skipped:
+            raise BrowseError(
+                f"Couldn't check which tab is active: {len(skipped)} tabs weren't probed because DevTools attaches on this connection "
+                "haven't been answered. Try again once Ardia catches up, or `ardia browse close` this session to start its connection over",
+                code="attaches_unanswered",
+            )
+        return None
 
-    async def probe(self, target_id: str) -> tuple[bool, bool]:
+    async def probe(self, target_id: str) -> tuple[bool, bool] | None:
         from ardia_cli.browse.connection import claimed_attach
         from ardia_cli.browse.page import WORLD_NAME
 
         try:
             attached = await claimed_attach(self.browser, "Target.attachToTarget", {"targetId": target_id, "flatten": True}, PROBE_TIMEOUT)
-        except BrowseError:
-            return False, False
+        except BrowseError as error:
+            return None if error.code == "attaches_unanswered" else (False, False)
         session = attached["sessionId"]
         try:
             tree = await self.browser.send("Page.getFrameTree", None, session, PROBE_TIMEOUT)
