@@ -1,6 +1,6 @@
 import { Cancelled } from "../cdp/cancel.ts";
 
-type Waiter = { grant: () => void; settled: boolean };
+type Waiter = { grant: () => void; expire: () => void; settled: boolean; deadline: number };
 
 export class FifoLock {
   private held = false;
@@ -33,32 +33,39 @@ export class FifoLock {
       };
       const waiter: Waiter = {
         settled: false,
+        deadline: timeoutSeconds === null ? Number.POSITIVE_INFINITY : performance.now() + timeoutSeconds * 1000,
         grant: () => {
           waiter.settled = true;
           leave();
           resolve(true);
         },
-      };
-      this.waiters.push(waiter);
-      signal?.addEventListener("abort", aborted, { once: true });
-      if (timeoutSeconds !== null) {
-        timer = setTimeout(() => {
+        expire: () => {
           if (waiter.settled) return;
           waiter.settled = true;
           leave();
           resolve(false);
-        }, timeoutSeconds * 1000);
-      }
+        },
+      };
+      this.waiters.push(waiter);
+      signal?.addEventListener("abort", aborted, { once: true });
+      if (timeoutSeconds !== null) timer = setTimeout(() => waiter.expire(), timeoutSeconds * 1000);
     });
   }
 
   release(): void {
     if (!this.held) throw new Error("Lock is not acquired.");
-    const next = this.waiters[0];
-    if (next === undefined) {
-      this.held = false;
+    for (;;) {
+      const next = this.waiters[0];
+      if (next === undefined) {
+        this.held = false;
+        return;
+      }
+      if (performance.now() >= next.deadline) {
+        next.expire();
+        continue;
+      }
+      next.grant();
       return;
     }
-    next.grant();
   }
 }

@@ -9,7 +9,10 @@ import { parseQsl, quote, urlsplit } from "../pylib/urllib.ts";
 import { strerror } from "../libc.ts";
 import { closeFd, readFdUpTo } from "./paths.ts";
 import { Cancelled, checkCancelled, currentSignal } from "./cdp/cancel.ts";
-import { reprStr } from "../py.ts";
+import { isSpace, strip } from "../py.ts";
+import { codePoints } from "../pystr.ts";
+import { reprText } from "../pylib/str.ts";
+import { decimalValue } from "../pylib/unicode.ts";
 
 export const CONTROL_FILE = "ArdiaControl.json";
 const BROWSER_PATH = /^\/devtools\/browser\/[0-9A-Za-z-]{1,128}$/;
@@ -50,8 +53,10 @@ function fromWs(url: string, source: string): Endpoint {
   return { ws: url, source, explicit: true, active: null, instance: `${host}${parts.path}` };
 }
 
-async function fromPort(port: number, source: string, signal: AbortSignal | null): Promise<Endpoint> {
-  if (!(port > 0 && port < 65536)) throw new EndpointError(`${source} must be between 1 and 65535, not ${port}`);
+async function fromPort(given: bigint | number, source: string, signal: AbortSignal | null): Promise<Endpoint> {
+  const exact = typeof given === "bigint" ? given : BigInt(Math.trunc(given));
+  if (!(exact > 0n && exact < 65536n)) throw new EndpointError(`${source} must be between 1 and 65535, not ${exact}`);
+  const port = Number(exact);
   let info: unknown;
   try {
     info = parseText((await versionBody(port, signal)).toString("utf8"));
@@ -112,9 +117,40 @@ function versionBody(port: number, signal: AbortSignal | null): Promise<Buffer> 
   });
 }
 
-export function portNumber(text: string): number {
-  if (!/^\s*[+-]?[0-9]+(_[0-9]+)*\s*$/u.test(text)) throw new EndpointError(`ARDIA_PORT must be a port number, not ${reprStr(text)}`);
-  return Number.parseInt(text.replaceAll("_", ""), 10);
+function intSpace(ch: string): boolean {
+  const code = ch.codePointAt(0) ?? 0;
+  return code < 0x80 ? " \t\n\v\f\r".includes(ch) : isSpace(ch);
+}
+
+export function pythonInt(text: string): bigint | null {
+  const body = strip(text, intSpace);
+  let sign = 1n;
+  let at = 0;
+  if (body.startsWith("+") || body.startsWith("-")) {
+    if (body.startsWith("-")) sign = -1n;
+    at = 1;
+  }
+  const points = codePoints(body.slice(at));
+  if (points.length === 0 || points[0] === "_" || points[points.length - 1] === "_") return null;
+  let digits = "";
+  let previous = "";
+  for (const point of points) {
+    if (point === "_") {
+      if (previous === "_") return null;
+    } else {
+      const value = decimalValue(point.codePointAt(0) as number);
+      if (value < 0) return null;
+      digits += String(value);
+    }
+    previous = point;
+  }
+  return sign * BigInt(digits);
+}
+
+export function portNumber(text: string): bigint {
+  const value = pythonInt(text);
+  if (value === null) throw new EndpointError(`ARDIA_PORT must be a port number, not ${reprText(text)}`);
+  return value;
 }
 
 function alive(pid: number): boolean {
@@ -180,7 +216,7 @@ function setting(value: unknown): string | null {
   return typeof value === "string" && value !== "" ? value : null;
 }
 
-export type EnvEndpoint = { kind: "ws"; url: string; source: string } | { kind: "port"; port: number; source: string };
+export type EnvEndpoint = { kind: "ws"; url: string; source: string } | { kind: "port"; port: bigint; source: string };
 
 export function envEndpoint(env: NodeJS.ProcessEnv = process.env): EnvEndpoint | null {
   const ws = env["ARDIA_WS"];
@@ -196,7 +232,7 @@ export async function resolve(config: EndpointConfig, signal: AbortSignal | null
   checkCancelled(signal);
   const ws = setting(config.ws);
   if (ws !== null) return fromWs(ws, "--ws");
-  if (typeof config.port === "number" || typeof config.port === "bigint") return fromPort(Number(config.port), "--port", signal);
+  if (typeof config.port === "number" || typeof config.port === "bigint") return fromPort(typeof config.port === "bigint" ? config.port : Number(config.port), "--port", signal);
   const fromEnv = envEndpoint();
   if (fromEnv !== null) return fromEnv.kind === "ws" ? fromWs(fromEnv.url, fromEnv.source) : fromPort(fromEnv.port, fromEnv.source, signal);
   const dataDir = setting(config.data_dir);

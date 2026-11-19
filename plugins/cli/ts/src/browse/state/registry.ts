@@ -23,6 +23,10 @@ function table(data: Data, name: Table): JsonObject {
   return data.get(name) as JsonObject;
 }
 
+export function nonceOf(slot: string): string {
+  return slot.slice("SLOT".length).toLowerCase();
+}
+
 export function temporaryLimit(): BrowseError {
   return new BrowseError(
     `Ardia already has ${MAX_TEMPORARIES} tabs open for ardia browse reads and scripts; let them finish, or end ` +
@@ -272,7 +276,7 @@ export class Registry {
       const opened = table(data, "opened");
       if ([...opened.values()].filter((owner) => truthy(map(owner).get("temporary"))).length >= MAX_TEMPORARIES) throw temporaryLimit();
       const slot = `SLOT${tokenHex(14).toUpperCase()}`;
-      opened.set(slot, this.temporaryRecord());
+      opened.set(slot, new Map([...this.temporaryRecord(), ["nonce", nonceOf(slot)]]));
       return slot;
     });
   }
@@ -293,6 +297,19 @@ export class Registry {
     return this.open(instance, (data) =>
       [...table(data, "opened")].filter(([, owner]) => truthy(map(owner).get("temporary")) && map(owner).get("key") === this.key).map(([target]) => target),
     );
+  }
+
+  nonces(instance: Instance): Map<string, string> {
+    if (this.browseFd === null) return new Map();
+    return this.open(instance, (data) => {
+      const found = new Map<string, string>();
+      for (const [slot, owner] of table(data, "opened")) {
+        const fields = map(owner);
+        const nonce = fields.get("nonce");
+        if (truthy(fields.get("temporary")) && fields.get("key") === this.key && typeof nonce === "string") found.set(slot, nonce);
+      }
+      return found;
+    });
   }
 
   claimOrphans(instance: Instance): string[] {

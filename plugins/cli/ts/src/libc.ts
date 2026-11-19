@@ -17,7 +17,7 @@ type Native = {
   unlinkAt(dir: number, name: Name): number;
   sizeAt(dir: number, name: Name): number;
   statAt(dir: number, name: string): [number, number, bigint, bigint, number] | number;
-  armWatchdog(dir: number, name: string, dev: bigint, ino: bigint, ms: number, code: number): number;
+  armWatchdog(dir: number, name: string, dev: bigint, ino: bigint, ms: number, code: number, fireDelay?: number): number;
   disarmWatchdog(): number;
   renameExclusiveAt(fromDir: number, from: string, toDir: number, to: string): number;
   removeDirAt(dir: number, name: string): number;

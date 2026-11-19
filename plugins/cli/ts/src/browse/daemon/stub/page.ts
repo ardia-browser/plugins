@@ -97,10 +97,11 @@ export class StubPage {
         await this.send("Inspector.enable", null, { timeout: CRASH_PROBE });
       } catch (error) {
         if (error instanceof Gated) this.crashed = known;
-        else if (!(error instanceof BrowseError)) throw error;
+        else if (!(error instanceof BrowseError) || error instanceof ConnectionLost) throw error;
       }
       if (!this.crashed) await this.enablePage();
       if (this.attaching !== session) throw new BrowseError(DETACHED, null, "tab_detached");
+      if (!browser.alive) throw new ConnectionLost();
     } catch (error) {
       this.attaching = null;
       this.state.sessions.delete(session);

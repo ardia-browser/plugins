@@ -7,7 +7,7 @@ import { parseConfig } from "../../src/browse/daemon/config.ts";
 import { Daemon } from "../../src/browse/daemon/server.ts";
 import { PathError } from "../../src/browse/paths.ts";
 import { dumps } from "../../src/json.ts";
-import { ask, config, type Scratch, scratch, socketFile, until } from "./daemon-helpers.ts";
+import { ask, config, type Scratch, scratch, socketFile, until, quietWatchdog } from "./daemon-helpers.ts";
 
 setDefaultTimeout(90_000);
 const CHROME = process.env["ARDIA_M3_CHROME"];
@@ -66,7 +66,7 @@ function kill(child: ChildProcess): void {
 
 function daemonFor(found: Scratch, session: string, port: number): Daemon {
   const text = dumps(config(found.data, session, {}, port), "spaced");
-  return new Daemon(parseConfig(text));
+  return quietWatchdog(new Daemon(parseConfig(text)));
 }
 
 afterEach(() => {

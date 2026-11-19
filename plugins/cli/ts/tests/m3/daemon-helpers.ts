@@ -164,3 +164,7 @@ export async function sessionMeta(data: string, key: string, timeoutMs = 5000): 
   if (!(await until(() => fs.existsSync(file), timeoutMs))) throw new Error(`${key}.json never appeared`);
   return JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>;
 }
+
+export function quietWatchdog<T extends object>(daemon: T): T {
+  return Object.assign(daemon, { watchdog: { arm: () => 0, disarm: () => 0 } });
+}
