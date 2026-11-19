@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from ardia_cli import command_metrics, control
 from ardia_cli.caller import Caller
+from ardia_cli.browse import rawcdp
 from ardia_cli.browse.connection import Browser
 from ardia_cli.browse.errors import BrowseError, ConnectionLost, StaleRef
 from ardia_cli.browse.page import Page
@@ -175,6 +176,7 @@ class State:
         return pages
 
     def forget_target(self, target_id: str):
+        rawcdp.forget_target(self, target_id)
         page = self.pages.pop(target_id, None)
         if page:
             page.detach()
@@ -243,6 +245,7 @@ class State:
             page = self.sessions.get(params.get("sessionId"))
             if page:
                 page.detach()
+            rawcdp.forget_session(self, params.get("sessionId"))
         for listener in list(self.listeners):
             listener(None, method, params)
 

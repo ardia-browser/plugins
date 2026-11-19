@@ -988,8 +988,22 @@ way before the daemon starts; `--params -` reads stdin, up to 1 MB in bytes, and
 A bad param is a usage error, exit 1 as for every browse command. On your tab the session picked with `tab active`
 (a borrowed tab, where `reload`, `back`, `storage` and the like refuse too), a raw call without `--target` is refused
 (`code: "borrowed_tab"`, saying the `--target <tab>` that sends it anyway): raw calls can navigate or change anything,
-so they go to a borrowed tab only when you name it. Every call counts as a mutation, so a timeout or a dropped connection reports the outcome as unknown and
-a `batch` stops there. Events aren't printed, and a domain it enables stays on for the tab until the session ends. A
+so they go to a borrowed tab only when you name it. Every call counts as a mutation, so a timeout or a dropped
+connection reports the outcome as unknown and a `batch` stops there.
+
+Raw calls run on a DevTools session of their own (`browse/rawcdp.py`), never on the one the daemon drives the tab
+with: for a tab, a flattened `Target.attachToTarget` session the daemon keeps per tab; for `--target browser`, a
+`Target.attachToBrowserTarget` session. So `cdp Runtime.disable`, `Network.disable` or an `Emulation.set…` reach
+only that raw session, and `console`, `network`, snapshots and the rest keep working as the daemon set them up.
+What persists: domains enabled and settings made through `cdp` stay on that raw session for as long as the daemon
+keeps its DevTools connection, which it drops after 30 s with nothing to do (an open `console` or `network` capture
+keeps it). The next `cdp` call then attaches a fresh raw session, so those enables and settings are off again. To
+tell, `--json` gives `data.session`: `attached` (a new raw session, the first on this tab), `kept` (the same one as
+the last call), `reattached` (a fresh one replacing an earlier raw session, after a reconnect or after Ardia detached
+it; text mode also prints a `→ …off again` notice on stderr), or `shared` (an engine that refuses
+`attachToBrowserTarget`: browser calls then go on the daemon's own browser connection, as before). Effects outside
+the session itself, such as a navigation, a cookie or a download setting, aren't undone by a reconnect. Events
+aren't printed. A
 method name that isn't `Domain.method` is a usage error. Its result is page content (`--content-boundaries` wraps it)
 and goes through the output cap. Telemetry: the browse command event's `subcommand` `cdp`, with `error_code`
 `policy_refused` from an older engine.

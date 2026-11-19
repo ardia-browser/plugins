@@ -114,4 +114,7 @@ ardia call <name> --params '{"ids": ["tab-1"]}'      # or --params - to read the
 - Ask before calling a method marked `changes` that the user didn't ask for, as for any unasked step.
 - "this Ardia is too old to list its methods": ask the user to update Ardia; the commands above still work.
 - On a page, `ardia browse cdp <Domain.method> [--param k=v] [--param k:=json] [--target browser|t<N>]` sends any Chrome
-  DevTools Protocol method to your session's tab, another tab, or the browser, and prints the result as JSON.
+  DevTools Protocol method to your session's tab, another tab, or the browser, and prints the result as JSON. It
+  runs on its own DevTools session; domains it enables reset after 30 s idle (`--json`: `data.session` is
+  `reattached`), so enable and use them back to back or in one `batch`. On a tab you took with `tab active`, name it
+  with `--target`.

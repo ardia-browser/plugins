@@ -54,8 +54,18 @@ class FakeState:
         class Browser:
             async def send(self, method, params=None, session=None, timeout=30, mutation=False):
                 state.browser_sent.append((method, params, session, timeout, mutation))
-                return state.answers.get(method, {})
+                if method == "Target.attachToTarget":
+                    state.attaches += 1
+                    return {"sessionId": f"S-{params['targetId']}-{state.attaches}"}
+                if method == "Target.attachToBrowserTarget":
+                    state.attaches += 1
+                    return {"sessionId": f"S-browser-{state.attaches}"}
+                answer = state.answers.get(method, {})
+                if isinstance(answer, Exception):
+                    raise answer
+                return answer
 
+        self.attaches = 0
         self.browser = Browser()
         self.current = "T1"
         self.extras = {}
@@ -80,6 +90,10 @@ class FakeState:
         return "t" + target_id[1:]
 
 
+def raw_sent(state):
+    return [row for row in state.browser_sent if not row[0].startswith("Target.attachTo")]
+
+
 def ctx(state, stdin=None):
     return commands.Ctx(state, {}, os.getcwd(), {}, stdin, "cdp")
 
@@ -92,25 +106,27 @@ class RawCdp(unittest.TestCase):
     def test_sends_to_the_sessions_tab(self):
         state = FakeState({"Page.getLayoutMetrics": {"cssLayoutViewport": {"clientWidth": 800}}})
         result = cdp(state, "Page.getLayoutMetrics")
-        self.assertEqual(state.pages["T1"].sent, [("Page.getLayoutMetrics", {}, 30, True)])
-        self.assertEqual(result.data, {"method": "Page.getLayoutMetrics", "target": "t1", "result": {"cssLayoutViewport": {"clientWidth": 800}}})
+        self.assertEqual(raw_sent(state), [("Page.getLayoutMetrics", {}, "S-T1-1", 30, True)])
+        self.assertEqual(state.pages["T1"].sent, [])
+        self.assertEqual(result.data, {"method": "Page.getLayoutMetrics", "target": "t1", "session": "attached",
+                                       "result": {"cssLayoutViewport": {"clientWidth": 800}}})
         self.assertEqual(json.loads(result.text), {"cssLayoutViewport": {"clientWidth": 800}})
         self.assertTrue(result.page_content)
 
     def test_params_from_flags_and_stdin(self):
         state = FakeState()
         cdp(state, "Runtime.evaluate", "--param", "expression=document.title", "--param", "returnByValue:=true", "--timeout", "5s")
-        self.assertEqual(state.pages["T1"].sent[0][:3], ("Runtime.evaluate", {"expression": "document.title", "returnByValue": True}, 5))
+        self.assertEqual(raw_sent(state)[0][:4], ("Runtime.evaluate", {"expression": "document.title", "returnByValue": True}, "S-T1-1", 5))
         cdp(state, "Runtime.evaluate", "--params", "-", "--param", "awaitPromise:=true", stdin='{"expression": "1+1"}')
-        self.assertEqual(state.pages["T1"].sent[1][1], {"expression": "1+1", "awaitPromise": True})
+        self.assertEqual(raw_sent(state)[1][1], {"expression": "1+1", "awaitPromise": True})
 
     def test_targets_the_browser_or_another_tab(self):
         state = FakeState({"Browser.getVersion": {"product": "Chrome/1"}})
         result = cdp(state, "Browser.getVersion", "--target", "browser")
-        self.assertEqual(state.browser_sent, [("Browser.getVersion", {}, None, 30, True)])
+        self.assertEqual(raw_sent(state), [("Browser.getVersion", {}, "S-browser-1", 30, True)])
         self.assertEqual(result.data["target"], "browser")
         result = cdp(state, "DOM.getDocument", "--target", "work")
-        self.assertEqual(state.pages["T2"].sent[0][0], "DOM.getDocument")
+        self.assertEqual(raw_sent(state)[1][:3], ("DOM.getDocument", {}, "S-T2-2"))
         self.assertEqual(result.data["target"], "t2")
 
     def test_an_empty_answer_says_done(self):
@@ -144,10 +160,76 @@ class RawCdp(unittest.TestCase):
             self.assertEqual(caught.exception.code, "borrowed_tab")
             self.assertIn("your tab [t1] (picked with `tab active`)", caught.exception.message)
             self.assertIn(f"`ardia browse cdp {method} --target t1`", caught.exception.message)
-        self.assertEqual(state.pages["T1"].sent, [])
-        state.tab_ids = {"t1": "T1"}
+        self.assertEqual(state.browser_sent, [])
         cdp(state, "Page.navigate", "--param", "url=https://example.test/", "--target", "t1")
-        self.assertEqual(state.pages["T1"].sent[0][0], "Page.navigate")
+        self.assertEqual(raw_sent(state)[0][0], "Page.navigate")
+
+    def test_raw_calls_get_their_own_session_kept_for_the_connection(self):
+        state = FakeState()
+        first = cdp(state, "Runtime.disable")
+        second = cdp(state, "Runtime.enable")
+        self.assertEqual((first.data["session"], second.data["session"]), ("attached", "kept"))
+        self.assertEqual([row[2] for row in raw_sent(state)], ["S-T1-1", "S-T1-1"])
+        self.assertEqual(state.pages["T1"].sent, [])
+        self.assertNotIn("notice", state.extras)
+
+    def test_a_reopened_connection_gets_a_fresh_raw_session_and_says_so(self):
+        state = FakeState()
+        cdp(state, "Runtime.enable")
+        cdp(state, "Runtime.enable", "--target", "browser")
+        old_browser = state.browser
+        state.browser = type(old_browser)()
+        again = cdp(state, "Runtime.evaluate")
+        self.assertEqual(again.data["session"], "reattached")
+        self.assertIn("off again", state.extras["notice"])
+        self.assertEqual(raw_sent(state)[-1][2], "S-T1-3")
+        state.extras.pop("notice")
+        self.assertEqual(cdp(state, "Runtime.evaluate").data["session"], "kept")
+        self.assertEqual(cdp(state, "Browser.getVersion", "--target", "browser").data["session"], "reattached")
+
+    def test_a_detached_raw_session_is_attached_again(self):
+        from ardia_cli.browse import rawcdp
+
+        state = FakeState()
+        cdp(state, "Runtime.enable")
+        rawcdp.forget_session(state, "S-T1-1")
+        self.assertEqual(cdp(state, "Runtime.evaluate").data["session"], "reattached")
+        rawcdp.forget_target(state, "T1")
+        self.assertEqual(cdp(state, "Runtime.evaluate").data["session"], "attached")
+
+    def test_a_session_ardia_already_dropped_is_replaced_once(self):
+        from ardia_cli.browse.errors import CdpError
+
+        state = FakeState()
+        cdp(state, "Runtime.enable")
+        state.answers["Runtime.evaluate"] = CdpError("Runtime.evaluate", "Session with given id not found.")
+        original = state.browser.send
+
+        async def send(method, params=None, session=None, timeout=30, mutation=False):
+            if method == "Runtime.evaluate" and session == "S-T1-2":
+                state.browser_sent.append((method, params, session, timeout, mutation))
+                return {"value": 1}
+            return await original(method, params, session, timeout, mutation)
+
+        state.browser.send = send
+        result = cdp(state, "Runtime.evaluate")
+        self.assertEqual((result.data["session"], result.data["result"]), ("reattached", {"value": 1}))
+
+    def test_without_a_browser_session_browser_calls_share_the_root(self):
+        from ardia_cli.browse.errors import CdpError
+
+        state = FakeState({"Browser.getVersion": {"product": "x"}})
+        original = state.browser.send
+
+        async def send(method, params=None, session=None, timeout=30, mutation=False):
+            if method == "Target.attachToBrowserTarget":
+                raise CdpError(method, "Not allowed")
+            return await original(method, params, session, timeout, mutation)
+
+        state.browser.send = send
+        self.assertEqual(cdp(state, "Browser.getVersion", "--target", "browser").data["session"], "shared")
+        self.assertEqual(raw_sent(state)[-1][2], None)
+        self.assertEqual(cdp(state, "Browser.getVersion", "--target", "browser").data["session"], "shared")
 
     def test_cdp_is_a_known_mutating_command(self):
         self.assertIn("cdp", commands.MUTATING)
@@ -264,18 +346,18 @@ class TargetHold(unittest.TestCase):
 
         state.registry = Registry()
         state.instance = "I"
-        original = state.pages["T2"].send
+        original = state.browser.send
 
-        async def send(*args, **kwargs):
-            held.append(("send", "T2"))
-            return await original(*args, **kwargs)
+        async def send(method, *args, **kwargs):
+            held.append(("send", method))
+            return await original(method, *args, **kwargs)
 
-        state.pages["T2"].send = send
+        state.browser.send = send
         cdp(state, "Runtime.evaluate", "--target", "t2")
-        self.assertEqual(held, [("on", "T2"), ("send", "T2"), ("off", "T2")])
+        self.assertEqual(held, [("on", "T2"), ("send", "Target.attachToTarget"), ("send", "Runtime.evaluate"), ("off", "T2")])
         held.clear()
         cdp(state, "Runtime.evaluate")
-        self.assertEqual(held, [])
+        self.assertEqual([row for row in held if row[0] != "send"], [])
 
 class OlderEngine(unittest.TestCase):
     def test_upload_and_download_say_update_ardia(self):
@@ -345,7 +427,7 @@ class PlainDevToolsServer(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        for session in ("warm", "warm-again", "up", "dl", "raw", "ui", "fw", "fk", "bo", "bb", "ho", "hc"):
+        for session in ("warm", "warm-again", "up", "dl", "raw", "ui", "fw", "fk", "bo", "bb", "ho", "hc", "rs"):
             cls.browse("close", session=session, check=False)
         cls.chromium.terminate()
         try:
@@ -431,6 +513,17 @@ class PlainDevToolsServer(unittest.TestCase):
         self.assertEqual(refused.returncode, 1, refused.stdout)
         self.assertEqual(json.loads(refused.stdout)["code"], "tab_in_use")
         self.browse("tab", "close", opened, session="ho")
+
+    def test_raw_domain_changes_dont_touch_the_sessions_own_capture(self):
+        self.browse("open", self.url + "?raw-session", session="rs")
+        self.browse("console", session="rs")
+        first = json.loads(self.browse("cdp", "Runtime.disable", "--json", session="rs").stdout)["data"]
+        self.assertEqual(first["session"], "attached")
+        again = json.loads(self.browse("cdp", "Runtime.enable", "--json", session="rs").stdout)["data"]
+        self.assertEqual(again["session"], "kept")
+        self.browse("cdp", "Runtime.disable", session="rs")
+        self.browse("eval", "console.log('after-raw-disable')", session="rs")
+        self.assertIn("after-raw-disable", self.browse("console", session="rs").stdout)
 
     def test_webui_tab_is_listed(self):
         self.browse("tab", "new", "chrome://version", session="ui")

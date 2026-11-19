@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from ardia_cli.browse import actions, changes, snapshot
+from ardia_cli.browse import actions, changes, rawcdp, snapshot
 from ardia_cli.browse.errors import BrowseError, ConnectionLost, Gated, OutcomeUnknown, Usage
 from ardia_cli.browse.state import parse_ref, wait_until
 
@@ -1996,28 +1996,31 @@ async def cmd_cdp(ctx: Ctx, argv):
     params = cdp_params(options.get("params"), options.get("param") or [], ctx.stdin)
     timeout = parse_timeout(options["timeout"]) if options.get("timeout") else 30
     target = options.get("target")
+    state = ctx.state
     try:
-        if target == "browser":
-            await ctx.state.connect()
-            result = await ctx.state.browser.send(method, params, timeout=timeout, mutation=True)
-            where = "browser"
+        if target == rawcdp.BROWSER:
+            await state.connect()
+            result, session = await rawcdp.send(state, rawcdp.BROWSER, method, params, timeout)
+            where = rawcdp.BROWSER
+        elif target:
+            await state.connect()
+            await state.refresh_targets()
+            target_id = await state.find_tab(target)
+            with state.registry.holding(state.instance, target_id):
+                page = await state.page(target_id)
+                result, session = await rawcdp.send(state, page.target_id, method, params, timeout)
+            where = state.tab_id(page.target_id)
         else:
-            if target:
-                await ctx.state.connect()
-                await ctx.state.refresh_targets()
-                target_id = await ctx.state.find_tab(target)
-                with ctx.state.registry.holding(ctx.state.instance, target_id):
-                    page = await ctx.state.page(target_id)
-                    result = await page.send(method, params, timeout=timeout, mutation=True)
-            else:
-                page = await ctx.state.page()
-                refuse_raw_on_borrowed(ctx, page, method)
-                result = await page.send(method, params, timeout=timeout, mutation=True)
-            where = ctx.state.tab_id(page.target_id)
+            page = await state.page()
+            refuse_raw_on_borrowed(ctx, page, method)
+            result, session = await rawcdp.send(state, page.target_id, method, params, timeout)
+            where = state.tab_id(page.target_id)
     except Gated as error:
         raise error.during("cdp") from None
+    if session == "reattached":
+        state.extras["notice"] = "\n".join(part for part in (state.extras.get("notice"), rawcdp.RESET_NOTICE) if part)
     text = json.dumps(result, indent=2, ensure_ascii=False) if result else f"✓ {method}"
-    return Result({"method": method, "target": where, "result": result}, text, page_content=bool(result))
+    return Result({"method": method, "target": where, "session": session, "result": result}, text, page_content=bool(result))
 
 
 @command("addinitscript")
