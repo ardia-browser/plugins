@@ -4,7 +4,21 @@ import { sleepMs } from "./printable.ts";
 
 const { O_RDONLY, O_WRONLY, O_RDWR, O_CREAT, O_TRUNC, O_APPEND, O_NOFOLLOW, O_DIRECTORY, O_NONBLOCK } = fs.constants;
 export { O_RDONLY, O_WRONLY, O_RDWR, O_CREAT, O_TRUNC, O_APPEND, O_NOFOLLOW, O_NONBLOCK };
-const O_EXLOCK = 0x20;
+const DARWIN_O_EXLOCK = 0x20;
+
+export function flockOpenFlag(platform: string, constants: Record<string, number | undefined> = fs.constants): number | undefined {
+  return constants.O_EXLOCK ?? (platform === "darwin" ? DARWIN_O_EXLOCK : undefined);
+}
+
+export class NoFlock extends Error {
+  constructor() {
+    super("this platform has no open flag that takes the flock Python takes");
+  }
+}
+
+export function locksLikePython(): boolean {
+  return flockOpenFlag(process.platform) !== undefined;
+}
 const ELOOP = 62;
 const ENOTDIR = 20;
 
@@ -151,8 +165,10 @@ export function openPrivateFile(name: string, dir: Dir, flags: number): number {
 }
 
 export function takeLock(name: string, dir: Dir): number | undefined {
+  const exclusive = flockOpenFlag(process.platform);
+  if (exclusive === undefined) throw new NoFlock();
   try {
-    return openPrivateFile(name, dir, O_RDWR | O_CREAT | O_EXLOCK | O_NONBLOCK);
+    return openPrivateFile(name, dir, O_RDWR | O_CREAT | exclusive | O_NONBLOCK);
   } catch (error) {
     if (codeOf(error) === "EAGAIN") return undefined;
     throw error;

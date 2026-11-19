@@ -3,6 +3,7 @@ import { render as renderHelp } from "./help.ts";
 import type { Value } from "./json.ts";
 import { failed, type Kind, type Listing, methodFailed, methodOf, paramsOf, type Rendered } from "./listing.ts";
 import { NeedsPython } from "./paths.ts";
+import { locksLikePython } from "./privatefs.ts";
 import { inert, Output, stdoutFlushFailed, writeAll } from "./printable.ts";
 import { Unsupported } from "./py.ts";
 import { render } from "./render.ts";
@@ -14,6 +15,7 @@ const GROUPS_FLAGS = [...LISTING_FLAGS, "--window", "--profile"];
 const TABS_FLAGS = [...GROUPS_FLAGS, "--flat", "--usage", "--pid"];
 
 export function serveHelp(argv: string[], python: string | null): number | undefined {
+  if (!locksLikePython()) return undefined;
   const text = renderHelp();
   if (text === undefined) return undefined;
   const call = new Call(argv);
@@ -75,6 +77,7 @@ function renderReply(kind: Kind, listing: Listing, reply: Reply): Rendered | und
 }
 
 export async function serveListing(kind: Kind, listing: Listing, argv: string[], python: string | null): Promise<number | undefined> {
+  if (!locksLikePython()) return undefined;
   const call = new Call(argv);
   call.command = kind;
   call.allowedFlags = allowedFor(kind);

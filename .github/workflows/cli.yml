@@ -73,6 +73,8 @@ jobs:
       - run: bun install --frozen-lockfile --ignore-scripts
       - name: Type check (tsrs)
         run: ./node_modules/.bin/tsrs --noEmit -p .
+      - name: Unit tests
+        run: bun test ./tests
       - run: sh scripts/build.sh
       - name: Size
         run: |
