@@ -305,7 +305,7 @@ impl Connection {
                 Ok(count) => {
                     self.buffer.extend_from_slice(&chunk[..count]);
                     self.receive();
-                    if self.lost.is_some() || self.reader_stopped {
+                    if self.lost.is_some() || self.reader_stopped || self.reply.is_some() {
                         return;
                     }
                 }

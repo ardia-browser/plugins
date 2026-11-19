@@ -365,12 +365,15 @@ class FakeArdia:
                         ending = "scripted"
                         return
                     pause = float(reply.get("pause", 0)) if isinstance(reply, dict) else 0.0
+                    then = reply.get("then") if isinstance(reply, dict) else None
                     if isinstance(reply, dict):
-                        reply = {key: value for key, value in reply.items() if key != "pause"}
+                        reply = {key: value for key, value in reply.items() if key not in ("pause", "then")}
                     if isinstance(reply, dict) and "raw" in reply:
                         self.send(connection, decode_blob(reply["raw"]))
                     else:
                         self.send(connection, json.dumps({"id": request.get("id"), **reply}).encode() + b"\n")
+                    if then == "half-close":
+                        connection.shutdown(socket.SHUT_WR)
                     if method == "subscribe":
                         for event in self.events:
                             self.send(connection, json.dumps(event).encode() + b"\n")

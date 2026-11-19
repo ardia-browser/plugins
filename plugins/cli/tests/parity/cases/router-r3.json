@@ -1,0 +1,9 @@
+[
+ {
+  "id": "router-r3--windows-half-closed-after-hello",
+  "command": "windows",
+  "argv": ["windows"],
+  "control": {"hello": {"result": {"app": "Ardia", "version": "1.0"}, "then": "half-close"}, "replies": {"windows": {"result": []}}},
+  "note": "Ardia answers hello, then shuts its side for writing while still reading: the next request still goes out and the call fails as dropped"
+ }
+]
