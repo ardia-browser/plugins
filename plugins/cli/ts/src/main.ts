@@ -1,4 +1,4 @@
-import { writeSync } from "node:fs";
+import { read, write, writeSync } from "node:fs";
 import { catchInterrupts } from "./control.ts";
 import { interruptsIgnored, LIBC_UNAVAILABLE, LibcUnavailable, loadLibc, watchLifeline, writeWhole } from "./libc.ts";
 import { bundledPython, installRoot } from "./install.ts";
@@ -33,6 +33,18 @@ async function serve(argv: string[], python: string | null): Promise<number | un
   }
 }
 
+function failWithoutAddon(message: string, lifeline: number): Promise<number> {
+  const sink = Buffer.alloc(64);
+  const watch = () =>
+    read(lifeline, sink, 0, sink.length, null, (error, count) => {
+      if (error === null && count > 0) watch();
+      else if (error?.code !== "EAGAIN" && error?.code !== "EINTR") process.kill(process.pid, "SIGKILL");
+      else setTimeout(watch, 50);
+    });
+  watch();
+  return new Promise((resolve) => write(2, message, () => resolve(LIBC_UNAVAILABLE)));
+}
+
 async function main(words: string[]): Promise<number> {
   const routed = takeMarker(words);
   if (routed === undefined) {
@@ -45,10 +57,7 @@ async function main(words: string[]): Promise<number> {
     loadLibc();
   } catch (error) {
     if (!(error instanceof LibcUnavailable)) throw error;
-    try {
-      writeSync(2, `${error.message}\n`);
-    } catch {}
-    return LIBC_UNAVAILABLE;
+    process.exit(await failWithoutAddon(`${error.message}\n`, routed.lifeline));
   }
   watchLifeline(routed.lifeline);
   if (!interruptsIgnored()) catchInterrupts();

@@ -1124,6 +1124,35 @@ class TsProcess(EntryProcess, unittest.TestCase):
                     self.assertTrue((bare / "ts-ran").exists())
                     self.assertFalse(log.exists(), "Python ran")
 
+    def test_a_missing_addon_never_leaves_the_typescript_program_behind_a_killed_router(self):
+        bare = self.bare_install(self.logging_python(self.case / "exec.log"))
+        (bare / "libexec" / harness.TS_LIBC).unlink()
+        reader, writer = full_blocking_pipe()
+        try:
+            router = subprocess.Popen([str(bare / "bin" / "ardia"), "windows"], env=self.environment({}), stdin=subprocess.DEVNULL,
+                                      stdout=subprocess.DEVNULL, stderr=writer, preexec_fn=os.setsid)
+            os.close(writer)
+            writer = None
+            child = self.ts_child(router.pid)
+            time.sleep(0.5)
+            self.assertIsNone(router.poll(), "ardia ended before its stderr was drained")
+            os.kill(router.pid, signal.SIGKILL)
+            router.wait(5)
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                try:
+                    os.kill(child, 0)
+                except ProcessLookupError:
+                    break
+                time.sleep(0.05)
+            else:
+                os.kill(child, signal.SIGKILL)
+                self.fail("the TypeScript program ran on after the router died")
+        finally:
+            if writer is not None:
+                os.close(writer)
+            os.close(reader)
+
     def test_an_invalid_served_table_falls_back_to_the_compiled_one(self):
         data = self.case / "data"
         data.mkdir()
