@@ -28,6 +28,7 @@ const DESIGNED: Record<string, { exit: number; code?: string; err?: string; why:
   "review--5-after-check-text": { exit: 1, code: "document_changed_after", why: AFTER },
   "contract--1-snapshot-flags": { exit: 1, err: "✗ snapshot --diff compares the whole page, so it takes no -s or -d\n", why: "a client grammar case: --diff with -s and -d is the same usage error Python's daemon gives" },
   "review2--1-click-button-inline": { exit: 1, err: "✗ --button takes left or right in plugin mode, not --new-tab\n", why: "a client grammar case: --new-tab reached the daemon as --button's value, and plugin mode clicks only left or right" },
+  "review--4-lease-cdp-error": { exit: 1, code: "document_changed", why: "clicks now go through Ardia.dispatchClick (ardia#2808), so the lease refusal names that method instead of Input.dispatchMouseEvent; same code" },
   "review2--1-wait-text-takes-fn": { exit: 1, code: "timeout", err: '✗ Timed out after 25000ms waiting for text "--fn"\n', why: "a client grammar case: -t took --fn as its text, which the page never shows, so the wait times out as Python's would" },
   "review2--1-snapshot-select-dashdash": { exit: 1, code: "not_found", err: "✗ Element not found: --. Verify the selector, role, or name is correct and the element exists in the DOM.\n", why: "a client grammar case: -s took -- as its value (the selector), and no element matches it" },
 };
@@ -37,7 +38,7 @@ const SETUP: Record<string, string[][]> = {
 const ENGINE_FAULTS: Record<string, [string, string]> = {
   "review--4-scope-cdp-error": ["Input.insertText", "ardia: tab_out_of_scope: the tab moved to another window"],
   "review--4-scope-text": ["Input.insertText", "ardia: tab_out_of_scope: the tab moved to another window"],
-  "review--4-lease-cdp-error": ["Input.dispatchMouseEvent", "ardia: document_changed: no act lease covers this document"],
+  "review--4-lease-cdp-error": ["Ardia.dispatchClick", "ardia: document_changed: no act lease covers this document"],
 };
 
 function option(name: string, fallback: string): string {

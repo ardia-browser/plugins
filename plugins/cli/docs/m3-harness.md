@@ -189,9 +189,15 @@ Testing through the tap, and check the transcript instead of comparing two sides
 | Piece | File | What it does |
 |---|---|---|
 | World | `ts/tests/m3/plugin-world.ts` | One Chrome, one tap, a fixture site and any number of plugin daemons, each spawned through `spawn.ts` with a `plugin` config and given the credential only in requests. Ports `ARDIA_F1_PORTS` (default 9660) up to +7. |
-| Rules | `ts/tests/m3/plugin-rules.ts` | `pluginViolations(transcript)`: (a) a forbidden method (`Runtime.*`, `DOM.resolveNode`, `DOM.performSearch`, `Page.createIsolatedWorld`, drags) or any method off the plugin list; (b) an `Input.dispatch*`/`Input.insertText` sent while an earlier one on that connection is unanswered; key events with `nativeVirtualKeyCode`, `isSystemKey` or a command off the editing allowlist; a press released elsewhere. `plugin-rules.test.ts` shows each check failing on a made-up transcript. |
+| Rules | `ts/tests/m3/plugin-rules.ts` | `pluginViolations(transcript)`: (a) a forbidden method (`Runtime.*`, `DOM.resolveNode`, `DOM.performSearch`, `Page.createIsolatedWorld`, drags, and `Input.dispatchMouseEvent` as a press, a release or with any button) or any method off the plugin list; (b) an input command (`Input.dispatch*`, `Input.insertText`, `Ardia.dispatchClick`) sent while an earlier one on that connection is unanswered; key events with `nativeVirtualKeyCode`, `isSystemKey` or a command off the editing allowlist. `plugin-rules.test.ts` shows each check failing on a made-up transcript. |
 | Scenarios | `ts/tests/m3/plugin-live.test.ts`, `plugin-live2.test.ts` | Every verb, the document check before and after, engine refusals injected as CDP errors (`/tap/fault` with `message`), a held input event that must hold back the next one, credential refusals, the files left in `Browse/`, then (a) and (b) on the whole transcript. Skipped without `ARDIA_M3_CHROME`. |
 | Pending cases | `ts/tests/m3/plugin-pending.ts <f1-early.json> [--phase 1\|2]` | Runs M1's pending F1-early cases against a fresh plugin daemon each and compares the answer with the recorded reply: `pass` (equal), `designed` (a listed difference, with its reason), `ran` (the reply was a placeholder and the step ran), `n/a` (client-only), `fail`. |
+
+Stock Chrome has no `Ardia.dispatchClick` (ardia#2808), so the plugin world starts the tap with the test-only
+`--emulate-dispatch-click 1`: the tap answers each `Ardia.dispatchClick` itself after sending Chromium a press, waiting
+for its answer, then a release. Those two events are written as `{"k": "emulated"}`, which the rules don't read as the
+daemon's traffic. Scenarios whose clicks need it say so in their names (`[tap emulates Ardia.dispatchClick]`); against
+a real plugin engine the flag stays off.
 
 `ARDIA_M3_TS_PROGRAM` names the built program the daemons run; `ARDIA_F1_SENT=<file>` writes the methods each marked
 step sent.

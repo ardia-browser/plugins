@@ -23,9 +23,11 @@ export const SENT_METHODS: ReadonlySet<string> = new Set([
   "Input.dispatchMouseEvent",
   "Input.dispatchKeyEvent",
   "Input.insertText",
+  "Ardia.dispatchClick",
 ]);
 
-export const INPUT_METHODS: ReadonlySet<string> = new Set(["Input.dispatchMouseEvent", "Input.dispatchKeyEvent", "Input.insertText"]);
+export const CLICK_METHOD = "Ardia.dispatchClick";
+export const INPUT_METHODS: ReadonlySet<string> = new Set(["Input.dispatchMouseEvent", "Input.dispatchKeyEvent", "Input.insertText", CLICK_METHOD]);
 
 export const FORBIDDEN_PREFIXES: readonly string[] = ["Runtime.", "Debugger."];
 export const FORBIDDEN_METHODS: ReadonlySet<string> = new Set([
@@ -54,8 +56,9 @@ export const KEY_COMMANDS: ReadonlySet<string> = new Set([
   "insertTab",
 ]);
 
-const MOUSE_TYPES = new Set(["mousePressed", "mouseReleased", "mouseMoved", "mouseWheel"]);
-const MOUSE_BUTTONS = new Set(["none", "left", "right"]);
+const MOUSE_TYPES = new Set(["mouseMoved", "mouseWheel"]);
+const CLICK_BUTTONS = new Set(["left", "right"]);
+const CLICK_COUNTS = new Set([1, 2]);
 
 export class PluginPolicy extends Error {
   override readonly name = "PluginPolicy";
@@ -74,12 +77,24 @@ function checkKey(params: Record<string, unknown>): void {
   }
 }
 
-function checkMouse(params: Record<string, unknown>): void {
+export function mouseViolation(params: Record<string, unknown>): string | null {
   const type = params["type"];
-  if (typeof type !== "string" || !MOUSE_TYPES.has(type)) throw new PluginPolicy(`a plugin mouse event is pressed, released, moved or wheel, not ${String(type)}`);
-  const button = params["button"] ?? "none";
-  if (typeof button !== "string" || !MOUSE_BUTTONS.has(button)) throw new PluginPolicy(`a plugin mouse event uses the left or right button, not ${String(button)}`);
-  if (type === "mouseMoved" && (button !== "none" || Number(params["buttons"] ?? 0) !== 0)) throw new PluginPolicy("plugins can't drag: a move never holds a button");
+  if (typeof type !== "string" || !MOUSE_TYPES.has(type)) return `a plugin mouse event is a buttonless move or a wheel, not ${String(type)} (clicks go through ${CLICK_METHOD})`;
+  if ((params["button"] ?? "none") !== "none" || Number(params["buttons"] ?? 0) !== 0) return "a plugin mouse event never holds a button";
+  return null;
+}
+
+function checkMouse(params: Record<string, unknown>): void {
+  const bad = mouseViolation(params);
+  if (bad !== null) throw new PluginPolicy(bad);
+}
+
+function checkClick(params: Record<string, unknown>): void {
+  const { x, y, button, clickCount, modifiers } = params;
+  if (typeof x !== "number" || typeof y !== "number" || !Number.isFinite(x) || !Number.isFinite(y)) throw new PluginPolicy(`${CLICK_METHOD} takes a finite x and y`);
+  if (typeof button !== "string" || !CLICK_BUTTONS.has(button)) throw new PluginPolicy(`${CLICK_METHOD} clicks the left or right button, not ${String(button)}`);
+  if (typeof clickCount !== "number" || !CLICK_COUNTS.has(clickCount)) throw new PluginPolicy(`${CLICK_METHOD} takes a clickCount of 1 or 2`);
+  if (typeof modifiers !== "number" || !Number.isInteger(modifiers) || modifiers < 0 || modifiers > 15) throw new PluginPolicy(`${CLICK_METHOD} takes modifier bits 0 to 15`);
 }
 
 export function checkRequest(method: string, params: Record<string, unknown>): void {
@@ -87,5 +102,6 @@ export function checkRequest(method: string, params: Record<string, unknown>): v
   if ("objectId" in params || "executionContextId" in params || "contextId" in params) throw new PluginPolicy(`plugin mode never sends ${method} with a script handle`);
   if (method === "Input.dispatchKeyEvent") checkKey(params);
   else if (method === "Input.dispatchMouseEvent") checkMouse(params);
+  else if (method === CLICK_METHOD) checkClick(params);
   else if (method === "Input.insertText" && typeof params["text"] !== "string") throw new PluginPolicy("Input.insertText takes text");
 }

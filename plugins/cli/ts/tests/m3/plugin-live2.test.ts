@@ -62,7 +62,7 @@ describe.skipIf(!CHROME)("plugin mode phase 2 against headless Chrome for Testin
     expect((await marked("scroll -s", ["scroll", "-s", "#list", "down", "40"])).exit).toBe(0);
   });
 
-  test("find searches the AX tree, never the DOM search", async () => {
+  test("find searches the AX tree, never the DOM search [its clicks need the tap's Ardia.dispatchClick emulation]", async () => {
     const found = await marked("find role", ["find", "--name=Save", "--exact", "--", "role", "button", "click"], { json: true });
     expect(found.exit).toBe(0);
     expect((JSON.parse(found.out) as { data: { clicked: string } }).data.clicked).toBe("@e3");

@@ -83,7 +83,7 @@ export async function startWorld(base: number, credential = CREDENTIAL, session 
   children.push(chrome);
   await waitFor(() => answers(chromePort), 30_000, "headless Chrome");
   const transcript = path.join(found.root, "transcript.jsonl");
-  const tap = spawn(process.execPath, [path.join(TS_DIR, "tests", "m3", "tap.ts"), "--listen", String(tapPort), "--out", transcript, "--upstream", String(chromePort), "--chrome-pid", String(chrome.pid)], {
+  const tap = spawn(process.execPath, [path.join(TS_DIR, "tests", "m3", "tap.ts"), "--listen", String(tapPort), "--out", transcript, "--upstream", String(chromePort), "--chrome-pid", String(chrome.pid), "--emulate-dispatch-click", "1"], {
     stdio: ["ignore", "pipe", "inherit"],
     detached: true,
   });

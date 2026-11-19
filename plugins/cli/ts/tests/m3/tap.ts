@@ -16,6 +16,11 @@ const out = options.get("--out") ?? "";
 const upstreamPort = options.get("--upstream");
 const replayPath = options.get("--replay");
 const chromePid = Number(options.get("--chrome-pid") ?? 0);
+const emulateClicks = options.get("--emulate-dispatch-click") === "1";
+const EMULATED_IDS = 2_000_000_000;
+let emulatedId = EMULATED_IDS;
+type Emulation = { link: Link; socket: ServerWebSocket<Link>; id: number; sessionId: string | undefined; params: Record<string, unknown>; phase: "press" | "release" };
+const emulations = new Map<number, Emulation>();
 const scratch = options.get("--scratch");
 if (!listen || !out || (!upstreamPort && !replayPath)) {
   process.stderr.write("tap.ts: --listen, --out and one of --upstream or --replay are required\n");
@@ -124,6 +129,47 @@ function injected(link: Link, text: string, socket: ServerWebSocket<Link>): bool
   return false;
 }
 
+function sendEmulated(emulation: Emulation): void {
+  const { params } = emulation;
+  const pressing = emulation.phase === "press";
+  const button = params["button"] === "right" ? "right" : "left";
+  emulatedId += 1;
+  const text = JSON.stringify({
+    id: emulatedId,
+    method: "Input.dispatchMouseEvent",
+    ...(emulation.sessionId ? { sessionId: emulation.sessionId } : {}),
+    params: { type: pressing ? "mousePressed" : "mouseReleased", x: params["x"], y: params["y"], button, buttons: pressing ? (button === "right" ? 2 : 1) : 0, clickCount: params["clickCount"], modifiers: params["modifiers"] },
+  });
+  emulations.set(emulatedId, emulation);
+  record({ k: "emulated", c: emulation.link.conn, t: now(), m: text });
+  deliver(emulation.link, text);
+}
+
+function emulateClick(link: Link, socket: ServerWebSocket<Link>, text: string): boolean {
+  const message = parse(text) as { id?: number; method?: string; sessionId?: string; params?: Record<string, unknown> } | null;
+  if (!message || message.method !== "Ardia.dispatchClick" || message.id === undefined) return false;
+  sendEmulated({ link, socket, id: message.id, sessionId: message.sessionId, params: message.params ?? {}, phase: "press" });
+  return true;
+}
+
+function emulatedAnswer(text: string): boolean {
+  const id = Number(/^\{"id":(\d+)/u.exec(text)?.[1] ?? 0);
+  if (id <= EMULATED_IDS) return false;
+  const emulation = emulations.get(id);
+  if (emulation === undefined) return false;
+  emulations.delete(id);
+  record({ k: "emulated", c: emulation.link.conn, t: now(), m: text });
+  const answer = JSON.parse(text) as { error?: unknown };
+  if (answer.error === undefined && emulation.phase === "press") {
+    sendEmulated({ ...emulation, phase: "release" });
+    return true;
+  }
+  const reply = JSON.stringify({ id: emulation.id, ...(emulation.sessionId ? { sessionId: emulation.sessionId } : {}), ...(answer.error === undefined ? { result: {} } : { error: answer.error }) });
+  record({ k: "in", c: emulation.link.conn, t: now(), m: reply, emulated: true });
+  emulation.socket.send(reply);
+  return true;
+}
+
 function openUpstream(link: Link, socket: ServerWebSocket<Link>): void {
   void versionBody().then((body) => {
     const real = (JSON.parse(body) as { webSocketDebuggerUrl: string }).webSocketDebuggerUrl;
@@ -145,6 +191,7 @@ function openUpstream(link: Link, socket: ServerWebSocket<Link>): void {
     };
     upstream.onmessage = (event) => {
       const text = typeof event.data === "string" ? event.data : new TextDecoder().decode(event.data as ArrayBuffer);
+      if (emulatedAnswer(text)) return;
       record({ k: "in", c: link.conn, t: now(), m: text });
       if (link.dropId !== null && text.startsWith(`{"id":${link.dropId},`)) {
         link.dropId = null;
@@ -272,6 +319,7 @@ const server = Bun.serve<Link>({
       const text = typeof data === "string" ? data : new TextDecoder().decode(data);
       record({ k: "out", c: link.conn, t: now(), m: text });
       if (injected(link, text, socket)) return;
+      if (emulateClicks && emulateClick(link, socket, text)) return;
       deliver(link, text);
     },
     close(socket, code) {

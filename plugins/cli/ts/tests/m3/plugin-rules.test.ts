@@ -14,8 +14,9 @@ describe("the tap checks", () => {
     const entries = [
       out(1, "DOM.scrollIntoViewIfNeeded"), answer(1),
       out(2, "DOM.getContentQuads"), answer(2),
-      out(3, "Input.dispatchMouseEvent", { type: "mousePressed", x: 5, y: 5, button: "left" }), answer(3),
-      out(4, "Input.dispatchMouseEvent", { type: "mouseReleased", x: 5, y: 5, button: "left" }), answer(4),
+      out(3, "Ardia.dispatchClick", { x: 5, y: 5, button: "left", clickCount: 1, modifiers: 0 }), answer(3),
+      out(4, "Input.dispatchMouseEvent", { type: "mouseMoved", x: 5, y: 5, button: "none", buttons: 0 }), answer(4),
+      { k: "emulated", c: 0, m: JSON.stringify({ id: 2000000001, method: "Input.dispatchMouseEvent", params: { type: "mousePressed" } }) },
     ];
     expect(pluginViolations(entries)).toEqual([]);
   });
@@ -52,13 +53,19 @@ describe("the tap checks", () => {
     expect(found.map((item) => item.detail)).toEqual(["nativeVirtualKeyCode", 'commands ["copy"]']);
   });
 
-  test("a press released somewhere else is a drag", () => {
+  test("a mouse press, a release or a move holding a button is forbidden: clicks go through Ardia.dispatchClick", () => {
     const found = pluginViolations([
-      out(1, "Input.dispatchMouseEvent", { type: "mousePressed", x: 1, y: 1 }), answer(1),
-      out(2, "Input.dispatchMouseEvent", { type: "mouseMoved", x: 9, y: 9 }), answer(2),
-      out(3, "Input.dispatchMouseEvent", { type: "mouseReleased", x: 9, y: 9 }), answer(3),
+      out(1, "Input.dispatchMouseEvent", { type: "mousePressed", x: 1, y: 1, button: "left", buttons: 1 }), answer(1),
+      out(2, "Input.dispatchMouseEvent", { type: "mouseMoved", x: 9, y: 9, buttons: 1 }), answer(2),
+      out(3, "Input.dispatchMouseEvent", { type: "mouseReleased", x: 9, y: 9, button: "left" }), answer(3),
+      out(4, "Input.dispatchMouseEvent", { type: "mouseWheel", x: 9, y: 9, button: "none", buttons: 0, deltaY: 10 }), answer(4),
     ]);
-    expect(found.map((item) => item.rule)).toEqual(["drag", "drag"]);
+    expect(found.map((item) => [item.rule, item.at])).toEqual([["forbidden", 0], ["forbidden", 2], ["forbidden", 4]]);
+  });
+
+  test("(b) Ardia.dispatchClick is one input command: nothing else may go out before it's answered", () => {
+    const found = pluginViolations([out(1, "Ardia.dispatchClick", { x: 1, y: 1, button: "left", clickCount: 1, modifiers: 0 }), out(2, "Input.dispatchKeyEvent", { type: "keyUp", key: "a" }), answer(1), answer(2)]);
+    expect(found.map((item) => item.rule)).toEqual(["pipelined"]);
   });
 });
 
@@ -71,7 +78,12 @@ describe("the daemon's own policy", () => {
     expect(() => checkRequest("Input.dispatchKeyEvent", { type: "keyDown", nativeVirtualKeyCode: 1 })).toThrow(PluginPolicy);
     expect(() => checkRequest("Input.dispatchKeyEvent", { type: "keyDown", commands: ["paste"] })).toThrow(PluginPolicy);
     expect(() => checkRequest("Input.dispatchMouseEvent", { type: "mouseMoved", buttons: 1 })).toThrow(PluginPolicy);
-    expect(() => checkRequest("Input.dispatchMouseEvent", { type: "mousePressed", button: "middle" })).toThrow(PluginPolicy);
+    expect(() => checkRequest("Input.dispatchMouseEvent", { type: "mousePressed", button: "left", buttons: 1 })).toThrow(PluginPolicy);
+    expect(() => checkRequest("Input.dispatchMouseEvent", { type: "mouseReleased", button: "left" })).toThrow(PluginPolicy);
+    expect(() => checkRequest("Ardia.dispatchClick", { x: 1, y: 1, button: "middle", clickCount: 1, modifiers: 0 })).toThrow(PluginPolicy);
+    expect(() => checkRequest("Ardia.dispatchClick", { x: 1, y: 1, button: "left", clickCount: 3, modifiers: 0 })).toThrow(PluginPolicy);
+    expect(() => checkRequest("Ardia.dispatchClick", { x: 1, y: 1, button: "left", clickCount: 2, modifiers: 0 })).not.toThrow();
+    expect(() => checkRequest("Input.dispatchMouseEvent", { type: "mouseMoved", x: 1, y: 1, button: "none", buttons: 0 })).not.toThrow();
     expect(() => checkRequest("Input.dispatchKeyEvent", { type: "rawKeyDown", commands: ["selectAll"] })).not.toThrow();
   });
 

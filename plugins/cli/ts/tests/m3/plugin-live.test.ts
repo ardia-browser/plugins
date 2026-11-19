@@ -74,7 +74,7 @@ describe.skipIf(!CHROME)("plugin mode against headless Chrome for Testing, throu
     }
   });
 
-  test("click @ref: scrollIntoViewIfNeeded, getContentQuads, then press and release", async () => {
+  test("click @ref: scrollIntoViewIfNeeded, getContentQuads, then Ardia.dispatchClick [tap emulates Ardia.dispatchClick]", async () => {
     const clicked = await marked("click", ["click", "--", "@e3"], { expect_loader: loader, json: true });
     expect(clicked.exit).toBe(0);
     const data = (JSON.parse(clicked.out) as { data: { clicked: string; changes: Record<string, unknown> } }).data;
@@ -98,9 +98,9 @@ describe.skipIf(!CHROME)("plugin mode against headless Chrome for Testing, throu
     await tap(world, "fault", { kind: "error", method: "Input.insertText", at: 1, message: "ardia: tab_out_of_scope: the tab moved to another window" });
     const scope = await marked("scope", ["fill", "--", "@e2", "Ada"], { json: true });
     expect(scope.out).toBe('{"success":false,"data":null,"error":"Input.insertText: ardia: tab_out_of_scope: the tab moved to another window","code":"tab_out_of_scope"}\n');
-    await tap(world, "fault", { kind: "error", method: "Input.dispatchMouseEvent", at: 1, message: "ardia: document_changed: no act lease covers this document" });
+    await tap(world, "fault", { kind: "error", method: "Ardia.dispatchClick", at: 1, message: "ardia: document_changed: no act lease covers this document" });
     const lease = await marked("lease", ["click", "--", "@e3"], { json: true });
-    expect(lease.out).toBe('{"success":false,"data":null,"error":"Input.dispatchMouseEvent: ardia: document_changed: no act lease covers this document","code":"document_changed"}\n');
+    expect(lease.out).toBe('{"success":false,"data":null,"error":"Ardia.dispatchClick: ardia: document_changed: no act lease covers this document","code":"document_changed"}\n');
     await tap(world, "fault", { kind: "error", method: "Input.insertText", at: 1, message: "page said ardia: tab_out_of_scope" });
     const quoted = await step(world, ["fill", "--", "@e2", "Ada"], { json: true });
     expect(quoted.code).not.toBe("tab_out_of_scope");
@@ -133,7 +133,7 @@ describe.skipIf(!CHROME)("plugin mode against headless Chrome for Testing, throu
     expect(fs.readFileSync(`${world.found.browse}/${world.key}.log`, "utf8")).not.toContain("Ab3_-9xYz0");
   });
 
-  test("the after-check: a click that navigates answers document_changed_after (the step ran)", async () => {
+  test("the after-check: a click that navigates answers document_changed_after (the step ran) [tap emulates Ardia.dispatchClick]", async () => {
     const shot = await step(world, ["snapshot", "-i"], { expect_loader: loader });
     expect(shot.exit).toBe(0);
     const after = await marked("navigate", ["click", "--", "@e4"], { expect_loader: loader, json: true });
@@ -150,6 +150,7 @@ describe.skipIf(!CHROME)("plugin mode against headless Chrome for Testing, throu
     const methods = new Set(all.filter((entry) => entry.k === "out").map((entry) => (JSON.parse(String(entry.m)) as { method: string }).method));
     expect([...methods].filter((method) => method.startsWith("Runtime.") || method === "DOM.resolveNode")).toEqual([]);
     expect(methods.has("Input.insertText")).toBe(true);
-    expect(methods.has("Input.dispatchMouseEvent")).toBe(true);
+    expect(methods.has("Ardia.dispatchClick")).toBe(true);
+    expect(all.some((entry) => entry.k === "emulated")).toBe(true);
   });
 });

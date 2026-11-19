@@ -1,7 +1,7 @@
 import { type Entry, type Message } from "./canon.ts";
-import { forbidden, INPUT_METHODS, KEY_COMMANDS, SENT_METHODS } from "../../src/browse/plugin/policy.ts";
+import { forbidden, INPUT_METHODS, KEY_COMMANDS, mouseViolation, SENT_METHODS } from "../../src/browse/plugin/policy.ts";
 
-export type Violation = { rule: "forbidden" | "unlisted" | "pipelined" | "key_params" | "drag"; at: number; method: string; detail: string };
+export type Violation = { rule: "forbidden" | "unlisted" | "pipelined" | "key_params"; at: number; method: string; detail: string };
 
 function parsed(text: string | undefined): Message | null {
   if (text === undefined) return null;
@@ -24,13 +24,13 @@ function keyViolation(params: Record<string, unknown>): string | null {
 export function pluginViolations(entries: readonly Entry[]): Violation[] {
   const found: Violation[] = [];
   const outstanding = new Map<number, Map<number, string>>();
-  const pressedAt = new Map<number, string>();
   entries.forEach((entry, at) => {
     const conn = entry.c ?? 0;
     const message = parsed(entry.m);
     if (message === null) return;
     const waiting = outstanding.get(conn) ?? new Map<number, string>();
     outstanding.set(conn, waiting);
+    if (entry.k === "emulated") return;
     if (entry.k === "in" && typeof message.id === "number") {
       waiting.delete(message.id);
       return;
@@ -51,17 +51,8 @@ export function pluginViolations(entries: readonly Entry[]): Violation[] {
       if (bad !== null) found.push({ rule: "key_params", at, method, detail: bad });
     }
     if (method === "Input.dispatchMouseEvent") {
-      const type = params["type"];
-      const point = `${String(params["x"])},${String(params["y"])}`;
-      const session = message.sessionId ?? "";
-      if (type === "mousePressed") pressedAt.set(conn, `${session}@${point}`);
-      else if (type === "mouseReleased") {
-        const pressed = pressedAt.get(conn);
-        if (pressed !== undefined && pressed !== `${session}@${point}`) found.push({ rule: "drag", at, method, detail: `released at ${point} after pressing at ${pressed}` });
-        pressedAt.delete(conn);
-      } else if (type === "mouseMoved" && (pressedAt.has(conn) || Number(params["buttons"] ?? 0) !== 0)) {
-        found.push({ rule: "drag", at, method, detail: "moved with a button held" });
-      }
+      const bad = mouseViolation(params);
+      if (bad !== null) found.push({ rule: "forbidden", at, method, detail: bad });
     }
   });
   return found;

@@ -57,6 +57,9 @@ export class PluginPage {
       await link.send("Page.enable", {}, sessionId);
       await link.send("Page.setLifecycleEventsEnabled", { enabled: true }, sessionId);
       await this.refreshFrames(link, sessionId);
+      if (this.staged === null || !link.browser.alive) {
+        throw new BrowseError("Ardia detached this tab while it was being attached (it closed, crashed or moved); run the step again", { targetId: this.targetId }, "tab_detached");
+      }
       ready = true;
     } finally {
       if (!ready) {

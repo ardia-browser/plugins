@@ -152,7 +152,10 @@ and never by Python's or by the person's own session. The TypeScript daemon only
   `scroll`, `wait`, `find`, `is` and `get`; anything else (and `close`'s tab closing) answers 77 `plugin_refused`.
   They read pages through DOM, accessibility and Input only: no `Runtime`, `DOM.resolveNode`, `DOM.performSearch`,
   `Page.createIsolatedWorld` or drag method is ever sent (the daemon checks every outgoing method against its list, and
-  the harness checks the transcript). At most one `Input.dispatch*` or `Input.insertText` is outstanding: each is sent
+  the harness checks the transcript). A click is one `Ardia.dispatchClick {x, y, button, clickCount, modifiers}`, which
+  the engine presses and releases in one browser task; `Input.dispatchMouseEvent` is only ever a buttonless
+  `mouseMoved` or a `mouseWheel`, never a press, a release or a held button. At most one input command
+  (`Input.dispatch*`, `Input.insertText` or `Ardia.dispatchClick`) is outstanding: each is sent
   only after the previous one was answered, and one left unanswered (10 s, `outcome_unknown`) holds back the next step's
   input for up to 10 s more (`input_unanswered`).
 - **Document check.** With `options.expect_loader`, the daemon compares the picked tab's main-frame loader before the

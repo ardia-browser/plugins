@@ -4,6 +4,7 @@ import { Usage } from "../daemon-errors.ts";
 import { CHAR_TO_KEY_INFO, pauseAfter } from "../input/human.ts";
 import { MODIFIER_BITS, MODIFIER_KEYS, parseCombo, parseKey } from "../input/keys.ts";
 import { type PluginPage } from "./page.ts";
+import { CLICK_METHOD } from "./policy.ts";
 
 export const BUTTONS: Readonly<Record<string, number>> = { left: 1, right: 2 };
 const SHORTCUT = MODIFIER_BITS["Meta"] as number;
@@ -101,10 +102,8 @@ export function buttonOf(given: unknown): string {
   return button;
 }
 
-export async function clickAt(page: PluginPage, x: number, y: number, button: string): Promise<void> {
-  const mask = BUTTONS[button] as number;
-  await page.send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button, buttons: mask, clickCount: 1 });
-  await page.send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button, buttons: 0, clickCount: 1 });
+export async function clickAt(page: PluginPage, x: number, y: number, button: string, clickCount = 1): Promise<void> {
+  await page.send(CLICK_METHOD, { x, y, button, clickCount, modifiers: 0 });
 }
 
 export async function wheelAt(page: PluginPage, x: number, y: number, deltaX: number, deltaY: number): Promise<void> {
