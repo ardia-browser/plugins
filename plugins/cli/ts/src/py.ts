@@ -83,11 +83,44 @@ export function reprStr(text: string): string {
   return out + quote;
 }
 
-export function repr(value: Value): string {
+type ReprFrame = { entries: [string | undefined, Value][]; next: number; close: string };
+
+function reprScalar(value: Value): string | undefined {
   if (typeof value === "string") return reprStr(value);
-  if (Array.isArray(value)) return `[${value.map(repr).join(", ")}]`;
-  if (value instanceof Map) return `{${[...value].map(([key, child]) => `${reprStr(key)}: ${repr(child)}`).join(", ")}}`;
+  if (Array.isArray(value) || value instanceof Map) return undefined;
   return strOf(value);
+}
+
+export function repr(value: Value): string {
+  const out: string[] = [];
+  const stack: ReprFrame[] = [];
+  const emit = (child: Value) => {
+    const scalar = reprScalar(child);
+    if (scalar !== undefined) {
+      out.push(scalar);
+      return;
+    }
+    const container = child as Value[] | JsonObject;
+    const entries: [string | undefined, Value][] = Array.isArray(container)
+      ? container.map((inner): [undefined, Value] => [undefined, inner])
+      : [...container];
+    out.push(Array.isArray(container) ? "[" : "{");
+    stack.push({ entries, next: 0, close: Array.isArray(container) ? "]" : "}" });
+  };
+  emit(value);
+  for (let frame = stack.at(-1); frame !== undefined; frame = stack.at(-1)) {
+    if (frame.next === frame.entries.length) {
+      stack.pop();
+      out.push(frame.close);
+      continue;
+    }
+    const [key, child] = frame.entries[frame.next] as [string | undefined, Value];
+    if (frame.next > 0) out.push(", ");
+    frame.next += 1;
+    if (key !== undefined) out.push(`${reprStr(key)}: `);
+    emit(child);
+  }
+  return out.join("");
 }
 
 export function strOf(value: Value | undefined): string {

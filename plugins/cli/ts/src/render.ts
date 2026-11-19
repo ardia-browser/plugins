@@ -63,12 +63,24 @@ function commands(listing: Listing, result: Value): Rendered {
   return rendered(out);
 }
 
+const DEEPEST_GROUP_PYTHON_SURELY_WALKS = 500;
+
 export function walk(items: Value, depth: number, into: [JsonObject, number][]): void {
-  for (const item of iterateOrEmpty(items)) {
+  const pending: [Value[], number, number][] = [[iterateOrEmpty(items), 0, depth]];
+  for (let frame = pending.at(-1); frame !== undefined; frame = pending.at(-1)) {
+    const [list, next, level] = frame;
+    if (next === list.length) {
+      pending.pop();
+      continue;
+    }
+    frame[1] = next + 1;
+    const item = list[next];
     if (!(item instanceof Map)) continue;
-    into.push([item, depth]);
+    into.push([item, level]);
     const type = item.get("type");
-    if (type === "group" || type === "folder") walk(item.get("items") ?? null, depth + 1, into);
+    if (type !== "group" && type !== "folder") continue;
+    if (level >= DEEPEST_GROUP_PYTHON_SURELY_WALKS) throw new Unsupported();
+    pending.push([iterateOrEmpty(item.get("items") ?? null), 0, level + 1]);
   }
 }
 

@@ -2,27 +2,24 @@ import { write, writeSync } from "node:fs";
 import { interrupted as interruptRequested } from "./control.ts";
 import { codeOf, errnoOf, strerror } from "./paths.ts";
 
-function escaped(text: string, escape: (code: number) => boolean): string {
-  let out = "";
-  for (const ch of text) {
-    const code = ch.codePointAt(0) ?? 0;
-    out += escape(code) ? `\\u${code.toString(16).padStart(4, "0")}` : ch;
-  }
-  return out;
+function escaped(text: string, controls: RegExp): string {
+  return text.replace(controls, (found) => `\\u${found.charCodeAt(0).toString(16).padStart(4, "0")}`);
 }
 
-const c1 = (code: number) => code >= 0x7f && code <= 0x9f;
+const FIELD_CONTROLS = /[\x00-\x1f\x7f-\x9f]/g;
+const TEXT_CONTROLS = /[\x00-\x08\x0b-\x1f\x7f-\x9f]/g;
+const JSON_CONTROLS = /[\x7f-\x9f]/g;
 
 export function shown(text: string): string {
-  return escaped(text, (code) => code <= 0x1f || c1(code));
+  return escaped(text, FIELD_CONTROLS);
 }
 
 export function inert(text: string): string {
-  return escaped(text, (code) => code <= 0x08 || (code >= 0x0b && code <= 0x1f) || c1(code));
+  return escaped(text, TEXT_CONTROLS);
 }
 
 export function jsonSafe(text: string): string {
-  return escaped(text, c1);
+  return escaped(text, JSON_CONTROLS);
 }
 
 export function sleepMs(ms: number): void {

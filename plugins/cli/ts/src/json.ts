@@ -27,17 +27,30 @@ export function object(entries: [string, Value][]): JsonObject {
   return new Map(entries);
 }
 
+function sameScalar(a: Value, b: Value): boolean {
+  if (a instanceof Float) return b instanceof Float && (a.value === b.value || (Number.isNaN(a.value) && Number.isNaN(b.value)));
+  return a === b;
+}
+
 export function same(a: Value | undefined, b: Value | undefined): boolean {
   if (a === undefined || b === undefined) return a === b;
-  if (a instanceof Float) return b instanceof Float && (a.value === b.value || (Number.isNaN(a.value) && Number.isNaN(b.value)));
-  if (Array.isArray(a)) return Array.isArray(b) && a.length === b.length && a.every((item, index) => same(item, b[index]));
-  if (a instanceof Map) {
-    if (!(b instanceof Map) || a.size !== b.size) return false;
-    const left = [...a];
-    const right = [...b];
-    return left.every(([key, item], index) => right[index]?.[0] === key && same(item, right[index]?.[1]));
+  const pending: [Value, Value][] = [[a, b]];
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    const [left, right] = next;
+    if (Array.isArray(left)) {
+      if (!Array.isArray(right) || left.length !== right.length) return false;
+      left.forEach((item, index) => pending.push([item, right[index] as Value]));
+    } else if (left instanceof Map) {
+      if (!(right instanceof Map) || left.size !== right.size) return false;
+      const rightEntries = [...right];
+      for (const [index, [key, item]] of [...left].entries()) {
+        const other = rightEntries[index];
+        if (other === undefined || other[0] !== key) return false;
+        pending.push([item, other[1]]);
+      }
+    } else if (!sameScalar(left, right)) return false;
   }
-  return a === b;
+  return true;
 }
 
 export class TooDeep extends Error {}
@@ -293,41 +306,57 @@ export function quote(text: string, ensureAscii: boolean): string {
 
 export type Style = "compact" | "spaced" | "indented";
 
-export function dumps(value: Value, style: Style, ensureAscii = false): string {
-  const parts: string[] = [];
-  write(value, style, ensureAscii, 0, parts);
-  return parts.join("");
-}
+type Frame = { entries: [string | undefined, Value][]; next: number; depth: number; close: string };
 
-function write(value: Value, style: Style, ensureAscii: boolean, depth: number, out: string[]): void {
-  if (value === null) out.push("null");
-  else if (value === true) out.push("true");
-  else if (value === false) out.push("false");
-  else if (typeof value === "bigint") out.push(value.toString());
-  else if (value instanceof Float) out.push(jsonFloat(value.value));
-  else if (typeof value === "string") out.push(quote(value, ensureAscii));
-  else {
-    const item = style === "spaced" ? ", " : ",";
-    const pair = style === "compact" ? ":" : ": ";
-    const newline = (level: number) => {
-      if (style === "indented") out.push(`\n${"  ".repeat(level)}`);
-    };
-    const entries: [string | undefined, Value][] = Array.isArray(value)
-      ? value.map((child): [undefined, Value] => [undefined, child])
-      : [...value];
-    const [open, close] = Array.isArray(value) ? ["[", "]"] : ["{", "}"];
-    if (entries.length === 0) {
-      out.push(open + close);
+export function dumps(value: Value, style: Style, ensureAscii = false): string {
+  const out: string[] = [];
+  const item = style === "spaced" ? ", " : ",";
+  const pair = style === "compact" ? ":" : ": ";
+  const newline = (level: number) => {
+    if (style === "indented") out.push(`\n${"  ".repeat(level)}`);
+  };
+  const stack: Frame[] = [];
+  const emit = (child: Value, depth: number) => {
+    const scalar = scalarJson(child, ensureAscii);
+    if (scalar !== undefined) {
+      out.push(scalar);
       return;
     }
-    out.push(open);
-    entries.forEach(([key, child], index) => {
-      if (index > 0) out.push(item);
-      newline(depth + 1);
-      if (key !== undefined) out.push(quote(key, ensureAscii), pair);
-      write(child, style, ensureAscii, depth + 1, out);
-    });
-    newline(depth);
-    out.push(close);
+    const container = child as Value[] | JsonObject;
+    const entries: [string | undefined, Value][] = Array.isArray(container)
+      ? container.map((inner): [undefined, Value] => [undefined, inner])
+      : [...container];
+    const [open, close] = Array.isArray(container) ? ["[", "]"] : ["{", "}"];
+    if (entries.length === 0) out.push(open + close);
+    else {
+      out.push(open);
+      stack.push({ entries, next: 0, depth, close });
+    }
+  };
+  emit(value, 0);
+  for (let frame = stack.at(-1); frame !== undefined; frame = stack.at(-1)) {
+    if (frame.next === frame.entries.length) {
+      stack.pop();
+      newline(frame.depth);
+      out.push(frame.close);
+      continue;
+    }
+    const [key, child] = frame.entries[frame.next] as [string | undefined, Value];
+    if (frame.next > 0) out.push(item);
+    frame.next += 1;
+    newline(frame.depth + 1);
+    if (key !== undefined) out.push(quote(key, ensureAscii), pair);
+    emit(child, frame.depth + 1);
   }
+  return out.join("");
+}
+
+function scalarJson(value: Value, ensureAscii: boolean): string | undefined {
+  if (value === null) return "null";
+  if (value === true) return "true";
+  if (value === false) return "false";
+  if (typeof value === "bigint") return value.toString();
+  if (value instanceof Float) return jsonFloat(value.value);
+  if (typeof value === "string") return quote(value, ensureAscii);
+  return undefined;
 }
