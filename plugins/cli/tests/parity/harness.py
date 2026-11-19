@@ -45,7 +45,8 @@ DENIED_PROGRAMS = ("/bin/launchctl", "/usr/bin/security", "/usr/bin/codesign", "
 ROOTS = ("home", "cli-home", "data", "cwd", "tmp", "outside")
 PLACES = ("box", "home", "cli_home", "data", "cwd", "tmp", "outside", "cli")
 HARNESS_FILES = ("helpers.log", "stubs")
-CONTENT_APART = ("data/Telemetry/local", "data/Telemetry/cli-queue.jsonl", "data/Telemetry/cli-flush.json", "cli-home/Usage/usage.json")
+FLUSH_FILE = "data/Telemetry/cli-flush.json"
+CONTENT_APART = ("data/Telemetry/local", "data/Telemetry/cli-queue.jsonl", FLUSH_FILE, "cli-home/Usage/usage.json")
 READ_ONLY_METHODS = frozenset({"hello", "workspace", "windows", "commands"})
 PATH_ENV = frozenset({"ARDIA_DATA_DIR", "ARDIA_CONFIG_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME",
                       "XDG_RUNTIME_DIR"})
@@ -692,7 +693,8 @@ def materialize(box: Path, case: Case) -> dict:
     flush = telemetry / "cli-flush.json"
     if not no_links_below(box, flush):
         raise UnsafeCase(f"case {case.id!r}: its Telemetry folder leaves the sandbox")
-    flush.write_text(json.dumps({"failures": 0, "next_at": 9e12}))
+    if FLUSH_FILE not in case.files:
+        flush.write_text(json.dumps({"failures": 0, "next_at": 9e12}))
     stubs = box / "stubs"
     stubs.mkdir(exist_ok=True)
     log = box / "helpers.log"

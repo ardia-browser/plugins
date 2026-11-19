@@ -59,5 +59,68 @@
    }
   },
   "note": "4300 digits is still a number for Python"
+ },
+ {
+  "id": "router-r3--flush-state-nan-failures",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "files": {
+   "data/Telemetry/cli-flush.json": {
+    "text": "{\"failures\":NaN,\"next_at\":0}",
+    "mode": 384
+   }
+  },
+  "note": "Python leaves a flush state it can't convert to int (or whose next_at is still ahead) as it is and starts no flusher"
+ },
+ {
+  "id": "router-r3--flush-state-infinite-failures",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "files": {
+   "data/Telemetry/cli-flush.json": {
+    "text": "{\"failures\":Infinity,\"next_at\":0}",
+    "mode": 384
+   }
+  },
+  "note": "Python leaves a flush state it can't convert to int (or whose next_at is still ahead) as it is and starts no flusher"
+ },
+ {
+  "id": "router-r3--flush-state-next-at-past-every-float",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "files": {
+   "data/Telemetry/cli-flush.json": {
+    "text": "{\"failures\":0,\"next_at\":9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999}",
+    "mode": 384
+   }
+  },
+  "note": "Python leaves a flush state it can't convert to int (or whose next_at is still ahead) as it is and starts no flusher"
  }
 ]

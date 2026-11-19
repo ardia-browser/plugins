@@ -546,8 +546,26 @@ fn discard_spool(root: &Path) {
 fn number(value: Option<&Value>) -> f64 {
     match value {
         Some(Value::Int(number)) => *number as f64,
+        Some(Value::BigInt(digits)) => digits.parse().unwrap_or(0.0),
         Some(Value::Float(number)) => *number,
         _ => 0.0,
+    }
+}
+
+fn whole(value: Option<&Value>) -> Option<Value> {
+    match value {
+        Some(Value::Int(number)) => Some(Value::Int(*number)),
+        Some(Value::BigInt(digits)) => Some(Value::BigInt(digits.clone())),
+        Some(Value::Float(number)) if !number.is_finite() => None,
+        Some(Value::Float(number)) => {
+            let number = number.trunc();
+            Some(if number.abs() < 1e18 {
+                Value::Int(number as i128)
+            } else {
+                Value::BigInt(format!("{number:.0}"))
+            })
+        }
+        _ => Some(Value::Int(0)),
     }
 }
 
@@ -565,11 +583,8 @@ fn start_flush(dir: &OwnedFd, target: &Target, python: Option<&Path>) {
     if number(state.get("next_at")) > now {
         return;
     }
-    let failures = number(state.get("failures")).trunc();
-    let written = Value::object(vec![
-        ("failures", Value::Int(failures as i128)),
-        ("next_at", Value::Float(now + FLUSH_INTERVAL_S)),
-    ]);
+    let Some(failures) = whole(state.get("failures")) else { return };
+    let written = Value::object(vec![("failures", failures), ("next_at", Value::Float(now + FLUSH_INTERVAL_S))]);
     if paths::write_private(FLUSH_STATE, dir, json::dumps(&written, Style::Spaced, false).as_bytes()).is_err() {
         return;
     }
@@ -621,6 +636,18 @@ fn spawn_flusher(python: &Path, target: &Target) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn flush_failures_convert_like_python_int() {
+        assert_eq!(whole(Some(&Value::Float(f64::NAN))), None);
+        assert_eq!(whole(Some(&Value::Float(f64::NEG_INFINITY))), None);
+        assert_eq!(whole(Some(&Value::Float(-3.9))), Some(Value::Int(-3)));
+        assert_eq!(whole(Some(&Value::Float(1e300))), Some(Value::BigInt("1000000000000000052504760255204420248704468581108159154915854115511802457988908195786371375080447864043704443832883878176942523235360430575644792184786706982848387200926575803737830233794788090059368953234970799945081119038967640880074652742780142494579258788820056842838115669472196386865459400540160".into())));
+        assert_eq!(whole(Some(&Value::Float(-2.5e19))), Some(Value::BigInt("-25000000000000000000".into())));
+        assert_eq!(whole(Some(&Value::Bool(true))), Some(Value::Int(0)));
+        assert_eq!(whole(None), Some(Value::Int(0)));
+        assert_eq!(number(Some(&Value::BigInt("9".repeat(400)))), f64::INFINITY);
+    }
 
     #[test]
     fn makes_uuid7s() {
