@@ -1098,7 +1098,7 @@ class ProductionSigning(unittest.TestCase):
 class BuildSmoke(unittest.TestCase):
     def test_the_packaging_smoke_runs_leave_no_history_or_telemetry_behind(self):
         script = (CLI / "scripts" / "build.sh").read_text().splitlines()
-        runs = [line for line in script if '"$root/bin/ardia"' in line and not line.startswith(("cp ", "chmod ")) and "--version" not in line]
+        runs = [line.lstrip() for line in script if '"$root/bin/ardia"' in line and not line.lstrip().startswith(("cp ", "chmod ")) and "--version" not in line]
         self.assertTrue(runs)
         for line in runs:
             self.assertRegex(line, r'^ARDIA_CLI_HOME="\$work/[^"]+" ARDIA_TELEMETRY=off "\$root/bin/ardia" ', line)
