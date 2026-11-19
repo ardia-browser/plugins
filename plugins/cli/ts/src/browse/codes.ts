@@ -1,5 +1,6 @@
 import { dumps, object, parseText, type Value } from "../json.ts";
 import { exitOf } from "./answer.ts";
+import { ALIASES } from "./tables.ts";
 import { PythonCrash } from "./errors.ts";
 import { ANSWER_JSON_DEPTH } from "./serve.ts";
 
@@ -41,13 +42,13 @@ function codedRows(rows: Value[]): boolean {
   return changed;
 }
 
-export function codeJsonAnswer(answer: Map<string, Value>): void {
+export function codeJsonAnswer(answer: Map<string, Value>, command: string): void {
   const status = exitOf(answer.get("exit"));
   if (status instanceof PythonCrash || status === 0n) return;
   const given = answer.get("out");
   const out = typeof given === "string" ? given : "";
   const parsed = parsedLine(out);
-  if (Array.isArray(parsed)) {
+  if (Array.isArray(parsed) && (ALIASES[command] ?? command) === "batch") {
     if (codedRows(parsed)) answer.set("out", `${dumps(parsed, "compact")}\n`);
     return;
   }

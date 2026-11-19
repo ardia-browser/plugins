@@ -58,14 +58,14 @@ function invalidReply(answer: Map<string, Value>, secrets: Secrets): PythonCrash
   return status instanceof PythonCrash ? status : undefined;
 }
 
-function printAnswer(answer: Map<string, Value>, secrets: Secrets, printer: Printer, call: Call, asJson: boolean, chars: bigint): Outcome {
+function printAnswer(answer: Map<string, Value>, secrets: Secrets, printer: Printer, call: Call, asJson: boolean, chars: bigint, command: string): Outcome {
   const invalid = asJson ? invalidReply(answer, secrets) : undefined;
   if (invalid !== undefined) {
     for (const [key, value] of cleanMetrics(answer.get("metrics"))) call.metrics.set(key, value);
     call.metrics.set("output_chars", chars);
     return { status: 1, crash: invalid };
   }
-  if (asJson) codeJsonAnswer(answer);
+  if (asJson) codeJsonAnswer(answer, command);
   const code = answer.get("code");
   if (typeof code === "string") call.noteErrorCode(code);
   for (const [key, value] of cleanMetrics(answer.get("metrics"))) call.metrics.set(key, value);
@@ -108,7 +108,7 @@ async function run(browse: string[], printer: Printer, call: Call, plugin: boole
   if (plugin) return { status: printError(new BrowseError(message(UNAVAILABLE_WHY), REFUSED, UNAVAILABLE), asJson, secrets, printer, call) };
   try {
     const answer = await roundTrip(found, rest, secrets, call, python);
-    return printAnswer(answer, secrets, printer, call, asJson, outputChars(answer));
+    return printAnswer(answer, secrets, printer, call, asJson, outputChars(answer), rest[0] as string);
   } catch (error) {
     if (handBackReason(error) !== undefined) throw error;
     if (error instanceof PythonCrash) return { status: 1, crash: error };

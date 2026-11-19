@@ -3406,7 +3406,16 @@
    "session": "plugin-ai",
    "namespace": ""
   },
-  "note": "round 3: valid JSON that isn't an object (a batch's list) is kept; ordinary browse since round 4 (plugin mode has no daemon yet)"
+  "note": "round 5: a list from a failing non-batch command is wrapped; only a batch's list is kept; ordinary browse since round 4 (plugin mode has no daemon yet)",
+  "intentional": {
+   "why": "under --json exactly one JSON line with a code goes to stdout, whatever fails (AI plugin contract §3)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"[1, 2]\",\"code\":\"internal_error\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
  },
  {
   "id": "review3--contract-snapshot-cursor",
@@ -3706,6 +3715,61 @@
    "why": "under --json a failing answer's error rows always carry a code, and other JSON becomes one error object (AI plugin contract §3)",
    "stdout": {
     "text": "{\"success\":false,\"data\":null,\"error\":\"{\\\"success\\\":true,\\\"data\\\":null,\\\"error\\\":null}\",\"code\":\"internal_error\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review5--2-batch-list-kept",
+  "command": "browse batch",
+  "argv": [
+   "browse",
+   "--json",
+   "batch",
+   "get title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "[1, 2]\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "round 5: a failing batch's list stays a list"
+ },
+ {
+  "id": "review5--2-get-list-wrapped",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--json",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "[1,2]\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "round 5: Codex's repro: get title answering [1,2] with exit 1",
+  "intentional": {
+   "why": "under --json a failing answer's error rows always carry a code, and other JSON becomes one error object (AI plugin contract §3)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"[1,2]\",\"code\":\"internal_error\"}\n"
    },
    "stderr": {
     "text": ""
