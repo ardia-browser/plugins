@@ -48,22 +48,34 @@ function decodedLossily(argv: string[]): boolean {
   return argv.some(lossy) || Object.entries(process.env).some(([key, value]) => lossy(key) || lossy(value));
 }
 
+async function cannotRun(python: string, errno: number): Promise<number> {
+  const { DARWIN_ERRORS } = await import("./errnos.ts");
+  complain(`ardia: couldn't run ${python}: ${DARWIN_ERRORS[errno] ?? `Unknown error: ${errno}`}\n`);
+  return 127;
+}
+
+const BOURNE_SHELL = "/bin/sh";
+
 export async function handOff(argv: string[], python: string | null = bundledPython(), lease?: string): Promise<number> {
   if (python === null || !existsSync(python)) {
     complain(`ardia: this command runs on the bundled Python, which isn't there (${python ?? "next to this ardia"})\n`);
     return 127;
   }
+  const { E2BIG, ENOEXEC, errnoOf, exceedsArgMax, execBlocker } = await import("./exec-check.ts");
+  const blocked = execBlocker(python);
+  if (blocked !== undefined && blocked !== ENOEXEC) return cannotRun(python, blocked);
   try {
-    if (decodedLossily(argv)) {
+    if (blocked === undefined && decodedLossily(argv)) {
       const raw = await import("./raw-handoff.ts");
       const folder = await raw.parcelRawWords();
       if (folder !== undefined) raw.execTrampoline(python, folder, lease);
     }
-    process.execve?.(python, [python, "-I", "-m", "ardia_cli", ...argv], process.env);
+    const words = [python, "-I", "-m", "ardia_cli", ...argv];
+    const [program, programWords] = blocked === ENOEXEC ? [BOURNE_SHELL, ["sh", ...words]] : [python, words];
+    if (exceedsArgMax(programWords, process.env)) return cannotRun(python, E2BIG);
+    process.execve?.(program, programWords, process.env);
   } catch (error) {
-    const errno = Math.abs((error as NodeJS.ErrnoException).errno ?? 0);
-    const { DARWIN_ERRORS } = await import("./errnos.ts");
-    complain(`ardia: couldn't run ${python}: ${DARWIN_ERRORS[errno] ?? (error instanceof Error ? error.message : String(error))}\n`);
+    return cannotRun(python, errnoOf(error));
   }
   return 127;
 }

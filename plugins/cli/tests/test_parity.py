@@ -520,6 +520,42 @@ class EntryProcess:
         self.assertNotIn(secret.encode(), logged)
         self.assertIn(b"note=" + b"n\xfe\n".hex().encode(), logged)
 
+    def test_a_python_that_cannot_run_is_reported_and_the_lease_dropped(self):
+        for argv in (["config", "path"], ["nosuch-\udcff"]):
+            for body, mode, reason in ((None, 0o644, "Permission denied"), ("#!/nonexistent/interpreter\n", 0o755, "No such file or directory")):
+                with self.subTest(argv=argv, reason=reason):
+                    bare = self.bare_install(body, mode)
+                    done = subprocess.run([str(bare / "bin" / "ardia"), *argv], env=self.environment({}), capture_output=True, timeout=30)
+                    self.assertEqual((done.returncode, done.stdout, done.stderr), (127, b"", self.couldnt_run(bare, reason)))
+                    self.assertEqual(os.listdir(bare / ".leases"), [])
+
+    def test_a_python_that_is_not_a_program_runs_through_the_shell_as_execvp_does(self):
+        for argv in (["config", "path"], ["nosuch-\udcff"]):
+            with self.subTest(argv=argv):
+                bare = self.bare_install("echo shell-ran \"$@\"\nexit 9\n")
+                done = subprocess.run([str(bare / "bin" / "ardia"), *argv], env=self.environment({}), capture_output=True, timeout=30)
+                self.assertEqual((done.returncode, done.stdout.split(b" ")[:4]), (9, [b"shell-ran", b"-I", b"-m", b"ardia_cli"]))
+
+    def test_an_argument_list_too_long_for_python_is_reported_and_the_lease_dropped(self):
+        for argv in (["config", "path"], ["nosuch-\udcff"]):
+            with self.subTest(argv=argv):
+                bare = self.bare_install(f'#!/bin/sh\nexec "{self.python}" "$@"\n')
+                program = str(bare / "bin" / "ardia")
+                env = self.environment({"ARDIA_FILL": ""})
+                words = [program, *argv] + [f"{key}={value}" for key, value in env.items()]
+                used = sum(len(os.fsencode(word)) + 1 for word in words) + 8 * len(words) + 16
+                done = None
+                for slack in range(64):
+                    env["ARDIA_FILL"] = "f" * (1024 * 1024 - used - slack)
+                    try:
+                        done = subprocess.run([program, *argv], env=env, capture_output=True, timeout=30)
+                        break
+                    except OSError:
+                        continue
+                self.assertIsNotNone(done, "ardia itself never started")
+                self.assertEqual((done.returncode, done.stdout, done.stderr), (127, b"", self.couldnt_run(bare, "Argument list too long")))
+                self.assertEqual(os.listdir(bare / ".leases"), [])
+
     def test_a_lease_is_held_while_it_runs(self):
         leases = self.root / ".leases"
         leases.mkdir(exist_ok=True)
