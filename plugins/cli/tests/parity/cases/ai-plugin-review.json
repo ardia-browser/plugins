@@ -1,0 +1,392 @@
+[
+ {
+  "id": "review--1-batch-text",
+  "command": "browse batch",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "batch",
+   "get title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 1: batch is refused before the daemon",
+  "intentional": {
+   "why": "plugin mode refuses commands that run other commands: the Python daemon checks the plugin rules on the outer command only (M3 F1 moves the check per step)",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `batch`: it runs other commands inside the daemon, which doesn't check the plugin rules on them yet, so send each step on its own; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse batch (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--1-batch-json",
+  "command": "browse batch",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "batch",
+   "get title",
+   "cdp Browser.getVersion"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 1: one JSON line with nested_commands_refused",
+  "intentional": {
+   "why": "plugin mode refuses commands that run other commands: the Python daemon checks the plugin rules on the outer command only (M3 F1 moves the check per step)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `batch`: it runs other commands inside the daemon, which doesn't check the plugin rules on them yet, so send each step on its own; nothing was sent\",\"code\":\"nested_commands_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse batch (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--1-batch-bail",
+  "command": "browse batch",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "batch",
+   "--bail",
+   "get title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 1: batch flags change nothing",
+  "intentional": {
+   "why": "plugin mode refuses commands that run other commands: the Python daemon checks the plugin rules on the outer command only (M3 F1 moves the check per step)",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `batch`: it runs other commands inside the daemon, which doesn't check the plugin rules on them yet, so send each step on its own; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse batch (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--1-open-read",
+  "command": "browse open",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "open",
+   "--read",
+   "https://example.com/"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 1: open --read runs read, which plugins can't run",
+  "intentional": {
+   "why": "plugin mode refuses commands that run other commands: the Python daemon checks the plugin rules on the outer command only (M3 F1 moves the check per step)",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `open --read`: it runs other commands inside the daemon, which doesn't check the plugin rules on them yet, so send each step on its own; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse open (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--1-open-read-inline",
+  "command": "browse open",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "open",
+   "--read=1",
+   "https://example.com/"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 1: --read=value is the same flag",
+  "intentional": {
+   "why": "plugin mode refuses commands that run other commands: the Python daemon checks the plugin rules on the outer command only (M3 F1 moves the check per step)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `open --read`: it runs other commands inside the daemon, which doesn't check the plugin rules on them yet, so send each step on its own; nothing was sent\",\"code\":\"nested_commands_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse open (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--1-goto-read",
+  "command": "browse open",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "goto",
+   "https://example.com/",
+   "--read"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 1: aliases of open too",
+  "intentional": {
+   "why": "plugin mode refuses commands that run other commands: the Python daemon checks the plugin rules on the outer command only (M3 F1 moves the check per step)",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `goto --read`: it runs other commands inside the daemon, which doesn't check the plugin rules on them yet, so send each step on its own; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse goto (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--1-open-without-read",
+  "command": "browse open",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "open",
+   "--",
+   "--read"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Opened\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 1: --read after -- is a positional, so open goes to the daemon"
+ }
+]

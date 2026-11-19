@@ -1093,6 +1093,13 @@ it relies on is `tests/parity/cases/ai-plugin-contract.json` (one case per item)
   --capture-console --show --content-boundaries --out --stdin`); and `auth`, `notes`, `flow`, `plugin`, `read`,
   `session`, `script`, `cdp`, `clipboard` and `close --all`. The router sends a plugin's browse call only to the TypeScript client and
   refuses (77) rather than hand it to Python.
+- Commands that run other commands are refused with status 77 and code `nested_commands_refused`, before anything is
+  sent: `batch` (and its aliases) and `open --read` (or `goto`/`navigate --read`, which runs `read`). `script` and
+  `flow`, the other two, are refused above. The rules here are checked by the client on the outer command only; the
+  Python daemon runs a batch's steps, a script's `browse()` calls and a saved flow's steps without them. **When plugin
+  mode moves into the daemon (M3 F1), the daemon must check every rule on every step it runs for a `for_plugin`
+  session** (the refused commands and flags, the refused session flags, `--out`, and the CDP input rules below), and
+  only then may the client stop refusing these commands. Cases: `tests/parity/cases/ai-plugin-review.json`.
 - Input the engine accepts from a plugin (ardia#2808's plugin policy). The daemon builds these CDP calls, so it keeps
   them for a `for_plugin` session (the TypeScript daemon, M3 F1, must; today's Python daemon doesn't yet: its
   humanized typing sends `nativeVirtualKeyCode` and its shortcuts send `undo`/`redo`):
@@ -1125,6 +1132,7 @@ Python has none:
 | `unknown_command` | the daemon's `Unknown command: …` |
 | `command_failed` | any other daemon error line without a code |
 | `plugin_refused` | a plugin-mode refusal (status 77) |
+| `nested_commands_refused` | plugin mode and a command that runs other commands (`batch`, `open --read`; status 77) |
 
 Telemetry's `error_code` stays Python's. Each such case in the parity table is marked `intentional`, holds the output
 the TypeScript client must print instead of Python's, and is counted apart in the report.

@@ -127,7 +127,7 @@ async function run(browse: string[], printer: Printer, call: Call, plugin: Acces
   }
 }
 
-function refuse(browse: readonly string[] | undefined, why: string, call: Call, python: string | null): number {
+function refuse(browse: readonly string[] | undefined, why: string, call: Call, python: string | null, code = CODE): number {
   const printer = new Printer("strict");
   let asJson = false;
   if (browse !== undefined) {
@@ -137,9 +137,9 @@ function refuse(browse: readonly string[] | undefined, why: string, call: Call, 
       if (!(error instanceof Usage)) throw error;
     }
   }
-  call.noteErrorCode(CODE);
+  call.noteErrorCode(code);
   if (asJson) {
-    const payload = object([["success", false], ["data", null], ["error", message(why)], ["code", CODE]]);
+    const payload = object([["success", false], ["data", null], ["error", message(why)], ["code", code]]);
     printer.out(`${dumps(payload, "compact")}\n`);
   } else printer.err(`✗ ${message(why)}\n`);
   finish(call, REFUSED, python);
@@ -185,7 +185,7 @@ async function pluginAccess(browse: string[], call: Call, python: string | null)
     checkRequest(browse, parsed.found.values, parsed.rest);
     return access;
   } catch (error) {
-    if (error instanceof PluginRefusal) return refuse(browse, error.message, call, python);
+    if (error instanceof PluginRefusal) return refuse(browse, error.message, call, python, error.code);
     throw error;
   }
 }

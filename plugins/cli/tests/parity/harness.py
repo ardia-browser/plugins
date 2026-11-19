@@ -1164,7 +1164,7 @@ def compare(new: Observed, python: Observed, fallback: bool = False, label: str 
     return mismatches
 
 
-INTENTIONAL_KEYS = frozenset({"why", "stdout", "stderr", "status"})
+INTENTIONAL_KEYS = frozenset({"why", "stdout", "stderr", "status", "daemon_requests", "usage"})
 
 
 def intended(python: "Observed", case: Case, places: dict | None = None) -> tuple["Observed", list[str]]:
@@ -1173,13 +1173,14 @@ def intended(python: "Observed", case: Case, places: dict | None = None) -> tupl
     spec = case.intentional or {}
     problems = []
     if set(spec) - INTENTIONAL_KEYS or not isinstance(spec.get("why"), str) or len(spec) < 2:
-        return python, [f"intentional takes why and at least one of stdout, stderr, status, not {sorted(spec)}"]
+        return python, [f"intentional takes why and at least one of stdout, stderr, status, daemon_requests, usage, not {sorted(spec)}"]
     changes = {}
     for name in ("stdout", "stderr"):
         if name in spec:
             changes[name] = file_bytes(spec[name], places or {})
-    if "status" in spec:
-        changes["status"] = spec["status"]
+    for name in ("status", "daemon_requests", "usage"):
+        if name in spec:
+            changes[name] = spec[name]
     if all(getattr(python, name) == value for name, value in changes.items()):
         problems.append(f"intentional ({spec['why']}) expects what Python already does; drop it")
     return replace(python, **changes), problems

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { closeSync, fstatSync, read } from "node:fs";
 import { isatty } from "node:tty";
 import { PLUGIN_MODE } from "./route.ts";
-import { VALUE_FLAGS } from "./tables.ts";
+import { ALIASES, VALUE_FLAGS } from "./tables.ts";
 
 export { pluginMode } from "./route.ts";
 
@@ -10,6 +10,7 @@ export const CREDENTIAL_FD = "ARDIA_PLUGIN_CREDENTIAL_FD";
 export const ENDPOINT = "ARDIA_PLUGIN_ENDPOINT";
 export const REFUSED = 77;
 export const CODE = "plugin_refused";
+export const NESTED_CODE = "nested_commands_refused";
 const CREDENTIAL = /^p\.[A-Za-z0-9_-]{43}$/;
 const TOKEN_SERVER = /^ws:\/\/127\.0\.0\.1:[0-9]{1,5}\/devtools\/browser\/[A-Za-z0-9._-]{1,128}$/;
 const FD_NUMBER = /^[0-9]{1,5}$/;
@@ -26,8 +27,17 @@ const SESSION_FLAGS = [
   "--content-boundaries", "--out", "--stdin",
 ];
 const LOCAL_COMMANDS = ["auth", "notes", "flow", "plugin", "read", "session", "script", "cdp", "clipboard"];
+const NESTING_COMMANDS = ["batch"];
+const NESTING_FLAGS: Readonly<Record<string, string>> = { open: "--read" };
 
-export class PluginRefusal extends Error {}
+export class PluginRefusal extends Error {
+  constructor(
+    why: string,
+    readonly code: string = CODE,
+  ) {
+    super(why);
+  }
+}
 
 export type Access = { credential: string; endpoint: string };
 
@@ -133,12 +143,23 @@ function afterCommand(argv: readonly string[]): string[] {
   return [];
 }
 
+function nestedRefusal(command: string, own: readonly string[]): PluginRefusal | undefined {
+  const name = ALIASES[command] ?? command;
+  const flag = NESTING_FLAGS[name];
+  const nesting = NESTING_COMMANDS.includes(name) ? `\`${command}\`` : flag !== undefined && own.some((token) => token === flag || token.startsWith(`${flag}=`)) ? `\`${command} ${flag}\`` : undefined;
+  if (nesting === undefined) return undefined;
+  return new PluginRefusal(`can't run ${nesting}: it runs other commands inside the daemon, which doesn't check the plugin rules on them yet, so send each step on its own`, NESTED_CODE);
+}
+
 export function checkRequest(argv: readonly string[], values: Map<string, string>, rest: readonly string[]): void {
   const command = rest[0] ?? "";
+  const own = afterCommand(argv);
   if (LOCAL_COMMANDS.includes(command) || (command === "close" && rest.slice(1).includes("--all"))) {
     throw new PluginRefusal(`can't run \`${command}\` for a plugin, only page steps`);
   }
-  for (const token of afterCommand(argv)) {
+  const nested = nestedRefusal(command, own);
+  if (nested !== undefined) throw nested;
+  for (const token of own) {
     const name = token.split("=")[0] as string;
     if (SESSION_FLAGS.includes(name)) throw new PluginRefusal(`doesn't take ${name} after the command`);
   }
