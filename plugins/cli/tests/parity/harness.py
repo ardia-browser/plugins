@@ -139,11 +139,14 @@ def route_from(lines: list[str]) -> str:
     return "ts" if "ts" in lines else "rust"
 
 
+TS_CAN_LOCK = sys.platform == "darwin"
+
+
 def expected_route(entry: str, served: dict[str, str], case: "Case", ts_installed: bool) -> str:
     if case.fallback or case.command not in served:
         return "python"
     side = "ts" if entry == "ts" else served[case.command]
-    return "python" if side == "ts" and not ts_installed else side
+    return "python" if side == "ts" and (not ts_installed or not TS_CAN_LOCK) else side
 
 
 _blob_store = {}

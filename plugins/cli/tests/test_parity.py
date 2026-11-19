@@ -48,6 +48,8 @@ class ParityTable:
         self.assertFalse(failed, f"{len(failed)} of {len(self.outcomes)} parity cases differ:\n" + "\n".join(failed))
 
     def test_it_serves_only_proven_commands(self):
+        if self.entry == "ts" and not harness.TS_CAN_LOCK:
+            self.skipTest("TypeScript hands every command back where it can't take Python's flock, so nothing is proven native here")
         self.assertEqual(self.summary["unproven_but_served"], [], "served.txt lists commands without passing parity cases")
 
     def test_the_table_has_each_served_command_at_least_once(self):
