@@ -99,10 +99,10 @@ pub fn record(call: &Call, status: i64) {
     }
     let Ok(dir) = paths::open_private(&home, &[FOLDER], true) else { return };
     let Ok(Some(_lock)) = paths::take_lock_retrying(LOCK, &dir) else { return };
-    let state = paths::read_private(STATE, &dir, MAX_STATE_BYTES)
-        .ok()
-        .flatten()
-        .and_then(|raw| json::parse(&raw));
+    let raw = paths::read_private(STATE, &dir, MAX_STATE_BYTES).ok().flatten();
+    let Ok(state) = raw.map_or(Ok(None), |raw| json::parse_limited(&raw, json::TELEMETRY_DEPTH)) else {
+        return;
+    };
     let mut state = match state {
         Some(Value::Object(map)) => map,
         _ => Map::new(),

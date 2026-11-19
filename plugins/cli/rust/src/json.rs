@@ -82,22 +82,206 @@ impl Value {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub struct TooDeep;
+
+pub const TELEMETRY_DEPTH: usize = 9995;
+pub const CONTROL_DEPTH: usize = 9991;
+
 pub fn parse(bytes: &[u8]) -> Option<Value> {
-    let text = std::str::from_utf8(bytes).ok()?;
-    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
-    let mut parser = Parser { chars: text.as_bytes(), at: 0 };
+    parse_limited(bytes, usize::MAX).ok().flatten()
+}
+
+pub fn parse_limited(bytes: &[u8], depth_limit: usize) -> Result<Option<Value>, TooDeep> {
+    let Some(text) = decode(bytes) else { return Ok(None) };
+    let mut parser = Parser {
+        chars: &text,
+        at: 0,
+        depth: 0,
+        depth_limit,
+        too_deep: false,
+    };
     parser.space();
-    let value = parser.value()?;
+    let value = parser.value();
+    if parser.too_deep {
+        return Err(TooDeep);
+    }
+    let Some(value) = value else { return Ok(None) };
     parser.space();
-    if parser.at != parser.chars.len() {
+    Ok((parser.at == parser.chars.len()).then_some(value))
+}
+
+fn push_code(out: &mut Vec<u8>, code: u32) {
+    match code {
+        0..=0x7f => out.push(code as u8),
+        0x80..=0x7ff => out.extend([0xc0 | (code >> 6) as u8, 0x80 | (code & 0x3f) as u8]),
+        0x800..=0xffff => out.extend([0xe0 | (code >> 12) as u8, 0x80 | ((code >> 6) & 0x3f) as u8, 0x80 | (code & 0x3f) as u8]),
+        _ => out.extend([
+            0xf0 | (code >> 18) as u8,
+            0x80 | ((code >> 12) & 0x3f) as u8,
+            0x80 | ((code >> 6) & 0x3f) as u8,
+            0x80 | (code & 0x3f) as u8,
+        ]),
+    }
+}
+
+fn next_code(bytes: &[u8], at: usize) -> Option<(u32, usize)> {
+    let lead = *bytes.get(at)?;
+    let tail = |index: usize| bytes.get(at + index).filter(|byte| *byte & 0xc0 == 0x80).map(|byte| u32::from(byte & 0x3f));
+    match lead {
+        0..=0x7f => Some((u32::from(lead), 1)),
+        0xc2..=0xdf => Some(((u32::from(lead & 0x1f) << 6) | tail(1)?, 2)),
+        0xe0..=0xef => {
+            let code = (u32::from(lead & 0x0f) << 12) | (tail(1)? << 6) | tail(2)?;
+            (code >= 0x800).then_some((code, 3))
+        }
+        0xf0..=0xf4 => {
+            let code = (u32::from(lead & 0x07) << 18) | (tail(1)? << 12) | (tail(2)? << 6) | tail(3)?;
+            (0x10000..=0x10ffff).contains(&code).then_some((code, 4))
+        }
+        _ => None,
+    }
+}
+
+fn utf8_surrogate_pass(bytes: &[u8]) -> Option<Vec<u8>> {
+    if std::str::from_utf8(bytes).is_ok() {
+        return Some(bytes.to_vec());
+    }
+    let mut at = 0;
+    while at < bytes.len() {
+        at += next_code(bytes, at)?.1;
+    }
+    Some(bytes.to_vec())
+}
+
+fn from_units(units: impl Iterator<Item = u32>) -> Option<Vec<u8>> {
+    let mut out = Vec::new();
+    let mut pending: Option<u32> = None;
+    for unit in units {
+        if let Some(high) = pending.take() {
+            if (0xdc00..0xe000).contains(&unit) {
+                push_code(&mut out, 0x10000 + ((high - 0xd800) << 10) + (unit - 0xdc00));
+                continue;
+            }
+            push_code(&mut out, high);
+        }
+        if (0xd800..0xdc00).contains(&unit) {
+            pending = Some(unit);
+        } else {
+            push_code(&mut out, unit);
+        }
+    }
+    if let Some(high) = pending {
+        push_code(&mut out, high);
+    }
+    Some(out)
+}
+
+fn utf16(bytes: &[u8], big_endian: bool) -> Option<Vec<u8>> {
+    if !bytes.len().is_multiple_of(2) {
         return None;
     }
-    Some(value)
+    from_units(bytes.chunks(2).map(|pair| {
+        let pair = [pair[0], pair[1]];
+        u32::from(if big_endian { u16::from_be_bytes(pair) } else { u16::from_le_bytes(pair) })
+    }))
+}
+
+fn utf32(bytes: &[u8], big_endian: bool) -> Option<Vec<u8>> {
+    if !bytes.len().is_multiple_of(4) {
+        return None;
+    }
+    let mut out = Vec::new();
+    for chunk in bytes.chunks(4) {
+        let quad = [chunk[0], chunk[1], chunk[2], chunk[3]];
+        let code = if big_endian { u32::from_be_bytes(quad) } else { u32::from_le_bytes(quad) };
+        if code > 0x10ffff {
+            return None;
+        }
+        push_code(&mut out, code);
+    }
+    Some(out)
+}
+
+fn decode(bytes: &[u8]) -> Option<Vec<u8>> {
+    if bytes.starts_with(&[0, 0, 0xfe, 0xff]) || bytes.starts_with(&[0xff, 0xfe, 0, 0]) {
+        return utf32(&bytes[4..], bytes[0] == 0);
+    }
+    if bytes.starts_with(&[0xfe, 0xff]) || bytes.starts_with(&[0xff, 0xfe]) {
+        return utf16(&bytes[2..], bytes[0] == 0xfe);
+    }
+    if let Some(rest) = bytes.strip_prefix(&[0xef, 0xbb, 0xbf]) {
+        return utf8_surrogate_pass(rest);
+    }
+    if bytes.len() >= 4 {
+        if bytes[0] == 0 {
+            return if bytes[1] != 0 { utf16(bytes, true) } else { utf32(bytes, true) };
+        }
+        if bytes[1] == 0 {
+            return if bytes[2] != 0 || bytes[3] != 0 {
+                utf16(bytes, false)
+            } else {
+                utf32(bytes, false)
+            };
+        }
+    } else if bytes.len() == 2 {
+        if bytes[0] == 0 {
+            return utf16(bytes, true);
+        }
+        if bytes[1] == 0 {
+            return utf16(bytes, false);
+        }
+    }
+    utf8_surrogate_pass(bytes)
 }
 
 struct Parser<'a> {
     chars: &'a [u8],
     at: usize,
+    depth: usize,
+    depth_limit: usize,
+    too_deep: bool,
+}
+
+struct Text {
+    shown: String,
+    lone: Option<Vec<u32>>,
+}
+
+impl Text {
+    fn push(&mut self, ch: char) {
+        self.shown.push(ch);
+        if let Some(lone) = &mut self.lone {
+            lone.push(ch as u32);
+        }
+    }
+
+    fn push_code(&mut self, code: u32) {
+        match char::from_u32(code) {
+            Some(ch) => self.push(ch),
+            None => {
+                let lone = self.lone.get_or_insert_with(|| self.shown.chars().map(|ch| ch as u32).collect());
+                lone.push(code);
+                self.shown.push('\u{fffd}');
+            }
+        }
+    }
+
+    fn push_raw(&mut self, raw: &[u8]) -> Option<()> {
+        if self.lone.is_none() {
+            if let Ok(text) = std::str::from_utf8(raw) {
+                self.shown.push_str(text);
+                return Some(());
+            }
+        }
+        let mut at = 0;
+        while at < raw.len() {
+            let (code, size) = next_code(raw, at)?;
+            self.push_code(code);
+            at += size;
+        }
+        Some(())
+    }
 }
 
 impl Parser<'_> {
@@ -120,11 +304,21 @@ impl Parser<'_> {
         }
     }
 
+    fn nested(&mut self, open: u8) -> Option<Value> {
+        self.depth += 1;
+        if self.depth > self.depth_limit {
+            self.too_deep = true;
+            return None;
+        }
+        let value = if open == b'{' { self.object() } else { self.array() };
+        self.depth -= 1;
+        value
+    }
+
     fn value(&mut self) -> Option<Value> {
         match self.peek()? {
-            b'{' => self.object(),
-            b'[' => self.array(),
-            b'"' => self.string().map(Value::Str),
+            open @ (b'{' | b'[') => self.nested(open),
+            b'"' => self.string().map(|text| Value::Str(text.shown)),
             b'n' if self.word("null") => Some(Value::Null),
             b't' if self.word("true") => Some(Value::Bool(true)),
             b'f' if self.word("false") => Some(Value::Bool(false)),
@@ -142,6 +336,7 @@ impl Parser<'_> {
     fn object(&mut self) -> Option<Value> {
         self.at += 1;
         let mut map = Map::new();
+        let mut lone_keys: Vec<Option<Vec<u32>>> = Vec::new();
         self.space();
         if self.peek() == Some(b'}') {
             self.at += 1;
@@ -160,7 +355,18 @@ impl Parser<'_> {
             self.at += 1;
             self.space();
             let value = self.value()?;
-            map.insert(&key, value);
+            let seen = map
+                .entries
+                .iter()
+                .zip(&lone_keys)
+                .position(|((shown, _), lone)| *lone == key.lone && (lone.is_some() || *shown == key.shown));
+            match seen {
+                Some(index) => map.entries[index].1 = value,
+                None => {
+                    map.entries.push((key.shown, value));
+                    lone_keys.push(key.lone);
+                }
+            }
             self.space();
             match self.peek()? {
                 b',' => self.at += 1,
@@ -206,9 +412,12 @@ impl Parser<'_> {
         u32::from_str_radix(text, 16).ok()
     }
 
-    fn string(&mut self) -> Option<String> {
+    fn string(&mut self) -> Option<Text> {
         self.at += 1;
-        let mut out = String::new();
+        let mut out = Text {
+            shown: String::new(),
+            lone: None,
+        };
         loop {
             let start = self.at;
             while let Some(byte) = self.peek() {
@@ -217,7 +426,7 @@ impl Parser<'_> {
                 }
                 self.at += 1;
             }
-            out.push_str(std::str::from_utf8(&self.chars[start..self.at]).ok()?);
+            out.push_raw(&self.chars[start..self.at])?;
             match self.peek()? {
                 b'"' => {
                     self.at += 1;
@@ -244,13 +453,13 @@ impl Parser<'_> {
                                 match self.hex4() {
                                     Some(low) if (0xdc00..0xe000).contains(&low) => {
                                         let code = 0x10000 + ((unit - 0xd800) << 10) + (low - 0xdc00);
-                                        out.push(char::from_u32(code)?);
+                                        out.push_code(code);
                                         continue;
                                     }
                                     _ => self.at = saved,
                                 }
                             }
-                            out.push(char::from_u32(unit).unwrap_or('\u{fffd}'));
+                            out.push_code(unit);
                         }
                         _ => return None,
                     }
@@ -499,6 +708,43 @@ mod tests {
         );
         assert_eq!(dumps(&value, Style::Indented, false).lines().count(), 10);
         assert_eq!(dumps(&Value::str("é😀"), Style::Compact, true), "\"\\u00e9\\ud83d\\ude00\"");
+    }
+
+    #[test]
+    fn reads_bytes_like_json_loads() {
+        let doc = r#"{"a": "\u00e9"}"#;
+        let expected = parse(doc.as_bytes()).unwrap();
+        let utf16le: Vec<u8> = doc.encode_utf16().flat_map(u16::to_le_bytes).collect();
+        let utf16be: Vec<u8> = doc.encode_utf16().flat_map(u16::to_be_bytes).collect();
+        let utf32le: Vec<u8> = doc.chars().flat_map(|ch| (ch as u32).to_le_bytes()).collect();
+        for bytes in [
+            [&[0xff, 0xfe][..], &utf16le].concat(),
+            utf16le.clone(),
+            utf16be,
+            [&[0xff, 0xfe, 0, 0][..], &utf32le].concat(),
+            utf32le,
+            [&[0xef, 0xbb, 0xbf][..], doc.as_bytes()].concat(),
+        ] {
+            assert_eq!(parse(&bytes).as_ref(), Some(&expected), "{bytes:?}");
+        }
+        assert!(parse(&[&[0xef, 0xbb, 0xbf, 0xef, 0xbb, 0xbf][..], doc.as_bytes()].concat()).is_none());
+        assert!(parse(&[&[0xff, 0xfe][..], &utf16le, &[0]].concat()).is_none());
+        assert_eq!(parse(b"\"a\xed\xa0\x80\""), Some(Value::str("a\u{fffd}")));
+        assert!(parse(b"\"a\xc0\x80\"").is_none());
+    }
+
+    #[test]
+    fn keeps_lone_surrogate_keys_apart() {
+        let value = parse(br#"{"\ud800": 1, "\ud801": 2, "\ud800": 3, "\ufffd": 4}"#).unwrap();
+        assert_eq!(dumps(&value, Style::Compact, false), "{\"\u{fffd}\":3,\"\u{fffd}\":2,\"\u{fffd}\":4}");
+    }
+
+    #[test]
+    fn stops_past_the_depth_limit() {
+        let nested = |depth: usize| format!("{}{}", "[".repeat(depth), "]".repeat(depth));
+        assert!(matches!(parse_limited(nested(5).as_bytes(), 5), Ok(Some(_))));
+        assert_eq!(parse_limited(nested(6).as_bytes(), 5), Err(TooDeep));
+        assert_eq!(parse_limited(format!("[1,]{}", nested(9)).as_bytes(), 5), Ok(None));
     }
 
     #[test]

@@ -165,16 +165,20 @@ pub fn cli_target(argv: &[String]) -> Option<Target> {
     Some(Target { root, url, environment })
 }
 
-pub fn read_consent(root: &Path) -> Option<Map> {
-    let fd = paths::open(&root.join(CONSENT_FILE), libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_NONBLOCK).ok()?;
-    let info = paths::metadata(&fd).ok()?;
+pub fn read_consent(root: &Path) -> Result<Option<Map>, json::TooDeep> {
+    let Ok(fd) = paths::open(&root.join(CONSENT_FILE), libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_NONBLOCK) else {
+        return Ok(None);
+    };
+    let Ok(info) = paths::metadata(&fd) else { return Ok(None) };
     if !info.is_file() || info.uid() != paths::uid() || info.size() > MAX_CONSENT_BYTES as u64 {
-        return None;
+        return Ok(None);
     }
-    let raw = paths::read_fd(&fd, MAX_CONSENT_BYTES + 1).ok()?;
-    match json::parse(&raw)? {
-        Value::Object(map) => Some(map),
-        _ => None,
+    let Ok(raw) = paths::read_fd(&fd, MAX_CONSENT_BYTES + 1) else {
+        return Ok(None);
+    };
+    match json::parse_limited(&raw, json::TELEMETRY_DEPTH)? {
+        Some(Value::Object(map)) => Ok(Some(map)),
+        _ => Ok(None),
     }
 }
 
@@ -227,7 +231,7 @@ fn expiry_overflows(doc: &Map) -> bool {
 
 pub fn consent_unreadable(argv: &[String]) -> bool {
     cli_target(argv)
-        .and_then(|target| read_consent(Path::new(&target.root)))
+        .and_then(|target| read_consent(Path::new(&target.root)).ok().flatten())
         .is_some_and(|doc| unreadable_expiry(&doc))
 }
 
@@ -373,7 +377,7 @@ pub fn finish(call: &Call, status: i64, python: Option<&Path>) {
     usage::record(call, status);
     let Some(target) = cli_target(&call.argv) else { return };
     let root = PathBuf::from(&target.root);
-    let doc = read_consent(&root);
+    let Ok(doc) = read_consent(&root) else { return };
     if doc.as_ref().is_some_and(|doc| unreadable_expiry(doc) || expiry_overflows(doc)) {
         return;
     }
@@ -549,10 +553,10 @@ fn number(value: Option<&Value>) -> f64 {
 
 fn start_flush(dir: &OwnedFd, target: &Target, python: Option<&Path>) {
     let Ok(Some(claim)) = paths::take_lock(FLUSH_CLAIM_LOCK, dir) else { return };
-    let state = paths::read_private(FLUSH_STATE, dir, 64 * 1024)
-        .ok()
-        .flatten()
-        .and_then(|raw| json::parse(&raw));
+    let raw = paths::read_private(FLUSH_STATE, dir, 64 * 1024).ok().flatten();
+    let Ok(state) = raw.map_or(Ok(None), |raw| json::parse_limited(&raw, json::TELEMETRY_DEPTH)) else {
+        return;
+    };
     let state = match &state {
         Some(Value::Object(map)) => map.clone(),
         _ => Map::new(),
