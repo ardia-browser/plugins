@@ -10,7 +10,6 @@ import subprocess
 import sys
 import tempfile
 import threading
-import time
 import unittest
 from pathlib import Path
 
@@ -24,7 +23,6 @@ LISTINGS = (["windows", "--json"], ["tabs", "--json"], ["tabs"])
 STDOUT_KINDS = ("closed pipe", "read-only file", "full non-blocking pipe", "hung-up terminal") + (("full device",) if Path("/dev/full").exists() else ())
 TRACEBACK = re.compile(rb"Traceback \(most recent call last\):\n(?:  .*\n)*")
 TABS = [{"type": "tab", "id": f"tab-{index}", "title": "t" * 40, "url": "https://example.com/" + "p" * 40} for index in range(3000)]
-DRAIN_AFTER_S = 0.4
 CLOSING = {0: "<&-", 1: ">&-", 2: "2>&-"}
 LOCAL_TELEMETRY = Path("data") / "Telemetry" / "local"
 
@@ -100,16 +98,10 @@ def run_to(command: list[str], home: Path, kind: str) -> tuple:
         process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=stdout, stderr=subprocess.PIPE, env=env)
     finally:
         os.close(stdout)
-    drainer = None
-    if keep is not None:
-        time.sleep(DRAIN_AFTER_S)
-        drainer = threading.Thread(target=drain, args=(keep,))
-        drainer.start()
     try:
         stderr = process.communicate(timeout=60)[1]
     finally:
-        if drainer is not None:
-            drainer.join(10)
+        if keep is not None:
             os.close(keep)
     return process.returncode, TRACEBACK.sub(b"", stderr), telemetry_of(home)
 
