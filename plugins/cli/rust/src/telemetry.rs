@@ -448,6 +448,32 @@ fn start_flush(dir: &OwnedFd, target: &Target, python: Option<&Path>) {
     }
 }
 
+#[cfg(target_os = "linux")]
+const OPEN_DESCRIPTORS: &str = "/proc/self/fd";
+#[cfg(not(target_os = "linux"))]
+const OPEN_DESCRIPTORS: &str = "/dev/fd";
+
+fn open_descriptors_above_stderr() -> Vec<libc::c_int> {
+    let mut found: Vec<libc::c_int> = std::fs::read_dir(OPEN_DESCRIPTORS)
+        .map(|entries| {
+            entries
+                .filter_map(|entry| entry.ok()?.file_name().to_str()?.parse().ok())
+                .filter(|fd| *fd > 2)
+                .collect()
+        })
+        .unwrap_or_default();
+    if found.is_empty() {
+        let mut limit: libc::rlimit = unsafe { std::mem::zeroed() };
+        let highest = if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) } == 0 {
+            (limit.rlim_cur as i64).clamp(3, 65_536)
+        } else {
+            1024
+        } as libc::c_int;
+        found = (3..highest).collect();
+    }
+    found
+}
+
 fn spawn_flusher(python: &Path, target: &Target) {
     let config = Value::object(vec![
         ("data_root", Value::str(&target.root)),
@@ -461,16 +487,11 @@ fn spawn_flusher(python: &Path, target: &Target) {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .current_dir("/");
+    let inherited = open_descriptors_above_stderr();
     unsafe {
-        command.pre_exec(|| {
+        command.pre_exec(move || {
             libc::setsid();
-            let mut limit: libc::rlimit = std::mem::zeroed();
-            let highest = if libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) == 0 {
-                (limit.rlim_cur as i64).clamp(3, 65_536)
-            } else {
-                1024
-            } as libc::c_int;
-            for fd in 3..highest {
+            for &fd in &inherited {
                 let flags = libc::fcntl(fd, libc::F_GETFD);
                 if flags >= 0 {
                     libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC);
