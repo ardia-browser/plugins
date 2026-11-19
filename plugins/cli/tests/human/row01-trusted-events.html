@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Row 1 · Trusted events</title>
+<style>
+body{font:14px system-ui;margin:16px}
+#verdict{font:bold 20px system-ui}.pass{color:#080}.fail{color:#c00}
+#target{width:220px;height:80px}
+#scroller{width:300px;height:120px;overflow:auto;border:1px solid #888;margin:8px 0}
+#touch{width:220px;height:80px;background:#eef;touch-action:none}
+</style>
+<div id="verdict">RUNNING row 1</div>
+<button id="target">Click, type and scroll here</button>
+<div id="scroller"><div style="height:2000px">wheel inside</div></div>
+<div id="touch">touch here</div>
+<pre id="measured"></pre>
+<script>
+const ROW = 1;
+function report(pass, measured) {
+  const result = {row: ROW, pass: !!pass, measured};
+  window.__humanResult = result;
+  document.documentElement.dataset.humanResult = JSON.stringify(result);
+  const verdict = document.getElementById('verdict');
+  verdict.textContent = (pass ? 'PASS' : 'FAIL') + ' row ' + ROW;
+  verdict.className = pass ? 'pass' : 'fail';
+  document.getElementById('measured').textContent = JSON.stringify(measured, null, 2);
+}
+function onFinish(run) {
+  let done = false;
+  const go = () => {
+    if (done || !document.documentElement.hasAttribute('data-finish')) return;
+    done = true;
+    Promise.resolve().then(run).catch(error => report(false, {error: String(error)}));
+  };
+  new MutationObserver(go).observe(document.documentElement, {attributes: true, attributeFilter: ['data-finish']});
+  go();
+}
+function driverRead() {
+  try { return JSON.parse(document.documentElement.dataset.read || 'null'); } catch { return null; }
+}
+</script>
+<script>
+const seen = {};
+const record = name => event => (seen[name] ??= []).push(event.isTrusted);
+const target = document.getElementById('target');
+target.addEventListener('click', record('click'));
+target.addEventListener('pointerdown', record('pointerdown'));
+target.addEventListener('mousedown', record('mousedown'));
+document.addEventListener('keydown', record('keydown'));
+document.addEventListener('keyup', record('keyup'));
+document.getElementById('scroller').addEventListener('wheel', record('wheel'), {passive: true});
+const touch = document.getElementById('touch');
+touch.addEventListener('touchstart', record('touchstart'), {passive: true});
+touch.addEventListener('touchend', record('touchend'), {passive: true});
+touch.addEventListener('pointerdown', event => { if (event.pointerType === 'touch') record('touchPointerdown')(event); });
+onFinish(() => {
+  const kinds = ['click', 'pointerdown', 'mousedown', 'keydown', 'keyup', 'wheel', 'touchstart', 'touchend', 'touchPointerdown'];
+  const measured = {};
+  let pass = true;
+  for (const kind of kinds) {
+    const flags = seen[kind] || [];
+    measured[kind] = {count: flags.length, trusted: flags.length > 0 && flags.every(Boolean)};
+    if (!measured[kind].trusted) pass = false;
+  }
+  measured.touchEventsExposed = 'ontouchstart' in window;
+  measured.maxTouchPoints = navigator.maxTouchPoints;
+  report(pass, measured);
+});
+</script>
+</html>

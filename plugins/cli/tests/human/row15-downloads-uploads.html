@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Row 15 · Downloads and uploads without a dialog</title>
+<style>
+body{font:14px system-ui;margin:16px}
+#verdict{font:bold 20px system-ui}.pass{color:#080}.fail{color:#c00}
+a,button{display:inline-block;width:200px;height:32px;margin:4px}
+</style>
+<div id="verdict">RUNNING row 15</div>
+<a id="served" href="/download/row15-served.txt">served download</a>
+<button id="blob">blob download</button>
+<input id="upload" type="file" multiple>
+<pre id="measured"></pre>
+<script>
+const ROW = 15;
+function report(pass, measured) {
+  const result = {row: ROW, pass: !!pass, measured};
+  window.__humanResult = result;
+  document.documentElement.dataset.humanResult = JSON.stringify(result);
+  const verdict = document.getElementById('verdict');
+  verdict.textContent = (pass ? 'PASS' : 'FAIL') + ' row ' + ROW;
+  verdict.className = pass ? 'pass' : 'fail';
+  document.getElementById('measured').textContent = JSON.stringify(measured, null, 2);
+}
+function onFinish(run) {
+  let done = false;
+  const go = () => {
+    if (done || !document.documentElement.hasAttribute('data-finish')) return;
+    done = true;
+    Promise.resolve().then(run).catch(error => report(false, {error: String(error)}));
+  };
+  new MutationObserver(go).observe(document.documentElement, {attributes: true, attributeFilter: ['data-finish']});
+  go();
+}
+function driverRead() {
+  try { return JSON.parse(document.documentElement.dataset.read || 'null'); } catch { return null; }
+}
+</script>
+<script>
+const blobText = 'row15 blob download ' + 'x'.repeat(100);
+const measured = {clicks: [], upload: null};
+document.getElementById('served').addEventListener('click', event => measured.clicks.push({id: 'served', trusted: event.isTrusted}));
+document.getElementById('blob').addEventListener('click', event => {
+  measured.clicks.push({id: 'blob', trusted: event.isTrusted});
+  const anchor = document.createElement('a');
+  anchor.href = URL.createObjectURL(new Blob([blobText], {type: 'text/plain'}));
+  anchor.download = 'row15-blob.txt';
+  anchor.click();
+});
+const upload = document.getElementById('upload');
+upload.addEventListener('click', event => { measured.uploadClickTrusted = event.isTrusted; });
+upload.addEventListener('change', async event => {
+  measured.upload = {trusted: event.isTrusted, files: await Promise.all([...upload.files].map(async file => ({name: file.name, size: file.size, head: (await file.text()).slice(0, 20)})))};
+});
+onFinish(() => {
+  const read = driverRead() || {};
+  const downloads = read.downloads || [];
+  const served = downloads.find(entry => entry.name === 'row15-served.txt');
+  const blob = downloads.find(entry => entry.name === 'row15-blob.txt');
+  measured.driverRead = read;
+  const checks = {
+    servedLanded: !!served && served.size === 'row15 served download'.length && served.inFolder,
+    blobLanded: !!blob && blob.size === blobText.length && blob.inFolder,
+    noDialog: read.dialogs === 0,
+    upload: measured.upload?.files?.length === 2 && measured.upload.files[0].name === 'row15-up-1.txt' && measured.upload.files[0].head.startsWith('row15 upload one'),
+  };
+  measured.checks = checks;
+  report(Object.values(checks).every(Boolean), measured);
+});
+</script>
+</html>

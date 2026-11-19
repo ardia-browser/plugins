@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Row 20 · Rich editors</title>
+<style>
+body{font:14px system-ui;margin:16px}
+#verdict{font:bold 20px system-ui}.pass{color:#080}.fail{color:#c00}
+.editor{width:420px;min-height:40px;border:1px solid #888;padding:6px;margin:6px 0;font:16px system-ui;white-space:pre-wrap}
+</style>
+<div id="verdict">RUNNING row 20</div>
+<div id="plain" class="editor" contenteditable="true"></div>
+<div id="model" class="editor" contenteditable="true"></div>
+<pre id="measured"></pre>
+<script>
+const ROW = 20;
+function report(pass, measured) {
+  const result = {row: ROW, pass: !!pass, measured};
+  window.__humanResult = result;
+  document.documentElement.dataset.humanResult = JSON.stringify(result);
+  const verdict = document.getElementById('verdict');
+  verdict.textContent = (pass ? 'PASS' : 'FAIL') + ' row ' + ROW;
+  verdict.className = pass ? 'pass' : 'fail';
+  document.getElementById('measured').textContent = JSON.stringify(measured, null, 2);
+}
+function onFinish(run) {
+  let done = false;
+  const go = () => {
+    if (done || !document.documentElement.hasAttribute('data-finish')) return;
+    done = true;
+    Promise.resolve().then(run).catch(error => report(false, {error: String(error)}));
+  };
+  new MutationObserver(go).observe(document.documentElement, {attributes: true, attributeFilter: ['data-finish']});
+  go();
+}
+function driverRead() {
+  try { return JSON.parse(document.documentElement.dataset.read || 'null'); } catch { return null; }
+}
+</script>
+<script>
+const plain = document.getElementById('plain');
+const plainLog = {inputTypes: [], snapshots: []};
+plain.addEventListener('beforeinput', event => plainLog.inputTypes.push(event.inputType + (event.isTrusted ? '' : ':untrusted')));
+plain.addEventListener('input', () => plainLog.snapshots.push(plain.textContent));
+const model = document.getElementById('model');
+const state = {text: '', history: [], future: [], inputTypes: [], untrusted: 0};
+const renderModel = (caret) => {
+  model.textContent = state.text;
+  const node = model.firstChild;
+  if (node && caret !== undefined) {
+    const range = document.createRange();
+    range.setStart(node, Math.min(caret, state.text.length));
+    range.collapse(true);
+    const selection = getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+};
+const offsets = () => {
+  const selection = getSelection();
+  if (!selection.rangeCount) return [state.text.length, state.text.length];
+  const range = selection.getRangeAt(0);
+  const toOffset = (container, offset) => container === model ? (offset ? state.text.length : 0) : offset;
+  return [toOffset(range.startContainer, range.startOffset), toOffset(range.endContainer, range.endOffset)];
+};
+const undo = () => {
+  if (state.history.length) { state.future.push(state.text); state.text = state.history.pop(); }
+  renderModel(state.text.length);
+};
+model.addEventListener('keydown', event => {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z' && !event.shiftKey) {
+    event.preventDefault();
+    if (!event.isTrusted) state.untrusted++;
+    state.inputTypes.push('keymapUndo');
+    undo();
+  }
+});
+model.addEventListener('beforeinput', event => {
+  event.preventDefault();
+  if (!event.isTrusted) state.untrusted++;
+  state.inputTypes.push(event.inputType);
+  const [start, end] = offsets();
+  if (event.inputType === 'historyUndo') {
+    undo();
+    return;
+  }
+  if (event.inputType === 'historyRedo') {
+    if (state.future.length) { state.history.push(state.text); state.text = state.future.pop(); }
+    renderModel(state.text.length);
+    return;
+  }
+  const lastType = state.inputTypes[state.inputTypes.length - 2];
+  if (!(event.inputType === 'insertText' && lastType === 'insertText' && start === end && event.data !== ' ')) state.history.push(state.text);
+  state.future = [];
+  if (event.inputType === 'insertText' || event.inputType === 'insertReplacementText') {
+    const data = event.data ?? event.dataTransfer?.getData('text/plain') ?? '';
+    state.text = state.text.slice(0, start) + data + state.text.slice(end);
+    renderModel(start + data.length);
+  } else if (event.inputType === 'deleteContentBackward') {
+    const from = start === end ? Math.max(0, start - 1) : start;
+    state.text = state.text.slice(0, from) + state.text.slice(end);
+    renderModel(from);
+  }
+});
+onFinish(() => {
+  const read = driverRead() || {};
+  const measured = {plain: {...plainLog, final: plain.textContent}, model: {text: state.text, inputTypes: state.inputTypes, untrusted: state.untrusted, rendered: model.textContent}, driverRead: read};
+  const checks = {
+    plainTyped: plainLog.snapshots.includes('hello world'),
+    plainUndo: plainLog.inputTypes.includes('historyUndo') && plain.textContent !== 'hello world',
+    modelTyped: state.inputTypes.filter(type => type === 'insertText').length >= 11,
+    modelSelectionReplace: read.afterReplace === 'hello ardia',
+    modelUndo: state.text === 'hello world' && (state.inputTypes.includes('historyUndo') || state.inputTypes.includes('keymapUndo')),
+    trusted: state.untrusted === 0 && !plainLog.inputTypes.some(type => type.endsWith(':untrusted')),
+  };
+  measured.checks = checks;
+  report(Object.values(checks).every(Boolean), measured);
+});
+</script>
+</html>

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Row 2 · Real user activation</title>
+<style>
+body{font:14px system-ui;margin:16px}
+#verdict{font:bold 20px system-ui}.pass{color:#080}.fail{color:#c00}
+#target{width:220px;height:80px}
+</style>
+<div id="verdict">RUNNING row 2</div>
+<button id="target">Activate</button>
+<input id="field" placeholder="type here">
+<pre id="measured"></pre>
+<script>
+const ROW = 2;
+function report(pass, measured) {
+  const result = {row: ROW, pass: !!pass, measured};
+  window.__humanResult = result;
+  document.documentElement.dataset.humanResult = JSON.stringify(result);
+  const verdict = document.getElementById('verdict');
+  verdict.textContent = (pass ? 'PASS' : 'FAIL') + ' row ' + ROW;
+  verdict.className = pass ? 'pass' : 'fail';
+  document.getElementById('measured').textContent = JSON.stringify(measured, null, 2);
+}
+function onFinish(run) {
+  let done = false;
+  const go = () => {
+    if (done || !document.documentElement.hasAttribute('data-finish')) return;
+    done = true;
+    Promise.resolve().then(run).catch(error => report(false, {error: String(error)}));
+  };
+  new MutationObserver(go).observe(document.documentElement, {attributes: true, attributeFilter: ['data-finish']});
+  go();
+}
+function driverRead() {
+  try { return JSON.parse(document.documentElement.dataset.read || 'null'); } catch { return null; }
+}
+</script>
+<script>
+const activation = () => ({isActive: navigator.userActivation.isActive, hasBeenActive: navigator.userActivation.hasBeenActive});
+const measured = {atLoad: activation(), samples: []};
+let lastSample = activation();
+setInterval(() => { lastSample = activation(); }, 100);
+document.getElementById('field').addEventListener('keydown', event => {
+  if (!measured.inKey) measured.inKey = {...activation(), trusted: event.isTrusted, before: lastSample};
+});
+document.getElementById('target').addEventListener('click', event => {
+  measured.inClick = {...activation(), trusted: event.isTrusted, before: lastSample};
+});
+onFinish(() => {
+  const pass = !measured.atLoad.hasBeenActive && !!measured.inKey?.isActive && !measured.inKey.before.hasBeenActive
+    && !!measured.inClick?.isActive && measured.inClick.before.isActive === false;
+  report(pass, measured);
+});
+</script>
+</html>

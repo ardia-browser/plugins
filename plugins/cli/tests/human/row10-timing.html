@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Row 10 · Timing</title>
+<style>
+body{font:14px system-ui;margin:16px}
+#verdict{font:bold 20px system-ui}.pass{color:#080}.fail{color:#c00}
+</style>
+<div id="verdict">RUNNING row 10</div>
+<button id="target" style="width:200px;height:40px">Click me</button>
+<input id="field" style="width:200px">
+<div id="spinner" style="width:40px;height:40px;background:#48c"></div>
+<pre id="measured"></pre>
+<script>
+const ROW = 10;
+function report(pass, measured) {
+  const result = {row: ROW, pass: !!pass, measured};
+  window.__humanResult = result;
+  document.documentElement.dataset.humanResult = JSON.stringify(result);
+  const verdict = document.getElementById('verdict');
+  verdict.textContent = (pass ? 'PASS' : 'FAIL') + ' row ' + ROW;
+  verdict.className = pass ? 'pass' : 'fail';
+  document.getElementById('measured').textContent = JSON.stringify(measured, null, 2);
+}
+function onFinish(run) {
+  let done = false;
+  const go = () => {
+    if (done || !document.documentElement.hasAttribute('data-finish')) return;
+    done = true;
+    Promise.resolve().then(run).catch(error => report(false, {error: String(error)}));
+  };
+  new MutationObserver(go).observe(document.documentElement, {attributes: true, attributeFilter: ['data-finish']});
+  go();
+}
+function driverRead() {
+  try { return JSON.parse(document.documentElement.dataset.read || 'null'); } catch { return null; }
+}
+</script>
+<script>
+const phases = [{name: 'pre-attach', start: performance.now()}];
+const frames = [];
+let last = performance.now();
+const spinner = document.getElementById('spinner');
+const tick = now => {
+  frames.push([now, now - last]);
+  last = now;
+  spinner.style.transform = 'rotate(' + (now / 4 % 360) + 'deg)';
+  requestAnimationFrame(tick);
+};
+requestAnimationFrame(tick);
+const drifts = [];
+let expected = performance.now() + 10;
+setInterval(() => {
+  const now = performance.now();
+  drifts.push([now, now - expected]);
+  expected = now + 10;
+}, 10);
+new MutationObserver(() => {
+  const name = document.documentElement.dataset.phase;
+  if (name && phases[phases.length - 1].name !== name) phases.push({name, start: performance.now()});
+}).observe(document.documentElement, {attributes: true, attributeFilter: ['data-phase']});
+const summarise = (series, start, end) => {
+  const values = series.filter(([time]) => time >= start && time < end).map(([, value]) => value).sort((x, y) => x - y);
+  if (!values.length) return null;
+  return {n: values.length, p50: +values[Math.floor(values.length / 2)].toFixed(1), p95: +values[Math.floor(values.length * 0.95)].toFixed(1), max: +values[values.length - 1].toFixed(1)};
+};
+onFinish(() => {
+  const end = performance.now();
+  const byPhase = phases.map((phase, index) => {
+    const stop = phases[index + 1]?.start ?? end;
+    return {name: phase.name, ms: Math.round(stop - phase.start), frame: summarise(frames, phase.start, stop), drift: summarise(drifts, phase.start, stop)};
+  });
+  const base = byPhase.find(phase => phase.name === 'pre-attach');
+  const limitFrame = Math.max(50, (base?.frame?.max ?? 17) * 2);
+  const limitDrift = Math.max(40, (base?.drift?.max ?? 10) * 2);
+  const judged = byPhase.filter(phase => !['pre-attach', 'screenshot'].includes(phase.name));
+  const offenders = judged.filter(phase => (phase.frame && phase.frame.max > limitFrame) || (phase.drift && phase.drift.max > limitDrift)).map(phase => phase.name);
+  report(phases.length > 2 && offenders.length === 0, {byPhase, limitFrame, limitDrift, offenders});
+});
+</script>
+</html>

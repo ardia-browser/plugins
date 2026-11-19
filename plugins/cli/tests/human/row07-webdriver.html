@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Row 7 · navigator.webdriver</title>
+<style>
+body{font:14px system-ui;margin:16px}
+#verdict{font:bold 20px system-ui}.pass{color:#080}.fail{color:#c00}
+</style>
+<div id="verdict">RUNNING row 7</div>
+<p>Checks the automation flags a page can see.</p>
+<pre id="measured"></pre>
+<script>
+const ROW = 7;
+function report(pass, measured) {
+  const result = {row: ROW, pass: !!pass, measured};
+  window.__humanResult = result;
+  document.documentElement.dataset.humanResult = JSON.stringify(result);
+  const verdict = document.getElementById('verdict');
+  verdict.textContent = (pass ? 'PASS' : 'FAIL') + ' row ' + ROW;
+  verdict.className = pass ? 'pass' : 'fail';
+  document.getElementById('measured').textContent = JSON.stringify(measured, null, 2);
+}
+function onFinish(run) {
+  let done = false;
+  const go = () => {
+    if (done || !document.documentElement.hasAttribute('data-finish')) return;
+    done = true;
+    Promise.resolve().then(run).catch(error => report(false, {error: String(error)}));
+  };
+  new MutationObserver(go).observe(document.documentElement, {attributes: true, attributeFilter: ['data-finish']});
+  go();
+}
+function driverRead() {
+  try { return JSON.parse(document.documentElement.dataset.read || 'null'); } catch { return null; }
+}
+</script>
+<script>
+const scan = () => {
+  const names = new Set([...Object.getOwnPropertyNames(window), ...Object.getOwnPropertyNames(document)]);
+  const suspicious = [...names].filter(name => /^(\$?cdc_|\$wdc_|__webdriver|__selenium|__driver|__fxdriver|_Selenium_IDE|domAutomation|__nightmare|_phantom|callPhantom|__playwright|__pw_|__puppeteer)/i.test(name));
+  const descriptor = Object.getOwnPropertyDescriptor(Navigator.prototype, 'webdriver');
+  return {
+    webdriver: navigator.webdriver,
+    webdriverGetterNative: !!descriptor?.get && /\[native code\]/.test(Function.prototype.toString.call(descriptor.get)),
+    ownWebdriverOnNavigator: Object.getOwnPropertyNames(navigator).includes('webdriver'),
+    suspicious,
+    documentAttributes: [...document.documentElement.attributes].map(attribute => attribute.name).filter(name => /webdriver|selenium|driver/i.test(name)),
+    userAgentHeadless: /Headless/i.test(navigator.userAgent),
+    uaDataHeadless: (navigator.userAgentData?.brands || []).some(brand => /Headless/i.test(brand.brand)),
+  };
+};
+const atLoad = scan();
+onFinish(() => {
+  const atFinish = scan();
+  const clean = state => state.webdriver === false && state.webdriverGetterNative && !state.ownWebdriverOnNavigator && state.suspicious.length === 0 && state.documentAttributes.length === 0;
+  report(clean(atLoad) && clean(atFinish), {atLoad, atFinish});
+});
+</script>
+</html>

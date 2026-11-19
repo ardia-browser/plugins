@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Row 22 · Waits that follow real work</title>
+<style>
+body{font:14px system-ui;margin:16px}
+#verdict{font:bold 20px system-ui}.pass{color:#080}.fail{color:#c00}
+#banner{background:#fd8;overflow:hidden;transition:none}
+#go{width:200px;height:40px}
+</style>
+<div id="verdict">RUNNING row 22</div>
+<div id="banner"></div>
+<ul id="results"></ul>
+<button id="go">Continue</button>
+<pre id="measured"></pre>
+<script>
+const ROW = 22;
+function report(pass, measured) {
+  const result = {row: ROW, pass: !!pass, measured};
+  window.__humanResult = result;
+  document.documentElement.dataset.humanResult = JSON.stringify(result);
+  const verdict = document.getElementById('verdict');
+  verdict.textContent = (pass ? 'PASS' : 'FAIL') + ' row ' + ROW;
+  verdict.className = pass ? 'pass' : 'fail';
+  document.getElementById('measured').textContent = JSON.stringify(measured, null, 2);
+}
+function onFinish(run) {
+  let done = false;
+  const go = () => {
+    if (done || !document.documentElement.hasAttribute('data-finish')) return;
+    done = true;
+    Promise.resolve().then(run).catch(error => report(false, {error: String(error)}));
+  };
+  new MutationObserver(go).observe(document.documentElement, {attributes: true, attributeFilter: ['data-finish']});
+  go();
+}
+function driverRead() {
+  try { return JSON.parse(document.documentElement.dataset.read || 'null'); } catch { return null; }
+}
+</script>
+<script>
+const timeline = {start: performance.now()};
+let ready = false;
+const mark = name => { timeline[name] = Math.round(performance.now() - timeline.start); };
+const busy = ms => { const end = performance.now() + ms; while (performance.now() < end) {} };
+const clicks = [];
+document.getElementById('go').addEventListener('click', event => {
+  clicks.push({atMs: Math.round(performance.now() - timeline.start), ready, trusted: event.isTrusted});
+});
+(async () => {
+  const first = await fetch('/slow?ms=700&n=1').then(response => response.json());
+  mark('firstFetch');
+  document.getElementById('results').innerHTML = first.items.map(item => `<li>${item}</li>`).join('');
+  await new Promise(resolve => setTimeout(resolve, 250));
+  const banner = document.getElementById('banner');
+  for (let height = 0; height <= 80; height += 20) {
+    banner.style.height = height + 'px';
+    banner.textContent = 'late banner';
+    await new Promise(resolve => requestAnimationFrame(resolve));
+  }
+  mark('layoutShift');
+  await new Promise(resolve => setTimeout(resolve, 200));
+  busy(450);
+  mark('longTask');
+  const second = await fetch('/slow?ms=400&n=2').then(response => response.json());
+  document.getElementById('results').insertAdjacentHTML('beforeend', second.items.map(item => `<li>${item}</li>`).join(''));
+  mark('secondFetch');
+  ready = true;
+  mark('ready');
+})();
+onFinish(() => {
+  const read = driverRead() || {};
+  const firstReady = clicks.find(click => click.ready);
+  const measured = {timeline, clicks, driverRead: read, latencyAfterReadyMs: firstReady ? firstReady.atMs - timeline.ready : null};
+  const pass = clicks.length > 0 && clicks.every(click => click.ready && click.trusted) && measured.latencyAfterReadyMs !== null && measured.latencyAfterReadyMs < 2000;
+  report(pass, measured);
+});
+</script>
+</html>

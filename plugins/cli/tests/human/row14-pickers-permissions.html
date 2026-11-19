@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Row 14 · Native pickers and permission prompts</title>
+<style>
+body{font:14px system-ui;margin:16px}
+#verdict{font:bold 20px system-ui}.pass{color:#080}.fail{color:#c00}
+button{width:160px;height:32px;margin:3px}
+select,input{margin:4px;height:28px}
+</style>
+<div id="verdict">RUNNING row 14</div>
+<div><button id="geo">geolocation</button><button id="notify">notifications</button><button id="camera">camera</button></div>
+<div><select id="fruit"><option value="apple">apple</option><option value="banana">banana</option><option value="cherry">cherry</option></select></div>
+<div><input id="date" type="date"></div>
+<div><input id="color" type="color" value="#000000"></div>
+<pre id="measured"></pre>
+<script>
+const ROW = 14;
+function report(pass, measured) {
+  const result = {row: ROW, pass: !!pass, measured};
+  window.__humanResult = result;
+  document.documentElement.dataset.humanResult = JSON.stringify(result);
+  const verdict = document.getElementById('verdict');
+  verdict.textContent = (pass ? 'PASS' : 'FAIL') + ' row ' + ROW;
+  verdict.className = pass ? 'pass' : 'fail';
+  document.getElementById('measured').textContent = JSON.stringify(measured, null, 2);
+}
+function onFinish(run) {
+  let done = false;
+  const go = () => {
+    if (done || !document.documentElement.hasAttribute('data-finish')) return;
+    done = true;
+    Promise.resolve().then(run).catch(error => report(false, {error: String(error)}));
+  };
+  new MutationObserver(go).observe(document.documentElement, {attributes: true, attributeFilter: ['data-finish']});
+  go();
+}
+function driverRead() {
+  try { return JSON.parse(document.documentElement.dataset.read || 'null'); } catch { return null; }
+}
+</script>
+<script>
+const measured = {geo: [], notify: [], camera: [], select: [], date: [], color: []};
+const errorOf = error => ({name: error?.name ?? error?.code, message: String(error?.message ?? error).slice(0, 120)});
+const settle = (promise, ms) => Promise.race([promise, new Promise(resolve => setTimeout(() => resolve('pending after ' + ms + 'ms (prompt not answered)'), ms))]);
+const permissionState = async name => { try { return (await navigator.permissions.query({name})).state; } catch (error) { return errorOf(error); } };
+document.getElementById('geo').addEventListener('click', async event => {
+  const state = await permissionState('geolocation');
+  const result = await settle(new Promise(resolve => navigator.geolocation.getCurrentPosition(
+    position => resolve({latitude: position.coords.latitude, longitude: position.coords.longitude}),
+    error => resolve(errorOf(error)), {timeout: 4000})), 5000);
+  measured.geo.push({trusted: event.isTrusted, stateBefore: state, result});
+});
+document.getElementById('notify').addEventListener('click', async event => {
+  const state = await permissionState('notifications');
+  const result = await settle(Notification.requestPermission(), 4000);
+  measured.notify.push({trusted: event.isTrusted, stateBefore: state, result});
+});
+document.getElementById('camera').addEventListener('click', async event => {
+  const state = await permissionState('camera');
+  const result = await settle(navigator.mediaDevices.getUserMedia({video: true}).then(stream => {
+    const tracks = stream.getVideoTracks().map(track => track.label);
+    stream.getTracks().forEach(track => track.stop());
+    return {tracks};
+  }, errorOf), 5000);
+  measured.camera.push({trusted: event.isTrusted, stateBefore: state, result});
+});
+const watch = (id, key) => {
+  const element = document.getElementById(id);
+  for (const type of ['input', 'change']) element.addEventListener(type, event => measured[key].push({type, trusted: event.isTrusted, value: element.value}));
+};
+watch('fruit', 'select');
+watch('date', 'date');
+watch('color', 'color');
+onFinish(() => {
+  const last = list => list[list.length - 1];
+  const checks = {
+    geolocation: typeof last(measured.geo)?.result?.latitude === 'number',
+    notifications: last(measured.notify)?.result === 'granted',
+    camera: Array.isArray(last(measured.camera)?.result?.tracks),
+    select: measured.select.some(entry => entry.type === 'change' && entry.trusted && entry.value !== 'apple'),
+    date: measured.date.some(entry => entry.type === 'change' && entry.trusted && entry.value === '2026-11-19'),
+    color: measured.color.some(entry => entry.type === 'change' && entry.trusted && entry.value !== '#000000'),
+  };
+  measured.checks = checks;
+  report(Object.values(checks).every(Boolean), measured);
+});
+</script>
+</html>

@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Row 8 · Attached-session side effects</title>
+<style>
+body{font:14px system-ui;margin:16px}
+#verdict{font:bold 20px system-ui}.pass{color:#080}.fail{color:#c00}
+</style>
+<div id="verdict">RUNNING row 8</div>
+<button id="target" style="width:200px;height:40px">Act on me</button>
+<pre id="measured"></pre>
+<script>
+const ROW = 8;
+function report(pass, measured) {
+  const result = {row: ROW, pass: !!pass, measured};
+  window.__humanResult = result;
+  document.documentElement.dataset.humanResult = JSON.stringify(result);
+  const verdict = document.getElementById('verdict');
+  verdict.textContent = (pass ? 'PASS' : 'FAIL') + ' row ' + ROW;
+  verdict.className = pass ? 'pass' : 'fail';
+  document.getElementById('measured').textContent = JSON.stringify(measured, null, 2);
+}
+function onFinish(run) {
+  let done = false;
+  const go = () => {
+    if (done || !document.documentElement.hasAttribute('data-finish')) return;
+    done = true;
+    Promise.resolve().then(run).catch(error => report(false, {error: String(error)}));
+  };
+  new MutationObserver(go).observe(document.documentElement, {attributes: true, attributeFilter: ['data-finish']});
+  go();
+}
+function driverRead() {
+  try { return JSON.parse(document.documentElement.dataset.read || 'null'); } catch { return null; }
+}
+</script>
+<script>
+const hits = {errorStackGetter: 0, proxyOwnKeys: 0, objectGetter: 0, toStringOnObject: 0, debuggerPauseMs: 0, debuggerSlow: 0, consoleCostMs: 0, prepareStackTrace: 0};
+const costProbe = Object.fromEntries(Array.from({length: 200}, (_, i) => ['key' + i, {nested: [i, String(i), {deep: i}]}]));
+const nativePrepare = Error.prepareStackTrace;
+Error.prepareStackTrace = (error, frames) => { hits.prepareStackTrace++; return nativePrepare ? nativePrepare(error, frames) : String(error) + frames.map(frame => '\n    at ' + frame).join(''); };
+const nativeNames = [
+  ['Function.prototype.toString', Function.prototype.toString],
+  ['EventTarget.prototype.addEventListener', EventTarget.prototype.addEventListener],
+  ['HTMLElement.prototype.click', HTMLElement.prototype.click],
+  ['Element.prototype.attachShadow', Element.prototype.attachShadow],
+  ['window.open', window.open],
+  ['console.debug', console.debug],
+  ['document.querySelector', document.querySelector],
+  ['navigator.webdriver getter', Object.getOwnPropertyDescriptor(Navigator.prototype, 'webdriver').get],
+  ['MutationObserver', MutationObserver],
+  ['Date.now', Date.now],
+  ['performance.now', Performance.prototype.now],
+];
+const toStringNative = () => nativeNames.filter(([, fn]) => !/^function (get |set )?[\w$]*\(\) \{\s+\[native code\]\s+\}$/.test(Function.prototype.toString.call(fn))).map(([name]) => name);
+const baseline = {toStringNotNative: toStringNative(), nativeIdentity: nativeNames.map(([, fn]) => fn)};
+let probes = 0;
+const ratios = [];
+const probe = () => {
+  probes++;
+  const error = new Error('probe');
+  Object.defineProperty(error, 'stack', {configurable: true, get() { hits.errorStackGetter++; return 'probe'; }});
+  console.debug(error);
+  console.debug(new Proxy({}, {ownKeys() { hits.proxyOwnKeys++; return []; }}));
+  console.debug({get probe() { hits.objectGetter++; return 1; }});
+  console.debug({toString() { hits.toStringOnObject++; return 'x'; }});
+  const started = performance.now();
+  debugger;
+  const paused = performance.now() - started;
+  hits.debuggerPauseMs = Math.max(hits.debuggerPauseMs, paused);
+  if (paused > 8) hits.debuggerSlow++;
+  const plainStart = performance.now();
+  for (let i = 0; i < 300; i++) console.debug('x');
+  const plainMs = performance.now() - plainStart;
+  const costStart = performance.now();
+  for (let i = 0; i < 300; i++) console.debug(costProbe);
+  const costMs = performance.now() - costStart;
+  hits.consoleCostMs = Math.max(hits.consoleCostMs, costMs);
+  ratios.push(costMs / Math.max(plainMs, 0.05));
+};
+probe();
+const timer = setInterval(probe, 150);
+let clickedTrusted = null;
+document.getElementById('target').addEventListener('click', event => { clickedTrusted = event.isTrusted; probe(); });
+onFinish(() => {
+  clearInterval(timer);
+  probe();
+  const swapped = nativeNames.filter(([name, fn], index) => {
+    const now = name === 'navigator.webdriver getter' ? Object.getOwnPropertyDescriptor(Navigator.prototype, 'webdriver').get
+      : name === 'Function.prototype.toString' ? Function.prototype.toString
+      : name === 'EventTarget.prototype.addEventListener' ? EventTarget.prototype.addEventListener
+      : name === 'HTMLElement.prototype.click' ? HTMLElement.prototype.click
+      : name === 'Element.prototype.attachShadow' ? Element.prototype.attachShadow
+      : name === 'window.open' ? window.open
+      : name === 'console.debug' ? console.debug
+      : name === 'document.querySelector' ? document.querySelector
+      : name === 'MutationObserver' ? MutationObserver
+      : name === 'Date.now' ? Date.now : Performance.prototype.now;
+    return now !== baseline.nativeIdentity[index];
+  }).map(([name]) => name);
+  ratios.sort((x, y) => x - y);
+  const consoleRatio = +ratios[Math.floor(ratios.length / 2)].toFixed(2);
+  const measured = {probes, consoleRatio, hits, clickedTrusted, toStringNotNative: toStringNative(), swappedSinceLoad: swapped};
+  const pass = consoleRatio < 1.5 && hits.prepareStackTrace === 0 && hits.errorStackGetter === 0 && hits.proxyOwnKeys === 0 && hits.objectGetter === 0 && hits.toStringOnObject === 0
+    && hits.debuggerSlow === 0 && measured.toStringNotNative.length === 0 && swapped.length === 0 && clickedTrusted === true;
+  report(pass, measured);
+});
+</script>
+</html>
