@@ -26,32 +26,62 @@ pub fn json_safe(text: &str) -> String {
     escaped(text, |c| (0x7f..=0x9f).contains(&c))
 }
 
+#[derive(Debug, PartialEq)]
+enum Stopped {
+    Closed,
+    Interrupted,
+}
+
+fn write_stdout(mut bytes: &[u8], interrupted: impl Fn() -> bool) -> Result<(), Stopped> {
+    while !bytes.is_empty() {
+        if interrupted() {
+            return Err(Stopped::Interrupted);
+        }
+        let written = unsafe { libc::write(1, bytes.as_ptr().cast(), bytes.len()) };
+        if written >= 0 {
+            bytes = &bytes[written as usize..];
+        } else if std::io::Error::last_os_error().raw_os_error() != Some(libc::EINTR) {
+            return Err(Stopped::Closed);
+        }
+    }
+    Ok(())
+}
+
 pub struct Output {
     json: bool,
     closed: bool,
+    interrupted: bool,
 }
 
 impl Output {
     pub fn new(json: bool) -> Output {
-        Output { json, closed: false }
+        Output {
+            json,
+            closed: false,
+            interrupted: false,
+        }
     }
 
     pub fn closed(&self) -> bool {
         self.closed
     }
 
+    pub fn interrupted(&self) -> bool {
+        self.interrupted
+    }
+
     pub fn say(&mut self, text: &str) {
-        if self.closed {
+        if self.closed || self.interrupted {
             return;
         }
-        let clean = if self.json { json_safe(text) } else { inert(text) };
-        let mut stdout = std::io::stdout().lock();
-        let written = stdout
-            .write_all(clean.as_bytes())
-            .and_then(|_| stdout.write_all(b"\n"))
-            .and_then(|_| stdout.flush());
-        if written.is_err() {
-            self.closed = true;
+        let mut line = if self.json { json_safe(text) } else { inert(text) };
+        line.push('\n');
+        match write_stdout(line.as_bytes(), crate::control::interrupted) {
+            Ok(()) => {}
+            Err(Stopped::Closed) => self.closed = true,
+            Err(Stopped::Interrupted) => self.interrupted = true,
+        }
+        if self.closed || self.interrupted {
             quiet_stdout();
         }
     }
@@ -110,5 +140,11 @@ mod tests {
         assert_eq!(shown("a\tb\u{7f}\u{85}é"), "a\\u0009b\\u007f\\u0085é");
         assert_eq!(inert("a\tb\nc\u{1b}[0m\u{9f}"), "a\tb\nc\\u001b[0m\\u009f");
         assert_eq!(json_safe("\u{1}\u{80}"), "\u{1}\\u0080");
+    }
+
+    #[test]
+    fn a_write_stops_when_interrupted() {
+        assert_eq!(write_stdout(b"never written", || true), Err(Stopped::Interrupted));
+        assert_eq!(write_stdout(b"", || true), Ok(()));
     }
 }

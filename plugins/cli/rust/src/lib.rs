@@ -232,7 +232,6 @@ fn serve_listing(kind: Kind, listing: &Listing, argv: &[String], python: Option<
     let interrupts = control::catch_interrupts();
     let caller = caller::current();
     let reply = control::call(listing.data_dir.as_deref(), kind.method(), listing.params(kind), &caller);
-    drop(interrupts);
     let reply = if control::interrupted() { Err(control::Failure::Interrupted) } else { reply };
     let rendered = match reply {
         Ok(result) => {
@@ -267,11 +266,15 @@ fn serve_listing(kind: Kind, listing: &Listing, argv: &[String], python: Option<
     }
     for line in &rendered.lines {
         out.say(line);
-        if out.closed() {
+        if out.closed() || out.interrupted() {
             break;
         }
     }
-    if out.closed() {
+    drop(interrupts);
+    if out.interrupted() {
+        status = 130;
+        out.complain(&format!("ardia {}: interrupted", kind.name()));
+    } else if out.closed() {
         call.note_error_code("stdout_closed");
         status = 141;
     } else if let Some(complaint) = &rendered.complaint {

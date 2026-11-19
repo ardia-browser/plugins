@@ -399,9 +399,12 @@ class EntryProcess:
         finally:
             fake.close()
 
-    def test_ctrl_c_stops_a_command_blocked_on_its_output(self):
-        stopped, _, _ = self.blocked_listing(["tabs", "--json"])
-        self.assertTrue(stopped, "Ctrl-C didn't stop a command blocked on its output")
+    def test_ctrl_c_while_blocked_on_output_ends_like_python(self):
+        new = self.blocked_listing(["tabs", "--json"])
+        self.case = Path(tempfile.mkdtemp(prefix="c", dir=self.scratch))
+        python = self.blocked_listing(["-I", "-m", "ardia_cli", "tabs", "--json"], program=self.python)
+        self.assertEqual(new, python)
+        self.assertEqual(new, (True, 130, b"ardia tabs: interrupted\n"))
 
     def slow_listing(self, release: threading.Event, first=None):
         asked = []
@@ -672,13 +675,6 @@ class TsProcess(EntryProcess, unittest.TestCase):
                 return int(found[0])
             time.sleep(0.05)
         self.fail("the router started no child")
-
-    def test_ctrl_c_while_blocked_on_output_ends_like_python(self):
-        new = self.blocked_listing(["tabs", "--json"])
-        self.case = Path(tempfile.mkdtemp(prefix="c", dir=self.scratch))
-        python = self.blocked_listing(["-I", "-m", "ardia_cli", "tabs", "--json"], program=self.python)
-        self.assertEqual(new, python)
-        self.assertEqual(new, (True, 130, b"ardia tabs: interrupted\n"))
 
     def test_an_ignored_interrupt_stays_ignored_for_python_after_a_hand_back(self):
         release = threading.Event()

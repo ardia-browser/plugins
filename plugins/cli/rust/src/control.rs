@@ -26,19 +26,25 @@ extern "C" fn on_interrupt(_: libc::c_int) {
     INTERRUPTED.store(true, Ordering::SeqCst);
 }
 
-pub struct Interrupts(libc::sighandler_t);
+pub struct Interrupts(libc::sigaction);
 
 impl Drop for Interrupts {
     fn drop(&mut self) {
-        unsafe { libc::signal(libc::SIGINT, self.0) };
+        unsafe { libc::sigaction(libc::SIGINT, &self.0, std::ptr::null_mut()) };
     }
 }
 
 pub fn catch_interrupts() -> Interrupts {
-    let handler: extern "C" fn(libc::c_int) = on_interrupt;
-    let previous = unsafe { libc::signal(libc::SIGINT, handler as libc::sighandler_t) };
-    if previous == libc::SIG_IGN {
-        unsafe { libc::signal(libc::SIGINT, libc::SIG_IGN) };
+    let mut previous: libc::sigaction = unsafe { std::mem::zeroed() };
+    unsafe { libc::sigaction(libc::SIGINT, std::ptr::null(), &mut previous) };
+    if previous.sa_sigaction != libc::SIG_IGN {
+        let handler: extern "C" fn(libc::c_int) = on_interrupt;
+        let mut action: libc::sigaction = unsafe { std::mem::zeroed() };
+        action.sa_sigaction = handler as libc::sighandler_t;
+        unsafe {
+            libc::sigemptyset(&mut action.sa_mask);
+            libc::sigaction(libc::SIGINT, &action, std::ptr::null_mut());
+        }
     }
     Interrupts(previous)
 }
