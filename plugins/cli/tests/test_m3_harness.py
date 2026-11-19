@@ -1,5 +1,6 @@
 import copy
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -9,7 +10,7 @@ from pathlib import Path
 CLI = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CLI))
 
-from tests.m3 import compare, infra, linkrun, normalize, runner
+from tests.m3 import compare, infra, linkrun, normalize, protocol, runner
 
 
 def message(**fields) -> str:
@@ -96,6 +97,54 @@ class Replay(unittest.TestCase):
         result = self.harness.replay(changed)
         self.assertFalse(result["ok"])
         self.assertTrue(any("tap: unexpected request" in line or "answers" in line for line in result["differences"]), result["differences"])
+
+
+def ts_program() -> str | None:
+    found = os.environ.get("ARDIA_M3_TS_PROGRAM") or str(Path(__file__).resolve().parents[1] / "ts" / "dist" / "ardia-ts")
+    return found if Path(found).exists() else None
+
+
+@unittest.skipUnless(shutil.which("bun") or (Path.home() / ".bun" / "bin" / "bun").exists(), "the replay tap needs bun")
+@unittest.skipUnless(ts_program(), "the TS daemon replays need the built ardia-ts")
+class DaemonReplay(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        os.environ["ARDIA_M3_TS_PROGRAM"] = ts_program()
+        cls.scratch = Path(tempfile.mkdtemp(prefix="ardia-m3-d2-"))
+        cls.harness = runner.Harness(cls.scratch).__enter__()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.harness.__exit__(None, None, None)
+
+    def test_every_daemon_recording_replays_identically_against_the_ts_daemon(self):
+        paths = [path for path in replayable() if runner.name_of(path).startswith("daemon/")]
+        self.assertGreaterEqual(len(paths), 4)
+        failed = [result for result in (self.harness.replay(runner.load(path), "ts") for path in paths) if not result["ok"]]
+        self.assertEqual(failed, [], "\n".join(f"{result['name']}: {result['differences'][:3]}" for result in failed))
+
+
+class Protocol(unittest.TestCase):
+    def test_every_recorded_request_and_answer_fits_the_schema(self):
+        import gzip
+
+        checked = 0
+        for path in sorted(infra.TRANSCRIPTS.rglob("*.result.json.gz")):
+            raw = json.loads(gzip.decompress(path.read_bytes()))
+            for step in raw["steps"]:
+                for item in step.get("answers") or []:
+                    found = protocol.check("answer", item["answer"]) + (protocol.check("request", item["wire"]) if "wire" in item else [])
+                    self.assertEqual(found, [], f"{path.name}: {found}")
+                    checked += 1
+        self.assertGreater(checked, 50)
+
+    def test_the_schema_catches_a_bad_message(self):
+        self.assertEqual(protocol.check("answer", {"exit": 0, "out": "", "err": "", "daemon": "ts/0.4.0"}), [])
+        self.assertNotEqual(protocol.check("answer", {"exit": "0", "out": "", "err": ""}), [])
+        self.assertNotEqual(protocol.check("answer", {"exit": 0, "out": "", "err": "", "code": "Not A Code"}), [])
+        self.assertNotEqual(protocol.check("request", {"argv": ["open", 3]}), [])
+        self.assertNotEqual(protocol.check("config", {"session": "s", "key": "../x", "data_root": "/tmp"}), [])
+        self.assertEqual(protocol.check("config", {"session": "s", "key": "0" * 24, "data_root": "/tmp", "port": 9222, "harness_seed": 5}), [])
 
 
 def link_replayable() -> list[str]:

@@ -16,6 +16,7 @@ type Native = {
   renameAt(dir: number, from: string, to: string): number;
   unlinkAt(dir: number, name: Name): number;
   sizeAt(dir: number, name: Name): number;
+  statAt(dir: number, name: string): number[] | number;
   listAt(dir: number): Buffer[] | number;
   lock(fd: number, exclusive: boolean, wait: boolean): number;
   watchLifeline(fd: number): number;
@@ -23,7 +24,7 @@ type Native = {
   strerror(errno: number): string | number;
 };
 
-const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "openFileAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "listAt", "lock", "watchLifeline", "writeSome", "strerror"];
+const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "openFileAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "statAt", "listAt", "lock", "watchLifeline", "writeSome", "strerror"];
 const ERRNO_NAMES = new Map<number, string>(Object.entries(constants.errno).map(([name, value]) => [value, name]));
 const EWOULDBLOCK = constants.errno.EWOULDBLOCK ?? constants.errno.EAGAIN;
 
@@ -135,6 +136,15 @@ export function unlinkAt(dir: number, name: Name): void {
 
 export function sizeAt(dir: number, name: Name): number {
   return checked(native().sizeAt(dir, name), "fstatat", name);
+}
+
+export type EntryInfo = { mode: number; uid: number; dev: number; ino: number; mtime: number };
+
+export function statAt(dir: number, name: string): EntryInfo {
+  const info = native().statAt(dir, name);
+  if (typeof info === "number") throw errnoError(-info, "fstatat", name);
+  const [mode = 0, owner = 0, dev = 0, ino = 0, mtime = 0] = info;
+  return { mode, uid: owner, dev, ino, mtime };
 }
 
 export function listAt(dir: number): Buffer[] {

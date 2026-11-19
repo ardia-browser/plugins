@@ -127,7 +127,7 @@ class Side:
                 "--session", step.get("session", "harness"), *argv]
 
     def env(self) -> dict:
-        extra = {"ARDIA_BROWSE_DAEMON": self.impl, "ARDIA_M3_SEED": str(self.seed), "ARDIA_M3_ANSWERS": str(self.root / "answers.jsonl")}
+        extra = {"ARDIA_BROWSE_DAEMON": browse_driver.daemon_of(self.impl), "ARDIA_M3_SEED": str(self.seed), "ARDIA_M3_ANSWERS": str(self.root / "answers.jsonl")}
         extra.update(self.scenario.get("env") or {})
         return browse_driver.isolated_env(self.root / "home", extra)
 

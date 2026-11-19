@@ -276,6 +276,35 @@ static napi_value size_at(napi_env env, napi_callback_info info) {
   return number(env, (double)found.st_size);
 }
 
+static bool plain_name(const char *name) {
+  return name[0] != 0 && strchr(name, '/') == NULL && strcmp(name, ".") != 0 && strcmp(name, "..") != 0;
+}
+
+static napi_value stat_at(napi_env env, napi_callback_info info) {
+  Call call;
+  int32_t dir;
+  char name[PATH_MAX];
+  struct stat found;
+  napi_value result = NULL;
+  if (!take_args(env, info, 2, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &dir)) return NULL;
+  int checked = name_arg(&call, 1, name, sizeof(name));
+  if (checked != 0) return status(env, checked);
+  if (!plain_name(name)) return status(env, -EINVAL);
+  if (fstatat(dir, name, &found, AT_SYMLINK_NOFOLLOW) != 0) return status(env, failed());
+  double fields[5] = {(double)found.st_mode, (double)found.st_uid, (double)found.st_dev, (double)found.st_ino,
+#if defined(__APPLE__)
+                      (double)found.st_mtimespec.tv_sec + (double)found.st_mtimespec.tv_nsec / 1e9};
+#else
+                      (double)found.st_mtim.tv_sec + (double)found.st_mtim.tv_nsec / 1e9};
+#endif
+  if (napi_create_array(env, &result) != napi_ok) return status(env, -ENOMEM);
+  for (uint32_t index = 0; index < 5; index += 1) {
+    if (napi_set_element(env, result, index, number(env, fields[index])) != napi_ok) return status(env, -ENOMEM);
+  }
+  return result;
+}
+
 static void finish_listing(DIR *stream) {
   rewinddir(stream);
   closedir(stream);
@@ -428,6 +457,7 @@ __attribute__((visibility("default"))) napi_value napi_register_module_v1(napi_e
       && define(env, exports, "renameAt", rename_at)
       && define(env, exports, "unlinkAt", unlink_at)
       && define(env, exports, "sizeAt", size_at)
+      && define(env, exports, "statAt", stat_at)
       && define(env, exports, "listAt", list_at)
       && define(env, exports, "lock", lock)
       && define(env, exports, "watchLifeline", watch_lifeline)

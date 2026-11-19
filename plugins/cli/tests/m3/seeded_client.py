@@ -29,15 +29,21 @@ def seeded_spawn(dir_fd: int, key: str, config: dict) -> subprocess.Popen:
     from ardia_cli.browse import paths
 
     seed = int(os.environ.get("ARDIA_M3_SEED", "0"))
+    seeded = {**config, "harness_seed": seed}
+    home = os.environ.get("HOME")
+    if home and os.path.isdir(home):
+        with open(os.path.join(home, "spawn-config.jsonl"), "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(seeded, ensure_ascii=False) + "\n")
+    if os.environ.get("ARDIA_BROWSE_DAEMON") == "ts":
+        argv = [os.environ["ARDIA_M3_TS_PROGRAM"], "daemon"]
+    else:
+        argv = [sys.executable, "-I", "-c", BOOT.format(parent=str(CLI))]
     log_fd = paths.open_private_file(f"{key}.log", dir_fd, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
     try:
-        process = subprocess.Popen(
-            [sys.executable, "-I", "-c", BOOT.format(parent=str(CLI))],
-            stdin=subprocess.PIPE, stdout=log_fd, stderr=log_fd, start_new_session=True, close_fds=True, cwd="/",
-        )
+        process = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=log_fd, stderr=log_fd, start_new_session=True, close_fds=True, cwd="/")
     finally:
         os.close(log_fd)
-    process.stdin.write(json.dumps({**config, "harness_seed": seed}).encode())
+    process.stdin.write(json.dumps(seeded).encode())
     process.stdin.close()
     return process
 
@@ -53,7 +59,7 @@ def install():
         if answers:
             with open(answers, "a", encoding="utf-8") as handle:
                 handle.write(json.dumps({"request": {key: payload.get(key) for key in ("argv", "options", "stdin", "beside_if_busy", "patient_queue")},
-                                         "answer": answer}, ensure_ascii=False) + "\n")
+                                         "answer": answer, "wire": payload}, ensure_ascii=False) + "\n")
         return answer
 
     client.spawn = seeded_spawn

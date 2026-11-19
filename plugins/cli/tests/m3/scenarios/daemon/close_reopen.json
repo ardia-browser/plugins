@@ -1,0 +1,10 @@
+{
+ "steps": [
+  {"argv": ["open", "{fixture}/login.html", "--no-changes"], "session": "cr"},
+  {"argv": ["close"], "session": "cr"},
+  {"argv": ["get", "title"], "session": "cr"},
+  {"argv": ["open", "{fixture}/auth.html", "--no-changes"], "session": "cr"},
+  {"argv": ["get", "title"], "session": "cr"},
+  {"argv": ["--json", "close"], "session": "cr"}
+ ]
+}

@@ -1833,6 +1833,27 @@ The TypeScript browse daemon's CDP link (M3, not served yet) differs from Python
   that isn't UTF-8 closes with 1003 (Python 1007), and both end in `connection_lost`.
 - Cancellation is explicit: an abandoned command stops at its next CDP call or `sleep`, not at any `await`.
 
+The TypeScript browse daemon itself (`libexec/ardia-ts daemon`, slice D2 of M3, not served yet) keeps Python's files,
+protocol and answers (`docs/browse-daemon-protocol.md`), except for these, each covered by `ts/tests/m3/daemon*.test.ts`
+or the `daemon/*` harness scenarios:
+
+- Its answers carry `"daemon": "ts/<version>"`; Python's carry none. Clients and telemetry tell the two apart by it.
+- It checks its spawn config before it touches anything: a key that isn't 24 hex digits, a relative `data_root`, a
+  session or namespace that isn't a session name, or a field of the wrong type ends it with exit 2 and
+  `ardia-ts daemon: <what's wrong>` in `<key>.log`. Python takes such a config as it is.
+- It enters `Browse/` by path and then checks that `.` is the folder it opened (same device and inode), where Python
+  calls `fchdir` on the open folder. A folder swapped in between ends it with exit 2 (`the Browse folder changed while
+  the daemon started`) before it binds anything.
+- `<key>.log` holds JavaScript stack traces where Python's holds tracebacks; the line format
+  (`<time> ardia_cli.browse <LEVEL> <message>`) and the redaction are the same. A `$exception` event it reports has an
+  empty `stacktrace.frames`, as the other native entries' do.
+- Cancelling a command during `Target.attachToTarget` detaches the session the late answer opens (plugins#11's attach
+  rule, in the link); Python on this branch leaves it attached.
+- Under heavy load it can resume a few milliseconds later than Python after a CDP reply, so the `load` event may
+  already be in when it first checks, and the isolated world `open` would have made for its readiness probe is made by
+  the next command instead. The harness's Ctrl-C comparison shows this as a request moving between steps; the answers
+  don't change.
+
 ## Linux
 
 The same CLI, with these differences:

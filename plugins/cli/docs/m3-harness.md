@@ -159,3 +159,23 @@ The link settles a reply in the reader (pending entry, timer, attach slot) but r
 `setImmediate`. Bun runs microtasks between the messages of one socket read; Python's reader handles every buffered
 message before a waiter resumes. Deferring the resume keeps that order: an event that arrives in the same read as a
 reply reaches its handlers before the command that waited goes on.
+
+## The daemon shell (slice D2)
+
+`ts/src/browse/daemon/` is the daemon: `main.ts` (the hidden `ardia-ts daemon` subcommand), `config.ts`, `server.ts`
+(socket, admission, the FIFO command lock, busy answers, limits, idle disconnect, the endpoint watch, `close`, signals),
+`render.ts` (render, cap, spill, the answer encoding), `claims.ts`, `log.ts` and `spawn.ts` (what the TS client calls to
+start a daemon). `ts/src/browse/paths.ts`, `endpoint.ts`, `state/registry.ts` and `state/temptabs.ts` are shared with
+later slices. `daemon/stub/` holds the minimum page core the D2 scenarios need (`get title|url`, `open`, `wait`,
+`session`); D3 replaces it, and every other command answers `code: "unsupported"` until its slice lands.
+
+| What | How it's run |
+|---|---|
+| Scenarios `daemon/*` | `python -m tests.m3 live 'daemon/*' --a python --b ts`, `replay 'daemon/*' --impl ts`, `cancel daemon/minimum_set --impl ts`; `tests.test_m3_harness` replays them against the TS daemon |
+| Mixed fleets | `--a`/`--b`/`--impl` take `client:daemon` pairs: `python:python`, `python:ts` (`ts` alone means this until the TS client serves browse), `fleet:python`, `fleet:ts`, and `ts:python`/`ts:ts` once the TS client does. `fleet` is `ts/tests/m3/fleet-client.ts`, a minimal TS client that starts daemons through `spawn.ts` |
+| Protocol | every request, answer and spawn config of a run is checked against `tests/m3/protocol.schema.json`; a violation is a difference |
+| Faults | `ts/tests/m3/daemon.test.ts` (built binary; most cases run against both daemons): stale socket, lock held elsewhere, symlinked or shared folder, oversized and broken requests, a client hanging up, queueing and `beside_if_busy`, close while queued, SIGTERM/SIGHUP/SIGINT during a request, the unconnected exit, the install lease. `daemon-live.test.ts` (headless Chrome for Testing on fixed ports from `ARDIA_D2_CHROME_PORT`, default 9531): idle disconnect then reconnect with a new link, connection loss, the endpoint watch, a folder swapped after it was opened. `daemon-units.test.ts`: render, cap and spill, session keys, seeded tokens and the tab registry checked against Python's own functions |
+
+The Python seeded client starts the TS daemon when `ARDIA_BROWSE_DAEMON=ts` and appends each spawn config to
+`$HOME/spawn-config.jsonl` and each full request to `answers.jsonl` (`wire`), which is what the protocol check reads.
+Recordings must be made on the default ports (`ARDIA_M3_PORTS=9400-9419`): the fixture URL in them carries the port.

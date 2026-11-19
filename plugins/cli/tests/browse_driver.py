@@ -8,7 +8,7 @@ from pathlib import Path
 
 CLI = Path(__file__).resolve().parents[1]
 SEEDED_CLIENT = CLI / "tests" / "m3" / "seeded_client.py"
-HARNESS_ENV = ("ARDIA_BROWSE_DAEMON", "ARDIA_BROWSE_HARNESS", "ARDIA_M3_SEED", "ARDIA_M3_ANSWERS", "ARDIA_M3_TS_PROGRAM")
+HARNESS_ENV = ("ARDIA_BROWSE_DAEMON", "ARDIA_BROWSE_HARNESS", "ARDIA_M3_SEED", "ARDIA_M3_ANSWERS", "ARDIA_M3_TS_PROGRAM", "ARDIA_M3_CLIENT", "ARDIA_TEST_PYTHON")
 KEPT_ENV = ("PATH", "LANG", "LC_ALL", "TZ")
 
 
@@ -36,14 +36,37 @@ def implementation() -> str:
     return chosen
 
 
+FLEET_CLIENT = CLI / "ts" / "tests" / "m3" / "fleet-client.ts"
+PAIRS = ("python", "ts", "python:python", "python:ts", "fleet:python", "fleet:ts", "ts:python", "ts:ts")
+
+
+def pair_of(chosen: str) -> tuple[str, str]:
+    if chosen not in PAIRS:
+        raise RuntimeError(f"an implementation is one of {', '.join(PAIRS)}, not {chosen!r}")
+    if ":" in chosen:
+        client, daemon = chosen.split(":")
+        return client, daemon
+    return ("ts" if chosen == "ts" and os.environ.get("ARDIA_M3_CLIENT") == "ts" else "python"), chosen
+
+
+def daemon_of(chosen: str) -> str:
+    return pair_of(chosen)[1]
+
+
 def client_argv(chosen: str | None = None, seeded: bool | None = None) -> list[str]:
-    chosen = chosen or implementation()
-    if chosen == "ts":
+    client, daemon = pair_of(chosen or implementation())
+    if daemon == "ts" and not os.environ.get("ARDIA_M3_TS_PROGRAM"):
+        raise RuntimeError("the TS daemon needs ARDIA_M3_TS_PROGRAM, the built ardia-ts")
+    if client == "ts":
         program = os.environ.get("ARDIA_M3_TS_PROGRAM")
         if not program:
-            raise RuntimeError("ARDIA_BROWSE_DAEMON=ts needs ARDIA_M3_TS_PROGRAM, the built ardia-ts")
+            raise RuntimeError("the TS client needs ARDIA_M3_TS_PROGRAM, the built ardia-ts")
         return [program]
-    if seeded or (seeded is None and os.environ.get("ARDIA_M3_SEED") is not None):
+    if client == "fleet":
+        from tests.m3 import infra
+
+        return [infra.bun(), str(FLEET_CLIENT)]
+    if daemon == "ts" or seeded or (seeded is None and os.environ.get("ARDIA_M3_SEED") is not None):
         return [sys.executable, "-I", str(SEEDED_CLIENT)]
     return [sys.executable, "-m", "ardia_cli"]
 

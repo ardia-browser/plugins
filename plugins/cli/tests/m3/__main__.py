@@ -8,7 +8,9 @@
                                                           Ctrl-C (or K: kill|stop|close|drop|error) at every CDP request
   python -m tests.m3 list
 
-Scenarios are names under tests/m3/scenarios (globs allowed). I is python or ts (ts needs ARDIA_M3_TS_PROGRAM).
+Scenarios are names under tests/m3/scenarios (globs allowed). I is python, ts, or a client:daemon pair (python, fleet or ts
+client; python or ts daemon). ts alone is Python's client with the TS daemon until the TS client serves browse; ts needs
+ARDIA_M3_TS_PROGRAM.
 Live modes need ARDIA_M3_CHROME. Ports come from ARDIA_M3_PORTS (default 9400-9419).
 """
 import argparse
@@ -17,6 +19,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from tests.browse_driver import PAIRS
 from tests.m3 import runner
 
 
@@ -40,9 +43,9 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="python -m tests.m3", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("command", choices=["record", "replay", "live", "selftest", "cancel", "list"])
     parser.add_argument("scenarios", nargs="*")
-    parser.add_argument("--impl", default="python", choices=["python", "ts"])
-    parser.add_argument("--a", default="python", choices=["python", "ts"])
-    parser.add_argument("--b", default="python", choices=["python", "ts"])
+    parser.add_argument("--impl", default="python", choices=PAIRS)
+    parser.add_argument("--a", default="python", choices=PAIRS)
+    parser.add_argument("--b", default="python", choices=PAIRS)
     parser.add_argument("--step", type=int, action="append")
     parser.add_argument("--kind", default="interrupt", choices=["interrupt", "kill", "stop", "close", "drop", "error"])
     parser.add_argument("--pace", choices=["asap", "recorded"], help="override the scenarios' replay pace")

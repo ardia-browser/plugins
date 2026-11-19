@@ -7,7 +7,7 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from tests.m3 import compare, infra, normalize
+from tests.m3 import compare, infra, normalize, protocol
 from tests.m3.side import Fault, Run, Side
 
 
@@ -47,6 +47,10 @@ def expectation(name: str) -> Path:
 def expected_of(name: str) -> dict:
     raw = json.loads(gzip.decompress(expectation(name).read_bytes()))
     return normalize.run(Run(root=Path(raw["subs"]["root"]), transcript=recording(name), steps=raw["steps"], files=raw["files"], subs=raw["subs"]))
+
+
+def checked_protocol(result: Run, label: str) -> list[str]:
+    return [f"protocol {label}: {line}" for line in protocol.violations(result)]
 
 
 class Harness:
@@ -96,6 +100,7 @@ class Harness:
         first, second = self.twin(scenario, a, b)
         unstable = (scenario.get("unstable_steps") or {}).get("steps")
         differences = compare.compared(normalize.run(first, unstable), normalize.run(second, unstable), compare.LIVE)
+        differences += checked_protocol(first, "A") + checked_protocol(second, "B")
         return {"name": scenario["name"], "mode": f"live {a}/{b}", "ok": not differences, "differences": differences}
 
     def replay(self, scenario: dict, impl: str = "python") -> dict:
@@ -110,6 +115,7 @@ class Harness:
         if result.tap.get("remaining"):
             differences.append(f"tap: {result.tap['remaining']} recorded request(s) never sent, first: {result.tap.get('remainingForms', [])[:2]}")
         differences += compare.compared(expected, normalize.run(result), compare.LIVE)
+        differences += checked_protocol(result, impl)
         return {"name": name, "mode": f"replay {impl}", "ok": not differences, "differences": differences}
 
     def request_points(self, scenario: dict) -> dict[int, list[tuple[str, int]]]:
@@ -139,6 +145,7 @@ class Harness:
             for part in ("requests", "request_sets", "sources"):
                 found[part].pop(str(fault.step), None)
         differences = compare.compared(shaped[0], shaped[1], compare.LIVE)
+        differences += checked_protocol(first, "A") + checked_protocol(second, "B")
         return {"name": scenario["name"], "mode": mode, "ok": not differences, "differences": differences}
 
     def cancel(self, scenario: dict, a: str = "python", b: str = "python", kind: str = "interrupt", steps: list[int] | None = None) -> list[dict]:
