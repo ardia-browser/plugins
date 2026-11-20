@@ -1,7 +1,7 @@
 import { claim as claimTab, release as releaseTab } from "../daemon/claims.ts";
 import type { FifoLock } from "../daemon/lock.ts";
 import type { Ctx } from "../commands/ctx.ts";
-import type { Element, Page } from "../state/page.ts";
+import type { Page } from "../state/page.ts";
 import type { Listener, State } from "../state/state.ts";
 import type { Recording } from "./record.ts";
 import type { Stream } from "./stream.ts";
@@ -76,10 +76,7 @@ export function removeListener(state: State, listener: Listener | null): void {
 export type Peers = {
   take: ((state: State, page: Page, options: { interactive?: boolean }) => Promise<unknown>) | null;
   frameOffset: ((page: Page, frameId: string) => Promise<[number, number]>) | null;
-  currentOrNew: ((ctx: Ctx) => Promise<Page>) | null;
-  refuseOnBorrowed: ((ctx: Ctx, page: Page, what: string) => void) | null;
-  resolve: ((ctx: Ctx, selector: string) => Promise<[Page, Element]>) | null;
 };
 
-export const peers: Peers = { take: null, frameOffset: null, currentOrNew: null, refuseOnBorrowed: null, resolve: null };
+export const peers: Peers = { take: null, frameOffset: null };
 

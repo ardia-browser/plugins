@@ -1,0 +1,20 @@
+{
+ "steps": [
+  {"argv": ["open", "{fixture}/login.html", "--no-changes"]},
+  {"argv": ["screenshot", "a.png"]},
+  {"argv": ["screenshot", "b.png", "--if-changed"]},
+  {"argv": ["screenshot", "c.png", "--if-changed"]},
+  {"argv": ["screenshot", "--full", "--out", "full.png"]},
+  {"argv": ["screenshot", "body", "shots/body.png"]},
+  {"argv": ["screenshot", "d.jpg", "--screenshot-format", "jpeg", "--screenshot-quality", "50"]},
+  {"argv": ["screenshot", "--screenshot-format", "gif"]},
+  {"argv": ["screenshot", "x.png", "--annotate", "--screenshot-format", "jpg"]},
+  {"argv": ["screenshot", "e.png", "--if-changed", "--threshold", "nope"]},
+  {"argv": ["pdf", "page.pdf"]},
+  {"argv": ["pdf", "wide/page.pdf", "--landscape"]},
+  {"argv": ["pdf"]},
+  {"argv": ["highlight", "body"]},
+  {"argv": ["highlight"]},
+  {"argv": ["a11y"]}
+ ]
+}

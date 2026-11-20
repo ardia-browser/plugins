@@ -26,6 +26,7 @@ DIVERGENCES = {
 
 UNANSWERING_FAULTS = ("drop", "stop")
 PAGE_SESSION_ENABLES = ("Runtime.enable", "Debugger.enable", "Console.enable")
+CONSOLE_CAPTURE = ("console", "errors")
 BUSY_PROBE = "1"
 WORLD_HANDLE = "globalThis"
 
@@ -93,7 +94,15 @@ def rewriter(names: list[str]) -> Rewriter:
     return Rewriter(names)
 
 
-def checks(transcript_path) -> list[str]:
+def captures_console(steps) -> bool:
+    for step in steps or []:
+        argv = [str(arg) for arg in step.get("argv") or []]
+        if (argv and argv[0] in CONSOLE_CAPTURE) or "--capture-console" in argv:
+            return True
+    return False
+
+
+def checks(transcript_path, console_capture: bool = False) -> list[str]:
     found = []
     worlds = set()
     binding = set()
@@ -106,7 +115,7 @@ def checks(transcript_path) -> list[str]:
             continue
         if not message.get("sessionId"):
             continue
-        if message.get("method") in PAGE_SESSION_ENABLES:
+        if message.get("method") in PAGE_SESSION_ENABLES and not (console_capture and message["method"] == "Runtime.enable"):
             found.append(f"row 8: {message['method']} sent on a page session")
         if message.get("method") == "Page.createIsolatedWorld":
             worlds.add(message["sessionId"])

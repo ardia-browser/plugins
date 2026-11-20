@@ -14,6 +14,7 @@ READY_PROBE = "() => document.readyState"
 KEY = re.compile(r"\b[0-9a-f]{24}\b")
 TABS_FILE = re.compile(r"tabs-[0-9a-f]+")
 READ_STAMP = re.compile(r"(?<=\[read )\d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC(?=\])")
+REQUEST_ROW = re.compile(r"(?m)^\[\d+\.\d+\](?= [A-Z]+ \S+ \()")
 
 RULES = {
     "browser-ids": "values of the CDP ID fields in STRING_IDS and INT_IDS become <kind#n>, numbered by first appearance in the step's own requests (browser events cross step marks by timing)",
@@ -26,6 +27,7 @@ RULES = {
     "session-key": "24-hex session keys in file names and answers become <KEY:session>",
     "tabs-file": "the tab registry's file name hash becomes tabs-<HASH>",
     "file-times": "`pid`, `started`, `at` and any float over 1e9 (epoch seconds) inside the session folder's JSON files become <PID> and <TIME>",
+    "request-rows": "the `[<renderer pid>.<n>]` request id at the start of a `network requests` row becomes `[<REQUEST>]`; Chromium numbers subresource requests by its renderer's process id, which differs between any two browsers",
     "read-stamp": "the wall-clock time in `read`'s `[read YYYY-MM-DD HH:MM:SS UTC]` line becomes <TIME>",
     "live-sets": "live mode compares each step's requests as a set of distinct forms; order, counts and concurrency are replay's job, because Chromium's load timing decides how often the daemon polls",
     "ready-probe": "live mode ignores the `() => document.readyState` probe, which the daemon sends only when the load event hasn't arrived yet",
@@ -169,7 +171,7 @@ def transcript(entries: list[dict], subs: Subs, rewrite=None) -> tuple[dict, Ids
 
 def answer(step: dict, subs: Subs, ids: Ids, keys: dict) -> dict:
     def clean(text: str) -> str:
-        text = READ_STAMP.sub("<TIME>", ids.in_text(subs.text(text or "")))
+        text = REQUEST_ROW.sub("[<REQUEST>]", READ_STAMP.sub("<TIME>", ids.in_text(subs.text(text or ""))))
         return KEY.sub(lambda found: keys.get(found.group(), "<KEY>"), text)
 
     shaped = {"exit": step.get("exit"), "out": clean(step.get("out", "")), "err": clean(step.get("err", ""))}

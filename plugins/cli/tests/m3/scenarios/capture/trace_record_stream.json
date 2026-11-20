@@ -1,0 +1,17 @@
+{
+ "steps": [
+  {"argv": ["open", "{fixture}/login.html", "--no-changes"]},
+  {"argv": ["trace", "start", "--categories", "-*,blink.user_timing"]},
+  {"argv": ["trace", "start"]},
+  {"argv": ["open", "{fixture}/login.html", "--no-changes"]},
+  {"argv": ["trace", "stop", "trace.json"]},
+  {"argv": ["profiler", "stop"]},
+  {"argv": ["trace", "sideways"]},
+  {"argv": ["record", "stop"]},
+  {"argv": ["record", "sideways"]},
+  {"argv": ["record", "start"]},
+  {"argv": ["stream"]},
+  {"argv": ["stream", "disable"]},
+  {"argv": ["stream", "sideways"]}
+ ]
+}

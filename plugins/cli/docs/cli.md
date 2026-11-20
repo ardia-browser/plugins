@@ -1983,6 +1983,26 @@ Its page core (slice D3: `browse/state/page.ts`, `state.ts`, `refs.ts`, `apptabs
 - The caller counts as announced to Ardia's control socket only after the handshake finished, so a cancelled one is
   tried again by the next command; Python records it before. A cancelled active-tab lookup (`tab active`) ends its HTTP
   request at once.
+- Capture and media (D6). Console and error capture is the one path that sends `Runtime.enable` on a page session
+  (Chromium reports console calls only through it); `console` and `errors` start it (and `open --capture-console` once `open`'s page setup is served), the page
+  can detect it, and it lasts until the session ends, as in Python. The harness's transcript check allows it only in a
+  scenario that asks for console capture. The rest:
+  - A lost connection is never swallowed: `network request` and HAR bodies, `network unroute`'s `Fetch.disable` and the
+    screencast stop pass `connection_lost` on where Python's catch-all ignores it. `record stop` still closes ffmpeg's
+    input and waits for it when that happens.
+  - Numbers Chromium sends as whole floats (`1.0`) are written as integers in HAR and trace files and in stream frame
+    metadata, because the CDP reply is parsed into JavaScript numbers. Values computed as floats by the command itself
+    (a HAR entry's `time`, a selector screenshot's clip origin, `diffPercent`) keep Python's float spelling.
+  - The stream viewer runs on `Bun.serve`: its Host, Origin, token, four-viewer and 64 KiB message checks and their
+    status codes and texts are Python's; a plain HTTP request without a WebSocket upgrade gets 426 with our own text
+    where the `websockets` package answers 400 or 426 with its own; a port already in use reports Python's `OSError`
+    line. Frames a slow viewer can't take yet are skipped to the newest, as Python's single-slot waiter does.
+  - A background route, auth or screencast-ack task that fails for a reason other than a CDP error ends quietly;
+    Python's event loop logs "Task exception was never retrieved".
+  - `a11y` looks for axe-core in the bundled Python's `ardia_cli/vendor/axe.min.js`, then in `node_modules/axe-core`
+    upward from the program. Once Python is gone (M4) axe-core needs its own place in the artifact (release owner).
+  - Live input from a stream viewer (`stream enable --input`) is tracked and released by the act slice's input model
+    (D5); until it lands the daemon still sends the events, under the command lock, but can't release held keys.
 
 ## Linux
 

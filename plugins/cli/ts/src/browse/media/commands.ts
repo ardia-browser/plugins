@@ -12,7 +12,7 @@ import { resolve } from "../commands/shared.ts";
 import { BrowseError, Gated } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
 import { flag } from "../metrics.ts";
-import { pyError, pyIntArg } from "../pyerror.ts";
+import { pyError, pyFloat, pyIntArg } from "../pyerror.ts";
 import { type Element, type Page, quiet } from "../state/page.ts";
 import { type Json, record } from "../state/records.ts";
 import { peers } from "../capture/store.ts";
@@ -22,7 +22,7 @@ import { type AnnotationRow, drawAnnotations, thresholdOf } from "./draw.ts";
 import { defaultPath } from "./paths.ts";
 import { type Comparison, comparePngs, encodePng } from "./png.ts";
 
-export type Clip = { x: number; y: number; width: number; height: number; scale: number };
+export type Clip = { x: unknown; y: unknown; width: number; height: number; scale: number };
 export type Annotation = AnnotationRow & { ref: string; role: string; name?: string };
 type Viewport = Json;
 
@@ -196,8 +196,8 @@ export async function cmdScreenshot(ctx: Ctx, argv: string[]): Promise<Result> {
     const [ox, oy] = await frameOffset(page, element.frame);
     const vp = await viewportOf(page);
     clip = {
-      x: num(box["x"]) + ox + num(vp["scrollX"]),
-      y: num(box["y"]) + oy + num(vp["scrollY"]),
+      x: pyFloat(num(box["x"]) + ox + num(vp["scrollX"])),
+      y: pyFloat(num(box["y"]) + oy + num(vp["scrollY"])),
       width: Math.max(1, num(box["width"])),
       height: Math.max(1, num(box["height"])),
       scale: 1,

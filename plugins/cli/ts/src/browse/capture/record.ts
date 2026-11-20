@@ -82,7 +82,7 @@ export async function cmdRecord(ctx: Ctx, argv: string[]): Promise<Result> {
   need(args, 2, `record ${action} <path.webm> [url]`);
   const capture = captureOf(ctx.state);
   if (capture.recording !== null) throw new BrowseError("A recording is already running; stop it first");
-  const ffmpeg = Bun.which("ffmpeg");
+  const ffmpeg = Bun.which("ffmpeg", { PATH: process.env["PATH"] ?? ":/bin:/usr/bin" });
   if (!ffmpeg) throw new BrowseError("record needs ffmpeg on PATH to encode WebM (brew install ffmpeg)");
   let page: Page;
   if (args.length > 2) {
