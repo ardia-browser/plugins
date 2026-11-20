@@ -81,40 +81,33 @@ export function run(argv: readonly string[], options: RunOptions): Promise<Ran> 
     const out = sink(limit);
     const err = sink(limit);
     let settled = false;
-    let stopping: "timeout" | "cancelled" | null = null;
-    let killTimer: ReturnType<typeof setTimeout> | undefined;
-    const exited = () => child.exitCode !== null || child.signalCode !== null;
+    let stopped = false;
     const settle = (finish: () => void) => {
       if (settled) return;
       settled = true;
       clearTimeout(deadline);
-      clearTimeout(killTimer);
       signal?.removeEventListener("abort", cancel);
       finish();
     };
-    const giveUp = () => {
-      const pid = child.pid;
-      if (pid !== undefined) signalGroup(pid, "SIGKILL");
+    const release = () => {
       child.stdout?.destroy();
       child.stderr?.destroy();
       child.stdin?.destroy();
-      settle(() => reject(stopping === "cancelled" ? new Cancelled() : new RunTimedOut()));
     };
-    const groupGone = () => child.pid === undefined || !signalGroup(child.pid, 0);
     const stop = (why: "timeout" | "cancelled") => {
-      if (settled || stopping !== null) return;
-      stopping = why;
+      if (settled || stopped) return;
+      stopped = true;
+      settle(() => reject(why === "cancelled" ? new Cancelled() : new RunTimedOut()));
       const pid = child.pid;
       if (pid === undefined) {
-        giveUp();
+        release();
         return;
       }
       signalGroup(pid, "SIGTERM");
-      if (exited() && groupGone()) {
-        giveUp();
-        return;
-      }
-      killTimer = setTimeout(giveUp, grace);
+      setTimeout(() => {
+        if (signalGroup(pid, 0)) signalGroup(pid, "SIGKILL");
+        release();
+      }, grace);
     };
     const deadline = setTimeout(() => stop("timeout"), options.timeout * 1000);
     const cancel = () => stop("cancelled");
@@ -122,14 +115,7 @@ export function run(argv: readonly string[], options: RunOptions): Promise<Ran> 
     child.on("error", (error) => {
       if (child.pid === undefined) settle(() => reject(describe(error)));
     });
-    child.on("exit", () => {
-      if (stopping !== null && groupGone()) giveUp();
-    });
     child.on("close", () => {
-      if (stopping !== null) {
-        giveUp();
-        return;
-      }
       settle(() => resolve({ code: exitCode(child), stdout: out.take(), stderr: err.take() }));
     });
     child.stdout?.on("data", (chunk: Buffer) => out.push(chunk));

@@ -2018,19 +2018,27 @@ scenarios:
   `security -i`'s stdin, as in Python. A process killed at its deadline ends the call as soon as it exits, even when a
   child of its own still holds its output open; Python's `subprocess.run` also returns then.
 - Plugins and credential providers get only `PATH`, `HOME`, `LANG`, `LC_*`, `TMPDIR`, `USER`, `LOGNAME` and `SHELL` from
-  the daemon's environment; Python passes everything but `ARDIA_*` and `AGENT_BROWSER_*`. A provider's reply is checked
-  strictly (`password` a non-empty string; `url`, `username` and the three selectors strings or absent; anything else
-  ignored), and a failed or malformed reply reads `Credential provider <name> returned an error` or `… sent a malformed
-  reply`, never the provider's own text. Python echoes the provider's `error` and `protocol`. `plugin run` keeps
-  Python's messages.
-- Keychain, plugin, `git` and `npm` processes run in their own process group. At the deadline or on a cancel the
-  group gets SIGTERM, then SIGKILL after 0.5 s, and the call ends then; a child that kept the output open is killed
-  with it. Python kills only the process it started.
+  the daemon's environment; Python passes everything but `ARDIA_*` and `AGENT_BROWSER_*`.
+- A credential provider's reply for `auth login` is checked strictly before anything uses it: the process must exit 0,
+  `success` must be the boolean `true`, `password` a non-empty string, and `url`, `username` and the three selectors
+  strings or absent (an explicit `null` is malformed). `url` must be an https origin (http only for localhost) with a
+  valid port, and a selector non-empty, without control characters and at most 1,000 characters. Anything else reads
+  `Credential provider <name> sent a malformed reply`, and a `success: false` reply or a nonzero exit
+  `Credential provider <name> returned an error`: the provider's own text, the item and the reply are never repeated.
+  If the login then fails on something the provider supplied (its page doesn't load, a selector matches nothing), the
+  error reads `Credential provider <name> named a page or field this session couldn't use` instead of repeating it.
+  Python echoes the provider's `error`, `protocol` and item. Python's `plugin run <name> credential.read` keeps its
+  own messages and environment (it is frozen); the TypeScript client's `plugin run` (M2) must apply the same
+  boundary.
+- Keychain, plugin, `git` and `npm` processes run in their own session and process group. At the deadline or on a
+  cancel the call ends at once; the group gets one SIGTERM, and one SIGKILL 0.5 s later unless the whole group is gone
+  by then, whatever its pipes do in between. Python kills only the process it started.
 - `clipboard` and `set permission` grant each permission with `Browser.setPermission`, so grants add up; Python's
   `Browser.grantPermissions` replaces every grant the origin had (a clipboard grant revoked geolocation). The harness
   leaves both out of the comparison through the `permission-overrides` divergence (ardia#2812 row 3).
-- An `--init-script` file is opened without blocking and must be a regular file under 4 MB (a FIFO or device is
-  refused with `bad_init_script`); Python reads whatever the path names and can block on a FIFO. It is decoded as
+- An `--init-script` file is opened without blocking and must be a regular file; at most 4 MB is read from it, whatever
+  its size said when it was opened, and more than that is refused with `bad_init_script`, as is a FIFO or device.
+  Python reads whatever the path names and can block on a FIFO. It is decoded as
   Python's text read decodes it: a BOM kept, CRLF and CR made LF.
 - A password given to `set credentials`, read from the Keychain or returned by a credential provider for `auth login` is
   registered with the redactor as soon as the daemon sees it, so no answer, stderr line, script log or error repeats it

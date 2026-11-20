@@ -158,7 +158,7 @@ describe("credential providers", () => {
       "Plugin 'vault' failed: locked",
     );
     expect(credential(plugin(`cat > /dev/null; echo '{"protocol": "agent-browser.plugin.v1", "success": true, "data": {}}'`).root, "vault", "i", null)).rejects.toThrow(
-      "Credential provider vault returned no password for i",
+      "Credential provider vault sent a malformed reply",
     );
     expect(call(plugin("cat > /dev/null").root, "vault", "other.cap", {})).rejects.toThrow("Plugin vault doesn't declare other.cap (it declares credential.read)");
     expect(call(plugin("cat > /dev/null").root, "nobody", "credential.read", {})).rejects.toThrow("No plugin named nobody");
@@ -417,7 +417,7 @@ describe("credential provider boundary", () => {
       [`echo '{"protocol": "${leak}", "success": true}'`, "Credential provider vault sent a malformed reply"],
       [`echo '${leak}'`, "Credential provider vault sent a malformed reply"],
       [`echo '{"protocol": "agent-browser.plugin.v1", "success": true, "data": {"password": "pw", "url": ["${leak}"]}}'`, "Credential provider vault sent a malformed reply"],
-      [`echo '{"protocol": "agent-browser.plugin.v1", "success": true, "data": {"password": 7}}'`, "Credential provider vault returned no password for i"],
+      [`echo '{"protocol": "agent-browser.plugin.v1", "success": true, "data": {"password": 7}}'`, "Credential provider vault sent a malformed reply"],
     ];
     for (const [body, said] of cases) {
       const error = (await credential(provider(`cat > /dev/null; ${body}`), "vault", "i", null).catch((thrown: unknown) => thrown)) as BrowseError;

@@ -39,6 +39,27 @@ export function decodeScript(bytes: Uint8Array, file: string): string {
   return text.replace(/\r\n?/gu, "\n");
 }
 
+type Readable = { read(buffer: Buffer, offset: number, length: number, position: null): Promise<{ bytesRead: number }> };
+
+function overCap(file: string): BrowseError {
+  return new BrowseError(`--init-script ${file} is over ${MAX_INIT_SCRIPT / (1024 * 1024)} MB`, null, "bad_init_script");
+}
+
+export async function readCapped(handle: Readable, file: string): Promise<string> {
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for (;;) {
+    const room = MAX_INIT_SCRIPT + 1 - total;
+    const chunk = Buffer.alloc(Math.min(room, 256 * 1024));
+    const { bytesRead } = await handle.read(chunk, 0, chunk.length, null);
+    if (bytesRead === 0) break;
+    chunks.push(chunk.subarray(0, bytesRead));
+    total += bytesRead;
+    if (total > MAX_INIT_SCRIPT) throw overCap(file);
+  }
+  return decodeScript(Buffer.concat(chunks, total), file);
+}
+
 export async function readScript(file: string): Promise<string> {
   let handle: fs.promises.FileHandle;
   try {
@@ -50,16 +71,7 @@ export async function readScript(file: string): Promise<string> {
     const info = await handle.stat();
     if (info.isDirectory()) throw new PyException("IsADirectoryError", `[Errno 21] Is a directory: ${reprText(file)}`);
     if (!info.isFile()) throw new BrowseError(`--init-script ${file} isn't a regular file (a pipe, socket or device can't be read as a script)`, null, "bad_init_script");
-    if (info.size > MAX_INIT_SCRIPT) throw new BrowseError(`--init-script ${file} is over ${MAX_INIT_SCRIPT / (1024 * 1024)} MB`, null, "bad_init_script");
-    const bytes = Buffer.alloc(Math.min(info.size, MAX_INIT_SCRIPT) + 1);
-    let filled = 0;
-    for (;;) {
-      const { bytesRead } = await handle.read(bytes, filled, bytes.length - filled, null);
-      if (bytesRead === 0) break;
-      filled += bytesRead;
-      if (filled >= bytes.length) throw new BrowseError(`--init-script ${file} is over ${MAX_INIT_SCRIPT / (1024 * 1024)} MB`, null, "bad_init_script");
-    }
-    return decodeScript(bytes.subarray(0, filled), file);
+    return await readCapped(handle, file);
   } finally {
     await handle.close();
   }

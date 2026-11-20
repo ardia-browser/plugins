@@ -8,6 +8,7 @@ import { BrowseError, Usage } from "../daemon-errors.ts";
 import { pyValue } from "../daemon/render.ts";
 import { browseDir, checkName, closeFd, DIR_NAME, openPrivateDirAt, readPrivateJson, writePrivateJson } from "../paths.ts";
 import { run, RunTimedOut, SpawnFailed } from "./run.ts";
+import { originOf } from "./origin.ts";
 
 export const PROTOCOL = "agent-browser.plugin.v1";
 export const REGISTRY = "registry.json";
@@ -178,7 +179,9 @@ export function pluginEnv(): Record<string, string> {
   return env;
 }
 
-type Reply = { kind: "ok"; data: Value } | { kind: "invalid" } | { kind: "protocol"; said: Value } | { kind: "failed"; error: Value };
+type Reply = ({ kind: "ok"; data: Value; success: Value } | { kind: "invalid" } | { kind: "protocol"; said: Value } | { kind: "failed"; error: Value; success: Value }) & {
+  exit: number;
+};
 
 async function ask(root: string, name: string, capability: string, request: unknown, timeout: number): Promise<Reply> {
   const plugin = find(root, name);
@@ -207,12 +210,12 @@ async function ask(root: string, name: string, capability: string, request: unkn
     const lines = raw.split(LINE_BREAKS);
     reply = pyLoads(raw ? (lines.at(-1) as string) : "");
   } catch {
-    return { kind: "invalid" };
+    return { kind: "invalid", exit: ran.code };
   }
-  if (!(reply instanceof Map) || reply.get("protocol") !== PROTOCOL) return { kind: "protocol", said: reply instanceof Map ? (reply.get("protocol") ?? "") : "" };
-  const success = reply.get("success");
-  if (!success || success === 0n) return { kind: "failed", error: reply.get("error") ?? null };
-  return { kind: "ok", data: reply.get("data") ?? null };
+  if (!(reply instanceof Map) || reply.get("protocol") !== PROTOCOL) return { kind: "protocol", said: reply instanceof Map ? (reply.get("protocol") ?? "") : "", exit: ran.code };
+  const success = reply.get("success") ?? null;
+  if (!success || success === 0n) return { kind: "failed", error: reply.get("error") ?? null, success, exit: ran.code };
+  return { kind: "ok", data: reply.get("data") ?? null, success, exit: ran.code };
 }
 
 export async function call(root: string, name: string, capability: string, request: unknown, timeout = RUN_TIMEOUT): Promise<unknown> {
@@ -230,20 +233,40 @@ function malformed(name: string): BrowseError {
   return new BrowseError(`Credential provider ${name} sent a malformed reply`, null, "credential_provider_failed");
 }
 
+const MAX_FIELD = 1000;
+const CONTROL = /[\u0000-\u001f\u007f]/u;
+
+function usableText(value: string, empty: boolean): boolean {
+  return (empty || value !== "") && codePoints(value).length <= MAX_FIELD && !CONTROL.test(value);
+}
+
+function usableUrl(value: string): boolean {
+  if (!usableText(value, false) || /\s/u.test(value)) return false;
+  try {
+    originOf(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function credential(root: string, name: string, item: string, url: string | null, timeout = RUN_TIMEOUT): Promise<Record<string, string>> {
   const reply = await ask(root, name, "credential.read", { item, ...(url ? { url } : {}) }, timeout);
-  if (reply.kind === "failed") throw new BrowseError(`Credential provider ${name} returned an error`, null, "credential_provider_failed");
-  if (reply.kind !== "ok") throw malformed(name);
+  if (reply.kind === "failed" && reply.success === false) throw new BrowseError(`Credential provider ${name} returned an error`, null, "credential_provider_failed");
+  if (reply.kind === "ok" && reply.exit !== 0) throw new BrowseError(`Credential provider ${name} returned an error`, null, "credential_provider_failed");
+  if (reply.kind !== "ok" || reply.success !== true) throw malformed(name);
   const data = reply.data;
   if (!(data instanceof Map)) throw malformed(name);
   const password = data.get("password");
-  if (typeof password !== "string" || password === "") throw new BrowseError(`Credential provider ${name} returned no password for ${item}`, null, "credential_provider_failed");
+  if (typeof password !== "string" || password === "" || codePoints(password).length > MAX_FIELD) throw malformed(name);
   const creds: Record<string, string> = Object.create(null);
   creds["password"] = password;
   for (const field of CREDENTIAL_TEXT_FIELDS) {
+    if (!data.has(field)) continue;
     const value = data.get(field);
-    if (value === undefined || value === null) continue;
     if (typeof value !== "string") throw malformed(name);
+    const usable = field === "url" ? usableUrl(value) : usableText(value, field === "username");
+    if (!usable) throw malformed(name);
     creds[field] = value;
   }
   return creds;

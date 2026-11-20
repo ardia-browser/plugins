@@ -1,5 +1,4 @@
 import { type Value } from "../../json.ts";
-import { hostnameOf, portOf, urlsplit } from "../../pylib/urllib.ts";
 import { codePoints } from "../../pystr.ts";
 import { addSecret } from "../../redact.ts";
 import { plainParams } from "../cdp/params.ts";
@@ -7,18 +6,21 @@ import { navigate } from "../commands/core.ts";
 import type { Ctx } from "../commands/ctx.ts";
 import { register } from "../commands/index.ts";
 import { parse } from "../commands/parse.ts";
-import { BrowseError, Usage } from "../daemon-errors.ts";
+import { BrowseError, ConnectionLost, Usage } from "../daemon-errors.ts";
+import { Cancelled } from "../cdp/cancel.ts";
 import { Result } from "../daemon/render.ts";
 import { browseDir, checkName, closeFd, listNames, openPrivateDirAt, readPrivateJson, unlinkQuietly, writePrivateJson } from "../paths.ts";
 import { pyValue } from "../daemon/render.ts";
 import type { Element, Page } from "../state/page.ts";
 import { waitUntil } from "../state/wait.ts";
 import { credential } from "./providers.ts";
+import { LOOPBACK_HOSTS, originOf } from "./origin.ts";
+
+export { LOOPBACK_HOSTS, originOf };
 import { run, RunTimedOut, SpawnFailed } from "./run.ts";
 
 export const SECURITY = "/usr/bin/security";
 export const SERVICE = "dev.ardia.browse.auth";
-export const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 export const SECURITY_TIMEOUT = 20;
 export const tools = { security: SECURITY, timeout: SECURITY_TIMEOUT };
 
@@ -72,15 +74,6 @@ export async function deleteSecret(name: string): Promise<void> {
   await security(["delete-generic-password", "-a", name, "-s", SERVICE, ...keychainArgs()]);
 }
 
-export function originOf(url: string): string {
-  const parts = urlsplit(url);
-  const host = (hostnameOf(parts.netloc) ?? "").toLowerCase();
-  if (parts.scheme === "https" || (parts.scheme === "http" && LOOPBACK_HOSTS.has(host))) {
-    const port = portOf(parts.netloc);
-    return `${parts.scheme}://${host}${port ? `:${port}` : ""}`;
-  }
-  throw new BrowseError(`A credential is bound to https origins (http only for localhost); ${url} isn't one`);
-}
 
 export function authDir(root: string): number {
   const browse = browseDir(root);
@@ -221,6 +214,7 @@ export async function login(ctx: Ctx, argv: string[]): Promise<Result> {
   if (root === null) throw new BrowseError("This session has no data folder for auth profiles");
   let meta: Meta;
   let password: string | null;
+  const providerName = (options["credential_provider"] as string | undefined) || null;
   if (options["credential_provider"]) {
     const creds = await credential(root, options["credential_provider"] as string, (options["item"] as string | undefined) || name, (options["url"] as string | undefined) ?? null);
     const url = (options["url"] as string | undefined) || creds["url"];
@@ -240,76 +234,90 @@ export async function login(ctx: Ctx, argv: string[]): Promise<Result> {
     password = await readSecret(name, Boolean(meta["utf8"]));
     addSecret(password);
   }
-  for (const key of ["username_selector", "password_selector", "submit_selector"]) {
-    const camel = `${key.split("_")[0]}Selector`;
-    if (options[key]) meta[camel] = options[key];
-  }
-  const humanize = ctx.humanize && !options["no_humanize"];
-  const origins = new Set<string>(meta["origins"]);
-  const page = await currentOrNew(ctx);
-  await page.refreshFrames();
-  if (!origins.has(originOfFrame(page, page.mainFrame) ?? "")) await navigate(ctx, page, meta["url"]);
-  const passwordSelector = meta["passwordSelector"] || "input[type=password]";
-  const passwordField = async (): Promise<Element | null> => {
-    let found: [Page, Element];
-    try {
-      found = await ctx.state.locate(passwordSelector, page);
-    } catch (error) {
-      if (error instanceof BrowseError) return null;
-      throw error;
+  const finish = async (): Promise<Result> => {
+    for (const key of ["username_selector", "password_selector", "submit_selector"]) {
+      const camel = `${key.split("_")[0]}Selector`;
+      if (options[key]) meta[camel] = options[key];
     }
-    const [foundPage, element] = found;
-    const visible = await foundPage.call("(el) => ardiaBrowse.visible(el)", [element], { frame: element.frame });
-    return visible ? element : null;
-  };
-  const passwordElement = (await waitUntil(passwordField, ctx.timeout, 0.2, "the password field")) as Element;
-  let usernameElement: Element | null = null;
-  if (meta["username"]) {
-    if (meta["usernameSelector"]) usernameElement = (await ctx.state.locate(meta["usernameSelector"], page))[1];
-    else {
-      const remote = await page.call(USERNAME_FIELD, [passwordElement], { frame: passwordElement.frame, byValue: false });
-      usernameElement = await page.elementFrom(remote, passwordElement.frame, "the username field");
-    }
-  }
-  await page.refreshFrames();
-  const frame = passwordElement.frame;
-  const expected = [page.loader(page.mainFrame), page.loader(frame)];
-  const frameOrigin = originOfFrame(page, frame);
-  const topOrigin = originOfFrame(page, page.mainFrame);
-  if (!origins.has(frameOrigin ?? "") || !origins.has(topOrigin ?? "")) {
-    throw new BrowseError(
-      `Refusing to type ${name}'s credentials: the page is ${topOrigin || "unknown"}` +
-        `${frame === page.mainFrame ? "" : ` with the field in ${frameOrigin ?? "None"}`}, not ${[...origins].sort().join(", ")}`,
-    );
-  }
-  const navigations = page.navigations;
-  const makeGuard =
-    (element: Element): Guard =>
-    async () => {
-      await page.refreshFrames();
-      if (page.navigations !== navigations || page.loader(page.mainFrame) !== expected[0] || page.loader(frame) !== expected[1] || !origins.has(originOfFrame(page, frame) ?? "")) {
-        throw new BrowseError(`Stopped typing ${name}'s credentials: the page navigated or the frame changed`);
+    const humanize = ctx.humanize && !options["no_humanize"];
+    const origins = new Set<string>(meta["origins"]);
+    const page = await currentOrNew(ctx);
+    await page.refreshFrames();
+    if (!origins.has(originOfFrame(page, page.mainFrame) ?? "")) await navigate(ctx, page, meta["url"]);
+    const passwordSelector = meta["passwordSelector"] || "input[type=password]";
+    const passwordField = async (): Promise<Element | null> => {
+      let found: [Page, Element];
+      try {
+        found = await ctx.state.locate(passwordSelector, page);
+      } catch (error) {
+        if (error instanceof BrowseError) return null;
+        throw error;
       }
-      const focused = await page.call("(el) => document.activeElement === el || el.contains(document.activeElement)", [element], { frame });
-      if (!focused) throw new BrowseError(`Stopped typing ${name}'s credentials: focus left the field`);
-      if (frame !== page.mainFrame) {
-        const owner = Number((await page.send("DOM.getFrameOwner", { frameId: frame }))["backendNodeId"]);
-        const ownerElement = await page.resolveBackend(owner, page.mainFrame as string, "the field's frame");
-        const topFocus = ownerElement !== null && (await page.call("(el) => document.activeElement === el", [ownerElement], { frame: page.mainFrame }));
-        if (!topFocus) throw new BrowseError(`Stopped typing ${name}'s credentials: focus left the field's frame`);
-      }
+      const [foundPage, element] = found;
+      const visible = await foundPage.call("(el) => ardiaBrowse.visible(el)", [element], { frame: element.frame });
+      return visible ? element : null;
     };
+    const passwordElement = (await waitUntil(passwordField, ctx.timeout, 0.2, "the password field")) as Element;
+    let usernameElement: Element | null = null;
+    if (meta["username"]) {
+      if (meta["usernameSelector"]) usernameElement = (await ctx.state.locate(meta["usernameSelector"], page))[1];
+      else {
+        const remote = await page.call(USERNAME_FIELD, [passwordElement], { frame: passwordElement.frame, byValue: false });
+        usernameElement = await page.elementFrom(remote, passwordElement.frame, "the username field");
+      }
+    }
+    await page.refreshFrames();
+    const frame = passwordElement.frame;
+    const expected = [page.loader(page.mainFrame), page.loader(frame)];
+    const frameOrigin = originOfFrame(page, frame);
+    const topOrigin = originOfFrame(page, page.mainFrame);
+    if (!origins.has(frameOrigin ?? "") || !origins.has(topOrigin ?? "")) {
+      throw new BrowseError(
+        `Refusing to type ${name}'s credentials: the page is ${topOrigin || "unknown"}` +
+          `${frame === page.mainFrame ? "" : ` with the field in ${frameOrigin ?? "None"}`}, not ${[...origins].sort().join(", ")}`,
+      );
+    }
+    const navigations = page.navigations;
+    const makeGuard =
+      (element: Element): Guard =>
+      async () => {
+        await page.refreshFrames();
+        if (page.navigations !== navigations || page.loader(page.mainFrame) !== expected[0] || page.loader(frame) !== expected[1] || !origins.has(originOfFrame(page, frame) ?? "")) {
+          throw new BrowseError(`Stopped typing ${name}'s credentials: the page navigated or the frame changed`);
+        }
+        const focused = await page.call("(el) => document.activeElement === el || el.contains(document.activeElement)", [element], { frame });
+        if (!focused) throw new BrowseError(`Stopped typing ${name}'s credentials: focus left the field`);
+        if (frame !== page.mainFrame) {
+          const owner = Number((await page.send("DOM.getFrameOwner", { frameId: frame }))["backendNodeId"]);
+          const ownerElement = await page.resolveBackend(owner, page.mainFrame as string, "the field's frame");
+          const topFocus = ownerElement !== null && (await page.call("(el) => document.activeElement === el", [ownerElement], { frame: page.mainFrame }));
+          if (!topFocus) throw new BrowseError(`Stopped typing ${name}'s credentials: focus left the field's frame`);
+        }
+      };
+    try {
+      if (usernameElement !== null) await actions.typeInto(page, usernameElement, frame, String(meta["username"]), humanize, makeGuard(usernameElement));
+      await actions.typeInto(page, passwordElement, frame, password as string, humanize, makeGuard(passwordElement));
+    } finally {
+      password = null;
+    }
+    if (meta["submitSelector"]) {
+      const [, submit] = await ctx.state.locate(meta["submitSelector"], page);
+      await actions.click(page, submit, humanize);
+    } else await actions.pressEnter(page, frame, humanize);
+    return new Result({ name, loggedIn: true, url: page.url }, `✓ Logged in as ${meta["username"] || name}`);
+  };
+  if (!providerName) return finish();
+  const supplied = [meta["url"], ...meta["origins"], meta["username"], meta["usernameSelector"], meta["passwordSelector"], meta["submitSelector"]].filter(
+    (value): value is string => typeof value === "string" && value !== "" && value !== name,
+  );
   try {
-    if (usernameElement !== null) await actions.typeInto(page, usernameElement, frame, String(meta["username"]), humanize, makeGuard(usernameElement));
-    await actions.typeInto(page, passwordElement, frame, password as string, humanize, makeGuard(passwordElement));
-  } finally {
-    password = null;
+    return await finish();
+  } catch (error) {
+    if (error instanceof Cancelled || error instanceof ConnectionLost) throw error;
+    const said = error instanceof BrowseError ? JSON.stringify([error.text, error.data ?? null]) : "";
+    if (error instanceof BrowseError && !supplied.some((value) => said.includes(value))) throw error;
+    throw new BrowseError(`Credential provider ${providerName} named a page or field this session couldn't use`, null, error instanceof BrowseError ? (error.code ?? "credential_provider_failed") : "credential_provider_failed");
   }
-  if (meta["submitSelector"]) {
-    const [, submit] = await ctx.state.locate(meta["submitSelector"], page);
-    await actions.click(page, submit, humanize);
-  } else await actions.pressEnter(page, frame, humanize);
-  return new Result({ name, loggedIn: true, url: page.url }, `✓ Logged in as ${meta["username"] || name}`);
 }
 
 register("auth", (ctx, argv) => login(ctx, argv));
