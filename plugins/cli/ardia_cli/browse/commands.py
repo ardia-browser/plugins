@@ -12,6 +12,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from ardia_cli.browse import actions, changes, rawcdp, snapshot
+from ardia_cli.browse.limits import MAX_GIVEN
 from ardia_cli.browse.errors import BrowseError, ConnectionLost, Gated, OutcomeUnknown, Usage
 from ardia_cli.browse.state import parse_ref, wait_until
 
@@ -1053,6 +1054,9 @@ async def cmd_wait(ctx: Ctx, argv):
         {"-t": "--text", "-u": "--url", "-l": "--load", "-f": "--fn"},
     )
     timeout = float(options["timeout"]) / 1000 if options.get("timeout") else ctx.timeout
+    plain = not options and args and re.fullmatch(r"\d+(\.\d+)?", args[0])
+    if (options.get("timeout") and timeout > MAX_GIVEN) or (plain and float(args[0]) / 1000 > MAX_GIVEN):
+        raise Usage(f"waits are capped at one day ({int(MAX_GIVEN * 1000)} ms); wait again for longer")
     if options.get("download"):
         path = ctx.path(args[0]) if args else None
         saved = await wait_download(ctx, None, path, timeout)

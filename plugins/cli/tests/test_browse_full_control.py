@@ -739,6 +739,19 @@ class CheckedBeforeConnecting(unittest.TestCase):
         self.assertEqual(limits.answer_deadline({"argv": ["wait", "86400000"]}), 300 + 86430 + 30)
         self.assertEqual(limits.answer_deadline({"argv": ["script", "--timeout", "1440m"]}), 172860)
 
+    def test_a_wait_past_the_one_day_cap_is_refused_up_front(self):
+        from ardia_cli.browse import limits
+
+        def wait(*argv):
+            return asyncio.run(asyncio.wait_for(commands.COMMANDS["wait"](commands.Ctx(FakeState(), {}, os.getcwd(), {}, None, "wait"), list(argv)), 1))
+
+        for argv in (["172800000"], ["86400001"], ["--text", "x", "--timeout", "172800000"], ["--download", "--timeout", "86400001"]):
+            with self.assertRaises(Usage) as refused:
+                wait(*argv)
+            self.assertIn("waits are capped at one day", refused.exception.message, argv)
+        self.assertEqual(wait("1").data, {"ms": 1, "waited": "timeout"})
+        self.assertEqual(limits.MAX_GIVEN, 86400)
+
     def test_an_unbounded_deadline_is_capped_above_the_daemons_budget(self):
         import math
         import socket as sockets
