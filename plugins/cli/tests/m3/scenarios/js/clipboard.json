@@ -1,0 +1,10 @@
+{
+ "divergences": ["eval-isolated"],
+ "steps": [
+  {"argv": ["open", "{fixture}/form.html", "--no-changes"], "session": "clip"},
+  {"argv": ["clipboard", "write", "hello", "d7"], "session": "clip"},
+  {"argv": ["clipboard", "read"], "session": "clip"},
+  {"argv": ["clipboard", "frob"], "session": "clip"},
+  {"argv": ["clipboard"], "session": "clip"}
+ ]
+}

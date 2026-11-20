@@ -22,7 +22,41 @@ DIVERGENCES = {
               "Page.createIsolatedWorld first when that world isn't known for the current document",
         "why": "a main-world evaluation is visible to the page (ardia#2812 row 8); the isolated world shares the document but not its JS",
     },
+    "eval-isolated": {
+        "row": 9,
+        "commands": "eval (without --main-world)",
+        "python": 'Runtime.evaluate {"expression": <script>, "returnByValue": true, "awaitPromise": true, "userGesture": false} on the '
+                  "page session, in the page's main world",
+        "ts": 'Runtime.callFunctionOn {"functionDeclaration": "function (source) { return (0, eval)(source); }", "objectId": '
+              '<the ardia-browse world>, "arguments": [{"value": <script>}], "returnByValue": true, "awaitPromise": true, "userGesture": false}',
+        "why": "a main-world evaluation leaves globals and stack frames the page can see (ardia#2812 rows 8 and 9); the isolated world "
+               "shares the document but not its JavaScript. `eval --main-world` keeps the old way for code that needs the page's globals",
+    },
+    "script-isolated": {
+        "row": 9,
+        "commands": "script (its controller in the temporary tab)",
+        "python": 'Runtime.evaluate {"expression": <CONTROLLER>, "returnByValue": false, "awaitPromise": true} in the controller tab\'s '
+                  "main world",
+        "ts": "Page.createIsolatedWorld and the library in the controller tab, then Runtime.callFunctionOn "
+              '{"functionDeclaration": "function () { return (<CONTROLLER>); }", "objectId": <the ardia-browse world>, "arguments": [], '
+              '"returnByValue": false, "awaitPromise": true}; the worker and every later controller call are the same. In this scenario '
+              "Page.createIsolatedWorld and the library evaluation aren't compared on either side (core/* compares them)",
+        "why": "the controller's global and its worker live in the isolated world, so nothing the script machinery defines is visible "
+               "to a page (ardia#2812 row 9)",
+    },
+    "temp-tab-marker": {
+        "row": None,
+        "commands": "anything that opens a temporary tab (script's controller, read's readers, flow run's page tier)",
+        "python": 'Target.createTarget {"url": "about:blank", "background": true}',
+        "ts": 'Target.createTarget {"url": "about:blank#ardia-temp-<nonce>", "background": true}',
+        "why": "D2's temporary tabs carry a nonce so a daemon that dies mid-create leaves a tab the next sweep can find by its URL; "
+               "this is D2's change, not an ardia#2812 row, and needs its accepted-difference entry",
+    },
 }
+
+TEMP_MARKER = "about:blank#ardia-temp-"
+ISOLATED_EVAL = "function (source) { return (0, eval)(source); }"
+SCRIPT_CONTROLLER_HEAD = "\n(() => {\n  if (globalThis.__ardiaScript) return globalThis.__ardiaScript;"
 
 UNANSWERING_FAULTS = ("drop", "stop")
 PAGE_SESSION_ENABLES = ("Runtime.enable", "Debugger.enable", "Console.enable")
@@ -36,6 +70,18 @@ def daemon_of(impl: str) -> str:
 
 def busy_probe(message: dict) -> bool:
     return message.get("method") == "Runtime.evaluate" and (message.get("params") or {}).get("expression") == BUSY_PROBE
+
+
+def main_world_eval(message: dict) -> bool:
+    params = message.get("params") or {}
+    return (message.get("method") == "Runtime.evaluate" and "contextId" not in params and params.get("userGesture") is False
+            and params.get("returnByValue") is True and params.get("awaitPromise") is True)
+
+
+def library() -> str:
+    from ardia_cli.browse.js import LIBRARY
+
+    return LIBRARY
 
 
 def names_for(scenario: dict, fault=None) -> list[str]:
@@ -84,6 +130,19 @@ class Rewriter:
                 kept = {name: value for name, value in params.items()
                         if name != "executionContextId" and not (name == "objectId" and value in self.handles)}
                 message = {**message, "params": kept}
+        if "eval-isolated" in self.names and main_world_eval(message):
+            message = {**message, "method": "Runtime.callFunctionOn", "params": {
+                "functionDeclaration": ISOLATED_EVAL, "arguments": [{"value": params.get("expression")}], "returnByValue": True,
+                "awaitPromise": True, "userGesture": False}}
+        if "script-isolated" in self.names:
+            if method == "Page.createIsolatedWorld" or (method == "Runtime.evaluate" and params.get("expression") == library()):
+                return None
+            if method == "Runtime.evaluate" and str(params.get("expression") or "").startswith(SCRIPT_CONTROLLER_HEAD):
+                message = {**message, "method": "Runtime.callFunctionOn", "params": {
+                    "functionDeclaration": f"function () {{ return ({params['expression']}); }}", "arguments": [], "returnByValue": False,
+                    "awaitPromise": True}}
+        if "temp-tab-marker" in self.names and method == "Target.createTarget" and str(params.get("url") or "").startswith(TEMP_MARKER):
+            message = {**message, "params": {**params, "url": "about:blank"}}
         if "busy-probe-isolated" in self.names and busy_probe(message):
             message = {**message, "params": {name: value for name, value in params.items() if name != "contextId"}}
         return message

@@ -1,7 +1,7 @@
 import { dumps, Float, type JsonObject, quote, type Value } from "../../json.ts";
 import { isSpace, strip } from "../../py.ts";
 import { codePoints } from "../../pystr.ts";
-import { MAX_INT_DIGITS } from "../../pylib/str.ts";
+import { MAX_INT_DIGITS, PyException } from "../../pylib/str.ts";
 
 export const MAX_STDIN_PARAMS = 1024 * 1024;
 export const MAX_PARAMS_DEPTH = 64;
@@ -46,6 +46,7 @@ class Scanner {
   constructor(
     readonly points: readonly string[],
     readonly what: string,
+    readonly strict = true,
   ) {}
 
   fail(message: string, at: number): never {
@@ -67,9 +68,9 @@ class Scanner {
     if (point === "n" && this.word(at, "null")) return [null, at + 4];
     if (point === "t" && this.word(at, "true")) return [true, at + 4];
     if (point === "f" && this.word(at, "false")) return [false, at + 5];
-    if (point === "N" && this.word(at, "NaN")) this.constant("NaN");
-    if (point === "I" && this.word(at, "Infinity")) this.constant("Infinity");
-    if (point === "-" && this.word(at + 1, "Infinity")) this.constant("-Infinity");
+    if (point === "N" && this.word(at, "NaN")) return this.constant("NaN", at);
+    if (point === "I" && this.word(at, "Infinity")) return this.constant("Infinity", at);
+    if (point === "-" && this.word(at + 1, "Infinity")) return this.constant("-Infinity", at);
     return this.number(at);
   }
 
@@ -88,8 +89,10 @@ class Scanner {
     return true;
   }
 
-  constant(name: string): never {
-    throw new ParamsError(`${this.what} has ${name}, which isn't JSON`);
+  constant(name: string, at: number): [Value, number] {
+    if (this.strict) throw new ParamsError(`${this.what} has ${name}, which isn't JSON`);
+    const value = name === "NaN" ? Number.NaN : name.startsWith("-") ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
+    return [new Float(value), at + name.length];
   }
 
   number(at: number): [Value, number] {
@@ -117,10 +120,17 @@ class Scanner {
     const literal = this.points.slice(at, index).join("");
     if (float) {
       const parsed = Number(literal);
+      if (!this.strict) return [new Float(parsed), index];
       if (!Number.isFinite(parsed)) throw new ParamsError(`${this.what} has the number ${literal.slice(0, 24)}, which is too large for JSON`);
       return [new Float(parsed), index];
     }
     const digits = literal.startsWith("-") ? literal.length - 1 : literal.length;
+    if (digits > MAX_INT_DIGITS && !this.strict) {
+      throw new PyException(
+        "ValueError",
+        `Exceeds the limit (${MAX_INT_DIGITS} digits) for integer string conversion: value has ${digits} digits; use sys.set_int_max_str_digits() to increase the limit`,
+      );
+    }
     if (digits > MAX_INT_DIGITS) {
       throw new ParamsError(
         `${this.what} isn't valid JSON (Exceeds the limit (${MAX_INT_DIGITS} digits) for integer string conversion: value has ${digits} digits; ` +
@@ -128,6 +138,7 @@ class Scanner {
       );
     }
     const integer = BigInt(literal);
+    if (!this.strict) return [integer, index];
     if (!Number.isFinite(Number(integer))) throw new ParamsError(`${this.what} has the number ${literal.slice(0, 24)}…, which is too large for JSON`);
     return [integer, index];
   }
@@ -197,7 +208,7 @@ class Scanner {
     }
     const found: JsonObject = new Map();
     for (const [key, value] of pairs) {
-      if (found.has(key)) throw new ParamsError(`${this.what} has the key ${quote(key, true)} twice`);
+      if (found.has(key) && this.strict) throw new ParamsError(`${this.what} has the key ${quote(key, true)} twice`);
       found.set(key, value);
     }
     return [found, index + 1];
@@ -277,6 +288,22 @@ export function strictJson(text: string, what: string, depth = 0): Value {
   }
   checked(value, what, depth);
   return value;
+}
+
+export function pyLoads(text: string): Value {
+  const points = codePoints(text);
+  const scanner = new Scanner(points, "", false);
+  try {
+    if (points[0] === "\ufeff") scanner.fail("Unexpected UTF-8 BOM (decode using utf-8-sig)", 0);
+    const [parsed, end] = scanner.value(scanner.space(0));
+    const rest = scanner.space(end);
+    if (rest !== points.length) scanner.fail("Extra data", rest);
+    return parsed;
+  } catch (error) {
+    if (error instanceof TooDeep) throw new PyException("RecursionError", "maximum recursion depth exceeded while decoding a JSON document");
+    if (error instanceof DecodeError) throw new PyException("JSONDecodeError", error.describe());
+    throw error;
+  }
 }
 
 export function readParamsStdin(stdin: string): string {

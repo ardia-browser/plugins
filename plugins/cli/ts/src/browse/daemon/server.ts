@@ -5,6 +5,7 @@ import { type Value } from "../../json.ts";
 import { armWatchdog, disarmWatchdog, peerUid, removeDirAt, renameExclusiveAt } from "../../libc.ts";
 import { codeOf, uid } from "../../paths.ts";
 import { formatG, roundHalfEven } from "../../pylib/format.ts";
+import { PyException } from "../../pylib/str.ts";
 import { Cancelled, currentSignal, withSignal } from "../cdp/cancel.ts";
 import { BrowseError, ConnectionLost, Unreachable } from "../daemon-errors.ts";
 import { type Endpoint, EndpointError, resolve } from "../endpoint.ts";
@@ -443,6 +444,7 @@ export class Daemon {
       this.state.notice = null;
       if (this.state.connected) await this.state.announceCaller(this.state.endpoint);
       this.closeAfterBatch = false;
+      this.state.topCommand = name;
       this.running = { name, since: monotonic() };
       const limit = commandLimit(name, words, ctx.timeout);
       answer = await this.withinLimit(limit, options, name, () => this.answer(ctx, name, words, options));
@@ -518,7 +520,7 @@ export class Daemon {
       }
       log.exception(`command ${name} crashed`, thrown);
       reportException(thrown, "browse_daemon", { dataRoot: this.config.dataRoot, testEndpoint: Boolean(this.config.ws || this.config.port) });
-      const type = thrown instanceof Error ? thrown.name : "Error";
+      const type = thrown instanceof PyException ? thrown.type : thrown instanceof Error ? thrown.name : "Error";
       const said = thrown instanceof Error ? thrown.message : String(thrown);
       return render(options, null, new BrowseError(`${name} failed: ${type}: ${said}`), name);
     }

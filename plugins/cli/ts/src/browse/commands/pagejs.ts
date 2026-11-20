@@ -1,4 +1,5 @@
 import { formatG } from "../../pylib/format.ts";
+import { PyException } from "../../pylib/str.ts";
 import { PY_SPACE_CLASS } from "../../pylib/re.ts";
 import { isWordCode } from "../../pylib/unicode.ts";
 import { isSpace, strip } from "../../py.ts";
@@ -20,7 +21,7 @@ import { need, parse } from "./parse.ts";
 export const EVAL_TIMEOUT = 60.0;
 export const ISOLATED_EVAL = "function (source) { return (0, eval)(source); }";
 const S = `[${PY_SPACE_CLASS}]`;
-const UNQUOTED_ATTRIBUTE = /\[[^\]"'=]+=[^\]"']*[\t\n\v\f\r\x1c-\x1f \x85\xa0  -     　/:.,;][^\]"']*\]/u;
+const UNQUOTED_ATTRIBUTE = new RegExp(`\\[[^\\]"'=]+=[^\\]"']*[${PY_SPACE_CLASS}/:.,;][^\\]"']*\\]`, "u");
 const SELECTOR_CALL = new RegExp(`\\b(querySelectorAll|querySelector|closest|matches)\\(${S}*(['"])((?:\\\\.|(?!\\2).)*)\\2`, "gu");
 const UNQUOTED_VALUE = new RegExp(
   `\\[${S}*([^${PY_SPACE_CLASS}~|^$*!=\\]"']+)${S}*([~|^$*]?=)${S}*([^"'\\\\\\]${PY_SPACE_CLASS}][^\\]]*?)(${S}+[iIsS])?${S}*\\]`,
@@ -29,7 +30,9 @@ const UNQUOTED_VALUE = new RegExp(
 const FETCHING = new RegExp(`\\bfetch${S}*\\(|\\bXMLHttpRequest\\b|\\bnew${S}+DOMParser\\b|\\bwindow\\.open${S}*\\(`, "u");
 const PAGE_GLOBAL_MISSING = /ReferenceError: ([A-Za-z_$][\w$]*) is not defined/u;
 const STALE_CONTEXT = ["Cannot find context", "Execution context was destroyed", "Cannot find default execution context", "Inspected target navigated", "Could not find object with given id"];
-const WRAPPER_FRAME = /eval \(eval at [^\n]*?\), (<anonymous>:\d+:\d+)\)/gu;
+const TOP_FRAME = /at eval \(eval at <anonymous> \(:1:\d+\), (<anonymous>:\d+:\d+)\)/gu;
+const INNER_FRAME = /\(eval at <anonymous> \(:1:\d+\), (<anonymous>:\d+:\d+)\)/gu;
+const WRAPPER_TAIL = /\n {4}at eval \(<anonymous>\)\n {4}at <anonymous>:1:\d+$/u;
 export const FETCH_HINT =
   "→ tip: to read other pages, `ardia browse read <url> <url>…` (or `read --links <pattern>` for this page's links) reads " +
   "them in one call, through your logins and after their scripts run; `ardia browse script` loops over pages with clicks and fills";
@@ -76,7 +79,7 @@ function remoteValue(result: CdpResult): unknown {
 }
 
 function evaluationError(description: string, isolated: boolean): BrowseError {
-  let text = isolated ? description.replace(WRAPPER_FRAME, "$1").replace(/\n {4}at <anonymous>:1:\d+$/u, "") : description;
+  let text = isolated ? description.replace(TOP_FRAME, "at $1").replace(INNER_FRAME, "($1)").replace(WRAPPER_TAIL, "") : description;
   if (text.includes("is not a valid selector") && UNQUOTED_ATTRIBUTE.test(text)) {
     text +=
       '\n  An attribute value with spaces or punctuation needs quotes in CSS: a[href*="/path/"], ' +
@@ -167,15 +170,19 @@ export async function cmdEval(ctx: Ctx, argv: string[]): Promise<Result> {
 }
 
 function decodeBase64(text: string): string {
-  const clean = text.replace(/[^A-Za-z0-9+/=]/gu, "");
-  if (clean.replace(/=+$/u, "").length % 4 === 1) throw new BrowseError("Invalid base64-encoded string: number of data characters cannot be 1 more than a multiple of 4");
-  if (/=[^=]/u.test(clean) || (clean.length % 4 !== 0 && clean.includes("="))) throw new BrowseError("Incorrect padding");
-  if (clean.length % 4 !== 0) throw new BrowseError("Incorrect padding");
-  const bytes = Buffer.from(clean, "base64");
+  const data = text.replace(/[^A-Za-z0-9+/]/gu, "");
+  if (data.length % 4 === 1) {
+    throw new PyException("Error", `Invalid base64-encoded string: number of data characters (${data.length}) cannot be 1 more than a multiple of 4`);
+  }
+  const padded = text.replace(/[^A-Za-z0-9+/=]/gu, "");
+  const needed = (4 - (data.length % 4)) % 4;
+  const tail = padded.slice(padded.search(/=|$/u));
+  if (needed > 0 && tail.length < needed) throw new PyException("Error", "Incorrect padding");
+  const bytes = Buffer.from(data, "base64");
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   } catch {
-    throw new BrowseError("'utf-8' codec can't decode the script: it isn't UTF-8");
+    throw new PyException("UnicodeDecodeError", "'utf-8' codec can't decode the script's bytes: invalid UTF-8");
   }
 }
 
@@ -234,7 +241,7 @@ export async function cmdClipboard(ctx: Ctx, argv: string[]): Promise<Result> {
     const origin = (page.mainFrame === null ? undefined : page.frames.get(page.mainFrame)?.origin) ?? null;
     await ctx.state.browser?.send("Browser.grantPermissions", { origin, permissions: CLIPBOARD_PERMISSIONS });
     if (action === "read") {
-      const text = await page.call("() => navigator.clipboard.readText()", [], { frame: page.mainFrame, timeout: EVAL_TIMEOUT });
+      const text = await evaluateIsolated(page, "navigator.clipboard.readText()");
       return new Result({ text }, String(text ?? ""), true);
     }
     if (action === "write") {

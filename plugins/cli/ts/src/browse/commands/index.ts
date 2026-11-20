@@ -70,6 +70,7 @@ export const OWNERS: Readonly<Record<string, string>> = {
   screenshot: "D6",
   pdf: "D6",
   auth: "D7",
+  cdp: "D7",
 };
 
 export type Step = unknown;
