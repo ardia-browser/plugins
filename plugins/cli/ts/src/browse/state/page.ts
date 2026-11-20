@@ -1,6 +1,6 @@
 import { formatG } from "../../pylib/format.ts";
 import { type Browser, type CdpResult, DETACH_WAIT, isMutation } from "../cdp/browser.ts";
-import { Cancelled, currentSignal, sleep } from "../cdp/cancel.ts";
+import { Cancelled, currentSignal, sleep, untilCancelled } from "../cdp/cancel.ts";
 import { BrowseError, CdpError, CdpTimeout, ConnectionLost, Gated, NotFocusable, OutcomeUnknown, PageBusy } from "../daemon-errors.ts";
 import { LIBRARY, PAGE_FOCUS_INSIDE } from "../js/index.ts";
 import { flag } from "../metrics.ts";
@@ -127,6 +127,7 @@ export class Page {
   unansweredAt = 0;
   private readonly calls = new Set<AbortController>();
   private restoring: { session: string; done: Set<string> } | null = null;
+  private readonly creating = new Map<string, { loader: string | null; made: Promise<World> }>();
 
   constructor(
     readonly state: State,
@@ -449,22 +450,46 @@ export class Page {
     const loader = this.loader(frame);
     const cached = this.worlds.get(frame);
     if (cached && cached[0] === loader) return { frame, loader, context: cached[1], handle: cached[2] };
+    const shared = this.creating.get(frame);
+    if (shared && shared.loader === loader) {
+      try {
+        return await untilCancelled(shared.made);
+      } catch (error) {
+        if (!(error instanceof Cancelled) || currentSignal()?.aborted) throw error;
+      }
+    }
+    const made = this.createWorld(frame, loader);
+    this.creating.set(frame, { loader, made });
+    made.catch(() => {});
+    try {
+      return await made;
+    } finally {
+      if (this.creating.get(frame)?.made === made) this.creating.delete(frame);
+    }
+  }
+
+  private async createWorld(frame: string, loader: string | null): Promise<World> {
     const fresh = () => this.frames.has(frame) && this.loader(frame) === loader;
     const guard = () => {
       if (!fresh()) throw new StaleWorld();
     };
-    const result = await this.send("Page.createIsolatedWorld", { frameId: frame, worldName: WORLD_NAME });
-    const context = Number(result["executionContextId"]);
-    guard();
-    await this.send("Runtime.evaluate", { expression: LIBRARY, contextId: context, returnByValue: true }, { guard });
-    guard();
-    const handle = record(record((await this.send("Runtime.evaluate", { expression: WORLD_HANDLE, contextId: context, returnByValue: false }, { guard }))["result"]))["objectId"];
-    guard();
-    if (typeof handle !== "string" || !handle) throw new StaleWorld();
-    await this.refreshFrames();
-    guard();
-    this.worlds.set(frame, [loader, context, handle]);
-    return { frame, loader, context, handle };
+    try {
+      const result = await this.send("Page.createIsolatedWorld", { frameId: frame, worldName: WORLD_NAME });
+      const context = Number(result["executionContextId"]);
+      guard();
+      await this.send("Runtime.evaluate", { expression: LIBRARY, contextId: context, returnByValue: true }, { guard });
+      guard();
+      const handle = record(record((await this.send("Runtime.evaluate", { expression: WORLD_HANDLE, contextId: context, returnByValue: false }, { guard }))["result"]))["objectId"];
+      guard();
+      if (typeof handle !== "string" || !handle) throw new StaleWorld();
+      await this.refreshFrames();
+      guard();
+      this.worlds.set(frame, [loader, context, handle]);
+      return { frame, loader, context, handle };
+    } catch (error) {
+      if (error instanceof CdpError && STALE_CONTEXT.some((marker) => error.cdpMessage.includes(marker))) throw new StaleWorld();
+      throw error;
+    }
   }
 
   async call(fn: string, args: unknown[] = [], options: CallOptions = {}): Promise<unknown> {
