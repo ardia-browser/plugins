@@ -1,0 +1,143 @@
+#!/usr/bin/env bun
+import fs from "node:fs";
+import { pluginViolations } from "./plugin-rules.ts";
+import { addDaemon, CHROME, CONTRACT, entries, pageTarget, resetPage, startWorld, step, stopWorld, tap, type World } from "./plugin-world.ts";
+
+type Reply = { out: string; err: string; exit: number };
+type Case = { id: string; argv: string[]; daemon: { replies: Reply[] }; intentional?: unknown; cdp_rules?: unknown };
+type Outcome = { id: string; verdict: "pass" | "fail" | "ran" | "designed" | "n/a"; why: string; got?: Reply & { code?: string } };
+
+const PHASES: Record<string, Set<string>> = {
+  "1": new Set(["tab", "snapshot", "click", "fill", "press", "key"]),
+  "2": new Set(["tab", "snapshot", "click", "fill", "press", "key", "get", "type", "scroll", "wait", "find", "is"]),
+};
+const PLACEHOLDER = "✓ Done\n";
+const RECORDED_TARGET = "86AFEE216CB13B62B5F557C8C255568F";
+const RECORDED_LOADER = "BC8D78A4AEFDD527B1433946AF6B12C3";
+const RECORDED_PORT = "63234";
+const CLIENT_ONLY: Record<string, string> = {
+  "review2--4-notice-before-document-changed": "the reply's reconnect notice comes from a control-server restart the harness can't stage",
+  "review2--4-notice-json": "the reply's reconnect notice comes from a control-server restart the harness can't stage",
+  "review2--4-quoted-message-mid-line": "a client rewording case: the reply is staged text",
+  "review--5-same-words-other-code": "a client rewording case: the reply is staged text",
+  "review--7-port-highest": "a client endpoint case: the reply is staged text",
+};
+const AFTER = "the step ran and then the page loaded a new document: F1-early answers document_changed_after (data.ran true), the case's own intentional note";
+const DESIGNED: Record<string, { exit: number; code?: string; err?: string; why: string }> = {
+  "contract--6-after-check-json": { exit: 1, code: "document_changed_after", why: AFTER },
+  "review--5-after-check-text": { exit: 1, code: "document_changed_after", why: AFTER },
+  "contract--1-snapshot-flags": { exit: 1, err: "✗ snapshot --diff compares the whole page, so it takes no -s or -d\n", why: "a client grammar case: --diff with -s and -d is the same usage error Python's daemon gives" },
+  "review2--1-click-button-inline": { exit: 1, err: "✗ --button takes left or right in plugin mode, not --new-tab\n", why: "a client grammar case: --new-tab reached the daemon as --button's value, and plugin mode clicks only left or right" },
+  "contract--8-press-copy": { exit: 77, code: "plugin_refused", why: "ardia#2808's key policy refuses Meta+C, so the daemon refuses it before any key goes out" },
+  "contract--8-press-paste": { exit: 77, code: "plugin_refused", why: "ardia#2808's key policy refuses Meta+V, so the daemon refuses it before any key goes out" },
+  "contract--8-press-undo": { exit: 77, code: "plugin_refused", why: "ardia#2808's key policy refuses Meta+Z, so the daemon refuses it before any key goes out" },
+  "review--4-lease-cdp-error": { exit: 77, code: "plugin_refused", why: "ardia#2808's fixed refusals: an input refused at delivery (lease, scope, departed session) is \"ardia: input isn't allowed for this session\", a policy refusal (77), and clicks go through Ardia.dispatchClick" },
+  "review--4-scope-cdp-error": { exit: 1, code: "tab_out_of_scope", why: "ardia#2808's fixed text for this refusal is \"ardia: tab_out_of_scope: the tab left the plugin's window\"" },
+  "review--4-scope-text": { exit: 1, why: "ardia#2808's fixed text for this refusal is \"ardia: tab_out_of_scope: the tab left the plugin's window\"" },
+  "review2--1-wait-text-takes-fn": { exit: 1, code: "timeout", err: '✗ Timed out after 25000ms waiting for text "--fn"\n', why: "a client grammar case: -t took --fn as its text, which the page never shows, so the wait times out as Python's would" },
+  "review2--1-snapshot-select-dashdash": { exit: 1, code: "not_found", err: "✗ Element not found: --. Verify the selector, role, or name is correct and the element exists in the DOM.\n", why: "a client grammar case: -s took -- as its value (the selector), and no element matches it" },
+};
+const SETUP: Record<string, string[][]> = {
+  "contract--1-wait": [["click", "--", "@e3"]],
+};
+const ENGINE_FAULTS: Record<string, [string, string]> = {
+  "review--4-scope-cdp-error": ["Input.insertText", "ardia: tab_out_of_scope: the tab left the plugin's window"],
+  "review--4-scope-text": ["Input.insertText", "ardia: tab_out_of_scope: the tab left the plugin's window"],
+  "review--4-lease-cdp-error": ["Ardia.dispatchClick", "ardia: input isn't allowed for this session"],
+};
+
+function option(name: string, fallback: string): string {
+  const at = process.argv.indexOf(name);
+  return at > 0 ? (process.argv[at + 1] ?? fallback) : fallback;
+}
+
+function split(argv: string[]): { command: string[]; json: boolean; expect: string | null } {
+  const rest = argv.slice(1);
+  const command: string[] = [];
+  let json = false;
+  let expect: string | null = null;
+  let afterDash = false;
+  for (let index = 0; index < rest.length; index += 1) {
+    const token = rest[index] as string;
+    if (afterDash) command.push(token);
+    else if (token === "--json") json = true;
+    else if (token === "--session") index += 1;
+    else if (token === "--expect-loader") {
+      expect = rest[index + 1] ?? null;
+      index += 1;
+    } else {
+      if (token === "--") afterDash = true;
+      command.push(token);
+    }
+  }
+  return { command, json, expect };
+}
+
+function commandOf(argv: string[]): string {
+  return argv.find((token) => !token.startsWith("-")) ?? "";
+}
+
+async function run(world: World, target: string, item: Case, index: number): Promise<Outcome> {
+  if (Object.hasOwn(CLIENT_ONLY, item.id)) return { id: item.id, verdict: "n/a", why: CLIENT_ONLY[item.id] as string };
+  const { command, json, expect } = split(item.argv);
+  await resetPage(world, target);
+  const { key } = await addDaemon(world, `pending-${index}`);
+  try {
+    const picked = await step(world, ["tab", target], { json: true }, undefined, key);
+    const loader = String((JSON.parse(picked.out) as { data: { loader: string } }).data.loader);
+    await step(world, ["snapshot", "-c"], {}, undefined, key);
+    for (const argv of SETUP[item.id] ?? []) await step(world, argv, {}, undefined, key);
+    const live = (text: string) => text.replaceAll(RECORDED_TARGET, target).replaceAll(RECORDED_LOADER, loader).replaceAll(RECORDED_PORT, String(world.sitePort));
+    const argv = command.map(live);
+    const fault = ENGINE_FAULTS[item.id];
+    if (fault) await tap(world, "fault", { kind: "error", method: fault[0], at: 1, message: fault[1] });
+    const got = await step(world, argv, { json, expect_loader: expect === null ? null : live(expect) }, undefined, key);
+    if (fault) await tap(world, "fault", {});
+    const want = item.daemon.replies[0] as Reply;
+    const wanted = { out: live(want.out), err: live(want.err), exit: want.exit };
+    const same = got.exit === wanted.exit && got.out === wanted.out && got.err === wanted.err;
+    if (same) return { id: item.id, verdict: "pass", why: "the answer equals the recorded reply", got };
+    const designed = DESIGNED[item.id];
+    if (designed !== undefined) {
+      const matches = got.exit === designed.exit && (designed.code === undefined || got.code === designed.code) && (designed.err === undefined || got.err === designed.err);
+      return { id: item.id, verdict: matches ? "designed" : "fail", why: designed.why, got };
+    }
+    if (want.out === PLACEHOLDER && want.err === "" && want.exit === 0) {
+      return { id: item.id, verdict: got.exit === 0 ? "ran" : "fail", why: `the recorded reply is the placeholder ✓ Done; the daemon answered exit ${got.exit}${got.code ? ` (${got.code})` : ""}`, got };
+    }
+    return { id: item.id, verdict: "fail", why: `wanted ${JSON.stringify(wanted)}`, got };
+  } finally {
+    await step(world, ["close"], {}, undefined, key).catch(() => undefined);
+  }
+}
+
+async function main(): Promise<number> {
+  const file = process.argv[2];
+  if (!file || !CHROME) {
+    process.stderr.write("usage: ARDIA_M3_CHROME=<chrome-headless-shell> bun tests/m3/plugin-pending.ts <f1-early.json> [--phase 1|2] [--ports <base>] [--out <file>]\n");
+    return 64;
+  }
+  const phase = PHASES[option("--phase", "1")] as Set<string>;
+  const cases = (JSON.parse(fs.readFileSync(file, "utf8")) as Case[]).filter((item) => phase.has(commandOf(split(item.argv).command)));
+  const world = await startWorld(Number(option("--ports", "9460")), undefined, undefined, CONTRACT);
+  const outcomes: Outcome[] = [];
+  try {
+    const target = await pageTarget(world);
+    for (const [index, item] of cases.entries()) {
+      const outcome = await run(world, target, item, index);
+      outcomes.push(outcome);
+      process.stdout.write(`${outcome.verdict.padEnd(4)} ${outcome.id}: ${outcome.why}${outcome.verdict === "fail" ? `\n     got ${JSON.stringify(outcome.got)}` : ""}\n`);
+    }
+    const violations = pluginViolations(entries(world));
+    process.stdout.write(`tap: ${violations.length} rule violations${violations.length ? ` ${JSON.stringify(violations.slice(0, 5))}` : ""}\n`);
+    const out = option("--out", "");
+    if (out) fs.writeFileSync(out, JSON.stringify({ outcomes, violations }, null, 1));
+    const counts = Object.fromEntries(["pass", "designed", "ran", "fail", "n/a"].map((verdict) => [verdict, outcomes.filter((item) => item.verdict === verdict).length]));
+    process.stdout.write(`${JSON.stringify(counts)} of ${outcomes.length}\n`);
+    return counts["fail"] || violations.length ? 1 : 0;
+  } finally {
+    await stopWorld(world);
+  }
+}
+
+process.exit(await main());

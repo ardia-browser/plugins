@@ -1,0 +1,10 @@
+{
+ "racy_steps": {"steps": [1], "reason": "Chromium answers Page.navigate to chrome://crash either before the renderer dies (navigation_failed) or not at all (outcome_unknown), whichever wins"},
+ "steps": [
+  {"argv": ["open", "{fixture}/login.html", "--no-changes"], "session": "crash"},
+  {"argv": ["open", "chrome://crash", "--no-changes"], "session": "crash"},
+  {"argv": ["get", "title"], "session": "crash"},
+  {"argv": ["open", "{fixture}/auth.html", "--no-changes"], "session": "crash"},
+  {"argv": ["get", "title"], "session": "crash"}
+ ]
+}

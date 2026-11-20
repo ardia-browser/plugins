@@ -6,8 +6,8 @@ import { Cancelled, withSignal } from "../../src/browse/cdp/cancel.ts";
 import { parseConfig } from "../../src/browse/daemon/config.ts";
 import { FifoLock } from "../../src/browse/daemon/lock.ts";
 import { Daemon } from "../../src/browse/daemon/server.ts";
-import { StubPage } from "../../src/browse/daemon/stub/page.ts";
-import { StubState } from "../../src/browse/daemon/stub/state.ts";
+import { Page } from "../../src/browse/state/page.ts";
+import { State } from "../../src/browse/state/state.ts";
 import { ConnectionLost, Gated, OutcomeUnknown } from "../../src/browse/daemon-errors.ts";
 import { EndpointError, portNumber } from "../../src/browse/endpoint.ts";
 import { browseDir, closeFd } from "../../src/browse/paths.ts";
@@ -160,7 +160,7 @@ describe("temporary tabs carry a marker until their answer is known", () => {
   function scene(onCreate: (url: string) => Promise<unknown>) {
     const found = fresh();
     const dir = browseDir(found.data);
-    const state = new StubState({ session: "s", key: "a".repeat(24), browseFd: dir, noAutoDialog: false, pinTab: false }, () => Promise.reject(new Error("unused")));
+    const state = new State({ session: "s", key: "a".repeat(24), browseFd: dir, noAutoDialog: false, pinTab: false }, () => Promise.reject(new Error("unused")));
     const targets: Record<string, unknown>[] = [];
     const closed: string[] = [];
     const browser = {
@@ -206,7 +206,7 @@ describe("temporary tabs carry a marker until their answer is known", () => {
       const failure = await temptabs.create(state, []).catch((error: unknown) => error);
       expect(failure).toBeInstanceOf(OutcomeUnknown);
       expect(closed).toEqual([]);
-      const later = new StubState({ session: "s", key: "a".repeat(24), browseFd: dir, noAutoDialog: false, pinTab: false }, () => Promise.reject(new Error("unused")));
+      const later = new State({ session: "s", key: "a".repeat(24), browseFd: dir, noAutoDialog: false, pinTab: false }, () => Promise.reject(new Error("unused")));
       Object.assign(later, { browser: (state as unknown as { browser: unknown }).browser, instance: "inst" });
       await temptabs.sweep(later);
       expect(closed).toEqual(["PENDING"]);
@@ -219,8 +219,8 @@ describe("temporary tabs carry a marker until their answer is known", () => {
 
 describe("the crashed-tab path", () => {
   function setup(onSend: (method: string) => Promise<unknown>, alive = true) {
-    const state = new StubState({ session: "s", key: "k", browseFd: null, noAutoDialog: false, pinTab: false }, () => Promise.reject(new Error("unused")));
-    const page = new StubPage(state, "TARGET");
+    const state = new State({ session: "s", key: "k", browseFd: null, noAutoDialog: false, pinTab: false }, () => Promise.reject(new Error("unused")));
+    const page = new Page(state, "TARGET");
     page.crashed = true;
     const browser = {
       alive,

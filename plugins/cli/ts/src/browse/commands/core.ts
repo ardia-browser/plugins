@@ -1,127 +1,37 @@
-import path from "node:path";
-import { formatG } from "../../../pylib/format.ts";
-import { reprStr } from "../../../py.ts";
-import { urlsplit, hostnameOf } from "../../../pylib/urllib.ts";
-import { type Browser } from "../../cdp/browser.ts";
-import { sleep } from "../../cdp/cancel.ts";
-import { BrowseError, Gated, OutcomeUnknown, Usage } from "../../daemon-errors.ts";
-import { DEFAULT_TIMEOUT_MS } from "../../limits.ts";
-import { flag } from "../../metrics.ts";
-import { Result, type Options } from "../render.ts";
-import { type StubPage } from "./page.ts";
-import { type StubState } from "./state.ts";
+import { formatG } from "../../pylib/format.ts";
+import { reprStr } from "../../py.ts";
+import { hostnameOf, urlsplit } from "../../pylib/urllib.ts";
+import { type Browser } from "../cdp/browser.ts";
+import { Cancelled, shield, sleep, untilCancelled } from "../cdp/cancel.ts";
+import * as temptabs from "../state/temptabs.ts";
+import { BrowseError, Gated, OutcomeUnknown, Usage } from "../daemon-errors.ts";
+import { Result } from "../daemon/render.ts";
+import { flag } from "../metrics.ts";
+import { type Page, quiet } from "../state/page.ts";
+import { type State } from "../state/state.ts";
+import { waitUntil } from "../state/wait.ts";
+import { type Ctx } from "./ctx.ts";
+import { register, unsupported } from "./index.ts";
+import { need, normalizeUrl, parse } from "./parse.ts";
 
-export const KNOWN_SCHEMES = ["http", "https", "about", "data", "file", "blob", "chrome", "view-source"];
-const LOOPBACK = /^(localhost|127\.\d+\.\d+\.\d+|\[::1\])(:\d+)?(\/|$)/u;
 const DROPPED_CONNECTION = /ERR_(EMPTY_RESPONSE|CONNECTION_(RESET|CLOSED|REFUSED|TIMED_OUT)|TIMED_OUT|HTTP2_PROTOCOL_ERROR|SSL_PROTOCOL_ERROR|QUIC_PROTOCOL_ERROR)/u;
 const FAILED_HOSTS_KEPT = 50;
+const SHOWN_HOLD = 0.3;
 const HTTPS_ONLY_NOTE =
   "Ardia loads http:// addresses over https and blocks the page when the site has no working https, which is what this " +
   "error usually means for an http:// address. Try the https:// address; if that fails too, say the site couldn't be reached";
-export const LATER_SLICE = "isn't served by the TypeScript daemon yet (it arrives with a later slice of the port)";
 
-export class Ctx {
-  constructor(
-    readonly state: StubState,
-    readonly options: Options,
-    readonly cwd: string,
-    readonly env: Record<string, unknown>,
-    readonly stdin: string | null,
-    readonly command = "",
-  ) {}
-
-  get timeout(): number {
-    return Number(this.options["timeout_ms"] || DEFAULT_TIMEOUT_MS) / 1000;
-  }
-
-  path(value: string): string {
-    return path.resolve(this.cwd, value);
-  }
-}
-
-export type Handler = (ctx: Ctx, argv: string[]) => Promise<Result>;
-type Kind = "bool" | "value" | "multi";
-
-export function parse(argv: string[], flags: Record<string, Kind> = {}, aliases: Record<string, string> = {}): [Record<string, unknown>, string[]] {
-  const options: Record<string, unknown> = {};
-  const positionals: string[] = [];
-  let index = 0;
-  while (index < argv.length) {
-    const token = argv[index] as string;
-    index += 1;
-    if (token === "--") {
-      positionals.push(...argv.slice(index));
-      break;
-    }
-    const split = token.startsWith("--") && token.includes("=");
-    let name = split ? token.slice(0, token.indexOf("=")) : token;
-    let inline: string | null = split ? token.slice(token.indexOf("=") + 1) : null;
-    name = Object.hasOwn(aliases, name) ? (aliases[name] as string) : name;
-    if (Object.hasOwn(flags, name)) {
-      const kind = flags[name] as Kind;
-      const key = name.replace(/^-+/u, "").replaceAll("-", "_");
-      if (kind === "bool") options[key] = true;
-      else {
-        if (inline === null) {
-          if (index >= argv.length) throw new Usage(`${name} needs a value`);
-          inline = argv[index] as string;
-          index += 1;
-        }
-        if (kind === "multi") options[key] = [...((options[key] as string[] | undefined) ?? []), inline];
-        else options[key] = inline;
-      }
-      continue;
-    }
-    if (token.startsWith("-") && token.length > 1 && !/^-\d/u.test(token)) throw new Usage(`Unknown flag: ${token}`);
-    positionals.push(token);
-  }
-  return [options, positionals];
-}
-
-export function need(positionals: string[], count: number, usage: string): void {
-  if (positionals.length < count) throw new Usage(`Usage: ardia browse ${usage}`);
-}
-
-export function normalizeUrl(given: string): string {
-  const url = given.trim();
-  const match = /^([a-zA-Z][a-zA-Z0-9+.-]*):/u.exec(url);
-  if (match && KNOWN_SCHEMES.includes((match[1] as string).toLowerCase())) return url;
-  if (LOOPBACK.test(url)) return `http://${url}`;
-  return `https://${url}`;
-}
-
-export async function waitUntil<T>(check: () => Promise<T>, timeout: number, interval: number, what: string): Promise<T> {
-  const deadline = performance.now() / 1000 + timeout;
-  for (;;) {
-    const value = await check();
-    if (value) return value;
-    if (performance.now() / 1000 >= deadline) throw new BrowseError(`Timed out after ${formatG(timeout * 1000)}ms waiting for ${what}`, null, "timeout");
-    await sleep(interval);
-  }
-}
-
-export async function pageTitle(page: StubPage): Promise<string> {
+export async function pageTitle(page: Page): Promise<string> {
   try {
     const title = await page.call("() => document.title", [], { frame: page.mainFrame, read: true });
     return typeof title === "string" ? title : title ? String(title) : "";
   } catch (error) {
-    if (error instanceof BrowseError) return "";
+    if (quiet(error)) return "";
     throw error;
   }
 }
 
-async function showsContent(page: StubPage, loader: string): Promise<boolean> {
-  let ready: unknown;
-  try {
-    ready = await page.call("() => [document.readyState, (document.body && document.body.innerText || '').trim().length]", [], { frame: page.mainFrame, read: true });
-  } catch (error) {
-    if (error instanceof BrowseError) return false;
-    throw error;
-  }
-  return page.loader(page.mainFrame) === loader && Array.isArray(ready) && ["interactive", "complete"].includes(ready[0]) && Number(ready[1]) > 0;
-}
-
-export async function waitForLoad(page: StubPage, loader: string | null, timeout: number, until = "load"): Promise<void> {
+export async function waitForLoad(page: Page, loader: string | null, timeout: number, until = "load"): Promise<void> {
   const event = ({ load: "load", domcontentloaded: "DOMContentLoaded", networkidle: "networkIdle" } as Record<string, string>)[until] ?? until;
   const ready = async () => {
     const main = page.mainFrame;
@@ -132,8 +42,8 @@ export async function waitForLoad(page: StubPage, loader: string | null, timeout
       try {
         state = await page.call("() => document.readyState", [], { frame: main, read: true });
       } catch (error) {
-        if (!(error instanceof BrowseError)) throw error;
-        if (error.code === "tab_detached") await page.state.reattach(page);
+        if (!quiet(error)) throw error;
+        if ((error as BrowseError).code === "tab_detached") await page.state.reattach(page);
         return false;
       }
       if (loader !== null && page.loader(main) !== loader) return false;
@@ -144,7 +54,18 @@ export async function waitForLoad(page: StubPage, loader: string | null, timeout
   await waitUntil(ready, timeout, 0.05, `the page to reach ${until}`);
 }
 
-function failedNavigation(state: StubState, url: string, errorText: string): BrowseError {
+async function showsContent(page: Page, loader: string): Promise<boolean> {
+  let ready: unknown;
+  try {
+    ready = await page.call("() => [document.readyState, (document.body && document.body.innerText || '').trim().length]", [], { frame: page.mainFrame, read: true });
+  } catch (error) {
+    if (quiet(error)) return false;
+    throw error;
+  }
+  return page.loader(page.mainFrame) === loader && Array.isArray(ready) && ["interactive", "complete"].includes(ready[0]) && Number(ready[1]) > 0;
+}
+
+function failedNavigation(state: State, url: string, errorText: string): BrowseError {
   const host = hostnameOf(urlsplit(url).netloc) || url;
   let message = `Navigation to ${url} failed: ${errorText}`;
   if (DROPPED_CONNECTION.test(errorText)) {
@@ -182,12 +103,12 @@ function siteSilent(url: string, timeout: number, error: OutcomeUnknown): Browse
   );
 }
 
-function sameDocument(page: StubPage, url: string): boolean {
+function sameDocument(page: Page, url: string): boolean {
   const current = page.url || "";
   return url.includes("#") && !current.startsWith("about:") && current.split("#")[0] === url.split("#")[0];
 }
 
-async function sendNavigate(ctx: Ctx, page: StubPage, url: string): Promise<Record<string, unknown>> {
+async function sendNavigate(ctx: Ctx, page: Page, url: string): Promise<Record<string, unknown>> {
   let result: Record<string, unknown>;
   try {
     result = await page.send("Page.navigate", { url }, { timeout: ctx.timeout });
@@ -202,13 +123,17 @@ async function sendNavigate(ctx: Ctx, page: StubPage, url: string): Promise<Reco
   return result;
 }
 
-export async function navigate(ctx: Ctx, page: StubPage, url: string, until = "load"): Promise<void> {
-  if (page.crashed) throw new BrowseError(`Reloading a crashed tab ${LATER_SLICE}`, null, "unsupported");
-  if (sameDocument(page, url)) throw new BrowseError(`A same-document navigation ${LATER_SLICE}`, null, "unsupported");
+export async function navigate(ctx: Ctx, page: Page, url: string, until = "load"): Promise<void> {
+  if (page.crashed) {
+    await sendNavigate(ctx, page, url);
+    await page.recovered(ctx.timeout);
+    return;
+  }
+  if (sameDocument(page, url)) throw unsupported("A same-document navigation");
   const result = await sendNavigate(ctx, page, url);
   const loader = typeof result["loaderId"] === "string" && result["loaderId"] ? result["loaderId"] : null;
   ctx.state.loadNote = null;
-  if (loader === null) throw new BrowseError(`A same-document navigation ${LATER_SLICE}`, null, "unsupported");
+  if (loader === null) throw unsupported("A same-document navigation");
   try {
     await waitForLoad(page, loader, ctx.timeout, until);
   } catch (error) {
@@ -222,16 +147,45 @@ export async function navigate(ctx: Ctx, page: StubPage, url: string, until = "l
   await page.refreshFrames();
 }
 
-function refuseLater(what: string): never {
-  throw new BrowseError(`${what} ${LATER_SLICE}`, null, "unsupported");
+function refuse(what: string): never {
+  throw unsupported(what);
 }
 
-async function newTab(ctx: Ctx, url: string | null, label: string | null): Promise<StubPage> {
+export function wantsShow(ctx: Ctx, options: Record<string, unknown>): boolean {
+  return Boolean(options["show"] || ctx.options["show"] || ["1", "true", "yes", "on"].includes(String(ctx.env["AGENT_BROWSER_SHOW_TAB"] || "").toLowerCase()));
+}
+
+export async function newTab(
+  ctx: Ctx,
+  url: string | null,
+  label: string | null = null,
+  window = false,
+  show = false,
+  abandoned: ((targetId: string) => void) | null = null,
+): Promise<Page> {
   const state = ctx.state;
   await state.connect();
+  const params: Record<string, unknown> = { url: "about:blank", background: true };
+  if (window) params["newWindow"] = true;
   let result: Record<string, unknown>;
   try {
-    result = await (state.browser as Browser).send("Target.createTarget", { url: "about:blank", background: true });
+    if (abandoned === null) result = await (state.browser as Browser).send("Target.createTarget", params);
+    else {
+      const creating = (state.browser as Browser).send("Target.createTarget", params, { signal: null });
+      try {
+        result = await untilCancelled(creating);
+      } catch (error) {
+        if (error instanceof Cancelled) {
+          creating.then(
+            (late) => {
+              if (typeof late["targetId"] === "string") abandoned(late["targetId"]);
+            },
+            () => {},
+          );
+        }
+        throw error;
+      }
+    }
   } catch (error) {
     if (error instanceof Gated) throw new BrowseError(`Ardia's policy refused to open a tab for the ardia command (${error.refusal})`, null, "policy_refused");
     throw error;
@@ -247,9 +201,128 @@ async function newTab(ctx: Ctx, url: string | null, label: string | null): Promi
   }
   state.current = targetId;
   if (state.pinTab) state.pinnedTarget = targetId;
-  const page = await state.page(targetId);
+  let page = await state.page(targetId);
   if (url) await navigate(ctx, page, normalizeUrl(url));
+  if (show) page = await showTab(ctx, page);
   return page;
+}
+
+export async function engineOffscreen(state: State, targetId: string): Promise<boolean> {
+  if (state.offscreen.has(targetId)) return true;
+  if (state.endpoint === null || state.endpoint.explicit || state.browser === null) return false;
+  let info: Record<string, unknown>;
+  try {
+    info = (await state.browser.send("Target.getTargetInfo", { targetId }))["targetInfo"] as Record<string, unknown>;
+  } catch (error) {
+    if (quiet(error)) return false;
+    throw error;
+  }
+  if (info && typeof info === "object" && info["ardiaOffscreen"] === true) {
+    state.setOffscreen(targetId, true);
+    return true;
+  }
+  return false;
+}
+
+export async function leaveOffscreen(ctx: Ctx, page: Page): Promise<Page> {
+  const state = ctx.state;
+  const old = page.targetId;
+  const known = page.url || String(state.targetInfos.get(old)?.["url"] ?? "");
+  const url = known && !known.startsWith("about:") ? known : null;
+  const label = [...state.labels].find(([, owner]) => owner === old)?.[0] ?? null;
+  if (label) state.labels.delete(label);
+  const openedBefore = new Set(state.opened);
+  const pinned = state.pinnedTarget;
+  let fresh: Page;
+  try {
+    fresh = await newTab(ctx, null, label, false, false, (late) => temptabs.mustClose(state, late, true));
+    if (url) await navigate(ctx, fresh, normalizeUrl(url));
+  } catch (error) {
+    try {
+      await shield(() => putBack(state, old, label, pinned, [...state.opened].filter((target) => !openedBefore.has(target))));
+    } catch (closing) {
+      if (error instanceof Error && error.cause === undefined) Object.defineProperty(error, "cause", { value: closing, configurable: true, writable: true });
+    }
+    throw error;
+  }
+  state.setOffscreen(old, false);
+  if (state.registry.reserveClose(state.instance, old)) {
+    try {
+      await (state.browser as Browser).send("Target.closeTarget", { targetId: old });
+    } catch (error) {
+      if (!quiet(error)) throw error;
+    } finally {
+      state.registry.finishClose(state.instance, old);
+    }
+  }
+  state.forgetTarget(old);
+  state.leftOffscreen = state.tabId(fresh.targetId);
+  return fresh;
+}
+
+async function putBack(state: State, old: string, label: string | null, pinned: string | null, made: string[]): Promise<void> {
+  state.current = old;
+  if (state.pinTab) state.pinnedTarget = pinned;
+  if (label) state.labels.set(label, old);
+  let closedAll = true;
+  let failure: unknown = null;
+  for (const target of made) {
+    const outcome = await temptabs.closeReserved(state, target);
+    if (outcome.closed) {
+      state.forgetTarget(target);
+      continue;
+    }
+    closedAll = false;
+    if (outcome.error !== null) failure ??= outcome.error;
+    temptabs.mustClose(state, target, true);
+  }
+  if (closedAll) flag("offscreen_handoff_rolled_back", true);
+  if (failure !== null) throw failure;
+}
+
+export function offscreenNote(state: State): string {
+  const tab = state.leftOffscreen;
+  state.leftOffscreen = null;
+  return tab ? `\n→ The viewport ended and the page was reloaded in a new tab [${tab}]: Ardia never shows an emulated page` : "";
+}
+
+async function tabShown(state: State, page: Page): Promise<boolean | null> {
+  let infos: unknown;
+  try {
+    infos = (await (state.browser as Browser).send("Target.getTargets", { filter: [{ type: "tab" }] }))["targetInfos"];
+  } catch (error) {
+    if (quiet(error)) return null;
+    throw error;
+  }
+  await page.refreshFrames();
+  const same = (Array.isArray(infos) ? infos : []).filter(
+    (info) => info?.["type"] === "tab" && info?.["url"] === page.url && info?.["embedderData"] !== null && typeof info?.["embedderData"] === "object" && !Array.isArray(info["embedderData"]),
+  );
+  return same.length === 1 ? Boolean(same[0]["embedderData"]["tabActive"]) : null;
+}
+
+export async function showTab(ctx: Ctx, given: Page): Promise<Page> {
+  let page = given;
+  if (await engineOffscreen(ctx.state, page.targetId)) page = await leaveOffscreen(ctx, page);
+  const now = () => performance.now() / 1000;
+  const deadline = now() + 5;
+  let nudge = 0;
+  let shownSince: number | null = null;
+  for (;;) {
+    if (now() >= nudge) {
+      await (ctx.state.browser as Browser).send("Target.activateTarget", { targetId: page.targetId });
+      nudge = now() + 1;
+    }
+    if (!(await page.hidden()) && (await tabShown(ctx.state, page)) !== false) {
+      shownSince = shownSince ?? now();
+      if (now() - shownSince >= SHOWN_HOLD) return page;
+    } else {
+      shownSince = null;
+      nudge = Math.min(nudge, now() + 0.2);
+    }
+    if (now() >= deadline) throw new BrowseError("Ardia didn't show the tab; switch to it in Ardia, or try `ardia browse tab <id> --show` again");
+    await sleep(0.1);
+  }
 }
 
 export async function cmdOpen(ctx: Ctx, argv: string[]): Promise<Result> {
@@ -263,25 +336,28 @@ export async function cmdOpen(ctx: Ctx, argv: string[]): Promise<Result> {
     "--read": "bool",
   });
   if (options["headers"]) throw new Usage("ardia browse can't scope headers to an origin at launch; run `ardia browse set headers <json>` before `open`");
-  if (options["enable"] || options["init_script"] || options["capture_console"] || (ctx.options["enable"] as unknown[] | undefined)?.length) refuseLater("`open` with page setup");
-  if (options["show"] || ctx.options["show"] || ["1", "true", "yes", "on"].includes(String(ctx.env["AGENT_BROWSER_SHOW_TAB"] ?? "").toLowerCase())) refuseLater("`open --show`");
-  if (options["read"]) refuseLater("`open --read`");
+  if (options["enable"] || options["init_script"] || options["capture_console"] || (ctx.options["enable"] as unknown[] | undefined)?.length) refuse("`open` with page setup");
+  if (options["read"]) refuse("`open --read`");
   const state = ctx.state;
   await state.connect();
   const url = args.length > 0 ? normalizeUrl(args[0] as string) : null;
-  const freshTab = !(state.current && state.targetInfos.has(state.current));
-  let page: StubPage;
-  if (freshTab) page = await newTab(ctx, url, (options["label"] as string | undefined) ?? null);
+  const show = wantsShow(ctx, options);
+  const borrowed = state.current && state.current === state.attached ? state.attached : null;
+  const freshTab = !(state.current && state.targetInfos.has(state.current) && !borrowed);
+  let page: Page;
+  if (freshTab) page = await newTab(ctx, url, (options["label"] as string | undefined) ?? null, false, show);
   else {
     page = await state.page();
+    if (page.crashed && url) await navigate(ctx, page, "about:blank");
     if (url) await navigate(ctx, page, url);
   }
   page = await state.reattach(page);
-  const background = freshTab ? await page.takesInput() : null;
+  if (show && !freshTab) page = await showTab(ctx, page);
+  const background = freshTab && !show ? await page.takesInput() : null;
   await page.refreshFrames();
   const title = await pageTitle(page);
   const data: Record<string, unknown> = { url: page.url, title };
-  let text = `✓ ${title}\n  ${page.url}`;
+  let text = `✓ ${title}\n  ${page.url}${offscreenNote(state)}`;
   const stillLoading = state.loadNote;
   state.loadNote = null;
   if (stillLoading) {
@@ -291,8 +367,19 @@ export async function cmdOpen(ctx: Ctx, argv: string[]): Promise<Result> {
   if (background !== null) {
     const tab = state.tabId(page.targetId);
     Object.assign(data, { tabId: tab, background: true, takesInput: background });
-    if (!background) {
-      text += `\n→ Opened in its own background tab [${tab}]; this Ardia doesn't deliver input there. use: ardia browse tab ${tab} --show (or open <url> --show)`;
+    let where = `→ Opened in its own background tab [${tab}]`;
+    if (borrowed) {
+      const left = state.tabId(borrowed);
+      data["left"] = left;
+      flag("open_moved_tab", true);
+      where =
+        `→ [${tab}] is this session's tab now, a background tab of its own, since this session uses your tab [${left}] ` +
+        `and won't navigate it; \`tab ${left}\` goes back`;
+    }
+    if (borrowed || !background) {
+      text +=
+        `\n${where}; ` +
+        (background ? "it takes input without being shown" : `this Ardia doesn't deliver input there. use: ardia browse tab ${tab} --show (or open <url> --show)`);
     }
   }
   return new Result(data, text);
@@ -302,7 +389,7 @@ export async function cmdGet(ctx: Ctx, argv: string[]): Promise<Result> {
   const [, args] = parse(argv);
   need(args, 1, "get text|html|value|attr|title|url|count|box|styles|cdp-url [selector]");
   const what = args[0] as string;
-  if (what !== "title" && what !== "url") refuseLater(`\`get ${what}\``);
+  if (what !== "title" && what !== "url") refuse(`\`get ${what}\``);
   const page = await ctx.state.page();
   if (what === "title") {
     const title = await pageTitle(page);
@@ -335,13 +422,13 @@ export async function cmdWait(ctx: Ctx, argv: string[]): Promise<Result> {
     { "-t": "--text", "-u": "--url", "-l": "--load", "-f": "--fn" },
   );
   const timeout = options["timeout"] ? Number(options["timeout"]) / 1000 : ctx.timeout;
-  if (options["download"]) refuseLater("`wait --download`");
+  if (options["download"]) refuse("`wait --download`");
   if (Object.keys(options).length === 0 && args.length > 0 && /^\d+(\.\d+)?$/u.test(args[0] as string)) {
     const ms = Number(args[0]);
     await sleep(ms / 1000);
     return new Result({ ms: Math.trunc(ms), waited: "timeout" });
   }
-  if (options["fn"] !== undefined) refuseLater("`wait --fn`");
+  if (options["fn"] !== undefined) refuse("`wait --fn`");
   const page = await ctx.state.page();
   if (options["text"] !== undefined) {
     const wanted = options["text"] as string;
@@ -374,7 +461,7 @@ export async function cmdWait(ctx: Ctx, argv: string[]): Promise<Result> {
     return new Result({ state: until });
   }
   need(args, 1, "wait <selector|ms> | --text | --url | --load | --fn");
-  refuseLater("`wait <selector>`");
+  refuse("`wait <selector>`");
 }
 
 export async function cmdSession(ctx: Ctx, argv: string[]): Promise<Result> {
@@ -386,11 +473,14 @@ export async function cmdSession(ctx: Ctx, argv: string[]): Promise<Result> {
       connected: state.connected,
       tabs: state.opened.size,
       current: state.current ? state.tabId(state.current) : null,
-      refs: 0,
+      refs: state.refs.size,
       captures: [...state.leases].sort(),
     });
   }
   return new Result({ session: state.session }, state.session);
 }
 
-export const COMMANDS: Readonly<Record<string, Handler>> = { open: cmdOpen, get: cmdGet, wait: cmdWait, session: cmdSession };
+register("open", cmdOpen);
+register("get", cmdGet);
+register("wait", cmdWait);
+register("session", cmdSession);

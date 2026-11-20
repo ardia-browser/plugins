@@ -1,0 +1,10 @@
+{
+ "live_only": "the page's busy loop and the 30 s call limit run on the daemon's clock",
+ "divergences": ["busy-probe-isolated"],
+ "steps": [
+  {"argv": ["open", "{fixture}/busypage.html", "--no-changes"], "session": "busy"},
+  {"argv": ["wait", "2500"], "session": "busy"},
+  {"argv": ["get", "title"], "session": "busy"},
+  {"argv": ["get", "title"], "session": "busy"}
+ ]
+}

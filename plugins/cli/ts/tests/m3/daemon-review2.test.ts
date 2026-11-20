@@ -8,19 +8,19 @@ import { Cancelled, withSignal } from "../../src/browse/cdp/cancel.ts";
 import { parseConfig } from "../../src/browse/daemon/config.ts";
 import { Daemon } from "../../src/browse/daemon/server.ts";
 import { daemonEnvironment } from "../../src/browse/daemon/spawn.ts";
-import { StubPage } from "../../src/browse/daemon/stub/page.ts";
-import { StubState } from "../../src/browse/daemon/stub/state.ts";
+import { Page } from "../../src/browse/state/page.ts";
+import { State } from "../../src/browse/state/state.ts";
 import { Gated } from "../../src/browse/daemon-errors.ts";
 import { resolve } from "../../src/browse/endpoint.ts";
 import { closeFd } from "../../src/browse/paths.ts";
 import * as temptabs from "../../src/browse/state/temptabs.ts";
 import { dumps } from "../../src/json.ts";
 import { BUILT_LIBC } from "../libc-loaded.ts";
-import { alive, ask, config, keyOf, lockHolder, PROGRAM, type Scratch, scratch, socketFile, staleSocket, start, until, quietWatchdog } from "./daemon-helpers.ts";
+import { alive, ask, config, keyOf, lockHolder, PROGRAM, type Scratch, scratch, socketFile, staleSocket, start, until, quietWatchdog, D2_FIRST_PORT } from "./daemon-helpers.ts";
 
 setDefaultTimeout(120_000);
 const CHROME = process.env["ARDIA_M3_CHROME"];
-const CHROME_PORT = Number(process.env["ARDIA_D2_CHROME_PORT"] ?? "9531") + 4;
+const CHROME_PORT = D2_FIRST_PORT + 4;
 const home = process.cwd();
 const made: Scratch[] = [];
 const pids: number[] = [];
@@ -175,11 +175,12 @@ function fetchLine(file: string): Promise<void> {
 }
 
 describe("attach", () => {
-  function setup(onSend: (method: string, page: StubPage) => Promise<unknown>) {
-    const state = new StubState({ session: "s", key: "k", browseFd: null, noAutoDialog: false, pinTab: false }, () => Promise.reject(new Error("unused")));
-    const page = new StubPage(state, "TARGET");
+  function setup(onSend: (method: string, page: Page) => Promise<unknown>) {
+    const state = new State({ session: "s", key: "k", browseFd: null, noAutoDialog: false, pinTab: false }, () => Promise.reject(new Error("unused")));
+    const page = new Page(state, "TARGET");
     const sent: string[] = [];
     const browser = {
+      alive: true,
       send(method: string) {
         sent.push(method);
         if (method === "Target.attachToTarget") return Promise.resolve({ sessionId: "SESSION" });
@@ -230,7 +231,7 @@ describe("attach", () => {
 describe("temporary tabs", () => {
   test("a createTarget reply that arrives after the deadline is closed, and counted", async () => {
     const closed: string[] = [];
-    const state = new StubState({ session: "s", key: "k", browseFd: null, noAutoDialog: false, pinTab: false }, () => Promise.reject(new Error("unused")));
+    const state = new State({ session: "s", key: "k", browseFd: null, noAutoDialog: false, pinTab: false }, () => Promise.reject(new Error("unused")));
     const browser = {
       alive: true,
       send(method: string, params: Record<string, unknown>) {

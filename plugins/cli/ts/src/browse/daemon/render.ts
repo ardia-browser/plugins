@@ -154,7 +154,7 @@ export function cap(text: string, options: Options, name = "", fallback: number 
       cutAt = newlineAt;
     }
   }
-  const saved = spill(text);
+  const saved = options["no_spill"] ? null : spill(text);
   const where = saved ? `; all of it is in ${saved}` : "";
   return (
     text.slice(0, cutAt) +

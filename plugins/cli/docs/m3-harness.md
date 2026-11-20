@@ -22,8 +22,11 @@ the normalized requests, the answers and the session folder. Everything runs fro
 - Bun 1.3.14 and `bun install --frozen-lockfile --ignore-scripts` in `ts/`.
 - Live modes need `ARDIA_M3_CHROME`: a pinned `chrome-headless-shell` (Chrome for Testing 158.0.8127.18, Playwright's
   `chromium_headless_shell-1254`, in its own folder). It always runs headless, never headed.
-- Ports come from `ARDIA_M3_PORTS` (default `9400-9419`; slice *i* uses `9400 + 20i` through `+19`). The top port
-  serves the fixtures; the rest are Chromium and tap pairs.
+- Ports come from `ARDIA_M3_PORT_BASE` (default 9400): each agent owns the block of 20 starting there (D3 9400, D4
+  9420, D5 9440, F1-early 9460, reviewers 9500 and up). In a block, +0 to +17 are Chromium and tap pairs, +19 serves
+  the fixtures, `human_core` takes +16 and +17, and the D2 bun tests (`ARDIA_D2_CHROME_PORT` overrides them) take +10
+  to +14. A run first checks every port of its block and stops at once if any is bound (bound locally or answering a
+  connection), so a daemon never talks to another agent's tap. `ARDIA_M3_PORTS` is refused.
 - The TS side runs through `ARDIA_M3_TS_PROGRAM=<built ardia-ts>`. The program is started as `<program> browse …`. To
   be seeded it must read `harness_seed` from its spawn config (below).
 
@@ -178,4 +181,83 @@ later slices. `daemon/stub/` holds the minimum page core the D2 scenarios need (
 
 The Python seeded client starts the TS daemon when `ARDIA_BROWSE_DAEMON=ts` and appends each spawn config to
 `$HOME/spawn-config.jsonl` and each full request to `answers.jsonl` (`wire`), which is what the protocol check reads.
-Recordings must be made on the default ports (`ARDIA_M3_PORTS=9400-9419`): the fixture URL in them carries the port.
+Recordings must be made with the default base (9400): the fixture URL in them carries port 9419. Replay at any other
+base rewrites that port to the block's own fixture port in the recorded messages (the tap's `--fixture-from` and
+`--fixture-to`), and the normalizer writes every fixture port as `<FIXTURE>`, so replays run in any block.
+
+## The page core (slice D3)
+
+`ts/src/browse/state/` is the page core: `page.ts` (attach, frames, isolated worlds, `call`, crash and detach, setup
+restore, the busy probe), `state.ts` (connection, targets, tab ids, the lost-tab follow, `tab active`'s probes),
+`refs.ts` (refs and their staleness), `apptabs.ts` (Ardia's tab list over the control socket) and `records.ts` (console,
+error and network records for D6). `ts/src/browse/commands/` holds the command table (`index.ts`: every Python command,
+its owning slice, `register()`, `dispatch()` and its hooks), the parser (`parse.ts`), `Ctx` (`ctx.ts`) and the commands
+D3 serves (`core.ts`: `open` without change reports, `get title|url`, `wait`, `session`). Later slices register their
+commands from their own files and import them in `all.ts`; a name registered twice, or one outside the table, throws.
+
+| What | How it's run |
+|---|---|
+| Scenarios `core/*` | `live 'core/*' --a python --b ts`, `replay 'core/*' --impl ts` (`core/open_title` waits for D4's `snapshot` and D5's change report), `cancel core/frames_worlds --impl ts --kind interrupt\|error\|drop` |
+| Designed divergences | `tests/m3/divergences.py`: each entry names its ardia#2812 row; a scenario lists the ones it needs in `divergences`, and only the named request form is rewritten, on both sides. `drop` and `stop` fault runs add `busy-probe-isolated`, since an unanswered call is what sends the probe. Every TS run (live, replay, fault) also fails on `Runtime.enable`, `Debugger.enable` or `Console.enable` on a page session and on a main-world busy probe |
+| Racy steps | `racy_steps` in a scenario: only the exit status is compared, for a step where Chromium decides which of two errors one request gets |
+| Human tier | `python -m tests.m3.human_core --pages <plugins#13 tests/human> --chrome <Chrome for Testing> [--impl ts\|python]`: rows 7 to 11 through `ardia browse`, with a full Chrome for Testing in `--headless=new` (chrome-headless-shell is old-mode headless and sets `navigator.webdriver`). Clicks D5 doesn't serve yet are made by the tier and named in the row's notes |
+| Unit tests | `ts/tests/m3/core.test.ts` (attach order, publish after the frame refresh, busy probe world, worlds per document, re-homing, crash and detach, setup restore, the probe rules, refs, the table) and `core-ported.test.ts` (`test_browse_crash` and `test_browse_detach`, same names) |
+
+
+## Plugin mode (F1-early)
+
+Plugin mode has no Python twin, so its scenarios run the TypeScript plugin daemon alone, on headless Chrome for
+Testing through the tap, and check the transcript instead of comparing two sides. The engine's plugin policy
+(ardia#2808) isn't in stock Chrome, so the rules it enforces are asserted on the tap.
+
+| Piece | File | What it does |
+|---|---|---|
+| World | `ts/tests/m3/plugin-world.ts` | One Chrome, one tap, a fixture site and any number of plugin daemons, each spawned through `spawn.ts` with a `plugin` config and given the credential only in requests. Ports from `ARDIA_F1_PORTS` (default 9460): each suite takes three (Chrome, tap, site) at offsets 0, 3, 6, 9, 12 and 15, inside 9460–9479 beside D3–D5's 9400–9459; the standalone scripts (`plugin-pending.ts`, `plugin-cost.ts`, `plugin-latency.ts`, `plugin-background.ts`) default to 9460 and run alone. |
+| Rules | `ts/tests/m3/plugin-rules.ts` | `pluginViolations(transcript)`: (a) a forbidden method (`Runtime.*`, `DOM.resolveNode`, `DOM.performSearch`, `Page.createIsolatedWorld`, `DOM.focus`, `Page.captureScreenshot`, `DOM.scrollIntoViewIfNeeded`, `Emulation.setFocusEmulationEnabled`, drags, and `Input.dispatchMouseEvent` as a press, a release or with any button) or any method off the plugin list; (b) an input command (`Input.dispatch*`, `Input.insertText`, `Ardia.dispatchClick`) sent while an earlier one on that connection is unanswered; key events with `nativeVirtualKeyCode`, `isSystemKey` or a command off the editing allowlist; (c) an input command on any session but a page target's own (one the daemon attached with `Target.attachToTarget` to a target reported as `type: "page"` with no subtype; iframe, prerender and auto-attached sessions and the browser session fail). Every harness step posts a tap mark carrying its argv, and the checker classifies it with the daemon's own `find` grammar. `plugin-rules.test.ts` shows each check failing on a made-up transcript. |
+| Scenarios | `ts/tests/m3/plugin-live.test.ts`, `plugin-live2.test.ts` | Every verb, the document check before and after, engine refusals injected as CDP errors (`/tap/fault` with `message`), a held input event that must hold back the next one, credential refusals, the files left in `Browse/`, then (a) and (b) on the whole transcript. Skipped without `ARDIA_M3_CHROME`. |
+| Pending cases | `ts/tests/m3/plugin-pending.ts <f1-early.json> [--phase 1\|2]` | Runs M1's pending F1-early cases against a fresh plugin daemon each and compares the answer with the recorded reply: `pass` (equal), `designed` (a listed difference, with its reason), `ran` (the reply was a placeholder and the step ran), `n/a` (client-only), `fail`. |
+
+Stock Chrome has none of ardia#2808's plugin additions, so the plugin world starts the tap with three test-only fakes:
+`--emulate-dispatch-click 1` answers each `Ardia.dispatchClick` itself after sending Chromium a press, waiting for its
+answer, then a release; `--emulate-act-hold 1` stands in for the engine's act visibility hold: after `POST /tap/hold
+{target, front}`, the mark of an acting step makes the tap activate `target` through its own owner connection
+(`Target.activateTarget`) before the step runs, and `/tap/unhold`, which the harness posts after every step,
+activates `front` again (both written as `{"k": "hold"}`); `--emulate-hidden-wheel-refusal 1` reads
+`document.visibilityState` before forwarding a `mouseWheel`, writes `{"k": "visibility"}`, and refuses the wheel with
+`ardia: page hidden` when the page is hidden. Every harness step posts `/tap/done` after its answer; check (f) fails any CDP event or message from the daemon
+between that and the next step's mark (answers to earlier requests are allowed). Check (e) fails a wheel during a step that doesn't act (or before any
+step) and a wheel a hidden page saw that wasn't refused with `ardia: page hidden`. Scenarios that need a fake say so in
+their names (`[tap emulates Ardia.dispatchClick]`, `[tap emulates the act visibility hold]`). `plugin-hidden.test.ts`
+acts on a really hidden tab and needs a full Chrome for Testing (`ARDIA_F1_CHROME`, `--headless=new`);
+chrome-headless-shell never hides a tab. Those two events are written as `{"k": "emulated"}`, which the rules don't read as the
+daemon's traffic. Scenarios whose clicks need it say so in their names (`[tap emulates Ardia.dispatchClick]`); against
+a real plugin engine the flag stays off.
+
+`ARDIA_M3_TS_PROGRAM` names the built program the daemons run; `ARDIA_F1_SENT=<file>` writes the methods each marked
+step sent.
+
+### Acceptance case (d): an act on a hidden tab
+
+`ts/tests/m3/plugin-background.ts` (run with Bun; `ARDIA_F1_CHROME` names a full Chrome for Testing, run
+`--headless=new`, since chrome-headless-shell never hides a tab) opens a form in a background tab
+(`Target.createTarget {background: true}`) behind a visible one and acts on it the plugin's way over raw CDP: a click
+(a buttoned press and release stands in for `Ardia.dispatchClick` on stock Chrome), `Input.insertText`, Enter, and, in a
+second act, wheels (at most 4) that bring a button in a lower area into view and a click on it. Each act holds the tab
+visible the way the engine's act hold will (the harness activates it on the owner session, then the front tab again),
+and the report checks the tab is hidden before and after every act. It reads the results through DOM and the AX tree (no Runtime on the plugin's
+session), reads `visibilityState` through a separate owner session, and prints a JSON report, including whether hit
+testing found the field and whether the field had focus before the insert. Rerun it against the ardia#2808 build
+(engine/next) when it exists, where `Ardia.dispatchClick` is real.
+
+### Cost and latency
+
+- `ts/tests/m3/plugin-cost.ts` (Bun; `ARDIA_M3_CHROME`, `ARDIA_M3_TS_PROGRAM`): the polls `wait --text` makes in 10 s on
+  a page that never shows the text, and, only when the 1-minute load is under `ARDIA_F1_MAX_LOAD` (10) with no stray
+  `yes`, `snapshot -c` on a 900-paragraph article and a 2,000-row table: wall-time p50 and p95 interleaved with a
+  `get title` control, the renderer's task time per snapshot (`Performance.getMetrics` `TaskDuration` on a separate
+  owner session) and the longest renderer main-thread task during one snapshot (tracing on the owner session).
+  Otherwise it prints `deferred: load N`.
+- `ts/tests/m3/plugin-latency.ts`: the person's scroll and typing latency (input to the next animation frame, read on an
+  owner session) on a visible tab, alone and while a plugin fills and snapshots another tab, interleaved, p50 and p95.
+  Run it against the ardia#2808 build (`ARDIA_F1_ENGINE=2808`, engine/next); on stock Chrome it's only a smoke test.
+

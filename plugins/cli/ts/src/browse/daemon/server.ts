@@ -6,7 +6,7 @@ import { armWatchdog, disarmWatchdog, peerUid, removeDirAt, renameExclusiveAt } 
 import { codeOf, uid } from "../../paths.ts";
 import { formatG, roundHalfEven } from "../../pylib/format.ts";
 import { Cancelled, currentSignal, withSignal } from "../cdp/cancel.ts";
-import { BrowseError, ConnectionLost, Unreachable, Usage } from "../daemon-errors.ts";
+import { BrowseError, ConnectionLost, Unreachable } from "../daemon-errors.ts";
 import { type Endpoint, EndpointError, resolve } from "../endpoint.ts";
 import { BEHIND_SCRIPT_WAIT, commandLimit, QUEUE_WAIT, queueWait } from "../limits.ts";
 import { answerFields, begin, flag, type Metrics } from "../metrics.ts";
@@ -18,14 +18,19 @@ import { type DaemonConfig } from "./config.ts";
 import { FifoLock } from "./lock.ts";
 import { type Caller, parseCaller } from "./announce.ts";
 import { log } from "./log.ts";
-import { canonical, SKIPPED } from "./names.ts";
+import { canonical } from "./names.ts";
 import { type Answer, encodeAnswer, joinedBatch, MAX_REQUEST, type Options, render, Result, timedOut } from "./render.ts";
 import { redact } from "../../redact.ts";
 import { parseText } from "../../json.ts";
-import { COMMANDS, Ctx, LATER_SLICE } from "./stub/commands.ts";
-import { StubState } from "./stub/state.ts";
+import { dispatch } from "../commands/all.ts";
+import { Ctx } from "../commands/ctx.ts";
+import { State } from "../state/state.ts";
 import { reportException } from "../../telemetry.ts";
 import { cliVersion } from "../../version.ts";
+import { runPluginCommand } from "../plugin/commands.ts";
+import { ALL_PLUGIN_COMMANDS } from "../plugin/commands2.ts";
+import { sameCredential } from "../plugin/key.ts";
+import { PluginRefused, PluginSession } from "../plugin/session.ts";
 
 export const CONNECTED_IDLE = 30.0;
 export const DEFAULT_DAEMON_IDLE = 3600.0;
@@ -35,11 +40,13 @@ export const WATCH_INTERVAL = 2.0;
 export const EXIT_GRACE = 3.0;
 export const READ_TIMEOUT = 30.0;
 export const SHUTDOWN_EXIT = 1;
-const PYTHON_COMMANDS = new Set(
-  "a11y addinitscript back batch check click clipboard console cookies dblclick dialog diff download drag errors eval fill find flow focus forward frame get highlight hover is keyboard keydown keyup mouse network notes open pdf press profiler pushstate react read record reload removeinitscript screenshot script scroll scrollintoview select session set snapshot state storage stream tab trace type uncheck upload vitals wait window".split(
-    " ",
-  ),
-);
+
+export function settledError(error: BrowseError, browser: { readonly alive: boolean; readonly closedByUs: boolean } | null): { error: BrowseError; lost: boolean } {
+  if (error instanceof ConnectionLost) return { error, lost: true };
+  if (browser === null || browser.alive || browser.closedByUs) return { error, lost: false };
+  if (error.cause instanceof ConnectionLost) return { error, lost: true };
+  return { error: new ConnectionLost(), lost: true };
+}
 
 type Request = Record<string, unknown>;
 type Running = { name: string; since: number };
@@ -64,7 +71,8 @@ export class Daemon {
   readonly key: string;
   readonly sock: string;
   readonly lockFd: number | null;
-  readonly state: StubState;
+  readonly state: State;
+  readonly plugin: PluginSession | null;
   readonly lock = new FifoLock();
   pending = 0;
   last = monotonic();
@@ -100,10 +108,12 @@ export class Daemon {
       closeFd(this.dirFd);
       throw error;
     }
-    this.state = new StubState(
-      { session: config.session, key: config.key, browseFd: this.dirFd, noAutoDialog: config.noAutoDialog, pinTab: config.pinTab },
+    this.state = new State(
+      { session: config.session, key: config.key, browseFd: config.plugin === null ? this.dirFd : null, noAutoDialog: config.noAutoDialog, pinTab: config.pinTab, dataDir: config.dataDir },
       () => this.resolveEndpoint(),
     );
+    this.plugin =
+      config.plugin === null ? null : new PluginSession({ session: config.session, endpoint: config.ws ?? "", credentialId: config.plugin, autoDialog: !config.noAutoDialog });
     this.idleLimit = (config.idleTimeoutMs || DEFAULT_DAEMON_IDLE * 1000) / 1000;
     this.stopped = new Promise((resolve) => {
       this.stopNow = resolve;
@@ -119,8 +129,12 @@ export class Daemon {
     }
   }
 
+  get live(): State | PluginSession {
+    return this.plugin ?? this.state;
+  }
+
   leases(): Set<string> {
-    return this.state.activeLeases();
+    return this.live.activeLeases();
   }
 
   private enterFolder(): void {
@@ -221,7 +235,7 @@ export class Daemon {
     this.enterFolder();
     if (socketIsOurs(this.sock, this.dirFd)) unlinkQuietly(this.sock, this.dirFd);
     this.server = await this.listen();
-    writePrivateJson(
+    if (this.plugin === null) writePrivateJson(
       `${this.key}.json`,
       this.dirFd,
       new Map<string, Value>([
@@ -300,30 +314,37 @@ export class Daemon {
     try {
       unlinkQuietly(`${this.key}.json`, this.dirFd);
     } catch {}
-    try {
-      releaseClaims(this.dirFd, this.key);
-    } catch {}
-    try {
-      this.state.registry.forget();
-    } catch {}
+    if (this.plugin === null) {
+      try {
+        releaseClaims(this.dirFd, this.key);
+      } catch {}
+      try {
+        this.state.registry.forget();
+      } catch {}
+    }
   }
 
   private async cleanupInner(): Promise<void> {
+    if (this.plugin !== null) {
+      await this.plugin.disconnect();
+      return;
+    }
     await temptabs.drain(this.state);
     await this.state.disconnect();
   }
 
   async idleTick(): Promise<void> {
     const now = monotonic();
-    if (this.state.lost || this.state.restarted) {
+    const live = this.live;
+    if (live.lost || live.restarted) {
       if (this.pending === 0 || now - this.last > EXIT_GRACE) this.stopNow();
       return;
     }
-    if (this.state.connected) {
-      if (this.pending === 0 && !this.lock.locked && this.leases().size === 0 && !this.state.holding() && now - this.last > this.connectedIdle) {
+    if (live.connected) {
+      if (this.pending === 0 && !this.lock.locked && this.leases().size === 0 && !live.holding() && now - this.last > this.connectedIdle) {
         await this.lock.acquire();
         try {
-          if (this.pending === 0 && this.leases().size === 0 && !this.state.holding()) await this.state.disconnect();
+          if (this.pending === 0 && this.leases().size === 0 && !live.holding()) await live.disconnect();
         } finally {
           this.lock.release();
         }
@@ -332,12 +353,14 @@ export class Daemon {
   }
 
   async watchTick(): Promise<void> {
-    const browser = this.state.browser;
+    const live = this.live;
+    const browser = live.browser;
     if (browser !== null && browser.link !== null && browser.link.lost && !browser.closedByUs) {
-      this.state.lost = true;
+      live.lost = true;
       log.info("Ardia closed the connection; this daemon ends");
       return;
     }
+    if (this.plugin !== null) return;
     if (browser === null && this.state.instance !== null && this.pending === 0) {
       let endpoint: Endpoint;
       try {
@@ -370,6 +393,12 @@ export class Daemon {
       const line = await reading.line;
       const request = parseRequest(line);
       if (request === null) return;
+      const refused = this.refusedCredential(request);
+      if (refused !== null) {
+        const [code, out, err] = render(record(request["options"]), null, refused, "");
+        await writeAnswer(socket, encodeAnswer(code, out, err, [["code", refused.code ?? "plugin_refused"]]));
+        return;
+      }
       const stop = new AbortController();
       let metrics: Metrics | undefined;
       const execute = withSignal(stop.signal, () =>
@@ -394,6 +423,8 @@ export class Daemon {
       if (extra.metrics) fields.push(["metrics", new Map([...extra.metrics].map(([key, value]): [string, Value] => [key, typeof value === "number" ? BigInt(value) : value]))]);
       if (extra.code) fields.push(["code", extra.code]);
       if (request["busy_elsewhere"]) fields.push(["busy_elsewhere", true]);
+      const loader = this.plugin?.loader;
+      if (loader) fields.push(["loader", loader]);
       fields.push(["daemon", `ts/${cliVersion()}`]);
       await writeAnswer(socket, encodeAnswer(code, out, err, fields));
     } catch (error) {
@@ -408,6 +439,7 @@ export class Daemon {
   async execute(request: Request): Promise<Answer> {
     const argv = Array.isArray(request["argv"]) ? (request["argv"] as unknown[]) : [];
     const options = record(request["options"]);
+    if (this.plugin !== null) options["no_spill"] = true;
     const name = argv.length > 0 ? canonical(String(argv[0])) : "";
     const cwd = typeof request["cwd"] === "string" && request["cwd"] ? request["cwd"] : (process.env["HOME"] ?? "/");
     const ctx = new Ctx(this.state, options, cwd, record(request["env"]), typeof request["stdin"] === "string" ? request["stdin"] : null, name);
@@ -435,19 +467,21 @@ export class Daemon {
     let closeAfter = false;
     try {
       if (this.stopping || this.closing) return this.refuseClosing(options, name);
-      if (this.state.lost) return render(options, null, new ConnectionLost(), name);
-      this.state.notice = null;
-      if (this.state.connected) await this.state.announceCaller(this.state.endpoint);
+      if (this.live.lost) return render(options, null, new ConnectionLost(), name);
+      this.live.notice = null;
+      this.plugin?.useCredential(request["credential"] as string);
+      if (this.plugin === null && this.state.connected) await this.state.announceCaller(this.state.endpoint);
       this.closeAfterBatch = false;
       this.running = { name, since: monotonic() };
       const limit = commandLimit(name, words, ctx.timeout);
       answer = await this.withinLimit(limit, options, name, () => this.answer(ctx, name, words, options));
-      const notice = this.state.notice;
-      this.state.notice = null;
+      const notice = this.live.notice;
+      this.live.notice = null;
       answer = [answer[0], answer[1], (notice ? `${redact(notice)}\n` : "") + answer[2]];
       closeAfter = this.closeAfterBatch && name === "batch" && answer[0] === 0;
       this.closeAfterBatch = false;
     } finally {
+      this.plugin?.useCredential(null);
       this.running = null;
       this.lock.release();
     }
@@ -507,13 +541,10 @@ export class Daemon {
     } catch (thrown) {
       if (thrown instanceof Cancelled) throw thrown;
       if (thrown instanceof BrowseError) {
-        let error = thrown;
-        const browser = this.state.browser;
-        if (error instanceof ConnectionLost || (browser !== null && !browser.alive && !browser.closedByUs)) {
-          this.state.lost = true;
-          error = error instanceof ConnectionLost ? error : new ConnectionLost();
-        }
-        if (error instanceof Unreachable && this.state.instance === null) this.state.restarted = true;
+        const live = this.live;
+        const { error, lost } = settledError(thrown, live.browser);
+        if (lost) live.lost = true;
+        if (error instanceof Unreachable && live.instance === null) live.restarted = true;
         return render(options, null, error, name);
       }
       log.exception(`command ${name} crashed`, thrown);
@@ -526,17 +557,8 @@ export class Daemon {
   }
 
   async dispatch(ctx: Ctx, name: string, argv: string[]): Promise<Result> {
-    if (name === "auth") {
-      if (argv[0] !== "login") throw new Usage("auth save|list|show|delete run without the daemon");
-      throw new BrowseError(`\`auth login\` ${LATER_SLICE}`, null, "unsupported");
-    }
-    if (Object.hasOwn(SKIPPED, name)) throw new BrowseError(`\`${name}\` isn't part of ardia browse: ${SKIPPED[name]}`, null, "unsupported");
-    const handler = Object.hasOwn(COMMANDS, name) ? COMMANDS[name] : undefined;
-    if (handler === undefined) {
-      if (PYTHON_COMMANDS.has(name)) throw new BrowseError(`\`${name}\` ${LATER_SLICE}`, null, "unsupported");
-      throw new Usage(`Unknown command: ${name}. Run \`ardia browse --help\``);
-    }
-    return handler(ctx, argv);
+    if (this.plugin !== null) return runPluginCommand(this.plugin, ctx.options, name, argv, ALL_PLUGIN_COMMANDS);
+    return dispatch(ctx, name, argv);
   }
 
   private async lockForClose(): Promise<boolean> {
@@ -548,7 +570,29 @@ export class Daemon {
     }
   }
 
+  refusedCredential(request: Request): BrowseError | null {
+    const given = request["credential"];
+    if (this.plugin === null) {
+      return given === undefined || given === null ? null : new PluginRefused("ardia browse sent a plugin credential to a session that isn't a plugin's; nothing ran");
+    }
+    if (typeof given !== "string" || !sameCredential(given, this.config.plugin as string)) {
+      return new PluginRefused("ardia browse sent this plugin session a step without its activity's credential; nothing ran");
+    }
+    return null;
+  }
+
   async close(ctx: Ctx, caller: Caller | null): Promise<Answer> {
+    if (this.plugin !== null) {
+      await this.lockForClose();
+      try {
+        if (this.stopping) return this.refuseClosing(ctx.options, "close");
+        this.stopping = true;
+      } finally {
+        this.lock.release();
+      }
+      this.stopNow();
+      return render(ctx.options, new Result({ closed: true, tabs: 0, keptOpen: [] }, `✓ Session ${this.plugin.session} closed (0 tabs it opened)`), null, "close");
+    }
     const state = this.state;
     const tally = { closed: 0, kept: [] as string[] };
     if (!(await this.lockForClose())) return render(ctx.options, null, this.busyError(this.closeWait), "close");

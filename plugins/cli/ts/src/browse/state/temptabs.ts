@@ -18,6 +18,7 @@ export type TempTabState = {
   readonly connected: boolean;
   readonly browser: Browser | null;
   mustClose: Set<string>;
+  readonly reservedCloses?: Set<string>;
   mustCloseTask: { done: boolean; stop: AbortController; finished: Promise<void> } | null;
   forgetTarget(targetId: string): void;
 };
@@ -111,7 +112,35 @@ export async function closeMarked(state: TempTabState, slots: ReadonlyMap<string
   }
 }
 
-export function mustClose(state: TempTabState, targetId: string): void {
+export type ReservedClose = { closed: boolean; refused: boolean; error: unknown };
+
+export async function closeReserved(state: TempTabState, targetId: string): Promise<ReservedClose> {
+  if (!state.registry.reserveClose(state.instance, targetId)) return { closed: false, refused: true, error: null };
+  let closed = false;
+  let error: unknown = null;
+  try {
+    if (state.connected) {
+      await (state.browser as Browser).send("Target.closeTarget", { targetId }, { timeout: CLOSE_TIMEOUT });
+      closed = await gone(state, targetId);
+    }
+  } catch (thrown) {
+    if (thrown instanceof Cancelled) throw thrown;
+    closed = state.connected && (await gone(state, targetId));
+    if (!closed) error = thrown;
+  } finally {
+    if (closed) state.registry.finishClose(state.instance, targetId);
+    else state.registry.releaseClose(state.instance, targetId);
+  }
+  return { closed, refused: false, error };
+}
+
+async function closeQueued(state: TempTabState, targetId: string): Promise<boolean> {
+  if (state.reservedCloses?.has(targetId)) return (await closeReserved(state, targetId)).closed;
+  return closeUntracked(state, targetId);
+}
+
+export function mustClose(state: TempTabState, targetId: string, reserved = false): void {
+  if (reserved) state.reservedCloses?.add(targetId);
   state.mustClose.add(targetId);
   const task = state.mustCloseTask;
   if (task === null || task.done) {
@@ -132,7 +161,7 @@ export async function closeUntracked(state: TempTabState, targetId: string): Pro
     await (state.browser as Browser).send("Target.closeTarget", { targetId }, { timeout: CLOSE_TIMEOUT });
   } catch (error) {
     if (error instanceof Cancelled) throw error;
-    return false;
+    return state.connected && (await gone(state, targetId));
   }
   return gone(state, targetId);
 }
@@ -142,8 +171,9 @@ async function retryCloses(state: TempTabState): Promise<void> {
   let delay = RETRY_FIRST;
   while (pending.size > 0) {
     for (const targetId of [...pending]) {
-      if (await closeUntracked(state, targetId)) {
+      if (await closeQueued(state, targetId)) {
         pending.delete(targetId);
+        state.reservedCloses?.delete(targetId);
         state.forgetTarget(targetId);
       }
     }
@@ -167,7 +197,12 @@ export async function drain(state: TempTabState): Promise<void> {
   const timer = setTimeout(() => budget.abort(), DRAIN_BUDGET * 1000);
   try {
     await withSignal(budget.signal, async () => {
-      for (const targetId of [...pending]) if (await closeUntracked(state, targetId)) pending.delete(targetId);
+      for (const targetId of [...pending]) {
+        if (await closeQueued(state, targetId)) {
+          pending.delete(targetId);
+          state.reservedCloses?.delete(targetId);
+        }
+      }
       if (state.connected) await closeMarked(state, state.registry.nonces(state.instance), false);
     });
   } catch (error) {
@@ -222,7 +257,7 @@ export async function closeOne(state: TempTabState, targetId: string): Promise<v
       }
     } catch (error) {
       if (error instanceof Cancelled) throw error;
-      closed = false;
+      closed = state.connected && (await gone(state, targetId));
     } finally {
       if (closed) registry.finishClose(state.instance, targetId);
       else registry.releaseClose(state.instance, targetId);

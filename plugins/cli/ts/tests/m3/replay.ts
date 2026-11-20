@@ -29,6 +29,8 @@ const STALL_MS = 10000;
 const HOIST_MS = 50;
 const HOIST_WINDOW = 400;
 const RESPONSE_ID = /^\{"id":(\d+),/;
+const WORLD_HANDLE = "globalThis";
+const HANDLE_PREFIX = "ardia-world-handle:";
 
 export class ReplayConn {
   private readonly requests: Recorded[] = [];
@@ -43,6 +45,9 @@ export class ReplayConn {
   private stall: ReturnType<typeof setTimeout> | null = null;
   private hoistTimer: ReturnType<typeof setTimeout> | null = null;
   private failed = false;
+  private readonly binding = new Set<string>();
+  private readonly lastTree = new Map<string, string>();
+  private readonly navigated = new Map<string, Map<string, Record<string, unknown>>>();
 
   constructor(entries: Entry[], private readonly hooks: ReplayHooks, private readonly elastic: Elastic, from: string | undefined, to: string | undefined,
               private readonly paced = false) {
@@ -97,12 +102,26 @@ export class ReplayConn {
     if (this.failed) return;
     const message = parse(text);
     if (!message || message.id === undefined || !message.method) return;
+    if (this.worldHandle(message)) return;
     const session = message.sessionId ?? "";
+    if (this.binding.delete(session) && message.method === "Page.getFrameTree") {
+      const tree = this.lastTree.get(session);
+      if (tree !== undefined) {
+        this.hooks.note("divergence", requestForm(message));
+        this.hooks.batch(() => this.hooks.send(this.withId(this.current(session, tree), message.id ?? 0)));
+        return;
+      }
+    }
     const form = requestForm(message);
     const found = this.find(session, form);
     if (!found) {
       this.fail(session, form);
       return;
+    }
+    const answered = "repeat" in found ? found.repeat.response : found.hit.response;
+    if (message.method === "Page.getFrameTree" && answered) {
+      this.lastTree.set(session, answered.text);
+      this.navigated.delete(session);
     }
     if ("repeat" in found) {
       const answer = found.repeat.response;
@@ -115,6 +134,52 @@ export class ReplayConn {
     this.happened.set(found.hit.index, performance.now());
     this.skipPassedProbes(found.hit.index);
     this.pump();
+  }
+
+  private observe(text: string): void {
+    const event = parse(text);
+    if (event?.method !== "Page.frameNavigated") return;
+    const frame = ((event.params ?? {}) as Record<string, unknown>)["frame"] as Record<string, unknown> | undefined;
+    if (!frame || typeof frame["id"] !== "string") return;
+    const session = event.sessionId ?? "";
+    const frames = this.navigated.get(session) ?? new Map<string, Record<string, unknown>>();
+    frames.set(frame["id"], frame);
+    this.navigated.set(session, frames);
+  }
+
+  private current(session: string, tree: string): string {
+    const frames = this.navigated.get(session);
+    const answer = parse(tree);
+    if (!frames || !answer) return tree;
+    const walk = (node: Record<string, unknown>) => {
+      const frame = node["frame"] as Record<string, unknown> | undefined;
+      const latest = frame && typeof frame["id"] === "string" ? frames.get(frame["id"]) : undefined;
+      if (frame && latest) {
+        for (const key of ["loaderId", "url", "urlFragment", "securityOrigin", "name"]) {
+          if (key in latest) frame[key] = latest[key];
+        }
+      }
+      for (const child of (node["childFrames"] as Record<string, unknown>[] | undefined) ?? []) walk(child);
+    };
+    walk(((answer.result ?? {}) as Record<string, unknown>)["frameTree"] as Record<string, unknown> ?? {});
+    return JSON.stringify(answer);
+  }
+
+  private worldHandle(message: NonNullable<ReturnType<typeof parse>>): boolean {
+    const params = (message.params ?? {}) as Record<string, unknown>;
+    if (message.method === "Runtime.evaluate" && params["expression"] === WORLD_HANDLE && params["returnByValue"] === false && typeof params["contextId"] === "number") {
+      const answer: Record<string, unknown> = { id: message.id, result: { result: { type: "object", className: "Window", objectId: `${HANDLE_PREFIX}${params["contextId"]}` } } };
+      if (message.sessionId) answer["sessionId"] = message.sessionId;
+      this.hooks.note("divergence", requestForm(message));
+      this.hooks.batch(() => this.hooks.send(JSON.stringify(answer)));
+      this.binding.add(message.sessionId ?? "");
+      return true;
+    }
+    if (message.method === "Runtime.callFunctionOn" && typeof params["objectId"] === "string" && params["objectId"].startsWith(HANDLE_PREFIX)) {
+      const { objectId, ...rest } = params;
+      message.params = { ...rest, executionContextId: Number(String(objectId).slice(HANDLE_PREFIX.length)) };
+    }
+    return false;
   }
 
   private open(group: number): Recorded[] {
@@ -212,7 +277,10 @@ export class ReplayConn {
   private emit(item: Outgoing): void {
     item.sent = true;
     if (item.kind === "close") this.hooks.close(item.code);
-    else this.hooks.send(item.respondsTo ? this.withId(item.text, item.respondsTo.liveId) : item.text);
+    else {
+      if (!item.respondsTo) this.observe(item.text);
+      this.hooks.send(item.respondsTo ? this.withId(item.text, item.respondsTo.liveId) : item.text);
+    }
   }
 
   private blocked(): void {

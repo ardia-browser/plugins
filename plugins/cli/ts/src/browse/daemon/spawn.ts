@@ -18,12 +18,15 @@ const POLL_MS = 30;
 export type DaemonChoice = { kind: "ts"; program: string } | { kind: "python"; python: string; code: string };
 
 export const ENDPOINT_ENV = ["ARDIA_WS", "ARDIA_PORT", "ARDIA_CDP_URL", "AGENT_BROWSER_CDP"] as const;
+export const PLUGIN_ENV_PREFIX = "ARDIA_PLUGIN_";
+export const PLUGIN_SWITCH = "ARDIA_BROWSE_FOR_PLUGIN";
 
 export function daemonEnvironment(config: JsonObject, env: NodeJS.ProcessEnv = process.env): { config: JsonObject; env: NodeJS.ProcessEnv } {
   const folded = new Map(config);
+  const dropped = (name: string) => (ENDPOINT_ENV as readonly string[]).includes(name) || name.startsWith(PLUGIN_ENV_PREFIX) || name === PLUGIN_SWITCH;
   const kept: NodeJS.ProcessEnv = {};
   for (const [name, value] of Object.entries(env)) {
-    if (!(ENDPOINT_ENV as readonly string[]).includes(name)) kept[name] = value;
+    if (!dropped(name)) kept[name] = value;
   }
   const unset = (field: string) => folded.get(field) === undefined || folded.get(field) === null;
   if (!unset("ws") || !unset("port")) return { config: folded, env: kept };

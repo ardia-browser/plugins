@@ -4,6 +4,7 @@ import os
 import queue
 import shutil
 import signal
+import socket
 import subprocess
 import threading
 import time
@@ -21,17 +22,61 @@ CHROME_FLAGS = ["--headless", "--no-first-run", "--no-default-browser-check", "-
                 "--disable-sync", "--disable-default-apps", "--mute-audio", "--hide-scrollbars", "--force-color-profile=srgb"]
 
 
+DEFAULT_BASE = 9400
+BLOCK = 20
+RECORDED_FIXTURE = DEFAULT_BASE + BLOCK - 1
+
+
+class PortsBusy(RuntimeError):
+    pass
+
+
+def port_base() -> int:
+    if os.environ.get("ARDIA_M3_PORTS"):
+        raise PortsBusy("ARDIA_M3_PORTS is gone: set ARDIA_M3_PORT_BASE to your block's first port (D3 9400, D4 9420, D5 9440, "
+                        "F1-early 9460, reviewers 9500 and up); the block is that port and the 19 after it")
+    text = os.environ.get("ARDIA_M3_PORT_BASE", str(DEFAULT_BASE))
+    if not text.isdigit() or not 1024 <= int(text) <= 65535 - BLOCK:
+        raise PortsBusy(f"ARDIA_M3_PORT_BASE must be a port from 1024 to {65535 - BLOCK}, not {text!r}")
+    return int(text)
+
+
 def port_range() -> tuple[int, int]:
-    low, _, high = os.environ.get("ARDIA_M3_PORTS", "9400-9419").partition("-")
-    return int(low), int(high)
+    base = port_base()
+    return base, base + BLOCK - 1
+
+
+def bound(port: int) -> bool:
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        probe.bind(("127.0.0.1", port))
+    except OSError:
+        return True
+    finally:
+        probe.close()
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=0.2):
+            return True
+    except OSError:
+        return False
+
+
+def check_block(low: int, high: int):
+    taken = [port for port in range(low, high + 1) if bound(port)]
+    if taken:
+        raise PortsBusy(f"ports {', '.join(map(str, taken))} of the block {low}-{high} are already bound (another agent's harness, or a run "
+                        "of yours still going); refusing to start so no daemon talks to someone else's tap. Wait for it, or set "
+                        "ARDIA_M3_PORT_BASE to your own block")
 
 
 class Ports:
     def __init__(self):
         low, high = port_range()
+        check_block(low, high)
         self.fixture = high
         self.free: queue.Queue = queue.Queue()
-        for chrome in range(low, high - 1, 2):
+        for chrome in range(low, high - 2, 2):
             self.free.put((chrome, chrome + 1))
 
     def take(self) -> tuple[int, int]:

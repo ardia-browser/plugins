@@ -10,7 +10,7 @@ from pathlib import Path
 CLI = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CLI))
 
-from tests.m3 import compare, infra, linkrun, normalize, protocol, runner
+from tests.m3 import compare, divergences, infra, linkrun, normalize, protocol, runner
 
 
 def message(**fields) -> str:
@@ -61,8 +61,132 @@ class Normalizer(unittest.TestCase):
 
     def test_every_rule_is_named(self):
         for rule in ("browser-ids", "message-id", "concurrency", "scratch", "ports", "ids-in-answers", "session-key", "tabs-file", "file-times",
-                     "read-stamp", "metrics"):
+                     "read-stamp", "metrics", "racy-steps", "divergences"):
             self.assertIn(rule, normalize.RULES)
+
+    def test_racy_steps_keep_only_the_exit_status(self):
+        steps = [{"exit": 1, "out": "", "err": "✗ one\n", "answers": [{"answer": {"code": "navigation_failed", "exit": 1}}]},
+                 {"exit": 0, "out": "x\n", "err": "", "answers": []}]
+        result = runner.Run(root=Path("/tmp/none"), transcript=Path("/dev/null"), steps=steps, files={}, subs={})
+        shaped = normalize.run(result, None, [0])
+        self.assertEqual(shaped["answers"][0], {"exit": 1, "err": "<racy>", "out": "<racy>", "answers": "<racy>"})
+        self.assertEqual(shaped["answers"][1]["out"], "x\n")
+
+
+class PortBlocks(unittest.TestCase):
+    def setUp(self):
+        self.saved = {name: os.environ.get(name) for name in ("ARDIA_M3_PORT_BASE", "ARDIA_M3_PORTS")}
+
+    def tearDown(self):
+        for name, value in self.saved.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+    def test_the_block_follows_the_base(self):
+        os.environ.pop("ARDIA_M3_PORTS", None)
+        os.environ["ARDIA_M3_PORT_BASE"] = "9440"
+        self.assertEqual(infra.port_range(), (9440, 9459))
+        os.environ.pop("ARDIA_M3_PORT_BASE")
+        self.assertEqual(infra.port_range(), (9400, 9419))
+        for bad in ("94x0", "80", "65530"):
+            os.environ["ARDIA_M3_PORT_BASE"] = bad
+            with self.assertRaises(infra.PortsBusy):
+                infra.port_base()
+
+    def test_the_old_range_variable_is_refused(self):
+        os.environ["ARDIA_M3_PORTS"] = "9400-9419"
+        with self.assertRaises(infra.PortsBusy):
+            infra.port_range()
+
+    def test_a_bound_port_in_the_block_stops_the_run_before_anything_starts(self):
+        import socket
+
+        holder = socket.socket()
+        holder.bind(("127.0.0.1", 0))
+        holder.listen()
+        port = holder.getsockname()[1]
+        try:
+            with self.assertRaises(infra.PortsBusy) as caught:
+                infra.check_block(port - 3, port + 2)
+            self.assertIn(str(port), str(caught.exception))
+        finally:
+            holder.close()
+
+    def test_a_replay_tap_rewrites_the_recorded_fixture_port(self):
+        self.assertEqual(normalize.Subs({"fixture": 9459}).text("http://127.0.0.1:9459/login.html and localhost:9459"),
+                         "http://127.0.0.1:<FIXTURE>/login.html and localhost:<FIXTURE>")
+        self.assertEqual(normalize.Subs({}).text("http://127.0.0.1:9419/x"), "http://127.0.0.1:<FIXTURE>/x")
+
+
+class Divergences(unittest.TestCase):
+    def shaped(self, items, names=None):
+        rewrite = divergences.rewriter(names) if names is not None else None
+        return normalize.transcript(entries(*items), normalize.Subs({}), rewrite)[0]
+
+    def test_the_busy_probe_compares_equal_across_worlds_only_when_the_scenario_names_it(self):
+        python = [("mark", 3), ("out", message(id=1, method="Runtime.evaluate", sessionId="S", params={"expression": "1", "returnByValue": True}))]
+        ts = [("mark", 3), ("out", message(id=4, method="Runtime.evaluate", sessionId="S", params={"expression": "1", "contextId": 2, "returnByValue": True}))]
+        self.assertTrue(compare.compared(self.shaped(python), self.shaped(ts), compare.LIVE))
+        named = divergences.names_for({"divergences": ["busy-probe-isolated"]})
+        self.assertEqual(compare.compared(self.shaped(python, named), self.shaped(ts, named), compare.LIVE), [])
+        other = [("mark", 3), ("out", message(id=4, method="Runtime.evaluate", sessionId="S", params={"expression": "2", "contextId": 2}))]
+        self.assertTrue(compare.compared(self.shaped(python, named), self.shaped(other, named), compare.LIVE))
+        with self.assertRaises(ValueError):
+            divergences.names_for({"divergences": ["no-such-divergence"]})
+
+    def test_world_handles_compare_with_python_context_ids_without_shifting_other_ids(self):
+        call = {"functionDeclaration": "() => document.title", "arguments": [], "returnByValue": True, "awaitPromise": True}
+        python = [("mark", 1), ("out", message(id=1, method="Runtime.callFunctionOn", sessionId="SESSION-A", params={**call, "executionContextId": 5})),
+                  ("in", message(id=1, result={})), ("out", message(id=2, method="DOM.describeNode", sessionId="SESSION-A", params={"objectId": "NODE-1"}))]
+        ts = [("mark", 1), ("out", message(id=7, method="Runtime.evaluate", sessionId="SESSION-B", params={"expression": "globalThis", "contextId": 5, "returnByValue": False})),
+              ("in", message(id=7, result={"result": {"objectId": "HANDLE-XYZ"}})),
+              ("out", message(id=10, method="Page.getFrameTree", sessionId="SESSION-B", params={})),
+              ("in", message(id=10, result={})),
+              ("out", message(id=8, method="Runtime.callFunctionOn", sessionId="SESSION-B", params={**call, "objectId": "HANDLE-XYZ"})),
+              ("in", message(id=8, result={})), ("out", message(id=9, method="DOM.describeNode", sessionId="SESSION-B", params={"objectId": "NODE-2"}))]
+        names = divergences.names_for({})
+        self.assertEqual(names, ["world-handle"])
+        self.assertTrue(compare.compared(self.shaped(python, []), self.shaped(ts, []), compare.LIVE))
+        self.assertEqual(compare.compared(self.shaped(python, names), self.shaped(ts, names), compare.LIVE), [])
+
+    def test_only_world_handles_lose_their_object_id(self):
+        call = {"functionDeclaration": "function () { return this.go(); }", "arguments": [], "returnByValue": True, "awaitPromise": True}
+        python = [("mark", 2), ("out", message(id=1, method="Runtime.callFunctionOn", sessionId="S", params={**call, "objectId": "CONTROLLER-1"}))]
+        aimed_wrong = [("mark", 2), ("out", message(id=7, method="Runtime.evaluate", sessionId="S", params={"expression": "globalThis", "contextId": 5, "returnByValue": False})),
+                       ("in", message(id=7, result={"result": {"objectId": "HANDLE-1"}})),
+                       ("out", message(id=8, method="Runtime.callFunctionOn", sessionId="S", params={**call, "objectId": "HANDLE-1"}))]
+        aimed_right = [("mark", 2), ("out", message(id=8, method="Runtime.callFunctionOn", sessionId="S", params={**call, "objectId": "CONTROLLER-9"}))]
+        names = divergences.names_for({})
+        self.assertTrue(compare.compared(self.shaped(python, names), self.shaped(aimed_wrong, names), compare.LIVE))
+        self.assertEqual(compare.compared(self.shaped(python, names), self.shaped(aimed_right, names), compare.LIVE), [])
+
+    def test_every_divergence_names_its_row(self):
+        for name, entry in divergences.DIVERGENCES.items():
+            self.assertIsInstance(entry.get("row"), int, name)
+
+    def test_the_transcript_check_finds_page_session_enables_and_a_main_world_probe(self):
+        folder = Path(tempfile.mkdtemp(prefix="ardia-m3-div-"))
+        try:
+            path = folder / "t.jsonl"
+            lines = [{"k": "out", "m": message(id=1, method="Runtime.enable", sessionId="S")},
+                     {"k": "out", "m": message(id=2, method="Runtime.enable")},
+                     {"k": "out", "m": message(id=3, method="Debugger.enable", sessionId="S")},
+                     {"k": "out", "m": message(id=4, method="Runtime.evaluate", sessionId="T", params={"expression": "1"})},
+                     {"k": "out", "m": message(id=5, method="Page.createIsolatedWorld", sessionId="S", params={"frameId": "F"})},
+                     {"k": "out", "m": message(id=6, method="Runtime.evaluate", sessionId="S", params={"expression": "1"})},
+                     {"k": "out", "m": message(id=7, method="Runtime.evaluate", sessionId="S", params={"expression": "1", "contextId": 3})},
+                     {"k": "out", "m": message(id=8, method="Runtime.callFunctionOn", sessionId="S", params={"executionContextId": 3})},
+                     {"k": "out", "m": message(id=9, method="Runtime.evaluate", sessionId="S", params={"expression": "globalThis", "contextId": 3, "returnByValue": False})},
+                     {"k": "out", "m": message(id=10, method="Runtime.callFunctionOn", sessionId="S", params={"objectId": "H"})}]
+            path.write_text("".join(json.dumps(line) + "\n" for line in lines))
+            self.assertEqual(divergences.checks(path), ["a page call named a numeric execution context instead of its world handle",
+                                                        "a world handle was used before its loader was checked by Page.getFrameTree",
+                                                        "row 8: Debugger.enable sent on a page session", "row 8: Runtime.enable sent on a page session",
+                                                        "row 8: the busy probe ran in the page's main world though the page had an isolated world"])
+        finally:
+            shutil.rmtree(folder, ignore_errors=True)
 
 
 def replayable() -> list[Path]:
@@ -99,6 +223,9 @@ class Replay(unittest.TestCase):
         self.assertTrue(any("tap: unexpected request" in line or "answers" in line for line in result["differences"]), result["differences"])
 
 
+LATER_SLICES = {"core/open_title": "its `open` reports changes (D5) and it runs `snapshot` (D4)"}
+
+
 def ts_program() -> str | None:
     found = os.environ.get("ARDIA_M3_TS_PROGRAM") or str(Path(__file__).resolve().parents[1] / "ts" / "dist" / "ardia-ts")
     return found if Path(found).exists() else None
@@ -118,8 +245,8 @@ class DaemonReplay(unittest.TestCase):
         cls.harness.__exit__(None, None, None)
 
     def test_every_daemon_recording_replays_identically_against_the_ts_daemon(self):
-        paths = [path for path in replayable() if runner.name_of(path).startswith("daemon/")]
-        self.assertGreaterEqual(len(paths), 4)
+        paths = [path for path in replayable() if runner.name_of(path).startswith(("daemon/", "core/")) and runner.name_of(path) not in LATER_SLICES]
+        self.assertGreaterEqual(len(paths), 7)
         failed = [result for result in (self.harness.replay(runner.load(path), "ts") for path in paths) if not result["ok"]]
         self.assertEqual(failed, [], "\n".join(f"{result['name']}: {result['differences'][:3]}" for result in failed))
 

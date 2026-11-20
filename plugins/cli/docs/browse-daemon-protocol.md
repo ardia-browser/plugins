@@ -66,6 +66,7 @@ client then polls for the socket for up to 15 s; if the child exits and the lock
 | `debug` | boolean | log at INFO instead of WARNING |
 | `no_auto_dialog`, `pin_tab` | boolean or null | session defaults |
 | `harness_seed` | integer, harness only | seeds the daemon's randomness (`docs/m3-harness.md`) |
+| `plugin` | 32 lowercase hex digits or null | makes this a plugin daemon (below): the activity's credential id, `sha256(credential)[:32]` |
 
 ## Request
 
@@ -84,8 +85,9 @@ isn't a JSON object, or a client that sends nothing for 30 s gets the connection
 | `caller` | `{"name", "app"?}` or null | the program that ran `ardia` |
 | `beside_if_busy` | true, optional | answer `busy_elsewhere` at once instead of queueing |
 | `patient_queue` | true, optional | a `read` that may queue as long as its own limit |
+| `credential` | `p.` and 43 base64url characters, plugin mode only | the activity's credential (below) |
 
-Planned: `credential` (plugin mode, F1).
+`options` also carries `expect_loader` (string or null): plugin mode's document check (below).
 
 After the request line the daemon watches the connection: any further byte or the client closing it (Ctrl-C) cancels
 the command, and then no answer is written.
@@ -103,8 +105,7 @@ One line of JSON (UTF-8, `\n`), at most 256 MiB. An answer over that is replaced
 | `metrics` | object of numbers and booleans, optional | the command's telemetry counts, timings and flags |
 | `busy_elsewhere` | true, optional | the session was busy and the request had `beside_if_busy` |
 | `daemon` | `ts/<version>`, optional | sent only by the TypeScript daemon; its absence means Python's |
-
-Planned: `loader` (plugin mode, F1).
+| `loader` | string, optional | plugin mode: the picked tab's main-frame loader after the step, so the plugin can chain |
 
 ## Serving
 
@@ -123,3 +124,126 @@ Planned: `loader` (plugin mode, F1).
   `idle_timeout_ms` (1 h) while disconnected, it exits. A connection the browser closes is terminal: the daemon ends.
   On SIGTERM, SIGHUP or SIGINT it lets running commands finish for up to 5 s, cancels the rest, then cleans up within
   10 s (tabs it must close, the connection, the socket, `<key>.json`, its claims and registry entries).
+
+## Plugin mode
+
+A plugin's steps (`ARDIA_BROWSE_FOR_PLUGIN=1`, `docs/cli.md` › Plugin mode) are served by a TypeScript plugin daemon
+and never by Python's or by the person's own session. The TypeScript daemon only; Python's has no plugin mode.
+
+- **Key.** `<key>` is `sha256(namespace + "\0" + "plugin:" + <credential id> + "\0" + session + "\0plugin")`, first 24
+  hex characters, where the credential id is `sha256(credential)` in hex, first 32 characters. So a plugin session never
+  shares a daemon, a socket or any state with the person's session of the same name, with another activity, or with a
+  client that doesn't know plugin mode.
+- **Spawn.** As above (`<ardia-ts> daemon`, always TypeScript's, whatever `served.txt` says), with `plugin` set to the
+  credential id, `ws` set to the token server exactly as `ARDIA_PLUGIN_ENDPOINT` gave it (`ws://127.0.0.1:<port>/devtools/browser/<id>`,
+  no query), `port`, `data_dir` and `endpoint_label` null. The credential itself is never in the config, argv or the
+  environment: every spawn drops `ARDIA_WS`, `ARDIA_PORT`, `ARDIA_CDP_URL`, `AGENT_BROWSER_CDP`, every `ARDIA_PLUGIN_*`
+  variable and `ARDIA_BROWSE_FOR_PLUGIN` from the child's environment, and the client closes the credential descriptor
+  before spawning. A config with `plugin` and any other endpoint is refused (exit 2).
+- **Requests.** Every request carries `credential`. The plugin daemon checks `sha256(credential)[:32]` against its
+  `plugin` (in constant time) as soon as the line is parsed, before it reads any option or touches any state, and answers
+  a missing or different one with exactly `exit` 77, `out`, `err` and `code` `plugin_refused`: no `loader`, `metrics` or
+  `daemon`, nothing sent, and no change to its caller, dialog or pinning settings. A daemon without `plugin` answers the
+  same, just as early, to any request that carries `credential`, so a person's session never serves a plugin step. The daemon holds the credential only while that request runs; it
+  registers it for redaction and never writes it.
+- **Connection.** On a step's first CDP need the daemon connects to `<ws>?token=<credential>` with no `Origin` header.
+  It drops the connection after 30 s idle like any session, and the next step reconnects with that step's credential. A
+  connection the token server closes (the activity ended, control went off) ends the daemon.
+- **Commands.** Only `tab <id>` (the pick) and `tab`/`tab list`, `snapshot`, `click`, `fill`, `press`/`key`, `type`,
+  `scroll`, `wait`, `find`, `is` and `get`; anything else (and `close`'s tab closing) answers 77 `plugin_refused`.
+  They read pages through DOM, accessibility and Input only: no `Runtime`, `DOM.resolveNode`, `DOM.performSearch`,
+  `Page.createIsolatedWorld`, `DOM.focus`, `Page.captureScreenshot`, `DOM.scrollIntoViewIfNeeded`,
+  `Emulation.setFocusEmulationEnabled` or drag method is ever sent (the daemon checks every outgoing method against its list, and
+  the harness checks the transcript). A click is one `Ardia.dispatchClick {x, y, button, clickCount, modifiers}`, which
+  the engine presses and releases in one browser task; `Input.dispatchMouseEvent` is only ever a buttonless
+  `mouseMoved` or a `mouseWheel`, never a press, a release or a held button. At most one input command
+  (`Input.dispatch*`, `Input.insertText` or `Ardia.dispatchClick`) is outstanding: each is sent
+  only after the previous one was answered, and one left unanswered (10 s, `outcome_unknown`) holds back the next step's
+  input for up to 10 s more (`input_unanswered`).
+- **Page session only.** An act lease names the tab, the DevTools page target of its primary main frame and that
+  frame's document, and the engine refuses input on any other session. So every input command (`Input.*`,
+  `Ardia.dispatchClick`) goes out on the page target's own session, the one the daemon attached to that tab with
+  `Target.attachToTarget`: never on an iframe target's, a prerender target's or an auto-attached session, and never on
+  the browser session. The daemon refuses to send one anywhere else, and the harness checks it as acceptance check (c).
+- **Focus and scrolling.** Focus comes only from clicks: `fill`, `type`, `press <selector> <key>` and `find … focus`
+  click their element (`Ardia.dispatchClick` at its first content quad's centre), which focuses the page the way a
+  person's click does; moves and wheels never focus. The engine holds the tab visible only while the plugin acts (its
+  act lease turns the hold on), so the daemon scrolls only inside acting steps (`click`, `fill`, `type`, `press`,
+  `scroll`, and `find` with an action other than `text`): it reads the element's content quad and the layout viewport
+  (`Page.getLayoutMetrics`), and while the quad's middle is outside the viewport it sends one buttonless `mouseWheel` at
+  the viewport's centre with the delta that would centre it, up to 4 times; still outside answers `outside_viewport`
+  and nothing is clicked. Reads (`snapshot`, `get`, `is`, `find … text`, `wait`) never scroll, and the daemon's link
+  refuses a wheel outside an acting step. A wheel the engine answers `ardia: busy` (the person used that tab in the last
+  500 ms, or a second wheel while one is unanswered: ardia#2808 round 18 keeps one wheel slot per credential and tab and
+  answers a wheel only when the renderer acknowledges it, so the daemon's one-input-outstanding rule normally avoids
+  it) is retried after 100, 200, 300, 400 and 500 ms, then the step answers `busy` ("Ardia didn't scroll the tab
+  because the person is using it right now …"); `ardia: page hidden` answers `outside_viewport` ("The tab is hidden and
+  can't be scrolled"). The owner session keeps `DOM.scrollIntoViewIfNeeded`.
+- **Nothing between steps.** After every step the daemon detaches from the page target (`Target.detachFromTarget`), so
+  no session, domain, event subscription or handler (the auto-accepted dialog included) lives between steps; the next
+  step attaches again (`Page.enable`, lifecycle events, `Page.getFrameTree`), which replays the page's current
+  lifecycle. The answer's `loader` is the one read during the step. The harness checks it as (f).
+- **Polling.** `wait` (`--text`, `--url`, `--load`, `--state`) and `find`'s short retry poll on one schedule: 200, 400,
+  600, 800 ms, then every second, ending at the deadline, on visible and hidden tabs alike; each answer counts its polls
+  (`plugin_wait_polls`). `--text` reads the AX tree each poll: Chrome 158's `Accessibility.queryAXTree` matches whole
+  names only, so it can't stand in for a substring search.
+- **Keys.** Key events follow ardia#2808's key policy, whose key table the daemon carries as generated data
+  (`ts/scripts/plugin-key-table.ts`, checked against the engine's compiled validator by `plugin-keys.test.ts`). A
+  `press` the engine would refuse (Meta+C, Meta+V, Meta+Z, Shift+Delete, a character no key types) answers 77
+  `plugin_refused` before any key goes out, so no modifier is left down. `type` and humanized `fill` send each
+  character as key events when the engine allows them and as `Input.insertText` otherwise (é, CJK, emoji).
+- **Frames.** `snapshot` (and each step's changes view) reads the top document's AX tree and, under each `<iframe>`,
+  the child frame's own tree (`Accessibility.getFullAXTree {frameId}`) when that frame is in the tab's frame tree and
+  same-site with the top document (same scheme and registrable domain, approximated as the host's last two labels).
+  Cross-site frames (out-of-process iframes) aren't read; when any frame is skipped the snapshot ends with one line,
+  `N embedded frame(s) not read`, and `--json` carries `framesNotRead`. Refs inside a read frame work like any other.
+- **Protected fields.** The daemon never returns a password field's value: not in `snapshot`, `get value`, `get text`,
+  `get attr … value`, `get html` (a password input's `value` attribute is removed), `find` or any change report. A field
+  is protected when the AX tree marks it `protected`, when its AX value is all mask characters, or when `DOM.describeNode`
+  shows `<input type=password>`; on Chrome 158 only the DOM signal is reliable (the AX tree carries no `protected`
+  property and masks the value with one bullet per character). It shows as present, with its role, name and
+  `(password field)` and no value. `fill`, `type` and `find … fill|type` into one answer exit 77 `protected_field`
+  ("Password fields are filled by the password manager, not by plugins") before any input goes out, and the answer's
+  metrics count it (`plugin_protected_refused`). Owner mode is unchanged.
+- **Removed elements.** Without Runtime, Chrome 158 shows a node removed from the page exactly like a `display:none`
+  one (`DOM.describeNode` succeeds, the AX tree marks it `notRendered`, it has no quads), so acting on a ref whose node
+  was removed answers `not_visible` rather than the owner session's `stale_ref`. This is accepted: the AI contract takes
+  a fresh snapshot after either.
+- **Refs.** A step acts only on the picked tab: a ref taken on another tab is stale, answering exit 1 `stale_ref` like
+  any other stale ref, and nothing is sent.
+- **Document check.** With `options.expect_loader`, the daemon compares the picked tab's main-frame loader before the
+  step (a mismatch answers code `document_changed`, exit 1, and nothing ran) and after it, even when the step failed (a
+  mismatch answers code `document_changed_after`, exit 1, `data.ran: true`, in place of the step's own answer). The
+  pick ignores it. Every answer whose tab is
+  attached carries `loader`.
+- **Engine codes.** ardia#2808 gives every refusal a plugin can get one fixed message
+  (`engine/ardiacore/src/ardia/core/ac_plugin_refusals.h`, vendored under `ts/tests/m3/plugin-engine/`). One table,
+  `src/browse/plugin/engine-codes.ts`, maps them by exact string (the two patterns by `ardia: ` plus a method and the
+  fixed suffix), and `plugin-refusals.test.ts` fails when the header has a string the table neither maps nor lists as
+  uncoded. Codes never come from page text. `ardia: busy` and `ardia: the page isn't taking input right now` → retried
+  (wheels), then `busy`; `ardia: page hidden` → `outside_viewport`; `ardia: not delivered` → `not_applied` (nothing was
+  sent); `ardia: outcome unknown` → `outcome_unknown`; `ardia: the page changed after the input was sent` →
+  `document_changed`; `ardia: tab_out_of_scope: the tab left the plugin's window` → `tab_out_of_scope`; no attached
+  session or no page → `tab_detached`; a nodeId or backendNodeId not in the page, or one that left it → `stale_ref`; a
+  point outside the page → `outside_viewport`; nothing there → `not_visible`; a closing connection → `connection_lost`;
+  the policy refusals (not the page session, input not allowed for this session, input that can't be made, a session
+  that can't send input, `ardia: <method> <what> isn't allowed for a plugin`, `ardia: <method> <what> can't be sent`) →
+  exit 77 `plugin_refused`. The act lease (ardia#2808 plus `act-lease-on-2808` at 573cd7ed8, whose header is the vendored one) adds three:
+  `ardia: no act lease for this page's current document` → `act_lease_missing` (refused at admission) and
+  `ardia: act lease ended before this input was delivered` → `act_lease_ended` (a pointer command that never passed its
+  final check before forwarding) both mean nothing of the command reached the page and answer exit 77 with "(nothing
+  ran)"; the daemon takes no leases, so it doesn't retry, and the AI host decides whether to grant a new lease and send
+  the step again. `ardia: document_changed: the tab loaded a new document since the act was approved` →
+  `document_changed`. Its host-side strings (`the tab can't be shown for this act`, `no lease for this page now`) answer
+  nothing the daemon sends and stay uncoded. `ardia: outcome unknown` can answer any leased command the daemon sends (keys, `Input.insertText`,
+  clicks, wheels, `Page.handleJavaScriptDialog`), not only pointer input: it's `outcome_unknown` on every path and is
+  never retried; an auto-accepted dialog that answers it leaves a notice on the step. Round 18's hold and minting refusals (`another hold on that tab is still being taken`,
+  `too many plugin credentials for this profile`) aren't answers to anything the daemon sends and stay uncoded. A wheel
+  answered `ardia: outcome unknown` (its acknowledgement never came) is `outcome_unknown` and never retried. The
+  protocol errors (not JSON, no id, duplicate id, too many pending) stay uncoded: the
+  daemon never sends what causes them. A coded refusal always ends the step before any further CDP call; only a plain,
+  uncoded CDP failure may fall back (an empty title, a default viewport point, "no box").
+- **State.** Tab numbers live in the daemon's memory, per credential; the shared `tabs-*.json` registry, claims, the
+  temporary-tab sweep and `using` are never touched. Nothing is written in `Browse/` beyond the session's socket, lock and
+  log (no `<key>.json`), and an answer over the output cap is cut, not spilled.
+

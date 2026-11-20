@@ -1,4 +1,5 @@
 import { Float, parseText, type Value } from "../../json.ts";
+import { CREDENTIAL_ID, tokenServer } from "../plugin/key.ts";
 
 export type DaemonConfig = {
   session: string;
@@ -14,6 +15,7 @@ export type DaemonConfig = {
   noAutoDialog: boolean;
   pinTab: boolean;
   harnessSeed: bigint | null;
+  plugin: string | null;
 };
 
 export const CONFIG_LIMIT = 1024 * 1024;
@@ -83,12 +85,19 @@ export function parseConfig(text: string): DaemonConfig {
     idleTimeoutMs = idle instanceof Float ? idle.value : Number(idle);
     if (!Number.isFinite(idleTimeoutMs) || idleTimeoutMs < 0) throw new BadConfig("idle_timeout_ms must be a number of milliseconds");
   } else if (idle !== undefined && idle !== null) throw new BadConfig("idle_timeout_ms must be a number of milliseconds");
+  const plugin = optionalText(parsed, "plugin");
+  const ws = optionalText(parsed, "ws");
+  if (plugin !== null) {
+    if (!CREDENTIAL_ID.test(plugin)) throw new BadConfig("plugin must be the credential's id: 32 lowercase hex digits");
+    if (ws === null || !tokenServer(ws)) throw new BadConfig("a plugin daemon's ws must be the token server, ws://127.0.0.1:<port>/devtools/browser/<id>, with no token");
+    if (port !== null || optionalText(parsed, "data_dir") !== null) throw new BadConfig("a plugin daemon takes no port or data_dir");
+  }
   return {
     session,
     namespace,
     key,
     dataRoot,
-    ws: optionalText(parsed, "ws"),
+    ws,
     port: port === null ? null : Number(port),
     dataDir: optionalText(parsed, "data_dir"),
     endpointLabel: cleanLabel(optionalText(parsed, "endpoint_label")),
@@ -97,5 +106,6 @@ export function parseConfig(text: string): DaemonConfig {
     noAutoDialog: flag(parsed, "no_auto_dialog"),
     pinTab: flag(parsed, "pin_tab"),
     harnessSeed: wholeNumber(parsed, "harness_seed", 0n, 2n ** 64n),
+    plugin,
   };
 }

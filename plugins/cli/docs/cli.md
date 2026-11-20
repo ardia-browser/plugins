@@ -1923,6 +1923,67 @@ These are intentional: Python behaves the other way, and the TypeScript daemon f
   endpoint label without any query, fragment or user info, whatever the client sent.
 - A request line may be 16 MiB including its newline; one byte more is dropped unanswered.
 
+Its page core (slice D3: `browse/state/page.ts`, `state.ts`, `refs.ts`, `apptabs.ts` and the command table in
+`browse/commands/`) follows `page.py`, `state.py` and `tabs.py`, except for these, each covered by
+`ts/tests/m3/core*.test.ts`, the `core/*` harness scenarios or the human tier (`tests/m3/human_core.py`):
+
+- It never sends `Runtime.enable` or `Debugger.enable` on a page session (ardia#2812 row 8). Python doesn't either
+  unless console capture asks for it; in TypeScript that is the one opt-in path left (`Page.enableRuntime`, for slice
+  D6), and the harness fails any TS run that sends either on a page session.
+- The busy probe, sent before any command on a tab whose page stopped answering in the last 120 s, evaluates `1` in the
+  `ardia-browse` isolated world (made first with `Page.createIsolatedWorld` when the document has none yet) instead of
+  the page's main world, within the same 3 s. Before any frame of the tab is known it evaluates `1` without a context,
+  as Python does, since there is no world to put it in. The harness compares it through the `busy-probe-isolated`
+  divergence.
+- Setup that a cancelled or failed command cut short after the session was published (`keepAwake`, the layout metrics,
+  a setup restore) is done again on the tab's next use, `Page.enable` first. Python marks the tab ready and never
+  finishes it; after a Ctrl-C during attach, its next `open --show` can time out on that half-made session.
+- `tab active`'s fallback probe follows plugins#11: at most 8 probes at a time, a probe the attach cap refuses counts as
+  not probed rather than inactive and is tried again in up to three passes (0.25 s, then 0.5 s apart), and tabs still
+  unprobed after that end the command with `attaches_unanswered` instead of `no_tab`. Python on this branch probes all
+  tabs at once and reads a refusal as inactive.
+- Ardia's tab list (`windows`, for the app tab ids and following a replaced page) is asked over the control socket in
+  one exchange with a 6 s deadline; Python allows 3 s to connect and 3 s for the answer.
+- A ref resolves only to the backend node it was issued for. Python follows a ref whose page reloaded the same address,
+  or whose element was redrawn, to the one node with the same role and name; TypeScript fails it as a stale ref, with
+  the same `stale_ref` code, exit status and wording (naming the likely successor's ref), so a command never acts on a
+  node it wasn't given. `followed_redrawn_ref` and `followed_ref_after_reload` never fire.
+- A page call is bound to the document and frame its isolated world was made for. Each world gets a handle (one more
+  `Runtime.evaluate` of `globalThis`, kept as its remote object id), and every call is `Runtime.callFunctionOn` on that
+  handle rather than on a numeric execution context id, which Chromium can reuse in another process. Right after the
+  handle is made, a `Page.getFrameTree` request (one more than Python sends per world) binds it to the loader the
+  renderer reports, so a navigation whose event hasn't arrived yet can't hand the call a world in the new document. A renderer that no
+  longer has the handle's document refuses it, and the call fails with `document_changed` (a read retries once in a
+  fresh world). The frame's loader is also checked after the world is made, after the helper library goes in and right
+  before the call is sent. An element from another frame is never re-homed into this frame's world. Python can run such
+  a call on the new document. The harness compares the calls through the `world-handle` divergence, and its replay
+  serves the handle from the recorded context.
+- A lost connection is never read as an answer: a page title, a visibility check, the busy probe, the active-tab
+  probe and the setup restore pass `connection_lost` on, where Python's catch-all reads it as an empty title, a
+  visible tab, an inactive tab or lost setup (releasing the route claim).
+- Setup restored after a reattach is done in full or left to be done again: a cancel or lost connection partway keeps
+  it pending, and the next use replays the steps not yet applied on that session. An init script whose registration is
+  ambiguous (cancelled, timed out or answered with an unknown outcome) may be installed without its id, so the session
+  is detached instead (`setup_session_dropped`) and the next use attaches a new one and replays everything; it isn't
+  reported as lost setup.
+- A tab that had crashed before the session attached keeps its CDP session as a handle for `reload` only; the session
+  counts as attached once `Page.enable` and the frame refresh finish. A connection whose target discovery was cancelled
+  or failed is dropped, so the next command connects and discovers again.
+- When `set viewport`'s tab leaves its off-screen copy and the replacement tab fails to load, the replacement is closed
+  and the session's tab, label and pin go back to the original (`offscreen_handoff_rolled_back`, counted only when the
+  close succeeded). Every such close takes the tab registry's close reservation first, as the temporary-tab sweep does;
+  a replacement whose reservation is refused, that Chromium won't close, or whose creation was answered after a cancel
+  goes on the list of tabs the daemon keeps closing (each retry reserves again) and is handed to the next connect's sweep
+  at exit. The command's own error is kept, with any closing error as its cause, and the answer reports it even when that
+  cause is a lost connection (the session is still marked lost, so the next command gets `connection_lost`). Python leaves the session on the half-made tab.
+- Two metric flags are TypeScript-only: `offscreen_handoff_rolled_back` (the rollback above closed the replacement) and
+  `setup_session_dropped` (an ambiguous init-script registration detached the session). They count from the TypeScript
+  client onward (M1, plugins#14), whose flag list carries them. While the Python client fronts the TS daemon, its
+  `command_metrics.clean()` drops names it doesn't know, and the Python side is frozen, so neither is reported then.
+- The caller counts as announced to Ardia's control socket only after the handshake finished, so a cancelled one is
+  tried again by the next command; Python records it before. A cancelled active-tab lookup (`tab active`) ends its HTTP
+  request at once.
+
 ## Linux
 
 The same CLI, with these differences:
