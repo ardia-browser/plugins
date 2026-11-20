@@ -21,7 +21,7 @@ RULES = {
     "message-id": "the top-level `id` of a request is dropped; requests are matched by content",
     "concurrency": "requests on one CDP session sent while another was unanswered are one group, compared as a sorted multiset",
     "scratch": "the side's scratch root (data dir, HOME, TMPDIR) becomes <SCRATCH> in answers, files and requests",
-    "ports": "the tap's and Chromium's port become <TAP> and <CHROME> in answers and requests",
+    "ports": "the tap's, Chromium's and the fixture server's port become <TAP>, <CHROME> and <FIXTURE> in answers and requests (recordings made before the fixture port was stored used 9419)",
     "ids-in-answers": "browser string IDs (8+ chars) seen in the transcript become their placeholder inside answer text",
     "session-key": "24-hex session keys in file names and answers become <KEY:session>",
     "tabs-file": "the tab registry's file name hash becomes tabs-<HASH>",
@@ -33,6 +33,8 @@ RULES = {
     "replay-repeats": "replay lets the read-only probes listed in tests/m3/elastic.json repeat or be skipped, since their count follows the daemon's sleeps",
     "unstable-steps": "live mode compares only exit and stderr of the steps a scenario lists in `unstable_steps`, with the reason in the scenario",
     "metrics": "of an answer's `metrics` only the key set is compared, never values",
+    "racy-steps": "every mode compares only the exit status of the steps a scenario lists in `racy_steps`, where Chromium decides which of two errors the same request gets (the reason is in the scenario)",
+    "divergences": "designed TS differences from tests/m3/divergences.py (`world-handle` always, the rest when a scenario names them) rewrite only the request fields they name, on both sides, before IDs are numbered",
 }
 
 
@@ -81,22 +83,26 @@ class Ids:
         return text
 
 
+RECORDED_FIXTURE = 9419
+
+
 class Subs:
     def __init__(self, subs: dict):
         self.root = subs.get("root") or ""
         self.tap = subs.get("tap")
         self.chrome = subs.get("chrome")
+        self.fixture = subs.get("fixture", RECORDED_FIXTURE)
 
     def text(self, text: str) -> str:
         if self.root:
             text = text.replace(self.root, "<SCRATCH>")
-        for port, name in ((self.tap, "<TAP>"), (self.chrome, "<CHROME>")):
+        for port, name in ((self.tap, "<TAP>"), (self.chrome, "<CHROME>"), (self.fixture, "<FIXTURE>")):
             if port:
                 text = re.sub(rf"(?<=127\.0\.0\.1:){port}\b|(?<=localhost:){port}\b|(?<=--port ){port}\b", name, text)
         return text
 
 
-def transcript(entries: list[dict], subs: Subs) -> tuple[dict, Ids]:
+def transcript(entries: list[dict], subs: Subs, rewrite=None) -> tuple[dict, Ids]:
     ids = Ids()
     local = Ids()
     step: str = "setup"
@@ -104,6 +110,7 @@ def transcript(entries: list[dict], subs: Subs) -> tuple[dict, Ids]:
     open_by_session: dict[tuple, set] = {}
     session_of: dict[tuple, tuple] = {}
     sources: dict[str, set] = {}
+    dropped: set = set()
     for entry in entries:
         kind = entry.get("k")
         if kind == "mark":
@@ -121,6 +128,11 @@ def transcript(entries: list[dict], subs: Subs) -> tuple[dict, Ids]:
             continue
         conn = entry.get("c", 0)
         if kind == "in":
+            if (conn, message.get("id")) in dropped:
+                dropped.discard((conn, message.get("id")))
+                if hasattr(rewrite, "reply"):
+                    rewrite.reply((conn, message.get("id")), message)
+                continue
             ids.walk(message)
             found = (conn, message.get("id"))
             if found in session_of:
@@ -128,6 +140,12 @@ def transcript(entries: list[dict], subs: Subs) -> tuple[dict, Ids]:
             continue
         if "method" not in message or "id" not in message:
             continue
+        if rewrite is not None:
+            rewritten = rewrite(message, (conn, message["id"])) if hasattr(rewrite, "reply") else rewrite(message)
+            if rewritten is None:
+                dropped.add((conn, message["id"]))
+                continue
+            message = rewritten
         session = (conn, message.get("sessionId") or "")
         ids.walk(message)
         normalized = local.walk({name: value for name, value in message.items() if name != "id"})
@@ -197,14 +215,17 @@ def files(found: dict, subs: Subs, ids: Ids, keys: dict) -> dict:
     return dict(sorted(shaped.items()))
 
 
-def run(result, unstable: list[int] | None = None) -> dict:
+def run(result, unstable: list[int] | None = None, racy: list[int] | None = None, rewrite=None) -> dict:
     subs = Subs(result.subs)
-    requests, ids = transcript(load(result.transcript), subs)
+    requests, ids = transcript(load(result.transcript), subs, rewrite)
     keys = session_keys(result.files)
     answers = [answer(step, subs, ids, keys) for step in result.steps]
     for index in unstable or []:
         if index < len(answers):
             answers[index] = {"exit": answers[index]["exit"], "err": answers[index]["err"], "out": "<unstable>", "answers": "<unstable>"}
+    for index in racy or []:
+        if index < len(answers):
+            answers[index] = {"exit": answers[index]["exit"], "err": "<racy>", "out": "<racy>", "answers": "<racy>"}
     return {
         "answers": answers,
         "files": files(result.files, subs, ids, keys),

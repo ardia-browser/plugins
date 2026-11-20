@@ -7,18 +7,18 @@ import path from "node:path";
 import { parseConfig } from "../../src/browse/daemon/config.ts";
 import { Daemon } from "../../src/browse/daemon/server.ts";
 import { spawnDaemon } from "../../src/browse/daemon/spawn.ts";
-import { StubState } from "../../src/browse/daemon/stub/state.ts";
-import { StubPage } from "../../src/browse/daemon/stub/page.ts";
+import { State } from "../../src/browse/state/state.ts";
+import { Page } from "../../src/browse/state/page.ts";
 import { Cancelled } from "../../src/browse/cdp/cancel.ts";
 import { browseDir, closeFd, lockHeld, socketIsOurs } from "../../src/browse/paths.ts";
 import { BUILT_LIBC } from "../libc-loaded.ts";
 import { dumps } from "../../src/json.ts";
-import { alive, ask, config, keyOf, PYTHON, sessionMeta, raw, type Scratch, scratch, socketFile, staleSocket, start, tsChoice, until, quietWatchdog } from "./daemon-helpers.ts";
+import { alive, ask, config, keyOf, PYTHON, sessionMeta, raw, type Scratch, scratch, socketFile, staleSocket, start, tsChoice, until, quietWatchdog, D2_FIRST_PORT } from "./daemon-helpers.ts";
 
 setDefaultTimeout(90_000);
 const TS_DIR = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
 const CHROME = process.env["ARDIA_M3_CHROME"];
-const CHROME_PORT = Number(process.env["ARDIA_D2_CHROME_PORT"] ?? "9531") + 3;
+const CHROME_PORT = D2_FIRST_PORT + 3;
 const home = process.cwd();
 const made: Scratch[] = [];
 const pids: number[] = [];
@@ -171,7 +171,7 @@ describe("shutdown", () => {
 
 describe("attach", () => {
   test("a cancelled attach publishes no session and leaves the page to be enabled", async () => {
-    const state = new StubState({ session: "s", key: "k", browseFd: null, noAutoDialog: false, pinTab: false }, () => Promise.reject(new Error("unused")));
+    const state = new State({ session: "s", key: "k", browseFd: null, noAutoDialog: false, pinTab: false }, () => Promise.reject(new Error("unused")));
     const sent: string[] = [];
     const browser = {
       send(method: string) {
@@ -181,7 +181,7 @@ describe("attach", () => {
         return Promise.resolve({});
       },
     };
-    const page = new StubPage(state, "TARGET");
+    const page = new Page(state, "TARGET");
     const failure = await page.attach(browser as never).catch((error: unknown) => error);
     expect(failure).toBeInstanceOf(Cancelled);
     expect(page.sessionId).toBeNull();

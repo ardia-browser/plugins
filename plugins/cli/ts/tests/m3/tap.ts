@@ -37,7 +37,12 @@ writeFileSync(out, "");
 const record = (entry: Entry) => appendFileSync(out, `${JSON.stringify(entry)}\n`);
 record({ k: "meta", scratch: scratch ?? "", listen, mode: replayPath ? "replay" : "live" });
 
-const recording = replayPath ? readTranscript(replayPath) : [];
+const fixtureFrom = options.get("--fixture-from");
+const fixtureTo = options.get("--fixture-to");
+const fixturePort = fixtureFrom && fixtureTo && fixtureFrom !== fixtureTo ? new RegExp(`(?<=(?:127\\.0\\.0\\.1|localhost|\\[::1\\]):)${fixtureFrom}\\b`, "g") : null;
+const recording = (replayPath ? readTranscript(replayPath) : []).map((entry) =>
+  fixturePort && entry.m !== undefined ? { ...entry, m: entry.m.replace(fixturePort, fixtureTo as string) } : entry,
+);
 const recordedScratch = recording.find((entry) => entry.k === "meta")?.scratch;
 const recordedVersion = recording.find((entry) => entry.k === "version")?.body;
 const elasticRules = JSON.parse(readFileSync(new URL("../../../tests/m3/elastic.json", import.meta.url), "utf8")) as { lookahead: number; methods: string[]; probes: string[] };

@@ -3,7 +3,7 @@ import { sleep } from "../cdp/cancel.ts";
 import { BrowseError, Usage } from "../daemon-errors.ts";
 import { unavailable } from "./link.ts";
 import { Result } from "../daemon/render.ts";
-import { need, parse } from "../daemon/stub/commands.ts";
+import { need, parse } from "../commands/parse.ts";
 import { pollUntil, pollWait } from "./poll.ts";
 import { type AxNode, buildTree, isAxList, type Node, ROLE_NAMES } from "../snapshot/tree.ts";
 import { FIND_ACTIONS, findArguments } from "./acting.ts";

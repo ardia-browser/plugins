@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { generate } from "../../scripts/plugin-key-table.ts";
 import { NAMED_KEYS } from "../../src/browse/input/keys.ts";
-import { charEvents, comboEvents, uncheckedComboEvents } from "../../src/browse/plugin/input.ts";
+import { charEvents, clickAt, comboEvents, uncheckedComboEvents, wheelAt } from "../../src/browse/plugin/input.ts";
 import { KEY_ROWS } from "../../src/browse/plugin/key-table.ts";
 import { keyRefusal } from "../../src/browse/plugin/keys.ts";
 import { PluginRefused } from "../../src/browse/plugin/session.ts";
@@ -114,5 +114,34 @@ describe("plugin key events follow ardia#2808's key policy", () => {
   test("text no key event can type goes through Input.insertText", () => {
     for (const char of EXTRA_CHARS) expect(charEvents(char)).toBeNull();
     expect(charEvents("a")).not.toBeNull();
+  });
+});
+
+describe("plugin wheels and clicks follow ardia#2808's pointer policy", () => {
+  test.skipIf(!clang)("every wheel and Ardia.dispatchClick the daemon sends passes the engine's compiled validator", async () => {
+    const binary = path.join(work, "check_pointer");
+    const built = spawnSync("clang++", ["-std=c++20", "-O1", `-I${ENGINE}`, path.join(ENGINE, "check_pointer.cc"), path.join(POLICY, "ac_cli_plugin_input.cc"), "-o", binary], { encoding: "utf8" });
+    expect(built.stderr).toBe("");
+    const sent: [string, Record<string, unknown>][] = [];
+    const page = { send: async (method: string, params: Record<string, unknown>) => (sent.push([method, params]), {}) } as never;
+    for (const [x, y, dx, dy] of [[500, 400, 0, 2600], [500, 400, 0, -900], [1, 1, 300, 0], [999.5, 0.5, -10.25, 0]] as const) await wheelAt(page, x, y, dx, dy);
+    for (const button of ["left", "right"]) for (const count of [1, 2]) await clickAt(page, 35.5, 315, button, count);
+    const kind = (value: unknown) => (typeof value === "string" ? `s:${value}` : Number.isInteger(value) ? `i:${String(value)}` : `d:${String(value)}`);
+    const lines = sent.map(([method, params]) => [method === "Ardia.dispatchClick" ? "click" : "mouse", ...Object.entries(params).map(([name, value]) => `${name}=${kind(value)}`)].join("\t"));
+    const input = path.join(work, "pointer.tsv");
+    fs.writeFileSync(input, `${lines.join("\n")}\n`);
+    const fd = fs.openSync(input, "r");
+    const ran = spawnSync(binary, [], { stdio: [fd, "pipe", "pipe"], encoding: "utf8" });
+    fs.closeSync(fd);
+    const answers = ran.stdout.trimEnd().split("\n");
+    expect(answers).toHaveLength(sent.length);
+    expect(sent.map(([method], index) => [method, answers[index]]).filter(([, answer]) => answer !== "ok")).toEqual([]);
+    expect(sent.filter(([method]) => method === "Input.dispatchMouseEvent")).toHaveLength(4);
+    const control = path.join(work, "pointer-control.tsv");
+    fs.writeFileSync(control, "mouse\ttype=s:mousePressed\tx=i:1\ty=i:1\tbutton=s:left\tbuttons=i:1\nclick\tx=i:1\ty=i:1\tbutton=s:middle\tclickCount=i:1\tmodifiers=i:0\n");
+    const controlFd = fs.openSync(control, "r");
+    const refused = spawnSync(binary, [], { stdio: [controlFd, "pipe", "pipe"], encoding: "utf8" }).stdout.trimEnd().split("\n");
+    fs.closeSync(controlFd);
+    expect(refused.every((answer) => answer !== "ok")).toBe(true);
   });
 });

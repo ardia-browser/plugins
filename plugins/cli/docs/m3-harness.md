@@ -22,8 +22,11 @@ the normalized requests, the answers and the session folder. Everything runs fro
 - Bun 1.3.14 and `bun install --frozen-lockfile --ignore-scripts` in `ts/`.
 - Live modes need `ARDIA_M3_CHROME`: a pinned `chrome-headless-shell` (Chrome for Testing 158.0.8127.18, Playwright's
   `chromium_headless_shell-1254`, in its own folder). It always runs headless, never headed.
-- Ports come from `ARDIA_M3_PORTS` (default `9400-9419`; slice *i* uses `9400 + 20i` through `+19`). The top port
-  serves the fixtures; the rest are Chromium and tap pairs.
+- Ports come from `ARDIA_M3_PORT_BASE` (default 9400): each agent owns the block of 20 starting there (D3 9400, D4
+  9420, D5 9440, F1-early 9460, reviewers 9500 and up). In a block, +0 to +17 are Chromium and tap pairs, +19 serves
+  the fixtures, `human_core` takes +16 and +17, and the D2 bun tests (`ARDIA_D2_CHROME_PORT` overrides them) take +10
+  to +14. A run first checks every port of its block and stops at once if any is bound (bound locally or answering a
+  connection), so a daemon never talks to another agent's tap. `ARDIA_M3_PORTS` is refused.
 - The TS side runs through `ARDIA_M3_TS_PROGRAM=<built ardia-ts>`. The program is started as `<program> browse …`. To
   be seeded it must read `harness_seed` from its spawn config (below).
 
@@ -178,7 +181,28 @@ later slices. `daemon/stub/` holds the minimum page core the D2 scenarios need (
 
 The Python seeded client starts the TS daemon when `ARDIA_BROWSE_DAEMON=ts` and appends each spawn config to
 `$HOME/spawn-config.jsonl` and each full request to `answers.jsonl` (`wire`), which is what the protocol check reads.
-Recordings must be made on the default ports (`ARDIA_M3_PORTS=9400-9419`): the fixture URL in them carries the port.
+Recordings must be made with the default base (9400): the fixture URL in them carries port 9419. Replay at any other
+base rewrites that port to the block's own fixture port in the recorded messages (the tap's `--fixture-from` and
+`--fixture-to`), and the normalizer writes every fixture port as `<FIXTURE>`, so replays run in any block.
+
+## The page core (slice D3)
+
+`ts/src/browse/state/` is the page core: `page.ts` (attach, frames, isolated worlds, `call`, crash and detach, setup
+restore, the busy probe), `state.ts` (connection, targets, tab ids, the lost-tab follow, `tab active`'s probes),
+`refs.ts` (refs and their staleness), `apptabs.ts` (Ardia's tab list over the control socket) and `records.ts` (console,
+error and network records for D6). `ts/src/browse/commands/` holds the command table (`index.ts`: every Python command,
+its owning slice, `register()`, `dispatch()` and its hooks), the parser (`parse.ts`), `Ctx` (`ctx.ts`) and the commands
+D3 serves (`core.ts`: `open` without change reports, `get title|url`, `wait`, `session`). Later slices register their
+commands from their own files and import them in `all.ts`; a name registered twice, or one outside the table, throws.
+
+| What | How it's run |
+|---|---|
+| Scenarios `core/*` | `live 'core/*' --a python --b ts`, `replay 'core/*' --impl ts` (`core/open_title` waits for D4's `snapshot` and D5's change report), `cancel core/frames_worlds --impl ts --kind interrupt\|error\|drop` |
+| Designed divergences | `tests/m3/divergences.py`: each entry names its ardia#2812 row; a scenario lists the ones it needs in `divergences`, and only the named request form is rewritten, on both sides. `drop` and `stop` fault runs add `busy-probe-isolated`, since an unanswered call is what sends the probe. Every TS run (live, replay, fault) also fails on `Runtime.enable`, `Debugger.enable` or `Console.enable` on a page session and on a main-world busy probe |
+| Racy steps | `racy_steps` in a scenario: only the exit status is compared, for a step where Chromium decides which of two errors one request gets |
+| Human tier | `python -m tests.m3.human_core --pages <plugins#13 tests/human> --chrome <Chrome for Testing> [--impl ts\|python]`: rows 7 to 11 through `ardia browse`, with a full Chrome for Testing in `--headless=new` (chrome-headless-shell is old-mode headless and sets `navigator.webdriver`). Clicks D5 doesn't serve yet are made by the tier and named in the row's notes |
+| Unit tests | `ts/tests/m3/core.test.ts` (attach order, publish after the frame refresh, busy probe world, worlds per document, re-homing, crash and detach, setup restore, the probe rules, refs, the table) and `core-ported.test.ts` (`test_browse_crash` and `test_browse_detach`, same names) |
+
 
 ## Plugin mode (F1-early)
 

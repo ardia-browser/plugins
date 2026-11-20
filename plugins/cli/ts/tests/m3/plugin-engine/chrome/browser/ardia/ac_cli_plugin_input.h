@@ -3,6 +3,7 @@
 #ifndef CHROME_BROWSER_ARDIA_AC_CLI_PLUGIN_INPUT_H_
 #define CHROME_BROWSER_ARDIA_AC_CLI_PLUGIN_INPUT_H_
 
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -13,7 +14,6 @@ inline constexpr int kCdpAlt = 1;
 inline constexpr int kCdpCtrl = 2;
 inline constexpr int kCdpMeta = 4;
 inline constexpr int kCdpShift = 8;
-inline constexpr int kCdpMiddleButton = 4;
 
 struct PluginKeyEvent {
   std::optional<std::string> type;
@@ -29,8 +29,38 @@ struct PluginKeyEvent {
 
 std::string PluginKeyRefusal(const PluginKeyEvent& event);
 
-std::string PluginMouseRefusal(const std::optional<std::string>& button,
-                               std::optional<int> buttons);
+struct PluginParam {
+  enum class Kind { kInt, kDouble, kString, kOther };
+  Kind kind = Kind::kOther;
+  long long int_value = 0;
+  double double_value = 0;
+  std::string string_value;
+};
+
+using PluginParams = std::map<std::string, PluginParam>;
+
+struct PluginMouseParams {
+  std::string type;
+  double x = 0;
+  double y = 0;
+  int modifiers = 0;
+  std::optional<double> delta_x;
+  std::optional<double> delta_y;
+};
+
+struct PluginClickParams {
+  double x = 0;
+  double y = 0;
+  std::string button = "left";
+  int click_count = 1;
+  int modifiers = 0;
+};
+
+std::string PluginMouseRefusal(const PluginParams& params,
+                               PluginMouseParams* out);
+
+std::string PluginClickRefusal(const PluginParams& params,
+                               PluginClickParams* out);
 
 }
 

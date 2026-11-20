@@ -6,7 +6,7 @@ import { armWatchdog, disarmWatchdog, peerUid, removeDirAt, renameExclusiveAt } 
 import { codeOf, uid } from "../../paths.ts";
 import { formatG, roundHalfEven } from "../../pylib/format.ts";
 import { Cancelled, currentSignal, withSignal } from "../cdp/cancel.ts";
-import { BrowseError, ConnectionLost, Unreachable, Usage } from "../daemon-errors.ts";
+import { BrowseError, ConnectionLost, Unreachable } from "../daemon-errors.ts";
 import { type Endpoint, EndpointError, resolve } from "../endpoint.ts";
 import { BEHIND_SCRIPT_WAIT, commandLimit, QUEUE_WAIT, queueWait } from "../limits.ts";
 import { answerFields, begin, flag, type Metrics } from "../metrics.ts";
@@ -18,12 +18,13 @@ import { type DaemonConfig } from "./config.ts";
 import { FifoLock } from "./lock.ts";
 import { type Caller, parseCaller } from "./announce.ts";
 import { log } from "./log.ts";
-import { canonical, SKIPPED } from "./names.ts";
+import { canonical } from "./names.ts";
 import { type Answer, encodeAnswer, joinedBatch, MAX_REQUEST, type Options, render, Result, timedOut } from "./render.ts";
 import { redact } from "../../redact.ts";
 import { parseText } from "../../json.ts";
-import { COMMANDS, Ctx, LATER_SLICE } from "./stub/commands.ts";
-import { StubState } from "./stub/state.ts";
+import { dispatch } from "../commands/all.ts";
+import { Ctx } from "../commands/ctx.ts";
+import { State } from "../state/state.ts";
 import { reportException } from "../../telemetry.ts";
 import { cliVersion } from "../../version.ts";
 import { runPluginCommand } from "../plugin/commands.ts";
@@ -39,11 +40,13 @@ export const WATCH_INTERVAL = 2.0;
 export const EXIT_GRACE = 3.0;
 export const READ_TIMEOUT = 30.0;
 export const SHUTDOWN_EXIT = 1;
-const PYTHON_COMMANDS = new Set(
-  "a11y addinitscript back batch check click clipboard console cookies dblclick dialog diff download drag errors eval fill find flow focus forward frame get highlight hover is keyboard keydown keyup mouse network notes open pdf press profiler pushstate react read record reload removeinitscript screenshot script scroll scrollintoview select session set snapshot state storage stream tab trace type uncheck upload vitals wait window".split(
-    " ",
-  ),
-);
+
+export function settledError(error: BrowseError, browser: { readonly alive: boolean; readonly closedByUs: boolean } | null): { error: BrowseError; lost: boolean } {
+  if (error instanceof ConnectionLost) return { error, lost: true };
+  if (browser === null || browser.alive || browser.closedByUs) return { error, lost: false };
+  if (error.cause instanceof ConnectionLost) return { error, lost: true };
+  return { error: new ConnectionLost(), lost: true };
+}
 
 type Request = Record<string, unknown>;
 type Running = { name: string; since: number };
@@ -68,7 +71,7 @@ export class Daemon {
   readonly key: string;
   readonly sock: string;
   readonly lockFd: number | null;
-  readonly state: StubState;
+  readonly state: State;
   readonly plugin: PluginSession | null;
   readonly lock = new FifoLock();
   pending = 0;
@@ -105,8 +108,8 @@ export class Daemon {
       closeFd(this.dirFd);
       throw error;
     }
-    this.state = new StubState(
-      { session: config.session, key: config.key, browseFd: config.plugin === null ? this.dirFd : null, noAutoDialog: config.noAutoDialog, pinTab: config.pinTab },
+    this.state = new State(
+      { session: config.session, key: config.key, browseFd: config.plugin === null ? this.dirFd : null, noAutoDialog: config.noAutoDialog, pinTab: config.pinTab, dataDir: config.dataDir },
       () => this.resolveEndpoint(),
     );
     this.plugin =
@@ -126,7 +129,7 @@ export class Daemon {
     }
   }
 
-  get live(): StubState | PluginSession {
+  get live(): State | PluginSession {
     return this.plugin ?? this.state;
   }
 
@@ -538,13 +541,9 @@ export class Daemon {
     } catch (thrown) {
       if (thrown instanceof Cancelled) throw thrown;
       if (thrown instanceof BrowseError) {
-        let error = thrown;
         const live = this.live;
-        const browser = live.browser;
-        if (error instanceof ConnectionLost || (browser !== null && !browser.alive && !browser.closedByUs)) {
-          live.lost = true;
-          error = error instanceof ConnectionLost ? error : new ConnectionLost();
-        }
+        const { error, lost } = settledError(thrown, live.browser);
+        if (lost) live.lost = true;
         if (error instanceof Unreachable && live.instance === null) live.restarted = true;
         return render(options, null, error, name);
       }
@@ -559,17 +558,7 @@ export class Daemon {
 
   async dispatch(ctx: Ctx, name: string, argv: string[]): Promise<Result> {
     if (this.plugin !== null) return runPluginCommand(this.plugin, ctx.options, name, argv, ALL_PLUGIN_COMMANDS);
-    if (name === "auth") {
-      if (argv[0] !== "login") throw new Usage("auth save|list|show|delete run without the daemon");
-      throw new BrowseError(`\`auth login\` ${LATER_SLICE}`, null, "unsupported");
-    }
-    if (Object.hasOwn(SKIPPED, name)) throw new BrowseError(`\`${name}\` isn't part of ardia browse: ${SKIPPED[name]}`, null, "unsupported");
-    const handler = Object.hasOwn(COMMANDS, name) ? COMMANDS[name] : undefined;
-    if (handler === undefined) {
-      if (PYTHON_COMMANDS.has(name)) throw new BrowseError(`\`${name}\` ${LATER_SLICE}`, null, "unsupported");
-      throw new Usage(`Unknown command: ${name}. Run \`ardia browse --help\``);
-    }
-    return handler(ctx, argv);
+    return dispatch(ctx, name, argv);
   }
 
   private async lockForClose(): Promise<boolean> {

@@ -3,7 +3,7 @@ import { BrowseError, ConnectionLost, Usage } from "../daemon-errors.ts";
 import { DEFAULT_TIMEOUT_MS } from "../limits.ts";
 import { flag } from "../metrics.ts";
 import { Result, type Options } from "../daemon/render.ts";
-import { need, parse } from "../daemon/stub/commands.ts";
+import { need, parse } from "../commands/parse.ts";
 import { render as renderSnapshot } from "../snapshot/render.ts";
 import { diff as diffViews } from "../changes/report.ts";
 import { asData, renderReport } from "../changes/text.ts";

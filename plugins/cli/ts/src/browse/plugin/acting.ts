@@ -1,5 +1,5 @@
 import { canonical } from "../daemon/names.ts";
-import { parse } from "../daemon/stub/commands.ts";
+import { parse } from "../commands/parse.ts";
 
 export const FIND_ACTIONS = ["click", "fill", "type", "press", "check", "uncheck", "select", "hover", "focus", "dblclick", "text"];
 export const FIND_LOCATORS = ["role", "text", "label", "placeholder", "alt", "title", "testid", "first", "last", "nth"];

@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
+#include <initializer_list>
 #include <string>
 #include <string_view>
 
@@ -210,14 +212,176 @@ std::string PluginKeyRefusal(const PluginKeyEvent& event) {
   return refusal;
 }
 
-std::string PluginMouseRefusal(const std::optional<std::string>& button,
-                               std::optional<int> buttons) {
-  if (button && *button == "middle") {
-    return "with the middle button";
+namespace {
+
+constexpr int kCdpModifierMask = kCdpAlt | kCdpCtrl | kCdpMeta | kCdpShift;
+
+std::string UnknownParam(const PluginParams& params,
+                         std::initializer_list<std::string_view> allowed) {
+  for (const auto& [name, value] : params) {
+    if (std::find(allowed.begin(), allowed.end(), name) == allowed.end()) {
+      return "with " + name;
+    }
   }
-  if (buttons && (*buttons & kCdpMiddleButton)) {
-    return "with the middle button held";
+  return std::string();
+}
+
+std::optional<double> FiniteNumber(const PluginParam& value) {
+  if (value.kind == PluginParam::Kind::kInt) {
+    return static_cast<double>(value.int_value);
   }
+  if (value.kind == PluginParam::Kind::kDouble &&
+      std::isfinite(value.double_value)) {
+    return value.double_value;
+  }
+  return std::nullopt;
+}
+
+std::string Coordinates(const PluginParams& params, double* x, double* y) {
+  auto found_x = params.find("x");
+  auto found_y = params.find("y");
+  const std::optional<double> parsed_x =
+      found_x == params.end() ? std::nullopt : FiniteNumber(found_x->second);
+  const std::optional<double> parsed_y =
+      found_y == params.end() ? std::nullopt : FiniteNumber(found_y->second);
+  if (!parsed_x || !parsed_y) {
+    return "without finite x and y";
+  }
+  if (*parsed_x < 0 || *parsed_y < 0) {
+    return "with a negative x or y";
+  }
+  *x = *parsed_x;
+  *y = *parsed_y;
+  return std::string();
+}
+
+std::string IntParam(const PluginParams& params,
+                     const char* name,
+                     int min,
+                     int max,
+                     std::optional<int>* out) {
+  auto found = params.find(name);
+  if (found == params.end()) {
+    return std::string();
+  }
+  if (found->second.kind != PluginParam::Kind::kInt ||
+      found->second.int_value < min || found->second.int_value > max) {
+    return std::string("with that ") + name;
+  }
+  *out = static_cast<int>(found->second.int_value);
+  return std::string();
+}
+
+std::string Modifiers(const PluginParams& params, int* out) {
+  std::optional<int> modifiers;
+  std::string refusal = IntParam(params, "modifiers", 0, kCdpModifierMask,
+                                 &modifiers);
+  if (!refusal.empty()) {
+    return refusal;
+  }
+  if (modifiers && (*modifiers & ~kCdpModifierMask)) {
+    return "with unknown modifier bits";
+  }
+  *out = modifiers.value_or(0);
+  return std::string();
+}
+
+std::optional<std::string> StringParam(const PluginParams& params,
+                                       const char* name,
+                                       bool* wrong_type) {
+  auto found = params.find(name);
+  if (found == params.end()) {
+    return std::nullopt;
+  }
+  if (found->second.kind != PluginParam::Kind::kString) {
+    *wrong_type = true;
+    return std::nullopt;
+  }
+  return found->second.string_value;
+}
+
+}
+
+std::string PluginMouseRefusal(const PluginParams& params,
+                               PluginMouseParams* out) {
+  std::string refusal = UnknownParam(
+      params, {"type", "x", "y", "modifiers", "button", "buttons", "deltaX",
+               "deltaY"});
+  if (!refusal.empty()) {
+    return refusal;
+  }
+  bool wrong_type = false;
+  const std::optional<std::string> type =
+      StringParam(params, "type", &wrong_type);
+  if (wrong_type || !type || (*type != "mouseMoved" && *type != "mouseWheel")) {
+    return "except to move the pointer or scroll (use Ardia.dispatchClick to "
+           "click)";
+  }
+  const std::optional<std::string> button =
+      StringParam(params, "button", &wrong_type);
+  if (wrong_type || (button && *button != "none")) {
+    return "with a button";
+  }
+  std::optional<int> buttons;
+  refusal = IntParam(params, "buttons", 0, 0, &buttons);
+  if (!refusal.empty()) {
+    return "with a button held";
+  }
+  refusal = Coordinates(params, &out->x, &out->y);
+  if (refusal.empty()) {
+    refusal = Modifiers(params, &out->modifiers);
+  }
+  if (!refusal.empty()) {
+    return refusal;
+  }
+  const bool wheel = *type == "mouseWheel";
+  for (const char* name : {"deltaX", "deltaY"}) {
+    auto found = params.find(name);
+    if (!wheel && found != params.end()) {
+      return std::string("with ") + name + " on a move";
+    }
+    if (wheel) {
+      const std::optional<double> delta =
+          found == params.end() ? std::nullopt : FiniteNumber(found->second);
+      if (!delta) {
+        return "without finite deltaX and deltaY";
+      }
+      (std::string_view(name) == "deltaX" ? out->delta_x : out->delta_y) =
+          delta;
+    }
+  }
+  out->type = *type;
+  return std::string();
+}
+
+std::string PluginClickRefusal(const PluginParams& params,
+                               PluginClickParams* out) {
+  std::string refusal =
+      UnknownParam(params, {"x", "y", "button", "clickCount", "modifiers"});
+  if (!refusal.empty()) {
+    return refusal;
+  }
+  refusal = Coordinates(params, &out->x, &out->y);
+  if (!refusal.empty()) {
+    return refusal;
+  }
+  bool wrong_type = false;
+  const std::optional<std::string> button =
+      StringParam(params, "button", &wrong_type);
+  if (wrong_type || (button && *button != "left" && *button != "right")) {
+    return "with that button";
+  }
+  std::optional<int> click_count;
+  refusal = IntParam(params, "clickCount", 1, 3, &click_count);
+  if (!refusal.empty()) {
+    return "with a click count outside 1-3";
+  }
+  refusal = Modifiers(params, &out->modifiers);
+  if (!refusal.empty()) {
+    return refusal;
+  }
+  out->button = button.value_or("left");
+  out->click_count = click_count.value_or(1);
   return std::string();
 }
 
