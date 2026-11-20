@@ -103,9 +103,9 @@ async def row(run: Run, number: int, scratch: Path) -> dict:
             browse("press", "Meta+z", "--no-changes")
             read = {"afterReplace": after_replace}
         elif number == 21:
-            browse("click", "x-field input", "--no-changes")
+            browse("click", "input", "--no-changes")
             browse("keyboard", "type", "ardia-user", "--no-changes")
-            browse("click", "x-toggle button", "--no-changes")
+            browse("click", "button[type=button]", "--no-changes")
             browse("click", "#submit", "--no-changes")
         verdict = await tier.finish(read)
     finally:

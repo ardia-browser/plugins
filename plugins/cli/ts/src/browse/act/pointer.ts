@@ -207,9 +207,25 @@ export async function settledBox(page: Page, element: Element): Promise<Box | nu
   return box;
 }
 
+export const SHADOW_HIT = `(el, x, y) => {
+  const root = el.getRootNode();
+  if (!(root instanceof ShadowRoot)) return false;
+  const inner = root.elementFromPoint(x, y);
+  if (!inner || !(inner === el || el.contains(inner))) return false;
+  for (let host = root.host; host; ) {
+    const outer = host.getRootNode();
+    const hit = outer.elementFromPoint(x, y);
+    if (hit !== host && !(hit && host.contains(hit))) return false;
+    host = outer instanceof ShadowRoot ? outer.host : null;
+  }
+  return true;
+}`;
+
 async function hitTest(page: Page, element: Element, x: number, y: number): Promise<string | null> {
   const cover = await page.call("(el, x, y) => ardiaBrowse.hitTest(el, x, y)", [element, x, y], { frame: element.frame });
-  return typeof cover === "string" && cover ? cover : null;
+  if (typeof cover !== "string" || !cover) return null;
+  if (!cover.startsWith("nothing") && (await page.call(SHADOW_HIT, [element, x, y], { frame: element.frame, read: true }))) return null;
+  return cover;
 }
 
 export async function targetPoint(page: Page, element: Element, humanize: boolean, checkCover = true): Promise<Point> {

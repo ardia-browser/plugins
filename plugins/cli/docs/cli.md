@@ -1993,7 +1993,10 @@ harness scenarios or the human tier (`tests/m3/human_act.py`):
   touch emulation or that probe.
 - Element boxes, hit tests and frame offsets go through `browse/state/frames.ts`: an element inside an out-of-process
   iframe is measured in its own CDP session and placed at the sum of each frame owner's offset up to the top session,
-  where the click is sent (ardia#2812 rows 12, 13, 21). Python has no out-of-process frames.
+  where the click is sent (ardia#2812 rows 12, 13, 21). Python has no out-of-process frames. An element inside a
+  shadow root, closed ones included, isn't "covered" by its own host: when the cover check names something, the click
+  point is tested again through each shadow root from the element out to the document, and the click goes ahead if
+  every level hits the element or the host holding it. Python refuses such a click as covered by the host.
 - A command's whole-number coordinates and deltas go out as JSON integers (`91`), where Python's floats print `91.0`;
   Chromium reads both the same. The harness compares them as equal (`whole-floats`).
 - `batch` reads a line's `wait --state` as `wait`'s own flag, as the TypeScript client does; Python's splitter refuses
