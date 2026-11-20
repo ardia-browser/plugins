@@ -1,6 +1,6 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import os from "node:os";
-import { strerror } from "../../libc.ts";
+import { registerGroup, strerror, unregisterGroup } from "../../libc.ts";
 import { Cancelled, currentSignal } from "../cdp/cancel.ts";
 
 export type Ran = { code: number; stdout: Buffer; stderr: Buffer };
@@ -67,9 +67,16 @@ export function liveGroups(): number[] {
   return [...GROUPS.keys()];
 }
 
+function forget(pid: number, group: Group): void {
+  if (GROUPS.get(pid) !== group) return;
+  GROUPS.delete(pid);
+  unregisterGroup(pid);
+}
+
 export function killLiveGroups(): void {
-  for (const [pid, group] of GROUPS) {
-    if (!group.reaped || group.terminating) signalGroup(pid, "SIGKILL");
+  for (const pid of GROUPS.keys()) {
+    signalGroup(pid, "SIGKILL");
+    unregisterGroup(pid);
   }
   GROUPS.clear();
 }
@@ -99,7 +106,10 @@ export function run(argv: readonly string[], options: RunOptions): Promise<Ran> 
     const err = sink(limit);
     const pid = child.pid;
     const group: Group = { reaped: false, terminating: false };
-    if (pid !== undefined) GROUPS.set(pid, group);
+    if (pid !== undefined) {
+      GROUPS.set(pid, group);
+      registerGroup(pid);
+    }
     let settled = false;
     let stopped = false;
     const settle = (finish: () => void) => {
@@ -120,7 +130,7 @@ export function run(argv: readonly string[], options: RunOptions): Promise<Ran> 
       settle(() => reject(why === "cancelled" ? new Cancelled() : new RunTimedOut()));
       if (pid === undefined || GROUPS.get(pid) !== group) {
         release();
-        if (pid !== undefined && GROUPS.get(pid) === group) GROUPS.delete(pid);
+        if (pid !== undefined) forget(pid, group);
         return;
       }
       group.terminating = true;
@@ -128,7 +138,7 @@ export function run(argv: readonly string[], options: RunOptions): Promise<Ran> 
       setTimeout(() => {
         if (GROUPS.get(pid) === group) {
           if (signalGroup(pid, 0)) signalGroup(pid, "SIGKILL");
-          GROUPS.delete(pid);
+          forget(pid, group);
         }
         release();
       }, grace);
@@ -143,7 +153,7 @@ export function run(argv: readonly string[], options: RunOptions): Promise<Ran> 
       if (child.pid === undefined) settle(() => reject(describe(error)));
     });
     child.on("close", () => {
-      if (pid !== undefined && !group.terminating && GROUPS.get(pid) === group) GROUPS.delete(pid);
+      if (pid !== undefined && !group.terminating) forget(pid, group);
       settle(() => resolve({ code: exitCode(child), stdout: out.take(), stderr: err.take() }));
     });
     child.stdout?.on("data", (chunk: Buffer) => out.push(chunk));

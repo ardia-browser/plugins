@@ -181,9 +181,19 @@ function jsonCopy(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value ?? null, (_, item: unknown) => (typeof item === "bigint" ? item.toString() : item)));
 }
 
+const SETTINGS = new Set(["viewport", "device", "geo", "geolocation", "offline", "headers", "credentials", "auth", "media", "permission", "permissions"]);
+
+export function commandName(argv: unknown): string {
+  if (!Array.isArray(argv) || argv.length === 0 || !argv.every((word) => typeof word === "string")) return "unknown command";
+  const words = splitCommandLine(argv as string[]);
+  const name = canonical(words[0] as string);
+  if (!knownCommand(name)) return "unknown command";
+  if (name === "set" && SETTINGS.has(words[1] ?? "")) return `set ${canonical(words[1] as string)}`;
+  return name;
+}
+
 export function callLabel(index: number, argv: unknown): string {
-  const first = Array.isArray(argv) && argv.length > 0 ? String(argv[0]) : "";
-  return `call ${index}, \`${canonical(first)}\``;
+  return `call ${index}, \`${commandName(argv)}\``;
 }
 
 export function scriptCode(code: unknown): string {
@@ -206,9 +216,15 @@ export function errorText(message: Message, source: string, calls: readonly unkn
   let command = "";
   if (Array.isArray(failed) && failed.length > 0) {
     const index = callIndex(calls, failed);
-    command = index === null ? ` (in \`${canonical(String(failed[0]))}\`)` : ` (in ${callLabel(index, failed)})`;
+    command = index === null ? ` (in \`${commandName(failed)}\`)` : ` (in ${callLabel(index, failed)})`;
   }
   return `${where}${text}${command}`;
+}
+
+export function failureData(message: Message, calls: readonly unknown[][]): Record<string, unknown> {
+  const failed = message["command"];
+  const named = Array.isArray(failed) && failed.length > 0;
+  return { line: null, call: named ? callIndex(calls, failed) : null, command: named ? commandName(failed) : null };
 }
 
 async function answerCall(ctx: Ctx, given: unknown, index: number): Promise<Answer> {
@@ -246,7 +262,7 @@ async function drive(ctx: Ctx, page: Page, handle: string, source: string, curre
       answer = { ok: true, text: "", data: {} };
     } else {
       if (message["via"] === "page.eval") flag("script_eval_alias", true);
-      calls.push(Array.isArray(message["argv"]) ? [...(message["argv"] as unknown[])] : []);
+      calls.push(Array.isArray(argv) ? [...(argv as unknown[])] : []);
       current.set("call", calls.length);
       answer = await answerCall(ctx, message["argv"], calls.length);
       done.push(String((Array.isArray(message["argv"]) ? message["argv"] : [""])[0] ?? ""));
@@ -267,7 +283,7 @@ function timedOut(seconds: number, current: Map<string, unknown>, source: string
   let where = "";
   const argv = current.get("argv");
   const call = typeof current.get("call") === "number" ? (current.get("call") as number) : null;
-  if (Array.isArray(argv) && argv.length > 0) where = call === null ? `, in \`${canonical(String(argv[0]))}\`` : `, in ${callLabel(call, argv)}`;
+  if (Array.isArray(argv) && argv.length > 0) where = call === null ? `, in \`${commandName(argv)}\`` : `, in ${callLabel(call, argv)}`;
   else if (current.get("type") === "sleep") where = ", in sleep()";
   const line = sourceLine(source, current.get("line"));
   if (line) where += ` at line ${line}`;
@@ -293,7 +309,7 @@ function timedOut(seconds: number, current: Map<string, unknown>, source: string
       `. It opened ${opened} pages one after another; to take text from many pages, ` +
       "`ardia browse read <url> <url> …` (or `await read(urls)` here) loads them side by side, each with its own time limit";
   }
-  return failure(message, logs, { line, call, command: Array.isArray(argv) && argv.length > 0 ? canonical(String(argv[0])) : null }, "timeout");
+  return failure(message, logs, { line, call, command: Array.isArray(argv) && argv.length > 0 ? commandName(argv) : null }, "timeout");
 }
 
 async function stopWorker(page: Page, handle: string): Promise<Message> {
@@ -390,9 +406,7 @@ export async function run(ctx: Ctx, source: string, seconds: number): Promise<Re
     let hint = pageWorldHint(String(message["message"] || "error"), failed);
     if (hint) flag("script_page_world_hint", true);
     hint = hint ? `\n${hint}` : "";
-    const call = Array.isArray(failed) && failed.length > 0 ? callIndex(calls, failed) : null;
-    const command = Array.isArray(failed) && failed.length > 0 ? canonical(String(failed[0])) : null;
-    throw failure(`${errorText(message, source, calls)}${hint}`, [...logs, ...notes], { line, call, command }, scriptCode(message["code"]));
+    throw failure(`${errorText(message, source, calls)}${hint}`, [...logs, ...notes], { ...failureData(message, calls), line }, scriptCode(message["code"]));
   }
   const value = renderValue(message);
   const parts = [...logs, ...(value !== null ? [value] : []), ...notes];

@@ -19,6 +19,8 @@ type Native = {
   statAt(dir: number, name: string): [number, number, bigint, bigint, number] | number;
   armWatchdog(dir: number, name: string, dev: bigint, ino: bigint, ms: number, code: number, fireDelay?: number): number;
   disarmWatchdog(): number;
+  registerGroup(group: number): number;
+  unregisterGroup(group: number): number;
   renameExclusiveAt(fromDir: number, from: string, toDir: number, to: string): number;
   removeDirAt(dir: number, name: string): number;
   nonBlocking(fd: number): number;
@@ -29,7 +31,7 @@ type Native = {
   strerror(errno: number): string | number;
 };
 
-const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "openFileAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "statAt", "armWatchdog", "disarmWatchdog", "renameExclusiveAt", "removeDirAt", "nonBlocking", "listAt", "lock", "watchLifeline", "writeSome", "strerror"];
+const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "openFileAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "statAt", "armWatchdog", "disarmWatchdog", "registerGroup", "unregisterGroup", "renameExclusiveAt", "removeDirAt", "nonBlocking", "listAt", "lock", "watchLifeline", "writeSome", "strerror"];
 const ERRNO_NAMES = new Map<number, string>(Object.entries(constants.errno).map(([name, value]) => [value, name]));
 const EWOULDBLOCK = constants.errno.EWOULDBLOCK ?? constants.errno.EAGAIN;
 
@@ -158,6 +160,14 @@ export function armWatchdog(dir: number, name: string, dev: bigint, ino: bigint,
 
 export function disarmWatchdog(): number {
   return native().disarmWatchdog();
+}
+
+export function registerGroup(group: number): boolean {
+  return loaded !== undefined && loaded.registerGroup(group) === 0;
+}
+
+export function unregisterGroup(group: number): void {
+  if (loaded !== undefined) loaded.unregisterGroup(group);
 }
 
 export function renameExclusiveAt(fromDir: number, from: string, toDir: number, to: string): void {

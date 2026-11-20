@@ -70,7 +70,7 @@ describe("script errors name the call, not its arguments", () => {
       ["get", "url"],
       ["set", "credentials", "alice", "sk-r3-secret"],
     ]);
-    expect(text).toBe("line 2: it failed (in call 2, `set`)");
+    expect(text).toBe("line 2: it failed (in call 2, `set credentials`)");
     expect(text).not.toContain("sk-r3-secret");
   });
 });
@@ -208,5 +208,21 @@ describe("helper groups and the daemon's exit", () => {
     } finally {
       process.kill = real;
     }
+  });
+});
+
+describe("script errors name only the resolved command", () => {
+  test("a failed single-string call names `set credentials`, never its arguments, in the text and in JSON", () => {
+    const raw = ["set credentials alice sk-final-secret"];
+    const calls = [["get", "url"], raw];
+    const message = { kind: "error", message: "nope", name: "Error", line: 1, command: raw };
+    const text = script.errorText(message, "x", calls);
+    expect(text).toBe("line 1: nope (in call 2, `set credentials`)");
+    expect(script.commandName(raw)).toBe("set credentials");
+    expect(script.commandName(["set", "auth", "-x", "y"])).toBe("set auth");
+    expect(script.commandName(["click", "#a"])).toBe("click");
+    expect(script.commandName(["frobnicate sk-final-secret"])).toBe("unknown command");
+    expect(script.commandName(["'unclosed sk-final-secret"])).toBe("unknown command");
+    expect(JSON.stringify(script.failureData(message, calls))).not.toContain("sk-final-secret");
   });
 });

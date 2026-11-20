@@ -2038,8 +2038,11 @@ scenarios:
   still finds any member, whatever its pipes did in between. After that, or once the group is gone, it is forgotten
   and never signalled again. A group id can't be handed to a new group while a member of ours is alive, so the only
   residual is our group emptying and its id being recycled into a new group within that 0.5 s. When the daemon exits,
-  every group still running its first process, or still inside that window, is killed synchronously. Python kills
-  only the process it started.
+  every group whose run hasn't settled (its output still open, or its result not yet delivered) or that is still inside
+  that window is killed synchronously, whether or not its first process has exited; the native shutdown watchdog
+  does the same from the addon's own list of live groups before it calls `_exit`. A run that settled normally is
+  forgotten at once and never signalled: a process it left behind that closed our pipes is left alone, as Python
+  leaves it. Python kills only the process it started.
 - `clipboard` and `set permission` grant each permission with `Browser.setPermission`, so grants add up; Python's
   `Browser.grantPermissions` replaces every grant the origin had (a clipboard grant revoked geolocation). The harness
   leaves both out of the comparison through the `permission-overrides` divergence (ardia#2812 row 3).
@@ -2051,8 +2054,9 @@ scenarios:
   `set credentials` and `set auth` take the user and password as opaque positionals, never parsed as flags, so
   `-x` or `--foo` is a valid password; their usage error prints only the expected form (`Usage: ardia browse set
   credentials <user> <pass>`), never the arguments. Python parses them as flags and answers `Unknown flag: -x`.
-- A `script` that fails in a call names it by its index and command (`line 2: … (in call 3, \`set\`)`), and its
-  `data` carries `call` and `command` (the command name only); a timed-out script names the call the same way.
+- A `script` that fails in a call names it by its index and the command the parser resolved, never the call's text
+  or arguments (`line 2: … (in call 3, \`set credentials\`)`, `unknown command` when it names none), and its `data`
+  carries `call` and that `command`; a timed-out script names the call the same way.
   Python quotes the call's arguments.
 - An answer's `code` (and so the client's telemetry `error_code`) is always one of the daemon's own codes; anything
   else, such as a code a script throws, becomes `failed` (`script_failed` for a script). Python passes a script's code
