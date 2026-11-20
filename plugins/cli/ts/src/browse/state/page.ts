@@ -32,6 +32,7 @@ export const ROUTE_PATTERNS = [{ urlPattern: "*", requestStage: "Request" }];
 const BUSY_WHY = (probe: number) =>
   `the page's own scripts are keeping its tab busy, so it isn't answering. While it stays that way, commands on this tab give up after ${formatG(probe)} s instead of waiting; \`ardia browse reload\` it, or work from a lighter page (search results, the site's own API, or \`read --http <url>\`)`;
 const CRASH_SAFE = new Set(["Inspector.enable", "Page.reload", "Page.navigate"]);
+const BUSY_SAFE = new Set(["Page.handleJavaScriptDialog"]);
 const OTHER_WORLD = "same JavaScript world";
 const STALE_CONTEXT = ["Cannot find context", "Execution context was destroyed", "Cannot find default execution context", "Inspected target navigated", "Could not find object with given id"];
 export const WORLD_HANDLE = "globalThis";
@@ -378,7 +379,7 @@ export class Page {
     const session = this.session;
     if (session === null) throw new BrowseError(DETACHED, null, "tab_detached");
     if (this.crashed && !CRASH_SAFE.has(method)) throw new BrowseError(CRASHED, null, "tab_crashed");
-    if (this.unansweredAt && monotonic() - this.unansweredAt < BUSY_MEMORY) await this.stillBusy(method);
+    if (this.unansweredAt && monotonic() - this.unansweredAt < BUSY_MEMORY && !BUSY_SAFE.has(method)) await this.stillBusy(method);
     options.guard?.();
     if (this.session !== session) throw new BrowseError(DETACHED, null, "tab_detached");
     const timeout = options.timeout ?? 30;

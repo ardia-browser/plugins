@@ -100,6 +100,10 @@ between the recording and the replay. Left to teardown, the sessions close in a 
 requests and the registry's ids are numbered differently, and Python fails its own replay
 (`tabs/tab_active_borrowed` did).
 
+Scenarios under `stacked/` use commands from more than one slice (`snapshot`, `read` and `get text` from D4, `click`
+from D5, with D8's navigation), so the TypeScript side replays them only once those slices are merged. Python records
+and replays them as usual.
+
 The tap delivers each Chromium burst as one write (a burst ends after 3 ms of quiet, or at 250 ms). Python handles every
 message of one socket read before the command that waited on an answer resumes, so the grouping decides what the
 daemon sees first. Live and replay therefore group the same way.

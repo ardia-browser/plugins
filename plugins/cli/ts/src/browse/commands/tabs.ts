@@ -43,6 +43,9 @@ async function closeTab(ctx: Ctx, which: string | undefined): Promise<Result> {
   await state.refreshTargets();
   const targetId = which !== undefined ? await state.findTab(which) : state.current;
   if (targetId === null) throw new BrowseError("This session has no current tab to close");
+  if (state.mustClose.has(targetId)) {
+    throw new BrowseError(`Tab [${state.tabId(targetId)}] is already being closed (an earlier \`tab close\` was interrupted)`, null, "tab_closing");
+  }
   if (!state.opened.has(targetId)) {
     throw new BrowseError(`Tab [${state.tabId(targetId)}] is one of the user's tabs; ardia browse only closes tabs this session opened`);
   }
@@ -59,6 +62,7 @@ async function closeTab(ctx: Ctx, which: string | undefined): Promise<Result> {
     if (error instanceof Cancelled) {
       flag("tab_close_interrupted", true);
       temptabs.mustClose(state, targetId, true);
+      if (state.current === targetId) state.current = null;
     }
     throw error;
   }
@@ -184,14 +188,14 @@ export async function cmdFrame(ctx: Ctx, argv: string[]): Promise<Result> {
 
 async function dismissLeftOpen(page: Page): Promise<void> {
   if (page.dialog === null || page.session === null) return;
-  flag("dialog_dismissed_after_failure", true);
   try {
     await page.send("Page.handleJavaScriptDialog", { accept: false }, { timeout: DIALOG_FALLBACK_TIMEOUT });
-    page.dialog = null;
   } catch (error) {
     if (error instanceof ConnectionLost || error instanceof Cancelled) throw error;
-    if (!(error instanceof BrowseError)) throw error;
+    return;
   }
+  page.dialog = null;
+  flag("dialog_dismissed_after_failure", true);
 }
 
 export async function cmdDialog(ctx: Ctx, argv: string[]): Promise<Result> {

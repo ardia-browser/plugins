@@ -13,6 +13,9 @@
   {"argv": ["tab", "list"], "session": "agent"},
   {"argv": ["tab", "list"], "session": "owner"},
   {"argv": ["get", "url"], "session": "owner"},
+  {"argv": ["tab", "t2"], "session": "agent"},
+  {"argv": ["--json", "reload"], "session": "agent"},
+  {"argv": ["get", "url"], "session": "owner"},
   {"argv": ["close"], "session": "agent"},
   {"argv": ["close"], "session": "owner"}
  ]

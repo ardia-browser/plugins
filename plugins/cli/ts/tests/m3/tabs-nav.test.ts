@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { Cancelled, withSignal } from "../../src/browse/cdp/cancel.ts";
 import { BrowseError, ConnectionLost, Usage } from "../../src/browse/daemon-errors.ts";
+import { begin } from "../../src/browse/metrics.ts";
+import { monotonic } from "../../src/browse/state/wait.ts";
 import { Ctx } from "../../src/browse/commands/ctx.ts";
 import { dispatch, served } from "../../src/browse/commands/all.ts";
 import { tabLine } from "../../src/browse/commands/tabs.ts";
@@ -116,6 +118,70 @@ describe("dialog never stays open after a failure", () => {
   });
 });
 
+describe("dialog review fixes", () => {
+  test("a dialog answer skips the busy probe that an open dialog can't answer", async () => {
+    const browser = new FakeBrowser((method, params) => {
+      if (method === "Runtime.evaluate" && params["expression"] === "1") return () => new Promise(() => {});
+      return undefined;
+    });
+    const state = stateWith(browser);
+    const page = await state.page("TARGET");
+    state.current = "TARGET";
+    openDialog(page);
+    page.unansweredAt = monotonic();
+    const result = await begin({ argv: ["dialog"] }, () => dispatch(ctxOf(state, "dialog"), "dialog", ["accept", "Ada"]));
+    expect(result.data).toEqual({ handled: "accept" });
+    expect(browser.sent.filter((entry) => entry.method === "Runtime.evaluate" && entry.params["expression"] === "1")).toEqual([]);
+    expect(page.dialog).toBeNull();
+  });
+
+  test("the fallback flag counts only a dismiss that went through", async () => {
+    const refusing = new FakeBrowser((method) => (method === "Page.handleJavaScriptDialog" ? cdpError(method, "No dialog is showing") : undefined));
+    const state = stateWith(refusing);
+    const page = await state.page("TARGET");
+    state.current = "TARGET";
+    openDialog(page);
+    const flags = await begin({ argv: ["dialog"] }, async (metrics) => {
+      await dispatch(ctxOf(state, "dialog"), "dialog", ["accept"]).catch(() => null);
+      return metrics.values.get("dialog_dismissed_after_failure");
+    });
+    expect(flags).toBeUndefined();
+    expect(page.dialog).not.toBeNull();
+    let first = true;
+    const once = new FakeBrowser((method) => {
+      if (method === "Page.handleJavaScriptDialog" && first) {
+        first = false;
+        return cdpError(method, "Invalid prompt text");
+      }
+      return undefined;
+    });
+    const other = stateWith(once);
+    const otherPage = await other.page("TARGET");
+    other.current = "TARGET";
+    openDialog(otherPage);
+    const counted = await begin({ argv: ["dialog"] }, async (metrics) => {
+      await dispatch(ctxOf(other, "dialog"), "dialog", ["accept", "x"]).catch(() => null);
+      return metrics.values.get("dialog_dismissed_after_failure");
+    });
+    expect(counted).toBe(true);
+  });
+
+  test("a fallback dismiss that throws a non-browse error keeps the original error", async () => {
+    let calls = 0;
+    const browser = new FakeBrowser((method) => {
+      if (method !== "Page.handleJavaScriptDialog") return undefined;
+      calls += 1;
+      return calls === 1 ? cdpError(method, "Invalid prompt text") : new TypeError("boom");
+    });
+    const state = stateWith(browser);
+    const page = await state.page("TARGET");
+    state.current = "TARGET";
+    openDialog(page);
+    const error = await failure(dispatch(ctxOf(state, "dialog"), "dialog", ["accept", "x"]));
+    expect(error.text).toContain("Invalid prompt text");
+  });
+});
+
 describe("tabs this session opens are closed through the registry", () => {
   test("a tab of the user's is never closed", async () => {
     const browser = new FakeBrowser();
@@ -135,6 +201,11 @@ describe("tabs this session opens are closed through the registry", () => {
     expect(error).toBeInstanceOf(Cancelled);
     expect(state.mustClose.has("TARGET")).toBe(true);
     expect(state.reservedCloses.has("TARGET")).toBe(true);
+    expect(state.current).toBeNull();
+    state.tabIds.set("TARGET", "t1");
+    const again = await failure(dispatch(ctxOf(state, "tab"), "tab", ["close", "t1"]));
+    expect(again.code).toBe("tab_closing");
+    expect(again.text).toBe("Tab [t1] is already being closed (an earlier `tab close` was interrupted)");
     stopRetries(state);
   });
 
