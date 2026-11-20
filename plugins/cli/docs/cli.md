@@ -1976,6 +1976,10 @@ Its page core (slice D3: `browse/state/page.ts`, `state.ts`, `refs.ts`, `apptabs
   goes on the list of tabs the daemon keeps closing (each retry reserves again) and is handed to the next connect's sweep
   at exit. The command's own error is kept, with any closing error as its cause, and the answer reports it even when that
   cause is a lost connection (the session is still marked lost, so the next command gets `connection_lost`). Python leaves the session on the half-made tab.
+- Two metric flags are TypeScript-only: `offscreen_handoff_rolled_back` (the rollback above closed the replacement) and
+  `setup_session_dropped` (an ambiguous init-script registration detached the session). They count from the TypeScript
+  client onward (M1, plugins#14), whose flag list carries them. While the Python client fronts the TS daemon, its
+  `command_metrics.clean()` drops names it doesn't know, and the Python side is frozen, so neither is reported then.
 - The caller counts as announced to Ardia's control socket only after the handshake finished, so a cancelled one is
   tried again by the next command; Python records it before. A cancelled active-tab lookup (`tab active`) ends its HTTP
   request at once.

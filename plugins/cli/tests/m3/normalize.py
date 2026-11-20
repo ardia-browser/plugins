@@ -130,6 +130,8 @@ def transcript(entries: list[dict], subs: Subs, rewrite=None) -> tuple[dict, Ids
         if kind == "in":
             if (conn, message.get("id")) in dropped:
                 dropped.discard((conn, message.get("id")))
+                if hasattr(rewrite, "reply"):
+                    rewrite.reply((conn, message.get("id")), message)
                 continue
             ids.walk(message)
             found = (conn, message.get("id"))
@@ -139,7 +141,7 @@ def transcript(entries: list[dict], subs: Subs, rewrite=None) -> tuple[dict, Ids
         if "method" not in message or "id" not in message:
             continue
         if rewrite is not None:
-            rewritten = rewrite(message)
+            rewritten = rewrite(message, (conn, message["id"])) if hasattr(rewrite, "reply") else rewrite(message)
             if rewritten is None:
                 dropped.add((conn, message["id"]))
                 continue

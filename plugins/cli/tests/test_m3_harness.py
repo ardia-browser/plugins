@@ -151,6 +151,17 @@ class Divergences(unittest.TestCase):
         self.assertTrue(compare.compared(self.shaped(python, []), self.shaped(ts, []), compare.LIVE))
         self.assertEqual(compare.compared(self.shaped(python, names), self.shaped(ts, names), compare.LIVE), [])
 
+    def test_only_world_handles_lose_their_object_id(self):
+        call = {"functionDeclaration": "function () { return this.go(); }", "arguments": [], "returnByValue": True, "awaitPromise": True}
+        python = [("mark", 2), ("out", message(id=1, method="Runtime.callFunctionOn", sessionId="S", params={**call, "objectId": "CONTROLLER-1"}))]
+        aimed_wrong = [("mark", 2), ("out", message(id=7, method="Runtime.evaluate", sessionId="S", params={"expression": "globalThis", "contextId": 5, "returnByValue": False})),
+                       ("in", message(id=7, result={"result": {"objectId": "HANDLE-1"}})),
+                       ("out", message(id=8, method="Runtime.callFunctionOn", sessionId="S", params={**call, "objectId": "HANDLE-1"}))]
+        aimed_right = [("mark", 2), ("out", message(id=8, method="Runtime.callFunctionOn", sessionId="S", params={**call, "objectId": "CONTROLLER-9"}))]
+        names = divergences.names_for({})
+        self.assertTrue(compare.compared(self.shaped(python, names), self.shaped(aimed_wrong, names), compare.LIVE))
+        self.assertEqual(compare.compared(self.shaped(python, names), self.shaped(aimed_right, names), compare.LIVE), [])
+
     def test_every_divergence_names_its_row(self):
         for name, entry in divergences.DIVERGENCES.items():
             self.assertTrue(isinstance(entry.get("row"), int) or isinstance(entry.get("decision"), str), name)
