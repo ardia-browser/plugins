@@ -54,7 +54,9 @@ jobs:
           rows = {r.get("key"): r for r in (m.get("settings") or {}).get("rows") or []}
           bar = m.get("pageBar") or {}
           when = bar.get("when") or {}
-          if not when: problems.append("pageBar.when must name a site switch or a local addresses row")
+          unknown = sorted(set(when) - {"siteSwitch", "localAddresses"})
+          if unknown: problems.append("pageBar.when: unknown keys " + ", ".join(unknown))
+          if not {"siteSwitch", "localAddresses"} & set(when): problems.append("pageBar.when must name a site switch or a local addresses row")
           if "siteSwitch" in when and when["siteSwitch"] not in switches: problems.append("pageBar.when.siteSwitch isn't one of siteSwitches")
           if "localAddresses" in when:
               row = rows.get(when["localAddresses"])
@@ -73,6 +75,7 @@ jobs:
             [ "$REF" = "refs/tags/developer-mode-v$version" ] || { echo "::error::the tag $REF isn't developer-mode-v$version"; exit 1; }
             publish=true
           elif [ "$EVENT" = workflow_dispatch ] && [ "$DRY_RUN" = false ]; then
+            [ "$REF" = "refs/tags/developer-mode-v$version" ] || { echo "::error::publish only from the tag developer-mode-v$version, not $REF"; exit 1; }
             publish=true
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
