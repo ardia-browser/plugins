@@ -121,7 +121,7 @@ def main() -> int:
     parser.add_argument("--pages", type=Path, required=True)
     parser.add_argument("--impl", default="ts")
     parser.add_argument("--rows", default=",".join(map(str, ROWS)))
-    parser.add_argument("--port", type=int, default=int(os.environ.get("ARDIA_M3_HUMAN_PORT", "9512")))
+    parser.add_argument("--port", type=int, default=int(os.environ.get("ARDIA_M3_HUMAN_PORT") or int(os.environ.get("ARDIA_M3_PORT_BASE", "9400")) + 16))
     parser.add_argument("--keep", type=Path)
     parser.add_argument("--chrome", default=os.environ.get("ARDIA_M3_HUMAN_CHROME") or None,
                         help="a full Chrome for Testing binary run with --headless=new; chrome-headless-shell is old-mode headless")
