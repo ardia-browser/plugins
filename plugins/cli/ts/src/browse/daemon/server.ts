@@ -442,6 +442,7 @@ export class Daemon {
       this.state.notice = null;
       if (this.state.connected) await this.state.announceCaller(this.state.endpoint);
       this.closeAfterBatch = false;
+      this.state.topCommand = name;
       this.running = { name, since: monotonic() };
       const limit = commandLimit(name, words, ctx.timeout);
       answer = await this.withinLimit(limit, options, name, () => this.answer(ctx, name, words, options));
