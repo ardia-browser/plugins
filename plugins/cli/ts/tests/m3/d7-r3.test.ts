@@ -183,21 +183,27 @@ describe("helper groups and the daemon's exit", () => {
     expect(await until(() => !alive(pid), 2000)).toBe(true);
   });
 
-  test("a group whose leader was already reaped is never signalled, and a stopped group is forgotten", async () => {
-    const sent: number[] = [];
+  test("a group is signalled only inside its window: one TERM at the stop, a KILL only if it outlives the grace, then it is forgotten", async () => {
+    const sent: [number, string][] = [];
     const real = process.kill.bind(process);
     process.kill = ((pid: number, signal?: string | number) => {
-      if (pid < 0) sent.push(pid);
+      if (pid < 0 && signal !== 0 && signal !== undefined) sent.push([pid, String(signal)]);
       return real(pid, signal as never);
     }) as typeof process.kill;
     try {
       const dir = tempDir();
       const pidFile = path.join(dir, "pid");
-      await expect(run(["/bin/sh", "-c", `sleep 1 & echo $! > ${pidFile}; exit 0`], { timeout: 0.3, grace: 0.2 })).rejects.toBeInstanceOf(RunTimedOut);
+      await expect(run(["/bin/sh", "-c", `sleep 30 & echo $! > ${pidFile}; exit 0`], { timeout: 0.3, grace: 0.2 })).rejects.toBeInstanceOf(RunTimedOut);
+      expect(await until(() => !alive(Number(fs.readFileSync(pidFile, "utf8"))), 2000)).toBe(true);
       await new Promise((resolve) => setTimeout(resolve, 400));
-      expect(sent).toEqual([]);
-      await expect(run(["/bin/sh", "-c", "sleep 30"], { timeout: 0.2, grace: 0.2 })).rejects.toBeInstanceOf(RunTimedOut);
+      expect(sent.map(([, signal]) => signal)).toEqual(["SIGTERM"]);
+      expect(runModule.liveGroups()).toEqual([]);
+      const before = sent.length;
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(sent.length).toBe(before);
+      await expect(run(["/bin/sh", "-c", "trap '' TERM; sleep 30"], { timeout: 0.2, grace: 0.2 })).rejects.toBeInstanceOf(RunTimedOut);
       await new Promise((resolve) => setTimeout(resolve, 400));
+      expect(sent.slice(before).map(([, signal]) => signal)).toEqual(["SIGTERM", "SIGKILL"]);
       expect(runModule.liveGroups()).toEqual([]);
     } finally {
       process.kill = real;

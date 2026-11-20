@@ -118,7 +118,7 @@ export function run(argv: readonly string[], options: RunOptions): Promise<Ran> 
       if (settled || stopped) return;
       stopped = true;
       settle(() => reject(why === "cancelled" ? new Cancelled() : new RunTimedOut()));
-      if (pid === undefined || group.reaped || GROUPS.get(pid) !== group) {
+      if (pid === undefined || GROUPS.get(pid) !== group) {
         release();
         if (pid !== undefined && GROUPS.get(pid) === group) GROUPS.delete(pid);
         return;
@@ -138,12 +138,12 @@ export function run(argv: readonly string[], options: RunOptions): Promise<Ran> 
     signal?.addEventListener("abort", cancel, { once: true });
     child.on("exit", () => {
       group.reaped = true;
-      if (pid !== undefined && !group.terminating && GROUPS.get(pid) === group) GROUPS.delete(pid);
     });
     child.on("error", (error) => {
       if (child.pid === undefined) settle(() => reject(describe(error)));
     });
     child.on("close", () => {
+      if (pid !== undefined && !group.terminating && GROUPS.get(pid) === group) GROUPS.delete(pid);
       settle(() => resolve({ code: exitCode(child), stdout: out.take(), stderr: err.take() }));
     });
     child.stdout?.on("data", (chunk: Buffer) => out.push(chunk));

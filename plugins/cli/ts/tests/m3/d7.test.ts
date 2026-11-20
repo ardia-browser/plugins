@@ -343,15 +343,22 @@ async function gone(pid: number, ms = 3000): Promise<boolean> {
 }
 
 describe("subprocess lifetime", () => {
-  test("a leader that forked a child holding stdout and exited is settled at its deadline; its group isn't signalled once the leader is reaped", async () => {
+  test("a leader that forked a child holding stdout and exited is settled at its deadline, and the child is killed", async () => {
     const dir = tempDir();
     const pidFile = path.join(dir, "pid");
     const started = performance.now();
     await expect(run(["/bin/sh", "-c", `sleep 30 & echo $! > ${pidFile}; exit 0`], { timeout: 0.4, grace: 0.2 })).rejects.toBeInstanceOf(RunTimedOut);
     expect(performance.now() - started).toBeLessThan(3000);
-    const pid = Number(fs.readFileSync(pidFile, "utf8"));
-    expect(alivePid(pid)).toBe(true);
-    process.kill(pid, "SIGKILL");
+    expect(await gone(Number(fs.readFileSync(pidFile, "utf8")))).toBe(true);
+  });
+
+  test("a cancel after the leader exited also kills its orphan", async () => {
+    const dir = tempDir();
+    const pidFile = path.join(dir, "pid");
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(new Cancelled()), 300);
+    await expect(withSignal(controller.signal, () => run(["/bin/sh", "-c", `sleep 30 & echo $! > ${pidFile}; exit 0`], { timeout: 30, grace: 0.2 }))).rejects.toBeInstanceOf(Cancelled);
+    expect(await gone(Number(fs.readFileSync(pidFile, "utf8")))).toBe(true);
   });
 
   test("a leader still running at the deadline has its whole group killed, children included", async () => {

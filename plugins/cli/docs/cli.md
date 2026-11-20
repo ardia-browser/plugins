@@ -2033,11 +2033,13 @@ scenarios:
   own messages and environment (it is frozen); the TypeScript client's `plugin run` (M2) must apply the same
   boundary.
 - Keychain, plugin, `git` and `npm` processes run in their own session and process group. At the deadline or on a
-  cancel the call ends at once; if the process the daemon started is still running, its group gets one SIGTERM and
-  one SIGKILL 0.5 s later unless the whole group is gone by then, whatever its pipes do in between. Once that process
-  has exited, its group is never signalled again (a process left behind by an exited one isn't killed), since its
-  group id could be reused; the only residual is a PID recycled within the 0.5 s grace after our own SIGTERM. When the
-  daemon exits, every group still in that state is killed synchronously. Python kills only the process it started.
+  cancel the call ends at once, and the group gets one SIGTERM, whether or not the process the daemon started has
+  already exited, so anything it left behind is stopped too; 0.5 s later it gets one SIGKILL if `kill(-pgid, 0)`
+  still finds any member, whatever its pipes did in between. After that, or once the group is gone, it is forgotten
+  and never signalled again. A group id can't be handed to a new group while a member of ours is alive, so the only
+  residual is our group emptying and its id being recycled into a new group within that 0.5 s. When the daemon exits,
+  every group still running its first process, or still inside that window, is killed synchronously. Python kills
+  only the process it started.
 - `clipboard` and `set permission` grant each permission with `Browser.setPermission`, so grants add up; Python's
   `Browser.grantPermissions` replaces every grant the origin had (a clipboard grant revoked geolocation). The harness
   leaves both out of the comparison through the `permission-overrides` divergence (ardia#2812 row 3).
