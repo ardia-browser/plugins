@@ -226,3 +226,38 @@ describe("script errors name only the resolved command", () => {
     expect(JSON.stringify(script.failureData(message, calls))).not.toContain("sk-final-secret");
   });
 });
+
+describe("script calls that don't parse or name no command", () => {
+  test("they get fixed errors that never echo the call", () => {
+    const secret = "pw-Q7'zz-final";
+    for (const given of [[`set credentials alice ${secret}`], [`set credentials alice pw"${secret}`], [`nosuch ${secret}`]]) {
+      expect(script.refusedCall(given)).toEqual({ ok: false, error: "that call couldn't be parsed", code: "usage" });
+    }
+    expect(script.refusedCall(["frobnicate", secret])).toEqual({ ok: false, error: "unknown command", code: "usage" });
+    expect(script.refusedCall(["get title"])).toBeNull();
+    expect(script.refusedCall(["set", "credentials", "alice", secret])).toBeNull();
+    const raw = [`set credentials alice ${secret}`];
+    const text = script.errorText({ kind: "error", message: "that call couldn't be parsed", name: "Error", line: 1, command: raw }, "x", [raw]);
+    expect(text).toBe("line 1: that call couldn't be parsed (in call 1, `unknown command`)");
+    expect(JSON.stringify(script.failureData({ command: raw }, [raw]))).not.toContain("Q7");
+  });
+});
+
+describe("the native group table", () => {
+  test("a group the full table refuses is still tracked in JavaScript and counted", async () => {
+    const { registerGroup, unregisterGroup } = await import("../../src/libc.ts");
+    const fakes: number[] = [];
+    for (let pid = 900_000; fakes.length < 300; pid += 1) {
+      if (registerGroup(pid) !== 0) break;
+      fakes.push(pid);
+    }
+    try {
+      const before = runModule.groupStats.unregistered;
+      await run(["/bin/sh", "-c", "exit 0"], { timeout: 5 });
+      expect(runModule.groupStats.unregistered).toBe(before + 1);
+    } finally {
+      for (const pid of fakes) unregisterGroup(pid);
+    }
+    expect(fakes.length).toBe(256);
+  });
+});

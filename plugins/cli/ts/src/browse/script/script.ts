@@ -9,7 +9,7 @@ import { PyException, pyLen } from "../../pylib/str.ts";
 import type { CdpResult } from "../cdp/browser.ts";
 import { Cancelled, currentSignal, later, shield, sleep, withSignal } from "../cdp/cancel.ts";
 import { Ctx } from "../commands/ctx.ts";
-import { canonical, dispatch, OWNERS, register } from "../commands/index.ts";
+import { canonical, dispatch, OWNERS, register, SKIPPED } from "../commands/index.ts";
 import { parse } from "../commands/parse.ts";
 import { BrowseError, ConnectionLost, OutcomeUnknown, Usage } from "../daemon-errors.ts";
 import { MUTATING } from "../daemon/names.ts";
@@ -227,14 +227,27 @@ export function failureData(message: Message, calls: readonly unknown[][]): Reco
   return { line: null, call: named ? callIndex(calls, failed) : null, command: named ? commandName(failed) : null };
 }
 
-async function answerCall(ctx: Ctx, given: unknown, index: number): Promise<Answer> {
+export const UNPARSED_CALL = "that call couldn't be parsed";
+export const UNKNOWN_CALL = "unknown command";
+
+export function refusedCall(given: unknown): Answer | null {
   if (!Array.isArray(given) || given.length === 0 || !given.every((word) => typeof word === "string")) {
     return { ok: false, error: "browse() takes a command and its arguments as strings", code: "usage" };
   }
   const argv = splitCommandLine(given as string[]);
+  if (argv.length === 1 && /\s/u.test(argv[0] as string)) return { ok: false, error: UNPARSED_CALL, code: "usage" };
   const name = canonical(argv[0] as string);
   if (name === "batch") return { ok: false, error: "batch can't run inside a script; loop in the script instead", code: "usage" };
   if (REFUSED.includes(name)) return { ok: false, error: `${name} can't run inside a script`, code: "usage" };
+  if (!Object.hasOwn(OWNERS, name) && !Object.hasOwn(SKIPPED, name)) return { ok: false, error: UNKNOWN_CALL, code: "usage" };
+  return null;
+}
+
+async function answerCall(ctx: Ctx, given: unknown, index: number): Promise<Answer> {
+  const refused = refusedCall(given);
+  if (refused !== null) return refused;
+  const argv = splitCommandLine(given as string[]);
+  const name = canonical(argv[0] as string);
   const sub = new Ctx(ctx.state, { ...ctx.options }, ctx.cwd, ctx.env, null, name);
   const [result, error] = await runOne(sub, argv);
   if (error instanceof OutcomeUnknown || error instanceof ConnectionLost) throw error;
@@ -265,7 +278,7 @@ async function drive(ctx: Ctx, page: Page, handle: string, source: string, curre
       calls.push(Array.isArray(argv) ? [...(argv as unknown[])] : []);
       current.set("call", calls.length);
       answer = await answerCall(ctx, message["argv"], calls.length);
-      done.push(String((Array.isArray(message["argv"]) ? message["argv"] : [""])[0] ?? ""));
+      done.push(commandName(argv));
     }
     current.clear();
     await control(page, handle, "function (id, answer) { return this.reply(id, answer); }", [message["id"], answer]);

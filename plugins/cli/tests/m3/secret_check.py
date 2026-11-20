@@ -24,7 +24,10 @@ import tempfile
 from pathlib import Path
 
 LONG = "sk-d7-fake-secret-7f3a-" + "q" * 40
-PASSWORDS = ["a", '"', "-x", "--foo", LONG]
+APOSTROPHE = "sk-d7-apostrophe-Q7'zz-" + "r" * 30
+LONE_QUOTE = 'sk-d7-lonequote-"-' + "s" * 30
+PASSWORDS = ["a", '"', "-x", "--foo", LONG, APOSTROPHE, LONE_QUOTE]
+GREPPED = (LONG, APOSTROPHE, LONE_QUOTE)
 SCENARIOS = Path(__file__).resolve().parent / "scenarios"
 GENERATED = "gen-"
 REQUEST_FIELDS = ("request", "wire")
@@ -43,6 +46,10 @@ def script_steps(password: str) -> list[dict]:
             {"argv": ["script"], "session": "cred", "stdin": f"await browse('set', 'credentials', 'alice', {literal});"},
             {"argv": ["--json", "script"], "session": "cred", "stdin": f"log('before');\nawait browse('set', 'credentials', 'alice', {literal});"},
             {"argv": ["script", "--timeout", "2s"], "session": "cred", "stdin": f"await browse('set', 'credentials', {literal}, {literal});\nawait sleep(5000);"},
+            {"argv": ["script"], "session": "cred", "stdin": f"await browse({json.dumps('set credentials alice ' + password)});"},
+            {"argv": ["--json", "script"], "session": "cred", "stdin": f"await browse({json.dumps('set credentials alice ' + password)});"},
+            {"argv": ["script"], "session": "cred", "stdin": f"await browse({json.dumps('nosuch ' + password)});"},
+            {"argv": ["--json", "script"], "session": "cred", "stdin": f"await browse('frobnicate', {literal});"},
             {"argv": ["close"], "session": "cred"}]
 
 
@@ -80,6 +87,11 @@ def check(scratch: Path, name: str, password: str | None, script: bool) -> list[
     if not sides:
         return [f"{name}: nothing ran"]
     for side in sides:
+        result = side / "result.json"
+        steps = json.loads(result.read_text()).get("steps") if result.exists() else None
+        if not steps or steps[0].get("exit") != 0 or not replies(side):
+            problems.append(f"{name}/{side.name}: the daemon didn't run (its first step failed or no reply was recorded)")
+            continue
         for request, answer in replies(side):
             options = request.get("options") or {}
             if options.get("json") and answer.get("out"):
@@ -91,7 +103,7 @@ def check(scratch: Path, name: str, password: str | None, script: bool) -> list[
                 problems.append(f"{name}/{side.name}: a reply was masked")
             if password is not None and password.startswith("-") and password in str(answer.get("err") or ""):
                 problems.append(f"{name}/{side.name}: stderr repeats the dash-prefixed password")
-        if password != LONG:
+        if password not in GREPPED:
             continue
         for path in sorted(side.rglob("*")):
             if not path.is_file() or path.is_symlink():
@@ -102,9 +114,9 @@ def check(scratch: Path, name: str, password: str | None, script: bool) -> list[
             if path.name in ("answers.jsonl", "result.json"):
                 text = json.dumps([without_requests(json.loads(line)) for line in data.decode().splitlines()] if path.name == "answers.jsonl"
                                   else without_requests(json.loads(data)), ensure_ascii=False)
-                if password in text:
+                if password in text or json.dumps(password, ensure_ascii=False)[1:-1] in text:
                     problems.append(f"{name}/{side.name}: {path.name} carries the password outside the requests")
-            elif password.encode() in data:
+            elif password.encode() in data or json.dumps(password, ensure_ascii=False)[1:-1].encode() in data:
                 problems.append(f"{name}/{side.name}: {path.relative_to(side)} carries the password")
     return problems
 

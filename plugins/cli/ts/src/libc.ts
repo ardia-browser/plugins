@@ -162,8 +162,8 @@ export function disarmWatchdog(): number {
   return native().disarmWatchdog();
 }
 
-export function registerGroup(group: number): boolean {
-  return loaded !== undefined && loaded.registerGroup(group) === 0;
+export function registerGroup(group: number): number | null {
+  return loaded === undefined ? null : loaded.registerGroup(group);
 }
 
 export function unregisterGroup(group: number): void {

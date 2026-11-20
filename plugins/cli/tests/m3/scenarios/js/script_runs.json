@@ -7,10 +7,9 @@
  "racy_steps": {
   "steps": [
    6,
-   7,
-   12
+   11
   ],
-  "reason": "steps 6 and 7: a failed call is named by its index and command (`in call 1, `nosuch``), a designed difference in docs/cli.md that the harness can't express per answer, so only the exit status is compared; step 12: whether the worker's un-awaited request reaches the controller before its done message depends on CDP round-trip timing, in both daemons"
+  "reason": "step 6: a refused call is named by its index and command (`in call 1, `close``), a designed difference in docs/cli.md that the harness can't express per answer, so only the exit status is compared (an unknown command inside a script answers the worker differently, so it isn't in this comparison; tests/m3/secret_check.py and d7-r3.test.ts cover it); step 11: whether the worker's un-awaited request reaches the controller before its done message depends on CDP round-trip timing, in both daemons"
  },
  "steps": [
   {
@@ -55,13 +54,6 @@
    ],
    "session": "scr",
    "stdin": "log('before');\nreturn document.title;"
-  },
-  {
-   "argv": [
-    "script"
-   ],
-   "session": "scr",
-   "stdin": "await browse('nosuch');"
   },
   {
    "argv": [

@@ -62,6 +62,7 @@ function exitCode(child: ChildProcess): number {
 type Group = { reaped: boolean; terminating: boolean };
 
 const GROUPS = new Map<number, Group>();
+export const groupStats = { unregistered: 0 };
 
 export function liveGroups(): number[] {
   return [...GROUPS.keys()];
@@ -107,8 +108,10 @@ export function run(argv: readonly string[], options: RunOptions): Promise<Ran> 
     const pid = child.pid;
     const group: Group = { reaped: false, terminating: false };
     if (pid !== undefined) {
+      if (GROUPS.has(pid)) unregisterGroup(pid);
       GROUPS.set(pid, group);
-      registerGroup(pid);
+      const registered = registerGroup(pid);
+      if (registered !== null && registered !== 0) groupStats.unregistered += 1;
     }
     let settled = false;
     let stopped = false;

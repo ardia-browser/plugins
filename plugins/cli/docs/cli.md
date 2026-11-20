@@ -2042,7 +2042,8 @@ scenarios:
   that window is killed synchronously, whether or not its first process has exited; the native shutdown watchdog
   does the same from the addon's own list of live groups before it calls `_exit`. A run that settled normally is
   forgotten at once and never signalled: a process it left behind that closed our pipes is left alone, as Python
-  leaves it. Python kills only the process it started.
+  leaves it. The native list holds 256 groups; a group it can't take is still tracked and killed by the daemon's own
+  exit, but not by the watchdog, and is counted (`groupStats.unregistered`). Python kills only the process it started.
 - `clipboard` and `set permission` grant each permission with `Browser.setPermission`, so grants add up; Python's
   `Browser.grantPermissions` replaces every grant the origin had (a clipboard grant revoked geolocation). The harness
   leaves both out of the comparison through the `permission-overrides` divergence (ardia#2812 row 3).
@@ -2056,7 +2057,9 @@ scenarios:
   credentials <user> <pass>`), never the arguments. Python parses them as flags and answers `Unknown flag: -x`.
 - A `script` that fails in a call names it by its index and the command the parser resolved, never the call's text
   or arguments (`line 2: … (in call 3, \`set credentials\`)`, `unknown command` when it names none), and its `data`
-  carries `call` and that `command`; a timed-out script names the call the same way.
+  carries `call` and that `command`; a timed-out script names the call the same way. A single-string call that can't
+  be split (an unclosed quote) fails with `that call couldn't be parsed`, and a call naming no command with `unknown
+  command`; neither repeats the call. Python answers `Unknown command: <the call's text>`.
   Python quotes the call's arguments.
 - An answer's `code` (and so the client's telemetry `error_code`) is always one of the daemon's own codes; anything
   else, such as a code a script throws, becomes `failed` (`script_failed` for a script). Python passes a script's code
