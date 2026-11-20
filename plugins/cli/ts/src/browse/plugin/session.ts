@@ -199,7 +199,9 @@ export class PluginSession {
     }
     let page = this.pages.get(targetId);
     if (page === undefined) {
-      page = new PluginPage(targetId, () => this.autoDialog);
+      page = new PluginPage(targetId, () => this.autoDialog, (notice) => {
+        this.notice = notice;
+      });
       this.pages.set(targetId, page);
     }
     if (page.sessionId === null || page.link !== link) {

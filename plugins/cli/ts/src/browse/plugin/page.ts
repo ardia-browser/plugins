@@ -7,6 +7,8 @@ import { type PluginLink } from "./link.ts";
 export type Frame = { loader: string; url: string; parent: string | null; origin: string };
 type Queued = [string, Record<string, unknown>];
 
+export const DIALOG_OUTCOME_UNKNOWN = "Ardia couldn't confirm that the page's dialog was accepted (outcome unknown); snapshot before going on";
+
 function monotonic(): number {
   return performance.now() / 1000;
 }
@@ -31,6 +33,7 @@ export class PluginPage {
   constructor(
     readonly targetId: string,
     readonly autoDialog: () => boolean,
+    readonly report: (notice: string) => void = () => {},
   ) {}
 
   get loader(): string | null {
@@ -146,7 +149,10 @@ export class PluginPage {
           () => {
             this.dialog = null;
           },
-          (error: unknown) => log.exception("auto-accepting a dialog failed", error),
+          (error: unknown) => {
+            if (error instanceof BrowseError && error.code === "outcome_unknown") this.report(DIALOG_OUTCOME_UNKNOWN);
+            else log.exception("auto-accepting a dialog failed", error);
+          },
         );
       }
     } else if (method === "Page.javascriptDialogClosed") {

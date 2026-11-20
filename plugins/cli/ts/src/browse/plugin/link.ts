@@ -28,7 +28,7 @@ export function engineCoded(error: unknown): unknown {
   const refusal = engineRefusal(error.cdpMessage);
   if (refusal !== null) {
     flag(refusal.metric, true);
-    return new EngineRefused(error.text, refusal.code, refusal.exit);
+    return new EngineRefused(refusal.note ? `${error.text} (${refusal.note})` : error.text, refusal.code, refusal.exit);
   }
   return error;
 }

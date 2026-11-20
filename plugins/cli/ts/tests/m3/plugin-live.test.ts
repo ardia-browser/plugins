@@ -114,6 +114,15 @@ describe.skipIf(!CHROME)("plugin mode against headless Chrome for Testing, throu
     const lease = await marked("lease", ["click", "--", "@e3"], { json: true });
     expect(lease).toMatchObject({ exit: 77, code: "plugin_refused" });
     expect(JSON.parse(lease.out).error).toBe("Ardia.dispatchClick: ardia: input isn't allowed for this session");
+    await tap(world, "fault", { kind: "error", method: "Input.insertText", at: 1, message: "ardia: outcome unknown" });
+    const unknownFill = await marked("unknown fill", ["fill", "--", "@e2", "Ada"], { json: true, no_changes: true });
+    expect(unknownFill).toMatchObject({ exit: 1, code: "outcome_unknown" });
+    expect((methodsBetweenMarks(entries(world)).get("unknown fill") ?? []).filter((method) => method === "Input.insertText")).toHaveLength(1);
+    await tap(world, "fault", { kind: "error", method: "Ardia.dispatchClick", at: 1, message: "ardia: act lease ended before this input was delivered" });
+    const ended = await marked("lease ended", ["click", "--", "@e3"], { json: true, no_changes: true });
+    expect(ended).toMatchObject({ exit: 77, code: "act_lease_ended" });
+    expect(JSON.parse(ended.out).error).toEndWith("(nothing ran)");
+    expect((methodsBetweenMarks(entries(world)).get("lease ended") ?? []).filter((method) => method === "Ardia.dispatchClick")).toHaveLength(1);
     await tap(world, "fault", { kind: "error", method: "Input.insertText", at: 1, message: "page said ardia: tab_out_of_scope" });
     const quoted = await step(world, ["fill", "--", "@e2", "Ada"], { json: true });
     expect(quoted.code).not.toBe("tab_out_of_scope");

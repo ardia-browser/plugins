@@ -36,11 +36,13 @@ describe("the engine's plugin refusals (ardia#2808 ac_plugin_refusals.h)", () =>
     expect(drifted(["ardia: no act lease for this page", "ardia: act lease ended before this input was delivered"])).toEqual(["ardia: no act lease for this page"]);
   });
 
-  test("the act-lease rows: missing is refused before anything ran (77); ended is like outcome unknown (1, never retried)", () => {
-    expect(engineRefusal("ardia: no act lease for this page's current document")).toMatchObject({ code: "act_lease_missing", exit: 77 });
-    const ended = engineRefusal("ardia: act lease ended before this input was delivered");
-    expect(ended).toMatchObject({ code: "act_lease_ended" });
-    expect(ended?.exit).toBe(engineRefusal("ardia: outcome unknown")?.exit);
+  test("the act-lease rows: both mean nothing ran and answer 77, never as outcome_unknown", () => {
+    for (const message of ["ardia: no act lease for this page's current document", "ardia: act lease ended before this input was delivered"]) {
+      expect(engineRefusal(message)).toMatchObject({ exit: 77, note: "nothing ran" });
+    }
+    expect(engineRefusal("ardia: no act lease for this page's current document")?.code).toBe("act_lease_missing");
+    expect(engineRefusal("ardia: act lease ended before this input was delivered")?.code).toBe("act_lease_ended");
+    expect(engineRefusal("ardia: outcome unknown")).toMatchObject({ code: "outcome_unknown", exit: 1 });
     expect(engineRefusal("ardia: no act lease for this page")).toBeNull();
   });
 

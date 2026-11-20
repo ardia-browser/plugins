@@ -3,9 +3,10 @@ import { type Entry } from "./canon.ts";
 import { pluginViolations } from "./plugin-rules.ts";
 import { type Browser } from "../../src/browse/cdp/browser.ts";
 import { PluginLink } from "../../src/browse/plugin/link.ts";
-import { HIDDEN_TAB, TAB_IN_USE, WHEEL_BUSY_WAITS, wheelAt } from "../../src/browse/plugin/input.ts";
+import { clearField, clickAt, HIDDEN_TAB, pressCombo, TAB_IN_USE, typeText, WHEEL_BUSY_WAITS, wheelAt } from "../../src/browse/plugin/input.ts";
+import { DIALOG_OUTCOME_UNKNOWN, PluginPage } from "../../src/browse/plugin/page.ts";
 import { actingStep } from "../../src/browse/plugin/acting.ts";
-import { BrowseError } from "../../src/browse/daemon-errors.ts";
+import { BrowseError, CdpError } from "../../src/browse/daemon-errors.ts";
 import { scrubPasswordValues } from "../../src/browse/plugin/protected.ts";
 import { checkRequest, PluginPolicy } from "../../src/browse/plugin/policy.ts";
 import { comboEvents, editingCommand } from "../../src/browse/plugin/input.ts";
@@ -273,3 +274,61 @@ describe("(f) nothing between steps", () => {
   });
 });
 
+
+describe("outcome unknown on every leased command (the final act lease)", () => {
+  const unknown = (method: string) => new CdpError(method, "ardia: outcome unknown");
+
+  test("the link codes it outcome_unknown on input and non-input paths alike, and sends each command once", async () => {
+    const calls: string[] = [];
+    const browser = {
+      alive: true,
+      async send(method: string): Promise<Record<string, unknown>> {
+        calls.push(method);
+        throw unknown(method);
+      },
+    } as unknown as Browser;
+    const link = new PluginLink(browser, () => true);
+    link.pageSessions.add("S");
+    const commands: [string, Record<string, unknown>][] = [
+      ["Input.insertText", { text: "a" }],
+      ["Input.dispatchKeyEvent", { type: "keyDown", key: "a", code: "KeyA", windowsVirtualKeyCode: 65, text: "a", unmodifiedText: "a", modifiers: 0 }],
+      ["Ardia.dispatchClick", { x: 1, y: 1, button: "left", clickCount: 1, modifiers: 0 }],
+      ["Input.dispatchMouseEvent", { type: "mouseWheel", x: 1, y: 1, deltaX: 0, deltaY: 5, button: "none", buttons: 0 }],
+      ["Page.handleJavaScriptDialog", { accept: true }],
+    ];
+    for (const [method, params] of commands) await expect(link.send(method, params, "S")).rejects.toMatchObject({ code: "outcome_unknown", exitCode: 1 });
+    expect(calls).toEqual(commands.map(([method]) => method));
+  });
+
+  test("no caller retries it: typing, key combos, clearing, clicks and wheels each stop after the one command", async () => {
+    let sent = 0;
+    const page = {
+      async send(method: string): Promise<Record<string, unknown>> {
+        sent += 1;
+        throw new BrowseError(`${method}: ardia: outcome unknown`, null, "outcome_unknown");
+      },
+    } as never;
+    const runs: [string, () => Promise<unknown>][] = [
+      ["typeText", () => typeText(page, "ab", 0, false)],
+      ["pressCombo", () => pressCombo(page, "Meta+a")],
+      ["clearField", () => clearField(page)],
+      ["clickAt", () => clickAt(page, 1, 1, "left")],
+      ["wheelAt", () => wheelAt(page, 1, 1, 0, 5)],
+    ];
+    for (const [name, run] of runs) {
+      sent = 0;
+      await expect(run()).rejects.toMatchObject({ code: "outcome_unknown" });
+      expect([name, sent]).toEqual([name, 1]);
+    }
+  });
+
+  test("an auto-accepted dialog that comes back outcome unknown leaves a notice on the step", async () => {
+    const notices: string[] = [];
+    const page = new PluginPage("T", () => true, (notice) => notices.push(notice));
+    page.sessionId = "S";
+    page.link = { send: async () => Promise.reject(new BrowseError("Page.handleJavaScriptDialog: ardia: outcome unknown", null, "outcome_unknown")) } as never;
+    page.onEvent("Page.javascriptDialogOpening", { type: "alert", message: "hi" });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(notices).toEqual([DIALOG_OUTCOME_UNKNOWN]);
+  });
+});
