@@ -781,6 +781,26 @@ class CheckedBeforeConnecting(unittest.TestCase):
             self.assertNotIn("stdin was read", err.getvalue(), argv)
             self.assertIn("--t", err.getvalue(), argv)
 
+    def test_a_later_params_value_wins_and_stdin_stays_unread(self):
+        import contextlib
+        import io
+        from unittest import mock
+
+        from ardia_cli.browse import cli as browse_cli, client
+
+        class Unread(io.StringIO):
+            def read(self, *args):
+                raise AssertionError("stdin was read")
+
+            def isatty(self):
+                return False
+
+        with mock.patch.dict(os.environ, {"ARDIA_DATA_DIR": str(self.temp), "ARDIA_TELEMETRY": "0"}), \
+                mock.patch.object(client, "ensure_daemon", side_effect=AssertionError("connected")), \
+                mock.patch("sys.stdin", Unread()), contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(AssertionError, "connected"):
+                browse_cli.run(["--port", "9", "cdp", "Runtime.evaluate", "--params", "-", "--params", '{"expression": "1"}'])
+
     def test_a_long_deadline_is_waited_in_chunks_the_socket_can_hold(self):
         from unittest import mock
 

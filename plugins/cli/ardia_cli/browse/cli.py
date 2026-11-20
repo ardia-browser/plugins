@@ -339,10 +339,6 @@ def eval_code_given(args: list[str]) -> bool:
 MAX_CDP_STDIN = 1024 * 1024
 
 
-def params_from_stdin(args: list[str]) -> bool:
-    return "--params=-" in args or any(a == "--params" and b == "-" for a, b in zip(args, args[1:]))
-
-
 def cdp_params(raw: str | None, pairs: list[str], stdin: str | None) -> dict:
     import io
 
@@ -552,14 +548,13 @@ def run(argv: list[str]) -> int:
             if result is not None:
                 return print_result(result, as_json, options)
         stdin = None
-        if command == "cdp":
-            check_cdp_flags(args)
+        cdp_flags = check_cdp_flags(args) if command == "cdp" else {}
         if command == "notes" and "-" in args:
             stdin = read_stdin_text()
         elif (command in ("eval", "addinitscript") and "--stdin" in args) or (command == "eval" and not eval_code_given(args) and not sys.stdin.isatty()) \
                 or (command == "batch" and not [a for a in args if not a.startswith("--")] and not sys.stdin.isatty()):
             stdin = sys.stdin.read()
-        elif command == "cdp" and params_from_stdin(args):
+        elif command == "cdp" and cdp_flags.get("params") == "-":
             stdin = read_cdp_stdin()
         elif command == "read":
             stdin = read_stdin_urls(args)
