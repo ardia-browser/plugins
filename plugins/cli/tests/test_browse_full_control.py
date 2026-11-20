@@ -420,7 +420,7 @@ class RawCdp(unittest.TestCase):
                     await asyncio.sleep(0)
                 if give_up == "cancel":
                     attaching.cancel()
-                with self.assertRaises((asyncio.CancelledError, asyncio.TimeoutError, connection.CdpTimeout)):
+                with self.assertRaises(asyncio.CancelledError if give_up == "cancel" else connection.CdpTimeout):
                     await asyncio.wait_for(attaching, 1)
                 await asyncio.sleep(0.2)
             sock.inbox.put_nowait({"id": sock.sent[0]["id"], "result": {"sessionId": "S-page-late"}})
@@ -728,22 +728,14 @@ class CheckedBeforeConnecting(unittest.TestCase):
     def test_finite_deadlines_are_what_they_were_before_the_cap(self):
         from ardia_cli.browse import limits
 
-        def before(payload):
-            argv = payload.get("argv") or [""]
-            options = payload.get("options") or {}
-            timeout = float(options.get("timeout_ms") or limits.DEFAULT_TIMEOUT_MS) / 1000
-            name, rest = str(argv[0]), [str(arg) for arg in argv[1:]]
-            waits = max(limits.queue_wait(name, rest, patient=bool(payload.get("patient_queue"))), limits.BEHIND_SCRIPT_WAIT)
-            return waits + limits.command_limit(name, rest, timeout) + limits.LIMIT_MARGIN
-
-        payloads = [{"argv": ["wait", "86400000"]}, {"argv": ["wait", "86399999"]}, {"argv": ["wait", "86400001"]},
-                    {"argv": ["wait", "--text", "x", "--timeout", "86400000"]}, {"argv": ["wait", "x"], "options": {"timeout_ms": 86400000}},
-                    {"argv": ["wait", "x"], "options": {"timeout_ms": 10 ** 12}}, {"argv": ["script", "--timeout", "1d"]},
-                    {"argv": ["script", "--timeout", "1440m"]}, {"argv": ["script", "--timeout", "86399s"]},
-                    {"argv": ["read", "a", "--timeout", "86400s"], "patient_queue": True}, {"argv": ["cdp", "Page.x", "--timeout", "10m"]},
-                    {"argv": ["get", "url"], "options": {"timeout_ms": "inf"}}, {"argv": ["click", "@e1"]}]
-        for payload in payloads:
-            self.assertEqual(limits.answer_deadline(payload), before(payload), payload)
+        expected = [({"argv": ["wait", "86400000"]}, 86760), ({"argv": ["wait", "86399999"]}, 86759.999), ({"argv": ["wait", "86400001"]}, 86760),
+                    ({"argv": ["wait", "--text", "x", "--timeout", "86400000"]}, 86760), ({"argv": ["wait", "x"], "options": {"timeout_ms": 86400000}}, 86760),
+                    ({"argv": ["wait", "x"], "options": {"timeout_ms": 10 ** 12}}, 1000000360), ({"argv": ["script", "--timeout", "1d"]}, 450),
+                    ({"argv": ["script", "--timeout", "1440m"]}, 172860), ({"argv": ["script", "--timeout", "86399s"]}, 172858),
+                    ({"argv": ["read", "a", "--timeout", "86400s"], "patient_queue": True}, 172860), ({"argv": ["cdp", "Page.x", "--timeout", "10m"]}, 960),
+                    ({"argv": ["get", "url"], "options": {"timeout_ms": "inf"}}, 450), ({"argv": ["click", "@e1"]}, 450)]
+        for payload, deadline in expected:
+            self.assertAlmostEqual(limits.answer_deadline(payload), deadline, places=6, msg=payload)
         self.assertEqual(limits.answer_deadline({"argv": ["wait", "86400000"]}), 300 + 86430 + 30)
         self.assertEqual(limits.answer_deadline({"argv": ["script", "--timeout", "1440m"]}), 172860)
 
