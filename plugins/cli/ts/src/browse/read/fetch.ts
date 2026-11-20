@@ -14,6 +14,7 @@ export const ACCEPT = "text/markdown, text/plain;q=0.9, text/html;q=0.8, */*;q=0
 export const USER_AGENT = "ardia-browse-read/1";
 const CHARSET = /charset=([\p{L}\p{N}\p{M}\p{Pc}-]+)/u;
 const REDIRECTS = 10;
+const WEB_SCHEMES = new Set(["http", "https"]);
 
 export type Fetched = [number, string, string, string];
 export type ReadOptions = Record<string, unknown>;
@@ -98,8 +99,10 @@ export async function fetchUrl(url: string, timeout: number, accept = ACCEPT): P
         );
         const location = response.headers.get("location");
         if (![301, 302, 303, 307, 308].includes(response.status) || !location || hop >= REDIRECTS) break;
+        const next = urljoin(target, location);
+        if (!WEB_SCHEMES.has(urlsplit(next).scheme.toLowerCase())) break;
         response.body?.cancel().catch(() => {});
-        target = urljoin(target, location);
+        target = next;
         arm();
       }
       if (response.status < 200 || response.status >= 300) {
