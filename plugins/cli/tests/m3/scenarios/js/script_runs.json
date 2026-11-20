@@ -6,9 +6,11 @@
  ],
  "racy_steps": {
   "steps": [
+   6,
+   7,
    12
   ],
-  "reason": "whether the worker's un-awaited request reaches the controller before its done message depends on CDP round-trip timing, in both daemons"
+  "reason": "steps 6 and 7: a failed call is named by its index and command (`in call 1, `nosuch``), a designed difference in docs/cli.md that the harness can't express per answer, so only the exit status is compared; step 12: whether the worker's un-awaited request reaches the controller before its done message depends on CDP round-trip timing, in both daemons"
  },
  "steps": [
   {

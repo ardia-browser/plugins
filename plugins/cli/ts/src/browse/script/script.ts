@@ -13,6 +13,7 @@ import { canonical, dispatch, OWNERS, register } from "../commands/index.ts";
 import { parse } from "../commands/parse.ts";
 import { BrowseError, ConnectionLost, OutcomeUnknown, Usage } from "../daemon-errors.ts";
 import { MUTATING } from "../daemon/names.ts";
+import { safeCode } from "../codes.ts";
 import { Result } from "../daemon/render.ts";
 import { SCRIPT_CONTROLLER, SCRIPT_WORKER } from "../js/index.ts";
 import { flag } from "../metrics.ts";
@@ -180,7 +181,37 @@ function jsonCopy(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value ?? null, (_, item: unknown) => (typeof item === "bigint" ? item.toString() : item)));
 }
 
-async function answerCall(ctx: Ctx, given: unknown): Promise<Answer> {
+export function callLabel(index: number, argv: unknown): string {
+  const first = Array.isArray(argv) && argv.length > 0 ? String(argv[0]) : "";
+  return `call ${index}, \`${canonical(first)}\``;
+}
+
+export function scriptCode(code: unknown): string {
+  return typeof code === "string" ? (safeCode(code, "script_failed") ?? "script_failed") : "script_failed";
+}
+
+function callIndex(calls: readonly unknown[][], command: unknown): number | null {
+  const wanted = JSON.stringify(command);
+  for (let index = calls.length - 1; index >= 0; index -= 1) if (JSON.stringify(calls[index]) === wanted) return index + 1;
+  return null;
+}
+
+export function errorText(message: Message, source: string, calls: readonly unknown[][]): string {
+  const line = sourceLine(source, message["line"]);
+  let text = String(message["message"] || "error");
+  const name = message["name"];
+  if (name && name !== "Error" && !text.startsWith(String(name))) text = `${String(name)}: ${text}`;
+  const where = line ? `line ${line}: ` : "";
+  const failed = message["command"];
+  let command = "";
+  if (Array.isArray(failed) && failed.length > 0) {
+    const index = callIndex(calls, failed);
+    command = index === null ? ` (in \`${canonical(String(failed[0]))}\`)` : ` (in ${callLabel(index, failed)})`;
+  }
+  return `${where}${text}${command}`;
+}
+
+async function answerCall(ctx: Ctx, given: unknown, index: number): Promise<Answer> {
   if (!Array.isArray(given) || given.length === 0 || !given.every((word) => typeof word === "string")) {
     return { ok: false, error: "browse() takes a command and its arguments as strings", code: "usage" };
   }
@@ -195,12 +226,12 @@ async function answerCall(ctx: Ctx, given: unknown): Promise<Answer> {
   const done = result as Result;
   const outcomes = Array.isArray(done.batch) ? (done.batch as Record<string, unknown>[]) : [];
   const fatal = outcomes.find((outcome) => FATAL.includes(String(outcome?.["code"])));
-  if (fatal !== undefined) throw new OutcomeUnknown(`\`${showArgv(argv)}\``, String(fatal["error"] || "a command inside it was cut off"));
+  if (fatal !== undefined) throw new OutcomeUnknown(callLabel(index, argv), String(fatal["error"] || "a command inside it was cut off"));
   if (done.failed && name !== "read") return { ok: false, error: done.text || `${name} failed`, code: "failed" };
   return { ok: true, text: done.text, data: jsonCopy(done.data) };
 }
 
-async function drive(ctx: Ctx, page: Page, handle: string, source: string, current: Map<string, unknown>, done: string[]): Promise<Message> {
+async function drive(ctx: Ctx, page: Page, handle: string, source: string, current: Map<string, unknown>, done: string[], calls: unknown[][]): Promise<Message> {
   await start(page, handle, source, ctx.state.scriptState);
   for (;;) {
     const message = record(await control(page, handle, "function () { return this.next(); }", [], MAX_TIMEOUT + 30));
@@ -215,7 +246,9 @@ async function drive(ctx: Ctx, page: Page, handle: string, source: string, curre
       answer = { ok: true, text: "", data: {} };
     } else {
       if (message["via"] === "page.eval") flag("script_eval_alias", true);
-      answer = await answerCall(ctx, message["argv"]);
+      calls.push(Array.isArray(message["argv"]) ? [...(message["argv"] as unknown[])] : []);
+      current.set("call", calls.length);
+      answer = await answerCall(ctx, message["argv"], calls.length);
       done.push(String((Array.isArray(message["argv"]) ? message["argv"] : [""])[0] ?? ""));
     }
     current.clear();
@@ -233,7 +266,8 @@ export function keptPreview(stateText: unknown): string {
 function timedOut(seconds: number, current: Map<string, unknown>, source: string, logs: string[], kept: string, done: string[], stateText: unknown): BrowseError {
   let where = "";
   const argv = current.get("argv");
-  if (Array.isArray(argv) && argv.length > 0) where = `, in \`${showArgv(argv)}\``;
+  const call = typeof current.get("call") === "number" ? (current.get("call") as number) : null;
+  if (Array.isArray(argv) && argv.length > 0) where = call === null ? `, in \`${canonical(String(argv[0]))}\`` : `, in ${callLabel(call, argv)}`;
   else if (current.get("type") === "sleep") where = ", in sleep()";
   const line = sourceLine(source, current.get("line"));
   if (line) where += ` at line ${line}`;
@@ -259,7 +293,7 @@ function timedOut(seconds: number, current: Map<string, unknown>, source: string
       `. It opened ${opened} pages one after another; to take text from many pages, ` +
       "`ardia browse read <url> <url> …` (or `await read(urls)` here) loads them side by side, each with its own time limit";
   }
-  return failure(message, logs, { line, command: argv ?? null }, "timeout");
+  return failure(message, logs, { line, call, command: Array.isArray(argv) && argv.length > 0 ? canonical(String(argv[0])) : null }, "timeout");
 }
 
 async function stopWorker(page: Page, handle: string): Promise<Message> {
@@ -318,6 +352,7 @@ export async function run(ctx: Ctx, source: string, seconds: number): Promise<Re
   await temptabs.sweep(state);
   const current = new Map<string, unknown>();
   const done: string[] = [];
+  const calls: unknown[][] = [];
   const owned: string[] = [];
   let message: Message;
   try {
@@ -325,7 +360,7 @@ export async function run(ctx: Ctx, source: string, seconds: number): Promise<Re
     const handle = await install(page);
     let outcome: { value: Message } | { timedOut: true };
     try {
-      outcome = await withDeadline(seconds, () => drive(ctx, page, handle, source, current, done));
+      outcome = await withDeadline(seconds, () => drive(ctx, page, handle, source, current, done, calls));
     } catch (error) {
       if (error instanceof Cancelled) {
         const stopped = await shield(() => stopWorker(page, handle));
@@ -351,15 +386,13 @@ export async function run(ctx: Ctx, source: string, seconds: number): Promise<Re
   if (unawaited) notes.push(`[${unawaited} command${unawaited !== 1 ? "s" : ""} the script didn't await never ran]`);
   if (message["kind"] === "error") {
     const line = sourceLine(source, message["line"]);
-    let text = String(message["message"] || "error");
-    const name = message["name"];
-    if (name && name !== "Error" && !text.startsWith(String(name))) text = `${String(name)}: ${text}`;
-    const where = line ? `line ${line}: ` : "";
-    const command = message["command"] ? ` (in \`${showArgv(message["command"])}\`)` : "";
-    let hint = pageWorldHint(text, message["command"]);
+    const failed = message["command"];
+    let hint = pageWorldHint(String(message["message"] || "error"), failed);
     if (hint) flag("script_page_world_hint", true);
     hint = hint ? `\n${hint}` : "";
-    throw failure(`${where}${text}${command}${hint}`, [...logs, ...notes], { line, command: message["command"] ?? null }, (message["code"] as string | null) ?? null);
+    const call = Array.isArray(failed) && failed.length > 0 ? callIndex(calls, failed) : null;
+    const command = Array.isArray(failed) && failed.length > 0 ? canonical(String(failed[0])) : null;
+    throw failure(`${errorText(message, source, calls)}${hint}`, [...logs, ...notes], { line, call, command }, scriptCode(message["code"]));
   }
   const value = renderValue(message);
   const parts = [...logs, ...(value !== null ? [value] : []), ...notes];

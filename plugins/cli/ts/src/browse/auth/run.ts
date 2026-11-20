@@ -59,6 +59,23 @@ function exitCode(child: ChildProcess): number {
   return -(signalled ?? 1);
 }
 
+type Group = { reaped: boolean; terminating: boolean };
+
+const GROUPS = new Map<number, Group>();
+
+export function liveGroups(): number[] {
+  return [...GROUPS.keys()];
+}
+
+export function killLiveGroups(): void {
+  for (const [pid, group] of GROUPS) {
+    if (!group.reaped || group.terminating) signalGroup(pid, "SIGKILL");
+  }
+  GROUPS.clear();
+}
+
+process.on("exit", killLiveGroups);
+
 export function run(argv: readonly string[], options: RunOptions): Promise<Ran> {
   const signal = currentSignal();
   if (signal?.aborted) return Promise.reject(new Cancelled());
@@ -80,6 +97,9 @@ export function run(argv: readonly string[], options: RunOptions): Promise<Ran> 
     }
     const out = sink(limit);
     const err = sink(limit);
+    const pid = child.pid;
+    const group: Group = { reaped: false, terminating: false };
+    if (pid !== undefined) GROUPS.set(pid, group);
     let settled = false;
     let stopped = false;
     const settle = (finish: () => void) => {
@@ -98,20 +118,28 @@ export function run(argv: readonly string[], options: RunOptions): Promise<Ran> 
       if (settled || stopped) return;
       stopped = true;
       settle(() => reject(why === "cancelled" ? new Cancelled() : new RunTimedOut()));
-      const pid = child.pid;
-      if (pid === undefined) {
+      if (pid === undefined || group.reaped || GROUPS.get(pid) !== group) {
         release();
+        if (pid !== undefined && GROUPS.get(pid) === group) GROUPS.delete(pid);
         return;
       }
+      group.terminating = true;
       signalGroup(pid, "SIGTERM");
       setTimeout(() => {
-        if (signalGroup(pid, 0)) signalGroup(pid, "SIGKILL");
+        if (GROUPS.get(pid) === group) {
+          if (signalGroup(pid, 0)) signalGroup(pid, "SIGKILL");
+          GROUPS.delete(pid);
+        }
         release();
       }, grace);
     };
     const deadline = setTimeout(() => stop("timeout"), options.timeout * 1000);
     const cancel = () => stop("cancelled");
     signal?.addEventListener("abort", cancel, { once: true });
+    child.on("exit", () => {
+      group.reaped = true;
+      if (pid !== undefined && !group.terminating && GROUPS.get(pid) === group) GROUPS.delete(pid);
+    });
     child.on("error", (error) => {
       if (child.pid === undefined) settle(() => reject(describe(error)));
     });

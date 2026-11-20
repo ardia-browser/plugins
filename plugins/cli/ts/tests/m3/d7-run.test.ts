@@ -31,7 +31,7 @@ describe("subprocess cleanup", () => {
     const dir = tempDir();
     const marker = path.join(dir, "cleaned");
     const pidFile = path.join(dir, "pid");
-    const script = `(trap 'exec 1>&- 2>&-; sleep 0.15; touch ${marker}; exit 0' TERM; while :; do sleep 0.02; done) & echo $! > ${pidFile}; exit 0`;
+    const script = `(trap 'exec 1>&- 2>&-; sleep 0.15; touch ${marker}; exit 0' TERM; while :; do sleep 0.02; done) & echo $! > ${pidFile}; wait`;
     const sent: [number, string][] = [];
     const real = process.kill.bind(process);
     process.kill = ((pid: number, signal?: string | number) => {

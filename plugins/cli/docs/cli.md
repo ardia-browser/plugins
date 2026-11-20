@@ -2015,24 +2015,29 @@ scenarios:
 - The flow log, the hinted sites and the raw sessions live beside the session's state, not in Python's `extras`
   dictionary: nothing outside these modules can see or change them.
 - Keychain and plugin processes are started without a shell, from an argv array, and the Keychain secret goes only to
-  `security -i`'s stdin, as in Python. A process killed at its deadline ends the call as soon as it exits, even when a
-  child of its own still holds its output open; Python's `subprocess.run` also returns then.
+  `security -i`'s stdin, as in Python. How a helper is stopped at its deadline is below.
+- `auth save`'s and `auth login --url`'s URL must have a host: `https://` alone is refused as not an https origin,
+  where Python takes it as the origin `https://`.
 - Plugins and credential providers get only `PATH`, `HOME`, `LANG`, `LC_*`, `TMPDIR`, `USER`, `LOGNAME` and `SHELL` from
   the daemon's environment; Python passes everything but `ARDIA_*` and `AGENT_BROWSER_*`.
 - A credential provider's reply for `auth login` is checked strictly before anything uses it: the process must exit 0,
   `success` must be the boolean `true`, `password` a non-empty string, and `url`, `username` and the three selectors
-  strings or absent (an explicit `null` is malformed). `url` must be an https origin (http only for localhost) with a
-  valid port, and a selector non-empty, without control characters and at most 1,000 characters. Anything else reads
+  strings or absent (an explicit `null` is malformed). `url` must parse as a URL with a non-empty host and no user
+  info, https (http only for localhost) with a valid port; a selector must be non-blank, at most 1,000 characters,
+  with no control or format character (Unicode Cc, C1 included, and Cf). Anything else reads
   `Credential provider <name> sent a malformed reply`, and a `success: false` reply or a nonzero exit
   `Credential provider <name> returned an error`: the provider's own text, the item and the reply are never repeated.
-  If the login then fails on something the provider supplied (its page doesn't load, a selector matches nothing), the
-  error reads `Credential provider <name> named a page or field this session couldn't use` instead of repeating it.
+  Any later failure of a provider login reads `Credential provider <name>: the login didn't finish (<code>)`, built
+  from fixed text and one of the daemon's codes only.
   Python echoes the provider's `error`, `protocol` and item. Python's `plugin run <name> credential.read` keeps its
   own messages and environment (it is frozen); the TypeScript client's `plugin run` (M2) must apply the same
   boundary.
 - Keychain, plugin, `git` and `npm` processes run in their own session and process group. At the deadline or on a
-  cancel the call ends at once; the group gets one SIGTERM, and one SIGKILL 0.5 s later unless the whole group is gone
-  by then, whatever its pipes do in between. Python kills only the process it started.
+  cancel the call ends at once; if the process the daemon started is still running, its group gets one SIGTERM and
+  one SIGKILL 0.5 s later unless the whole group is gone by then, whatever its pipes do in between. Once that process
+  has exited, its group is never signalled again (a process left behind by an exited one isn't killed), since its
+  group id could be reused; the only residual is a PID recycled within the 0.5 s grace after our own SIGTERM. When the
+  daemon exits, every group still in that state is killed synchronously. Python kills only the process it started.
 - `clipboard` and `set permission` grant each permission with `Browser.setPermission`, so grants add up; Python's
   `Browser.grantPermissions` replaces every grant the origin had (a clipboard grant revoked geolocation). The harness
   leaves both out of the comparison through the `permission-overrides` divergence (ardia#2812 row 3).
@@ -2040,10 +2045,19 @@ scenarios:
   its size said when it was opened, and more than that is refused with `bad_init_script`, as is a FIFO or device.
   Python reads whatever the path names and can block on a FIFO. It is decoded as
   Python's text read decodes it: a BOM kept, CRLF and CR made LF.
-- A password given to `set credentials`, read from the Keychain or returned by a credential provider for `auth login` is
-  registered with the redactor as soon as the daemon sees it, so no answer, stderr line, script log or error repeats it
-  (it reads `***`), even a script error that quotes the call it failed in. Python's script errors quote that call
-  as given. A username is shown as in Python.
+- Passwords never enter output, by construction rather than by masking: nothing is substring-redacted for them.
+  `set credentials` and `set auth` take the user and password as opaque positionals, never parsed as flags, so
+  `-x` or `--foo` is a valid password; their usage error prints only the expected form (`Usage: ardia browse set
+  credentials <user> <pass>`), never the arguments. Python parses them as flags and answers `Unknown flag: -x`.
+- A `script` that fails in a call names it by its index and command (`line 2: … (in call 3, \`set\`)`), and its
+  `data` carries `call` and `command` (the command name only); a timed-out script names the call the same way.
+  Python quotes the call's arguments.
+- An answer's `code` (and so the client's telemetry `error_code`) is always one of the daemon's own codes; anything
+  else, such as a code a script throws, becomes `failed` (`script_failed` for a script). Python passes a script's code
+  through.
+- Flows save URLs, query strings included, as Python does, so a site that puts a secret in a URL has it saved in the
+  flow. User info (`user:password@`) is never kept: a URL carrying it is dropped from the flow, and a page URL is saved
+  without it.
 - The temporary tabs D2 opens carry `#ardia-temp-<nonce>` in their `about:blank` URL; the harness's `temp-tab-nonce`
   rule compares them with Python's plain `about:blank`.
 

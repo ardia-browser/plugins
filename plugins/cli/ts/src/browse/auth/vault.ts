@@ -1,6 +1,5 @@
 import { type Value } from "../../json.ts";
 import { codePoints } from "../../pystr.ts";
-import { addSecret } from "../../redact.ts";
 import { plainParams } from "../cdp/params.ts";
 import { navigate } from "../commands/core.ts";
 import type { Ctx } from "../commands/ctx.ts";
@@ -8,6 +7,7 @@ import { register } from "../commands/index.ts";
 import { parse } from "../commands/parse.ts";
 import { BrowseError, ConnectionLost, Usage } from "../daemon-errors.ts";
 import { Cancelled } from "../cdp/cancel.ts";
+import { safeCode } from "../codes.ts";
 import { Result } from "../daemon/render.ts";
 import { browseDir, checkName, closeFd, listNames, openPrivateDirAt, readPrivateJson, unlinkQuietly, writePrivateJson } from "../paths.ts";
 import { pyValue } from "../daemon/render.ts";
@@ -228,11 +228,9 @@ export async function login(ctx: Ctx, argv: string[]): Promise<Result> {
       submitSelector: creds["submitSelector"] ?? null,
     };
     password = creds["password"] || "";
-    addSecret(password);
   } else {
     meta = loadMeta(root, name);
     password = await readSecret(name, Boolean(meta["utf8"]));
-    addSecret(password);
   }
   const finish = async (): Promise<Result> => {
     for (const key of ["username_selector", "password_selector", "submit_selector"]) {
@@ -307,16 +305,12 @@ export async function login(ctx: Ctx, argv: string[]): Promise<Result> {
     return new Result({ name, loggedIn: true, url: page.url }, `✓ Logged in as ${meta["username"] || name}`);
   };
   if (!providerName) return finish();
-  const supplied = [meta["url"], ...meta["origins"], meta["username"], meta["usernameSelector"], meta["passwordSelector"], meta["submitSelector"]].filter(
-    (value): value is string => typeof value === "string" && value !== "" && value !== name,
-  );
   try {
     return await finish();
   } catch (error) {
     if (error instanceof Cancelled || error instanceof ConnectionLost) throw error;
-    const said = error instanceof BrowseError ? JSON.stringify([error.text, error.data ?? null]) : "";
-    if (error instanceof BrowseError && !supplied.some((value) => said.includes(value))) throw error;
-    throw new BrowseError(`Credential provider ${providerName} named a page or field this session couldn't use`, null, error instanceof BrowseError ? (error.code ?? "credential_provider_failed") : "credential_provider_failed");
+    const code = (error instanceof BrowseError ? safeCode(error.code) : null) ?? "credential_provider_failed";
+    throw new BrowseError(`Credential provider ${providerName}: the login didn't finish (${code})`, null, code);
   }
 }
 

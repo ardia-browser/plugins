@@ -1,5 +1,4 @@
 import { pyFloat, pyInt } from "../../pylib/str.ts";
-import { addSecret } from "../../redact.ts";
 import { plainParams, pyLoads } from "../cdp/params.ts";
 import { BrowseError, Gated, Usage } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
@@ -86,11 +85,28 @@ async function setPermission(ctx: Ctx, page: Page, args: string[]): Promise<Resu
   return new Result({ origin, granted: names }, `✓ ${names.join(", ")} allowed for ${origin}: ${PROMPT_NOTE}`);
 }
 
+async function setCredentials(ctx: Ctx, argv: string[]): Promise<Result> {
+  const named = argv[0] as string;
+  if (argv.length < 3) throw new Usage(`Usage: ardia browse set ${named} <user> <pass>`);
+  const username = argv[1] as string;
+  const password = argv[2] as string;
+  const page = await ctx.state.page();
+  refuseOnBorrowed(ctx, page, `change the ${canonical(named)} of`);
+  if (setHooks.credentials === null) throw unsupported("`set credentials`");
+  try {
+    await setHooks.credentials(ctx, page, username, password);
+  } catch (error) {
+    if (error instanceof Gated) throw error.during(`set ${canonical(named)}`);
+    throw error;
+  }
+  return new Result({ username });
+}
+
 export async function cmdSet(ctx: Ctx, argv: string[]): Promise<Result> {
+  if (argv[0] === "credentials" || argv[0] === "auth") return setCredentials(ctx, argv);
   const [, args] = parse(argv);
   need(args, 1, SET_USAGE);
   const setting = canonical(args[0] as string);
-  if ((setting === "credentials" || setting === "auth") && args.length >= 3) addSecret(args[2]);
   const page = await ctx.state.page();
   refuseOnBorrowed(ctx, page, `change the ${setting} of`);
   try {
@@ -157,12 +173,6 @@ export async function cmdSet(ctx: Ctx, argv: string[]): Promise<Result> {
       ctx.state.leases.add("emulation");
       const names = parsed instanceof Map ? [...parsed.keys()] : Array.isArray(parsed) ? parsed.map(String) : [];
       return new Result({ headers: names.sort() });
-    }
-    if (setting === "credentials" || setting === "auth") {
-      need(args, 3, "set credentials <user> <pass>");
-      if (setHooks.credentials === null) throw unsupported("`set credentials`");
-      await setHooks.credentials(ctx, page, args[1] as string, args[2] as string);
-      return new Result({ username: args[1] });
     }
     if (setting === "media") {
       const features: Record<string, string>[] = [];

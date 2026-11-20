@@ -234,14 +234,22 @@ function malformed(name: string): BrowseError {
 }
 
 const MAX_FIELD = 1000;
-const CONTROL = /[\u0000-\u001f\u007f]/u;
+const UNPRINTABLE = /[\p{Cc}\p{Cf}]/u;
 
 function usableText(value: string, empty: boolean): boolean {
-  return (empty || value !== "") && codePoints(value).length <= MAX_FIELD && !CONTROL.test(value);
+  if (UNPRINTABLE.test(value) || codePoints(value).length > MAX_FIELD) return false;
+  return empty || value.trim() !== "";
 }
 
 function usableUrl(value: string): boolean {
   if (!usableText(value, false) || /\s/u.test(value)) return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+  if (parsed.hostname === "" || parsed.username !== "" || parsed.password !== "") return false;
   try {
     originOf(value);
     return true;

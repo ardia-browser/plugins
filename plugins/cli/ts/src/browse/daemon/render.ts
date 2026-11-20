@@ -13,6 +13,7 @@ import { flag, rendered } from "../metrics.ts";
 import { closeFd, entryInfo, listNames, unlinkQuietly, wellFormed, writeAllFd } from "../paths.ts";
 import { tokenHex } from "../tokens.ts";
 import { MUTATING } from "./names.ts";
+import { safeCode } from "../codes.ts";
 
 export const MAX_REQUEST = 16 * 1024 * 1024;
 export const MAX_RESPONSE = 256 * 1024 * 1024;
@@ -75,7 +76,7 @@ export function compactJson(value: unknown): string {
 
 export function render(options: Options, result: Result | null = null, error: BrowseError | null = null, name = ""): Answer {
   const [code, out, err] = renderPlain(options, result, error, name);
-  rendered(name, result as never, error === null ? null : { code: error.code ?? null }, out);
+  rendered(name, result as never, error === null ? null : { code: safeCode(error.code) }, out);
   return [code, redact(out), redact(err)];
 }
 
@@ -86,7 +87,8 @@ export function renderPlain(options: Options, result: Result | null, error: Brow
     if (error instanceof ConnectionLost && MUTATING.has(name)) message += `; the outcome of \`${name}\` is unknown, so it wasn't retried`;
     if (asJson) {
       const payload: Record<string, unknown> = { success: false, data: error.data ?? null, error: message };
-      if (error.code) payload["code"] = error.code;
+      const code = safeCode(error.code);
+      if (code) payload["code"] = code;
       return [error.exitCode, `${compactJson(payload)}\n`, ""];
     }
     return [error.exitCode, "", `✗ ${inert(message)}\n`];

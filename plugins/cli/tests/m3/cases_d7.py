@@ -274,9 +274,17 @@ def gen_command_line(rng, count, corpus):
                                                                       for _ in range(rng.randint(0, 5))]])
 
 
+def with_host(rng):
+    while True:
+        made = url(rng)
+        rest = made.split("://", 1)[1] if "://" in made else ""
+        if rest and rest[0] not in "/?#":
+            return made
+
+
 @generator("d7.origin_of")
 def gen_origin(rng, count, corpus):
-    return many(rng, count, [["http://localhost:8080/x"], ["http://[::1]/"], ["https://h:99999/"]], lambda: [url(rng)])
+    return many(rng, count, [["http://localhost:8080/x"], ["http://[::1]/"], ["https://h:99999/"]], lambda: [with_host(rng)])
 
 
 @generator("d7.parse_params")

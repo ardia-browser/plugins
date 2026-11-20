@@ -22,7 +22,6 @@ import { allow } from "../../src/browse/commands/permissions.ts";
 import { decodeScript, readScript } from "../../src/browse/commands/setup.ts";
 import { parseParams } from "../../src/browse/flows/flows.ts";
 import { login, loginHooks } from "../../src/browse/auth/vault.ts";
-import { redact } from "../../src/redact.ts";
 import { cmdSet, setHooks } from "../../src/browse/commands/settings.ts";
 
 setDefaultTimeout(30_000);
@@ -344,12 +343,21 @@ async function gone(pid: number, ms = 3000): Promise<boolean> {
 }
 
 describe("subprocess lifetime", () => {
-  test("a leader that forked a child holding stdout and exited is settled at its deadline, and the child is killed", async () => {
+  test("a leader that forked a child holding stdout and exited is settled at its deadline; its group isn't signalled once the leader is reaped", async () => {
     const dir = tempDir();
     const pidFile = path.join(dir, "pid");
     const started = performance.now();
     await expect(run(["/bin/sh", "-c", `sleep 30 & echo $! > ${pidFile}; exit 0`], { timeout: 0.4, grace: 0.2 })).rejects.toBeInstanceOf(RunTimedOut);
     expect(performance.now() - started).toBeLessThan(3000);
+    const pid = Number(fs.readFileSync(pidFile, "utf8"));
+    expect(alivePid(pid)).toBe(true);
+    process.kill(pid, "SIGKILL");
+  });
+
+  test("a leader still running at the deadline has its whole group killed, children included", async () => {
+    const dir = tempDir();
+    const pidFile = path.join(dir, "pid");
+    await expect(run(["/bin/sh", "-c", `sleep 30 & echo $! > ${pidFile}; wait`], { timeout: 0.4, grace: 0.2 })).rejects.toBeInstanceOf(RunTimedOut);
     expect(await gone(Number(fs.readFileSync(pidFile, "utf8")))).toBe(true);
   });
 
@@ -481,7 +489,7 @@ describe("cdp params on the wire", () => {
 });
 
 describe("credentials never echoed", () => {
-  test("auth login registers a provider's password before anything can echo it", async () => {
+  test("auth login's errors on the provider path never carry the password or provider text", async () => {
     const secret = "sk-d7-login-secret-91c2";
     const root = tempDir();
     const dir = path.join(root, "bin");
@@ -491,26 +499,25 @@ describe("credentials never echoed", () => {
     saveRegistry(root, [{ name: "vault", package: "p", version: "1", spec: "p@1", command, capabilities: ["credential.read"] }]);
     const page = { mainFrame: "F", frames: new Map([["F", { origin: "https://x.example" }]]), refreshFrames: async () => new Map() };
     const state = { dataRoot: root, locate: async () => { throw new BrowseError(`nothing typed ${secret}`); } };
-    const ctx = { state, options: {}, humanize: false, timeout: 0.3 };
     loginHooks.actions = { typeInto: async () => {}, click: async () => {}, pressEnter: async () => {} };
     loginHooks.currentOrNew = async () => page as never;
     try {
-      const error = (await login(ctx as never, ["prof", "--credential-provider", "vault"]).catch((thrown: unknown) => thrown)) as BrowseError;
+      const error = (await login({ state, options: {}, humanize: false, timeout: 0.3 } as never, ["prof", "--credential-provider", "vault"]).catch((thrown: unknown) => thrown)) as BrowseError;
       expect(error).toBeInstanceOf(BrowseError);
-      expect(error.text).not.toContain(secret);
-      expect(redact(`page said ${secret}`)).not.toContain(secret);
+      expect(JSON.stringify([error.text, error.data, error.code])).not.toContain(secret);
     } finally {
       loginHooks.actions = null;
       loginHooks.currentOrNew = null;
     }
   });
 
-  test("set credentials registers the password even when it can't be served yet", async () => {
+  test("set credentials' errors never carry the password", async () => {
     const secret = "sk-d7-set-secret-4b1e";
-    const state = { page: async () => { throw new BrowseError(`no tab while handling ${redact(secret)}`); } };
-    const error = (await cmdSet({ state, options: {} } as never, ["credentials", "alice", secret]).catch((thrown: unknown) => thrown)) as BrowseError;
-    expect(error.text).not.toContain(secret);
-    expect(redact(`echo ${secret}`)).toBe("echo ***");
+    const state = { page: async () => { throw new BrowseError("no tab"); } };
+    for (const argv of [["credentials", "alice", secret], ["credentials", secret], ["auth", "-x", secret]]) {
+      const error = (await cmdSet({ state, options: {} } as never, argv).catch((thrown: unknown) => thrown)) as BrowseError;
+      expect(JSON.stringify([error.text, error.data])).not.toContain(secret);
+    }
     expect(setHooks.credentials).toBeNull();
   });
 });
