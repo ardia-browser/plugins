@@ -73,9 +73,16 @@ if __name__ == "__main__":
         self.assertEqual(page.fetch_loaders, {})
 
 
+class LiveState:
+    async def reattach(self, page):
+        return page
+
+
 class CrossDocumentPage:
     def __init__(self, late_loader):
         self.late_loader = late_loader
+        self.state = LiveState()
+        self.session_id = "S1"
         self.url = "http://s/first"
         self.main_frame = "F"
         self.frames = {"F": {"loader": "L1"}}
@@ -167,6 +174,7 @@ class SilentSite(unittest.TestCase):
         page = CrossDocumentPage("L1")
 
         async def send(method, params=None, timeout=30, mutation=False):
+            page.session_id = None
             raise OutcomeUnknown("`Page.navigate`", "Ardia detached the tab before it answered Page.navigate")
 
         page.send = send

@@ -27,10 +27,23 @@ class FakeBrowser:
         self.after_load = None
         self.params = []
         self.refuse_on_second_session = set()
+        self.after = {}
+        self.during = {}
 
     async def send(self, method, params=None, session=None, timeout=30, mutation=False):
+        result = await self.answer(method, params, session)
+        hook = self.after.pop(method, None) or self.after.pop((method, (params or {}).get("functionDeclaration")), None)
+        if hook:
+            asyncio.get_running_loop().call_soon(hook, session)
+        return result
+
+    async def answer(self, method, params, session):
         self.sent.append((method, session))
         self.params.append((method, params, session))
+        cut = self.during.pop((method, session), None)
+        if cut:
+            cut()
+            await asyncio.sleep(0)
         if method in self.refuse_on_second_session and session != "S1":
             raise CdpError(method, "refused")
         if method == "Page.addScriptToEvaluateOnNewDocument":
@@ -46,6 +59,8 @@ class FakeBrowser:
             return {"executionContextId": 7}
         if method == "Runtime.callFunctionOn":
             source = params["functionDeclaration"]
+            if source == readpages.SETTLE_PROBE:
+                return {"result": {"value": ["complete", "fingerprint", False]}}
             value = "Destination" if "document.title" in source else "complete" if "readyState" in source else False
             return {"result": {"value": value}}
         if method == "Page.navigate":
@@ -181,6 +196,136 @@ class OpenAfterDetach(unittest.TestCase):
         self.assertEqual(failed.exception.code, "tab_detached")
         self.assertEqual(self.browser.attached, 1)
         self.assertNotIn("reattached_after_detach", self.metrics.values)
+
+    def detach(self, session="S1"):
+        self.state.on_event("Target.detachedFromTarget", {"sessionId": session, "targetId": "T"}, None)
+
+    def navigations(self):
+        return [session for method, session in self.browser.sent if method == "Page.navigate"]
+
+    def test_an_open_whose_session_ended_before_its_navigation_was_sent_attaches_again_and_sends_it_once(self):
+        self.browser.after["Network.enable"] = self.detach
+        result = self.open()
+        self.assertEqual(result.data["url"], DEST)
+        self.assertEqual(result.data["title"], "Destination")
+        self.assertEqual(self.browser.attached, 2)
+        self.assertEqual(self.navigations(), ["S2"])
+        self.assertTrue(self.metrics.values.get("reattached_after_detach"))
+
+    def test_an_open_whose_new_session_ends_while_it_is_being_set_up_attaches_again(self):
+        self.detach_after_load()
+        self.browser.during[("Page.getFrameTree", "S2")] = lambda: self.detach("S2")
+        result = self.open()
+        self.assertEqual(result.data["title"], "Destination")
+        self.assertEqual(self.browser.attached, 3)
+        self.assertEqual(self.state.pages["T"].session_id, "S3")
+        self.assertEqual(self.navigations(), ["S1"])
+
+    def test_an_open_whose_new_session_ends_while_network_monitoring_is_put_back_puts_it_back_on_the_next(self):
+        async def monitor():
+            page = await self.state.page("T")
+            await page.enable_network()
+
+        asyncio.run(monitor())
+        self.detach_after_load()
+        self.browser.during[("Network.enable", "S2")] = lambda: self.detach("S2")
+        result = self.open()
+        self.assertEqual(result.data["title"], "Destination")
+        self.assertEqual(self.browser.attached, 3)
+        self.assertEqual([session for method, session in self.browser.sent if method == "Network.enable"][-2:], ["S2", "S3"])
+        self.assertTrue(self.state.pages["T"].network_on)
+
+    def test_an_open_whose_new_session_ends_while_the_runtime_is_put_back_puts_it_back_on_the_next(self):
+        async def monitor():
+            page = await self.state.page("T")
+            await page.enable_runtime()
+
+        asyncio.run(monitor())
+        self.detach_after_load()
+        self.browser.during[("Runtime.enable", "S2")] = lambda: self.detach("S2")
+        result = self.open()
+        self.assertEqual(result.data["title"], "Destination")
+        self.assertEqual(self.browser.attached, 3)
+        self.assertEqual([session for method, session in self.browser.sent if method == "Runtime.enable"][-2:], ["S2", "S3"])
+        self.assertTrue(self.state.pages["T"].runtime_on)
+
+    def test_an_open_whose_tab_closes_while_it_is_attached_again_still_fails_as_detached(self):
+        self.detach_after_load()
+        self.browser.during[("Page.getFrameTree", "S2")] = lambda: self.state.on_event("Target.targetDestroyed", {"targetId": "T"}, None)
+        with self.assertRaises(BrowseError) as failed:
+            self.open()
+        self.assertEqual(failed.exception.code, "tab_detached")
+        self.assertEqual(self.browser.attached, 2)
+
+    def test_an_open_whose_navigation_was_cut_off_by_the_detach_after_it_took_is_not_sent_again(self):
+        def navigated_then_detached():
+            self.browser.url, self.browser.loader = DEST, "L2"
+            self.detach()
+
+        self.browser.during[("Page.navigate", "S1")] = navigated_then_detached
+        result = self.open()
+        self.assertEqual(result.data["url"], DEST)
+        self.assertEqual(result.data["title"], "Destination")
+        self.assertEqual(self.navigations(), ["S1"])
+        self.assertEqual(self.browser.attached, 2)
+        self.assertTrue(self.metrics.values.get("reattached_after_detach"))
+
+    def test_an_open_whose_navigation_was_cut_off_by_the_detach_without_taking_stays_unknown_and_is_not_sent_again(self):
+        self.browser.during[("Page.navigate", "S1")] = self.detach
+        with self.assertRaises(BrowseError) as failed:
+            self.open()
+        self.assertEqual(failed.exception.code, "outcome_unknown")
+        self.assertEqual(self.navigations(), ["S1"])
+
+    def goto(self, before=None):
+        async def run():
+            command_metrics.current.set(self.metrics)
+            page = await self.state.page("T")
+            if before:
+                before()
+            ctx = commands.Ctx(self.state, {}, "/", {}, None, "read")
+            await readpages.goto(ctx, page, DEST, 5)
+            return page
+
+        with mock.patch.object(readpages, "SETTLE_QUIET", 0.01), mock.patch.object(readpages, "SETTLE_POLL", 0.01):
+            return asyncio.run(run())
+
+    def test_a_read_whose_session_ended_before_its_navigation_was_sent_attaches_again_and_sends_it_once(self):
+        page = self.goto(before=self.detach)
+        self.assertEqual(page.url, DEST)
+        self.assertEqual(page.session_id, "S2")
+        self.assertEqual(self.navigations(), ["S2"])
+
+    def test_a_read_whose_session_ended_while_the_page_settled_attaches_again_and_finishes(self):
+        self.browser.after[("Runtime.callFunctionOn", readpages.SETTLE_PROBE)] = self.detach
+        page = self.goto()
+        self.assertEqual(page.url, DEST)
+        self.assertEqual(page.session_id, "S2")
+        self.assertEqual(self.navigations(), ["S1"])
+        self.assertTrue(self.metrics.values.get("reattached_after_detach"))
+
+    def test_a_read_of_a_tab_that_closed_fails_as_detached_and_names_the_page(self):
+        with self.assertRaises(BrowseError) as failed:
+            self.goto(before=lambda: self.state.on_event("Target.targetDestroyed", {"targetId": "T"}, None))
+        self.assertEqual(failed.exception.code, "tab_detached")
+        self.assertIn(DEST, failed.exception.message)
+
+    def test_a_read_in_a_blank_tab_that_closed_names_the_page_it_was_opening(self):
+        self.browser.url = "about:blank"
+        self.state.target_infos["T"]["url"] = "about:blank"
+        with self.assertRaises(BrowseError) as failed:
+            self.goto(before=lambda: self.state.on_event("Target.targetDestroyed", {"targetId": "T"}, None))
+        self.assertEqual(failed.exception.code, "tab_detached")
+        self.assertIn(DEST, failed.exception.message)
+
+    def test_an_open_in_a_blank_tab_that_closed_names_the_page_it_was_opening(self):
+        self.browser.url = "about:blank"
+        self.state.target_infos["T"]["url"] = "about:blank"
+        self.browser.after["Network.enable"] = lambda session: self.state.on_event("Target.targetDestroyed", {"targetId": "T"}, None)
+        with self.assertRaises(BrowseError) as failed:
+            self.open()
+        self.assertEqual(failed.exception.code, "tab_detached")
+        self.assertIn(DEST, failed.exception.message)
 
 
 if __name__ == "__main__":

@@ -16,6 +16,7 @@ PAGE_SCHEMES = ("http:", "https:", "about:", "data:", "blob:", "file:")
 ACTIVE_TIMEOUT = 3.0
 APPEAR_POLL = 0.15
 PROBE_TIMEOUT = 3.0
+REATTACH_TRIES = 3
 UNKNOWN = object()
 NO_PAGE = (
     "The user isn't on a web page right now (New Tab or another Ardia view). "
@@ -284,19 +285,24 @@ class State:
         return page
 
     async def reattach(self, page: Page) -> Page:
-        if page.session_id is not None and page.browser is self.browser:
-            return page
         from ardia_cli.browse.errors import CdpError
-        from ardia_cli.browse.page import DETACHED
+        from ardia_cli.browse.page import detached
 
-        if self.pages.get(page.target_id) is not page or page.target_id not in self.target_infos:
-            raise BrowseError(DETACHED, code="tab_detached")
-        try:
-            await page.attach(self.browser)
-        except CdpError:
-            raise BrowseError(DETACHED, code="tab_detached") from None
-        command_metrics.flag("reattached_after_detach", True)
-        return page
+        for attempt in range(REATTACH_TRIES):
+            if page.session_id is not None and page.browser is self.browser:
+                return page
+            if self.pages.get(page.target_id) is not page or page.target_id not in self.target_infos:
+                raise detached(page.url)
+            try:
+                await page.attach(self.browser)
+            except CdpError:
+                raise detached(page.url) from None
+            except BrowseError as error:
+                if error.code != "tab_detached" or attempt + 1 == REATTACH_TRIES:
+                    raise
+                continue
+            command_metrics.flag("reattached_after_detach", True)
+            return page
 
     async def follow_lost_tab(self) -> str:
         lost = self.extras.get("lost_tab") or {}

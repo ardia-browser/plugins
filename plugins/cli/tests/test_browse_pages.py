@@ -62,6 +62,7 @@ class SameDocumentRead(unittest.TestCase):
     def test_a_hash_route_read_waits_for_the_route_to_render(self):
         class RoutedPage:
             def __init__(self):
+                self.state = SimpleNamespace(reattach=self.reattach)
                 self.text = "Person 1 Engineer 11"
                 self.url = "http://s/#/people/1"
                 self.main_frame = "F"
@@ -85,6 +86,12 @@ class SameDocumentRead(unittest.TestCase):
 
             async def call(self, function, *args, frame=None, read=False, **kwargs):
                 return ["complete", self.text, "loading" in self.text.lower()]
+
+            async def reattach(self, page):
+                return page
+
+            def loader(self, frame_id):
+                return None
 
             async def refresh_frames(self):
                 return {}

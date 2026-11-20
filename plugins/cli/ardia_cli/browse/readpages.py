@@ -447,7 +447,7 @@ async def probe(page):
         return tuple(await page.call(SETTLE_PROBE, frame=page.main_frame, read=True))
     except BrowseError as error:
         if error.code == "tab_detached":
-            raise
+            await page.state.reattach(page)
         return None, None, True
 
 
@@ -511,17 +511,18 @@ async def arrived_text(page, loader: str) -> bool:
 
 
 async def goto(ctx, page, url: str, timeout: float, keep_partial: bool = False) -> str | None:
-    from ardia_cli.browse.commands import wait_for_load
+    from ardia_cli.browse.commands import reattached, start_navigation, wait_for_load
     from ardia_cli.browse.errors import Gated
 
     loop = asyncio.get_running_loop()
     deadline = loop.time() + timeout
+    page = await reattached(page, url)
     before = await before_navigating(page, url)
     earlier = frozenset(page.fetches_started)
     old_loaders = frozenset(frame["loader"] for frame in page.frames.values() if frame.get("loader"))
     page.fetches_busy_until = 0.0
     try:
-        result = await page.send("Page.navigate", {"url": url}, timeout=timeout)
+        result = await start_navigation(page, url, timeout)
     except Gated:
         raise BrowseError(f"Ardia's policy only lets the ardia command open web pages; {url} isn't one", code="policy_refused") from None
     except OutcomeUnknown as error:
@@ -553,6 +554,7 @@ async def goto(ctx, page, url: str, timeout: float, keep_partial: bool = False) 
         await settle(page, min(deadline, loop.time() + SETTLE_LIMIT), earlier)
     else:
         await after_same_document(page, before, deadline, earlier)
+    await reattached(page, url)
     await page.refresh_frames()
 
 
