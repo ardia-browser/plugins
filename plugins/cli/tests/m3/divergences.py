@@ -50,33 +50,47 @@ def names_for(scenario: dict, fault=None) -> list[str]:
     return names
 
 
-def rewriter(names: list[str]):
-    unknown = [name for name in names if name not in DIVERGENCES]
-    if unknown:
-        raise ValueError(f"unknown divergence(s): {unknown}")
+class Rewriter:
+    def __init__(self, names: list[str]):
+        unknown = [name for name in names if name not in DIVERGENCES]
+        if unknown:
+            raise ValueError(f"unknown divergence(s): {unknown}")
+        self.names = names
+        self.binding: set = set()
+        self.handle_requests: set = set()
+        self.handles: set = set()
 
-    binding: set = set()
+    def reply(self, key, message: dict):
+        if key in self.handle_requests:
+            self.handle_requests.discard(key)
+            handle = ((message.get("result") or {}).get("result") or {}).get("objectId")
+            if isinstance(handle, str):
+                self.handles.add(handle)
 
-    def rewrite(message: dict) -> dict | None:
+    def __call__(self, message: dict, key=None) -> dict | None:
         params = message.get("params") or {}
         method = message.get("method")
         session = message.get("sessionId") or ""
-        if "world-handle" in names:
+        if "world-handle" in self.names:
             if method == "Runtime.evaluate" and params.get("expression") == WORLD_HANDLE and params.get("returnByValue") is False:
-                binding.add(session)
+                self.binding.add(session)
+                self.handle_requests.add(key)
                 return None
-            if session in binding:
-                binding.discard(session)
+            if session in self.binding:
+                self.binding.discard(session)
                 if method == "Page.getFrameTree":
                     return None
             if method == "Runtime.callFunctionOn":
-                kept = {key: value for key, value in params.items() if key not in ("executionContextId", "objectId")}
+                kept = {name: value for name, value in params.items()
+                        if name != "executionContextId" and not (name == "objectId" and value in self.handles)}
                 message = {**message, "params": kept}
-        if "busy-probe-isolated" in names and busy_probe(message):
-            message = {**message, "params": {key: value for key, value in params.items() if key != "contextId"}}
+        if "busy-probe-isolated" in self.names and busy_probe(message):
+            message = {**message, "params": {name: value for name, value in params.items() if name != "contextId"}}
         return message
 
-    return rewrite
+
+def rewriter(names: list[str]) -> Rewriter:
+    return Rewriter(names)
 
 
 def checks(transcript_path) -> list[str]:

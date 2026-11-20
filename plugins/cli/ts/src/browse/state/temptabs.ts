@@ -120,12 +120,13 @@ export async function closeReserved(state: TempTabState, targetId: string): Prom
   let error: unknown = null;
   try {
     if (state.connected) {
-      const answer = await (state.browser as Browser).send("Target.closeTarget", { targetId }, { timeout: CLOSE_TIMEOUT });
-      closed = answer["success"] !== false && (await gone(state, targetId));
+      await (state.browser as Browser).send("Target.closeTarget", { targetId }, { timeout: CLOSE_TIMEOUT });
+      closed = await gone(state, targetId);
     }
   } catch (thrown) {
     if (thrown instanceof Cancelled) throw thrown;
-    error = thrown;
+    closed = state.connected && (await gone(state, targetId));
+    if (!closed) error = thrown;
   } finally {
     if (closed) state.registry.finishClose(state.instance, targetId);
     else state.registry.releaseClose(state.instance, targetId);
@@ -160,7 +161,7 @@ export async function closeUntracked(state: TempTabState, targetId: string): Pro
     await (state.browser as Browser).send("Target.closeTarget", { targetId }, { timeout: CLOSE_TIMEOUT });
   } catch (error) {
     if (error instanceof Cancelled) throw error;
-    return false;
+    return state.connected && (await gone(state, targetId));
   }
   return gone(state, targetId);
 }
@@ -256,7 +257,7 @@ export async function closeOne(state: TempTabState, targetId: string): Promise<v
       }
     } catch (error) {
       if (error instanceof Cancelled) throw error;
-      closed = false;
+      closed = state.connected && (await gone(state, targetId));
     } finally {
       if (closed) registry.finishClose(state.instance, targetId);
       else registry.releaseClose(state.instance, targetId);
