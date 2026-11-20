@@ -92,14 +92,16 @@ async def claimed_attach(browser, method: str, params: dict | None = None, wait:
         attaching = asyncio.ensure_future(browser.send(method, params, session, timeout=None, ident=ident))
         attaching.add_done_callback(lambda done: link.attaching.discard(ident))
     try:
-        return await asyncio.wait_for(asyncio.shield(attaching), wait)
-    except (asyncio.CancelledError, asyncio.TimeoutError) as error:
+        await asyncio.wait({attaching}, timeout=wait)
+    except asyncio.CancelledError:
         attaching.add_done_callback(lambda done: detach_unclaimed(browser, done, session))
-        if isinstance(error, asyncio.TimeoutError):
-            if unknown:
-                raise OutcomeUnknown(f"`{method}`", f"Ardia didn't answer {method} in {wait:g}s after it was sent") from None
-            raise CdpTimeout(method, wait) from None
         raise
+    if not attaching.done():
+        attaching.add_done_callback(lambda done: detach_unclaimed(browser, done, session))
+        if unknown:
+            raise OutcomeUnknown(f"`{method}`", f"Ardia didn't answer {method} in {wait:g}s after it was sent")
+        raise CdpTimeout(method, wait)
+    return attaching.result()
 
 
 class Browser:
