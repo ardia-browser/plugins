@@ -611,6 +611,7 @@ export class State extends Refs implements temptabs.TempTabState {
     if (NTH_SUFFIX.test(selector)) flag("selector_nth", true);
     const deadline = monotonic() + wait;
     let polled = false;
+    let tries = 0;
     for (;;) {
       const frame = (this.frameFor(here) || here.mainFrame) as string;
       let remote: unknown;
@@ -626,8 +627,9 @@ export class State extends Refs implements temptabs.TempTabState {
         if (error.code !== "page_script_error") throw error;
         throw new BrowseError(`Invalid selector ${selector}: ${error.text}`);
       }
-      const last = monotonic() + APPEAR_POLL > deadline;
-      const element = (await here.elementFrom(remote, frame, selector)) ?? (last ? await pierce.queryOne(here, frame, selector) : null);
+      const pierced = tries % pierce.cadence.locate === 0 || monotonic() + APPEAR_POLL > deadline;
+      tries += 1;
+      const element = (await here.elementFrom(remote, frame, selector)) ?? (pierced ? await pierce.queryOne(here, frame, selector) : null);
       if (element !== null) {
         if (polled) flag("waited_for_element", true);
         return [here, element];

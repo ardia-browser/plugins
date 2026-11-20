@@ -9,6 +9,7 @@ import { BrowseError, Usage } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
 import { take } from "../snapshot/take.ts";
 import type { Element, Page } from "../state/page.ts";
+import { frameOffset } from "../state/offsets.ts";
 import * as pierce from "../state/pierce.ts";
 import { record } from "../state/records.ts";
 import { navigate, pageTitle } from "./core.ts";
@@ -73,16 +74,6 @@ export async function cmdSnapshot(ctx: Ctx, argv: string[]): Promise<Result> {
     body = `${found.line}\n${body}`;
   }
   return new Result(data, body, true);
-}
-
-async function frameOffset(page: Page, frame: string): Promise<[number, number]> {
-  if (frame === page.mainFrame) return [0, 0];
-  const session = page.sessionFor(frame);
-  const owner = await page.send("DOM.getFrameOwner", { frameId: frame }, { session });
-  const quads = (await page.send("DOM.getContentQuads", { backendNodeId: owner["backendNodeId"] }, { session }))["quads"];
-  const quad = Array.isArray(quads) && Array.isArray(quads[0]) ? (quads[0] as number[]) : null;
-  if (quad === null) return [0, 0];
-  return [Math.min(...quad.filter((_, index) => index % 2 === 0)), Math.min(...quad.filter((_, index) => index % 2 === 1))];
 }
 
 function boxText(value: number): string {

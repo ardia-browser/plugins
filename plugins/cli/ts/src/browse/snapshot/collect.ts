@@ -64,6 +64,7 @@ export async function frameNodes(page: Page, frame: string, scopes: number[] | n
     }
   }
   for (const node of walk(nodes)) node.frame = frame;
+  readLoaders.get(page)?.set(frame, page.loader(frame));
   return nodes;
 }
 
@@ -129,7 +130,29 @@ async function stitchFrames(page: Page, nodes: Node[], frame: string): Promise<v
   if (crossed) flag("snapshot_oopif_frames", true);
 }
 
+const readLoaders = new WeakMap<Page, Map<string, string | null>>();
+export const SNAPSHOT_MOVED = "The page changed document while the snapshot was being taken, so its refs would point into two documents; snapshot again";
+
+function sameDocuments(page: Page, loaders: ReadonlyMap<string, string | null>): void {
+  for (const [frame, loader] of loaders) {
+    if (page.loader(frame) !== loader) {
+      flag("snapshot_document_changed", true);
+      throw new BrowseError(SNAPSHOT_MOVED, null, "document_changed");
+    }
+  }
+}
+
 export async function collect(state: State, page: Page, selector: string | null = null, cursor = true): Promise<Node[]> {
+  const loaders = new Map<string, string | null>();
+  readLoaders.set(page, loaders);
+  try {
+    return await collectInto(state, page, selector, cursor, loaders);
+  } finally {
+    if (readLoaders.get(page) === loaders) readLoaders.delete(page);
+  }
+}
+
+async function collectInto(state: State, page: Page, selector: string | null, cursor: boolean, loaders: Map<string, string | null>): Promise<Node[]> {
   await page.refreshFrames();
   let frame = (state.frameFor(page) || page.mainFrame) as string;
   let scopes: number[] | null = null;
@@ -147,6 +170,7 @@ export async function collect(state: State, page: Page, selector: string | null 
   const framesUsed = [...new Set([...walk(nodes)].map((node) => node.frame as string))];
   const clickable = new Map<string, Map<number, string[]>>();
   if (cursor) for (const used of framesUsed) clickable.set(used, await clickableMap(page, used));
+  sameDocuments(page, loaders);
   for (const node of walk(nodes)) {
     const hints = node.backend === null ? undefined : clickable.get(node.frame as string)?.get(node.backend);
     if (hints && hints.length && !INTERACTIVE.has(node.role)) {
@@ -160,7 +184,9 @@ export async function collect(state: State, page: Page, selector: string | null 
       }
     }
   }
+  sameDocuments(page, loaders);
   await fieldValues(page, nodes);
+  sameDocuments(page, loaders);
   for (const node of walk(nodes)) {
     if (REF_ROLES.has(node.role) || (node.hints && node.hints.length)) {
       if ((node.role === "heading" && !node.name) || node.backend === null) continue;

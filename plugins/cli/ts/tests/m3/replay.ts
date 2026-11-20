@@ -30,6 +30,8 @@ const HOIST_MS = 50;
 const HOIST_WINDOW = 400;
 const RESPONSE_ID = /^\{"id":(\d+),/;
 const TEMP_MARKER = "about:blank#ardia-temp-";
+const PIERCE_DOCUMENT = "() => document";
+const NO_DOCUMENT = { result: { type: "object", subtype: "null", value: null } };
 const EMPTY_DOCUMENT = { root: { nodeId: 1, backendNodeId: 1, nodeType: 9, nodeName: "#document", localName: "", nodeValue: "", childNodeCount: 0, children: [] } };
 
 type Message = NonNullable<ReturnType<typeof parse>>;
@@ -38,6 +40,7 @@ function synthesize(message: Message): Record<string, unknown> | null {
   if (message.method === "Target.setAutoAttach") return {};
   const params = (message.params ?? {}) as Record<string, unknown>;
   if (message.method === "DOM.getDocument" && params["pierce"] === true) return EMPTY_DOCUMENT;
+  if (message.method === "Runtime.callFunctionOn" && params["functionDeclaration"] === PIERCE_DOCUMENT) return NO_DOCUMENT;
   return null;
 }
 

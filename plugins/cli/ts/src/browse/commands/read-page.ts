@@ -26,10 +26,13 @@ export async function readScoped(page: Page, given: string, selector: string): P
   const deadline = monotonic() + pages.THIN_WAIT;
   let got: Record<string, unknown> = { matched: 0, text: "" };
   const inMain = frame === page.mainFrame;
+  let tries = 0;
   for (;;) {
     try {
       got = record(await page.call(COMMANDS_READ_SCOPED, [selector], { frame, read: true }));
-      if (!got["matched"] && monotonic() + pages.THIN_POLL >= deadline) got = (await pierce.readAll(page, frame, selector)) ?? got;
+      const pierced = tries % pierce.cadence.read === 0 || monotonic() + pages.THIN_POLL >= deadline;
+      tries += 1;
+      if (!got["matched"] && pierced) got = (await pierce.readAll(page, frame, selector)) ?? got;
     } catch (error) {
       if (!(error instanceof BrowseError) || !["document_changed", "page_navigated", "frame_gone"].includes(error.code ?? "") || (error.code === "frame_gone" && !inMain)) {
         throw error;

@@ -45,12 +45,13 @@ DIVERGENCES = {
         "always": True,
         "commands": "a selector that matches nothing in the document (get, is, snapshot -s, read -s, get count)",
         "python": "nothing: the command fails with not_found",
-        "ts": 'DOM.getDocument {"depth": -1, "pierce": true}, then each open or closed shadow root resolved into the isolated world and searched; '
-              "replay answers it with an empty document",
+        "ts": 'Runtime.callFunctionOn "() => document" in the isolated world, DOM.describeNode {"objectId": <it>, "depth": -1, "pierce": true}, '
+              "then each open or closed shadow root resolved into the isolated world and searched; replay answers the first with null",
         "why": "selectors reach elements inside closed shadow roots (ardia#2812 row 12)",
     },
 }
 TEMP_MARKER = "about:blank#ardia-temp-"
+PIERCE_DOCUMENT = "() => document"
 
 UNANSWERING_FAULTS = ("drop", "stop")
 PAGE_SESSION_ENABLES = ("Runtime.enable", "Debugger.enable", "Console.enable")
@@ -114,7 +115,9 @@ class Rewriter:
                 message = {**message, "params": kept}
         if "oopif-auto-attach" in self.names and method == "Target.setAutoAttach":
             return None
-        if "shadow-pierce" in self.names and method == "DOM.getDocument" and params.get("pierce") is True:
+        if "shadow-pierce" in self.names and method == "DOM.describeNode" and params.get("pierce") is True:
+            return None
+        if "shadow-pierce" in self.names and method == "Runtime.callFunctionOn" and params.get("functionDeclaration") == PIERCE_DOCUMENT:
             return None
         if "temp-tab-marker" in self.names and method == "Target.createTarget" and str(params.get("url", "")).startswith(TEMP_MARKER):
             message = {**message, "params": {**params, "url": "about:blank"}}

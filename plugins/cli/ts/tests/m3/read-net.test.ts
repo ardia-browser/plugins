@@ -5,10 +5,12 @@ import CODECS from "../../src/browse/read/codecs.gen.json" with { type: "json" }
 import { APPROXIMATE, codecOf, decode, normalizeEncoding } from "../../src/browse/read/charset.ts";
 import { fetchUrl, run as fetchRun, trustedRoots } from "../../src/browse/read/fetch.ts";
 import { shadowBackends } from "../../src/browse/state/pierce.ts";
+import { frameOffset } from "../../src/browse/state/offsets.ts";
 import * as oopif from "../../src/browse/state/oopif.ts";
 import { Page } from "../../src/browse/state/page.ts";
 import { FakeBrowser, stateWith } from "./core-helpers.ts";
-import { BrowseError } from "../../src/browse/daemon-errors.ts";
+import { BrowseError, CdpError, ConnectionLost } from "../../src/browse/daemon-errors.ts";
+import { fieldValues } from "../../src/browse/snapshot/collect.ts";
 import { Cancelled, withSignal } from "../../src/browse/cdp/cancel.ts";
 
 const PYTHON = process.env["ARDIA_TEST_PYTHON"] ?? "python3";
@@ -107,6 +109,8 @@ beforeAll(() => {
       if (url.pathname === "/cp1252") return new Response(Buffer.from([0x80, 0x81, 0x41]), { headers: { "content-type": "text/plain; charset=windows-1252" } });
       if (url.pathname === "/bogus") return new Response("x", { headers: { "content-type": "text/plain; charset=klingon" } });
       if (url.pathname === "/hop") return new Response(null, { status: 302, headers: { location: "/latin" } });
+      if (url.pathname === "/to-file") return new Response(null, { status: 302, headers: { location: "file:///etc/hosts" } });
+      if (url.pathname === "/to-data") return new Response(null, { status: 302, headers: { location: "data:text/plain,secret" } });
       if (url.pathname === "/missing") return new Response("gone", { status: 404 });
       if (url.pathname === "/slow") return new Promise((resolve) => setTimeout(() => resolve(new Response("late")), 3000));
       if (url.pathname === "/page") return new Response("<html><head><title>T</title></head><body><h1>Head</h1><p>Body</p></body></html>", { headers: { "content-type": "text/html" } });
@@ -127,6 +131,15 @@ describe("readurl.fetch", () => {
     expect((await fetchUrl(`${base}/cp1252`, 5))[2]).toBe("€�A");
     expect(await fetchUrl(`${base}/hop`, 5)).toEqual([200, "text/plain", "café", `${base}/latin`]);
     expect((await fetchUrl(`${base}/agent`, 5))[2]).toBe("ardia-browse-read/1");
+  });
+
+  test("a redirect to file: or data: is refused with the redirect's status, as urllib refuses it", async () => {
+    expect(await fetchUrl(`${base}/to-file`, 5)).toEqual([302, "", "", `${base}/to-file`]);
+    expect(await fetchUrl(`${base}/to-data`, 5)).toEqual([302, "", "", `${base}/to-data`]);
+    const result = await fetchRun(`${base}/to-file`, { raw: true }, {});
+    expect(result.text).not.toContain("localhost");
+    await expect(fetchUrl("file:///etc/hosts", 5)).rejects.toThrow("read fetches http(s) URLs only, not file:///etc/hosts");
+    await expect(fetchUrl("data:text/plain,secret", 5)).rejects.toThrow("read fetches http(s) URLs only");
   });
 
   test("an unknown charset fails as Python's LookupError does", async () => {
@@ -261,3 +274,67 @@ const SELF_SIGNED = (() => {
   require("node:fs").rmSync(dir, { recursive: true, force: true });
   return pair;
 })();
+
+describe("frame offsets across out-of-process iframes (get box, D5's clicks)", () => {
+  test("a frame two OOPIF levels down adds each owner's offset, each asked in the session that holds the owner", async () => {
+    const owners: Record<string, number> = { "SESSION-1|A": 11, "CHILD1|B": 22, "CHILD2|C": 33 };
+    const quads: Record<string, number[]> = {
+      "SESSION-1|11": [100, 50, 400, 50, 400, 250, 100, 250],
+      "CHILD1|22": [10, 20, 200, 20, 200, 120, 10, 120],
+      "CHILD2|33": [3, 4, 50, 4, 50, 40, 3, 40],
+    };
+    const browser = new FakeBrowser((method, params, session) => {
+      if (method === "DOM.getFrameOwner") {
+        const backend = owners[`${session}|${params["frameId"]}`];
+        return backend === undefined ? new Error(`no owner of ${params["frameId"]} in ${session}`) : { backendNodeId: backend };
+      }
+      if (method === "DOM.getContentQuads") return { quads: [quads[`${session}|${params["backendNodeId"]}`]] };
+      return undefined;
+    });
+    const state = stateWith(browser);
+    const page = await state.page("TARGET");
+    const top = page.sessionId as string;
+    page.oopifs.set("CHILD1", { root: "A", parentSession: top });
+    page.oopifs.set("CHILD2", { root: "B", parentSession: "CHILD1" });
+    for (const [frame, session] of [["A", "CHILD1"], ["B", "CHILD2"], ["C", "CHILD2"]]) page.frameSessions.set(frame as string, session as string);
+    page.frames.set("A", { id: "A", url: "", loader: "LA", parent: "FRAME-MAIN", name: "", origin: "" });
+    page.frames.set("B", { id: "B", url: "", loader: "LB", parent: "A", name: "", origin: "" });
+    page.frames.set("C", { id: "C", url: "", loader: "LC", parent: "B", name: "", origin: "" });
+    expect(await frameOffset(page, "C")).toEqual([113, 74]);
+    expect(await frameOffset(page, "B")).toEqual([110, 70]);
+    expect(await frameOffset(page, "FRAME-MAIN")).toEqual([0, 0]);
+    const asked = browser.sent.filter((entry) => entry.method === "DOM.getFrameOwner").map((entry) => `${entry.session}|${entry.params["frameId"]}`);
+    expect(asked.slice(0, 3)).toEqual(["CHILD2|C", "CHILD1|B", "SESSION-1|A"]);
+  });
+});
+
+
+describe("iframe sessions that go away", () => {
+  test("a call to a frame whose iframe session is gone says the frame is gone, not that the tab detached", async () => {
+    const browser = new FakeBrowser((method, _params, session) =>
+      session === "CHILD" && method === "Runtime.evaluate" ? new CdpError(method, "Session with given id not found.") : undefined,
+    );
+    const state = stateWith(browser);
+    const page = await state.page("TARGET");
+    state.onEvent("Target.attachedToTarget", { sessionId: "CHILD", targetInfo: { type: "iframe", targetId: "OOPIF" } }, page.sessionId);
+    const answered = (await page.send("Runtime.evaluate", { expression: "1" }, { session: "CHILD" }).catch((error: unknown) => error)) as BrowseError;
+    expect(answered.code).toBe("frame_gone");
+    state.onEvent("Target.detachedFromTarget", { sessionId: "CHILD" }, page.sessionId);
+    const refused = (await page.send("Runtime.evaluate", { expression: "1" }, { session: "CHILD" }).catch((error: unknown) => error)) as BrowseError;
+    expect(refused.code).toBe("frame_gone");
+    expect(page.sessionId).not.toBeNull();
+  });
+});
+
+describe("settledAll", () => {
+  test("a lost connection inside one field's lookup is swallowed with the rest, as Python's gather(return_exceptions=True) does", async () => {
+    const page = {
+      resolveBackend: async () => {
+        throw new ConnectionLost();
+      },
+    };
+    const node = { role: "textbox", name: "", value: "", props: new Map([["inputType", "text"]]), backend: 5, children: [], ref: null, hints: null, url: null, frame: "F" };
+    await fieldValues(page as unknown as Page, [node as never]);
+    expect(node.value).toBe("");
+  });
+});

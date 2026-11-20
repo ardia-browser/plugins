@@ -34,6 +34,8 @@ const BUSY_WHY = (probe: number) =>
   `the page's own scripts are keeping its tab busy, so it isn't answering. While it stays that way, commands on this tab give up after ${formatG(probe)} s instead of waiting; \`ardia browse reload\` it, or work from a lighter page (search results, the site's own API, or \`read --http <url>\`)`;
 const CRASH_SAFE = new Set(["Inspector.enable", "Page.reload", "Page.navigate"]);
 const OTHER_WORLD = "same JavaScript world";
+const NO_SESSION = "Session with given id not found";
+export const FRAME_GONE = "That frame is gone. Run `ardia browse frame main` or snapshot again";
 const STALE_CONTEXT = ["Cannot find context", "Execution context was destroyed", "Cannot find default execution context", "Inspected target navigated", "Could not find object with given id"];
 export const WORLD_HANDLE = "globalThis";
 
@@ -391,7 +393,8 @@ export class Page {
     if (this.crashed && !CRASH_SAFE.has(method)) throw new BrowseError(CRASHED, null, "tab_crashed");
     if (this.unansweredAt && monotonic() - this.unansweredAt < BUSY_MEMORY) await this.stillBusy(method);
     options.guard?.();
-    if (this.session !== top || (session !== top && !this.oopifs.has(session))) throw new BrowseError(DETACHED, null, "tab_detached");
+    if (this.session !== top) throw new BrowseError(DETACHED, null, "tab_detached");
+    if (session !== top && !this.oopifs.has(session)) throw new BrowseError(FRAME_GONE, null, "frame_gone");
     const timeout = options.timeout ?? 30;
     const dropped = new AbortController();
     this.calls.add(dropped);
@@ -405,6 +408,10 @@ export class Page {
         sending.then(resolve, reject);
       });
     } catch (error) {
+      if (session !== top && error instanceof CdpError && error.cdpMessage.includes(NO_SESSION)) {
+        oopif.detached(this, session);
+        throw new BrowseError(FRAME_GONE, null, "frame_gone");
+      }
       if (error instanceof Cancelled && dropped.signal.aborted && !outer?.aborted) {
         if (unknown) throw new OutcomeUnknown(`\`${method}\``, `Ardia detached the tab before it answered ${method}`);
         if (this.crashed) throw new BrowseError(CRASHED, null, "tab_crashed");
