@@ -962,7 +962,6 @@ class LargeResults(unittest.TestCase):
             other = json.loads(daemon.encode_answer(0, "z" * 2000, "", name="snapshot"))
             self.assertIn("snapshot -s", other["err"])
 
-    @unittest.expectedFailure
     def test_a_redacted_token_keeps_the_result_valid_json(self):
         from ardia_cli.browse import daemon
 
