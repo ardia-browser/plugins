@@ -94,6 +94,12 @@ other 18 replay identically, run after run. `"unstable_steps": {"steps": [...], 
 `changes:` report depends on whether the page finished a change before the daemon's snapshot. For those steps live mode
 compares only exit and stderr. `"pace": "recorded"` replays the recorded gaps (capped at 2 s); no scenario needs it now.
 
+A scenario with more than one session ends with an explicit `close` step for each, in a fixed order. The side's
+teardown (`close --all`) closes sessions in the order of their keys, and a key hashes the endpoint, whose port differs
+between the recording and the replay. Left to teardown, the sessions close in a different order, so the tabs' close
+requests and the registry's ids are numbered differently, and Python fails its own replay
+(`tabs/tab_active_borrowed` did).
+
 The tap delivers each Chromium burst as one write (a burst ends after 3 ms of quiet, or at 250 ms). Python handles every
 message of one socket read before the command that waited on an answer resumes, so the grouping decides what the
 daemon sees first. Live and replay therefore group the same way.
