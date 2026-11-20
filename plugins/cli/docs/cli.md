@@ -1985,8 +1985,15 @@ Its page core (slice D3: `browse/state/page.ts`, `state.ts`, `refs.ts`, `apptabs
   request at once.
 - Capture and media (D6). Console and error capture is the one path that sends `Runtime.enable` on a page session
   (Chromium reports console calls only through it); `console` and `errors` start it (and `open --capture-console` once `open`'s page setup is served), the page
-  can detect it, and it lasts until the session ends, as in Python. The harness's transcript check allows it only in a
-  scenario that asks for console capture. The rest:
+  can detect it, and it lasts until the session ends, as in Python. Its first notice says so: Python's
+  "(Runtime is on for this tab until the session ends)" reads "(Runtime is on for this tab until the session ends; the
+  page can detect this)" (design section 8; the harness's `console-detectable` rule). The transcript check allows
+  `Runtime.enable` only in a scenario that asks for console capture. The rest:
+  - A deliberate fix: when a cancel or timeout lands while `network route`'s or `set credentials`' `Fetch.enable` is
+    unanswered, on a tab that had no route claim before, the daemon sends `Fetch.disable` (shielded, bounded at 2 s) and
+    counts `route_enable_undone`. Python leaves interception possibly on with no handler, so the page's requests hang.
+    The route handler is also registered before `Fetch.enable` is sent, so no paused request goes unanswered. Fault runs
+    show the extra `Fetch.disable` on the TypeScript side.
   - A lost connection is never swallowed: `network request` and HAR bodies, `network unroute`'s `Fetch.disable` and the
     screencast stop pass `connection_lost` on where Python's catch-all ignores it. `record stop` still closes ffmpeg's
     input and waits for it when that happens.
@@ -1999,8 +2006,8 @@ Its page core (slice D3: `browse/state/page.ts`, `state.ts`, `refs.ts`, `apptabs
     line. Frames a slow viewer can't take yet are skipped to the newest, as Python's single-slot waiter does.
   - A background route, auth or screencast-ack task that fails for a reason other than a CDP error ends quietly;
     Python's event loop logs "Task exception was never retrieved".
-  - `a11y` looks for axe-core in the bundled Python's `ardia_cli/vendor/axe.min.js`, then in `node_modules/axe-core`
-    upward from the program. Once Python is gone (M4) axe-core needs its own place in the artifact (release owner).
+  - `a11y` uses axe-core embedded in the program (`ts/vendor/axe.min.js`, 4.10.3, the version and checksums
+    `scripts/build.sh` pins for Python, recorded in `ts/vendor/axe.json` and checked by a test); it never looks on disk.
   - Live input from a stream viewer (`stream enable --input`) is tracked and released by the act slice's input model
     (D5); until it lands the daemon still sends the events, under the command lock, but can't release held keys.
 

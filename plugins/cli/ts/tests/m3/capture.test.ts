@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { auditLines, axeSource, AXE_MISSING } from "../../src/browse/capture/audit.ts";
@@ -8,6 +9,7 @@ import { cmdNetwork, credentialsFor, handlePaused, requestRow, statusMatches } f
 import { cmdRecord, encoderArgv } from "../../src/browse/capture/record.ts";
 import { captureOf } from "../../src/browse/capture/store.ts";
 import { tracing, traceConfig } from "../../src/browse/capture/trace.ts";
+import { Cancelled, withSignal } from "../../src/browse/cdp/cancel.ts";
 import { Gated } from "../../src/browse/daemon-errors.ts";
 import { claimKinds, cleanup, cleanups, emit, rig, scratchDir, tick } from "./capture-helpers.ts";
 
@@ -17,7 +19,7 @@ describe("console and errors (row 8: the one path that sends Runtime.enable)", (
   test("console starts capture with Runtime.enable once, says so, and keeps a console lease", async () => {
     const { browser, ctx, state } = rig();
     const first = await cmdConsole(ctx, []);
-    expect(first.text).toBe("Console capture started; messages from now on are kept (Runtime is on for this tab until the session ends)");
+    expect(first.text).toBe("Console capture started; messages from now on are kept (Runtime is on for this tab until the session ends; the page can detect this)");
     expect(first.pageContent).toBe(true);
     expect(browser.methods().filter((method) => method === "Runtime.enable")).toHaveLength(1);
     const page = await state.page();
@@ -87,6 +89,41 @@ describe("network", () => {
     expect((await cmdNetwork(allowed.ctx, ["unroute"])).text).toBe("✓ Done");
     expect(claimKinds(allowed.root as string).has("route")).toBe(false);
     expect(allowed.browser.methods()).toContain("Fetch.disable");
+  });
+
+  test("a cancel while Fetch.enable is unanswered turns interception off again and leaves no claim or router", async () => {
+    let answer: (value: Record<string, unknown>) => void = () => {};
+    const { browser, ctx, state, root } = rig(
+      (method) => (method === "Fetch.enable" ? () => new Promise<Record<string, unknown>>((resolve) => (answer = resolve)) : undefined),
+      { claims: true },
+    );
+    await state.page();
+    const stop = new AbortController();
+    const routing = withSignal(stop.signal, () => cmdNetwork(ctx, ["route", "*", "--abort"]));
+    for (let wait = 0; wait < 100 && !browser.methods().includes("Fetch.enable"); wait += 1) await tick(5);
+    stop.abort(new Cancelled());
+    await expect(routing).rejects.toBeInstanceOf(Cancelled);
+    answer({});
+    expect(browser.methods().slice(-2)).toEqual(["Fetch.enable", "Fetch.disable"]);
+    expect(claimKinds(root as string).has("route")).toBe(false);
+    expect(state.listeners).toHaveLength(0);
+    expect(state.leases.has("route")).toBe(false);
+  });
+
+  test("a cancel on a tab already routed keeps its interception", async () => {
+    let calls = 0;
+    const { browser, ctx } = rig((method) => {
+      if (method !== "Fetch.enable") return undefined;
+      calls += 1;
+      return calls === 1 ? {} : () => new Promise<Record<string, unknown>>(() => {});
+    });
+    await cmdNetwork(ctx, ["route", "*.png", "--abort"]);
+    const stop = new AbortController();
+    const routing = withSignal(stop.signal, () => cmdNetwork(ctx, ["route", "*.css", "--abort"]));
+    for (let wait = 0; wait < 100 && calls < 2; wait += 1) await tick(5);
+    stop.abort(new Cancelled());
+    await expect(routing).rejects.toBeInstanceOf(Cancelled);
+    expect(browser.methods()).not.toContain("Fetch.disable");
   });
 
   test("routes answer paused requests newest first, by type and glob", async () => {
@@ -240,7 +277,21 @@ describe("record through a PATH stub (no real encode)", () => {
 
 describe("a11y", () => {
   test("a missing axe-core gives Python's message", () => {
-    expect(() => axeSource([path.join(scratchDir(), "nope.js")])).toThrow(AXE_MISSING);
+    expect(() => axeSource(path.join(scratchDir(), "nope.js"))).toThrow(AXE_MISSING);
+  });
+
+  test("the embedded axe-core is the pinned file, the same version Python's build ships", () => {
+    const vendor = path.resolve(import.meta.dir, "..", "..", "vendor");
+    const manifest = JSON.parse(fs.readFileSync(path.join(vendor, "axe.json"), "utf8"));
+    for (const [name, sha] of Object.entries(manifest.files as Record<string, string>)) {
+      expect(createHash("sha256").update(fs.readFileSync(path.join(vendor, name))).digest("hex")).toBe(sha);
+    }
+    const build = fs.readFileSync(path.resolve(vendor, "..", "..", "scripts", "build.sh"), "utf8");
+    expect(build).toContain(`axe_version=${manifest.version}\n`);
+    expect(build).toContain(`axe_sha256=${manifest.tarballSha256}\n`);
+    expect(build).toContain(`axe_sha512=${manifest.tarballSha512}\n`);
+    const source = axeSource();
+    expect(source).toContain(`axe.version="${manifest.version}"`);
   });
 
   test("lines match Python's, with list targets printed as Python lists", () => {

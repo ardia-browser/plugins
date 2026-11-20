@@ -34,7 +34,7 @@ export async function cmdConsole(ctx: Ctx, argv: string[]): Promise<Result> {
   const lines = messages.map((message) => `[${String(record(message)["type"])}] ${String(record(message)["text"])}`);
   if (dropped) lines.unshift(`(${dropped} older messages dropped)`);
   if (started && messages.length === 0) {
-    lines.push("Console capture started; messages from now on are kept (Runtime is on for this tab until the session ends)");
+    lines.push("Console capture started; messages from now on are kept (Runtime is on for this tab until the session ends; the page can detect this)");
   }
   return new Result({ messages, dropped, started }, lines.join("\n") || "(no console messages)", true);
 }

@@ -79,6 +79,7 @@ class Harness:
 
     def __enter__(self):
         self.scratch.mkdir(parents=True, exist_ok=True)
+        infra.vendor_axe_for_python()
         self.fixtures = infra.FixtureServer(self.ports.fixture).__enter__()
         return self
 

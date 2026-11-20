@@ -2,6 +2,7 @@ import "../libc-loaded.ts";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { Cancelled } from "../../src/browse/cdp/cancel.ts";
 import { Ctx } from "../../src/browse/commands/ctx.ts";
 import { browseDir, closeFd, takeLock } from "../../src/browse/paths.ts";
 import type { Page } from "../../src/browse/state/page.ts";
@@ -28,6 +29,17 @@ export type Rig = { browser: FakeBrowser; state: State; ctx: Ctx; root: string |
 
 export function rig(script: Script = () => undefined, options: { claims?: boolean; env?: Record<string, unknown>; explicit?: boolean } = {}): Rig {
   const browser = new FakeBrowser(script);
+  const plainSend = browser.send.bind(browser);
+  browser.send = (method, params, options = {}) => {
+    const signal = (options as { signal?: AbortSignal | null }).signal ?? null;
+    const sent = plainSend(method, params, options);
+    if (signal === null) return sent;
+    return new Promise((resolve, reject) => {
+      if (signal.aborted) return reject(new Cancelled());
+      signal.addEventListener("abort", () => reject(new Cancelled()), { once: true });
+      sent.then(resolve, reject);
+    });
+  };
   let state = stateWith(browser, ["TARGET"], options.explicit ?? true);
   let root: string | null = null;
   if (options.claims) {

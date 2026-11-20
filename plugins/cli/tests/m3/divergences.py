@@ -22,6 +22,13 @@ DIVERGENCES = {
               "Page.createIsolatedWorld first when that world isn't known for the current document",
         "why": "a main-world evaluation is visible to the page (ardia#2812 row 8); the isolated world shares the document but not its JS",
     },
+    "console-detectable": {
+        "row": 8,
+        "commands": "console, the first time it starts capture on a tab",
+        "python": "answer text: ... (Runtime is on for this tab until the session ends)",
+        "ts": "answer text: ... (Runtime is on for this tab until the session ends; the page can detect this)",
+        "why": "console capture is the one Runtime.enable on a page session and a page can detect it; the notice says so (normalize rule `console-detectable`)",
+    },
 }
 
 UNANSWERING_FAULTS = ("drop", "stop")

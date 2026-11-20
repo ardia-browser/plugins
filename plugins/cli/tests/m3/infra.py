@@ -1,3 +1,4 @@
+import json
 import functools
 import http.server
 import os
@@ -17,6 +18,21 @@ FIXTURES = CLI / "tests" / "fixtures" / "browse"
 TAP = CLI / "ts" / "tests" / "m3" / "tap.ts"
 SCENARIOS = M3 / "scenarios"
 TRANSCRIPTS = M3 / "transcripts"
+AXE_VENDORED = CLI / "ts" / "vendor"
+AXE_FOR_PYTHON = CLI / "ardia_cli" / "vendor" / "axe.min.js"
+
+
+def vendor_axe_for_python() -> None:
+    import hashlib
+
+    manifest = json.loads((AXE_VENDORED / "axe.json").read_text())
+    data = (AXE_VENDORED / "axe.min.js").read_bytes()
+    if hashlib.sha256(data).hexdigest() != manifest["files"]["axe.min.js"]:
+        raise RuntimeError("ts/vendor/axe.min.js doesn't match ts/vendor/axe.json")
+    if AXE_FOR_PYTHON.exists() and AXE_FOR_PYTHON.read_bytes() == data:
+        return
+    AXE_FOR_PYTHON.parent.mkdir(exist_ok=True)
+    AXE_FOR_PYTHON.write_bytes(data)
 DIRECT = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 CHROME_FLAGS = ["--headless", "--no-first-run", "--no-default-browser-check", "--disable-background-networking", "--disable-component-update",
                 "--disable-sync", "--disable-default-apps", "--mute-audio", "--hide-scrollbars", "--force-color-profile=srgb"]

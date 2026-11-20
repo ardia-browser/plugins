@@ -1,6 +1,4 @@
 import fs from "node:fs";
-import path from "node:path";
-import { installRoot } from "../../install.ts";
 import { pyStr } from "../../pylib/plain.ts";
 import { pyStrip } from "../../pylib/str.ts";
 import { navigate } from "../commands/core.ts";
@@ -11,46 +9,18 @@ import { currentOrNew } from "../commands/shared.ts";
 import { BrowseError } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
 import { AUDIT_RUN } from "../js/index.ts";
+import AXE_PATH from "../../../vendor/axe.min.js" with { type: "file" };
 import type { Page } from "../state/page.ts";
 import { type Json, record } from "../state/records.ts";
 
-export const AXE_FILE = "axe.min.js";
 export const AXE_MISSING = "axe-core isn't bundled with this ardia command (apps/cli/scripts/build.sh adds ardia_cli/vendor/axe.min.js)";
 
-function bundledVendor(root: string | null): string[] {
-  if (root === null) return [];
-  const lib = path.join(root, "python", "lib");
-  let versions: string[] = [];
+export function axeSource(file: string = AXE_PATH): string {
   try {
-    versions = fs.readdirSync(lib).filter((name) => name.startsWith("python3")).sort();
+    return fs.readFileSync(file, "utf8");
   } catch {
-    return [];
+    throw new BrowseError(AXE_MISSING);
   }
-  return versions.map((version) => path.join(lib, version, "site-packages", "ardia_cli", "vendor", AXE_FILE));
-}
-
-function upward(start: string): string[] {
-  const found: string[] = [];
-  let here = path.resolve(start);
-  for (;;) {
-    found.push(path.join(here, "node_modules", "axe-core", AXE_FILE), path.join(here, "ardia_cli", "vendor", AXE_FILE));
-    const parent = path.dirname(here);
-    if (parent === here) return found;
-    here = parent;
-  }
-}
-
-export function axeCandidates(root: string | null = installRoot(), sourceDir: string = import.meta.dir): string[] {
-  return [...bundledVendor(root), ...upward(sourceDir)];
-}
-
-export function axeSource(candidates: readonly string[] = axeCandidates()): string {
-  for (const candidate of candidates) {
-    try {
-      if (fs.statSync(candidate).isFile()) return fs.readFileSync(candidate, "utf8");
-    } catch {}
-  }
-  throw new BrowseError(AXE_MISSING);
 }
 
 function nodesWord(count: unknown): string {

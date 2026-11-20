@@ -3,13 +3,13 @@ import path from "node:path";
 import { dumps, Float, type Value } from "../../json.ts";
 import { isSpace, strip } from "../../py.ts";
 import { codePoints } from "../../pystr.ts";
-import { shield, sleep } from "../cdp/cancel.ts";
+import { Cancelled, shield, sleep } from "../cdp/cancel.ts";
 import { globMatch, navigate } from "../commands/core.ts";
 import type { Ctx } from "../commands/ctx.ts";
 import { register } from "../commands/index.ts";
 import { need, parse } from "../commands/parse.ts";
 import { refuseOnBorrowed } from "../commands/shared.ts";
-import { BrowseError, Gated, Usage } from "../daemon-errors.ts";
+import { BrowseError, CdpTimeout, Gated, OutcomeUnknown, Usage } from "../daemon-errors.ts";
 import { pyValue, Result } from "../daemon/render.ts";
 import { flag } from "../metrics.ts";
 import { pyIntArg } from "../pyerror.ts";
@@ -17,7 +17,7 @@ import { type Page, quiet, ROUTE_PATTERNS } from "../state/page.ts";
 import { type Json, record } from "../state/records.ts";
 import type { Listener } from "../state/state.ts";
 import { defaultPath } from "../media/paths.ts";
-import { activate, captureOf, credentialsOf, type Route, releaseClaim } from "./store.ts";
+import { activate, captureOf, credentialsOf, type Route, releaseClaim, removeListener } from "./store.ts";
 
 export const BODY_LIMIT = 1024 * 1024;
 export const HAR_BODY_LIMIT = 2 * 1024 * 1024;
@@ -303,32 +303,51 @@ async function networkRoute(ctx: Ctx, argv: string[]): Promise<Result> {
     status: options["status"] ? pyIntArg(options["status"] as string) : 200,
     contentType: (options["content_type"] as string | undefined) ?? null,
   };
-  await activate(ctx, page, "route", async () => {
-    try {
-      await page.send("Fetch.enable", { patterns: ROUTE_PATTERNS });
-    } catch (error) {
-      if (error instanceof Gated) throw error.during("network route");
-      throw error;
-    }
-  });
+  await intercept(ctx, page, { patterns: ROUTE_PATTERNS }, (error) => error.during("network route"));
   capture.routes.push(route);
   ctx.state.leases.add("route");
-  installRouter(ctx);
   return new Result({ routed: route.pattern, abort: route.abort }, `✓ Routing ${route.pattern}`);
 }
 
-export async function enableCredentials(ctx: Ctx, page: Page, username: string, password: string): Promise<void> {
-  await activate(ctx, page, "route", async () => {
-    try {
-      await page.send("Fetch.enable", { patterns: ROUTE_PATTERNS, handleAuthRequests: true });
-    } catch (error) {
-      if (error instanceof Gated) throw error.during("set credentials", "HTTP auth answers Fetch.authRequired");
-      throw error;
+export const INTERCEPT_UNDO_WAIT = 2;
+
+function interceptionUnknown(error: unknown): boolean {
+  return error instanceof Cancelled || error instanceof CdpTimeout || error instanceof OutcomeUnknown;
+}
+
+async function intercept(ctx: Ctx, page: Page, params: Json, refused: (error: Gated) => Gated): Promise<void> {
+  const capture = captureOf(ctx.state);
+  const fresh = !ctx.state.claims.has(page.targetId, "route");
+  const hadRouter = capture.router !== null;
+  installRouter(ctx);
+  try {
+    await activate(ctx, page, "route", async () => {
+      try {
+        await page.send("Fetch.enable", params);
+      } catch (error) {
+        if (fresh && interceptionUnknown(error)) {
+          await shield(() => page.send("Fetch.disable", null, { timeout: INTERCEPT_UNDO_WAIT }).catch(() => ({})));
+          flag("route_enable_undone", true);
+        }
+        if (error instanceof Gated) throw refused(error);
+        throw error;
+      }
+    });
+  } catch (error) {
+    if (!hadRouter && capture.routes.length === 0 && !ctx.state.credentials) {
+      removeListener(ctx.state, capture.router);
+      capture.router = null;
     }
-  });
+    throw error;
+  }
+}
+
+export async function enableCredentials(ctx: Ctx, page: Page, username: string, password: string): Promise<void> {
+  await intercept(ctx, page, { patterns: ROUTE_PATTERNS, handleAuthRequests: true }, (error) =>
+    error.during("set credentials", "HTTP auth answers Fetch.authRequired"),
+  );
   ctx.state.credentials = { username, password, origin: null };
   ctx.state.leases.add("route");
-  installRouter(ctx);
 }
 
 export function credentialsFor(ctx: Ctx, page: Page, params: Json): { username: string; password: string } | null {
