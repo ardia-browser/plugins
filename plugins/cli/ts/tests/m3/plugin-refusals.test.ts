@@ -9,7 +9,10 @@ const HEADER = path.join(TS_DIR, "tests", "m3", "plugin-engine", "ardia", "core"
 function constants(file: string): Map<string, string> {
   const text = fs.readFileSync(file, "utf8");
   const found = new Map<string, string>();
-  for (const match of text.matchAll(/inline constexpr char (k\w+)\[\] =\s*"((?:[^"\\]|\\.)*)";/gu)) found.set(match[1] as string, (match[2] as string).replace(/\\(.)/gu, "$1"));
+  for (const match of text.matchAll(/inline constexpr char (k\w+)\[\] =((?:\s*"(?:[^"\\]|\\.)*")+);/gu)) {
+    const parts = [...(match[2] as string).matchAll(/"((?:[^"\\]|\\.)*)"/gu)].map((part) => (part[1] as string).replace(/\\(.)/gu, "$1"));
+    found.set(match[1] as string, parts.join(""));
+  }
   return found;
 }
 
@@ -21,19 +24,16 @@ describe("the engine's plugin refusals (ardia#2808 ac_plugin_refusals.h)", () =>
     expect(header.size).toBeGreaterThan(25);
   });
 
-  test("every row of the table is one of the header's strings, exactly, except rows the act lease PR still has to add", () => {
+  test("every row of the table is one of the header's strings, exactly", () => {
     const strings = new Set(header.values());
-    const missing = ENGINE_REFUSALS.filter((entry) => !strings.has(entry.message));
-    expect(missing.filter((entry) => entry.pending === undefined).map((entry) => entry.message)).toEqual([]);
-    expect(missing.map((entry) => entry.message).sort()).toEqual(ENGINE_REFUSALS.filter((entry) => entry.pending === "act-lease-pr" && !strings.has(entry.message)).map((entry) => entry.message).sort());
+    expect(ENGINE_REFUSALS.filter((entry) => !strings.has(entry.message)).map((entry) => entry.message)).toEqual([]);
   });
 
-  test("an act-lease string in the header must be exactly one of the rows the table expects from the act lease PR", () => {
-    const expected = new Set(ENGINE_REFUSALS.filter((entry) => entry.pending === "act-lease-pr").map((entry) => entry.message));
-    expect(expected.size).toBe(2);
-    const drifted = (values: Iterable<string>) => [...values].filter((value) => /act lease/iu.test(value) && !expected.has(value));
-    expect(drifted(header.values())).toEqual([]);
-    expect(drifted(["ardia: no act lease for this page", "ardia: act lease ended before this input was delivered"])).toEqual(["ardia: no act lease for this page"]);
+  test("the act lease's strings are in the header (573cd7ed8) with exactly the table's text", () => {
+    expect(header.get("kActLeaseMissing")).toBe("ardia: no act lease for this page's current document");
+    expect(header.get("kActLeaseEnded")).toBe("ardia: act lease ended before this input was delivered");
+    expect(header.get("kActDocumentReplaced")).toBe("ardia: document_changed: the tab loaded a new document since the act was approved");
+    expect(engineRefusal(header.get("kActDocumentReplaced") as string)?.code).toBe("document_changed");
   });
 
   test("the act-lease rows: both mean nothing ran and answer 77, never as outcome_unknown", () => {

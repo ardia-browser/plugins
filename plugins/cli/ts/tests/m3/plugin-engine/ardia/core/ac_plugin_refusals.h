@@ -47,6 +47,15 @@ inline constexpr char kCantBeAnsweredSuffix[] = " can't be answered";
 inline constexpr char kNotAllowedForPluginSuffix[] =
     " isn't allowed for a plugin";
 inline constexpr char kCantBeSentSuffix[] = " can't be sent";
+inline constexpr char kActLeaseMissing[] =
+    "ardia: no act lease for this page's current document";
+inline constexpr char kActLeaseEnded[] =
+    "ardia: act lease ended before this input was delivered";
+inline constexpr char kActDocumentReplaced[] =
+    "ardia: document_changed: the tab loaded a new document since the act was "
+    "approved";
+inline constexpr char kActTabNotShown[] = "the tab can't be shown for this act";
+inline constexpr char kNoActLeaseNow[] = "no lease for this page now";
 
 inline constexpr char kHoldNoCredential[] = "no such credential";
 inline constexpr char kNoSuchTab[] = "no such tab";

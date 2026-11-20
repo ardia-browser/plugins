@@ -6,7 +6,6 @@ export type EngineCode = {
   readonly code: string;
   readonly exit: 1 | 2 | 77;
   readonly metric: string;
-  readonly pending?: "act-lease-pr";
   readonly note?: string;
 };
 
@@ -20,6 +19,7 @@ export const ENGINE_REFUSALS: readonly EngineCode[] = [
   exact("ardia: not delivered", "not_applied", "plugin_not_delivered"),
   exact("ardia: outcome unknown", "outcome_unknown", "plugin_outcome_unknown"),
   exact("ardia: the page changed after the input was sent", "document_changed", "plugin_lease_refused"),
+  exact("ardia: document_changed: the tab loaded a new document since the act was approved", "document_changed", "plugin_lease_refused"),
   exact("ardia: tab_out_of_scope: the tab left the plugin's window", "tab_out_of_scope", "plugin_out_of_scope"),
   exact("ardia: no attached session has that sessionId", "tab_detached", "plugin_session_gone"),
   exact("ardia: there's no page to send input to", "tab_detached", "plugin_session_gone"),
@@ -33,8 +33,8 @@ export const ENGINE_REFUSALS: readonly EngineCode[] = [
   exact("ardia: input isn't allowed for this session", "plugin_refused", "plugin_policy_refused", 77),
   exact("ardia: that input can't be made", "plugin_refused", "plugin_policy_refused", 77),
   exact("ardia: that session can't send input", "plugin_refused", "plugin_policy_refused", 77),
-  { ...exact("ardia: no act lease for this page's current document", "act_lease_missing", "plugin_act_lease_missing", 77), pending: "act-lease-pr", note: "nothing ran" },
-  { ...exact("ardia: act lease ended before this input was delivered", "act_lease_ended", "plugin_act_lease_ended", 77), pending: "act-lease-pr", note: "nothing ran" },
+  { ...exact("ardia: no act lease for this page's current document", "act_lease_missing", "plugin_act_lease_missing", 77), note: "nothing ran" },
+  { ...exact("ardia: act lease ended before this input was delivered", "act_lease_ended", "plugin_act_lease_ended", 77), note: "nothing ran" },
   suffix(" isn't allowed for a plugin", "plugin_refused", "plugin_policy_refused", 77),
   suffix(" can't be sent", "plugin_refused", "plugin_policy_refused", 77),
 ];
@@ -53,6 +53,8 @@ export const ENGINE_UNCODED: readonly string[] = [
   "no attached session",
   "another hold on that tab is still being taken",
   "too many plugin credentials for this profile",
+  "the tab can't be shown for this act",
+  "no lease for this page now",
 ];
 
 export function engineRefusal(message: string): EngineCode | null {

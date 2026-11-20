@@ -228,13 +228,14 @@ and never by Python's or by the person's own session. The TypeScript daemon only
   point outside the page → `outside_viewport`; nothing there → `not_visible`; a closing connection → `connection_lost`;
   the policy refusals (not the page session, input not allowed for this session, input that can't be made, a session
   that can't send input, `ardia: <method> <what> isn't allowed for a plugin`, `ardia: <method> <what> can't be sent`) →
-  exit 77 `plugin_refused`. Two act-lease rows come from the act lease PR and aren't in ardia#2808's header yet;
-  both mean nothing of the command reached the page, so both answer exit 77 with "(nothing ran)":
+  exit 77 `plugin_refused`. The act lease (ardia#2808 plus `act-lease-on-2808` at 573cd7ed8, whose header is the vendored one) adds three:
   `ardia: no act lease for this page's current document` → `act_lease_missing` (refused at admission) and
   `ardia: act lease ended before this input was delivered` → `act_lease_ended` (a pointer command that never passed its
-  final check before forwarding). The daemon takes no leases, so it doesn't retry either; the AI host decides whether
-  to grant a new lease and send the step again. The drift test fails if the header later carries either with
-  different text. `ardia: outcome unknown` can answer any leased command the daemon sends (keys, `Input.insertText`,
+  final check before forwarding) both mean nothing of the command reached the page and answer exit 77 with "(nothing
+  ran)"; the daemon takes no leases, so it doesn't retry, and the AI host decides whether to grant a new lease and send
+  the step again. `ardia: document_changed: the tab loaded a new document since the act was approved` →
+  `document_changed`. Its host-side strings (`the tab can't be shown for this act`, `no lease for this page now`) answer
+  nothing the daemon sends and stay uncoded. `ardia: outcome unknown` can answer any leased command the daemon sends (keys, `Input.insertText`,
   clicks, wheels, `Page.handleJavaScriptDialog`), not only pointer input: it's `outcome_unknown` on every path and is
   never retried; an auto-accepted dialog that answers it leaves a notice on the step. Round 18's hold and minting refusals (`another hold on that tab is still being taken`,
   `too many plugin credentials for this profile`) aren't answers to anything the daemon sends and stay uncoded. A wheel
