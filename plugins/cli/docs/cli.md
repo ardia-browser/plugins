@@ -2032,6 +2032,10 @@ scenarios:
 - An `--init-script` file is opened without blocking and must be a regular file under 4 MB (a FIFO or device is
   refused with `bad_init_script`); Python reads whatever the path names and can block on a FIFO. It is decoded as
   Python's text read decodes it: a BOM kept, CRLF and CR made LF.
+- A password given to `set credentials`, read from the Keychain or returned by a credential provider for `auth login` is
+  registered with the redactor as soon as the daemon sees it, so no answer, stderr line, script log or error repeats it
+  (it reads `***`), even a script error that quotes the call it failed in. Python's script errors quote that call
+  as given. A username is shown as in Python.
 - The temporary tabs D2 opens carry `#ardia-temp-<nonce>` in their `about:blank` URL; the harness's `temp-tab-nonce`
   rule compares them with Python's plain `about:blank`.
 

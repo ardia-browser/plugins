@@ -1,4 +1,5 @@
 import { pyFloat, pyInt } from "../../pylib/str.ts";
+import { addSecret } from "../../redact.ts";
 import { plainParams, pyLoads } from "../cdp/params.ts";
 import { BrowseError, Gated, Usage } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
@@ -89,6 +90,7 @@ export async function cmdSet(ctx: Ctx, argv: string[]): Promise<Result> {
   const [, args] = parse(argv);
   need(args, 1, SET_USAGE);
   const setting = canonical(args[0] as string);
+  if ((setting === "credentials" || setting === "auth") && args.length >= 3) addSecret(args[2]);
   const page = await ctx.state.page();
   refuseOnBorrowed(ctx, page, `change the ${setting} of`);
   try {

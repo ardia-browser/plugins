@@ -1,6 +1,7 @@
 import { type Value } from "../../json.ts";
 import { hostnameOf, portOf, urlsplit } from "../../pylib/urllib.ts";
 import { codePoints } from "../../pystr.ts";
+import { addSecret } from "../../redact.ts";
 import { plainParams } from "../cdp/params.ts";
 import { navigate } from "../commands/core.ts";
 import type { Ctx } from "../commands/ctx.ts";
@@ -233,9 +234,11 @@ export async function login(ctx: Ctx, argv: string[]): Promise<Result> {
       submitSelector: creds["submitSelector"] ?? null,
     };
     password = creds["password"] || "";
+    addSecret(password);
   } else {
     meta = loadMeta(root, name);
     password = await readSecret(name, Boolean(meta["utf8"]));
+    addSecret(password);
   }
   for (const key of ["username_selector", "password_selector", "submit_selector"]) {
     const camel = `${key.split("_")[0]}Selector`;

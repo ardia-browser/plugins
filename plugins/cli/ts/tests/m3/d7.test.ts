@@ -21,6 +21,9 @@ import { wireParams } from "../../src/browse/cdp/params.ts";
 import { allow } from "../../src/browse/commands/permissions.ts";
 import { decodeScript, readScript } from "../../src/browse/commands/setup.ts";
 import { parseParams } from "../../src/browse/flows/flows.ts";
+import { login, loginHooks } from "../../src/browse/auth/vault.ts";
+import { redact } from "../../src/redact.ts";
+import { cmdSet, setHooks } from "../../src/browse/commands/settings.ts";
 
 setDefaultTimeout(30_000);
 const made: Scratch[] = [];
@@ -474,5 +477,40 @@ describe("cdp params on the wire", () => {
     const given = parseParams(["__proto__=x", "q=1"]);
     expect(Object.hasOwn(given, "__proto__")).toBe(true);
     expect(given["__proto__"]).toBe("x");
+  });
+});
+
+describe("credentials never echoed", () => {
+  test("auth login registers a provider's password before anything can echo it", async () => {
+    const secret = "sk-d7-login-secret-91c2";
+    const root = tempDir();
+    const dir = path.join(root, "bin");
+    fs.mkdirSync(dir);
+    const command = stub(dir, "provider", `cat > /dev/null; echo '{"protocol": "agent-browser.plugin.v1", "success": true, "data": {"password": "${secret}", "url": "https://x.example/"}}'`);
+    closeFd(browseDir(root));
+    saveRegistry(root, [{ name: "vault", package: "p", version: "1", spec: "p@1", command, capabilities: ["credential.read"] }]);
+    const page = { mainFrame: "F", frames: new Map([["F", { origin: "https://x.example" }]]), refreshFrames: async () => new Map() };
+    const state = { dataRoot: root, locate: async () => { throw new BrowseError(`nothing typed ${secret}`); } };
+    const ctx = { state, options: {}, humanize: false, timeout: 0.3 };
+    loginHooks.actions = { typeInto: async () => {}, click: async () => {}, pressEnter: async () => {} };
+    loginHooks.currentOrNew = async () => page as never;
+    try {
+      const error = (await login(ctx as never, ["prof", "--credential-provider", "vault"]).catch((thrown: unknown) => thrown)) as BrowseError;
+      expect(error).toBeInstanceOf(BrowseError);
+      expect(error.text).not.toContain(secret);
+      expect(redact(`page said ${secret}`)).not.toContain(secret);
+    } finally {
+      loginHooks.actions = null;
+      loginHooks.currentOrNew = null;
+    }
+  });
+
+  test("set credentials registers the password even when it can't be served yet", async () => {
+    const secret = "sk-d7-set-secret-4b1e";
+    const state = { page: async () => { throw new BrowseError(`no tab while handling ${redact(secret)}`); } };
+    const error = (await cmdSet({ state, options: {} } as never, ["credentials", "alice", secret]).catch((thrown: unknown) => thrown)) as BrowseError;
+    expect(error.text).not.toContain(secret);
+    expect(redact(`echo ${secret}`)).toBe("echo ***");
+    expect(setHooks.credentials).toBeNull();
   });
 });
