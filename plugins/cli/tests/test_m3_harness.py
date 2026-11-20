@@ -59,9 +59,21 @@ class Normalizer(unittest.TestCase):
         self.assertEqual(normalize.file_value({"pid": 4, "started": 1, "ids": {"x": [1, 1795110280.4]}, "next": 3}),
                          {"pid": "<PID>", "started": "<TIME>", "ids": {"x": [1, "<TIME>"]}, "next": 3})
 
+    def test_credentials_never_reach_normalized_output(self):
+        secret = "s3cret-PW-123"
+        shaped = self.shaped([("mark", 0), ("out", message(id=1, method="Fetch.continueWithAuth", sessionId="S", params={
+            "requestId": "R", "authChallengeResponse": {"response": "ProvideCredentials", "username": "alice-user", "password": secret}})),
+            ("out", message(id=2, method="Network.setExtraHTTPHeaders", sessionId="S", params={"headers": {"authorization": f"Basic {secret}", "X-Plain": "kept"}})),
+            ("out", message(id=3, method="Storage.setCookies", params={"cookies": [{"name": "sid", "value": secret}]}))])
+        text = json.dumps(shaped)
+        self.assertNotIn(secret, text)
+        self.assertNotIn("alice-user", text)
+        self.assertIn("<REDACTED>", text)
+        self.assertIn("kept", text)
+
     def test_every_rule_is_named(self):
         for rule in ("browser-ids", "message-id", "concurrency", "scratch", "ports", "ids-in-answers", "session-key", "tabs-file", "file-times",
-                     "read-stamp", "metrics", "racy-steps", "divergences"):
+                     "read-stamp", "metrics", "racy-steps", "divergences", "secrets"):
             self.assertIn(rule, normalize.RULES)
 
     def test_racy_steps_keep_only_the_exit_status(self):
@@ -230,6 +242,59 @@ LATER_SLICES = {
     "act/d5_batch": "Python's flow log probes the focused field after each step (D7)",
     "act/d5_changes": "change reports read D4's snapshot, and Python's flow log probes the focused field (D7)",
 }
+
+
+@unittest.skipUnless(shutil.which("bun") or (Path.home() / ".bun" / "bin" / "bun").exists(), "the replay tap needs bun")
+class ReplayInAnotherBlock(unittest.TestCase):
+    RECORDED_BASE = 9620
+    REPLAY_BASE = 9980
+
+    def setUp(self):
+        self.scratch = Path(tempfile.mkdtemp(prefix="ardia-m3-blocks-"))
+        self.saved = (infra.TRANSCRIPTS, os.environ.get("ARDIA_M3_PORT_BASE"))
+
+    def tearDown(self):
+        infra.TRANSCRIPTS = self.saved[0]
+        if self.saved[1] is None:
+            os.environ.pop("ARDIA_M3_PORT_BASE", None)
+        else:
+            os.environ["ARDIA_M3_PORT_BASE"] = self.saved[1]
+        shutil.rmtree(self.scratch, ignore_errors=True)
+
+    def moved(self, name: str, fixture: int) -> Path:
+        import gzip
+        import re
+
+        folder = self.scratch / "transcripts"
+        port = re.compile(rf"(?<=(127\.0\.0\.1|localhost):){infra.RECORDED_FIXTURE}\b")
+        for suffix in (".jsonl.gz", ".result.json.gz"):
+            source = infra.TRANSCRIPTS / f"{name}{suffix}"
+            text = port.sub(str(fixture), gzip.decompress(source.read_bytes()).decode("utf-8"))
+            if suffix == ".result.json.gz":
+                raw = json.loads(text)
+                raw["subs"]["fixture"] = fixture
+                text = json.dumps(raw)
+            target = folder / f"{name}{suffix}"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(gzip.compress(text.encode("utf-8"), 9, mtime=0))
+        return folder
+
+    def test_a_recording_made_in_another_block_replays_in_a_third(self):
+        fixture = self.RECORDED_BASE + infra.BLOCK - 1
+        self.assertNotIn(fixture, (infra.RECORDED_FIXTURE, self.REPLAY_BASE + infra.BLOCK - 1))
+        infra.TRANSCRIPTS = self.moved("daemon/waits", fixture)
+        from tests.m3 import side
+
+        self.assertEqual(side.recorded_fixture(runner.recording("daemon/waits")), fixture)
+        os.environ["ARDIA_M3_PORT_BASE"] = str(self.REPLAY_BASE)
+        with runner.Harness(self.scratch / "run") as harness:
+            result = harness.replay(runner.load(infra.SCENARIOS / "daemon" / "waits.json"), "python")
+        self.assertTrue(result["ok"], result.get("differences"))
+
+    def test_a_recording_without_a_stored_fixture_port_is_read_as_9419(self):
+        from tests.m3 import side
+
+        self.assertEqual(side.recorded_fixture(self.scratch / "nothing.jsonl.gz"), infra.RECORDED_FIXTURE)
 
 
 def ts_program() -> str | None:

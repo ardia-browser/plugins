@@ -1,6 +1,6 @@
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import type { ServerWebSocket } from "bun";
-import { type Entry, parse, readTranscript } from "./canon.ts";
+import { type Entry, parse, readTranscript, redactedText } from "./canon.ts";
 import { type Elastic, ReplayConn } from "./replay.ts";
 
 type Fault = { at: number; kind: "kill" | "stop" | "close" | "drop" | "error" | "hold"; seconds?: number; code?: number; method?: string };
@@ -54,7 +54,7 @@ let fault: Fault | null = null;
 let faultBase = 0;
 let matched = 0;
 let fired = false;
-let held: { link: Link; text: string } | null = null;
+let held: { link: Link; text: string; session: string; behind: string[] } | null = null;
 const failures: string[] = [];
 const links = new Set<Link>();
 let version: string | null = null;
@@ -100,7 +100,7 @@ function injected(link: Link, text: string, socket: ServerWebSocket<Link>): bool
   record({ k: "fault", c: link.conn, t: now(), fault, request: requests });
   switch (fault.kind) {
     case "hold":
-      held = { link, text };
+      held = { link, text, session: message.sessionId ?? "", behind: [] };
       return true;
     case "error":
       socket.send(JSON.stringify({ id: message.id, ...(message.sessionId ? { sessionId: message.sessionId } : {}), error: { code: -32000, message: "Injected by the harness" } }));
@@ -226,8 +226,9 @@ async function control(request: Request, path: string): Promise<Response> {
     const was = held;
     held = null;
     if (was) {
-      record({ k: "released", c: was.link.conn, t: now() });
+      record({ k: "released", c: was.link.conn, t: now(), behind: was.behind.length });
       deliver(was.link, was.text);
+      for (const text of was.behind) deliver(was.link, text);
     }
     return json({ ok: true, released: was !== null });
   }
@@ -272,7 +273,12 @@ const server = Bun.serve<Link>({
     message(socket, data) {
       const link = socket.data;
       const text = typeof data === "string" ? data : new TextDecoder().decode(data);
-      record({ k: "out", c: link.conn, t: now(), m: text });
+      record({ k: "out", c: link.conn, t: now(), m: redactedText(text) });
+      if (held && held.link === link && (parse(text)?.sessionId ?? "") === held.session) {
+        held.behind.push(text);
+        if (parse(text)?.id !== undefined) requests += 1;
+        return;
+      }
       if (injected(link, text, socket)) return;
       deliver(link, text);
     },

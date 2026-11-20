@@ -100,6 +100,13 @@ daemon sees first. Live and replay therefore group the same way.
 
 The recorded scratch root is replaced by the replay's own root in every frame, so paths match.
 
+Credentials never reach a recording: the tap writes `Fetch.continueWithAuth` and `Network.continueInterceptedRequest`
+with `authChallengeResponse.username` and `password` as `<REDACTED>`, and does the same for `Authorization`,
+`Proxy-Authorization` and `Cookie` header values (`Network.setExtraHTTPHeaders`, `Fetch.continueRequest`) and for
+cookie values being set (`Network.setCookie`, `Network.setCookies`, `Storage.setCookies`). Chromium still gets the
+real values. Replay matches requests on that redacted form, and the normalizer (`secrets` rule) applies the same
+redaction, so recordings made before the rule compare the same way.
+
 ## Determinism
 
 The harness starts each daemon itself, as the client does, and adds `harness_seed` to the spawn config. Python's
@@ -117,7 +124,7 @@ logical request on both sides:
 
 | Kind | Effect |
 |---|---|
-| `interrupt` (default) | The tap holds request k, the harness sends SIGINT to the client (Ctrl-C), then releases the request. |
+| `interrupt` (default) | The tap holds request k, the harness sends SIGINT to the client (Ctrl-C), then releases the request. Later requests on the same CDP session queue behind the held one and follow it in order, as on a real WebSocket; other sessions aren't held. |
 | `kill` | Forward request k, then SIGKILL Chromium. |
 | `stop` | Forward request k, then SIGSTOP Chromium for `seconds`. |
 | `close` | Close the daemon's WebSocket with `code` instead of forwarding. |
@@ -181,9 +188,10 @@ later slices. `daemon/stub/` holds the minimum page core the D2 scenarios need (
 
 The Python seeded client starts the TS daemon when `ARDIA_BROWSE_DAEMON=ts` and appends each spawn config to
 `$HOME/spawn-config.jsonl` and each full request to `answers.jsonl` (`wire`), which is what the protocol check reads.
-Recordings must be made with the default base (9400): the fixture URL in them carries port 9419. Replay at any other
-base rewrites that port to the block's own fixture port in the recorded messages (the tap's `--fixture-from` and
-`--fixture-to`), and the normalizer writes every fixture port as `<FIXTURE>`, so replays run in any block.
+Recordings can be made in any block: each `.result.json.gz` stores its fixture port in `subs.fixture` (recordings from
+before that have none and mean 9419). Replay rewrites the recorded fixture port to the replaying block's own in the
+recorded messages (the tap's `--fixture-from` and `--fixture-to`), and the normalizer writes every fixture port as
+`<FIXTURE>`, so any recording replays in any block.
 
 ## The page core (slice D3)
 
