@@ -22,8 +22,11 @@ the normalized requests, the answers and the session folder. Everything runs fro
 - Bun 1.3.14 and `bun install --frozen-lockfile --ignore-scripts` in `ts/`.
 - Live modes need `ARDIA_M3_CHROME`: a pinned `chrome-headless-shell` (Chrome for Testing 158.0.8127.18, Playwright's
   `chromium_headless_shell-1254`, in its own folder). It always runs headless, never headed.
-- Ports come from `ARDIA_M3_PORTS` (default `9400-9419`; slice *i* uses `9400 + 20i` through `+19`). The top port
-  serves the fixtures; the rest are Chromium and tap pairs.
+- Ports come from `ARDIA_M3_PORT_BASE` (default 9400): each agent owns the block of 20 starting there (D3 9400, D4
+  9420, D5 9440, F1-early 9460, reviewers 9500 and up). In a block, +0 to +17 are Chromium and tap pairs, +19 serves
+  the fixtures, `human_core` takes +16 and +17, and the D2 bun tests (`ARDIA_D2_CHROME_PORT` overrides them) take +10
+  to +14. A run first checks every port of its block and stops at once if any is bound (bound locally or answering a
+  connection), so a daemon never talks to another agent's tap. `ARDIA_M3_PORTS` is refused.
 - The TS side runs through `ARDIA_M3_TS_PROGRAM=<built ardia-ts>`. The program is started as `<program> browse …`. To
   be seeded it must read `harness_seed` from its spawn config (below).
 
@@ -178,7 +181,9 @@ later slices. `daemon/stub/` holds the minimum page core the D2 scenarios need (
 
 The Python seeded client starts the TS daemon when `ARDIA_BROWSE_DAEMON=ts` and appends each spawn config to
 `$HOME/spawn-config.jsonl` and each full request to `answers.jsonl` (`wire`), which is what the protocol check reads.
-Recordings must be made on the default ports (`ARDIA_M3_PORTS=9400-9419`): the fixture URL in them carries the port.
+Recordings must be made with the default base (9400): the fixture URL in them carries port 9419. Replay at any other
+base rewrites that port to the block's own fixture port in the recorded messages (the tap's `--fixture-from` and
+`--fixture-to`), and the normalizer writes every fixture port as `<FIXTURE>`, so replays run in any block.
 
 ## The page core (slice D3)
 

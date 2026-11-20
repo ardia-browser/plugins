@@ -73,6 +73,53 @@ class Normalizer(unittest.TestCase):
         self.assertEqual(shaped["answers"][1]["out"], "x\n")
 
 
+class PortBlocks(unittest.TestCase):
+    def setUp(self):
+        self.saved = {name: os.environ.get(name) for name in ("ARDIA_M3_PORT_BASE", "ARDIA_M3_PORTS")}
+
+    def tearDown(self):
+        for name, value in self.saved.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+    def test_the_block_follows_the_base(self):
+        os.environ.pop("ARDIA_M3_PORTS", None)
+        os.environ["ARDIA_M3_PORT_BASE"] = "9440"
+        self.assertEqual(infra.port_range(), (9440, 9459))
+        os.environ.pop("ARDIA_M3_PORT_BASE")
+        self.assertEqual(infra.port_range(), (9400, 9419))
+        for bad in ("94x0", "80", "65530"):
+            os.environ["ARDIA_M3_PORT_BASE"] = bad
+            with self.assertRaises(infra.PortsBusy):
+                infra.port_base()
+
+    def test_the_old_range_variable_is_refused(self):
+        os.environ["ARDIA_M3_PORTS"] = "9400-9419"
+        with self.assertRaises(infra.PortsBusy):
+            infra.port_range()
+
+    def test_a_bound_port_in_the_block_stops_the_run_before_anything_starts(self):
+        import socket
+
+        holder = socket.socket()
+        holder.bind(("127.0.0.1", 0))
+        holder.listen()
+        port = holder.getsockname()[1]
+        try:
+            with self.assertRaises(infra.PortsBusy) as caught:
+                infra.check_block(port - 3, port + 2)
+            self.assertIn(str(port), str(caught.exception))
+        finally:
+            holder.close()
+
+    def test_a_replay_tap_rewrites_the_recorded_fixture_port(self):
+        self.assertEqual(normalize.Subs({"fixture": 9459}).text("http://127.0.0.1:9459/login.html and localhost:9459"),
+                         "http://127.0.0.1:<FIXTURE>/login.html and localhost:<FIXTURE>")
+        self.assertEqual(normalize.Subs({}).text("http://127.0.0.1:9419/x"), "http://127.0.0.1:<FIXTURE>/x")
+
+
 class Divergences(unittest.TestCase):
     def shaped(self, items, names=None):
         rewrite = divergences.rewriter(names) if names is not None else None
