@@ -993,8 +993,10 @@ connection reports the outcome as unknown and a `batch` stops there.
 
 Raw calls run on a DevTools session of their own (`browse/rawcdp.py`), never on the one the daemon drives the tab
 with: for a tab, a flattened `Target.attachToTarget` session the daemon keeps per tab; for `--target browser`, a
-`Target.attachToBrowserTarget` session. So `cdp Runtime.disable`, `Network.disable` or an `Emulation.set…` reach
-only that raw session, and `console`, `network`, snapshots and the rest keep working as the daemon set them up.
+`Target.attachToBrowserTarget` session. So domain state such as `cdp Runtime.disable` or `Network.disable` reaches
+only that raw session, and `console`, `network`, snapshots and the rest keep working as the daemon set them up. Some
+methods change the page itself rather than the session: an `Emulation.set…` override such as
+`Emulation.setDeviceMetricsOverride` applies to the tab, so screenshots and other browse commands see it too.
 What persists: domains enabled and settings made through `cdp` stay on that raw session for as long as the daemon
 keeps its DevTools connection, which it drops after 30 s with nothing to do (an open `console` or `network` capture
 keeps it). The next `cdp` call then attaches a fresh raw session, so those enables and settings are off again. To

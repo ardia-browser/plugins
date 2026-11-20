@@ -1997,6 +1997,7 @@ class BrowseTokenPath(unittest.TestCase):
             self.assertIn(f"needs {method}", done.stderr)
             self.assertIn("isn't allowed for the ardia command", done.stderr)
             self.assertIn("update Ardia", done.stderr)
+        self.browse("network", "unroute", session=session, check=False)
         self.browse("open", self.url("upload.html"), session=session)
         files = (FIXTURES / "login.html", FIXTURES / "upload.html")
         done = self.browse("upload", "#f", *map(str, files), session=session, check=False)
