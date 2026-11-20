@@ -123,6 +123,7 @@ describe("3: the offscreen rollback closes what it made", () => {
       const answer = onSend(method, params);
       if (answer !== undefined) return answer as never;
       if (method === "Page.navigate") return { errorText: "net::ERR_NAME_NOT_RESOLVED" };
+      if (method === "Target.getTargets") return { targetInfos: ["OLD", "FRESH"].map((targetId) => ({ targetId, type: "page", url: "http://x/" })) };
       return undefined;
     });
     const state = stateWith(browser, ["OLD", "FRESH"]);
