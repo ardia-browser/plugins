@@ -3,7 +3,8 @@ import { sleep } from "../cdp/cancel.ts";
 import { BrowseError, Usage } from "../daemon-errors.ts";
 import { unavailable } from "./link.ts";
 import { Result } from "../daemon/render.ts";
-import { need, parse, waitUntil } from "../daemon/stub/commands.ts";
+import { need, parse } from "../daemon/stub/commands.ts";
+import { pollUntil, pollWait } from "./poll.ts";
 import { type AxNode, buildTree, isAxList, type Node, ROLE_NAMES } from "../snapshot/tree.ts";
 import { FIND_ACTIONS, findArguments } from "./acting.ts";
 import { attach, axNodes, observe } from "./ax.ts";
@@ -283,15 +284,15 @@ async function cmdWait(ctx: PluginCtx, argv: string[]): Promise<Result> {
   const page = await session.page();
   if (options["text"] !== undefined) {
     const wanted = String(options["text"]);
-    await waitUntil(async () => nodesText(buildTree(await axNodes(page))).includes(wanted), timeout, 0.1, `text ${JSON.stringify(wanted)}`);
+    await pollUntil(async () => nodesText(buildTree(await axNodes(page))).includes(wanted), timeout, `text ${JSON.stringify(wanted)}`);
     return new Result({ text: wanted, waited: "text" }, wanted);
   }
   if (options["url"] !== undefined) {
     const pattern = String(options["url"]);
-    await waitUntil(async () => {
+    await pollUntil(async () => {
       await page.refreshFrames();
       return globMatch(pattern, page.url);
-    }, timeout, 0.1, `the URL to match ${pattern}`);
+    }, timeout, `the URL to match ${pattern}`);
     return new Result({ url: page.url, waited: "url" }, page.url);
   }
   if (options["load"] !== undefined) {
@@ -300,13 +301,13 @@ async function cmdWait(ctx: PluginCtx, argv: string[]): Promise<Result> {
     if (event === undefined) throw new Usage("--load takes load, domcontentloaded or networkidle");
     await page.refreshFrames();
     const loader = page.loader;
-    await waitUntil(async () => page.reached(event, loader), timeout, 0.05, `the page to reach ${until}`);
+    await pollUntil(async () => page.reached(event, loader), timeout, `the page to reach ${until}`);
     return new Result({ state: until });
   }
   need(args, 1, "wait <selector|ms> | --text | --url | --load | --fn");
   const selector = args[0] as string;
   const wanted = (options["state"] as string | undefined) || "visible";
-  await waitUntil(() => stateOf(session, selector, wanted), timeout, 0.1, `${selector} to be ${wanted}`);
+  await pollUntil(() => stateOf(session, selector, wanted), timeout, `${selector} to be ${wanted}`);
   return new Result({ selector, waited: "selector" });
 }
 
@@ -418,14 +419,14 @@ async function cmdFind(ctx: PluginCtx, argv: string[]): Promise<Result> {
   const page = await ctx.session.page();
   const deadline = performance.now() / 1000 + FIND_WAIT;
   let found: Candidate;
-  for (;;) {
+  for (let attempt = 0; ; attempt += 1) {
     try {
       found = await findOnce(ctx, page, locator, value, name, exact, partial, index);
       break;
     } catch (error) {
       if (!(error instanceof BrowseError) || error.code !== "not_found" || performance.now() / 1000 >= deadline) throw error;
     }
-    await sleep(0.15);
+    await sleep(Math.min(pollWait(attempt), Math.max(0, deadline - performance.now() / 1000)));
   }
   const frame = page.mainFrame ?? "";
   const ref = ctx.session.refFor(page, frame, found.backend);

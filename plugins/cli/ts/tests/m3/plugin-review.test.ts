@@ -38,7 +38,13 @@ describe.skipIf(!CHROME)("plugins#21 review round 1, against headless Chrome for
     const crossed = await marked("cross-tab ref", ["click", "--", "@e3"], { expect_loader: loaderB, json: true });
     expect(crossed).toMatchObject({ exit: 1, code: "stale_ref" });
     const sent = sentIn("cross-tab ref");
-    expect(sent.filter((method) => method.startsWith("Input.") || method === "Ardia.dispatchClick" || method.startsWith("DOM.") || method === "Target.attachToTarget")).toEqual([]);
+    expect(sent.filter((method) => method.startsWith("Input.") || method === "Ardia.dispatchClick" || method.startsWith("DOM."))).toEqual([]);
+    const attachedTo = entries(world).filter((entry) => entry.k === "out" && String(entry.m).includes('"Target.attachToTarget"')).map((entry) => (JSON.parse(String(entry.m)) as { params: { targetId: string } }).params.targetId);
+    const stepAt = entries(world).findIndex((entry) => entry.k === "mark" && entry.step === "cross-tab ref");
+    const inStep = entries(world).slice(stepAt).findIndex((entry, index) => index > 0 && entry.k === "done");
+    const stepAttaches = entries(world).slice(stepAt, stepAt + inStep).filter((entry) => entry.k === "out" && String(entry.m).includes('"Target.attachToTarget"')).map((entry) => (JSON.parse(String(entry.m)) as { params: { targetId: string } }).params.targetId);
+    expect(attachedTo.length).toBeGreaterThan(0);
+    expect(stepAttaches).not.toContain(first);
     await pick(first);
   });
 

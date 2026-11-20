@@ -258,5 +258,6 @@ export async function runPluginCommand(session: PluginSession, options: Options,
     return result as Result;
   } finally {
     session.acting = false;
+    await session.quiesce();
   }
 }

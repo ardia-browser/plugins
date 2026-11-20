@@ -152,6 +152,7 @@ export async function step(world: World, argv: string[], options: Record<string,
   try {
     return await asked(world, argv, options, credential, key);
   } finally {
+    await tap(world, "done", { step: name });
     await tap(world, "unhold");
   }
 }

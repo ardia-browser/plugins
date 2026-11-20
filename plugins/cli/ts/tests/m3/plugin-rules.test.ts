@@ -254,3 +254,15 @@ describe("plugin wheels: busy and page hidden", () => {
     expect(actingStep(["snapshot"])).toBe(false);
   });
 });
+
+describe("(f) nothing between steps", () => {
+  test("a message after a step's answer and before the next step fails, in either direction", () => {
+    const mark = (argv: string[]): Entry => ({ k: "mark", step: argv.join(" "), argv });
+    const done: Entry = { k: "done", step: "x" };
+    const event: Entry = { k: "in", c: 0, m: JSON.stringify({ method: "Page.lifecycleEvent", sessionId: "S", params: { name: "load" } }) };
+    expect(checked([mark(["snapshot"]), out(1, "Accessibility.getFullAXTree"), answer(1), done, mark(["get", "title"]), out(2, "Target.getTargetInfo"), answer(2), done])).toEqual([]);
+    const found = checked([mark(["snapshot"]), out(1, "Accessibility.getFullAXTree"), answer(1), done, event, out(3, "Page.handleJavaScriptDialog"), mark(["get", "title"])]);
+    expect(found.filter((item) => item.rule === "between_steps").map((item) => item.method)).toEqual(["Page.lifecycleEvent", "Page.handleJavaScriptDialog"]);
+    expect(checked([mark(["fill", "@e2", "x"]), out(4, "Input.insertText", { text: "x" }), done, answer(4), mark(["get", "title"])]).filter((item) => item.rule === "between_steps")).toEqual([]);
+  });
+});

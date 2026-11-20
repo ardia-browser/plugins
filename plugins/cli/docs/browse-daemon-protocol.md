@@ -177,6 +177,14 @@ and never by Python's or by the person's own session. The TypeScript daemon only
   500 ms) is retried after 100, 200, 300, 400 and 500 ms, then the step answers `busy` ("Ardia didn't scroll the tab
   because the person is using it right now …"); `ardia: page_hidden` answers `outside_viewport` ("The tab is hidden and
   can't be scrolled"). The owner session keeps `DOM.scrollIntoViewIfNeeded`.
+- **Nothing between steps.** After every step the daemon detaches from the page target (`Target.detachFromTarget`), so
+  no session, domain, event subscription or handler (the auto-accepted dialog included) lives between steps; the next
+  step attaches again (`Page.enable`, lifecycle events, `Page.getFrameTree`), which replays the page's current
+  lifecycle. The answer's `loader` is the one read during the step. The harness checks it as (f).
+- **Polling.** `wait` (`--text`, `--url`, `--load`, `--state`) and `find`'s short retry poll on one schedule: 200, 400,
+  600, 800 ms, then every second, ending at the deadline, on visible and hidden tabs alike; each answer counts its polls
+  (`plugin_wait_polls`). `--text` reads the AX tree each poll: Chrome 158's `Accessibility.queryAXTree` matches whole
+  names only, so it can't stand in for a substring search.
 - **Keys.** Key events follow ardia#2808's key policy, whose key table the daemon carries as generated data
   (`ts/scripts/plugin-key-table.ts`, checked against the engine's compiled validator by `plugin-keys.test.ts`). A
   `press` the engine would refuse (Meta+C, Meta+V, Meta+Z, Shift+Delete, a character no key types) answers 77

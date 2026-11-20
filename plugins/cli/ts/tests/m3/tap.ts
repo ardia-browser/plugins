@@ -344,6 +344,10 @@ async function control(request: Request, path: string): Promise<Response> {
     await holdFor(body["argv"]);
     return json({ ok: true });
   }
+  if (path === "/tap/done") {
+    record({ k: "done", t: now(), step: body["step"] as number | string });
+    return json({ ok: true });
+  }
   if (path === "/tap/hold") {
     hold = typeof body["target"] === "string" && typeof body["front"] === "string" ? { target: body["target"], front: body["front"], on: false } : null;
     return json({ ok: true });

@@ -200,7 +200,8 @@ answer, then a release; `--emulate-act-hold 1` stands in for the engine's act vi
 (`Target.activateTarget`) before the step runs, and `/tap/unhold`, which the harness posts after every step,
 activates `front` again (both written as `{"k": "hold"}`); `--emulate-hidden-wheel-refusal 1` reads
 `document.visibilityState` before forwarding a `mouseWheel`, writes `{"k": "visibility"}`, and refuses the wheel with
-`ardia: page_hidden` when the page is hidden. Check (e) fails a wheel during a step that doesn't act (or before any
+`ardia: page_hidden` when the page is hidden. Every harness step posts `/tap/done` after its answer; check (f) fails any CDP event or message from the daemon
+between that and the next step's mark (answers to earlier requests are allowed). Check (e) fails a wheel during a step that doesn't act (or before any
 step) and a wheel a hidden page saw that wasn't refused with `ardia: page_hidden`. Scenarios that need a fake say so in
 their names (`[tap emulates Ardia.dispatchClick]`, `[tap emulates the act visibility hold]`). `plugin-hidden.test.ts`
 acts on a really hidden tab and needs a full Chrome for Testing (`ARDIA_F1_CHROME`, `--headless=new`);
@@ -223,4 +224,16 @@ and the report checks the tab is hidden before and after every act. It reads the
 session), reads `visibilityState` through a separate owner session, and prints a JSON report, including whether hit
 testing found the field and whether the field had focus before the insert. Rerun it against the ardia#2808 build
 (engine/next) when it exists, where `Ardia.dispatchClick` is real.
+
+### Cost and latency
+
+- `ts/tests/m3/plugin-cost.ts` (Bun; `ARDIA_M3_CHROME`, `ARDIA_M3_TS_PROGRAM`): the polls `wait --text` makes in 10 s on
+  a page that never shows the text, and, only when the 1-minute load is under `ARDIA_F1_MAX_LOAD` (10) with no stray
+  `yes`, `snapshot -c` on a 900-paragraph article and a 2,000-row table: wall-time p50 and p95 interleaved with a
+  `get title` control, the renderer's task time per snapshot (`Performance.getMetrics` `TaskDuration` on a separate
+  owner session) and the longest renderer main-thread task during one snapshot (tracing on the owner session).
+  Otherwise it prints `deferred: load N`.
+- `ts/tests/m3/plugin-latency.ts`: the person's scroll and typing latency (input to the next animation frame, read on an
+  owner session) on a visible tab, alone and while a plugin fills and snapshots another tab, interleaved, p50 and p95.
+  Run it against the ardia#2808 build (`ARDIA_F1_ENGINE=2808`, engine/next); on stock Chrome it's only a smoke test.
 

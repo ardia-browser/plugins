@@ -2,7 +2,7 @@ import { type Entry, type Message } from "./canon.ts";
 import { actingStep } from "../../src/browse/plugin/acting.ts";
 import { forbidden, INPUT_METHODS, KEY_COMMANDS, mouseViolation, PAGE_SESSION_ONLY, SENT_METHODS } from "../../src/browse/plugin/policy.ts";
 
-export type Violation = { rule: "forbidden" | "unlisted" | "pipelined" | "key_params" | "session" | "wheel_outside_act" | "hidden_wheel"; at: number; method: string; detail: string };
+export type Violation = { rule: "forbidden" | "unlisted" | "pipelined" | "key_params" | "session" | "wheel_outside_act" | "hidden_wheel" | "between_steps"; at: number; method: string; detail: string };
 
 type Wire = { asked: Map<number, Message>; pageTargets: Set<string>; pageSessions: Set<string> };
 
@@ -53,9 +53,15 @@ export function pluginViolations(entries: readonly Entry[]): Violation[] {
   const wires = new Map<number, Wire>();
   const hiddenWheels = new Set<string>();
   let acting: boolean | null = null;
+  let between = false;
   let stepName = "";
   entries.forEach((entry, at) => {
+    if (entry.k === "done") {
+      between = true;
+      return;
+    }
     if (entry.k === "mark") {
+      between = false;
       stepName = String(entry.step ?? "");
       acting = Array.isArray(entry["argv"]) ? actingStep(entry["argv"] as unknown[]) : null;
       return;
@@ -67,6 +73,9 @@ export function pluginViolations(entries: readonly Entry[]): Violation[] {
     const conn = entry.c ?? 0;
     const message = parsed(entry.m);
     if (message === null) return;
+    if (between && (entry.k === "out" || (entry.k === "in" && message.id === undefined))) {
+      found.push({ rule: "between_steps", at, method: message.method ?? `answer ${String(message.id)}`, detail: `a CDP message ${entry.k === "out" ? "from" : "to"} the daemon after ${stepName || "a step"} answered and before the next step` });
+    }
     const waiting = outstanding.get(conn) ?? new Map<number, string>();
     outstanding.set(conn, waiting);
     const wire = wires.get(conn) ?? { asked: new Map(), pageTargets: new Set(), pageSessions: new Set() };

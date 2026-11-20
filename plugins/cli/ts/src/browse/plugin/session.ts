@@ -69,7 +69,7 @@ export class PluginSession {
 
   get loader(): string | null {
     const page = this.current === null ? undefined : this.pages.get(this.current);
-    return page?.sessionId ? page.loader : null;
+    return page?.loader ?? null;
   }
 
   useCredential(credential: string | null): void {
@@ -102,6 +102,18 @@ export class PluginSession {
     this.routes.clear();
     spent("connect_ms", started);
     return this.link;
+  }
+
+  async quiesce(): Promise<void> {
+    const link = this.link;
+    for (const page of this.pages.values()) {
+      const sessionId = page.sessionId;
+      if (sessionId === null) continue;
+      page.detach();
+      this.routes.delete(sessionId);
+      link?.pageSessions.delete(sessionId);
+      if (link !== null && this.connected) await shield(() => link.send("Target.detachFromTarget", { sessionId }, null, 5)).catch(() => undefined);
+    }
   }
 
   async disconnect(): Promise<void> {
