@@ -1,0 +1,107 @@
+{
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/contents.html",
+    "--no-changes"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read",
+    "-s",
+    "main"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read",
+    "--outline"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read",
+    "--filter",
+    "a"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read",
+    "-s",
+    ".nothing-here"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/nextdata.html",
+    "--no-changes"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read",
+    "--data"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read",
+    "--data",
+    "--block",
+    "1"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read",
+    "--data",
+    "--block",
+    "99"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/listing.html",
+    "--no-changes"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read",
+    "--links",
+    "item",
+    "--list"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read",
+    "--links",
+    "zzz-none"
+   ],
+   "session": "d4"
+  }
+ ]
+}

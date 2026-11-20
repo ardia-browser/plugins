@@ -1,0 +1,46 @@
+{
+ "live_only": "find retries a missing element for 1.5 s (FIND_WAIT), so replay sees a timing-dependent number of AX tree reads",
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/login.html",
+    "--no-changes"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "find",
+    "role",
+    "button",
+    "--name",
+    "Nope",
+    "text"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "find",
+    "role",
+    "button",
+    "text",
+    "--name",
+    "Contin"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "find",
+    "role",
+    "link",
+    "text",
+    "--name",
+    "privacy policy"
+   ],
+   "session": "d4"
+  }
+ ]
+}

@@ -21,7 +21,7 @@ describe("attach (row 8)", () => {
     const state = stateWith(browser);
     const page = await state.page("TARGET");
     expect(page.sessionId).toBe("SESSION-1");
-    expect(browser.methods("SESSION-1")).toEqual(["Inspector.enable", "Page.enable", "Page.setLifecycleEventsEnabled", "Page.getFrameTree", "Page.getLayoutMetrics"]);
+    expect(browser.methods("SESSION-1")).toEqual(["Inspector.enable", "Page.enable", "Page.setLifecycleEventsEnabled", "Target.setAutoAttach", "Page.getFrameTree", "Page.getLayoutMetrics"]);
     expect(page.mainFrame).toBe(MAIN);
     expect(page.needsEnable).toBe(false);
     expect(pageSessionEnables(browser)).toEqual([]);

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { CLEANUPS, drainCleanups, dropPoint, drag } from "../../src/browse/act/drag.ts";
-import { frameOffset, sendIn, UNROUTED } from "../../src/browse/state/frames.ts";
+import { frameOffset, localRootOffset } from "../../src/browse/state/frames.ts";
 import { insertsAtOnce, pickOption } from "../../src/browse/act/fields.ts";
 import { tap, waitEnabled } from "../../src/browse/act/pointer.ts";
 import { Cancelled, sleep, withSignal } from "../../src/browse/cdp/cancel.ts";
@@ -15,7 +15,7 @@ import { ACTIONS_DISABLED_STATE } from "../../src/browse/js/index.ts";
 import { begin } from "../../src/browse/metrics.ts";
 import { Element, type Page } from "../../src/browse/state/page.ts";
 import type { State } from "../../src/browse/state/state.ts";
-import { cancelAfter, ends, FakeRenderer, QUADS } from "./act-fakes.ts";
+import { cancelAfter, ends, FakeRenderer } from "./act-fakes.ts";
 
 const BOX: [number, number, number, number] = [10, 200, 110, 240];
 
@@ -569,19 +569,40 @@ describe("ReviewFixes", () => {
     expect(routed).toBeGreaterThan(2);
   });
 
-  test("a frame in its own session is refused, never sent to the top session", async () => {
+  test("nested out-of-process frames add their owners' offsets up, each measured in its parent's session", async () => {
     const page = new FakeRenderer();
-    Object.assign(page, {
-      frameSessions: new Map([["CHILD", "S2"], ["GRAND", "S3"]]),
-      oopifs: new Map([["S2", { root: "CHILD", parentSession: "S" }], ["S3", { root: "GRAND", parentSession: "S2" }]]),
-    });
-    const error = (await sendIn(page.page, "CHILD", "DOM.getContentQuads", { backendNodeId: 1 }).catch((caught: unknown) => caught)) as BrowseError;
-    expect(error.code).toBe("internal_error");
-    expect(error.message).toBe(UNROUTED);
-    expect(page.sent).toEqual([]);
-    expect(await frameOffset(page.page, "GRAND").catch((caught: unknown) => (caught as BrowseError).code)).toBe("internal_error");
-    expect(page.sent).toEqual([]);
-    expect(await sendIn(page.page, "F", "DOM.getContentQuads", { backendNodeId: 1 })).toEqual({ quads: [QUADS[1]] });
+    const owners: Record<string, [string, number]> = { CHILD: ["S", 11], INNER: ["S2", 12], GRAND: ["S2", 13] };
+    const corners: Record<number, [number, number]> = { 11: [100, 50], 12: [7, 9], 13: [20, 30] };
+    const asked: string[] = [];
+    page.frames.set("CHILD", { id: "CHILD", url: "", loader: "L2", parent: "F", name: "", origin: "" });
+    page.frames.set("INNER", { id: "INNER", url: "", loader: "L3", parent: "CHILD", name: "", origin: "" });
+    page.frames.set("GRAND", { id: "GRAND", url: "", loader: "L4", parent: "INNER", name: "", origin: "" });
+    for (const [frame, session] of [["CHILD", "S2"], ["INNER", "S2"], ["GRAND", "S3"]] as const) page.frameSessions.set(frame, session);
+    page.oopifs.set("S2", { root: "CHILD", parentSession: "S" });
+    page.oopifs.set("S3", { root: "GRAND", parentSession: "S2" });
+    page.send = async (method: string, params: Record<string, unknown> | null = null, options: { session?: string | null } = {}) => {
+      const session = options.session ?? "S";
+      if (method === "DOM.getFrameOwner") {
+        const [where, backend] = owners[String(params?.["frameId"])] as [string, number];
+        asked.push(`${params?.["frameId"]}@${session}`);
+        expect(session).toBe(where);
+        return { backendNodeId: backend };
+      }
+      if (method === "DOM.getContentQuads") {
+        const [x, y] = corners[Number(params?.["backendNodeId"])] as [number, number];
+        return { quads: [[x, y, x + 50, y, x + 50, y + 40, x, y + 40]] };
+      }
+      return {};
+    };
+    expect(await frameOffset(page.page, "CHILD")).toEqual([100, 50]);
+    expect(await frameOffset(page.page, "INNER")).toEqual([107, 59]);
+    expect(await frameOffset(page.page, "GRAND")).toEqual([127, 89]);
+    expect(await localRootOffset(page.page, "GRAND")).toEqual([127, 89]);
+    expect(await localRootOffset(page.page, "INNER")).toEqual([100, 50]);
+    expect(await localRootOffset(page.page, "F")).toEqual([0, 0]);
+    expect(asked).toContain("GRAND@S2");
+    expect(asked).toContain("INNER@S2");
+    expect(asked).toContain("CHILD@S");
   });
 
   test("shutdown waits for a drag cleanup, but only so long", async () => {

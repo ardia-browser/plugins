@@ -23,7 +23,36 @@ DIVERGENCES = {
               "Page.createIsolatedWorld first when that world isn't known for the current document",
         "why": "a main-world evaluation is visible to the page (ardia#2812 row 8); the isolated world shares the document but not its JS",
     },
+    "oopif-auto-attach": {
+        "row": 13,
+        "always": True,
+        "commands": "every page session the TS daemon attaches",
+        "python": "nothing: Python never sees out-of-process iframes",
+        "ts": 'Target.setAutoAttach {"autoAttach": true, "waitForDebuggerOnStart": false, "flatten": true, "filter": iframes only} on the page '
+              "session after Page.setLifecycleEventsEnabled, and on each iframe session it attaches; replay answers it with an empty result",
+        "why": "reads and snapshots reach out-of-process iframes in their own sessions (ardia#2812 rows 13, 21)",
+    },
+    "temp-tab-marker": {
+        "row": None,
+        "always": True,
+        "decision": "D2 round 3 (plugins#20): temporary tabs open at about:blank#ardia-temp-<nonce> so a later sweep finds lost ones",
+        "commands": "read <url>... (temporary reader tabs)",
+        "python": 'Target.createTarget {"url": "about:blank", "background": true} for a reader tab',
+        "ts": 'Target.createTarget {"url": "about:blank#ardia-temp-<nonce>", "background": true}',
+        "why": "a temporary tab lost at shutdown is closed by the next sweep only if it is marked (docs/cli.md accepted differences)",
+    },
+    "shadow-pierce": {
+        "row": 12,
+        "always": True,
+        "commands": "a selector that matches nothing in the document (get, is, snapshot -s, read -s, get count)",
+        "python": "nothing: the command fails with not_found",
+        "ts": 'Runtime.callFunctionOn "() => document" in the isolated world, DOM.describeNode {"objectId": <it>, "depth": -1, "pierce": true}, '
+              "then each open or closed shadow root resolved into the isolated world and searched; replay answers the first with null",
+        "why": "selectors reach elements inside closed shadow roots (ardia#2812 row 12)",
+    },
 }
+TEMP_MARKER = "about:blank#ardia-temp-"
+PIERCE_DOCUMENT = "() => document"
 
 EDITING_COMMANDS = {
     "editing-commands": {
@@ -100,6 +129,14 @@ class Rewriter:
                 kept = {name: value for name, value in params.items()
                         if name != "executionContextId" and not (name == "objectId" and value in self.handles)}
                 message = {**message, "params": kept}
+        if "oopif-auto-attach" in self.names and method == "Target.setAutoAttach":
+            return None
+        if "shadow-pierce" in self.names and method == "DOM.describeNode" and params.get("pierce") is True:
+            return None
+        if "shadow-pierce" in self.names and method == "Runtime.callFunctionOn" and params.get("functionDeclaration") == PIERCE_DOCUMENT:
+            return None
+        if "temp-tab-marker" in self.names and method == "Target.createTarget" and str(params.get("url", "")).startswith(TEMP_MARKER):
+            message = {**message, "params": {**params, "url": "about:blank"}}
         if "editing-commands" in self.names and method == "Input.dispatchKeyEvent" and "commands" in params:
             message = {**message, "params": {name: value for name, value in params.items() if name != "commands"}}
         if "busy-probe-isolated" in self.names and busy_probe(message):

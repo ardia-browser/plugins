@@ -159,7 +159,7 @@ class Divergences(unittest.TestCase):
               ("out", message(id=8, method="Runtime.callFunctionOn", sessionId="SESSION-B", params={**call, "objectId": "HANDLE-XYZ"})),
               ("in", message(id=8, result={})), ("out", message(id=9, method="DOM.describeNode", sessionId="SESSION-B", params={"objectId": "NODE-2"}))]
         names = divergences.names_for({})
-        self.assertEqual(names, ["world-handle"])
+        self.assertEqual(names, ["world-handle", "oopif-auto-attach", "temp-tab-marker", "shadow-pierce"])
         self.assertTrue(compare.compared(self.shaped(python, []), self.shaped(ts, []), compare.LIVE))
         self.assertEqual(compare.compared(self.shaped(python, names), self.shaped(ts, names), compare.LIVE), [])
 
@@ -176,7 +176,7 @@ class Divergences(unittest.TestCase):
 
     def test_every_divergence_names_its_row(self):
         for name, entry in divergences.DIVERGENCES.items():
-            self.assertIsInstance(entry.get("row"), int, name)
+            self.assertTrue(isinstance(entry.get("row"), int) or isinstance(entry.get("decision"), str), name)
 
     def test_the_transcript_check_finds_page_session_enables_and_a_main_world_probe(self):
         folder = Path(tempfile.mkdtemp(prefix="ardia-m3-div-"))
@@ -236,11 +236,11 @@ class Replay(unittest.TestCase):
 
 
 LATER_SLICES = {
-    "core/open_title": "it runs `snapshot` (D4), and `open`'s change report needs D4's snapshot",
+    "core/open_title": "Python's flow log reads response bodies while `open` settles (D7); live answers match",
     "act/d5_fields": "Python's flow log probes the focused field after each step (D7)",
     "act/d5_keys": "Python's flow log probes the focused field after each step (D7)",
     "act/d5_batch": "Python's flow log probes the focused field after each step (D7)",
-    "act/d5_changes": "change reports read D4's snapshot, and Python's flow log probes the focused field (D7)",
+    "act/d5_changes": "Python's flow log probes the focused field and reads response bodies (D7); live answers match",
 }
 
 
@@ -316,7 +316,7 @@ class DaemonReplay(unittest.TestCase):
         cls.harness.__exit__(None, None, None)
 
     def test_every_daemon_recording_replays_identically_against_the_ts_daemon(self):
-        paths = [path for path in replayable() if runner.name_of(path).startswith(("daemon/", "core/", "act/d5_")) and runner.name_of(path) not in LATER_SLICES]
+        paths = [path for path in replayable() if runner.name_of(path).startswith(("daemon/", "core/", "d4/", "act/d5_")) and runner.name_of(path) not in LATER_SLICES]
         self.assertGreaterEqual(len(paths), 7)
         failed = [result for result in (self.harness.replay(runner.load(path), "ts") for path in paths) if not result["ok"]]
         self.assertEqual(failed, [], "\n".join(f"{result['name']}: {result['differences'][:3]}" for result in failed))

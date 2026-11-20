@@ -13,7 +13,7 @@ SOURCE_KEYS = ("expression", "functionDeclaration", "source")
 READY_PROBE = "() => document.readyState"
 KEY = re.compile(r"\b[0-9a-f]{24}\b")
 TABS_FILE = re.compile(r"tabs-[0-9a-f]+")
-READ_STAMP = re.compile(r"(?<=\[read )\d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC(?=\])")
+READ_STAMP = re.compile(r"(?<=\[read )\d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC(?=\])|(?:(?<=\(read )|(?<=, read ))\d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC(?=[,)])")
 
 REDACTED = "<REDACTED>"
 SECRET_HEADERS = {"authorization", "proxy-authorization", "cookie"}
@@ -57,7 +57,7 @@ RULES = {
     "session-key": "24-hex session keys in file names and answers become <KEY:session>",
     "tabs-file": "the tab registry's file name hash becomes tabs-<HASH>",
     "file-times": "`pid`, `started`, `at` and any float over 1e9 (epoch seconds) inside the session folder's JSON files become <PID> and <TIME>",
-    "read-stamp": "the wall-clock time in `read`'s `[read YYYY-MM-DD HH:MM:SS UTC]` line becomes <TIME>",
+    "read-stamp": "the wall-clock time in `read`'s `[read YYYY-MM-DD HH:MM:SS UTC]` line, and in a page header's `(HTTP 200, read YYYY-MM-DD HH:MM:SS UTC)`, becomes <TIME>",
     "live-sets": "live mode compares each step's requests as a set of distinct forms; order, counts and concurrency are replay's job, because Chromium's load timing decides how often the daemon polls",
     "ready-probe": "live mode ignores the `() => document.readyState` probe, which the daemon sends only when the load event hasn't arrived yet",
     "replay-order": "replay checks order in the tap: a request matches the recording within `lookahead` concurrency groups (tests/m3/elastic.json), so tasks that interleave by timing don't fail",

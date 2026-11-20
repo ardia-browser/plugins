@@ -1,0 +1,34 @@
+{
+ "note": "one reader tab per step: two in parallel number their isolated worlds in Chromium's order, which the step-wide id numbering can't compare; ReadingTabs in ts/tests/m3/read.test.ts covers the parallel tabs",
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/listing.html",
+    "--no-changes"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read",
+    "{fixture}/item.html"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read",
+    "./item.html"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read",
+    "--list"
+   ],
+   "session": "d4"
+  }
+ ]
+}

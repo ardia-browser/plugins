@@ -17,7 +17,11 @@ type Options = {
 
 export class FakeRenderer {
   readonly mainFrame = "F";
-  readonly frames = new Map([["F", { id: "F", url: "", loader: "L", parent: null, name: "", origin: "" }]]);
+  readonly frames = new Map<string, { id: string; url: string; loader: string; parent: string | null; name: string; origin: string }>([
+    ["F", { id: "F", url: "", loader: "L", parent: null, name: "", origin: "" }],
+  ]);
+  readonly frameSessions = new Map<string, string>();
+  readonly oopifs = new Map<string, { root: string; parentSession: string }>();
   readonly sent: [string, unknown][] = [];
   readonly params: [string, Record<string, unknown>][] = [];
   readonly counts: Record<string, number> = { mousedown: 0, mouseup: 0, mousemove: 0, dragstart: 0, dragend: 0, drop: 0, keydown: 0, keyup: 0 };
@@ -52,6 +56,10 @@ export class FakeRenderer {
 
   get page(): Page {
     return this as unknown as Page;
+  }
+
+  sessionFor(frame: string | null | undefined): string | null {
+    return (frame ? this.frameSessions.get(frame) : undefined) ?? this.session;
   }
 
   loader(frame: string | null): string | null {
