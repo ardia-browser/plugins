@@ -16,7 +16,7 @@ export const NEEDS_HIDDEN_TAB =
   "`set viewport` works on a tab this session opened that has never been shown: Ardia takes it off-screen first, so " +
   "an emulated page is never on screen";
 export const OPEN_ONE = "Open one with `ardia browse open <url>` (without --show) and set its viewport there";
-export const SET_USAGE = "set viewport|device|geo|offline|headers|credentials|media|permission ...";
+export const SET_USAGE = "set viewport|device|geo|offline|headers|credentials|media ...";
 
 type Device = [number, number, number, boolean, string | null];
 

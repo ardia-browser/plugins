@@ -13,6 +13,7 @@ import { waitUntil } from "../state/wait.ts";
 import { type Ctx } from "./ctx.ts";
 import { register, unsupported } from "./index.ts";
 import { need, normalizeUrl, parse } from "./parse.ts";
+import { applyOpenOptions, refuseUnservedSetup, takeOpenOptions } from "./setup.ts";
 
 const DROPPED_CONNECTION = /ERR_(EMPTY_RESPONSE|CONNECTION_(RESET|CLOSED|REFUSED|TIMED_OUT)|TIMED_OUT|HTTP2_PROTOCOL_ERROR|SSL_PROTOCOL_ERROR|QUIC_PROTOCOL_ERROR)/u;
 const FAILED_HOSTS_KEPT = 50;
@@ -164,6 +165,7 @@ export async function newTab(
   abandoned: ((targetId: string) => void) | null = null,
 ): Promise<Page> {
   const state = ctx.state;
+  refuseUnservedSetup(ctx);
   await state.connect();
   const params: Record<string, unknown> = { url: "about:blank", background: true };
   if (window) params["newWindow"] = true;
@@ -202,6 +204,7 @@ export async function newTab(
   state.current = targetId;
   if (state.pinTab) state.pinnedTarget = targetId;
   let page = await state.page(targetId);
+  await applyOpenOptions(ctx, page);
   if (url) await navigate(ctx, page, normalizeUrl(url));
   if (show) page = await showTab(ctx, page);
   return page;
@@ -336,7 +339,8 @@ export async function cmdOpen(ctx: Ctx, argv: string[]): Promise<Result> {
     "--read": "bool",
   });
   if (options["headers"]) throw new Usage("ardia browse can't scope headers to an origin at launch; run `ardia browse set headers <json>` before `open`");
-  if (options["enable"] || options["init_script"] || options["capture_console"] || (ctx.options["enable"] as unknown[] | undefined)?.length) refuse("`open` with page setup");
+  takeOpenOptions(ctx, options);
+  refuseUnservedSetup(ctx);
   if (options["read"]) refuse("`open --read`");
   const state = ctx.state;
   await state.connect();
@@ -349,6 +353,7 @@ export async function cmdOpen(ctx: Ctx, argv: string[]): Promise<Result> {
   else {
     page = await state.page();
     if (page.crashed && url) await navigate(ctx, page, "about:blank");
+    await applyOpenOptions(ctx, page);
     if (url) await navigate(ctx, page, url);
   }
   page = await state.reattach(page);

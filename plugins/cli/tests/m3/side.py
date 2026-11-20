@@ -47,7 +47,7 @@ def tap_call(port: int, path: str, body: dict | None = None) -> dict:
 
 
 def substitute(text: str, fixture: str, home: Path) -> str:
-    return text.replace("{fixture}", fixture).replace("{home}", str(home))
+    return text.replace("{fixture_dir}", str(infra.FIXTURES)).replace("{fixture}", fixture).replace("{home}", str(home))
 
 
 def browse_files(data: Path) -> dict:

@@ -381,7 +381,9 @@ describe("the command table", () => {
       encoding: "utf8",
     });
     expect(listed.status).toBe(0);
-    expect(Object.keys(OWNERS).sort()).toEqual([...listed.stdout.trim().split("\n"), "auth"].sort());
+    const names = listed.stdout.trim().split("\n");
+    const fullControl = names.includes("cdp") ? [] : ["cdp"];
+    expect(Object.keys(OWNERS).sort()).toEqual([...names, "auth", ...fullControl].sort());
     for (const name of ["open", "get", "wait", "session"]) expect(served(name)).toBe(true);
     const failure = (await dispatch(ctx(), "click", ["@e1"]).catch((error: unknown) => error)) as BrowseError;
     expect(failure.code).toBe("unsupported");

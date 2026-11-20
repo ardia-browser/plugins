@@ -1,32 +1,227 @@
 {
  "steps": [
-  {"argv": ["open", "{fixture}/form.html", "--no-changes"], "session": "set"},
-  {"argv": ["set", "media", "dark", "reduced-motion"], "session": "set"},
-  {"argv": ["set", "geo", "52.5", "13.4"], "session": "set"},
-  {"argv": ["set", "geolocation", "1", "2"], "session": "set"},
-  {"argv": ["set", "headers", "{\"x-d7\": \"1\", \"accept-language\": \"en\"}"], "session": "set"},
-  {"argv": ["set", "offline", "off"], "session": "set"},
-  {"argv": ["set", "device", "iPhone 14"], "session": "set"},
-  {"argv": ["set", "device", "nokia"], "session": "set"},
-  {"argv": ["set", "viewport", "800", "600"], "session": "set"},
-  {"argv": ["set", "viewport", "reset"], "session": "set"},
-  {"argv": ["set", "nope"], "session": "set"},
-  {"argv": ["set"], "session": "set"},
-  {"argv": ["notes", "set", "127.0.0.1", "first line"], "session": "set"},
-  {"argv": ["notes", "append", "second line"], "session": "set"},
-  {"argv": ["notes"], "session": "set"},
-  {"argv": ["notes", "get", "example.com"], "session": "set"},
-  {"argv": ["notes", "rm"], "session": "set"},
-  {"argv": ["notes", "--bad"], "session": "set"},
-  {"argv": ["notes", "get", "not a site"], "session": "set"},
-  {"argv": ["flow", "list"], "session": "set"},
-  {"argv": ["flow", "steps", "--all"], "session": "set"},
-  {"argv": ["flow", "save", "search"], "session": "set"},
-  {"argv": ["flow", "save", "bad name!"], "session": "set"},
-  {"argv": ["flow", "show", "nope"], "session": "set"},
-  {"argv": ["flow", "rm", "nope", "--site", "example.com"], "session": "set"},
-  {"argv": ["flow", "run", "nope"], "session": "set"},
-  {"argv": ["flow", "frob"], "session": "set"},
-  {"argv": ["--json", "flow", "steps"], "session": "set"}
+  {
+   "argv": [
+    "open",
+    "{fixture}/form.html",
+    "--no-changes"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "set",
+    "media",
+    "dark",
+    "reduced-motion"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "set",
+    "geo",
+    "52.5",
+    "13.4"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "set",
+    "geolocation",
+    "1.5",
+    "2.5"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "set",
+    "headers",
+    "{\"x-d7\": \"1\", \"accept-language\": \"en\"}"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "set",
+    "offline",
+    "off"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "set",
+    "device",
+    "iPhone 14"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "set",
+    "device",
+    "nokia"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "set",
+    "viewport",
+    "800",
+    "600",
+    "1.5"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "set",
+    "viewport",
+    "reset"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "set",
+    "nope"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "set"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "notes",
+    "set",
+    "127.0.0.1",
+    "first line"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "notes",
+    "append",
+    "second line"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "notes"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "notes",
+    "get",
+    "example.com"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "notes",
+    "rm"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "notes",
+    "--bad"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "notes",
+    "get",
+    "not a site"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "flow",
+    "list"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "flow",
+    "steps",
+    "--all"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "flow",
+    "save",
+    "search"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "flow",
+    "save",
+    "bad name!"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "flow",
+    "show",
+    "nope"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "flow",
+    "rm",
+    "nope",
+    "--site",
+    "example.com"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "flow",
+    "run",
+    "nope"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "flow",
+    "frob"
+   ],
+   "session": "set"
+  },
+  {
+   "argv": [
+    "--json",
+    "flow",
+    "steps"
+   ],
+   "session": "set"
+  }
  ]
 }

@@ -283,3 +283,18 @@ def gen_origin(rng, count, corpus):
 def gen_parse_params(rng, count, corpus):
     return many(rng, count, [[None]], lambda: [[rng.choice(["a=1", "b=", "=x", "c", " d =e", "f=g=h"]) for _ in range(rng.randint(0, 3))]])
 
+
+def full_control() -> bool:
+    try:
+        import ardia_cli.call_cli  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+FULL_CONTROL_ONLY = ("d7.cdp_params", "d7.parse_timeout")
+if not full_control():
+    from tests.m3.cases import GENERATORS
+
+    for name in FULL_CONTROL_ONLY:
+        GENERATORS.pop(name, None)
