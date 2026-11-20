@@ -13,6 +13,7 @@ Install the `ardia` command: in Ardia, open **Settings**, search for **command l
 |---|---|---|
 | [`cli`](plugins/cli) | The `ardia` command: drive Ardia, read pages and run its commands from your terminal or an agent. Built into Ardia: install it in one click from **Settings › Plugins**. | Ardia on macOS |
 | [`apple-passwords`](plugins/apple-passwords) | Fill logins and verification codes from Apple's Passwords app on every site. Built into Ardia, off until you turn it on in **Settings › Plugins**. | Ardia 0.2.47-nightly.8 on macOS |
+| [`developer-mode`](plugins/developer-mode) | Arc's striped developer bar, with the console, Network and Inspect a click away, on the sites you turn on. Built into Ardia, off until you turn it on in **Settings › Plugins**. | Ardia 0.2.48-nightly.1 on macOS |
 | [`compact-command-bar`](plugins/compact-command-bar/plugin.json) | ⌘T stops listing your pinned tabs and Top Apps, and shows at most 5 open tabs before you type. Typing still finds every tab. | Ardia 0.2.46-nightly.4 |
 
 ## Install
