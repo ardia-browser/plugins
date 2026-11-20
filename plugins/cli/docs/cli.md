@@ -1980,6 +1980,20 @@ Its page core (slice D3: `browse/state/page.ts`, `state.ts`, `refs.ts`, `apptabs
   `setup_session_dropped` (an ambiguous init-script registration detached the session). They count from the TypeScript
   client onward (M1, plugins#14), whose flag list carries them. While the Python client fronts the TS daemon, its
   `command_metrics.clean()` drops names it doesn't know, and the Python side is frozen, so neither is reported then.
+- `dialog accept` and `dialog dismiss` send `Page.handleJavaScriptDialog` shielded from Ctrl-C, so the answer the
+  user asked for always reaches the dialog. When the browser rejects or doesn't answer it, the daemon sends a dismiss
+  (5 s deadline) before reporting the first error (`dialog_dismissed_after_failure`), so a failed `dialog` never leaves
+  a JavaScript dialog blocking the page; a lost connection skips the dismiss. Python sends the one request and leaves
+  the dialog open when it fails.
+- `tab close` keeps the registry's close reservation only when the close succeeded: when `Target.closeTarget` fails,
+  the reservation is released and the tab stays the session's, and after a Ctrl-C the tab goes on the list of tabs the
+  daemon keeps closing (`tab_close_interrupted`). Python finishes the reservation either way, dropping the tab from the
+  registry's opened list while it may still be open. `tab new` and `window new` queue a tab whose creation was answered
+  after a Ctrl-C for closing, as `set viewport` does; Python leaves it open.
+- `tab new` and `window new` with global page setup (`--enable`, `--init-script`, `--capture-console`) answer
+  `unsupported` until the init-script slice lands, as `open` does.
+- Two more TypeScript-only metric flags, `tab_close_interrupted` and `dialog_dismissed_after_failure`, follow the rule
+  for `offscreen_handoff_rolled_back` above.
 - The caller counts as announced to Ardia's control socket only after the handshake finished, so a cancelled one is
   tried again by the next command; Python records it before. A cancelled active-tab lookup (`tab active`) ends its HTTP
   request at once.

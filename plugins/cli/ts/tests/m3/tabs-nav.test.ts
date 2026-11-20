@@ -247,3 +247,61 @@ describe("navigation", () => {
     expect(stale.code).toBe("stale_ref");
   });
 });
+
+describe("test_browse_borrowed, ported", () => {
+  function borrowedState(): [FakeBrowser, State] {
+    const browser = new FakeBrowser((method, params) => {
+      if (method === "Target.createTarget") return { targetId: "MINE" };
+      if (method === "Target.getTargets") {
+        return {
+          targetInfos: [
+            { targetId: "USER", type: "page", url: "http://127.0.0.1/page.html", title: "Draft" },
+            ...(params["filter"] === undefined ? [{ targetId: "MINE", type: "page", url: "about:blank", title: "" }] : []),
+          ],
+        };
+      }
+      return undefined;
+    });
+    const state = stateWith(browser, ["USER"]);
+    state.tabIds.set("USER", "t1");
+    return [browser, state];
+  }
+
+  test("test_back_forward_reload_and_pushstate_refuse_a_borrowed_tab", async () => {
+    const [, state] = borrowedState();
+    state.current = "USER";
+    state.attached = "USER";
+    for (const [name, argv] of [["back", []], ["forward", []], ["reload", []], ["pushstate", ["/x"]]] as const) {
+      const error = await failure(dispatch(ctxOf(state, name), name, [...argv]));
+      expect(error.code).toBe("borrowed_tab");
+      expect(error.text).toContain("ardia browse tab t");
+    }
+  });
+
+  test("test_tab_active_takes_the_users_tab_without_letting_open_navigate_it", async () => {
+    const [browser, state] = borrowedState();
+    state.takeActive = async () => {
+      state.current = "USER";
+      state.attached = "USER";
+      return "USER";
+    };
+    const result = await dispatch(ctxOf(state, "tab"), "tab", ["active"]);
+    expect([(result.data as Record<string, unknown>)["targetId"], state.current, state.attached]).toEqual(["USER", "USER", "USER"]);
+    const userSession = browser.sent.find((entry) => entry.method === "Target.attachToTarget" && entry.params["targetId"] === "USER");
+    expect(userSession).toBeDefined();
+    await dispatch(ctxOf(state, "open"), "open", ["about:blank"]).catch(() => null);
+    expect(browser.methods()).toContain("Target.createTarget");
+    expect(browser.sent.filter((entry) => entry.method === "Page.navigate" && entry.session === "SESSION-1")).toEqual([]);
+    expect(state.current).toBe("MINE");
+  });
+
+  test("test_tab_by_id_drives_the_users_tab", async () => {
+    const [, state] = borrowedState();
+    state.attached = "USER";
+    await dispatch(ctxOf(state, "tab"), "tab", ["t1"]);
+    expect(state.attached).toBeNull();
+    expect(state.current).toBe("USER");
+    const page = await state.page();
+    expect(page.targetId).toBe("USER");
+  });
+});
