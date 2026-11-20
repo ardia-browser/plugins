@@ -41,6 +41,7 @@ export class Result {
   failed = false;
   batch: unknown = undefined;
   outputCap: number | null = null;
+  whole = false;
 
   constructor(
     readonly data: unknown = {},
@@ -73,12 +74,12 @@ export function compactJson(value: unknown): string {
 }
 
 export function render(options: Options, result: Result | null = null, error: BrowseError | null = null, name = ""): Answer {
-  const [code, out, err] = renderInner(options, result, error, name);
+  const [code, out, err] = renderPlain(options, result, error, name);
   rendered(name, result as never, error === null ? null : { code: error.code ?? null }, out);
   return [code, redact(out), redact(err)];
 }
 
-function renderInner(options: Options, result: Result | null, error: BrowseError | null, name: string): Answer {
+export function renderPlain(options: Options, result: Result | null, error: BrowseError | null, name = ""): Answer {
   const asJson = options["json"];
   if (error !== null) {
     let message = error.text;
@@ -97,7 +98,7 @@ function renderInner(options: Options, result: Result | null, error: BrowseError
     return [code, `${compactJson({ success: true, data: done.data, error: null })}\n`, ""];
   }
   if (done.text === null) return [code, "", ""];
-  let text = cap(redact(done.text), options, name, done.outputCap);
+  let text = done.whole ? redact(done.text) : cap(redact(done.text), options, name, done.outputCap);
   const notice = capNotice(text);
   if (done.pageContent && options["content_boundaries"]) text = boundary(text);
   return [code, `${inert(text)}\n`, notice ? `${inert(notice)}\n` : ""];
@@ -266,12 +267,30 @@ export function joinedBatch(out: string, closed: string, options: Options): stri
   return `${dumps(outcomes, "compact")}\n`;
 }
 
-export function encodeAnswer(code: number, out: string, err: string, fields: [string, Value][] = [], limit = MAX_RESPONSE): Buffer {
+export function encodeAnswer(
+  code: number,
+  out: string,
+  err: string,
+  fields: [string, Value][] = [],
+  limit = MAX_RESPONSE,
+  name = "",
+  asJson = false,
+): Buffer {
   const answer = new Map<string, Value>([["exit", BigInt(code)], ["out", out], ["err", err], ...fields]);
   const data = Buffer.from(`${wellFormed(dumps(answer, "spaced"))}\n`, "utf8");
   if (data.length <= limit) return data;
-  const message = `✗ The answer was too large (${data.length} bytes, the limit is ${limit}); narrow it (snapshot -s, -d, --max-output)\n`;
+  const error =
+    name === "cdp"
+      ? new BrowseError(
+          `The result of \`cdp\` is ${groupThousands(String(data.length))} bytes once encoded for the answer, over the ${groupThousands(String(limit))} bytes the ` +
+            "daemon sends back, so it wasn't printed; it did run, so check before running it again. Ask for less: " +
+            "narrower params (DOM.getDocument --param depth:=1, a smaller Network.getResponseBody), or IO.read in chunks",
+          null,
+          "result_too_large",
+        )
+      : new BrowseError(`The answer was too large (${data.length} bytes, the limit is ${limit}); narrow it (snapshot -s, -d, --max-output)`);
+  const [exit, shownOut, shownErr] = renderPlain({ json: asJson }, null, error);
   const daemon = fields.filter(([key]) => key === "daemon");
-  const fallback = new Map<string, Value>([["exit", 1n], ["out", ""], ["err", message], ...daemon]);
+  const fallback = new Map<string, Value>([["exit", BigInt(exit)], ["out", shownOut], ["err", shownErr], ...(error.code ? [["code", error.code] as [string, Value]] : []), ...daemon]);
   return Buffer.from(`${dumps(fallback, "spaced", true)}\n`, "utf8");
 }

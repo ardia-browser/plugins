@@ -19,7 +19,7 @@ import { FifoLock } from "./lock.ts";
 import { type Caller, parseCaller } from "./announce.ts";
 import { log } from "./log.ts";
 import { canonical } from "./names.ts";
-import { type Answer, encodeAnswer, joinedBatch, MAX_REQUEST, type Options, render, Result, timedOut } from "./render.ts";
+import { type Answer, encodeAnswer, joinedBatch, MAX_REQUEST, MAX_RESPONSE, type Options, render, Result, timedOut } from "./render.ts";
 import { redact } from "../../redact.ts";
 import { parseText } from "../../json.ts";
 import { dispatch } from "../commands/all.ts";
@@ -398,7 +398,8 @@ export class Daemon {
       if (extra.code) fields.push(["code", extra.code]);
       if (request["busy_elsewhere"]) fields.push(["busy_elsewhere", true]);
       fields.push(["daemon", `ts/${cliVersion()}`]);
-      await writeAnswer(socket, encodeAnswer(code, out, err, fields));
+      const argv0 = Array.isArray(request["argv"]) && request["argv"].length > 0 ? canonical(String(request["argv"][0])) : "";
+      await writeAnswer(socket, encodeAnswer(code, out, err, fields, MAX_RESPONSE, argv0, Boolean(record(request["options"])["json"])));
     } catch (error) {
       if (!(error instanceof Gone) && !(error instanceof Cancelled)) log.exception("request failed", error);
     } finally {

@@ -14,6 +14,7 @@ export const MAX_TEMPORARIES = 32;
 export const MAX_FILE = 8 * 1024 * 1024;
 export const FILE_BUDGET = 1024 * 1024;
 export const CLOSE_HOLD = 30.0;
+export const HOLD_MARK = "#";
 
 export type Instance = string | null;
 type Data = JsonObject;
@@ -140,7 +141,13 @@ export class Registry {
     return temporaries <= MAX_TEMPORARIES;
   }
 
-  live(key: string): boolean {
+  static owner(key: string): string {
+    const cut = key.indexOf(HOLD_MARK);
+    return cut < 0 ? key : key.slice(0, cut);
+  }
+
+  live(given: string): boolean {
+    const key = Registry.owner(given);
     return key === this.key || lockHeld(`${key}.lock`, this.browseFd as number);
   }
 
@@ -364,13 +371,30 @@ export class Registry {
     });
   }
 
+  async holding<T>(instance: Instance, target: string, run: () => Promise<T>): Promise<T> {
+    if (this.browseFd === null) return run();
+    const hold = `${this.key}${HOLD_MARK}${target}`;
+    this.open(instance, (data) => {
+      const why = this.refusal(data, target);
+      if (why) throw new BrowseError(`That tab can't be used: ${why}`, { targetId: target }, "tab_closing");
+      table(data, "using").set(hold, new Map<string, Value>([["session", this.session], ["target", target]]));
+    });
+    try {
+      return await run();
+    } finally {
+      this.open(instance, (data) => {
+        table(data, "using").delete(hold);
+      });
+    }
+  }
+
   reserveClose(instance: Instance, target: string): boolean {
     if (this.browseFd === null) return true;
     return this.open(instance, (data) => {
       const held = map(table(data, "closing").get(target));
       if (this.refusal(data, target) || (held.get("key") === this.key && held.get("run") === this.run)) return false;
       for (const [key, entry] of table(data, "using")) {
-        if (key !== this.key && map(entry).get("target") === target && this.live(key)) return false;
+        if (Registry.owner(key) !== this.key && map(entry).get("target") === target && this.live(key)) return false;
       }
       table(data, "closing").set(
         target,
@@ -403,7 +427,8 @@ export class Registry {
     if (this.browseFd === null) return;
     for (const instance of [...this.instances]) {
       this.open(instance, (data) => {
-        table(data, "using").delete(this.key);
+        const using = table(data, "using");
+        for (const key of [...using.keys()]) if (Registry.owner(key) === this.key) using.delete(key);
         const opened = table(data, "opened");
         for (const [target, owner] of [...opened]) {
           if (map(owner).get("key") === this.key && !truthy(map(owner).get("temporary"))) opened.delete(target);
@@ -424,7 +449,7 @@ export class Registry {
       }
       const using = new Map<string, string[]>();
       for (const [key, entry] of table(data, "using")) {
-        if (key === this.key || !this.live(key)) continue;
+        if (Registry.owner(key) === this.key || !this.live(key)) continue;
         const fields = map(entry);
         const target = text(fields.get("target"));
         using.set(target, [...(using.get(target) ?? []), text(fields.get("session"))]);
