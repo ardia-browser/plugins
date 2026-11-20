@@ -15,6 +15,37 @@ KEY = re.compile(r"\b[0-9a-f]{24}\b")
 TABS_FILE = re.compile(r"tabs-[0-9a-f]+")
 READ_STAMP = re.compile(r"(?<=\[read )\d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC(?=\])")
 
+REDACTED = "<REDACTED>"
+SECRET_HEADERS = {"authorization", "proxy-authorization", "cookie"}
+
+
+def redact_headers(headers):
+    if isinstance(headers, list):
+        return [{**header, "value": REDACTED} if isinstance(header, dict) and isinstance(header.get("name"), str)
+                and header["name"].lower() in SECRET_HEADERS else header for header in headers]
+    if isinstance(headers, dict):
+        return {name: REDACTED if name.lower() in SECRET_HEADERS else value for name, value in headers.items()}
+    return headers
+
+
+def redact_secrets(message: dict) -> dict:
+    params = message.get("params")
+    method = message.get("method")
+    if not isinstance(params, dict):
+        return message
+    kept = dict(params)
+    auth = kept.get("authChallengeResponse")
+    if method in ("Fetch.continueWithAuth", "Network.continueInterceptedRequest") and isinstance(auth, dict):
+        kept["authChallengeResponse"] = {name: REDACTED if name in ("username", "password") else value for name, value in auth.items()}
+    if method in ("Network.setExtraHTTPHeaders", "Fetch.continueRequest", "Network.continueInterceptedRequest") and "headers" in kept:
+        kept["headers"] = redact_headers(kept["headers"])
+    if method == "Network.setCookie" and "value" in kept:
+        kept["value"] = REDACTED
+    if method in ("Network.setCookies", "Storage.setCookies") and isinstance(kept.get("cookies"), list):
+        kept["cookies"] = [{**cookie, "value": REDACTED} if isinstance(cookie, dict) else cookie for cookie in kept["cookies"]]
+    return {**message, "params": kept} if kept != params else message
+
+
 RULES = {
     "browser-ids": "values of the CDP ID fields in STRING_IDS and INT_IDS become <kind#n>, numbered by first appearance in the step's own requests (browser events cross step marks by timing)",
     "after-fault": "in a fault run, the faulted step's requests before the fault are left out; only the cleanup after it is compared",
@@ -33,6 +64,7 @@ RULES = {
     "replay-repeats": "replay lets the read-only probes listed in tests/m3/elastic.json repeat or be skipped, since their count follows the daemon's sleeps",
     "unstable-steps": "live mode compares only exit and stderr of the steps a scenario lists in `unstable_steps`, with the reason in the scenario",
     "metrics": "of an answer's `metrics` only the key set is compared, never values",
+    "secrets": "credential-bearing request params (continueWithAuth's username and password, Authorization/Proxy-Authorization/Cookie header values, cookie values being set) become <REDACTED>; the tap writes them redacted too, and replay matches on the redacted form",
     "racy-steps": "every mode compares only the exit status of the steps a scenario lists in `racy_steps`, where Chromium decides which of two errors the same request gets (the reason is in the scenario)",
     "fixture-dir": "the checkout's own fixture folder (tests/fixtures/browse, recorded in subs) becomes {fixture_dir} in answers and requests, so a recording replays from any clone",
     "temp-tab-nonce": "a temporary tab's `Target.createTarget` URL `about:blank#ardia-temp-<nonce>` (the TS daemon marks the tabs it opens only to read, so a sweep can find one a crashed daemon left) becomes `about:blank`, Python's URL",
@@ -145,6 +177,7 @@ def transcript(entries: list[dict], subs: Subs, rewrite=None) -> tuple[dict, Ids
             continue
         if "method" not in message or "id" not in message:
             continue
+        message = redact_secrets(message)
         if rewrite is not None:
             rewritten = rewrite(message, (conn, message["id"])) if hasattr(rewrite, "reply") else rewrite(message)
             if rewritten is None:
