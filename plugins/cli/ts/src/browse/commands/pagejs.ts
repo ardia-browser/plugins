@@ -147,7 +147,7 @@ export async function cmdEval(ctx: Ctx, argv: string[]): Promise<Result> {
   if (FETCHING.test(script)) hintOnce(ctx.state, "fetch", FETCH_HINT);
   const [fixed, quoted] = quoteSelectorLiterals(script);
   const mainWorld = Boolean(options["main_world"]);
-  flag("eval_main_world", mainWorld);
+  if (mainWorld) flag("eval_main_world", true);
   let value: unknown;
   try {
     value = mainWorld ? await evaluateMain(page, fixed, limit) : await evaluateIsolated(page, fixed, limit);

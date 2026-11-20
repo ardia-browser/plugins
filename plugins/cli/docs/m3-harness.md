@@ -202,3 +202,16 @@ commands from their own files and import them in `all.ts`; a name registered twi
 | Racy steps | `racy_steps` in a scenario: only the exit status is compared, for a step where Chromium decides which of two errors one request gets |
 | Human tier | `python -m tests.m3.human_core --pages <plugins#13 tests/human> --chrome <Chrome for Testing> [--impl ts\|python]`: rows 7 to 11 through `ardia browse`, with a full Chrome for Testing in `--headless=new` (chrome-headless-shell is old-mode headless and sets `navigator.webdriver`). Clicks D5 doesn't serve yet are made by the tier and named in the row's notes |
 | Unit tests | `ts/tests/m3/core.test.ts` (attach order, publish after the frame refresh, busy probe world, worlds per document, re-homing, crash and detach, setup restore, the probe rules, refs, the table) and `core-ported.test.ts` (`test_browse_crash` and `test_browse_detach`, same names) |
+
+## Scripting, flows and raw access (slice D7)
+
+`ts/src/browse/commands/{pagejs,settings,cdp,notes}.ts`, `script/`, `flows/`, `auth/` and `cdp/{raw,params}.ts` port
+`eval`, init scripts, `clipboard`, `set`, `cdp` (plugins#11), `script`, the flow log, `flow`, `auth login`, the
+credential providers and the page half of `notes`. `notes-files.ts` holds the file half until M2 takes it.
+
+| What | How it's run |
+|---|---|
+| Scenarios `js/*` | `live 'js/*' --a python --b ts`. `js/settings_notes_flows` also replays. `js/eval_reads`, `initscript`, `script_runs` and `clipboard` name the `eval-isolated` and `script-isolated` divergences, so they are live only (replay can't serve a request Python never sent). `js/cdp_raw` needs plugins#11's Python: run it from a copy of `plugins/cli` whose `ardia_cli` is full-control/cli's, until #11 is on main |
+| Function oracle | `python -m tests.m3.pure d7.<name> --generated 1500` for every `d7.*` twin in `tests/m3/oracle_fns_d7.py` (generators in `cases_d7.py`): cdp params, flow building, validation, signatures, drift, URL templating and filling, masking, sites, embedded JSON, the script worker source and its helpers, selector quoting, Keychain quoting. `d7.cdp_params` needs plugins#11's Python, like `js/cdp_raw` |
+| Unit tests | `ts/tests/m3/d7.test.ts`: the Keychain's argv and stdin (secret on stdin only), its failure, deadline and missing-program messages; credential providers' environment, working folder, bad answers, deadline and reply cap; tools without a shell; `git ls-remote` resolution; the `using` hold of `cdp --target`; the flow and note stores; the isolated `eval` call |
+| Human tier | `python -m tests.m3.human_d7 --pages <plugins#13 tests/human> --chrome <Chrome for Testing>`: rows 3 (clipboard after `clipboard write`'s grant), 9 (`eval` and `script` leave no global and no foreign stack frame) and 14 (geolocation, notifications and camera after `set permission`) |

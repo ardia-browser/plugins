@@ -1,17 +1,95 @@
 {
+ "live_only": "designed divergence (eval-isolated): replay serves only requests Python sent, so this runs live until the TS side records its own transcripts (M3-DESIGN 2.6)",
  "steps": [
-  {"argv": ["open", "{fixture}/form.html", "--no-changes"], "session": "init"},
-  {"argv": ["addinitscript", "document.documentElement.dataset.d7 = 'set'"], "session": "init"},
-  {"argv": ["open", "{fixture}/login.html", "--no-changes"], "session": "init"},
-  {"argv": ["eval", "document.documentElement.dataset.d7 || 'none'"], "session": "init"},
-  {"argv": ["session", "info"], "session": "init"},
-  {"argv": ["removeinitscript", "1"], "session": "init"},
-  {"argv": ["removeinitscript", "nope"], "session": "init"},
-  {"argv": ["open", "{fixture}/form.html", "--no-changes"], "session": "init"},
-  {"argv": ["eval", "document.documentElement.dataset.d7 || 'none'"], "session": "init"},
-  {"argv": ["addinitscript"], "session": "init"},
-  {"argv": ["addinitscript", "--stdin"], "session": "init", "stdin": "document.documentElement.dataset.d7b = 'b'"},
-  {"argv": ["session", "info"], "session": "init"}
+  {
+   "argv": [
+    "open",
+    "{fixture}/form.html",
+    "--no-changes"
+   ],
+   "session": "init"
+  },
+  {
+   "argv": [
+    "addinitscript",
+    "document.documentElement.dataset.d7 = 'set'"
+   ],
+   "session": "init"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/login.html",
+    "--no-changes"
+   ],
+   "session": "init"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.documentElement.dataset.d7 || 'none'"
+   ],
+   "session": "init"
+  },
+  {
+   "argv": [
+    "session",
+    "info"
+   ],
+   "session": "init"
+  },
+  {
+   "argv": [
+    "removeinitscript",
+    "1"
+   ],
+   "session": "init"
+  },
+  {
+   "argv": [
+    "removeinitscript",
+    "nope"
+   ],
+   "session": "init"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/form.html",
+    "--no-changes"
+   ],
+   "session": "init"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.documentElement.dataset.d7 || 'none'"
+   ],
+   "session": "init"
+  },
+  {
+   "argv": [
+    "addinitscript"
+   ],
+   "session": "init"
+  },
+  {
+   "argv": [
+    "addinitscript",
+    "--stdin"
+   ],
+   "session": "init",
+   "stdin": "document.documentElement.dataset.d7b = 'b'"
+  },
+  {
+   "argv": [
+    "session",
+    "info"
+   ],
+   "session": "init"
+  }
  ],
- "divergences": ["eval-isolated"]
+ "divergences": [
+  "eval-isolated"
+ ]
 }

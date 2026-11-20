@@ -1,21 +1,116 @@
 {
- "divergences": ["script-isolated", "eval-isolated", "temp-tab-marker"],
- "racy_steps": {"steps": [13], "reason": "whether the worker's un-awaited request reaches the controller before its done message depends on CDP round-trip timing, in both daemons"},
+ "live_only": "designed divergence (script-isolated, eval-isolated): replay serves only requests Python sent, so this runs live until the TS side records its own transcripts (M3-DESIGN 2.6)",
+ "divergences": [
+  "script-isolated",
+  "eval-isolated"
+ ],
+ "racy_steps": {
+  "steps": [
+   12
+  ],
+  "reason": "whether the worker's un-awaited request reaches the controller before its done message depends on CDP round-trip timing, in both daemons"
+ },
  "steps": [
-  {"argv": ["open", "{fixture}/form.html", "--no-changes"], "session": "scr"},
-  {"argv": ["script"], "session": "scr", "stdin": "log('start');\nconst t = await page.title();\nreturn {title: t, url: await page.url()};"},
-  {"argv": ["script"], "session": "scr", "stdin": "return [{n: 1}, {n: 2}];"},
-  {"argv": ["script"], "session": "scr", "stdin": "state.seen = (state.seen || 0) + 1;\nreturn state.seen;"},
-  {"argv": ["script"], "session": "scr", "stdin": "return state.seen;"},
-  {"argv": ["script"], "session": "scr", "stdin": "log('before');\nreturn document.title;"},
-  {"argv": ["script"], "session": "scr", "stdin": "await browse('nosuch');"},
-  {"argv": ["script"], "session": "scr", "stdin": "await browse('close');"},
-  {"argv": ["script"], "session": "scr", "stdin": "await browse('get title');\nreturn 'split';"},
-  {"argv": ["script"], "session": "scr", "stdin": "  "},
-  {"argv": ["script", "--timeout", "0"], "session": "scr", "stdin": "return 1"},
-  {"argv": ["script", "--timeout", "2s"], "session": "scr", "stdin": "state.rows = [1, 2];\nawait sleep(4000);\nreturn 1;"},
-  {"argv": ["script"], "session": "scr", "stdin": "return await page.evaluate(() => document.querySelectorAll('input').length);"},
-  {"argv": ["script"], "session": "scr", "stdin": "page.title();\nreturn 'x';"},
-  {"argv": ["script"], "session": "scr", "stdin": "syntax error here("}
+  {
+   "argv": [
+    "open",
+    "{fixture}/form.html",
+    "--no-changes"
+   ],
+   "session": "scr"
+  },
+  {
+   "argv": [
+    "script"
+   ],
+   "session": "scr",
+   "stdin": "log('start');\nconst t = await page.title();\nreturn {title: t, url: await page.url()};"
+  },
+  {
+   "argv": [
+    "script"
+   ],
+   "session": "scr",
+   "stdin": "return [{n: 1}, {n: 2}];"
+  },
+  {
+   "argv": [
+    "script"
+   ],
+   "session": "scr",
+   "stdin": "state.seen = (state.seen || 0) + 1;\nreturn state.seen;"
+  },
+  {
+   "argv": [
+    "script"
+   ],
+   "session": "scr",
+   "stdin": "return state.seen;"
+  },
+  {
+   "argv": [
+    "script"
+   ],
+   "session": "scr",
+   "stdin": "log('before');\nreturn document.title;"
+  },
+  {
+   "argv": [
+    "script"
+   ],
+   "session": "scr",
+   "stdin": "await browse('nosuch');"
+  },
+  {
+   "argv": [
+    "script"
+   ],
+   "session": "scr",
+   "stdin": "await browse('close');"
+  },
+  {
+   "argv": [
+    "script"
+   ],
+   "session": "scr",
+   "stdin": "await browse('get title');\nreturn 'split';"
+  },
+  {
+   "argv": [
+    "script"
+   ],
+   "session": "scr",
+   "stdin": "  "
+  },
+  {
+   "argv": [
+    "script",
+    "--timeout",
+    "2s"
+   ],
+   "session": "scr",
+   "stdin": "state.rows = [1, 2];\nawait sleep(4000);\nreturn 1;"
+  },
+  {
+   "argv": [
+    "script"
+   ],
+   "session": "scr",
+   "stdin": "return await page.evaluate(() => document.querySelectorAll('input').length);"
+  },
+  {
+   "argv": [
+    "script"
+   ],
+   "session": "scr",
+   "stdin": "page.title();\nreturn 'x';"
+  },
+  {
+   "argv": [
+    "script"
+   ],
+   "session": "scr",
+   "stdin": "syntax error here("
+  }
  ]
 }

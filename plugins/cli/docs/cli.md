@@ -1984,6 +1984,43 @@ Its page core (slice D3: `browse/state/page.ts`, `state.ts`, `refs.ts`, `apptabs
   tried again by the next command; Python records it before. A cancelled active-tab lookup (`tab active`) ends its HTTP
   request at once.
 
+Its scripting, flows and raw-access commands (slice D7: `browse/commands/{pagejs,settings,cdp,notes}.ts`,
+`browse/script/`, `browse/flows/`, `browse/auth/`, `browse/cdp/{raw,params}.ts`, `notes.ts`) follow `script.py`,
+`flows.py`, `flowrun.py`, `flowlog.py`, `vault.py`, `plugins.py`, `notes.py` and plugins#11's `cdp`, except for these,
+each covered by `ts/tests/m3/d7.test.ts`, the `d7.*` function oracle (`tests/m3/oracle_fns_d7.py`) or the `js/*`
+scenarios:
+
+- `eval` runs in the `ardia-browse` isolated world (ardia#2812 rows 8 and 9): `Runtime.callFunctionOn` on the world's
+  handle with `function (source) { return (0, eval)(source); }`, where Python sends a main-world `Runtime.evaluate`.
+  The page's DOM is the same; its own JavaScript globals (`window.app`, a framework's store) aren't there, and
+  nothing the code defines leaks into the page. `eval --main-world` keeps Python's call exactly. A `ReferenceError`
+  in the isolated world adds a line saying so (`eval_isolated_reference_error`); the wrapper's own stack frames are
+  taken out of an error, so it reads as Python's does. `clipboard read` goes through the same isolated evaluation.
+  The harness compares it through the `eval-isolated` divergence.
+- `script`'s controller lives in the isolated world of its temporary tab: it is installed with
+  `Runtime.callFunctionOn` on the world's handle and returned by reference, and its worker is started from there, so
+  neither `__ardiaScript` nor the worker is visible to a page (`script-isolated` divergence). Every later controller
+  call is Python's, on the controller's own object id. `page.evaluate()` inside a script is `eval`, so it is isolated too.
+- `cdp`, `eval`, init scripts and the raw session per tab and per browser follow plugins#11 (full-control/cli
+  3917106), which isn't on main yet: its params checks, timeouts, `result_too_large`, `borrowed_tab`, the 16-attach cap
+  and the `using` hold on `--target` tabs. Integers in `cdp` params past 2^53 are sent as the nearest double (Bun's JSON
+  writer); Python sends them exactly.
+- `set permission geolocation|notifications|camera|microphone|clipboard` is new (ardia#2812 row 14): it grants the
+  permission to the tab's origin with `Browser.grantPermissions` ahead of any prompt (`permission_granted`). A prompt
+  already on screen isn't answered; that needs Ardia's control socket to offer it. Python has no such setting and
+  answers `Unknown setting: permission`.
+- `set credentials`, `flow run`'s page tier and `auth login`'s typing come from slices D6, D4 and D5: until they land,
+  `set credentials` and `auth login` answer `unsupported`, and `flow run` opens its reader tab and waits for
+  `domcontentloaded` and `load` without D4's network settle. Flow steps record no requests until D5's network watch
+  calls `flowlog.capture`.
+- The flow log, the hinted sites and the raw sessions live beside the session's state, not in Python's `extras`
+  dictionary: nothing outside these modules can see or change them.
+- Keychain and plugin processes are started without a shell, from an argv array, and the Keychain secret goes only to
+  `security -i`'s stdin, as in Python. A process killed at its deadline ends the call as soon as it exits, even when a
+  child of its own still holds its output open; Python's `subprocess.run` also returns then.
+- The temporary tabs D2 opens carry `#ardia-temp-<nonce>` in their `about:blank` URL; the harness's `temp-tab-nonce`
+  rule compares them with Python's plain `about:blank`.
+
 ## Linux
 
 The same CLI, with these differences:

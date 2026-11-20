@@ -1,28 +1,210 @@
 {
- "python": "plugins#11 (full-control/cli 3917106): record and compare with its Python until it lands on main",
+ "live_only": "`cdp` is plugins#11 (full-control/cli 3917106), not yet on main: compare live against its Python (docs/m3-harness.md, D7); record and replay once it lands",
  "steps": [
-  {"argv": ["open", "{fixture}/form.html", "--no-changes"], "session": "raw"},
-  {"argv": ["cdp", "Runtime.evaluate", "--params", "{\"expression\": \"6 * 7\", \"returnByValue\": true}"], "session": "raw"},
-  {"argv": ["cdp", "Runtime.evaluate", "--param", "expression=document.title", "--param", "returnByValue:=true"], "session": "raw"},
-  {"argv": ["cdp", "Emulation.setFocusEmulationEnabled", "--param", "enabled:=false"], "session": "raw"},
-  {"argv": ["cdp", "Browser.getVersion", "--target", "browser"], "session": "raw"},
-  {"argv": ["--json", "cdp", "Page.getLayoutMetrics"], "session": "raw"},
-  {"argv": ["cdp", "Runtime.evaluate", "--params", "-"], "session": "raw", "stdin": "{\"expression\": \"'from stdin'\", \"returnByValue\": true}"},
-  {"argv": ["cdp", "Nope.nothing"], "session": "raw"},
-  {"argv": ["cdp", "notAMethod"], "session": "raw"},
-  {"argv": ["cdp", "Page.navigate", "--params", "{\"url\": 1,}"], "session": "raw"},
-  {"argv": ["cdp", "Page.navigate", "--params", "{\"a\": 1, \"a\": 2}"], "session": "raw"},
-  {"argv": ["cdp", "Page.navigate", "--params", "[1, 2]"], "session": "raw"},
-  {"argv": ["cdp", "Page.navigate", "--params", "{\"x\": NaN}"], "session": "raw"},
-  {"argv": ["cdp", "Page.navigate", "--params", "{\"x\": 1e400}"], "session": "raw"},
-  {"argv": ["cdp", "Page.navigate", "--param", "url"], "session": "raw"},
-  {"argv": ["cdp", "Page.navigate", "--param", "a:=[1,]"], "session": "raw"},
-  {"argv": ["cdp", "Page.navigate", "--params", "  "], "session": "raw"},
-  {"argv": ["cdp", "Page.getFrameTree", "--target", ""], "session": "raw"},
-  {"argv": ["cdp", "Page.getFrameTree", "--target", "t99"], "session": "raw"},
-  {"argv": ["cdp", "Page.getFrameTree", "--timeout", "0"], "session": "raw"},
-  {"argv": ["cdp", "Runtime.evaluate", "Page.reload"], "session": "raw"},
-  {"argv": ["cdp", "Runtime.evaluate", "--params", "{\"expression\": \"'again'\", \"returnByValue\": true}"], "session": "raw"},
-  {"argv": ["cdp", "Runtime.evaluate", "--target", "t1", "--params", "{\"expression\": \"'by tab'\", \"returnByValue\": true}"], "session": "raw"}
+  {
+   "argv": [
+    "open",
+    "{fixture}/form.html",
+    "--no-changes"
+   ],
+   "session": "raw"
+  },
+  {
+   "argv": [
+    "cdp",
+    "Runtime.evaluate",
+    "--params",
+    "{\"expression\": \"6 * 7\", \"returnByValue\": true}"
+   ],
+   "session": "raw"
+  },
+  {
+   "argv": [
+    "cdp",
+    "Runtime.evaluate",
+    "--param",
+    "expression=document.title",
+    "--param",
+    "returnByValue:=true"
+   ],
+   "session": "raw"
+  },
+  {
+   "argv": [
+    "cdp",
+    "Emulation.setFocusEmulationEnabled",
+    "--param",
+    "enabled:=false"
+   ],
+   "session": "raw"
+  },
+  {
+   "argv": [
+    "cdp",
+    "Browser.getVersion",
+    "--target",
+    "browser"
+   ],
+   "session": "raw"
+  },
+  {
+   "argv": [
+    "--json",
+    "cdp",
+    "Page.getLayoutMetrics"
+   ],
+   "session": "raw"
+  },
+  {
+   "argv": [
+    "cdp",
+    "Runtime.evaluate",
+    "--params",
+    "-"
+   ],
+   "session": "raw",
+   "stdin": "{\"expression\": \"'from stdin'\", \"returnByValue\": true}"
+  },
+  {
+   "argv": [
+    "cdp",
+    "Nope.nothing"
+   ],
+   "session": "raw"
+  },
+  {
+   "argv": [
+    "cdp",
+    "notAMethod"
+   ],
+   "session": "raw"
+  },
+  {
+   "argv": [
+    "cdp",
+    "Page.navigate",
+    "--params",
+    "{\"url\": 1,}"
+   ],
+   "session": "raw"
+  },
+  {
+   "argv": [
+    "cdp",
+    "Page.navigate",
+    "--params",
+    "{\"a\": 1, \"a\": 2}"
+   ],
+   "session": "raw"
+  },
+  {
+   "argv": [
+    "cdp",
+    "Page.navigate",
+    "--params",
+    "[1, 2]"
+   ],
+   "session": "raw"
+  },
+  {
+   "argv": [
+    "cdp",
+    "Page.navigate",
+    "--params",
+    "{\"x\": NaN}"
+   ],
+   "session": "raw"
+  },
+  {
+   "argv": [
+    "cdp",
+    "Page.navigate",
+    "--params",
+    "{\"x\": 1e400}"
+   ],
+   "session": "raw"
+  },
+  {
+   "argv": [
+    "cdp",
+    "Page.navigate",
+    "--param",
+    "url"
+   ],
+   "session": "raw"
+  },
+  {
+   "argv": [
+    "cdp",
+    "Page.navigate",
+    "--param",
+    "a:=[1,]"
+   ],
+   "session": "raw"
+  },
+  {
+   "argv": [
+    "cdp",
+    "Page.navigate",
+    "--params",
+    "  "
+   ],
+   "session": "raw"
+  },
+  {
+   "argv": [
+    "cdp",
+    "Page.getFrameTree",
+    "--target",
+    ""
+   ],
+   "session": "raw"
+  },
+  {
+   "argv": [
+    "cdp",
+    "Page.getFrameTree",
+    "--target",
+    "t99"
+   ],
+   "session": "raw"
+  },
+  {
+   "argv": [
+    "cdp",
+    "Page.getFrameTree",
+    "--timeout",
+    "0"
+   ],
+   "session": "raw"
+  },
+  {
+   "argv": [
+    "cdp",
+    "Runtime.evaluate",
+    "Page.reload"
+   ],
+   "session": "raw"
+  },
+  {
+   "argv": [
+    "cdp",
+    "Runtime.evaluate",
+    "--params",
+    "{\"expression\": \"'again'\", \"returnByValue\": true}"
+   ],
+   "session": "raw"
+  },
+  {
+   "argv": [
+    "cdp",
+    "Runtime.evaluate",
+    "--target",
+    "t1",
+    "--params",
+    "{\"expression\": \"'by tab'\", \"returnByValue\": true}"
+   ],
+   "session": "raw"
+  }
  ]
 }

@@ -34,6 +34,7 @@ RULES = {
     "unstable-steps": "live mode compares only exit and stderr of the steps a scenario lists in `unstable_steps`, with the reason in the scenario",
     "metrics": "of an answer's `metrics` only the key set is compared, never values",
     "racy-steps": "every mode compares only the exit status of the steps a scenario lists in `racy_steps`, where Chromium decides which of two errors the same request gets (the reason is in the scenario)",
+    "temp-tab-nonce": "a temporary tab's `Target.createTarget` URL `about:blank#ardia-temp-<nonce>` (the TS daemon marks the tabs it opens only to read, so a sweep can find one a crashed daemon left) becomes `about:blank`, Python's URL",
     "divergences": "designed TS differences from tests/m3/divergences.py (`world-handle` always, the rest when a scenario names them) rewrite only the request fields they name, on both sides, before IDs are numbered",
 }
 
@@ -146,6 +147,7 @@ def transcript(entries: list[dict], subs: Subs, rewrite=None) -> tuple[dict, Ids
                 dropped.add((conn, message["id"]))
                 continue
             message = rewritten
+        message = without_temp_nonce(message)
         session = (conn, message.get("sessionId") or "")
         ids.walk(message)
         normalized = local.walk({name: value for name, value in message.items() if name != "id"})
@@ -165,6 +167,16 @@ def transcript(entries: list[dict], subs: Subs, rewrite=None) -> tuple[dict, Ids
     sets = {name: {session: sorted({form for group in groups for form in group if READY_PROBE not in form}) for session, groups in sessions.items()}
             for name, sessions in steps.items()}
     return {"requests": shaped, "request_sets": sets, "sources": {name: sorted(found) for name, found in sources.items()}}, ids
+
+
+TEMP_TAB = "about:blank#ardia-temp-"
+
+
+def without_temp_nonce(message: dict) -> dict:
+    params = message.get("params") or {}
+    if message.get("method") == "Target.createTarget" and str(params.get("url") or "").startswith(TEMP_TAB):
+        return {**message, "params": {**params, "url": "about:blank"}}
+    return message
 
 
 def answer(step: dict, subs: Subs, ids: Ids, keys: dict) -> dict:

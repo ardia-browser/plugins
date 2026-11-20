@@ -59,6 +59,14 @@ class Normalizer(unittest.TestCase):
         self.assertEqual(normalize.file_value({"pid": 4, "started": 1, "ids": {"x": [1, 1795110280.4]}, "next": 3}),
                          {"pid": "<PID>", "started": "<TIME>", "ids": {"x": [1, "<TIME>"]}, "next": 3})
 
+    def test_a_temporary_tab_nonce_is_dropped_only_from_create_target(self):
+        made = {"method": "Target.createTarget", "params": {"url": "about:blank#ardia-temp-0a1b", "background": True}}
+        self.assertEqual(normalize.without_temp_nonce(made)["params"], {"url": "about:blank", "background": True})
+        other = {"method": "Page.navigate", "params": {"url": "about:blank#ardia-temp-0a1b"}}
+        self.assertIs(normalize.without_temp_nonce(other), other)
+        plain = {"method": "Target.createTarget", "params": {"url": "about:blank#elsewhere"}}
+        self.assertIs(normalize.without_temp_nonce(plain), plain)
+
     def test_every_rule_is_named(self):
         for rule in ("browser-ids", "message-id", "concurrency", "scratch", "ports", "ids-in-answers", "session-key", "tabs-file", "file-times",
                      "read-stamp", "metrics", "racy-steps", "divergences"):

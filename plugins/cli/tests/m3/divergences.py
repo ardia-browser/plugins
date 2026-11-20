@@ -44,17 +44,8 @@ DIVERGENCES = {
         "why": "the controller's global and its worker live in the isolated world, so nothing the script machinery defines is visible "
                "to a page (ardia#2812 row 9)",
     },
-    "temp-tab-marker": {
-        "row": None,
-        "commands": "anything that opens a temporary tab (script's controller, read's readers, flow run's page tier)",
-        "python": 'Target.createTarget {"url": "about:blank", "background": true}',
-        "ts": 'Target.createTarget {"url": "about:blank#ardia-temp-<nonce>", "background": true}',
-        "why": "D2's temporary tabs carry a nonce so a daemon that dies mid-create leaves a tab the next sweep can find by its URL; "
-               "this is D2's change, not an ardia#2812 row, and needs its accepted-difference entry",
-    },
 }
 
-TEMP_MARKER = "about:blank#ardia-temp-"
 ISOLATED_EVAL = "function (source) { return (0, eval)(source); }"
 SCRIPT_CONTROLLER_HEAD = "\n(() => {\n  if (globalThis.__ardiaScript) return globalThis.__ardiaScript;"
 
@@ -141,8 +132,6 @@ class Rewriter:
                 message = {**message, "method": "Runtime.callFunctionOn", "params": {
                     "functionDeclaration": f"function () {{ return ({params['expression']}); }}", "arguments": [], "returnByValue": False,
                     "awaitPromise": True}}
-        if "temp-tab-marker" in self.names and method == "Target.createTarget" and str(params.get("url") or "").startswith(TEMP_MARKER):
-            message = {**message, "params": {**params, "url": "about:blank"}}
         if "busy-probe-isolated" in self.names and busy_probe(message):
             message = {**message, "params": {name: value for name, value in params.items() if name != "contextId"}}
         return message
