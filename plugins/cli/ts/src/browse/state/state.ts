@@ -74,6 +74,11 @@ export class ClaimSet {
   get size(): number {
     return this.held.size;
   }
+
+  targetsOf(kind: string): string[] {
+    const prefix = `${kind}\u0000`;
+    return [...this.held].filter((key) => key.startsWith(prefix)).map((key) => key.slice(prefix.length));
+  }
 }
 
 function isPageInfo(info: Json): boolean {

@@ -399,7 +399,7 @@ export async function cmdGet(ctx: Ctx, argv: string[]): Promise<Result> {
   return new Result({ url: page.url }, page.url);
 }
 
-function globMatch(pattern: string, url: string): boolean {
+export function globMatch(pattern: string, url: string): boolean {
   if (pattern === url || (url.includes(pattern) && !pattern.includes("*"))) return true;
   let regex = "";
   for (let index = 0; index < pattern.length; ) {
