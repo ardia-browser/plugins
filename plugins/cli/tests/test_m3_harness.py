@@ -59,9 +59,21 @@ class Normalizer(unittest.TestCase):
         self.assertEqual(normalize.file_value({"pid": 4, "started": 1, "ids": {"x": [1, 1795110280.4]}, "next": 3}),
                          {"pid": "<PID>", "started": "<TIME>", "ids": {"x": [1, "<TIME>"]}, "next": 3})
 
+    def test_credentials_never_reach_normalized_output(self):
+        secret = "s3cret-PW-123"
+        shaped = self.shaped([("mark", 0), ("out", message(id=1, method="Fetch.continueWithAuth", sessionId="S", params={
+            "requestId": "R", "authChallengeResponse": {"response": "ProvideCredentials", "username": "alice-user", "password": secret}})),
+            ("out", message(id=2, method="Network.setExtraHTTPHeaders", sessionId="S", params={"headers": {"authorization": f"Basic {secret}", "X-Plain": "kept"}})),
+            ("out", message(id=3, method="Storage.setCookies", params={"cookies": [{"name": "sid", "value": secret}]}))])
+        text = json.dumps(shaped)
+        self.assertNotIn(secret, text)
+        self.assertNotIn("alice-user", text)
+        self.assertIn("<REDACTED>", text)
+        self.assertIn("kept", text)
+
     def test_every_rule_is_named(self):
         for rule in ("browser-ids", "message-id", "concurrency", "scratch", "ports", "ids-in-answers", "session-key", "tabs-file", "file-times",
-                     "read-stamp", "metrics", "racy-steps", "divergences"):
+                     "read-stamp", "metrics", "racy-steps", "divergences", "secrets"):
             self.assertIn(rule, normalize.RULES)
 
     def test_racy_steps_keep_only_the_exit_status(self):
