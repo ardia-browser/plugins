@@ -3,6 +3,7 @@ from ardia_cli.browse.errors import BrowseError, CdpError, Gated
 BROWSER = "browser"
 SESSION_GONE = ("Session with given id not found", "No session with given id", "no attached session has that sessionId")
 SESSION_NOT_FOUND_CODE = -32001
+INVALID_PARAMS_CODE = -32602
 ATTACH_TIMEOUT = 10
 USER_ATTACHES = ("Target.attachToTarget", "Target.attachToBrowserTarget")
 RESET_NOTICES = {
@@ -42,6 +43,8 @@ def forget_target(state, target_id: str | None) -> None:
 
 
 def session_gone(error: CdpError) -> bool:
+    if error.cdp_code == INVALID_PARAMS_CODE:
+        return False
     return error.cdp_code == SESSION_NOT_FOUND_CODE or any(gone in error.cdp_message for gone in SESSION_GONE)
 
 

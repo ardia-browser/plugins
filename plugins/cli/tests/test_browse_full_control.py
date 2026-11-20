@@ -637,6 +637,17 @@ class RawCdp(unittest.TestCase):
             for give_up in ("cancel", "timeout"):
                 self.assertEqual(asyncio.run(late(method, give_up)), [("S-browser", {"sessionId": "S-child"})], (method, give_up))
 
+    def test_a_bad_child_session_id_keeps_the_raw_session(self):
+        from ardia_cli.browse import rawcdp
+        from ardia_cli.browse.errors import CdpError
+
+        state = FakeState({"Target.detachFromTarget": failure("Target.detachFromTarget", SimpleNamespace(detail="No session with given id", code=-32602))})
+        cdp(state, "Browser.getVersion", "--target", "browser")
+        with self.assertRaises(CdpError):
+            cdp(state, "Target.detachFromTarget", "--param", "sessionId=nope", "--target", "browser")
+        self.assertEqual(state.attaches, 1)
+        self.assertEqual(rawcdp.of(state).sessions, {"browser": "S-browser-1"})
+
     def test_the_notice_says_whether_the_connection_or_only_the_session_changed(self):
         from ardia_cli.browse import rawcdp
         from ardia_cli.browse.errors import CdpError
