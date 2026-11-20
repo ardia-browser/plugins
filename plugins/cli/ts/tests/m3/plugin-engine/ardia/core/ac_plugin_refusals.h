@@ -52,6 +52,10 @@ inline constexpr char kHoldNoCredential[] = "no such credential";
 inline constexpr char kNoSuchTab[] = "no such tab";
 inline constexpr char kHoldOutOfScope[] = "tab out of scope";
 inline constexpr char kHoldNoAttachedSession[] = "no attached session";
+inline constexpr char kHoldInProgress[] =
+    "another hold on that tab is still being taken";
+inline constexpr char kTooManyCredentials[] =
+    "too many plugin credentials for this profile";
 
 }
 

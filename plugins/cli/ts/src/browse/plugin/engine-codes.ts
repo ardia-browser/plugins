@@ -50,6 +50,8 @@ export const ENGINE_UNCODED: readonly string[] = [
   "no such tab",
   "tab out of scope",
   "no attached session",
+  "another hold on that tab is still being taken",
+  "too many plugin credentials for this profile",
 ];
 
 export function engineRefusal(message: string): EngineCode | null {

@@ -244,6 +244,12 @@ describe("plugin wheels: busy and page hidden", () => {
     await expect(wheelAt(fakePage([new BrowseError("x", null, "page_hidden")]).page, 1, 1, 0, 10)).rejects.toMatchObject({ code: "outside_viewport", text: HIDDEN_TAB });
   });
 
+  test("a wheel answered outcome unknown (round 18 replies on the renderer's acknowledgement) is never retried", async () => {
+    const fake = fakePage([new BrowseError("Input.dispatchMouseEvent: ardia: outcome unknown", null, "outcome_unknown")]);
+    await expect(wheelAt(fake.page, 1, 1, 0, 10)).rejects.toMatchObject({ code: "outcome_unknown" });
+    expect(fake.sent()).toBe(1);
+  });
+
   test("the daemon's link never sends a wheel outside an acting step", async () => {
     let acting = false;
     const link = new PluginLink({} as Browser, () => acting);

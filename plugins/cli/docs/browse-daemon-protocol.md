@@ -174,7 +174,9 @@ and never by Python's or by the person's own session. The TypeScript daemon only
   the viewport's centre with the delta that would centre it, up to 4 times; still outside answers `outside_viewport`
   and nothing is clicked. Reads (`snapshot`, `get`, `is`, `find … text`, `wait`) never scroll, and the daemon's link
   refuses a wheel outside an acting step. A wheel the engine answers `ardia: busy` (the person used that tab in the last
-  500 ms) is retried after 100, 200, 300, 400 and 500 ms, then the step answers `busy` ("Ardia didn't scroll the tab
+  500 ms, or a second wheel while one is unanswered: ardia#2808 round 18 keeps one wheel slot per credential and tab and
+  answers a wheel only when the renderer acknowledges it, so the daemon's one-input-outstanding rule normally avoids
+  it) is retried after 100, 200, 300, 400 and 500 ms, then the step answers `busy` ("Ardia didn't scroll the tab
   because the person is using it right now …"); `ardia: page hidden` answers `outside_viewport` ("The tab is hidden and
   can't be scrolled"). The owner session keeps `DOM.scrollIntoViewIfNeeded`.
 - **Nothing between steps.** After every step the daemon detaches from the page target (`Target.detachFromTarget`), so
@@ -230,7 +232,10 @@ and never by Python's or by the person's own session. The TypeScript daemon only
   `ardia: no act lease for this page's current document` → exit 77 `act_lease_missing` (refused at admission, nothing
   ran) and `ardia: act lease ended before this input was delivered` → `act_lease_ended` (some events may have landed,
   so it's treated like `outcome_unknown`: exit 1, never retried); the drift test fails if the header later carries
-  either with different text. The protocol errors (not JSON, no id, duplicate id, too many pending) stay uncoded: the
+  either with different text. Round 18's hold and minting refusals (`another hold on that tab is still being taken`,
+  `too many plugin credentials for this profile`) aren't answers to anything the daemon sends and stay uncoded. A wheel
+  answered `ardia: outcome unknown` (its acknowledgement never came) is `outcome_unknown` and never retried. The
+  protocol errors (not JSON, no id, duplicate id, too many pending) stay uncoded: the
   daemon never sends what causes them. A coded refusal always ends the step before any further CDP call; only a plain,
   uncoded CDP failure may fall back (an empty title, a default viewport point, "no box").
 - **State.** Tab numbers live in the daemon's memory, per credential; the shared `tabs-*.json` registry, claims, the
