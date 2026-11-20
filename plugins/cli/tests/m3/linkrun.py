@@ -7,7 +7,7 @@
 
 Each scenario in tests/m3/link-scenarios is a list of ops that tests/m3/link_driver.py (Python's Browser and
 Connection) and ts/tests/m3/link-driver.ts (browse/cdp/browser.ts and link.ts) both run through the tap.
-I is python or ts. Live mode needs ARDIA_M3_CHROME; ports come from ARDIA_M3_PORTS.
+I is python or ts. Live mode needs ARDIA_M3_CHROME; ports come from ARDIA_M3_PORT_BASE (a block of 20).
 """
 import argparse
 import gzip

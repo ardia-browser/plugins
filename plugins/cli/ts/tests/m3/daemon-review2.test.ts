@@ -16,11 +16,11 @@ import { closeFd } from "../../src/browse/paths.ts";
 import * as temptabs from "../../src/browse/state/temptabs.ts";
 import { dumps } from "../../src/json.ts";
 import { BUILT_LIBC } from "../libc-loaded.ts";
-import { alive, ask, config, keyOf, lockHolder, PROGRAM, type Scratch, scratch, socketFile, staleSocket, start, until, quietWatchdog } from "./daemon-helpers.ts";
+import { alive, ask, config, keyOf, lockHolder, PROGRAM, type Scratch, scratch, socketFile, staleSocket, start, until, quietWatchdog, D2_FIRST_PORT } from "./daemon-helpers.ts";
 
 setDefaultTimeout(120_000);
 const CHROME = process.env["ARDIA_M3_CHROME"];
-const CHROME_PORT = Number(process.env["ARDIA_D2_CHROME_PORT"] ?? "9531") + 4;
+const CHROME_PORT = D2_FIRST_PORT + 4;
 const home = process.cwd();
 const made: Scratch[] = [];
 const pids: number[] = [];

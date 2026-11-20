@@ -13,12 +13,12 @@ import { Cancelled } from "../../src/browse/cdp/cancel.ts";
 import { browseDir, closeFd, lockHeld, socketIsOurs } from "../../src/browse/paths.ts";
 import { BUILT_LIBC } from "../libc-loaded.ts";
 import { dumps } from "../../src/json.ts";
-import { alive, ask, config, keyOf, PYTHON, sessionMeta, raw, type Scratch, scratch, socketFile, staleSocket, start, tsChoice, until, quietWatchdog } from "./daemon-helpers.ts";
+import { alive, ask, config, keyOf, PYTHON, sessionMeta, raw, type Scratch, scratch, socketFile, staleSocket, start, tsChoice, until, quietWatchdog, D2_FIRST_PORT } from "./daemon-helpers.ts";
 
 setDefaultTimeout(90_000);
 const TS_DIR = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
 const CHROME = process.env["ARDIA_M3_CHROME"];
-const CHROME_PORT = Number(process.env["ARDIA_D2_CHROME_PORT"] ?? "9531") + 3;
+const CHROME_PORT = D2_FIRST_PORT + 3;
 const home = process.cwd();
 const made: Scratch[] = [];
 const pids: number[] = [];

@@ -1950,7 +1950,9 @@ Its page core (slice D3: `browse/state/page.ts`, `state.ts`, `refs.ts`, `apptabs
   node it wasn't given. `followed_redrawn_ref` and `followed_ref_after_reload` never fire.
 - A page call is bound to the document and frame its isolated world was made for. Each world gets a handle (one more
   `Runtime.evaluate` of `globalThis`, kept as its remote object id), and every call is `Runtime.callFunctionOn` on that
-  handle rather than on a numeric execution context id, which Chromium can reuse in another process. A renderer that no
+  handle rather than on a numeric execution context id, which Chromium can reuse in another process. Right after the
+  handle is made, a `Page.getFrameTree` request (one more than Python sends per world) binds it to the loader the
+  renderer reports, so a navigation whose event hasn't arrived yet can't hand the call a world in the new document. A renderer that no
   longer has the handle's document refuses it, and the call fails with `document_changed` (a read retries once in a
   fresh world). The frame's loader is also checked after the world is made, after the helper library goes in and right
   before the call is sent. An element from another frame is never re-homed into this frame's world. Python can run such
@@ -1969,9 +1971,11 @@ Its page core (slice D3: `browse/state/page.ts`, `state.ts`, `refs.ts`, `apptabs
   or failed is dropped, so the next command connects and discovers again.
 - When `set viewport`'s tab leaves its off-screen copy and the replacement tab fails to load, the replacement is closed
   and the session's tab, label and pin go back to the original (`offscreen_handoff_rolled_back`, counted only when the
-  close succeeded). A replacement Chromium won't close, or whose creation was answered after a cancel, goes on the list
-  of tabs the daemon keeps closing (and hands to the next connect's sweep at exit). The command's own error is kept,
-  with any closing error as its cause. Python leaves the session on the half-made tab.
+  close succeeded). Every such close takes the tab registry's close reservation first, as the temporary-tab sweep does;
+  a replacement whose reservation is refused, that Chromium won't close, or whose creation was answered after a cancel
+  goes on the list of tabs the daemon keeps closing (each retry reserves again) and is handed to the next connect's sweep
+  at exit. The command's own error is kept, with any closing error as its cause, and the answer reports it even when that
+  cause is a lost connection (the session is still marked lost, so the next command gets `connection_lost`). Python leaves the session on the half-made tab.
 - The caller counts as announced to Ardia's control socket only after the handshake finished, so a cancelled one is
   tried again by the next command; Python records it before. A cancelled active-tab lookup (`tab active`) ends its HTTP
   request at once.

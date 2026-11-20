@@ -179,6 +179,7 @@ export class State extends Refs implements temptabs.TempTabState {
   notice: string | null = null;
   pinnedTarget: string | null = null;
   mustClose = new Set<string>();
+  readonly reservedCloses = new Set<string>();
   mustCloseTask: temptabs.TempTabState["mustCloseTask"] = null;
   caller: Caller | null = null;
   announced: Caller | null = null;

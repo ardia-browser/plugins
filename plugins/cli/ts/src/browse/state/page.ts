@@ -461,6 +461,8 @@ export class Page {
     const handle = record(record((await this.send("Runtime.evaluate", { expression: WORLD_HANDLE, contextId: context, returnByValue: false }, { guard }))["result"]))["objectId"];
     guard();
     if (typeof handle !== "string" || !handle) throw new StaleWorld();
+    await this.refreshFrames();
+    guard();
     this.worlds.set(frame, [loader, context, handle]);
     return { frame, loader, context, handle };
   }
