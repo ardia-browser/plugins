@@ -1,0 +1,21 @@
+{
+ "steps": [
+  {"argv": ["open", "{fixture}/login.html", "--no-changes"], "session": "nav"},
+  {"argv": ["back"], "session": "nav"},
+  {"argv": ["open", "{fixture}/form.html", "--no-changes"], "session": "nav"},
+  {"argv": ["back"], "session": "nav"},
+  {"argv": ["get", "title"], "session": "nav"},
+  {"argv": ["--json", "forward"], "session": "nav"},
+  {"argv": ["forward"], "session": "nav"},
+  {"argv": ["get", "url"], "session": "nav"},
+  {"argv": ["reload"], "session": "nav"},
+  {"argv": ["get", "title"], "session": "nav"},
+  {"argv": ["pushstate"], "session": "nav"},
+  {"argv": ["--json", "pushstate", "/pushed/path?x=1"], "session": "nav"},
+  {"argv": ["get", "url"], "session": "nav"},
+  {"argv": ["back"], "session": "nav"},
+  {"argv": ["get", "url"], "session": "nav"},
+  {"argv": ["back"], "session": "nav"},
+  {"argv": ["get", "title"], "session": "nav"}
+ ]
+}

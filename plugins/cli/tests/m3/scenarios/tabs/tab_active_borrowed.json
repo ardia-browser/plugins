@@ -1,0 +1,19 @@
+{
+ "steps": [
+  {"argv": ["open", "{fixture}/login.html", "--no-changes"], "session": "owner"},
+  {"argv": ["--json", "tab", "active"], "session": "agent"},
+  {"argv": ["get", "title"], "session": "agent"},
+  {"argv": ["back"], "session": "agent"},
+  {"argv": ["--json", "reload"], "session": "agent"},
+  {"argv": ["pushstate", "/elsewhere"], "session": "agent"},
+  {"argv": ["tab", "close"], "session": "agent"},
+  {"argv": ["open", "{fixture}/form.html", "--no-changes"], "session": "agent"},
+  {"argv": ["get", "url"], "session": "agent"},
+  {"argv": ["back"], "session": "agent"},
+  {"argv": ["tab", "list"], "session": "agent"},
+  {"argv": ["tab", "list"], "session": "owner"},
+  {"argv": ["get", "url"], "session": "owner"},
+  {"argv": ["close"], "session": "agent"},
+  {"argv": ["close"], "session": "owner"}
+ ]
+}

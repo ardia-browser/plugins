@@ -1,0 +1,15 @@
+{
+ "steps": [
+  {"argv": ["open", "{fixture}/hashapp.html", "--no-changes"], "session": "hash"},
+  {"argv": ["wait", "--text", "Directory"], "session": "hash"},
+  {"argv": ["pushstate", "#/people/3"], "session": "hash"},
+  {"argv": ["pushstate", "#/people/4"], "session": "hash"},
+  {"argv": ["back"], "session": "hash"},
+  {"argv": ["get", "url"], "session": "hash"},
+  {"argv": ["forward"], "session": "hash"},
+  {"argv": ["get", "url"], "session": "hash"},
+  {"argv": ["back"], "session": "hash"},
+  {"argv": ["back"], "session": "hash"},
+  {"argv": ["get", "url"], "session": "hash"}
+ ]
+}
