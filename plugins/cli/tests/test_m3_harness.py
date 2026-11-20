@@ -59,6 +59,13 @@ class Normalizer(unittest.TestCase):
         self.assertEqual(normalize.file_value({"pid": 4, "started": 1, "ids": {"x": [1, 1795110280.4]}, "next": 3}),
                          {"pid": "<PID>", "started": "<TIME>", "ids": {"x": [1, "<TIME>"]}, "next": 3})
 
+    def test_the_fixture_folder_reads_the_same_from_any_checkout(self):
+        here = normalize.Subs({"root": "/tmp/run/A", "fixture_dir": "/clone/one/tests/fixtures/browse"})
+        there = normalize.Subs({"root": "/tmp/run/B", "fixture_dir": "/clone/two/tests/fixtures/browse"})
+        said = "[Errno 2] No such file or directory: '{}/no-such-script.js'"
+        self.assertEqual(here.text(said.format("/clone/one/tests/fixtures/browse")), there.text(said.format("/clone/two/tests/fixtures/browse")))
+        self.assertEqual(here.text("/clone/two/tests/fixtures/browse/x"), "/clone/two/tests/fixtures/browse/x")
+
     def test_a_temporary_tab_nonce_is_dropped_only_from_create_target(self):
         made = {"method": "Target.createTarget", "params": {"url": "about:blank#ardia-temp-0a1b", "background": True}}
         self.assertEqual(normalize.without_temp_nonce(made)["params"], {"url": "about:blank", "background": True})

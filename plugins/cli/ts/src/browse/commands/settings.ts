@@ -6,6 +6,7 @@ import { flag } from "../metrics.ts";
 import { appCall, appTabMap, ControlRefused } from "../state/apptabs.ts";
 import type { Page } from "../state/page.ts";
 import { refuseOnBorrowed } from "./borrowed.ts";
+import { allow, PERMISSIONS } from "./permissions.ts";
 import { engineOffscreen, leaveOffscreen } from "./core.ts";
 import type { Ctx } from "./ctx.ts";
 import { canonical, register, unsupported } from "./index.ts";
@@ -29,13 +30,6 @@ export const DEVICES: Readonly<Record<string, Device>> = {
   desktop: [1280, 800, 1, false, null],
 };
 
-export const PERMISSIONS: Readonly<Record<string, readonly string[]>> = {
-  geolocation: ["geolocation"],
-  notifications: ["notifications"],
-  camera: ["videoCapture"],
-  microphone: ["audioCapture"],
-  clipboard: ["clipboardReadWrite", "clipboardSanitizedWrite"],
-};
 export const PROMPT_NOTE =
   "granted ahead of any prompt; a permission prompt already on screen isn't answered by this (Ardia doesn't let the ardia command answer one yet), " +
   "so set it before the page asks";
@@ -86,8 +80,7 @@ async function setPermission(ctx: Ctx, page: Page, args: string[]): Promise<Resu
   if (!origin || !/^https?:\/\//u.test(origin)) {
     throw new BrowseError("Permissions are granted to the tab's web origin, and this tab isn't on a web page yet; `open <url>` first", null, "not_a_web_page");
   }
-  const permissions = [...new Set(names.flatMap((name) => PERMISSIONS[name] as readonly string[]))];
-  await (ctx.state.browser as NonNullable<typeof ctx.state.browser>).send("Browser.grantPermissions", { origin, permissions });
+  await allow(ctx.state.browser as NonNullable<typeof ctx.state.browser>, origin, names);
   flag("permission_granted", true);
   return new Result({ origin, granted: names }, `✓ ${names.join(", ")} allowed for ${origin}: ${PROMPT_NOTE}`);
 }

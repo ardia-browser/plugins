@@ -44,7 +44,9 @@ async def row(run: human_core.Run, number: int) -> dict:
             notes.append("click by the tier (D5 owns click)")
             browse("wait", "100")
         elif number == 14:
-            browse("set", "permission", "geolocation", "notifications", "camera")
+            for name in ("geolocation", "notifications", "camera"):
+                browse("set", "permission", name)
+            browse("clipboard", "write", "grants compose")
             browse("set", "geo", "52.5", "13.4")
             for target in ("#geo", "#notify", "#camera"):
                 await tier.click(target)

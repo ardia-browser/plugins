@@ -14,6 +14,7 @@ import { DOCUMENT_CHANGED, type Page } from "../state/page.ts";
 import { record } from "../state/records.ts";
 import type { State } from "../state/state.ts";
 import { hintOnce, refuseOnBorrowed } from "./borrowed.ts";
+import { allow } from "./permissions.ts";
 import type { Ctx } from "./ctx.ts";
 import { register } from "./index.ts";
 import { need, parse } from "./parse.ts";
@@ -221,7 +222,6 @@ export async function cmdRemoveInitScript(ctx: Ctx, argv: string[]): Promise<Res
   return new Result({ removed: wanted });
 }
 
-export const CLIPBOARD_PERMISSIONS = ["clipboardReadWrite", "clipboardSanitizedWrite"];
 
 export async function cmdClipboard(ctx: Ctx, argv: string[]): Promise<Result> {
   const [, args] = parse(argv);
@@ -239,7 +239,7 @@ export async function cmdClipboard(ctx: Ctx, argv: string[]): Promise<Result> {
       return new Result({ [action]: true });
     }
     const origin = (page.mainFrame === null ? undefined : page.frames.get(page.mainFrame)?.origin) ?? null;
-    await ctx.state.browser?.send("Browser.grantPermissions", { origin, permissions: CLIPBOARD_PERMISSIONS });
+    await allow(ctx.state.browser as NonNullable<typeof ctx.state.browser>, origin, ["clipboard"]);
     if (action === "read") {
       const text = await evaluateIsolated(page, "navigator.clipboard.readText()");
       return new Result({ text }, String(text ?? ""), true);

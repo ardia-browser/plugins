@@ -14,6 +14,13 @@ import { Registry } from "../../src/browse/state/registry.ts";
 import { evaluateIsolated, ISOLATED_EVAL } from "../../src/browse/commands/pagejs.ts";
 import { workerSource } from "../../src/browse/script/script.ts";
 import { scratch, type Scratch } from "./daemon-helpers.ts";
+import { spawnSync } from "node:child_process";
+import { run, RunTimedOut, signalGroup } from "../../src/browse/auth/run.ts";
+import { Cancelled, withSignal } from "../../src/browse/cdp/cancel.ts";
+import { wireParams } from "../../src/browse/cdp/params.ts";
+import { allow } from "../../src/browse/commands/permissions.ts";
+import { decodeScript, readScript } from "../../src/browse/commands/setup.ts";
+import { parseParams } from "../../src/browse/flows/flows.ts";
 
 setDefaultTimeout(30_000);
 const made: Scratch[] = [];
@@ -148,7 +155,7 @@ describe("credential providers", () => {
       "Plugin 'vault' failed: locked",
     );
     expect(credential(plugin(`cat > /dev/null; echo '{"protocol": "agent-browser.plugin.v1", "success": true, "data": {}}'`).root, "vault", "i", null)).rejects.toThrow(
-      "Plugin 'vault' returned no password for i",
+      "Credential provider vault returned no password for i",
     );
     expect(call(plugin("cat > /dev/null").root, "vault", "other.cap", {})).rejects.toThrow("Plugin vault doesn't declare other.cap (it declares credential.read)");
     expect(call(plugin("cat > /dev/null").root, "nobody", "credential.read", {})).rejects.toThrow("No plugin named nobody");
@@ -314,3 +321,158 @@ describe("script and eval sources", () => {
   });
 });
 
+
+function alivePid(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function gone(pid: number, ms = 3000): Promise<boolean> {
+  const end = performance.now() + ms;
+  while (performance.now() < end) {
+    if (!alivePid(pid)) return true;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  return !alivePid(pid);
+}
+
+describe("subprocess lifetime", () => {
+  test("a leader that forked a child holding stdout and exited is settled at its deadline, and the child is killed", async () => {
+    const dir = tempDir();
+    const pidFile = path.join(dir, "pid");
+    const started = performance.now();
+    await expect(run(["/bin/sh", "-c", `sleep 30 & echo $! > ${pidFile}; exit 0`], { timeout: 0.4, grace: 0.2 })).rejects.toBeInstanceOf(RunTimedOut);
+    expect(performance.now() - started).toBeLessThan(3000);
+    expect(await gone(Number(fs.readFileSync(pidFile, "utf8")))).toBe(true);
+  });
+
+  test("a cancel settles the same way and leaves no process", async () => {
+    const dir = tempDir();
+    const pidFile = path.join(dir, "pid");
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(new Cancelled()), 300);
+    const started = performance.now();
+    await expect(withSignal(controller.signal, () => run(["/bin/sh", "-c", `sleep 30 & echo $! > ${pidFile}; wait`], { timeout: 30, grace: 0.2 }))).rejects.toBeInstanceOf(Cancelled);
+    expect(performance.now() - started).toBeLessThan(3000);
+    expect(await gone(Number(fs.readFileSync(pidFile, "utf8")))).toBe(true);
+  });
+
+  test("a group that ignores SIGTERM is killed after the grace", async () => {
+    const dir = tempDir();
+    const pidFile = path.join(dir, "pid");
+    await expect(run(["/bin/sh", "-c", `trap '' TERM; (trap '' TERM; sleep 30) & echo $! > ${pidFile}; wait`], { timeout: 0.3, grace: 0.3 })).rejects.toBeInstanceOf(RunTimedOut);
+    expect(await gone(Number(fs.readFileSync(pidFile, "utf8")))).toBe(true);
+  });
+
+  test("each run is its own process group", async () => {
+    const ran = await run(["/bin/sh", "-c", "ps -o pgid= -p $$; echo $$"], { timeout: 5 });
+    const [pgid, pid] = ran.stdout.toString().trim().split(/\s+/u);
+    expect(pgid).toBe(pid);
+    expect(Number(pgid)).not.toBe(process.pid);
+    expect(signalGroup(Number(pid), 0)).toBe(false);
+  });
+});
+
+describe("credential provider boundary", () => {
+  function provider(body: string): string {
+    const root = tempDir();
+    const dir = path.join(root, "bin");
+    fs.mkdirSync(dir);
+    const command = stub(dir, "provider", body);
+    closeFd(browseDir(root));
+    saveRegistry(root, [{ name: "vault", package: "p", version: "1", spec: "p@1", command, capabilities: ["credential.read"] }]);
+    return root;
+  }
+
+  test("only the allowlisted environment reaches a provider", async () => {
+    process.env["D7_FAKE_SECRET"] = "sk-fake-secret-0000";
+    process.env["GITHUB_TOKEN"] = "ghp_fake";
+    process.env["LC_ALL"] = "C";
+    try {
+      const root = provider(`cat > /dev/null; env > "$PWD/env.txt"; echo '{"protocol": "agent-browser.plugin.v1", "success": true, "data": {"password": "pw"}}'`);
+      await credential(root, "vault", "i", null);
+      const env = fs.readFileSync(path.join(root, "bin", "env.txt"), "utf8");
+      expect(env).not.toContain("sk-fake-secret-0000");
+      expect(env).not.toContain("GITHUB_TOKEN");
+      expect(env).toContain("LC_ALL=C");
+      expect(env).toContain(`PATH=${process.env["PATH"]}`);
+    } finally {
+      delete process.env["D7_FAKE_SECRET"];
+      delete process.env["GITHUB_TOKEN"];
+      delete process.env["LC_ALL"];
+    }
+  });
+
+  test("provider text never reaches the answer", async () => {
+    const leak = "sk-fake-secret-1111";
+    const cases: [string, string][] = [
+      [`echo '{"protocol": "agent-browser.plugin.v1", "success": false, "error": "${leak}"}'`, "Credential provider vault returned an error"],
+      [`echo '{"protocol": "${leak}", "success": true}'`, "Credential provider vault sent a malformed reply"],
+      [`echo '${leak}'`, "Credential provider vault sent a malformed reply"],
+      [`echo '{"protocol": "agent-browser.plugin.v1", "success": true, "data": {"password": "pw", "url": ["${leak}"]}}'`, "Credential provider vault sent a malformed reply"],
+      [`echo '{"protocol": "agent-browser.plugin.v1", "success": true, "data": {"password": 7}}'`, "Credential provider vault returned no password for i"],
+    ];
+    for (const [body, said] of cases) {
+      const error = (await credential(provider(`cat > /dev/null; ${body}`), "vault", "i", null).catch((thrown: unknown) => thrown)) as BrowseError;
+      expect(error).toBeInstanceOf(BrowseError);
+      expect(error.text).toBe(said);
+      expect(JSON.stringify([error.text, error.data])).not.toContain(leak);
+    }
+  });
+
+  test("a well-formed reply keeps only the known string fields", async () => {
+    const root = provider(`cat > /dev/null; echo '{"protocol": "agent-browser.plugin.v1", "success": true, "data": {"password": "pw", "username": "u", "url": "https://x.example", "extra": 1}}'`);
+    expect({ ...(await credential(root, "vault", "i", null)) }).toEqual({ password: "pw", username: "u", url: "https://x.example" });
+  });
+});
+
+describe("permission grants compose", () => {
+  test("each permission is its own override, so a later grant keeps the earlier ones", async () => {
+    const sent: [string, unknown][] = [];
+    const browser = { send: async (method: string, params: unknown) => (sent.push([method, params]), {}) };
+    await allow(browser as never, "https://a.example", ["geolocation"]);
+    await allow(browser as never, "https://a.example", ["notifications", "clipboard", "clipboard"]);
+    expect(sent.map(([method]) => method)).toEqual(Array(4).fill("Browser.setPermission"));
+    expect(sent.map(([, params]) => (params as { permission: { name: string } }).permission.name)).toEqual(["geolocation", "notifications", "clipboard-read", "clipboard-write"]);
+  });
+});
+
+describe("init-script files", () => {
+  test("a FIFO is refused at once instead of blocking the daemon", async () => {
+    const dir = tempDir();
+    const fifo = path.join(dir, "pipe.js");
+    expect(spawnSync("mkfifo", [fifo]).status).toBe(0);
+    const started = performance.now();
+    await expect(readScript(fifo)).rejects.toThrow(`--init-script ${fifo} isn't a regular file`);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  test("an oversized script is refused, a missing one reads like Python", async () => {
+    const dir = tempDir();
+    const big = path.join(dir, "big.js");
+    fs.writeFileSync(big, Buffer.alloc(4 * 1024 * 1024 + 1, 0x20));
+    await expect(readScript(big)).rejects.toThrow("is over 4 MB");
+    await expect(readScript(path.join(dir, "none.js"))).rejects.toThrow(`[Errno 2] No such file or directory: '${dir}/none.js'`);
+  });
+
+  test("decoding keeps a BOM and turns CRLF and CR into LF, as Python's text read does", () => {
+    expect(decodeScript(Buffer.from("\ufeffa\r\nb\rc\n", "utf8"), "x")).toBe("\ufeffa\nb\nc\n");
+  });
+});
+
+describe("cdp params on the wire", () => {
+  test("integers past 2^53 are sent exactly", () => {
+    const params = buildParams('{"n": 123456789012345678901234567890, "m": -9007199254740993, "s": 1, "f": 1.5}', [], "");
+    expect(JSON.stringify(wireParams(params as never))).toBe('{"n":123456789012345678901234567890,"m":-9007199254740993,"s":1,"f":1.5}');
+  });
+
+  test("a __proto__ param is an ordinary key", () => {
+    const given = parseParams(["__proto__=x", "q=1"]);
+    expect(Object.hasOwn(given, "__proto__")).toBe(true);
+    expect(given["__proto__"]).toBe("x");
+  });
+});

@@ -394,3 +394,15 @@ export function plainParams(value: Value): unknown {
   for (const [key, item] of value) out[key] = plainParams(item);
   return out;
 }
+
+const rawJson = (JSON as unknown as { rawJSON: (text: string) => unknown }).rawJSON;
+
+export function wireParams(value: Value): unknown {
+  if (value === null || typeof value === "boolean" || typeof value === "string") return value;
+  if (typeof value === "bigint") return Number.isSafeInteger(Number(value)) ? Number(value) : rawJson(value.toString());
+  if (value instanceof Float) return value.value;
+  if (Array.isArray(value)) return value.map(wireParams);
+  const out: Record<string, unknown> = Object.create(null);
+  for (const [key, item] of value) out[key] = wireParams(item);
+  return out;
+}

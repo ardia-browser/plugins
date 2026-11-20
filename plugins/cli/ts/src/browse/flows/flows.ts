@@ -856,7 +856,7 @@ export function hint(state: State, url: string | null): string | null {
 }
 
 export function parseParams(values: readonly string[] | null | undefined): Record<string, string> {
-  const params: Record<string, string> = {};
+  const params: Record<string, string> = Object.create(null);
   for (const item of values ?? []) {
     const [key, sep, value] = partition(item, "=");
     if (!sep || !key) throw new Usage(`--param takes name=value, not ${reprText(item)}`);

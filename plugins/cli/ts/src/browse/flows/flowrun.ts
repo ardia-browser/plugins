@@ -73,7 +73,7 @@ function resolveParams(flow: Json, given: Record<string, string>): Record<string
   const known = new Map<string, Json>(flow["params"].map((param: Json) => [param["name"], param]));
   const unknown = Object.keys(given).filter((name) => !known.has(name));
   if (unknown.length > 0) throw new Usage(`${flow["name"]} has no param ${unknown.join(", ")}; its params are: ${[...known.keys()].join(", ") || "none"}`);
-  const values: Record<string, string> = {};
+  const values: Record<string, string> = Object.create(null);
   for (const [name, param] of known) if (param["example"] !== null && param["example"] !== undefined) values[name] = param["example"];
   Object.assign(values, given);
   const missing = [...known.keys()].filter((name) => !Object.hasOwn(values, name));

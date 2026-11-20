@@ -34,6 +34,7 @@ RULES = {
     "unstable-steps": "live mode compares only exit and stderr of the steps a scenario lists in `unstable_steps`, with the reason in the scenario",
     "metrics": "of an answer's `metrics` only the key set is compared, never values",
     "racy-steps": "every mode compares only the exit status of the steps a scenario lists in `racy_steps`, where Chromium decides which of two errors the same request gets (the reason is in the scenario)",
+    "fixture-dir": "the checkout's own fixture folder (tests/fixtures/browse, recorded in subs) becomes {fixture_dir} in answers and requests, so a recording replays from any clone",
     "temp-tab-nonce": "a temporary tab's `Target.createTarget` URL `about:blank#ardia-temp-<nonce>` (the TS daemon marks the tabs it opens only to read, so a sweep can find one a crashed daemon left) becomes `about:blank`, Python's URL",
     "divergences": "designed TS differences from tests/m3/divergences.py (`world-handle` always, the rest when a scenario names them) rewrite only the request fields they name, on both sides, before IDs are numbered",
 }
@@ -93,8 +94,11 @@ class Subs:
         self.tap = subs.get("tap")
         self.chrome = subs.get("chrome")
         self.fixture = subs.get("fixture", RECORDED_FIXTURE)
+        self.fixture_dir = subs.get("fixture_dir") or ""
 
     def text(self, text: str) -> str:
+        if self.fixture_dir:
+            text = text.replace(self.fixture_dir, "{fixture_dir}")
         if self.root:
             text = text.replace(self.root, "<SCRATCH>")
         for port, name in ((self.tap, "<TAP>"), (self.chrome, "<CHROME>"), (self.fixture, "<FIXTURE>")):

@@ -44,6 +44,14 @@ DIVERGENCES = {
         "why": "the controller's global and its worker live in the isolated world, so nothing the script machinery defines is visible "
                "to a page (ardia#2812 row 9)",
     },
+    "permission-overrides": {
+        "row": 3,
+        "commands": "clipboard read|write, set permission",
+        "python": 'Browser.grantPermissions {"origin": <origin>, "permissions": ["clipboardReadWrite", "clipboardSanitizedWrite"]}',
+        "ts": 'Browser.setPermission {"permission": {"name": <one>}, "setting": "granted", "origin": <origin>} for each permission',
+        "why": "grantPermissions replaces every override the origin had, so a clipboard grant revoked a granted geolocation; per-permission "
+               "overrides compose. Neither form is compared in a scenario that names this; tests/m3/human_d7.py rows 3 and 14 prove the grants",
+    },
 }
 
 ISOLATED_EVAL = "function (source) { return (0, eval)(source); }"
@@ -132,6 +140,8 @@ class Rewriter:
                 message = {**message, "method": "Runtime.callFunctionOn", "params": {
                     "functionDeclaration": f"function () {{ return ({params['expression']}); }}", "arguments": [], "returnByValue": False,
                     "awaitPromise": True}}
+        if "permission-overrides" in self.names and method in ("Browser.grantPermissions", "Browser.setPermission"):
+            return None
         if "busy-probe-isolated" in self.names and busy_probe(message):
             message = {**message, "params": {name: value for name, value in params.items() if name != "contextId"}}
         return message

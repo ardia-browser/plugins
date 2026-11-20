@@ -166,16 +166,21 @@ export function remove(root: string, name: string): void {
   if (info !== null && info.isDirectory() && !info.isSymbolicLink()) fs.rmSync(base, { recursive: true, force: true });
 }
 
+export const PLUGIN_ENV = ["PATH", "HOME", "LANG", "TMPDIR", "USER", "LOGNAME", "SHELL"];
+export const CREDENTIAL_TEXT_FIELDS = ["url", "username", "usernameSelector", "passwordSelector", "submitSelector"];
+
 export function pluginEnv(): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
-    if (value === undefined || key.startsWith("ARDIA_") || key.startsWith("AGENT_BROWSER_")) continue;
-    env[key] = value;
+    if (value === undefined) continue;
+    if (PLUGIN_ENV.includes(key) || key.startsWith("LC_")) env[key] = value;
   }
   return env;
 }
 
-export async function call(root: string, name: string, capability: string, request: unknown, timeout = RUN_TIMEOUT): Promise<unknown> {
+type Reply = { kind: "ok"; data: Value } | { kind: "invalid" } | { kind: "protocol"; said: Value } | { kind: "failed"; error: Value };
+
+async function ask(root: string, name: string, capability: string, request: unknown, timeout: number): Promise<Reply> {
   const plugin = find(root, name);
   const declared = (plugin["capabilities"] ?? []) as string[];
   if (!declared.includes(capability) && capability !== "command.run") {
@@ -197,30 +202,50 @@ export async function call(root: string, name: string, capability: string, reque
     throw error;
   }
   const raw = decode(ran.stdout.subarray(0, MAX_REPLY)).trim();
-  let reply: Value | undefined;
+  let reply: Value;
   try {
     const lines = raw.split(LINE_BREAKS);
-    reply = raw ? pyLoads(lines.at(-1) as string) : pyLoads("");
+    reply = pyLoads(raw ? (lines.at(-1) as string) : "");
   } catch {
-    throw new BrowseError(`Plugin '${name}' returned invalid JSON`);
+    return { kind: "invalid" };
   }
-  if (!(reply instanceof Map) || reply.get("protocol") !== PROTOCOL) {
-    const said = reply instanceof Map ? (reply.get("protocol") ?? "") : "";
-    throw new BrowseError(`Plugin '${name}' used unsupported protocol '${typeof said === "string" ? said : dumps(said, "spaced")}'`);
-  }
+  if (!(reply instanceof Map) || reply.get("protocol") !== PROTOCOL) return { kind: "protocol", said: reply instanceof Map ? (reply.get("protocol") ?? "") : "" };
   const success = reply.get("success");
-  if (!success || success === "" || success === 0n) {
-    const error = reply.get("error");
-    throw new BrowseError(`Plugin '${name}' failed: ${error && typeof error === "string" ? error : error ? dumps(error, "spaced") : "no detail"}`);
-  }
-  return plainParams(reply.get("data") ?? null);
+  if (!success || success === 0n) return { kind: "failed", error: reply.get("error") ?? null };
+  return { kind: "ok", data: reply.get("data") ?? null };
 }
 
-export async function credential(root: string, name: string, item: string, url: string | null): Promise<Record<string, any>> {
-  const data = await call(root, name, "credential.read", { item, ...(url ? { url } : {}) });
-  if (data === null || typeof data !== "object" || Array.isArray(data) || !(data as Record<string, unknown>)["password"]) {
-    throw new BrowseError(`Plugin '${name}' returned no password for ${item}`);
+export async function call(root: string, name: string, capability: string, request: unknown, timeout = RUN_TIMEOUT): Promise<unknown> {
+  const reply = await ask(root, name, capability, request, timeout);
+  if (reply.kind === "invalid") throw new BrowseError(`Plugin '${name}' returned invalid JSON`);
+  if (reply.kind === "protocol") throw new BrowseError(`Plugin '${name}' used unsupported protocol '${typeof reply.said === "string" ? reply.said : dumps(reply.said, "spaced")}'`);
+  if (reply.kind === "failed") {
+    const error = reply.error;
+    throw new BrowseError(`Plugin '${name}' failed: ${error && typeof error === "string" ? error : error ? dumps(error, "spaced") : "no detail"}`);
   }
-  return data as Record<string, any>;
+  return plainParams(reply.data);
+}
+
+function malformed(name: string): BrowseError {
+  return new BrowseError(`Credential provider ${name} sent a malformed reply`, null, "credential_provider_failed");
+}
+
+export async function credential(root: string, name: string, item: string, url: string | null, timeout = RUN_TIMEOUT): Promise<Record<string, string>> {
+  const reply = await ask(root, name, "credential.read", { item, ...(url ? { url } : {}) }, timeout);
+  if (reply.kind === "failed") throw new BrowseError(`Credential provider ${name} returned an error`, null, "credential_provider_failed");
+  if (reply.kind !== "ok") throw malformed(name);
+  const data = reply.data;
+  if (!(data instanceof Map)) throw malformed(name);
+  const password = data.get("password");
+  if (typeof password !== "string" || password === "") throw new BrowseError(`Credential provider ${name} returned no password for ${item}`, null, "credential_provider_failed");
+  const creds: Record<string, string> = Object.create(null);
+  creds["password"] = password;
+  for (const field of CREDENTIAL_TEXT_FIELDS) {
+    const value = data.get(field);
+    if (value === undefined || value === null) continue;
+    if (typeof value !== "string") throw malformed(name);
+    creds[field] = value;
+  }
+  return creds;
 }
 

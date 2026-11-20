@@ -2,7 +2,7 @@ import { dumps } from "../../json.ts";
 import { strip, isSpace } from "../../py.ts";
 import { pyValue, Result } from "../daemon/render.ts";
 import { BrowseError, Gated, Usage } from "../daemon-errors.ts";
-import { buildParams, encodedSize, MAX_CDP_PARAMS, ParamsError, plainParams } from "../cdp/params.ts";
+import { buildParams, encodedSize, MAX_CDP_PARAMS, ParamsError, wireParams } from "../cdp/params.ts";
 import * as raw from "../cdp/raw.ts";
 import { parseTimeout } from "../script/timeout.ts";
 import type { Page } from "../state/page.ts";
@@ -56,7 +56,7 @@ export async function cmdCdp(ctx: Ctx, argv: string[]): Promise<Result> {
   if (args.length > 1) throw new Usage(`Usage: ardia browse ${CDP_USAGE} (params go in --params or --param)`);
   const method = args[0] as string;
   if (!CDP_METHOD.test(method)) throw new Usage(`${method} isn't a DevTools method name; give Domain.method, like Page.getLayoutMetrics`);
-  const params = plainParams(cdpParams(options["params"] as string | undefined, (options["param"] as string[] | undefined) ?? [], ctx.stdin));
+  const params = wireParams(cdpParams(options["params"] as string | undefined, (options["param"] as string[] | undefined) ?? [], ctx.stdin));
   const timeout = options["timeout"] ? parseTimeout(options["timeout"] as string) : 30;
   const target = cdpTarget(options);
   const state = ctx.state;

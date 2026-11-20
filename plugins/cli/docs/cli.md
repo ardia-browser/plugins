@@ -2003,8 +2003,7 @@ scenarios:
   call is Python's, on the controller's own object id. `page.evaluate()` inside a script is `eval`, so it is isolated too.
 - `cdp`, `eval`, init scripts and the raw session per tab and per browser follow plugins#11 (full-control/cli
   3917106), which isn't on main yet: its params checks, timeouts, `result_too_large`, `borrowed_tab`, the 16-attach cap
-  and the `using` hold on `--target` tabs. Integers in `cdp` params past 2^53 are sent as the nearest double (Bun's JSON
-  writer); Python sends them exactly.
+  and the `using` hold on `--target` tabs. Integers in `cdp` params are sent exactly, past 2^53 too, as Python sends them.
 - `set permission geolocation|notifications|camera|microphone|clipboard` is new (ardia#2812 row 14): it grants the
   permission to the tab's origin with `Browser.grantPermissions` ahead of any prompt (`permission_granted`). A prompt
   already on screen isn't answered; that needs Ardia's control socket to offer it. Python has no such setting and
@@ -2018,6 +2017,21 @@ scenarios:
 - Keychain and plugin processes are started without a shell, from an argv array, and the Keychain secret goes only to
   `security -i`'s stdin, as in Python. A process killed at its deadline ends the call as soon as it exits, even when a
   child of its own still holds its output open; Python's `subprocess.run` also returns then.
+- Plugins and credential providers get only `PATH`, `HOME`, `LANG`, `LC_*`, `TMPDIR`, `USER`, `LOGNAME` and `SHELL` from
+  the daemon's environment; Python passes everything but `ARDIA_*` and `AGENT_BROWSER_*`. A provider's reply is checked
+  strictly (`password` a non-empty string; `url`, `username` and the three selectors strings or absent; anything else
+  ignored), and a failed or malformed reply reads `Credential provider <name> returned an error` or `… sent a malformed
+  reply`, never the provider's own text. Python echoes the provider's `error` and `protocol`. `plugin run` keeps
+  Python's messages.
+- Keychain, plugin, `git` and `npm` processes run in their own process group. At the deadline or on a cancel the
+  group gets SIGTERM, then SIGKILL after 0.5 s, and the call ends then; a child that kept the output open is killed
+  with it. Python kills only the process it started.
+- `clipboard` and `set permission` grant each permission with `Browser.setPermission`, so grants add up; Python's
+  `Browser.grantPermissions` replaces every grant the origin had (a clipboard grant revoked geolocation). The harness
+  leaves both out of the comparison through the `permission-overrides` divergence (ardia#2812 row 3).
+- An `--init-script` file is opened without blocking and must be a regular file under 4 MB (a FIFO or device is
+  refused with `bad_init_script`); Python reads whatever the path names and can block on a FIFO. It is decoded as
+  Python's text read decodes it: a BOM kept, CRLF and CR made LF.
 - The temporary tabs D2 opens carry `#ardia-temp-<nonce>` in their `about:blank` URL; the harness's `temp-tab-nonce`
   rule compares them with Python's plain `about:blank`.
 
