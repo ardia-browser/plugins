@@ -3,7 +3,7 @@ import { pluginViolations } from "./plugin-rules.ts";
 import { CHROME, entries, pageTarget, resetPage, startWorld, step, stopWorld, type World } from "./plugin-world.ts";
 
 setDefaultTimeout(120_000);
-const BASE = Number(process.env["ARDIA_F1_PORTS"] ?? "9660") + 20;
+const BASE = Number(process.env["ARDIA_F1_PORTS"] ?? "9460") + 9;
 
 describe.skipIf(!CHROME)("F1.1: same-site child frames in the AX snapshot", () => {
   let world: World;

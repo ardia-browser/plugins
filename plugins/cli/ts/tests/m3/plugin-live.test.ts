@@ -4,7 +4,7 @@ import { methodsBetweenMarks, pluginViolations } from "./plugin-rules.ts";
 import { CHROME, CREDENTIAL, entries, OTHER_CREDENTIAL, pageTarget, startWorld, step, stopWorld, tap, type World } from "./plugin-world.ts";
 
 setDefaultTimeout(120_000);
-const BASE = Number(process.env["ARDIA_F1_PORTS"] ?? "9660");
+const BASE = Number(process.env["ARDIA_F1_PORTS"] ?? "9460");
 const CONTRACT_SNAPSHOT = '- heading "Sign up" [level=1, ref=e1]\n- LabelText\n  - StaticText "Name "\n  - textbox "Name" [ref=e2]\n- button "Save" [ref=e3]\n- link "Next" [ref=e4]\n';
 const CHANGED = "The page loaded a new document, so this step didn't count. Ardia checks it again for the next step";
 

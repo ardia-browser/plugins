@@ -3,7 +3,7 @@ import { methodsBetweenMarks, pluginViolations } from "./plugin-rules.ts";
 import { CREDENTIAL, entries, FULL_CHROME, pageTarget, startWorld, step, stopWorld, tap, type World } from "./plugin-world.ts";
 
 setDefaultTimeout(120_000);
-const BASE = Number(process.env["ARDIA_F1_PORTS"] ?? "9660") + 30;
+const BASE = Number(process.env["ARDIA_F1_PORTS"] ?? "9460") + 15;
 
 async function owner(world: World) {
   const version = (await (await fetch(`http://127.0.0.1:${world.chromePort}/json/version`)).json()) as { webSocketDebuggerUrl: string };

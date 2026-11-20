@@ -117,7 +117,7 @@ async function main(): Promise<number> {
   }
   const phase = PHASES[option("--phase", "1")] as Set<string>;
   const cases = (JSON.parse(fs.readFileSync(file, "utf8")) as Case[]).filter((item) => phase.has(commandOf(split(item.argv).command)));
-  const world = await startWorld(Number(option("--ports", "9670")), undefined, undefined, CONTRACT);
+  const world = await startWorld(Number(option("--ports", "9460")), undefined, undefined, CONTRACT);
   const outcomes: Outcome[] = [];
   try {
     const target = await pageTarget(world);

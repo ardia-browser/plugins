@@ -78,7 +78,7 @@ async function main(): Promise<number> {
     process.stdout.write(`${JSON.stringify(report, null, 1)}\n`);
     return 0;
   }
-  const world = await startWorld(Number(process.env["ARDIA_F1_PORTS"] ?? "9750"));
+  const world = await startWorld(Number(process.env["ARDIA_F1_PORTS"] ?? "9460"));
   try {
     const target = await pageTarget(world);
     await step(world, ["tab", target], { json: true });

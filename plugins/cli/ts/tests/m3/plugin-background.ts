@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 const CHROME = process.env["ARDIA_F1_CHROME"] ?? "";
-const CHROME_PORT = Number(process.env["ARDIA_F1_BACKGROUND_PORT"] ?? "9690");
+const CHROME_PORT = Number(process.env["ARDIA_F1_BACKGROUND_PORT"] ?? "9460");
 const SITE_PORT = CHROME_PORT + 1;
 if (!CHROME) {
   process.stderr.write("usage: ARDIA_F1_CHROME=<full Chrome for Testing binary> bun tests/m3/plugin-background.ts\n");

@@ -80,7 +80,7 @@ async function main(): Promise<number> {
   report["stray_yes"] = yes;
   const timingsAllowed = load < MAX_LOAD && yes === 0;
   const pages: Record<string, string> = { article: article(), table: table() };
-  const world = await startWorld(Number(process.env["ARDIA_F1_PORTS"] ?? "9740"));
+  const world = await startWorld(Number(process.env["ARDIA_F1_PORTS"] ?? "9460"));
   try {
     const target = await pageTarget(world);
     const picked = await step(world, ["tab", target], { json: true });

@@ -4,7 +4,7 @@ import { methodsBetweenMarks, pluginViolations } from "./plugin-rules.ts";
 import { CHROME, CREDENTIAL, entries, pageTarget, startWorld, step, stopWorld, tap, type World } from "./plugin-world.ts";
 
 setDefaultTimeout(120_000);
-const BASE = Number(process.env["ARDIA_F1_PORTS"] ?? "9660") + 5;
+const BASE = Number(process.env["ARDIA_F1_PORTS"] ?? "9460") + 3;
 
 describe.skipIf(!CHROME)("plugin mode phase 2 against headless Chrome for Testing, through the CDP tap", () => {
   let world: World;

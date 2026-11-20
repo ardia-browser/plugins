@@ -3,7 +3,7 @@ import { methodsBetweenMarks, pluginViolations } from "./plugin-rules.ts";
 import { CHROME, CREDENTIAL, entries, openTab, pageTarget, resetPage, startWorld, step, stopWorld, tap, type World } from "./plugin-world.ts";
 
 setDefaultTimeout(120_000);
-const BASE = Number(process.env["ARDIA_F1_PORTS"] ?? "9660") + 15;
+const BASE = Number(process.env["ARDIA_F1_PORTS"] ?? "9460") + 6;
 const LEASE = "ardia: document_changed: no act lease covers this document";
 
 describe.skipIf(!CHROME)("plugins#21 review round 1, against headless Chrome for Testing through the tap", () => {

@@ -3,7 +3,7 @@ import { methodsBetweenMarks, pluginViolations } from "./plugin-rules.ts";
 import { type Asked, CHROME, CREDENTIAL, entries, pageTarget, resetPage, SECRET, startWorld, step, stopWorld, type World } from "./plugin-world.ts";
 
 setDefaultTimeout(120_000);
-const BASE = Number(process.env["ARDIA_F1_PORTS"] ?? "9660") + 25;
+const BASE = Number(process.env["ARDIA_F1_PORTS"] ?? "9460") + 12;
 const MASK = /•{3,}/u;
 
 describe.skipIf(!CHROME)("protected (password) fields in plugin mode", () => {
