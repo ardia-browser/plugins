@@ -1,7 +1,7 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import type { Server, ServerWebSocket } from "bun";
 import { dumps, type Value } from "../../json.ts";
-import { shield } from "../cdp/cancel.ts";
+import { Cancelled, shield } from "../cdp/cancel.ts";
 import type { Ctx } from "../commands/ctx.ts";
 import { register } from "../commands/index.ts";
 import { parse } from "../commands/parse.ts";
@@ -16,8 +16,9 @@ import { activate, captureOf, commandLockOf, releaseClaim } from "./store.ts";
 
 export const STREAM_CLIENTS = 4;
 export const STREAM_MESSAGE_LIMIT = 64 * 1024;
+export const STREAM_INPUT_BACKLOG = 32;
 
-type Client = { sent: number; pending: boolean; queue: Promise<void> };
+type Client = { sent: number; pending: boolean; queue: Promise<void>; backlog: number; stop: AbortController };
 type Socket = ServerWebSocket<Client>;
 export type Stream = {
   cast: Screencast;
@@ -82,11 +83,15 @@ function queryToken(url: string): string {
   return "";
 }
 
+function isMove(message: Json): boolean {
+  return message["type"] === "input_mouse" && (message["eventType"] ?? message["type"]) === "mouseMoved";
+}
+
 function inputOf(page: Page): StreamInput {
   return page.input as unknown as StreamInput;
 }
 
-export async function streamInput(ctx: Ctx, page: Page, message: Json): Promise<void> {
+export async function streamInput(ctx: Ctx, page: Page, message: Json, signal: AbortSignal | null = null): Promise<void> {
   const kind = message["type"];
   if (typeof kind !== "string" || !Object.hasOwn(ALLOWED, kind)) return;
   const [method, keys] = ALLOWED[kind] as [string, readonly string[]];
@@ -94,7 +99,7 @@ export async function streamInput(ctx: Ctx, page: Page, message: Json): Promise<
   for (const key of keys) if (Object.hasOwn(message, key)) params[key] = message[key];
   if (Object.hasOwn(message, "eventType")) params["type"] = message["eventType"];
   const lock = commandLockOf(ctx.state);
-  if (lock !== null) await lock.acquire();
+  if (lock !== null) await lock.acquire(null, signal);
   try {
     const input = inputOf(page);
     input.trackStreamEvent?.(method, params);
@@ -161,7 +166,7 @@ export function startStreamServer(ctx: Ctx, stream: Stream, port: number): Serve
         if (origin !== null && !allowedOrigins(bound).includes(origin)) return refuse(403, "Forbidden origin");
         if (!sameToken(queryToken(request.url), stream.token)) return refuse(401, "Missing or wrong token");
         if (stream.clients.size >= STREAM_CLIENTS) return refuse(503, "Too many clients");
-        if (server.upgrade(request, { data: { sent: 0, pending: false, queue: Promise.resolve() } })) return undefined;
+        if (server.upgrade(request, { data: { sent: 0, pending: false, queue: Promise.resolve(), backlog: 0, stop: new AbortController() } })) return undefined;
         return refuse(426, "Failed to open a WebSocket connection: this endpoint only speaks WebSocket");
       },
       websocket: {
@@ -181,20 +186,34 @@ export function startStreamServer(ctx: Ctx, stream: Stream, port: number): Serve
           const fields = message as Json;
           const kind = fields["type"] === undefined ? "" : fields["type"];
           if (!String(kind).startsWith("input_")) return;
-          socket.data.queue = socket.data.queue.then(() =>
-            shield(async () => {
-              if (!stream.input) {
-                socket.send(json({ type: "error", error: "this stream is view only; restart it with `stream enable --input`" }));
-                return;
-              }
-              await streamInput(ctx, stream.page, fields);
-            }).catch((error: unknown) => {
+          const client = socket.data;
+          if (client.stop.signal.aborted) return;
+          if (client.backlog > STREAM_INPUT_BACKLOG) {
+            if (!isMove(fields)) socket.close(1008, "too much input queued");
+            return;
+          }
+          client.backlog += 1;
+          client.queue = client.queue
+            .then(() =>
+              shield(async () => {
+                if (!stream.input) {
+                  socket.send(json({ type: "error", error: "this stream is view only; restart it with `stream enable --input`" }));
+                  return;
+                }
+                await streamInput(ctx, stream.page, fields, client.stop.signal);
+              }),
+            )
+            .catch((error: unknown) => {
+              if (error instanceof Cancelled) return;
               log.info(`stream client ended: ${String(error)}`);
               socket.close();
-            }),
-          );
+            })
+            .finally(() => {
+              client.backlog -= 1;
+            });
         },
         close(socket) {
+          socket.data.stop.abort(new Cancelled());
           stream.clients.delete(socket);
           if (stream.input) {
             socket.data.queue = socket.data.queue.then(() => shield(() => releaseStreamInput(ctx, stream.page)).catch(() => {}));
@@ -278,10 +297,11 @@ export async function stopStream(ctx: Ctx): Promise<void> {
   ctx.state.leases.delete("stream");
   releaseClaim(ctx, stream.page.targetId, "stream");
   stream.cast.watchers.delete(stream.watcher);
-  const queues = [...stream.clients].map((socket) => socket.data.queue);
-  for (const socket of [...stream.clients]) socket.close(1000);
+  for (const socket of [...stream.clients]) {
+    socket.data.stop.abort(new Cancelled());
+    socket.close(1000);
+  }
   stream.server?.stop(true);
-  await Promise.allSettled(queues);
   await stream.cast.stop(ctx.state);
 }
 

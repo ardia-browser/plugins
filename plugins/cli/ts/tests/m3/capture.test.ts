@@ -5,7 +5,7 @@ import path from "node:path";
 import { auditLines, axeSource, AXE_MISSING } from "../../src/browse/capture/audit.ts";
 import { closeCaptures } from "../../src/browse/capture/close.ts";
 import { cmdConsole, cmdErrors } from "../../src/browse/capture/console.ts";
-import { cmdNetwork, credentialsFor, handlePaused, requestRow, statusMatches } from "../../src/browse/capture/network.ts";
+import { cmdNetwork, credentialsFor, enableCredentials, handlePaused, requestRow, statusMatches } from "../../src/browse/capture/network.ts";
 import { cmdRecord, encoderArgv } from "../../src/browse/capture/record.ts";
 import { captureOf } from "../../src/browse/capture/store.ts";
 import { tracing, traceConfig } from "../../src/browse/capture/trace.ts";
@@ -106,8 +106,36 @@ describe("network", () => {
     answer({});
     expect(browser.methods().slice(-2)).toEqual(["Fetch.enable", "Fetch.disable"]);
     expect(claimKinds(root as string).has("route")).toBe(false);
-    expect(state.listeners).toHaveLength(0);
+    expect(state.listeners).toHaveLength(1);
     expect(state.leases.has("route")).toBe(false);
+    const page = await state.page();
+    await handlePaused(ctx, page, { requestId: "LATE", resourceType: "Document", request: { url: "http://x/" } });
+    expect(browser.sent.at(-1)).toMatchObject({ method: "Fetch.continueRequest", params: { requestId: "LATE" } });
+  });
+
+  test("a refused Fetch.enable leaves no router behind", async () => {
+    const { ctx, state } = rig((method) => (method === "Fetch.enable" ? new Gated("Fetch.enable") : undefined));
+    await expect(cmdNetwork(ctx, ["route", "*", "--abort"])).rejects.toBeInstanceOf(Gated);
+    expect(state.listeners).toHaveLength(0);
+  });
+
+  test("set credentials' Fetch.enable cancelled on a fresh tab turns interception off and leaves no router or credentials", async () => {
+    const { browser, ctx, state, root } = rig(
+      (method) => (method === "Fetch.enable" ? () => new Promise<Record<string, unknown>>(() => {}) : undefined),
+      { claims: true },
+    );
+    const page = await state.page();
+    const stop = new AbortController();
+    const enabling = withSignal(stop.signal, () => enableCredentials(ctx, page, "u", "p"));
+    for (let wait = 0; wait < 100 && !browser.methods().includes("Fetch.enable"); wait += 1) await tick(5);
+    expect(state.listeners).toHaveLength(1);
+    stop.abort(new Cancelled());
+    await expect(enabling).rejects.toBeInstanceOf(Cancelled);
+    expect(browser.methods().slice(-2)).toEqual(["Fetch.enable", "Fetch.disable"]);
+    expect(browser.sent.find((entry) => entry.method === "Fetch.enable")?.params).toEqual({ patterns: [{ urlPattern: "*", requestStage: "Request" }], handleAuthRequests: true });
+    expect(claimKinds(root as string).has("route")).toBe(false);
+    expect(state.listeners).toHaveLength(1);
+    expect(state.credentials).toBeNull();
   });
 
   test("a cancel on a tab already routed keeps its interception", async () => {
@@ -214,9 +242,9 @@ describe("trace", () => {
 });
 
 describe("record through a PATH stub (no real encode)", () => {
-  function stub(exit: number, stderr = ""): string {
+  function stub(exit: number, stderr = "", linger = 0): string {
     const dir = scratchDir("ardia-d6-bin-");
-    const script = `#!/bin/sh\nprintf '%s\\n' "$@" > "${dir}/argv"\ncat > "${dir}/frames"\nprintf '${stderr}' >&2\nexit ${exit}\n`;
+    const script = `#!/bin/sh\necho $$ > "${dir}/pid"\nprintf '%s\\n' "$@" > "${dir}/argv"\ncat > "${dir}/frames"\nprintf '${stderr}' >&2\n${linger ? `exec sleep ${linger}` : `exit ${exit}`}\n`;
     fs.writeFileSync(path.join(dir, "ffmpeg"), script, { mode: 0o755 });
     const saved = process.env["PATH"];
     process.env["PATH"] = `${dir}:/usr/bin:/bin`;
@@ -264,6 +292,22 @@ describe("record through a PATH stub (no real encode)", () => {
     const { browser, ctx } = rig(visible);
     await expect(cmdRecord(ctx, ["start", "out.webm"])).rejects.toThrow("record needs ffmpeg on PATH to encode WebM (brew install ffmpeg)");
     expect(browser.methods()).not.toContain("Page.startScreencast");
+  });
+
+  test("a Ctrl-C during record stop's wait kills ffmpeg instead of waiting 60 s", async () => {
+    const dir = stub(0, "", 30);
+    const { ctx } = rig(visible);
+    await cmdRecord(ctx, ["start", "out.webm"]);
+    const stop = new AbortController();
+    const stopping = withSignal(stop.signal, () => cmdRecord(ctx, ["stop"]));
+    await tick(300);
+    const started = performance.now();
+    stop.abort(new Cancelled());
+    await expect(stopping).rejects.toBeInstanceOf(Cancelled);
+    expect(performance.now() - started).toBeLessThan(2000);
+    const pid = Number(fs.readFileSync(path.join(dir, "pid"), "utf8"));
+    await tick(200);
+    expect(() => process.kill(pid, 0)).toThrow();
   });
 
   test("closing the daemon stops a running recording", async () => {

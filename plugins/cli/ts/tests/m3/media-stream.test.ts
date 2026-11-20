@@ -4,7 +4,7 @@ import path from "node:path";
 import { closeCaptures } from "../../src/browse/capture/close.ts";
 import { Screencast } from "../../src/browse/capture/screencast.ts";
 import { bindCommandLock, captureOf } from "../../src/browse/capture/store.ts";
-import { cmdStream, startStreamServer, type Stream, streamInput } from "../../src/browse/capture/stream.ts";
+import { cmdStream, startStreamServer, STREAM_INPUT_BACKLOG, type Stream, streamInput } from "../../src/browse/capture/stream.ts";
 import { FifoLock } from "../../src/browse/daemon/lock.ts";
 import { Float } from "../../src/json.ts";
 import { cmdHighlight, cmdPdf, cmdScreenshot, comparison, comparisonText, diffScreenshot, inImage, unchanged } from "../../src/browse/media/commands.ts";
@@ -18,6 +18,9 @@ function png(width: number, height: number, rgb: [number, number, number]): Uint
   for (let i = 0; i < pixels.length; i += 4) pixels.set([...rgb, 255], i);
   return encodePng(new Image(width, height, pixels));
 }
+
+const visibleScript = (method: string, params: Record<string, unknown>) =>
+  method === "Runtime.callFunctionOn" && String(params["functionDeclaration"]).includes("visibilityState") ? { result: { type: "boolean", value: false } } : undefined;
 
 function fakeStream(input = false): Stream {
   const cast = { latest: null, seq: 0, watchers: new Set() } as unknown as Screencast;
@@ -123,6 +126,48 @@ describe("stream server", () => {
     expect(lock.locked).toBe(false);
     await streamInput(ctx, page, { type: "input_wheel" });
     expect(released).toBe(0);
+  });
+
+  test("stream disable under the command lock returns while a viewer's input waits for that lock, and later commands run", async () => {
+    const { browser, ctx, state } = rig(visibleScript);
+    const lock = new FifoLock();
+    bindCommandLock(state, lock);
+    await cmdStream(ctx, ["enable", "--input"]);
+    const stream = captureOf(state).stream as Stream;
+    const viewer = await connect(stream.port, {}, stream.token);
+    await lock.acquire();
+    viewer.socket?.send(JSON.stringify({ type: "input_mouse", eventType: "mouseMoved", x: 1, y: 2 }));
+    await tick(50);
+    const disabled = await Promise.race([cmdStream(ctx, ["disable"]).then((result) => result.text), tick(3000).then(() => "deadlocked")]);
+    expect(disabled).toBe("✓ Streaming disabled");
+    lock.release();
+    expect(await lock.acquire(2)).toBe(true);
+    lock.release();
+    await tick(50);
+    expect(browser.methods()).not.toContain("Input.dispatchMouseEvent");
+  });
+
+  test("a viewer's queued input is bounded: moves past the backlog are dropped, other input closes it with 1008", async () => {
+    const { browser, ctx, state } = rig(visibleScript);
+    const lock = new FifoLock();
+    bindCommandLock(state, lock);
+    await cmdStream(ctx, ["enable", "--input"]);
+    const stream = captureOf(state).stream as Stream;
+    const viewer = await connect(stream.port, {}, stream.token);
+    const seen: { code: number | null } = { code: null };
+    viewer.socket?.addEventListener("close", (event) => (seen.code = event.code));
+    await lock.acquire();
+    for (let i = 0; i < 500; i += 1) viewer.socket?.send(JSON.stringify({ type: "input_mouse", eventType: "mouseMoved", x: i, y: 1 }));
+    await tick(100);
+    expect(seen.code).toBeNull();
+    expect([...stream.clients][0]?.data.backlog).toBe(STREAM_INPUT_BACKLOG + 1);
+    viewer.socket?.send(JSON.stringify({ type: "input_mouse", eventType: "mousePressed", x: 1, y: 1, button: "left", clickCount: 1 }));
+    for (let wait = 0; wait < 100 && seen.code === null; wait += 1) await tick(10);
+    expect(seen.code).toBe(1008);
+    lock.release();
+    await tick(100);
+    expect(browser.methods().filter((method) => method === "Input.dispatchMouseEvent").length).toBeLessThanOrEqual(1);
+    await cmdStream(ctx, ["disable"]);
   });
 
   test("closing the daemon stops the stream", async () => {

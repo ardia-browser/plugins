@@ -334,7 +334,7 @@ async function intercept(ctx: Ctx, page: Page, params: Json, refused: (error: Ga
       }
     });
   } catch (error) {
-    if (!hadRouter && capture.routes.length === 0 && !ctx.state.credentials) {
+    if (!hadRouter && !interceptionUnknown(error) && capture.routes.length === 0 && !ctx.state.credentials) {
       removeListener(ctx.state, capture.router);
       capture.router = null;
     }

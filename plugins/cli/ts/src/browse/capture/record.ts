@@ -1,7 +1,7 @@
 import type { FileSink, Subprocess } from "bun";
 import { codePoints } from "../../pystr.ts";
 import { pyStrip } from "../../pylib/str.ts";
-import { sleep } from "../cdp/cancel.ts";
+import { Cancelled, currentSignal, sleep } from "../cdp/cancel.ts";
 import { navigate } from "../commands/core.ts";
 import type { Ctx } from "../commands/ctx.ts";
 import { register } from "../commands/index.ts";
@@ -114,16 +114,29 @@ export async function cmdRecord(ctx: Ctx, argv: string[]): Promise<Result> {
   return new Result({ path: args[1], started: true }, `✓ Recording started (${args[1]})`);
 }
 
-function finished(process: Encoder, seconds: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(false), seconds * 1000);
+function finished(process: Encoder, seconds: number, signal: AbortSignal | null): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    const done = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", cancel);
+    };
+    const cancel = () => {
+      done();
+      reject(new Cancelled());
+    };
+    const timer = setTimeout(() => {
+      done();
+      resolve(false);
+    }, seconds * 1000);
+    if (signal?.aborted) return cancel();
+    signal?.addEventListener("abort", cancel, { once: true });
     process.exited.then(
       () => {
-        clearTimeout(timer);
+        done();
         resolve(true);
       },
       () => {
-        clearTimeout(timer);
+        done();
         resolve(true);
       },
     );
@@ -134,7 +147,14 @@ async function closeEncoder(process: Encoder): Promise<void> {
   try {
     await process.stdin.end();
   } catch {}
-  if (!(await finished(process, ENCODER_WAIT))) {
+  let ended: boolean;
+  try {
+    ended = await finished(process, ENCODER_WAIT, currentSignal());
+  } catch (error) {
+    process.kill("SIGKILL");
+    throw error;
+  }
+  if (!ended) {
     process.kill();
     throw new BrowseError(`ffmpeg didn't finish the WebM in ${ENCODER_WAIT} s`);
   }
