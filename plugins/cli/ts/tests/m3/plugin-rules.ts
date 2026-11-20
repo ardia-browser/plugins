@@ -1,5 +1,6 @@
 import { type Entry, type Message } from "./canon.ts";
 import { actingStep } from "../../src/browse/plugin/acting.ts";
+import { engineRefusal } from "../../src/browse/plugin/engine-codes.ts";
 import { forbidden, INPUT_METHODS, KEY_COMMANDS, mouseViolation, PAGE_SESSION_ONLY, SENT_METHODS } from "../../src/browse/plugin/policy.ts";
 
 export type Violation = { rule: "forbidden" | "unlisted" | "pipelined" | "key_params" | "session" | "wheel_outside_act" | "hidden_wheel" | "between_steps"; at: number; method: string; detail: string };
@@ -84,7 +85,7 @@ export function pluginViolations(entries: readonly Entry[]): Violation[] {
     if (entry.k === "in" && typeof message.id === "number") {
       if (hiddenWheels.delete(`${conn}:${message.id}`)) {
         const said = String((message.error as { message?: unknown } | undefined)?.message ?? "");
-        if (!said.startsWith("ardia: page_hidden")) found.push({ rule: "hidden_wheel", at, method: "Input.dispatchMouseEvent", detail: "a wheel reached a hidden page instead of being refused" });
+        if (engineRefusal(said)?.code !== "page_hidden") found.push({ rule: "hidden_wheel", at, method: "Input.dispatchMouseEvent", detail: "a wheel reached a hidden page instead of being refused" });
       }
       waiting.delete(message.id);
       noteAnswer(wire, message);

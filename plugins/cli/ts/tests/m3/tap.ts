@@ -3,6 +3,7 @@ import type { ServerWebSocket } from "bun";
 import { type Entry, parse, readTranscript } from "./canon.ts";
 import { type Elastic, ReplayConn } from "./replay.ts";
 import { actingStep } from "../../src/browse/plugin/acting.ts";
+import { refusalMessage } from "../../src/browse/plugin/engine-codes.ts";
 
 type Fault = { at: number; kind: "kill" | "stop" | "close" | "drop" | "error" | "hold"; seconds?: number; code?: number; method?: string; message?: string };
 type Link = { conn: number; upstream: WebSocket | null; queue: string[]; replay: ReplayConn | null; dropId: number | null };
@@ -162,7 +163,7 @@ function emulateHiddenWheel(link: Link, socket: ServerWebSocket<Link>, message: 
   askChromium(link, message.sessionId, "Runtime.evaluate", { expression: "document.visibilityState", returnByValue: true }, (answer) => {
     const state = String((answer.result?.["result"] as { value?: unknown } | undefined)?.value ?? "unknown");
     record({ k: "visibility", c: link.conn, t: now(), wheel: message.id, state });
-    if (state === "hidden") answerDaemon(link, socket, message.id as number, message.sessionId, { code: -32000, message: "ardia: page_hidden: page hidden" });
+    if (state === "hidden") answerDaemon(link, socket, message.id as number, message.sessionId, { code: -32000, message: refusalMessage("page_hidden") });
     else deliver(link, text);
   });
 }

@@ -3,6 +3,7 @@ import { type Entry } from "./canon.ts";
 import { pluginViolations } from "./plugin-rules.ts";
 import { type Browser } from "../../src/browse/cdp/browser.ts";
 import { PluginLink } from "../../src/browse/plugin/link.ts";
+import { engineRefusal, refusalMessage } from "../../src/browse/plugin/engine-codes.ts";
 import { HIDDEN_TAB, TAB_IN_USE, WHEEL_BUSY_WAITS, wheelAt } from "../../src/browse/plugin/input.ts";
 import { actingStep } from "../../src/browse/plugin/acting.ts";
 import { BrowseError } from "../../src/browse/daemon-errors.ts";
@@ -207,7 +208,7 @@ describe("(e) wheels only inside an act", () => {
   });
 
   test("a wheel the page saw while hidden must have been refused with page_hidden", () => {
-    const refused: Entry = { k: "in", c: 0, m: JSON.stringify({ id: 1, sessionId: "S", error: { code: -32000, message: "ardia: page_hidden: page hidden" } }) };
+    const refused: Entry = { k: "in", c: 0, m: JSON.stringify({ id: 1, sessionId: "S", error: { code: -32000, message: "ardia: page hidden" } }) };
     expect(checked([mark(["scroll", "down"]), wheel(1), { k: "visibility", c: 0, wheel: 1, state: "hidden" }, refused])).toEqual([]);
     expect(checked([mark(["scroll", "down"]), wheel(2), { k: "visibility", c: 0, wheel: 2, state: "hidden" }, answer(2)]).map((item) => item.rule)).toEqual(["hidden_wheel"]);
   });
@@ -264,5 +265,19 @@ describe("(f) nothing between steps", () => {
     const found = checked([mark(["snapshot"]), out(1, "Accessibility.getFullAXTree"), answer(1), done, event, out(3, "Page.handleJavaScriptDialog"), mark(["get", "title"])]);
     expect(found.filter((item) => item.rule === "between_steps").map((item) => item.method)).toEqual(["Page.lifecycleEvent", "Page.handleJavaScriptDialog"]);
     expect(checked([mark(["fill", "@e2", "x"]), out(4, "Input.insertText", { text: "x" }), done, answer(4), mark(["get", "title"])]).filter((item) => item.rule === "between_steps")).toEqual([]);
+  });
+});
+
+describe("engine refusals come from one table, with #2808's exact text", () => {
+  test("round 16/17 messages map to their codes; anything else, including page text quoting them, stays uncoded", () => {
+    expect(engineRefusal("ardia: busy")?.code).toBe("busy");
+    expect(engineRefusal("ardia: page hidden")?.code).toBe("page_hidden");
+    expect(engineRefusal("ardia: tab_out_of_scope: the tab moved to another window")?.code).toBe("tab_out_of_scope");
+    expect(engineRefusal("ardia: the page changed after the input was sent")?.code).toBe("document_changed");
+    expect(engineRefusal("ardia: the page isn't taking input right now")?.code).toBe("page_busy");
+    expect(engineRefusal("ardia: page_hidden")).toBeNull();
+    expect(engineRefusal("ardia: busy wheel")).toBeNull();
+    expect(engineRefusal("page said ardia: busy")).toBeNull();
+    expect(refusalMessage("page_hidden")).toBe("ardia: page hidden");
   });
 });

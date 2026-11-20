@@ -200,9 +200,9 @@ answer, then a release; `--emulate-act-hold 1` stands in for the engine's act vi
 (`Target.activateTarget`) before the step runs, and `/tap/unhold`, which the harness posts after every step,
 activates `front` again (both written as `{"k": "hold"}`); `--emulate-hidden-wheel-refusal 1` reads
 `document.visibilityState` before forwarding a `mouseWheel`, writes `{"k": "visibility"}`, and refuses the wheel with
-`ardia: page_hidden` when the page is hidden. Every harness step posts `/tap/done` after its answer; check (f) fails any CDP event or message from the daemon
+`ardia: page hidden` when the page is hidden. Every harness step posts `/tap/done` after its answer; check (f) fails any CDP event or message from the daemon
 between that and the next step's mark (answers to earlier requests are allowed). Check (e) fails a wheel during a step that doesn't act (or before any
-step) and a wheel a hidden page saw that wasn't refused with `ardia: page_hidden`. Scenarios that need a fake say so in
+step) and a wheel a hidden page saw that wasn't refused with `ardia: page hidden`. Scenarios that need a fake say so in
 their names (`[tap emulates Ardia.dispatchClick]`, `[tap emulates the act visibility hold]`). `plugin-hidden.test.ts`
 acts on a really hidden tab and needs a full Chrome for Testing (`ARDIA_F1_CHROME`, `--headless=new`);
 chrome-headless-shell never hides a tab. Those two events are written as `{"k": "emulated"}`, which the rules don't read as the

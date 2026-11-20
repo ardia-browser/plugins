@@ -175,7 +175,7 @@ and never by Python's or by the person's own session. The TypeScript daemon only
   and nothing is clicked. Reads (`snapshot`, `get`, `is`, `find … text`, `wait`) never scroll, and the daemon's link
   refuses a wheel outside an acting step. A wheel the engine answers `ardia: busy` (the person used that tab in the last
   500 ms) is retried after 100, 200, 300, 400 and 500 ms, then the step answers `busy` ("Ardia didn't scroll the tab
-  because the person is using it right now …"); `ardia: page_hidden` answers `outside_viewport` ("The tab is hidden and
+  because the person is using it right now …"); `ardia: page hidden` answers `outside_viewport` ("The tab is hidden and
   can't be scrolled"). The owner session keeps `DOM.scrollIntoViewIfNeeded`.
 - **Nothing between steps.** After every step the daemon detaches from the page target (`Target.detachFromTarget`), so
   no session, domain, event subscription or handler (the auto-accepted dialog included) lives between steps; the next
@@ -210,10 +210,13 @@ and never by Python's or by the person's own session. The TypeScript daemon only
   mismatch answers code `document_changed_after`, exit 1, `data.ran: true`, in place of the step's own answer). The
   pick ignores it. Every answer whose tab is
   attached carries `loader`.
-- **Engine codes.** A CDP error whose own message starts `ardia: tab_out_of_scope` answers code `tab_out_of_scope`, and
-  one that starts `ardia: document_changed` (the act lease) answers `document_changed`. Codes never come from page text.
-  A coded refusal always ends the step before any further CDP call; only a plain, uncoded CDP failure may fall back
-  (an empty title, a default viewport point, "no box").
+- **Engine codes.** One table (`src/browse/plugin/engine-codes.ts`) maps the engine's own refusal messages, matched
+  exactly or as `<message>: …`, never from page text: `ardia: tab_out_of_scope` → `tab_out_of_scope`;
+  `ardia: document_changed` (the act lease) and `ardia: the page changed after the input was sent` (the navigation epoch
+  moved before delivery) → `document_changed`; `ardia: page hidden` → `page_hidden` (answered as `outside_viewport`);
+  `ardia: busy` → `busy` (retried for wheels); `ardia: the page isn't taking input right now` → `page_busy`. The texts
+  are ardia#2808's at round 16 (c0bfc72c2) and round 17 (34124a4). A coded refusal always ends the step before any
+  further CDP call; only a plain, uncoded CDP failure may fall back (an empty title, a default viewport point, "no box").
 - **State.** Tab numbers live in the daemon's memory, per credential; the shared `tabs-*.json` registry, claims, the
   temporary-tab sweep and `using` are never touched. Nothing is written in `Browse/` beyond the session's socket, lock and
   log (no `<key>.json`), and an answer over the output cap is cut, not spilled.
