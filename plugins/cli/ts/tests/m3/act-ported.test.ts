@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { dropPoint, drag } from "../../src/browse/act/drag.ts";
+import { CLEANUPS, drainCleanups, dropPoint, drag } from "../../src/browse/act/drag.ts";
+import { frameOffset, sendIn, UNROUTED } from "../../src/browse/state/frames.ts";
 import { insertsAtOnce, pickOption } from "../../src/browse/act/fields.ts";
-import { waitEnabled } from "../../src/browse/act/pointer.ts";
+import { tap, waitEnabled } from "../../src/browse/act/pointer.ts";
 import { Cancelled, sleep, withSignal } from "../../src/browse/cdp/cancel.ts";
 import { dragText, filledResult } from "../../src/browse/commands/act.ts";
 import "../../src/browse/commands/all.ts";
@@ -14,7 +15,7 @@ import { ACTIONS_DISABLED_STATE } from "../../src/browse/js/index.ts";
 import { begin } from "../../src/browse/metrics.ts";
 import { Element, type Page } from "../../src/browse/state/page.ts";
 import type { State } from "../../src/browse/state/state.ts";
-import { cancelAfter, ends, FakeRenderer } from "./act-fakes.ts";
+import { cancelAfter, ends, FakeRenderer, QUADS } from "./act-fakes.ts";
 
 const BOX: [number, number, number, number] = [10, 200, 110, 240];
 
@@ -319,8 +320,8 @@ describe("HeldInputTest", () => {
     const page = new FakeRenderer();
     const mouse = page.input.pointer;
     const seen: unknown[] = [];
-    const send = page.browser.send;
-    (page.browser as { send: unknown }).send = async (method: string, params: Record<string, unknown> | null) => {
+    const send = page.send.bind(page);
+    page.send = async (method: string, params: Record<string, unknown> | null = null) => {
       seen.push(mouse.held);
       return send(method, params);
     };
@@ -523,5 +524,79 @@ describe("EditingShortcuts (ardia#2812 row 20)", () => {
     const down = keys.find((params) => params["key"] === "z" && params["type"] === "rawKeyDown") as Record<string, unknown>;
     expect(down["commands"]).toEqual(process.platform === "darwin" ? ["redo"] : undefined);
     expect(keys.filter((params) => params["commands"]).length).toBe(process.platform === "darwin" ? 1 : 0);
+  });
+});
+
+describe("ReviewFixes", () => {
+  test("an interrupted tap lifts the finger with touchCancel", async () => {
+    const page = new FakeRenderer({ touch: true, delays: { "Input.dispatchTouchEvent touchEnd": 5 } });
+    const target = new Element("F", "S", 1, "@e1");
+    const outcome = await cancelAfter(
+      (signal) => withSignal(signal, () => tap(page.page, target, false)),
+      () => page.sent.some(([method, kind]) => method === "Input.dispatchTouchEvent" && kind === "touchStart"),
+    );
+    expect(outcome).toBeInstanceOf(Cancelled);
+    const touches = page.calls().filter(([method]) => method === "Input.dispatchTouchEvent").map(([, kind]) => kind);
+    expect(touches).toEqual(["touchStart", "touchCancel"]);
+    expect(page.input.holding).toBe(false);
+  });
+
+  test("a release that runs out of time is cancelled, so no old key up is still in flight", async () => {
+    const page = new FakeRenderer({ delays: { "Input.dispatchKeyEvent keyUp": 5 } });
+    const input = page.input;
+    await input.gesture("keydown", () => input.pressCombo("Shift", false, true), { keepHeld: true });
+    const started = performance.now();
+    expect(await input.releaseAll()).toBe(false);
+    expect(performance.now() - started).toBeLessThan(3000);
+    expect(input.holding).toBe(false);
+    await sleep(0.5, null);
+    expect(page.params.filter(([, params]) => params["type"] === "keyUp")).toEqual([]);
+    expect(page.inFlight).toBe(0);
+  });
+
+  test("mouse events go through the page, one answered move at a time", async () => {
+    const page = new FakeRenderer();
+    let routed = 0;
+    const send = page.send.bind(page);
+    page.send = async (method: string, params: Record<string, unknown> | null = null) => {
+      if (method === "Input.dispatchMouseEvent") routed += 1;
+      return send(method, params);
+    };
+    (page.browser as { send: unknown }).send = async () => {
+      throw new Error("a mouse event went around the page");
+    };
+    await page.input.pointer.move(200, 200, true);
+    expect(routed).toBeGreaterThan(2);
+  });
+
+  test("a frame in its own session is refused, never sent to the top session", async () => {
+    const page = new FakeRenderer();
+    Object.assign(page, {
+      frameSessions: new Map([["CHILD", "S2"], ["GRAND", "S3"]]),
+      oopifs: new Map([["S2", { root: "CHILD", parentSession: "S" }], ["S3", { root: "GRAND", parentSession: "S2" }]]),
+    });
+    const error = (await sendIn(page.page, "CHILD", "DOM.getContentQuads", { backendNodeId: 1 }).catch((caught: unknown) => caught)) as BrowseError;
+    expect(error.code).toBe("internal_error");
+    expect(error.message).toBe(UNROUTED);
+    expect(page.sent).toEqual([]);
+    expect(await frameOffset(page.page, "GRAND").catch((caught: unknown) => (caught as BrowseError).code)).toBe("internal_error");
+    expect(page.sent).toEqual([]);
+    expect(await sendIn(page.page, "F", "DOM.getContentQuads", { backendNodeId: 1 })).toEqual({ quads: [QUADS[1]] });
+  });
+
+  test("shutdown waits for a drag cleanup, but only so long", async () => {
+    let finish = () => {};
+    const slow = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    CLEANUPS.add(slow);
+    try {
+      expect(await drainCleanups(0.1)).toBe(false);
+      setTimeout(finish, 50);
+      expect(await drainCleanups(1)).toBe(true);
+    } finally {
+      CLEANUPS.delete(slow);
+    }
+    expect(await drainCleanups(0.1)).toBe(true);
   });
 });

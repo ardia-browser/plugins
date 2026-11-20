@@ -13,6 +13,18 @@ export const INTERCEPT_TIMEOUT = 1.5;
 export const DRAG_FAR_SHARE = 0.75;
 export const DRAG_GATED = "the source is an HTML5 draggable, and without drag interception a synthetic drag would start a real macOS drag session";
 export const CLEANUPS = new Set<Promise<void>>();
+export const CLEANUPS_WAIT = 2 * CLEANUP_TIMEOUT + INTERCEPT_TIMEOUT;
+
+export async function drainCleanups(seconds = CLEANUPS_WAIT): Promise<boolean> {
+  if (CLEANUPS.size === 0) return true;
+  try {
+    await within(Promise.allSettled([...CLEANUPS]), seconds);
+    return true;
+  } catch (error) {
+    if (error instanceof TimedOut) return false;
+    throw error;
+  }
+}
 
 
 export class DragInterception {

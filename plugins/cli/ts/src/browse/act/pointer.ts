@@ -525,9 +525,11 @@ export async function tap(page: Page, element: Element, humanize: boolean): Prom
   const input = inputOf(page);
   const point = { x: hundredths(x), y: hundredths(y), id: 1 };
   await input.gesture("tap", async () => {
+    input.heldTouch = point;
     await page.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [point] }, { inputEvent: true });
     if (humanize) await sleep(rng().uniform(0.05, 0.15));
     await page.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] }, { inputEvent: true });
+    input.heldTouch = null;
   });
   input.pointer.position = [x, y];
   return true;

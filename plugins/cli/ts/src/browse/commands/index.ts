@@ -82,6 +82,7 @@ export type DispatchHooks = {
   after?: (ctx: Ctx, name: string, argv: string[], result: Result) => void;
   afterCommand?: (state: Ctx["state"]) => Promise<void>;
   closeAfterBatch?: (state: Ctx["state"]) => boolean;
+  shutdown?: () => Promise<void>;
 };
 
 const COMMANDS = new Map<string, Handler>();

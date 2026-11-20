@@ -1,6 +1,6 @@
 import { pyLen } from "../../pylib/str.ts";
 import { rng } from "../../pylib/random.ts";
-import { Cancelled, shield, sleep, untilCancelled } from "../cdp/cancel.ts";
+import { Cancelled, later, shield, sleep, withSignal } from "../cdp/cancel.ts";
 import { BrowseError, ConnectionLost, OutcomeUnknown } from "../daemon-errors.ts";
 import { Page, type PageInput, type Viewport, type Element } from "../state/page.ts";
 import { roundCoordinate } from "./human.ts";
@@ -61,6 +61,7 @@ type GestureOptions = { keepHeld?: boolean; allowHidden?: boolean };
 export class Input implements PageInput {
   readonly heldKeys: HeldKeys = new Map();
   mouse: Mouse | null = null;
+  heldTouch: { x: number; y: number; id: number } | null = null;
 
   constructor(readonly page: Page) {}
 
@@ -80,7 +81,7 @@ export class Input implements PageInput {
   }
 
   get holding(): boolean {
-    return this.heldKeys.size > 0 || (this.mouse !== null && this.mouse.held !== null);
+    return this.heldKeys.size > 0 || this.heldTouch !== null || (this.mouse !== null && this.mouse.held !== null);
   }
 
   keyboard(element: Element | null = null, guard: (() => Promise<void>) | null = null): Keyboard {
@@ -88,6 +89,13 @@ export class Input implements PageInput {
   }
 
   async releaseHeld(): Promise<void> {
+    if (this.heldTouch !== null) {
+      try {
+        await this.page.send("Input.dispatchTouchEvent", { type: "touchCancel", touchPoints: [] }, { inputEvent: true, timeout: RELEASE_TIMEOUT });
+      } finally {
+        this.heldTouch = null;
+      }
+    }
     for (const [key, params] of [...this.heldKeys]) {
       const up: Record<string, unknown> = {};
       for (const name of ["key", "code", "windowsVirtualKeyCode"]) if (Object.hasOwn(params, name)) up[name] = params[name];
@@ -117,27 +125,21 @@ export class Input implements PageInput {
 
   async releaseAll(): Promise<boolean> {
     if (!this.holding) return true;
+    const limit = new AbortController();
+    const stop = later(RELEASE_TIMEOUT * 1000, () => limit.abort(new Cancelled()));
     try {
-      await shield(async () => {
-        let stop = () => {};
-        const limit = new Promise<never>((_, reject) => {
-          const timer = setTimeout(() => reject(new Cancelled()), RELEASE_TIMEOUT * 1000);
-          stop = () => clearTimeout(timer);
-        });
-        try {
-          await untilCancelled(Promise.race([this.releaseHeld(), limit]), null);
-        } finally {
-          stop();
-        }
-      });
+      await shield(() => withSignal(limit.signal, () => this.releaseHeld()));
       return true;
     } catch {
       this.heldKeys.clear();
+      this.heldTouch = null;
       if (this.mouse !== null) {
         this.mouse.held = null;
         this.mouse.pressedButton = null;
       }
       return false;
+    } finally {
+      stop();
     }
   }
 

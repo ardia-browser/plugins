@@ -1,11 +1,13 @@
 import { hypot } from "../../pylib/math.ts";
 import { rng } from "../../pylib/random.ts";
-import { type Browser, type CdpResult } from "../cdp/browser.ts";
+import { type CdpResult } from "../cdp/browser.ts";
 import { sleep } from "../cdp/cancel.ts";
-import { CdpTimeout, ConnectionLost, OutcomeUnknown } from "../daemon-errors.ts";
+import { OutcomeUnknown } from "../daemon-errors.ts";
 import type { Page } from "../state/page.ts";
 import { monotonic } from "../state/wait.ts";
 import { bezierPoint, BUTTON_MASK, controlPoints, CubicBezier, MOUSE, minimumJerk, moveDuration, PRESSED_FORCE, roundCoordinate, SCROLL, tremorSigma } from "./human.ts";
+
+export const MOUSE_TIMEOUT = 60;
 
 export interface DragHandoff {
   data: unknown;
@@ -90,7 +92,7 @@ export class Mouse {
       const sigma = tremorSigma(x, y, now, previous);
       x += random.gauss(0, sigma);
       y += random.gauss(0, sigma);
-      await this.dispatchMove(x, y, false);
+      await this.dispatchMove(x, y);
       previous = [x, y, now];
       await sleep(Math.max(0.001, MOUSE.frameInterval + random.uniform(-MOUSE.frameIntervalVariance, MOUSE.frameIntervalVariance)));
       if (random.random() < MOUSE.microPauseProbability) {
@@ -124,23 +126,17 @@ export class Mouse {
   }
 
   private async send(params: CdpResult): Promise<void> {
-    const browser = this.page.browser;
-    if (browser === null || !browser.alive) throw new ConnectionLost();
     try {
-      await browser.send("Input.dispatchMouseEvent", params, { session: this.page.session, timeout: 60 });
+      await this.page.send("Input.dispatchMouseEvent", params, { inputEvent: true, timeout: MOUSE_TIMEOUT });
     } catch (error) {
-      if (error instanceof OutcomeUnknown || error instanceof CdpTimeout) throw new OutcomeUnknown("the mouse input", "Ardia didn't answer an input event in time");
+      if (error instanceof OutcomeUnknown && error.text.includes("didn't answer")) {
+        throw new OutcomeUnknown("the mouse input", "Ardia didn't answer an input event in time");
+      }
       throw error;
     }
   }
 
-  private sendNowait(params: CdpResult): void {
-    const browser: Browser | null = this.page.browser;
-    if (browser === null || !browser.alive) throw new ConnectionLost();
-    browser.send("Input.dispatchMouseEvent", params, { session: this.page.session, timeout: 60, signal: null }).catch(() => {});
-  }
-
-  async dispatchMove(x: number, y: number, wait = true): Promise<void> {
+  async dispatchMove(x: number, y: number): Promise<void> {
     const interception = this.pressedButton !== null ? this.interception : null;
     if (interception !== null && interception.data !== null) {
       await interception.over(x, y);
@@ -150,8 +146,7 @@ export class Mouse {
     const params: CdpResult = { type: "mouseMoved", x: roundCoordinate(x), y: roundCoordinate(y) };
     const pressed = this.pressedButton;
     if (pressed !== null) Object.assign(params, { button: pressed, buttons: BUTTON_MASK[pressed], force: PRESSED_FORCE });
-    if (wait) await this.send(params);
-    else this.sendNowait(params);
+    await this.send(params);
     this.position = [x, y];
     if (interception !== null) await interception.moved(x, y);
   }

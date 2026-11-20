@@ -12,6 +12,7 @@ type Options = {
   failing?: string[];
   delays?: Record<string, number>;
   hidden?: boolean;
+  touch?: boolean;
 };
 
 export class FakeRenderer {
@@ -27,7 +28,9 @@ export class FakeRenderer {
   readonly delays: Record<string, number>;
   dragIntercepted: ((data: Record<string, unknown>) => void) | null = null;
   dragging = false;
+  inFlight = 0;
   hiddenTab: boolean;
+  touch: boolean;
   sessionId = "S";
   readonly session = "S";
   readonly input: Input;
@@ -41,6 +44,7 @@ export class FakeRenderer {
     this.failing = new Set(options.failing ?? []);
     this.delays = options.delays ?? {};
     this.hiddenTab = options.hidden ?? false;
+    this.touch = options.touch ?? false;
     this.input = new Input(this as unknown as Page);
     this.input.bind(null);
     this.input.pointer.position = [300, 300];
@@ -75,6 +79,7 @@ export class FakeRenderer {
   }
 
   async call(fn: string, args: unknown[] = []): Promise<unknown> {
+    if (fn.includes("maxTouchPoints")) return this.touch;
     if (fn.includes("inputWatch")) return { ...this.counts, activeFrame: false };
     if (fn.includes("draggable")) return this.draggable;
     if (fn.includes("ardiaBrowse.info")) return { connected: true };
@@ -91,7 +96,14 @@ export class FakeRenderer {
     const kind = params["type"];
     const key = `${method} ${String(kind ?? params["enabled"])}`;
     const delay = this.delays[key];
-    if (delay !== undefined) await sleep(delay);
+    if (delay !== undefined) {
+      this.inFlight += 1;
+      try {
+        await sleep(delay);
+      } finally {
+        this.inFlight -= 1;
+      }
+    }
     if (this.failing.has(key)) throw new CdpError(method, "boom");
     if (this.refused.has(method)) throw new Gated(method);
     this.sent.push([method, kind !== undefined ? kind : params["enabled"]]);

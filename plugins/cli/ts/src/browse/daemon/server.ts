@@ -316,6 +316,7 @@ export class Daemon {
     if (this.state.connected) {
       for (const page of [...this.state.pages.values()]) if (page.sessionId && page.input.releaseAll) await page.input.releaseAll();
     }
+    if (hooks.shutdown) await hooks.shutdown();
     await this.state.disconnect();
   }
 

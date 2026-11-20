@@ -1,4 +1,5 @@
 import type { CdpResult } from "../cdp/browser.ts";
+import { BrowseError } from "../daemon-errors.ts";
 import type { Page, SendOptions } from "./page.ts";
 
 type Oopif = { root: string; parentSession: string };
@@ -17,16 +18,22 @@ export function inOwnSession(page: Page, frameId: string | null): boolean {
   return sessionOfFrame(page, frameId) !== page.session;
 }
 
+export const UNROUTED =
+  "this frame lives in its own CDP session (an out-of-process iframe), and this build of the daemon can't send to a frame's own session yet";
+
+function topOnly(page: Page, session: string | null): void {
+  if (session !== page.session) throw new BrowseError(UNROUTED, null, "internal_error");
+}
+
 export async function sendIn(page: Page, frameId: string | null, method: string, params: CdpResult | null = null, options: SendOptions = {}): Promise<CdpResult> {
-  const session = sessionOfFrame(page, frameId);
-  if (session === page.session) return page.send(method, params, options);
-  return page.send(method, params, { ...options, session } as SendOptions);
+  topOnly(page, sessionOfFrame(page, frameId));
+  return page.send(method, params, options);
 }
 
 async function ownerCorner(page: Page, session: string | null, frameId: string): Promise<[number, number]> {
-  const options = (session === page.session ? {} : { session }) as SendOptions;
-  const owner = await page.send("DOM.getFrameOwner", { frameId }, options);
-  const found = await page.send("DOM.getContentQuads", { backendNodeId: owner["backendNodeId"] }, options);
+  topOnly(page, session);
+  const owner = await page.send("DOM.getFrameOwner", { frameId });
+  const found = await page.send("DOM.getContentQuads", { backendNodeId: owner["backendNodeId"] });
   const quads = Array.isArray(found["quads"]) ? (found["quads"] as number[][]) : [];
   const quad = quads[0];
   if (quad === undefined) return [0, 0];

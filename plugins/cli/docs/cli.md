@@ -2001,7 +2001,9 @@ harness scenarios or the human tier (`tests/m3/human_act.py`):
   touch emulation or that probe.
 - Element boxes, hit tests and frame offsets go through `browse/state/frames.ts`: an element inside an out-of-process
   iframe is measured in its own CDP session and placed at the sum of each frame owner's offset up to the top session,
-  where the click is sent (ardia#2812 rows 12, 13, 21). Python has no out-of-process frames. An element inside a
+  where the click is sent (ardia#2812 rows 12, 13, 21). Python has no out-of-process frames. Until the frame sessions
+  of slice D4 are merged, a send to a frame that lives in its own session is refused with `internal_error` instead of
+  going to the top session. An element inside a
   shadow root, closed ones included, isn't "covered" by its own host: when the cover check names something, the click
   point is tested again through each shadow root from the element out to the document, and the click goes ahead if
   every level hits the element or the host holding it. Python refuses such a click as covered by the host.
@@ -2010,6 +2012,17 @@ harness scenarios or the human tier (`tests/m3/human_act.py`):
 - `batch` reads a line's `wait --state` as `wait`'s own flag, as the TypeScript client does; Python's splitter refuses
   it as a launch option. A line's own `--out` saves the text of `get` and `snapshot`; for `eval`, `read` and `script`
   it answers that the save isn't served yet.
+- Every mouse event goes through the page's own send, like keys and touches, so it gets the busy probe, the crashed and
+  detached checks and the unanswered-call memory, and a humanized move waits for each `mouseMoved` answer before the
+  next: at most one input event is ever outstanding. Python sends a humanized path's moves without waiting for their
+  answers (pipelined), so its pages can see coalesced moves the TypeScript daemon doesn't produce.
+- A tap's finger counts as held from just before `touchStart` until `touchEnd` is answered, so a command cut short in
+  between lifts it with `touchCancel`, as held keys and buttons are released. A release that runs out of its 2 s is
+  cancelled, as Python's `wait_for` cancels it, so no earlier key up or button release is still awaited when the next
+  command's input starts; daemon shutdown also waits (at most 5.5 s) for an unfinished drag cleanup.
+- Page calls go through `Runtime.callFunctionOn` on the isolated world's handle, with one exception, as in Python:
+  `react` evaluates in the page's main world with `Runtime.evaluate`, since React's devtools hook lives on the page's
+  `window`.
 - The drag's interception cleanup, the network watch's `Network.disable` and held keys and buttons run under
   `shield()` and finish before the command answers, also when it is cancelled or cut short, as Python's do; the harness
   compares the cleanup traffic at every CDP call of `act/d5_drag_scroll`'s HTML5 drag.
