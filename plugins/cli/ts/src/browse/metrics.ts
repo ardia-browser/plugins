@@ -41,7 +41,8 @@ export const FLAGS = new Set([
   "script_state_kept_on_interrupt", "find_closest_names", "batch_saved", "read_empty_page", "network_reloaded", "fill_no_reaction_hint",
   "eval_selectors_quoted", "queued_behind_script", "followed_ref_after_reload", "clicked_visible_content", "element_rehomed",
   "plugin_loader_before", "plugin_loader_after", "plugin_lease_refused", "plugin_out_of_scope", "plugin_page_hidden", "plugin_engine_busy", "plugin_page_busy", "plugin_not_delivered", "plugin_outcome_unknown",
-  "plugin_session_gone", "plugin_node_gone", "plugin_outside_page", "plugin_policy_refused",
+  "plugin_session_gone", "plugin_node_gone", "plugin_outside_page", "plugin_policy_refused", "plugin_act_lease_missing",
+  "plugin_act_lease_ended",
 ]);
 export const MAIN_PHASE: Readonly<Record<string, string>> = { snapshot: "snapshot_build_ms", eval: "eval_ms" };
 export const OUTPUT_MARKERS = ["\n[output capped at ", "\n[truncated ", "\n[pages cut to fit ", " not shown. Narrow it instead: "];

@@ -6,6 +6,7 @@ export type EngineCode = {
   readonly code: string;
   readonly exit: 1 | 2 | 77;
   readonly metric: string;
+  readonly pending?: "act-lease-pr";
 };
 
 const exact = (message: string, code: string, metric: string, exit: 1 | 2 | 77 = 1): EngineCode => ({ message, match: "exact", code, exit, metric });
@@ -31,6 +32,8 @@ export const ENGINE_REFUSALS: readonly EngineCode[] = [
   exact("ardia: input isn't allowed for this session", "plugin_refused", "plugin_policy_refused", 77),
   exact("ardia: that input can't be made", "plugin_refused", "plugin_policy_refused", 77),
   exact("ardia: that session can't send input", "plugin_refused", "plugin_policy_refused", 77),
+  { ...exact("ardia: no act lease for this page's current document", "act_lease_missing", "plugin_act_lease_missing", 77), pending: "act-lease-pr" },
+  { ...exact("ardia: act lease ended before this input was delivered", "act_lease_ended", "plugin_act_lease_ended"), pending: "act-lease-pr" },
   suffix(" isn't allowed for a plugin", "plugin_refused", "plugin_policy_refused", 77),
   suffix(" can't be sent", "plugin_refused", "plugin_policy_refused", 77),
 ];

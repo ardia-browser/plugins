@@ -21,9 +21,27 @@ describe("the engine's plugin refusals (ardia#2808 ac_plugin_refusals.h)", () =>
     expect(header.size).toBeGreaterThan(25);
   });
 
-  test("every row of the table is one of the header's strings, exactly", () => {
+  test("every row of the table is one of the header's strings, exactly, except rows the act lease PR still has to add", () => {
     const strings = new Set(header.values());
-    for (const entry of ENGINE_REFUSALS) expect(strings.has(entry.message)).toBe(true);
+    const missing = ENGINE_REFUSALS.filter((entry) => !strings.has(entry.message));
+    expect(missing.filter((entry) => entry.pending === undefined).map((entry) => entry.message)).toEqual([]);
+    expect(missing.map((entry) => entry.message).sort()).toEqual(ENGINE_REFUSALS.filter((entry) => entry.pending === "act-lease-pr" && !strings.has(entry.message)).map((entry) => entry.message).sort());
+  });
+
+  test("an act-lease string in the header must be exactly one of the rows the table expects from the act lease PR", () => {
+    const expected = new Set(ENGINE_REFUSALS.filter((entry) => entry.pending === "act-lease-pr").map((entry) => entry.message));
+    expect(expected.size).toBe(2);
+    const drifted = (values: Iterable<string>) => [...values].filter((value) => /act lease/iu.test(value) && !expected.has(value));
+    expect(drifted(header.values())).toEqual([]);
+    expect(drifted(["ardia: no act lease for this page", "ardia: act lease ended before this input was delivered"])).toEqual(["ardia: no act lease for this page"]);
+  });
+
+  test("the act-lease rows: missing is refused before anything ran (77); ended is like outcome unknown (1, never retried)", () => {
+    expect(engineRefusal("ardia: no act lease for this page's current document")).toMatchObject({ code: "act_lease_missing", exit: 77 });
+    const ended = engineRefusal("ardia: act lease ended before this input was delivered");
+    expect(ended).toMatchObject({ code: "act_lease_ended" });
+    expect(ended?.exit).toBe(engineRefusal("ardia: outcome unknown")?.exit);
+    expect(engineRefusal("ardia: no act lease for this page")).toBeNull();
   });
 
   test("every string in the header is either mapped or listed as deliberately uncoded, so a new refusal fails here", () => {

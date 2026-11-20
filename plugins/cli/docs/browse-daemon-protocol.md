@@ -203,6 +203,10 @@ and never by Python's or by the person's own session. The TypeScript daemon only
   `(password field)` and no value. `fill`, `type` and `find … fill|type` into one answer exit 77 `protected_field`
   ("Password fields are filled by the password manager, not by plugins") before any input goes out, and the answer's
   metrics count it (`plugin_protected_refused`). Owner mode is unchanged.
+- **Removed elements.** Without Runtime, Chrome 158 shows a node removed from the page exactly like a `display:none`
+  one (`DOM.describeNode` succeeds, the AX tree marks it `notRendered`, it has no quads), so acting on a ref whose node
+  was removed answers `not_visible` rather than the owner session's `stale_ref`. This is accepted: the AI contract takes
+  a fresh snapshot after either.
 - **Refs.** A step acts only on the picked tab: a ref taken on another tab is stale, answering exit 1 `stale_ref` like
   any other stale ref, and nothing is sent.
 - **Document check.** With `options.expect_loader`, the daemon compares the picked tab's main-frame loader before the
@@ -222,7 +226,11 @@ and never by Python's or by the person's own session. The TypeScript daemon only
   point outside the page → `outside_viewport`; nothing there → `not_visible`; a closing connection → `connection_lost`;
   the policy refusals (not the page session, input not allowed for this session, input that can't be made, a session
   that can't send input, `ardia: <method> <what> isn't allowed for a plugin`, `ardia: <method> <what> can't be sent`) →
-  exit 77 `plugin_refused`. The protocol errors (not JSON, no id, duplicate id, too many pending) stay uncoded: the
+  exit 77 `plugin_refused`. Two act-lease rows come from the act lease PR and aren't in ardia#2808's header yet:
+  `ardia: no act lease for this page's current document` → exit 77 `act_lease_missing` (refused at admission, nothing
+  ran) and `ardia: act lease ended before this input was delivered` → `act_lease_ended` (some events may have landed,
+  so it's treated like `outcome_unknown`: exit 1, never retried); the drift test fails if the header later carries
+  either with different text. The protocol errors (not JSON, no id, duplicate id, too many pending) stay uncoded: the
   daemon never sends what causes them. A coded refusal always ends the step before any further CDP call; only a plain,
   uncoded CDP failure may fall back (an empty title, a default viewport point, "no box").
 - **State.** Tab numbers live in the daemon's memory, per credential; the shared `tabs-*.json` registry, claims, the
