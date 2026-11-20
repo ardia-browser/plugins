@@ -7,5 +7,6 @@ import "./notes.ts";
 import "../flows/flowlog.ts";
 import "../flows/flows.ts";
 import "../flows/flowrun.ts";
+import "../auth/vault.ts";
 
 export { dispatch, hooks, OWNERS, register, served } from "./index.ts";
