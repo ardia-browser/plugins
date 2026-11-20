@@ -1,10 +1,5 @@
 {
- "racy_steps": {
-  "steps": [
-   2
-  ],
-  "why": "two reader tabs load in parallel, so which tab's isolated world is created first (and numbered first) follows Chromium's timing"
- },
+ "note": "one reader tab per step: two in parallel number their isolated worlds in Chromium's order, which the step-wide id numbering can't compare; ReadingTabs in ts/tests/m3/read.test.ts covers the parallel tabs",
  "steps": [
   {
    "argv": [
@@ -18,14 +13,6 @@
    "argv": [
     "read",
     "{fixture}/item.html"
-   ],
-   "session": "d4"
-  },
-  {
-   "argv": [
-    "read",
-    "{fixture}/item.html",
-    "{fixture}/product.html"
    ],
    "session": "d4"
   },
