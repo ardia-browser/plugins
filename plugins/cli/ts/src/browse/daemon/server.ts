@@ -105,7 +105,7 @@ export class Daemon {
       throw error;
     }
     this.state = new State(
-      { session: config.session, key: config.key, browseFd: this.dirFd, noAutoDialog: config.noAutoDialog, pinTab: config.pinTab, dataDir: config.dataDir },
+      { session: config.session, key: config.key, browseFd: this.dirFd, noAutoDialog: config.noAutoDialog, pinTab: config.pinTab, dataDir: config.dataDir, dataRoot: config.dataRoot },
       () => this.resolveEndpoint(),
     );
     this.idleLimit = (config.idleTimeoutMs || DEFAULT_DAEMON_IDLE * 1000) / 1000;

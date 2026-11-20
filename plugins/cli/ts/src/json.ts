@@ -342,14 +342,14 @@ export type Style = "compact" | "spaced" | "indented";
 
 type Frame = { entries: [string | undefined, Value][]; next: number; depth: number; close: string };
 
-export function dumps(value: Value, style: Style, ensureAscii = false, c1Escaped = false): string {
+export function dumps(value: Value, style: Style, ensureAscii = false, c1Escaped = false, indent = 2): string {
   const out: string[] = [];
   const item = style === "spaced" ? ", " : ",";
   const pair = style === "compact" ? ":" : ": ";
   const indents: string[] = ["\n"];
   const newline = (level: number) => {
     if (style !== "indented") return;
-    while (indents.length <= level) indents.push(`${indents[indents.length - 1]}  `);
+    while (indents.length <= level) indents.push(`${indents[indents.length - 1]}${" ".repeat(indent)}`);
     out.push(indents[level] as string);
   };
   const stack: Frame[] = [];
