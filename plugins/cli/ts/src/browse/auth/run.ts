@@ -65,28 +65,43 @@ export function run(
     const err = sink(limit);
     let outcome: "timeout" | "cancelled" | null = null;
     let failure: unknown = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let cancel = () => {};
+    let settled = false;
+    const finish = (run: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", cancel);
+      run();
+    };
     const stop = (why: "timeout" | "cancelled") => {
       outcome ??= why;
       child.kill("SIGKILL");
+      child.once("exit", () => {
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+        finish(() => reject(why === "timeout" ? new RunTimedOut() : new Cancelled()));
+      });
     };
-    const timer = setTimeout(() => stop("timeout"), options.timeout * 1000);
-    const cancel = () => stop("cancelled");
+    timer = setTimeout(() => stop("timeout"), options.timeout * 1000);
+    cancel = () => stop("cancelled");
     signal?.addEventListener("abort", cancel, { once: true });
     child.stdout?.on("data", (chunk: Buffer) => out.push(chunk));
     child.stderr?.on("data", (chunk: Buffer) => err.push(chunk));
     child.on("error", (error) => {
       failure ??= error;
+      if (child.pid === undefined) finish(() => reject(describe(error)));
     });
     child.on("close", (code, killedBy) => {
-      clearTimeout(timer);
-      signal?.removeEventListener("abort", cancel);
-      if (outcome === "cancelled") reject(new Cancelled());
-      else if (outcome === "timeout") reject(new RunTimedOut());
-      else if (failure !== null && code === null && killedBy === null) reject(describe(failure));
-      else {
-        const signalled = killedBy === null ? null : (os.constants.signals as Record<string, number | undefined>)[killedBy];
-        resolve({ code: code ?? -(signalled ?? 1), stdout: out.take(), stderr: err.take() });
-      }
+      if (outcome !== null) return;
+      finish(() => {
+        if (failure !== null && child.pid === undefined) reject(describe(failure));
+        else {
+          const signalled = killedBy === null ? null : (os.constants.signals as Record<string, number | undefined>)[killedBy];
+          resolve({ code: code ?? -(signalled ?? 1), stdout: out.take(), stderr: err.take() });
+        }
+      });
     });
     if (options.input !== undefined && child.stdin) {
       child.stdin.on("error", () => {});

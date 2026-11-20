@@ -19,6 +19,7 @@ export const SECURITY = "/usr/bin/security";
 export const SERVICE = "dev.ardia.browse.auth";
 export const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 export const SECURITY_TIMEOUT = 20;
+export const tools = { security: SECURITY, timeout: SECURITY_TIMEOUT };
 
 export type Meta = Record<string, any>;
 
@@ -43,7 +44,7 @@ export async function security(words: readonly string[]): Promise<[number, strin
   const line = commandLine(words);
   let ran;
   try {
-    ran = await run([SECURITY, "-i"], { input: Buffer.from(line, "utf8"), timeout: SECURITY_TIMEOUT });
+    ran = await run([tools.security, "-i"], { input: Buffer.from(line, "utf8"), timeout: tools.timeout });
   } catch (error) {
     if (error instanceof RunTimedOut) throw new BrowseError("The Keychain didn't answer in time (is a Keychain prompt waiting?)");
     if (error instanceof SpawnFailed) throw new BrowseError(`Couldn't run ${SECURITY}: ${error.strerror}`);

@@ -175,7 +175,7 @@ export function pluginEnv(): Record<string, string> {
   return env;
 }
 
-export async function call(root: string, name: string, capability: string, request: unknown): Promise<unknown> {
+export async function call(root: string, name: string, capability: string, request: unknown, timeout = RUN_TIMEOUT): Promise<unknown> {
   const plugin = find(root, name);
   const declared = (plugin["capabilities"] ?? []) as string[];
   if (!declared.includes(capability) && capability !== "command.run") {
@@ -186,13 +186,13 @@ export async function call(root: string, name: string, capability: string, reque
   try {
     ran = await run([String(plugin["command"])], {
       input: Buffer.from(payload, "utf8"),
-      timeout: RUN_TIMEOUT,
+      timeout,
       env: pluginEnv(),
       cwd: path.dirname(String(plugin["command"])),
       limit: MAX_REPLY,
     });
   } catch (error) {
-    if (error instanceof RunTimedOut) throw new BrowseError(`Plugin ${name} didn't answer in ${RUN_TIMEOUT}s`);
+    if (error instanceof RunTimedOut) throw new BrowseError(`Plugin ${name} didn't answer in ${formatG(timeout)}s`);
     if (error instanceof SpawnFailed) throw new BrowseError(`Couldn't run plugin ${name}: ${error.strerror}`);
     throw error;
   }

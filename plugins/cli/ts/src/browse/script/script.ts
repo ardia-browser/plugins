@@ -38,7 +38,7 @@ export const READ_BATCH = 100;
 export const STATE_PREVIEW_CHARS = 1500;
 const PY_WHITESPACE = new RegExp(`[${PY_SPACE_CLASS}]+`, "u");
 const PAGE_GLOBAL = /\b(document|window|localStorage|sessionStorage|getComputedStyle) is not defined/u;
-const PAGE_MISSING = /ReferenceError: (\w+) is not defined/u;
+const PAGE_MISSING = /ReferenceError: ([\p{L}\p{N}_]+) is not defined/u;
 
 type Message = Record<string, unknown>;
 type Answer = { ok: boolean; text?: string | null; data?: unknown; error?: string; code?: string | null };
@@ -145,7 +145,8 @@ async function start(page: Page, handle: string, source: string, state = "{}"): 
 }
 
 function knownCommand(word: string): boolean {
-  return Object.hasOwn(OWNERS, canonical(word));
+  const name = canonical(word);
+  return name !== "auth" && Object.hasOwn(OWNERS, name);
 }
 
 export function splitCommandLine(argv: string[]): string[] {
