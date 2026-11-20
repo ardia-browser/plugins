@@ -107,12 +107,13 @@ describe.skipIf(!CHROME)("plugin mode against headless Chrome for Testing, throu
   });
 
   test("engine refusals keep their codes, from the CDP error only", async () => {
-    await tap(world, "fault", { kind: "error", method: "Input.insertText", at: 1, message: "ardia: tab_out_of_scope: the tab moved to another window" });
+    await tap(world, "fault", { kind: "error", method: "Input.insertText", at: 1, message: "ardia: tab_out_of_scope: the tab left the plugin's window" });
     const scope = await marked("scope", ["fill", "--", "@e2", "Ada"], { json: true });
-    expect(scope.out).toBe('{"success":false,"data":null,"error":"Input.insertText: ardia: tab_out_of_scope: the tab moved to another window","code":"tab_out_of_scope"}\n');
-    await tap(world, "fault", { kind: "error", method: "Ardia.dispatchClick", at: 1, message: "ardia: document_changed: no act lease covers this document" });
+    expect(JSON.parse(scope.out)).toEqual({ success: false, data: null, error: "Input.insertText: ardia: tab_out_of_scope: the tab left the plugin's window", code: "tab_out_of_scope" });
+    await tap(world, "fault", { kind: "error", method: "Ardia.dispatchClick", at: 1, message: "ardia: input isn't allowed for this session" });
     const lease = await marked("lease", ["click", "--", "@e3"], { json: true });
-    expect(lease.out).toBe('{"success":false,"data":null,"error":"Ardia.dispatchClick: ardia: document_changed: no act lease covers this document","code":"document_changed"}\n');
+    expect(lease).toMatchObject({ exit: 77, code: "plugin_refused" });
+    expect(JSON.parse(lease.out).error).toBe("Ardia.dispatchClick: ardia: input isn't allowed for this session");
     await tap(world, "fault", { kind: "error", method: "Input.insertText", at: 1, message: "page said ardia: tab_out_of_scope" });
     const quoted = await step(world, ["fill", "--", "@e2", "Ada"], { json: true });
     expect(quoted.code).not.toBe("tab_out_of_scope");

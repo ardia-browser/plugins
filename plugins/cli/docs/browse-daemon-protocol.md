@@ -210,13 +210,21 @@ and never by Python's or by the person's own session. The TypeScript daemon only
   mismatch answers code `document_changed_after`, exit 1, `data.ran: true`, in place of the step's own answer). The
   pick ignores it. Every answer whose tab is
   attached carries `loader`.
-- **Engine codes.** One table (`src/browse/plugin/engine-codes.ts`) maps the engine's own refusal messages, matched
-  exactly or as `<message>: …`, never from page text: `ardia: tab_out_of_scope` → `tab_out_of_scope`;
-  `ardia: document_changed` (the act lease) and `ardia: the page changed after the input was sent` (the navigation epoch
-  moved before delivery) → `document_changed`; `ardia: page hidden` → `page_hidden` (answered as `outside_viewport`);
-  `ardia: busy` → `busy` (retried for wheels); `ardia: the page isn't taking input right now` → `page_busy`. The texts
-  are ardia#2808's at round 16 (c0bfc72c2) and round 17 (34124a4). A coded refusal always ends the step before any
-  further CDP call; only a plain, uncoded CDP failure may fall back (an empty title, a default viewport point, "no box").
+- **Engine codes.** ardia#2808 gives every refusal a plugin can get one fixed message
+  (`engine/ardiacore/src/ardia/core/ac_plugin_refusals.h`, vendored under `ts/tests/m3/plugin-engine/`). One table,
+  `src/browse/plugin/engine-codes.ts`, maps them by exact string (the two patterns by `ardia: ` plus a method and the
+  fixed suffix), and `plugin-refusals.test.ts` fails when the header has a string the table neither maps nor lists as
+  uncoded. Codes never come from page text. `ardia: busy` and `ardia: the page isn't taking input right now` → retried
+  (wheels), then `busy`; `ardia: page hidden` → `outside_viewport`; `ardia: not delivered` → `not_applied` (nothing was
+  sent); `ardia: outcome unknown` → `outcome_unknown`; `ardia: the page changed after the input was sent` →
+  `document_changed`; `ardia: tab_out_of_scope: the tab left the plugin's window` → `tab_out_of_scope`; no attached
+  session or no page → `tab_detached`; a nodeId or backendNodeId not in the page, or one that left it → `stale_ref`; a
+  point outside the page → `outside_viewport`; nothing there → `not_visible`; a closing connection → `connection_lost`;
+  the policy refusals (not the page session, input not allowed for this session, input that can't be made, a session
+  that can't send input, `ardia: <method> <what> isn't allowed for a plugin`, `ardia: <method> <what> can't be sent`) →
+  exit 77 `plugin_refused`. The protocol errors (not JSON, no id, duplicate id, too many pending) stay uncoded: the
+  daemon never sends what causes them. A coded refusal always ends the step before any further CDP call; only a plain,
+  uncoded CDP failure may fall back (an empty title, a default viewport point, "no box").
 - **State.** Tab numbers live in the daemon's memory, per credential; the shared `tabs-*.json` registry, claims, the
   temporary-tab sweep and `using` are never touched. Nothing is written in `Browse/` beyond the session's socket, lock and
   log (no `<key>.json`), and an answer over the output cap is cut, not spilled.

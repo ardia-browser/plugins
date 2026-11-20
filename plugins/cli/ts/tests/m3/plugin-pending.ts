@@ -31,7 +31,9 @@ const DESIGNED: Record<string, { exit: number; code?: string; err?: string; why:
   "contract--8-press-copy": { exit: 77, code: "plugin_refused", why: "ardia#2808's key policy refuses Meta+C, so the daemon refuses it before any key goes out" },
   "contract--8-press-paste": { exit: 77, code: "plugin_refused", why: "ardia#2808's key policy refuses Meta+V, so the daemon refuses it before any key goes out" },
   "contract--8-press-undo": { exit: 77, code: "plugin_refused", why: "ardia#2808's key policy refuses Meta+Z, so the daemon refuses it before any key goes out" },
-  "review--4-lease-cdp-error": { exit: 1, code: "document_changed", why: "clicks now go through Ardia.dispatchClick (ardia#2808), so the lease refusal names that method instead of Input.dispatchMouseEvent; same code" },
+  "review--4-lease-cdp-error": { exit: 77, code: "plugin_refused", why: "ardia#2808's fixed refusals: an input refused at delivery (lease, scope, departed session) is \"ardia: input isn't allowed for this session\", a policy refusal (77), and clicks go through Ardia.dispatchClick" },
+  "review--4-scope-cdp-error": { exit: 1, code: "tab_out_of_scope", why: "ardia#2808's fixed text for this refusal is \"ardia: tab_out_of_scope: the tab left the plugin's window\"" },
+  "review--4-scope-text": { exit: 1, why: "ardia#2808's fixed text for this refusal is \"ardia: tab_out_of_scope: the tab left the plugin's window\"" },
   "review2--1-wait-text-takes-fn": { exit: 1, code: "timeout", err: '✗ Timed out after 25000ms waiting for text "--fn"\n', why: "a client grammar case: -t took --fn as its text, which the page never shows, so the wait times out as Python's would" },
   "review2--1-snapshot-select-dashdash": { exit: 1, code: "not_found", err: "✗ Element not found: --. Verify the selector, role, or name is correct and the element exists in the DOM.\n", why: "a client grammar case: -s took -- as its value (the selector), and no element matches it" },
 };
@@ -39,9 +41,9 @@ const SETUP: Record<string, string[][]> = {
   "contract--1-wait": [["click", "--", "@e3"]],
 };
 const ENGINE_FAULTS: Record<string, [string, string]> = {
-  "review--4-scope-cdp-error": ["Input.insertText", "ardia: tab_out_of_scope: the tab moved to another window"],
-  "review--4-scope-text": ["Input.insertText", "ardia: tab_out_of_scope: the tab moved to another window"],
-  "review--4-lease-cdp-error": ["Ardia.dispatchClick", "ardia: document_changed: no act lease covers this document"],
+  "review--4-scope-cdp-error": ["Input.insertText", "ardia: tab_out_of_scope: the tab left the plugin's window"],
+  "review--4-scope-text": ["Input.insertText", "ardia: tab_out_of_scope: the tab left the plugin's window"],
+  "review--4-lease-cdp-error": ["Ardia.dispatchClick", "ardia: input isn't allowed for this session"],
 };
 
 function option(name: string, fallback: string): string {

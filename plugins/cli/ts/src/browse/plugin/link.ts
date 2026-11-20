@@ -9,6 +9,16 @@ import { checkRequest, INPUT_METHODS, PAGE_SESSION_ONLY, PluginPolicy } from "./
 export const INPUT_ANSWER_WAIT = 10;
 export const EARLIER_INPUT_WAIT = 10;
 
+export class EngineRefused extends BrowseError {
+  constructor(
+    text: string,
+    code: string,
+    override readonly exitCode: number,
+  ) {
+    super(text, null, code);
+  }
+}
+
 export function unavailable(error: unknown): error is CdpError {
   return error instanceof CdpError && !error.code;
 }
@@ -18,7 +28,7 @@ export function engineCoded(error: unknown): unknown {
   const refusal = engineRefusal(error.cdpMessage);
   if (refusal !== null) {
     flag(refusal.metric, true);
-    return new BrowseError(error.text, null, refusal.code);
+    return new EngineRefused(error.text, refusal.code, refusal.exit);
   }
   return error;
 }

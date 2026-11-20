@@ -4,7 +4,7 @@ import { CHROME, CREDENTIAL, entries, openTab, pageTarget, resetPage, startWorld
 
 setDefaultTimeout(120_000);
 const BASE = Number(process.env["ARDIA_F1_PORTS"] ?? "9460") + 6;
-const LEASE = "ardia: document_changed: no act lease covers this document";
+const LEASE = "ardia: the page changed after the input was sent";
 
 describe.skipIf(!CHROME)("plugins#21 review round 1, against headless Chrome for Testing through the tap", () => {
   let world: World;
@@ -58,7 +58,7 @@ describe.skipIf(!CHROME)("plugins#21 review round 1, against headless Chrome for
   });
 
   test("3. get title keeps an out-of-scope refusal instead of answering an empty title", async () => {
-    await tap(world, "fault", { kind: "error", method: "Target.getTargetInfo", at: 1, message: "ardia: tab_out_of_scope: the tab moved to another window" });
+    await tap(world, "fault", { kind: "error", method: "Target.getTargetInfo", at: 1, message: "ardia: tab_out_of_scope: the tab left the plugin's window" });
     const title = await marked("title refused", ["get", "title"], { json: true });
     await tap(world, "fault", {});
     expect(title).toMatchObject({ exit: 1, code: "tab_out_of_scope" });

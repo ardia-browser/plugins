@@ -150,7 +150,7 @@ export async function wheelAt(page: PluginPage, x: number, y: number, deltaX: nu
     } catch (error) {
       if (!(error instanceof BrowseError)) throw error;
       if (error.code === "page_hidden") throw new BrowseError(HIDDEN_TAB, null, "outside_viewport");
-      if (error.code !== "busy") throw error;
+      if (error.code !== "busy" && error.code !== "page_busy") throw error;
       const wait = WHEEL_BUSY_WAITS[attempt];
       if (wait === undefined) throw new BrowseError(TAB_IN_USE, null, "busy");
       await sleep(wait);
