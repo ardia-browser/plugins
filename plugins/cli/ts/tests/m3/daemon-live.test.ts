@@ -7,11 +7,11 @@ import { parseConfig } from "../../src/browse/daemon/config.ts";
 import { Daemon } from "../../src/browse/daemon/server.ts";
 import { PathError } from "../../src/browse/paths.ts";
 import { dumps } from "../../src/json.ts";
-import { ask, config, type Scratch, scratch, socketFile, until, quietWatchdog } from "./daemon-helpers.ts";
+import { ask, config, type Scratch, scratch, socketFile, until, quietWatchdog, D2_FIRST_PORT } from "./daemon-helpers.ts";
 
 setDefaultTimeout(90_000);
 const CHROME = process.env["ARDIA_M3_CHROME"];
-const FIRST_PORT = Number(process.env["ARDIA_D2_CHROME_PORT"] ?? "9531");
+const FIRST_PORT = D2_FIRST_PORT;
 const PAGE = "data:text/html,<title>Idle tab</title><p>still here</p>";
 const home = process.cwd();
 const made: Scratch[] = [];

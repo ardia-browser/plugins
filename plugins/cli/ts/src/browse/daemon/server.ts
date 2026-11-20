@@ -37,6 +37,13 @@ export const EXIT_GRACE = 3.0;
 export const READ_TIMEOUT = 30.0;
 export const SHUTDOWN_EXIT = 1;
 
+export function settledError(error: BrowseError, browser: { readonly alive: boolean; readonly closedByUs: boolean } | null): { error: BrowseError; lost: boolean } {
+  if (error instanceof ConnectionLost) return { error, lost: true };
+  if (browser === null || browser.alive || browser.closedByUs) return { error, lost: false };
+  if (error.cause instanceof ConnectionLost) return { error, lost: true };
+  return { error: new ConnectionLost(), lost: true };
+}
+
 type Request = Record<string, unknown>;
 type Running = { name: string; since: number };
 
@@ -503,12 +510,8 @@ export class Daemon {
     } catch (thrown) {
       if (thrown instanceof Cancelled) throw thrown;
       if (thrown instanceof BrowseError) {
-        let error = thrown;
-        const browser = this.state.browser;
-        if (error instanceof ConnectionLost || (browser !== null && !browser.alive && !browser.closedByUs)) {
-          this.state.lost = true;
-          error = error instanceof ConnectionLost ? error : new ConnectionLost();
-        }
+        const { error, lost } = settledError(thrown, this.state.browser);
+        if (lost) this.state.lost = true;
         if (error instanceof Unreachable && this.state.instance === null) this.state.restarted = true;
         return render(options, null, error, name);
       }

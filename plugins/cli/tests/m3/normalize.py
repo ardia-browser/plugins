@@ -21,7 +21,7 @@ RULES = {
     "message-id": "the top-level `id` of a request is dropped; requests are matched by content",
     "concurrency": "requests on one CDP session sent while another was unanswered are one group, compared as a sorted multiset",
     "scratch": "the side's scratch root (data dir, HOME, TMPDIR) becomes <SCRATCH> in answers, files and requests",
-    "ports": "the tap's and Chromium's port become <TAP> and <CHROME> in answers and requests",
+    "ports": "the tap's, Chromium's and the fixture server's port become <TAP>, <CHROME> and <FIXTURE> in answers and requests (recordings made before the fixture port was stored used 9419)",
     "ids-in-answers": "browser string IDs (8+ chars) seen in the transcript become their placeholder inside answer text",
     "session-key": "24-hex session keys in file names and answers become <KEY:session>",
     "tabs-file": "the tab registry's file name hash becomes tabs-<HASH>",
@@ -83,16 +83,20 @@ class Ids:
         return text
 
 
+RECORDED_FIXTURE = 9419
+
+
 class Subs:
     def __init__(self, subs: dict):
         self.root = subs.get("root") or ""
         self.tap = subs.get("tap")
         self.chrome = subs.get("chrome")
+        self.fixture = subs.get("fixture", RECORDED_FIXTURE)
 
     def text(self, text: str) -> str:
         if self.root:
             text = text.replace(self.root, "<SCRATCH>")
-        for port, name in ((self.tap, "<TAP>"), (self.chrome, "<CHROME>")):
+        for port, name in ((self.tap, "<TAP>"), (self.chrome, "<CHROME>"), (self.fixture, "<FIXTURE>")):
             if port:
                 text = re.sub(rf"(?<=127\.0\.0\.1:){port}\b|(?<=localhost:){port}\b|(?<=--port ){port}\b", name, text)
         return text

@@ -96,6 +96,7 @@ class Side:
         self.impl = impl
         self.chrome_port, self.tap_port = ports
         self.fixture = fixture
+        self.fixture_port = int(fixture.rsplit(":", 1)[1].split("/", 1)[0])
         self.seed = seed
         self.replay = replay
         self.fault = fault
@@ -109,7 +110,8 @@ class Side:
         (self.root / "data").mkdir()
         tap_args = [infra.bun(), str(infra.TAP), "--listen", str(self.tap_port), "--out", str(self.root / "transcript.jsonl"), "--scratch", str(self.root)]
         if self.replay:
-            tap_args += ["--replay", str(self.replay), "--pace", self.scenario.get("pace", "asap")]
+            tap_args += ["--replay", str(self.replay), "--pace", self.scenario.get("pace", "asap"),
+                         "--fixture-from", str(infra.RECORDED_FIXTURE), "--fixture-to", str(self.fixture_port)]
         else:
             window = tuple(self.scenario.get("window") or (1200, 900))
             self.chrome = infra.launch_chrome(self.chrome_port, self.root / "profile", window)
@@ -193,7 +195,7 @@ class Side:
 
     def run(self) -> Run:
         result = Run(root=self.root, transcript=self.root / "transcript.jsonl")
-        result.subs = {"root": str(self.root), "tap": self.tap_port, "chrome": self.chrome_port}
+        result.subs = {"root": str(self.root), "tap": self.tap_port, "chrome": self.chrome_port, "fixture": self.fixture_port}
         self.start()
         try:
             env = self.env()

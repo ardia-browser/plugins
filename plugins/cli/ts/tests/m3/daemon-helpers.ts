@@ -168,3 +168,6 @@ export async function sessionMeta(data: string, key: string, timeoutMs = 5000): 
 export function quietWatchdog<T extends object>(daemon: T): T {
   return Object.assign(daemon, { watchdog: { arm: () => 0, disarm: () => 0 } });
 }
+
+export const PORT_BASE = Number(process.env["ARDIA_M3_PORT_BASE"] ?? "9400");
+export const D2_FIRST_PORT = Number(process.env["ARDIA_D2_CHROME_PORT"] ?? String(PORT_BASE + 10));

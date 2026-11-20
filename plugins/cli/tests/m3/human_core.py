@@ -242,7 +242,7 @@ def main() -> int:
     parser.add_argument("--pages", type=Path, required=True)
     parser.add_argument("--impl", default="ts")
     parser.add_argument("--rows", default=",".join(map(str, ROWS)))
-    parser.add_argument("--port", type=int, default=int(os.environ.get("ARDIA_M3_HUMAN_PORT", "9790")))
+    parser.add_argument("--port", type=int, default=None, help="Chromium's port, the tap takes the next (default: ARDIA_M3_PORT_BASE + 16)")
     parser.add_argument("--keep", type=Path)
     parser.add_argument("--chrome", default=os.environ.get("ARDIA_M3_HUMAN_CHROME") or None,
                         help="a full Chrome for Testing binary run with --headless=new; chrome-headless-shell is old-mode headless and sets navigator.webdriver")
@@ -250,7 +250,9 @@ def main() -> int:
     root = args.keep or Path(tempfile.mkdtemp(prefix="ardia-m3-human-"))
     if root.exists():
         shutil.rmtree(root)
-    run = Run(root, args.impl, args.pages.resolve(), args.port, args.chrome or infra.chrome_binary())
+    port = args.port if args.port is not None else infra.port_base() + 16
+    infra.check_block(port, port + 1)
+    run = Run(root, args.impl, args.pages.resolve(), port, args.chrome or infra.chrome_binary())
     results = []
     try:
         run.start()
