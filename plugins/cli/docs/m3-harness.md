@@ -191,9 +191,10 @@ later slices. `daemon/stub/` holds the minimum page core the D2 scenarios need (
 
 The Python seeded client starts the TS daemon when `ARDIA_BROWSE_DAEMON=ts` and appends each spawn config to
 `$HOME/spawn-config.jsonl` and each full request to `answers.jsonl` (`wire`), which is what the protocol check reads.
-Recordings must be made with the default base (9400): the fixture URL in them carries port 9419. Replay at any other
-base rewrites that port to the block's own fixture port in the recorded messages (the tap's `--fixture-from` and
-`--fixture-to`), and the normalizer writes every fixture port as `<FIXTURE>`, so replays run in any block.
+Recordings can be made in any block: each `.result.json.gz` stores its fixture port in `subs.fixture` (recordings from
+before that have none and mean 9419). Replay rewrites the recorded fixture port to the replaying block's own in the
+recorded messages (the tap's `--fixture-from` and `--fixture-to`), and the normalizer writes every fixture port as
+`<FIXTURE>`, so any recording replays in any block.
 
 ## The page core (slice D3)
 

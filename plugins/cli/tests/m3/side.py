@@ -1,3 +1,4 @@
+import gzip
 import json
 import os
 import shutil
@@ -44,6 +45,14 @@ def tap_call(port: int, path: str, body: dict | None = None) -> dict:
                                      headers={"content-type": "application/json"})
     with infra.DIRECT.open(request, timeout=10) as response:
         return json.loads(response.read())
+
+
+def recorded_fixture(replay: Path) -> int:
+    expected = replay.with_name(replay.name.removesuffix(".jsonl.gz") + ".result.json.gz")
+    try:
+        return int(json.loads(gzip.decompress(expected.read_bytes()))["subs"]["fixture"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return infra.RECORDED_FIXTURE
 
 
 def substitute(text: str, fixture: str, home: Path) -> str:
@@ -111,7 +120,7 @@ class Side:
         tap_args = [infra.bun(), str(infra.TAP), "--listen", str(self.tap_port), "--out", str(self.root / "transcript.jsonl"), "--scratch", str(self.root)]
         if self.replay:
             tap_args += ["--replay", str(self.replay), "--pace", self.scenario.get("pace", "asap"),
-                         "--fixture-from", str(infra.RECORDED_FIXTURE), "--fixture-to", str(self.fixture_port)]
+                         "--fixture-from", str(recorded_fixture(Path(self.replay))), "--fixture-to", str(self.fixture_port)]
         else:
             window = tuple(self.scenario.get("window") or (1200, 900))
             self.chrome = infra.launch_chrome(self.chrome_port, self.root / "profile", window)
