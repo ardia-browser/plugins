@@ -249,3 +249,17 @@ actions `find` hands over). `ts/src/browse/input/` adds `input.ts` (`Input`: hel
 | Human tier | `python -m tests.m3.human_act --pages <plugins#13 tests/human> --chrome <Chrome for Testing> [--impl ts\|python]`: rows 1, 2, 4, 5, 6, 20 and 21. The tier turns touch emulation on for row 1 (standing in for `set device`), sends row 5's IME composition and drops row 6's files, since the CLI has no command for them; row 21 runs on D4's closed-shadow selectors |
 | Transcript checks | every TS run also fails on a touch event sent before touch emulation or the page's touch probe (row 1) and, on macOS, a Meta editing shortcut without its command (row 20) |
 | Unit tests | `ts/tests/m3/act-ported.test.ts`: `test_browse_act`, `test_browse_drag`, `test_browse`'s held input and `test_browse_changes`' network watch, same names, plus the editing commands per platform |
+
+## Scripting, flows and raw access (slice D7)
+
+`ts/src/browse/commands/{pagejs,settings,cdp,notes}.ts`, `script/`, `flows/`, `auth/` and `cdp/{raw,params}.ts` port
+`eval`, init scripts, `clipboard`, `set`, `cdp` (plugins#11), `script`, the flow log, `flow`, `auth login`, the
+credential providers and the page half of `notes`. `notes-files.ts` holds the file half until M2 takes it.
+
+| What | How it's run |
+|---|---|
+| Scenarios `js/*` | `live 'js/*' --a python --b ts`. `js/settings_notes_flows` also replays. `js/eval_reads`, `initscript`, `script_runs` and `clipboard` name the `eval-isolated` and `script-isolated` divergences, so they are live only (replay can't serve a request Python never sent). `js/cdp_raw` needs plugins#11's Python: run it from a copy of `plugins/cli` whose `ardia_cli` is full-control/cli's, until #11 is on main |
+| Function oracle | `python -m tests.m3.pure d7.<name> --generated 1500` for every `d7.*` twin in `tests/m3/oracle_fns_d7.py` (generators in `cases_d7.py`): cdp params, flow building, validation, signatures, drift, URL templating and filling, masking, sites, embedded JSON, the script worker source and its helpers, selector quoting, Keychain quoting. `d7.cdp_params` needs plugins#11's Python, like `js/cdp_raw` |
+| Unit tests | `ts/tests/m3/d7.test.ts`: the Keychain's argv and stdin (secret on stdin only), its failure, deadline and missing-program messages; credential providers' environment, working folder, bad answers, deadline and reply cap; tools without a shell; `git ls-remote` resolution; the `using` hold of `cdp --target`; the flow and note stores; the isolated `eval` call |
+| Human tier | `python -m tests.m3.human_d7 --pages <plugins#13 tests/human> --chrome <Chrome for Testing>`: rows 3 (clipboard after `clipboard write`'s grant), 9 (`eval` and `script` leave no global and no foreign stack frame) and 14 (geolocation, notifications and camera after `set permission`) |
+| Secrets | `python -m tests.m3.secret_check`: for the passwords `a`, `"`, `-x`, `--foo` and a long one, generates the `set credentials`/`set auth` and script scenarios, runs them TS against TS, and checks every `--json` reply parses, no reply is masked, no stderr repeats a dash-prefixed password, and the long one appears in no file and no reply. Not searched: the requests the client sent, and the CDP transcript of the script scenarios (the tap records the script's own source on its way to the worker; D3's tap still redacts CDP credential fields) |

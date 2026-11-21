@@ -56,7 +56,7 @@ def recorded_fixture(replay: Path) -> int:
 
 
 def substitute(text: str, fixture: str, home: Path) -> str:
-    return text.replace("{fixture}", fixture).replace("{home}", str(home))
+    return text.replace("{fixture_dir}", str(infra.FIXTURES)).replace("{fixture}", fixture).replace("{home}", str(home))
 
 
 def browse_files(data: Path) -> dict:
@@ -204,7 +204,8 @@ class Side:
 
     def run(self) -> Run:
         result = Run(root=self.root, transcript=self.root / "transcript.jsonl")
-        result.subs = {"root": str(self.root), "tap": self.tap_port, "chrome": self.chrome_port, "fixture": self.fixture_port}
+        result.subs = {"root": str(self.root), "tap": self.tap_port, "chrome": self.chrome_port, "fixture": self.fixture_port,
+                       "fixture_dir": str(infra.FIXTURES)}
         self.start()
         try:
             env = self.env()

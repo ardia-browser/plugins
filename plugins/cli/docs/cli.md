@@ -2205,6 +2205,92 @@ harness scenarios or the human tier (`tests/m3/human_act.py`):
   `shield()` and finish before the command answers, also when it is cancelled or cut short, as Python's do; the harness
   compares the cleanup traffic at every CDP call of `act/d5_drag_scroll`'s HTML5 drag.
 
+Its scripting, flows and raw-access commands (slice D7: `browse/commands/{pagejs,settings,cdp,notes}.ts`,
+`browse/script/`, `browse/flows/`, `browse/auth/`, `browse/cdp/{raw,params}.ts`, `notes.ts`) follow `script.py`,
+`flows.py`, `flowrun.py`, `flowlog.py`, `vault.py`, `plugins.py`, `notes.py` and plugins#11's `cdp`, except for these,
+each covered by `ts/tests/m3/d7.test.ts`, the `d7.*` function oracle (`tests/m3/oracle_fns_d7.py`) or the `js/*`
+scenarios:
+
+- `eval` runs in the `ardia-browse` isolated world (ardia#2812 rows 8 and 9): `Runtime.callFunctionOn` on the world's
+  handle with `function (source) { return (0, eval)(source); }`, where Python sends a main-world `Runtime.evaluate`.
+  The page's DOM is the same; its own JavaScript globals (`window.app`, a framework's store) aren't there, and
+  nothing the code defines leaks into the page. `eval --main-world` keeps Python's call exactly. A `ReferenceError`
+  in the isolated world adds a line saying so (`eval_isolated_reference_error`); the wrapper's own stack frames are
+  taken out of an error, so it reads as Python's does. `clipboard read` goes through the same isolated evaluation.
+  The harness compares it through the `eval-isolated` divergence.
+- `script`'s controller lives in the isolated world of its temporary tab: it is installed with
+  `Runtime.callFunctionOn` on the world's handle and returned by reference, and its worker is started from there, so
+  neither `__ardiaScript` nor the worker is visible to a page (`script-isolated` divergence). Every later controller
+  call is Python's, on the controller's own object id. `page.evaluate()` inside a script is `eval`, so it is isolated too.
+- `cdp`, `eval`, init scripts and the raw session per tab and per browser follow plugins#11 (full-control/cli
+  3917106), which isn't on main yet: its params checks, timeouts, `result_too_large`, `borrowed_tab`, the 16-attach cap
+  and the `using` hold on `--target` tabs. Integers in `cdp` params are sent exactly, past 2^53 too, as Python sends them.
+- `set permission geolocation|notifications|camera|microphone|clipboard` is new (ardia#2812 row 14): it grants the
+  permission to the tab's origin with `Browser.grantPermissions` ahead of any prompt (`permission_granted`). A prompt
+  already on screen isn't answered; that needs Ardia's control socket to offer it. Python has no such setting and
+  answers `Unknown setting: permission`.
+- `set credentials`, `flow run`'s page tier and `auth login`'s typing come from slices D6, D4 and D5: until they land,
+  `set credentials` and `auth login` answer `unsupported`, and `flow run` opens its reader tab and waits for
+  `domcontentloaded` and `load` without D4's network settle. Flow steps record no requests until D5's network watch
+  calls `flowlog.capture`.
+- The flow log, the hinted sites and the raw sessions live beside the session's state, not in Python's `extras`
+  dictionary: nothing outside these modules can see or change them.
+- Keychain and plugin processes are started without a shell, from an argv array, and the Keychain secret goes only to
+  `security -i`'s stdin, as in Python. How a helper is stopped at its deadline is below.
+- `auth save`'s and `auth login --url`'s URL must have a host: `https://` alone is refused as not an https origin,
+  where Python takes it as the origin `https://`.
+- Plugins and credential providers get only `PATH`, `HOME`, `LANG`, `LC_*`, `TMPDIR`, `USER`, `LOGNAME` and `SHELL` from
+  the daemon's environment; Python passes everything but `ARDIA_*` and `AGENT_BROWSER_*`.
+- A credential provider's reply for `auth login` is checked strictly before anything uses it: the process must exit 0,
+  `success` must be the boolean `true`, `password` a non-empty string, and `url`, `username` and the three selectors
+  strings or absent (an explicit `null` is malformed). `url` must parse as a URL with a non-empty host and no user
+  info, https (http only for localhost) with a valid port; a selector must be non-blank, at most 1,000 characters,
+  with no control or format character (Unicode Cc, C1 included, and Cf). Anything else reads
+  `Credential provider <name> sent a malformed reply`, and a `success: false` reply or a nonzero exit
+  `Credential provider <name> returned an error`: the provider's own text, the item and the reply are never repeated.
+  Any later failure of a provider login reads `Credential provider <name>: the login didn't finish (<code>)`, built
+  from fixed text and one of the daemon's codes only.
+  Python echoes the provider's `error`, `protocol` and item. Python's `plugin run <name> credential.read` keeps its
+  own messages and environment (it is frozen); the TypeScript client's `plugin run` (M2) must apply the same
+  boundary.
+- Keychain, plugin, `git` and `npm` processes run in their own session and process group. At the deadline or on a
+  cancel the call ends at once, and the group gets one SIGTERM, whether or not the process the daemon started has
+  already exited, so anything it left behind is stopped too; 0.5 s later it gets one SIGKILL if `kill(-pgid, 0)`
+  still finds any member, whatever its pipes did in between. After that, or once the group is gone, it is forgotten
+  and never signalled again. A group id can't be handed to a new group while a member of ours is alive, so the only
+  residual is our group emptying and its id being recycled into a new group within that 0.5 s. When the daemon exits,
+  every group whose run hasn't settled (its output still open, or its result not yet delivered) or that is still inside
+  that window is killed synchronously, whether or not its first process has exited; the native shutdown watchdog
+  does the same from the addon's own list of live groups before it calls `_exit`. A run that settled normally is
+  forgotten at once and never signalled: a process it left behind that closed our pipes is left alone, as Python
+  leaves it. The native list holds 256 groups; a group it can't take is still tracked and killed by the daemon's own
+  exit, but not by the watchdog, and is counted (`groupStats.unregistered`). Python kills only the process it started.
+- `clipboard` and `set permission` grant each permission with `Browser.setPermission`, so grants add up; Python's
+  `Browser.grantPermissions` replaces every grant the origin had (a clipboard grant revoked geolocation). The harness
+  leaves both out of the comparison through the `permission-overrides` divergence (ardia#2812 row 3).
+- An `--init-script` file is opened without blocking and must be a regular file; at most 4 MB is read from it, whatever
+  its size said when it was opened, and more than that is refused with `bad_init_script`, as is a FIFO or device.
+  Python reads whatever the path names and can block on a FIFO. It is decoded as
+  Python's text read decodes it: a BOM kept, CRLF and CR made LF.
+- Passwords never enter output, by construction rather than by masking: nothing is substring-redacted for them.
+  `set credentials` and `set auth` take the user and password as opaque positionals, never parsed as flags, so
+  `-x` or `--foo` is a valid password; their usage error prints only the expected form (`Usage: ardia browse set
+  credentials <user> <pass>`), never the arguments. Python parses them as flags and answers `Unknown flag: -x`.
+- A `script` that fails in a call names it by its index and the command the parser resolved, never the call's text
+  or arguments (`line 2: … (in call 3, \`set credentials\`)`, `unknown command` when it names none), and its `data`
+  carries `call` and that `command`; a timed-out script names the call the same way. A single-string call that can't
+  be split (an unclosed quote) fails with `that call couldn't be parsed`, and a call naming no command with `unknown
+  command`; neither repeats the call. Python answers `Unknown command: <the call's text>`.
+  Python quotes the call's arguments.
+- An answer's `code` (and so the client's telemetry `error_code`) is always one of the daemon's own codes; anything
+  else, such as a code a script throws, becomes `failed` (`script_failed` for a script). Python passes a script's code
+  through.
+- Flows save URLs, query strings included, as Python does, so a site that puts a secret in a URL has it saved in the
+  flow. User info (`user:password@`) is never kept: a URL carrying it is dropped from the flow, and a page URL is saved
+  without it.
+- The temporary tabs D2 opens carry `#ardia-temp-<nonce>` in their `about:blank` URL; the harness's `temp-tab-nonce`
+  rule compares them with Python's plain `about:blank`.
+
 ## Linux
 
 The same CLI, with these differences:

@@ -15,12 +15,12 @@ import random
 import subprocess
 import sys
 
-from tests.m3 import cases_p2, cases_p2b, cases_p3, infra
+from tests.m3 import cases_d7, cases_p2, cases_p2b, cases_p3, infra
 from tests.m3.cases import GENERATORS, recorded_strings
 
 PIECES = ["a", "Z", " ", "\t", "\n", "\r\n", "\x00", "\x07", "\x1b", "\x1f", "\x7f", "\x85", "\x9f", "\xa0", "é", " ", "​",
           "\ud800", "\udfff", "\ud83d", "\U0001f600", "\U00010000", "﻿", "￿", "token=abc", "&", "<", '"', "\\", "日本"]
-REGISTERED = (cases_p2, cases_p2b, cases_p3)
+REGISTERED = (cases_p2, cases_p2b, cases_p3, cases_d7)
 
 
 def fuzz(count: int, seed: int) -> list[list]:

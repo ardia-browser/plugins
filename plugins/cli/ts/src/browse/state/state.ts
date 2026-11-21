@@ -46,6 +46,7 @@ export type StateConfig = {
   noAutoDialog: boolean;
   pinTab: boolean;
   dataDir?: string | null;
+  dataRoot?: string | null;
 };
 
 export type LostTab = { target: string; app: string | undefined; tab: string | undefined; generation: unknown; opened: boolean; borrowed: boolean };
@@ -205,6 +206,10 @@ export class State extends Refs implements temptabs.TempTabState {
 
   get dataDir(): string | null {
     return this.config.dataDir ?? null;
+  }
+
+  get dataRoot(): string | null {
+    return this.config.dataRoot ?? null;
   }
 
   get current(): string | null {

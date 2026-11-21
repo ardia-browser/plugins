@@ -480,6 +480,17 @@ typedef struct {
 
 static Watchdog watchdog;
 
+#define HELPER_GROUPS 256
+
+static _Atomic int helper_groups[HELPER_GROUPS];
+
+static void kill_helper_groups(void) {
+  for (int index = 0; index < HELPER_GROUPS; index++) {
+    int group = atomic_load(&helper_groups[index]);
+    if (group > 1) kill(-group, SIGKILL);
+  }
+}
+
 static int64_t monotonic_ms(void) {
   struct timespec clock;
   clock_gettime(CLOCK_MONOTONIC, &clock);
@@ -508,6 +519,7 @@ static void *watchdog_thread(void *argument) {
       && (uint64_t)found.st_dev == watchdog.dev && (uint64_t)found.st_ino == watchdog.ino) {
     unlinkat(watchdog.dir, watchdog.name, 0);
   }
+  kill_helper_groups();
   _exit(watchdog.code);
   return NULL;
 }
@@ -558,6 +570,32 @@ static napi_value arm_watchdog(napi_env env, napi_callback_info info) {
     return status(env, -started);
   }
   return status(env, 0);
+}
+
+static napi_value register_group(napi_env env, napi_callback_info info) {
+  Call call;
+  int32_t group;
+  if (!take_args(env, info, 1, &call) || call.argc != 1) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &group)) return NULL;
+  if (group <= 1) return status(env, -EINVAL);
+  for (int index = 0; index < HELPER_GROUPS; index++) {
+    int expected = 0;
+    if (atomic_compare_exchange_strong(&helper_groups[index], &expected, group)) return status(env, 0);
+  }
+  return status(env, -ENOSPC);
+}
+
+static napi_value unregister_group(napi_env env, napi_callback_info info) {
+  Call call;
+  int32_t group;
+  if (!take_args(env, info, 1, &call) || call.argc != 1) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &group)) return NULL;
+  if (group <= 1) return status(env, -EINVAL);
+  for (int index = 0; index < HELPER_GROUPS; index++) {
+    int expected = group;
+    if (atomic_compare_exchange_strong(&helper_groups[index], &expected, 0)) return status(env, 0);
+  }
+  return status(env, -ENOENT);
 }
 
 static napi_value disarm_watchdog(napi_env env, napi_callback_info info) {
@@ -635,6 +673,8 @@ __attribute__((visibility("default"))) napi_value napi_register_module_v1(napi_e
       && define(env, exports, "statAt", stat_at)
       && define(env, exports, "armWatchdog", arm_watchdog)
       && define(env, exports, "disarmWatchdog", disarm_watchdog)
+      && define(env, exports, "registerGroup", register_group)
+      && define(env, exports, "unregisterGroup", unregister_group)
       && define(env, exports, "renameExclusiveAt", rename_exclusive_at)
       && define(env, exports, "removeDirAt", remove_dir_at)
       && define(env, exports, "nonBlocking", non_blocking)

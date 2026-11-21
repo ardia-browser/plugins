@@ -5,6 +5,7 @@ import { type Value } from "../../json.ts";
 import { armWatchdog, disarmWatchdog, peerUid, removeDirAt, renameExclusiveAt } from "../../libc.ts";
 import { codeOf, uid } from "../../paths.ts";
 import { formatG, roundHalfEven } from "../../pylib/format.ts";
+import { PyException } from "../../pylib/str.ts";
 import { Cancelled, currentSignal, withSignal } from "../cdp/cancel.ts";
 import { BrowseError, ConnectionLost, Unreachable } from "../daemon-errors.ts";
 import { type Endpoint, EndpointError, resolve } from "../endpoint.ts";
@@ -21,7 +22,7 @@ import { closeCaptures } from "../capture/close.ts";
 import { type Caller, parseCaller } from "./announce.ts";
 import { log } from "./log.ts";
 import { canonical } from "./names.ts";
-import { type Answer, encodeAnswer, joinedBatch, MAX_REQUEST, type Options, render, Result, timedOut } from "./render.ts";
+import { type Answer, encodeAnswer, joinedBatch, MAX_REQUEST, MAX_RESPONSE, type Options, render, Result, timedOut } from "./render.ts";
 import { redact } from "../../redact.ts";
 import { parseText } from "../../json.ts";
 import { dispatch, hooks } from "../commands/all.ts";
@@ -106,7 +107,7 @@ export class Daemon {
       throw error;
     }
     this.state = new State(
-      { session: config.session, key: config.key, browseFd: this.dirFd, noAutoDialog: config.noAutoDialog, pinTab: config.pinTab, dataDir: config.dataDir },
+      { session: config.session, key: config.key, browseFd: this.dirFd, noAutoDialog: config.noAutoDialog, pinTab: config.pinTab, dataDir: config.dataDir, dataRoot: config.dataRoot },
       () => this.resolveEndpoint(),
     );
     bindCommandLock(this.state, this.lock);
@@ -406,7 +407,8 @@ export class Daemon {
       if (extra.code) fields.push(["code", extra.code]);
       if (request["busy_elsewhere"]) fields.push(["busy_elsewhere", true]);
       fields.push(["daemon", `ts/${cliVersion()}`]);
-      await writeAnswer(socket, encodeAnswer(code, out, err, fields));
+      const argv0 = Array.isArray(request["argv"]) && request["argv"].length > 0 ? canonical(String(request["argv"][0])) : "";
+      await writeAnswer(socket, encodeAnswer(code, out, err, fields, MAX_RESPONSE, argv0, Boolean(record(request["options"])["json"])));
     } catch (error) {
       if (!(error instanceof Gone) && !(error instanceof Cancelled)) log.exception("request failed", error);
     } finally {
@@ -450,6 +452,7 @@ export class Daemon {
       this.state.notice = null;
       if (this.state.connected) await this.state.announceCaller(this.state.endpoint);
       this.closeAfterBatch = false;
+      this.state.topCommand = name;
       this.running = { name, since: monotonic() };
       const limit = commandLimit(name, words, ctx.timeout);
       answer = await this.withinLimit(limit, options, name, () => this.answer(ctx, name, words, options));
@@ -527,7 +530,7 @@ export class Daemon {
       }
       log.exception(`command ${name} crashed`, thrown);
       reportException(thrown, "browse_daemon", { dataRoot: this.config.dataRoot, testEndpoint: Boolean(this.config.ws || this.config.port) });
-      const type = thrown instanceof Error ? thrown.name : "Error";
+      const type = thrown instanceof PyException ? thrown.type : thrown instanceof Error ? thrown.name : "Error";
       const said = thrown instanceof Error ? thrown.message : String(thrown);
       return render(options, null, new BrowseError(`${name} failed: ${type}: ${said}`), name);
     }

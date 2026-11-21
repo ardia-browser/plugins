@@ -11,7 +11,7 @@ export const ALIASES: Readonly<Record<string, string>> = {
 export const MUTATING: ReadonlySet<string> = new Set([
   "open", "click", "dblclick", "type", "fill", "press", "keyboard", "keydown", "keyup", "hover", "check", "uncheck",
   "select", "drag", "upload", "download", "scroll", "scrollintoview", "mouse", "back", "forward", "reload", "tab",
-  "find", "auth", "pushstate", "eval", "dialog", "batch", "storage", "cookies", "set", "state", "clipboard", "close", "script", "flow",
+  "find", "auth", "pushstate", "eval", "dialog", "batch", "storage", "cookies", "set", "state", "clipboard", "close", "script", "flow", "cdp",
 ]);
 
 export const SKIPPED: Readonly<Record<string, string>> = {

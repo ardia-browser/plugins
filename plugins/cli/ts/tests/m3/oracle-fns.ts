@@ -14,6 +14,7 @@ import { quote, quotePlus, unquote, unquotePlus, urlsplit } from "../../src/pyli
 import { bool, float, num, optionalFloat, optionalText, text, texts, toValue } from "./values.ts";
 import { P2_FUNCTIONS } from "./oracle-fns-p2.ts";
 import { P3_FUNCTIONS } from "./oracle-fns-p3.ts";
+import { D7_FUNCTIONS } from "./oracle-fns-d7.ts";
 
 type Fn = (...args: Value[]) => Value;
 
@@ -163,4 +164,5 @@ export const PURE: Record<string, Fn> = {
   "py.len": (value) => BigInt(pyLen(text(value))),
   ...P2_FUNCTIONS,
   ...P3_FUNCTIONS,
+  ...D7_FUNCTIONS,
 };

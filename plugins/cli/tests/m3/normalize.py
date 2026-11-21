@@ -72,6 +72,8 @@ RULES = {
     "secrets": "credential-bearing request params (continueWithAuth's username and password, Authorization/Proxy-Authorization/Cookie header values, cookie values being set) become <REDACTED>; the tap writes them redacted too, and replay matches on the redacted form",
     "racy-steps": "every mode compares only the exit status of the steps a scenario lists in `racy_steps`, where Chromium decides which of two errors the same request gets (the reason is in the scenario)",
     "whole-floats": "a whole-number float in a request's params (91.0) is compared as the integer (91): Python's json writes 91.0 for a float, JavaScript has one number type, and Chromium reads both the same",
+    "fixture-dir": "the checkout's own fixture folder (tests/fixtures/browse, recorded in subs) becomes {fixture_dir} in answers and requests, so a recording replays from any clone",
+    "temp-tab-nonce": "a temporary tab's `Target.createTarget` URL `about:blank#ardia-temp-<nonce>` (the TS daemon marks the tabs it opens only to read, so a sweep can find one a crashed daemon left) becomes `about:blank`, Python's URL",
     "divergences": "designed TS differences from tests/m3/divergences.py (`world-handle` always, the rest when a scenario names them) rewrite only the request fields they name, on both sides, before IDs are numbered",
 }
 
@@ -140,8 +142,11 @@ class Subs:
         self.tap = subs.get("tap")
         self.chrome = subs.get("chrome")
         self.fixture = subs.get("fixture", RECORDED_FIXTURE)
+        self.fixture_dir = subs.get("fixture_dir") or ""
 
     def text(self, text: str) -> str:
+        if self.fixture_dir:
+            text = text.replace(self.fixture_dir, "{fixture_dir}")
         if self.root:
             text = text.replace(self.root, "<SCRATCH>")
         for port, name in ((self.tap, "<TAP>"), (self.chrome, "<CHROME>"), (self.fixture, "<FIXTURE>")):
@@ -195,6 +200,7 @@ def transcript(entries: list[dict], subs: Subs, rewrite=None) -> tuple[dict, Ids
                 dropped.add((conn, message["id"]))
                 continue
             message = rewritten
+        message = without_temp_nonce(message)
         session = (conn, message.get("sessionId") or "")
         ids.walk(message)
         normalized = local.walk({name: value for name, value in message.items() if name != "id"})
@@ -214,6 +220,16 @@ def transcript(entries: list[dict], subs: Subs, rewrite=None) -> tuple[dict, Ids
     sets = {name: {session: sorted({form for group in groups for form in group if READY_PROBE not in form}) for session, groups in sessions.items()}
             for name, sessions in steps.items()}
     return {"requests": shaped, "request_sets": sets, "sources": {name: sorted(found) for name, found in sources.items()}}, ids
+
+
+TEMP_TAB = "about:blank#ardia-temp-"
+
+
+def without_temp_nonce(message: dict) -> dict:
+    params = message.get("params") or {}
+    if message.get("method") == "Target.createTarget" and str(params.get("url") or "").startswith(TEMP_TAB):
+        return {**message, "params": {**params, "url": "about:blank"}}
+    return message
 
 
 def answer(step: dict, subs: Subs, ids: Ids, keys: dict) -> dict:

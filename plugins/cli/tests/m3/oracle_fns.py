@@ -4,7 +4,7 @@ import urllib.parse
 
 from ardia_cli import command_metrics, redact
 from ardia_cli.browse import errors, fields, flowurl, limits, shape
-from tests.m3 import oracle_fns_p2, oracle_fns_p2b, oracle_fns_p3
+from tests.m3 import oracle_fns_d7, oracle_fns_p2, oracle_fns_p2b, oracle_fns_p3
 
 PURE: dict = {}
 
@@ -163,3 +163,4 @@ oracle("py.len")(len)
 oracle_fns_p2.register(oracle, secrets_set)
 oracle_fns_p2b.register(oracle)
 oracle_fns_p3.register(oracle)
+oracle_fns_d7.register(oracle)
