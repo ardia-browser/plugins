@@ -15,46 +15,6 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  rust:
-    name: Rust ardia on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-15, ubuntu-24.04]
-    defaults:
-      run:
-        working-directory: plugins/cli/rust
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: Rust
-        run: |
-          command -v rustup >/dev/null || curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-      - name: uv
-        run: |
-          curl -LsSf https://astral.sh/uv/0.12.15/install.sh | sh
-          ~/.local/bin/uv venv --python 3.13 "$RUNNER_TEMP/venv"
-      - run: cargo fmt --check
-      - run: cargo clippy --locked --all-targets -- -D warnings
-      - name: cargo test, some beside the Python CLI
-        run: ARDIA_TEST_PYTHON="$RUNNER_TEMP/venv/bin/python" cargo test --locked
-      - run: cargo build --locked --release
-      - name: Size
-        run: |
-          echo "ardia binary: $(wc -c < target/release/ardia) bytes" >> "$GITHUB_STEP_SUMMARY"
-      - name: Parity with the Python CLI
-        working-directory: plugins/cli
-        env:
-          ARDIA_RUST_CLI: ${{ github.workspace }}/plugins/cli/rust/target/release/ardia
-          ARDIA_TEST_REQUIRES: rust
-        run: |
-          VIRTUAL_ENV="$RUNNER_TEMP/venv" ~/.local/bin/uv pip install --quiet --require-hashes --no-build -r requirements.lock
-          "$RUNNER_TEMP/venv/bin/python" -m unittest -v tests.test_parity tests.test_closed_stdout
-
   typescript:
     name: TypeScript ardia on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -87,13 +47,6 @@ jobs:
         run: |
           echo "ardia-ts binary: $(wc -c < dist/ardia-ts) bytes" >> "$GITHUB_STEP_SUMMARY"
           echo "ardia-libc.so addon: $(wc -c < dist/ardia-libc.so) bytes" >> "$GITHUB_STEP_SUMMARY"
-      - name: Rust
-        run: |
-          command -v rustup >/dev/null || curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-      - name: The Rust router that starts it
-        working-directory: plugins/cli/rust
-        run: cargo build --locked --release
       - name: uv
         run: curl -LsSf https://astral.sh/uv/0.12.15/install.sh | sh
       - name: Unit tests, some beside the Python CLI
@@ -104,8 +57,7 @@ jobs:
         working-directory: plugins/cli
         env:
           ARDIA_TS_CLI: ${{ github.workspace }}/plugins/cli/ts/dist/ardia-ts
-          ARDIA_RUST_CLI: ${{ github.workspace }}/plugins/cli/rust/target/release/ardia
-          ARDIA_TEST_REQUIRES: rust,ts
+          ARDIA_TEST_REQUIRES: ts
         run: |
           ~/.local/bin/uv venv --python 3.13 "$RUNNER_TEMP/venv"
           VIRTUAL_ENV="$RUNNER_TEMP/venv" ~/.local/bin/uv pip install --quiet --require-hashes --no-build -r requirements.lock

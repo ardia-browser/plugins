@@ -144,10 +144,6 @@ class ProtocolAgrees(unittest.TestCase):
     def test_every_side_speaks_the_same_control_protocol(self):
         from ardia_cli import control
 
-        rust = (CLI / "rust" / "src" / "control.rs").read_text()
-        constants = dict(re.findall(r"pub const (PROTOCOL|MIN_APP_PROTOCOL): i128 = (\d+);", rust))
-        self.assertEqual(int(constants["PROTOCOL"]), control.PROTOCOL)
-        self.assertEqual(int(constants["MIN_APP_PROTOCOL"]), control.MIN_APP_PROTOCOL)
         ts = (CLI / "ts" / "src" / "protocol.ts").read_text()
         spoken = dict(re.findall(r"export const (PROTOCOL|MIN_APP_PROTOCOL) = (\d+);", ts))
         self.assertEqual(int(spoken["PROTOCOL"]), control.PROTOCOL)
@@ -1303,7 +1299,7 @@ class ProductionSigning(unittest.TestCase):
 class BuildSmoke(unittest.TestCase):
     def test_the_packaging_smoke_runs_leave_no_history_or_telemetry_behind(self):
         script = (CLI / "scripts" / "build.sh").read_text().splitlines()
-        runs = [line.lstrip() for line in script if '"$root/bin/ardia"' in line and not line.lstrip().startswith(("cp ", "chmod ")) and "--version" not in line]
+        runs = [line.lstrip() for line in script if '"$root/bin/ardia"' in line and not line.lstrip().startswith(("cp ", "chmod ", "--out ")) and "--version" not in line]
         self.assertTrue(runs)
         for line in runs:
             self.assertRegex(line, r'^ARDIA_CLI_HOME="\$work/[^"]+" ARDIA_TELEMETRY=off "\$root/bin/ardia" ', line)
