@@ -1,7 +1,7 @@
 import { read, write, writeSync } from "node:fs";
 import { catchInterrupts } from "./control.ts";
 import { interruptsIgnored, LIBC_UNAVAILABLE, LibcUnavailable, loadLibc, watchLifeline, writeWhole } from "./libc.ts";
-import { FLUSH_ARGUMENT } from "./flush-argument.ts";
+import { FLUSH_ARGUMENT, HISTORY_ARGUMENT } from "./flush-argument.ts";
 import { bundledPython, installRoot } from "./install.ts";
 import { abandonedOutput, settleStderr } from "./printable.ts";
 import { HAND_BACK, takeMarker } from "./routed.ts";
@@ -61,6 +61,7 @@ async function runFlusher(): Promise<number> {
 
 async function main(words: string[]): Promise<number> {
   if (words.length === 1 && words[0] === FLUSH_ARGUMENT) return runFlusher();
+  if (words.length === 1 && words[0] === HISTORY_ARGUMENT) return (await import("./browsing.ts")).historyChild();
   const routed = takeMarker(words);
   if (routed === undefined) {
     try {

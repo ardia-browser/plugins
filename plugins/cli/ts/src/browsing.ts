@@ -1,10 +1,12 @@
 import { Database } from "bun:sqlite";
-import { chmodSync, closeSync, copyFileSync, constants as fsConstants, fstatSync, lstatSync, mkdtempSync, openSync, readdirSync, readSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, writeSync, copyFileSync, constants as fsConstants, fstatSync, lstatSync, mkdtempSync, openSync, readdirSync, readSync, rmSync, writeFileSync } from "node:fs";
 import { openAt } from "./libc.ts";
 import { constants, tmpdir } from "node:os";
 import { now } from "./clock.ts";
 import { chromiumDir, EndpointError, requireControl } from "./control-file.ts";
-import { type JsonObject, parse, type Value } from "./json.ts";
+import { dumps, Float, type JsonObject, object, parse, type Value } from "./json.ts";
+import { spawnSync } from "node:child_process";
+import { HISTORY_ARGUMENT } from "./flush-argument.ts";
 import { errnoOf, join, LINUX, strerror } from "./paths.ts";
 import { O_NOFOLLOW, O_NONBLOCK, O_RDONLY } from "./privatefs.ts";
 import { reprStr, strOf, truthy } from "./py.ts";
@@ -21,6 +23,9 @@ const LOCAL_STATE = "Local State";
 const LEGACY_PIN_KEYS = ["pinned", "pinnedAsRow", "tileFolder"];
 const PRIVATE_PREFIXES = ["incognito", "guest", "private", "System Profile", "Guest Profile"];
 const COPY_ATTEMPTS = 3;
+const SNAPSHOT_PREFIX = "ardia-history-";
+const SNAPSHOT_FILES = ["History", "History-wal", "History-journal"];
+const STALE_SNAPSHOT_MS = 60 * 60 * 1000;
 const { O_DIRECTORY } = fsConstants;
 
 export class BrowsingDataError extends Error {}
@@ -364,12 +369,23 @@ function check(path: string): void {
 }
 
 function clear(work: string): void {
-  for (const name of readdirSync(work)) rmSync(join(work, name), { force: true });
+  for (const name of SNAPSHOT_FILES) rmSync(join(work, name), { force: true });
+}
+
+function ownWorkDir(work: unknown): work is string {
+  if (typeof work !== "string" || !work.startsWith(`${tmpdir()}/${SNAPSHOT_PREFIX}`) || work.slice(tmpdir().length + 1).includes("/")) return false;
+  try {
+    const info = lstatSync(work);
+    return info.isDirectory() && info.uid === process.getuid?.() && (info.mode & 0o777) === 0o700;
+  } catch {
+    return false;
+  }
 }
 
 function copyRegular(source: string, target: string): void {
   if (!lstatSync(source).isFile()) throw new Error(`${source} isn't a regular file`);
   copyFileSync(source, target, fsConstants.COPYFILE_EXCL);
+  chmodSync(target, 0o600);
 }
 
 function snapshot(history: string, work: string, deadline: number): string {
@@ -425,6 +441,105 @@ function roundHalfEven(value: number): number {
   return diff > 0.5 || (diff === 0.5 && floor % 2 !== 0) ? floor + 1 : floor;
 }
 
+export function readProfile(folder: string, work: string, cutoff: bigint, deadline: number): Value[][] {
+  const path = snapshot(join(folder, "History"), work, deadline);
+  let db: Database | undefined;
+  try {
+    db = new Database(path, { safeIntegers: true });
+    return db
+      .query(
+        `
+                    SELECT u.url, u.title, COUNT(v.id), MAX(v.visit_time), u.visit_count
+                    FROM visits v JOIN urls u ON u.id = v.url
+                    WHERE v.visit_time >= ? AND (v.transition & 255) NOT IN (?, ?) AND u.hidden = 0
+                      AND (u.url LIKE 'http://%' OR u.url LIKE 'https://%')
+                    GROUP BY u.id
+                    `,
+      )
+      .values(cutoff, 3n, 4n)
+      .slice(0, MAX_ROWS)
+      .map((row) => row.map(storable));
+  } catch (error) {
+    if (error instanceof BrowsingDataError) throw error;
+    if (monotonic() > deadline) throw new OutOfTime("reading history ran out of time");
+    throw new BrowsingDataError(`can't read ${baseName(folder)}'s history (${(error as Error).message})`);
+  } finally {
+    db?.close();
+  }
+}
+
+function storable(value: unknown): Value {
+  if (typeof value === "string" || typeof value === "bigint" || value === null) return value;
+  if (typeof value === "number") return Number.isInteger(value) ? BigInt(value) : new Float(value);
+  return null;
+}
+
+function inCompiledProgram(): boolean {
+  return (process.argv[1] ?? "").startsWith("/$bunfs/");
+}
+
+function newWorkDir(): string {
+  const work = mkdtempSync(join(tmpdir(), SNAPSHOT_PREFIX));
+  chmodSync(work, 0o700);
+  return work;
+}
+
+function readProfileBounded(folder: string, cutoff: bigint, deadline: number): Value[][] {
+  const work = newWorkDir();
+  try {
+    if (!inCompiledProgram()) return readProfile(folder, work, cutoff, deadline);
+    const remaining = Math.max(1, Math.ceil((deadline - monotonic()) * 1000));
+    const input = dumps(object([["folder", folder], ["work", work], ["cutoff", cutoff], ["budget_ms", BigInt(remaining)]]), "compact");
+    const child = spawnSync(process.execPath, [HISTORY_ARGUMENT], { input, timeout: remaining, killSignal: "SIGKILL", maxBuffer: 1 << 30 });
+    if (child.error !== undefined || child.signal !== null) throw new OutOfTime("reading history ran out of time");
+    const answer = parse(child.stdout, 100);
+    if (!(answer instanceof Map)) throw new BrowsingDataError(`can't read ${baseName(folder)}'s history (the reader gave no answer)`);
+    const error = answer.get("error");
+    if (typeof error === "string") throw answer.get("kind") === "time" ? new OutOfTime(error) : new BrowsingDataError(error);
+    return answer.get("rows") as Value[][];
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
+}
+
+export function cleanStaleSnapshots(): void {
+  const base = tmpdir();
+  let names: string[];
+  try {
+    names = readdirSync(base);
+  } catch {
+    return;
+  }
+  const oldest = Date.now() - STALE_SNAPSHOT_MS;
+  for (const name of names) {
+    if (!name.startsWith(SNAPSHOT_PREFIX)) continue;
+    const path = join(base, name);
+    try {
+      const info = lstatSync(path);
+      if (info.isDirectory() && info.uid === process.getuid?.() && info.mtimeMs < oldest) rmSync(path, { recursive: true, force: true });
+    } catch {}
+  }
+}
+
+export async function historyChild(): Promise<number> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+  const config = parse(Buffer.concat(chunks), 10);
+  if (!(config instanceof Map) || !ownWorkDir(config.get("work")) || typeof config.get("folder") !== "string" || typeof config.get("cutoff") !== "bigint" || typeof config.get("budget_ms") !== "bigint") return 2;
+  const deadline = monotonic() + Number(config.get("budget_ms") as bigint) / 1000;
+  let answer: JsonObject;
+  try {
+    const rows = readProfile(config.get("folder") as string, config.get("work") as string, config.get("cutoff") as bigint, deadline);
+    answer = object([["rows", rows]]);
+  } catch (error) {
+    if (!(error instanceof BrowsingDataError)) throw error;
+    answer = object([["error", error.message], ["kind", error instanceof OutOfTime ? "time" : "data"]]);
+  }
+  const bytes = Buffer.from(dumps(answer, "compact"), "utf8");
+  for (let at = 0; at < bytes.length; ) at += writeSync(1, bytes, at);
+  return 0;
+}
+
 function localIso(webkitUs: bigint | number): string {
   const seconds = quotient(webkitUs) - WEBKIT_EPOCH_OFFSET;
   let whole = Math.trunc(seconds);
@@ -473,39 +588,12 @@ export function history(root: string, options: HistoryOptions): Row[] {
   const profiles = pickProfiles(profileDirs(root, session), options.profile);
   const cutoff = BigInt(Math.trunc((now() - options.days * 86400 + WEBKIT_EPOCH_OFFSET) * 1_000_000));
   const rows: Row[] = [];
+  cleanStaleSnapshots();
   for (const [label, folder] of profiles) {
     outOfTime(deadline, "reading history");
-    const work = mkdtempSync(join(tmpdir(), "ardia-history-"));
-    let found: unknown[][] = [];
-    try {
-      chmodSync(work, 0o700);
-      const path = snapshot(join(folder, "History"), work, deadline);
-      let db: Database | undefined;
-      try {
-        db = new Database(path, { safeIntegers: true });
-        found = db
-          .query(
-            `
-                    SELECT u.url, u.title, COUNT(v.id), MAX(v.visit_time), u.visit_count
-                    FROM visits v JOIN urls u ON u.id = v.url
-                    WHERE v.visit_time >= ? AND (v.transition & 255) NOT IN (?, ?) AND u.hidden = 0
-                      AND (u.url LIKE 'http://%' OR u.url LIKE 'https://%')
-                    GROUP BY u.id
-                    `,
-          )
-          .values(cutoff, 3n, 4n)
-          .slice(0, MAX_ROWS);
-      } catch (error) {
-        if (error instanceof BrowsingDataError) throw error;
-        if (monotonic() > deadline) throw new OutOfTime("reading history ran out of time");
-        throw new BrowsingDataError(`can't read ${baseName(folder)}'s history (${(error as Error).message})`);
-      } finally {
-        db?.close();
-      }
-    } finally {
-      rmSync(work, { recursive: true, force: true });
-    }
-    for (const [url, title, visits, last, total] of found as [Value, Value, Value, bigint, Value][]) {
+    const found = readProfileBounded(folder, cutoff, deadline);
+    for (const [url, title, visits, given, total] of found as [Value, Value, Value, Value, Value][]) {
+      const last = given instanceof Float ? BigInt(Math.trunc(given.value)) : (given as bigint);
       rows.push(
         new Map<string, Value>([
           ["url", url],
