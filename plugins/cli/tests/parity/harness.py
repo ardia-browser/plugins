@@ -727,7 +727,8 @@ def read_inside(box: Path, path: Path) -> str | None:
 
 def places_of(box: Path) -> dict:
     return {"box": str(box), "home": str(box / "home"), "cli_home": str(box / "cli-home"), "data": str(box / "data"),
-            "cwd": str(box / "cwd"), "tmp": str(box / "tmp"), "outside": str(box / "outside"), "cli": str(box.parent / "src")}
+            "cwd": str(box / "cwd"), "tmp": str(box / "tmp"), "outside": str(box / "outside"), "cli": str(box.parent / "src"),
+            "harness_pid": str(os.getpid())}
 
 
 def materialize(box: Path, case: Case) -> dict:

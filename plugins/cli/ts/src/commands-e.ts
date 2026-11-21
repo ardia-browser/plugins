@@ -112,6 +112,47 @@ ENTRIES.push(
   },
 );
 
+const PINNED_SPEC: CommandSpec = {
+  options: [
+    { name: "--json", dest: "json", kind: "flag" },
+    { name: "--data-dir", dest: "data_dir", kind: "value" },
+  ],
+};
+
+const HISTORY_SPEC: CommandSpec = {
+  options: [
+    { name: "--days", dest: "days", kind: "value", type: "float" },
+    { name: "--limit", dest: "limit", kind: "value", type: "int" },
+    { name: "--profile", dest: "profile", kind: "value" },
+    { name: "--domains", dest: "domains", kind: "flag" },
+    { name: "--json", dest: "json", kind: "flag" },
+    { name: "--data-dir", dest: "data_dir", kind: "value" },
+  ],
+};
+
+function browsingEntry(command: "pinned" | "history", spec: CommandSpec): Entry {
+  return {
+    path: [command],
+    spec,
+    run: async (parsed) => {
+      const { runBrowsing } = await import("./browsing-cli.ts");
+      const days = parsed.get("days");
+      const limit = parsed.get("limit");
+      return runBrowsing({
+        command,
+        json: parsed.get("json") === true,
+        dataDir: text(parsed, "data_dir"),
+        days: typeof days === "number" ? days : 1,
+        limit: typeof limit === "bigint" ? limit : 200n,
+        profile: text(parsed, "profile"),
+        domains: parsed.get("domains") === true,
+      });
+    },
+  };
+}
+
+ENTRIES.push(browsingEntry("pinned", PINNED_SPEC), browsingEntry("history", HISTORY_SPEC));
+
 function withSkillFlag(argv: readonly string[]): readonly string[] {
   let index = 0;
   while (index < argv.length) {
