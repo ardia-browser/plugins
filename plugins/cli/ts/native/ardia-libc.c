@@ -643,7 +643,7 @@ static napi_value arm_watchdog(napi_env env, napi_callback_info info) {
   int32_t dir, ms, code, fire_delay = 0;
   uint64_t dev, ino;
   char name[PATH_MAX];
-  if (!take_args(env, info, 6, &call) || call.argc < 6 || call.argc > 7) return status(env, -EINVAL);
+  if (!take_args(env, info, 6, &call) && call.argc != 7) return status(env, -EINVAL);
   if (!int_arg(&call, 0, &dir) || !int_arg(&call, 4, &ms) || !int_arg(&call, 5, &code)) return NULL;
   if (call.argc == 7 && !int_arg(&call, 6, &fire_delay)) return NULL;
   if (dir < 0) return status(env, -EBADF);
