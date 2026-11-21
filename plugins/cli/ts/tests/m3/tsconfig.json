@@ -1,6 +1,6 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": { "types": ["node", "bun"] },
-  "include": ["."],
+  "include": [".", "../../src/text-modules.d.ts"],
   "exclude": []
 }
