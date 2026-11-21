@@ -1909,6 +1909,12 @@
    "endpoint": "token",
    "session": "default",
    "namespace": ""
+  },
+  "intentional": {
+   "why": "a usage error never repeats an option's value, which may be a secret typed in the wrong place (docs/cli.md)",
+   "stderr": {
+    "text": "✗ --idle-timeout takes 10s, 3m, 1h or milliseconds\n"
+   }
   }
  },
  {
@@ -1933,6 +1939,12 @@
   },
   "env": {
    "AGENT_BROWSER_IDLE_TIMEOUT_MS": "1x"
+  },
+  "intentional": {
+   "why": "a usage error never repeats an option's value, which may be a secret typed in the wrong place (docs/cli.md)",
+   "stderr": {
+    "text": "✗ --idle-timeout takes 10s, 3m, 1h or milliseconds\n"
+   }
   }
  },
  {

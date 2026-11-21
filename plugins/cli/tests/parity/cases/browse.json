@@ -505,6 +505,12 @@
    "endpoint": "token",
    "session": "default",
    "namespace": ""
+  },
+  "intentional": {
+   "why": "a usage error never repeats an option's value, which may be a secret typed in the wrong place (docs/cli.md)",
+   "stderr": {
+    "text": "✗ --port takes a number\n"
+   }
   }
  },
  {
@@ -554,6 +560,12 @@
    "endpoint": "token",
    "session": "default",
    "namespace": ""
+  },
+  "intentional": {
+   "why": "a usage error never repeats an option's value, which may be a secret typed in the wrong place (docs/cli.md)",
+   "stderr": {
+    "text": "✗ --max-output takes a number of characters\n"
+   }
   }
  },
  {
