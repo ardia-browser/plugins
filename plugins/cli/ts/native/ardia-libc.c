@@ -49,6 +49,7 @@ napi_status napi_get_boolean(napi_env env, bool value, napi_value *result);
 napi_status napi_get_null(napi_env env, napi_value *result);
 napi_status napi_create_string_utf8(napi_env env, const char *str, size_t length, napi_value *result);
 napi_status napi_create_array(napi_env env, napi_value *result);
+napi_status napi_create_bigint_uint64(napi_env env, uint64_t value, napi_value *result);
 napi_status napi_is_buffer(napi_env env, napi_value value, bool *result);
 napi_status napi_get_buffer_info(napi_env env, napi_value value, void **data, size_t *length);
 napi_status napi_create_buffer_copy(napi_env env, size_t length, const void *data, void **result_data, napi_value *result);
@@ -278,24 +279,41 @@ static napi_value size_at(napi_env env, napi_callback_info info) {
   return number(env, (double)found.st_size);
 }
 
+static bool plain_name(const char *name) {
+  return name[0] != 0 && strchr(name, '/') == NULL && strcmp(name, ".") != 0 && strcmp(name, "..") != 0;
+}
+
+static napi_value big(napi_env env, uint64_t value) {
+  napi_value result = NULL;
+  napi_create_bigint_uint64(env, value, &result);
+  return result;
+}
+
 static napi_value stat_at(napi_env env, napi_callback_info info) {
   Call call;
   int32_t dir;
-  bool follow;
   char name[PATH_MAX];
   struct stat found;
-  napi_value fields = NULL;
-  if (!take_args(env, info, 3, &call)) return status(env, -EINVAL);
-  if (!int_arg(&call, 0, &dir) || !bool_arg(&call, 2, &follow)) return NULL;
+  napi_value result = NULL;
+  if (!take_args(env, info, 2, &call) || call.argc != 2) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &dir)) return NULL;
+  if (dir < 0) return status(env, -EBADF);
   int checked = name_arg(&call, 1, name, sizeof(name));
   if (checked != 0) return status(env, checked);
-  if (fstatat(dir, name, &found, follow ? 0 : AT_SYMLINK_NOFOLLOW) != 0) return status(env, failed());
-  if (napi_create_array(env, &fields) != napi_ok) return status(env, -ENOMEM);
-  double values[3] = {(double)found.st_mode, (double)found.st_uid, (double)found.st_nlink};
-  for (uint32_t index = 0; index < 3; index += 1) {
-    if (napi_set_element(env, fields, index, number(env, values[index])) != napi_ok) return status(env, -ENOMEM);
+  if (!plain_name(name)) return status(env, -EINVAL);
+  if (fstatat(dir, name, &found, AT_SYMLINK_NOFOLLOW) != 0) return status(env, failed());
+#if defined(__APPLE__)
+  double mtime = (double)found.st_mtimespec.tv_sec + (double)found.st_mtimespec.tv_nsec / 1e9;
+#else
+  double mtime = (double)found.st_mtim.tv_sec + (double)found.st_mtim.tv_nsec / 1e9;
+#endif
+  napi_value fields[5] = {number(env, (double)found.st_mode), number(env, (double)found.st_uid), big(env, (uint64_t)found.st_dev),
+                          big(env, (uint64_t)found.st_ino), number(env, mtime)};
+  if (napi_create_array(env, &result) != napi_ok) return status(env, -ENOMEM);
+  for (uint32_t index = 0; index < 5; index += 1) {
+    if (fields[index] == NULL || napi_set_element(env, result, index, fields[index]) != napi_ok) return status(env, -ENOMEM);
   }
-  return fields;
+  return result;
 }
 
 static napi_value swap_at(napi_env env, napi_callback_info info) {
@@ -319,10 +337,12 @@ static napi_value remove_dir_at(napi_env env, napi_callback_info info) {
   Call call;
   int32_t dir;
   char name[PATH_MAX];
-  if (!take_args(env, info, 2, &call)) return status(env, -EINVAL);
+  if (!take_args(env, info, 2, &call) || call.argc != 2) return status(env, -EINVAL);
   if (!int_arg(&call, 0, &dir)) return NULL;
+  if (dir < 0) return status(env, -EBADF);
   int checked = name_arg(&call, 1, name, sizeof(name));
   if (checked != 0) return status(env, checked);
+  if (!plain_name(name)) return status(env, -EINVAL);
   return status(env, unlinkat(dir, name, AT_REMOVEDIR) == 0 ? 0 : failed());
 }
 

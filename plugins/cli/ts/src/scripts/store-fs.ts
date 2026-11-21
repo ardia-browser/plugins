@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
-import { flock, listAt, mkdirAt, openAt, removeDirAt, renameAt, statAt, type StatAt, swapAt, unlinkAt } from "../libc.ts";
+import { type EntryInfo, flock, listAt, mkdirAt, openAt, removeDirAt, renameAt, statAt, statBytesAt, swapAt, unlinkAt } from "../libc.ts";
 import { errnoOf, strerror, uid } from "../paths.ts";
 import { reprText } from "../pylib/str.ts";
 
@@ -65,8 +65,8 @@ export function closeFd(fd: number | null | undefined): void {
   } catch {}
 }
 
-export function lstatAt(dir: number, name: string): StatAt {
-  return os(() => statAt(dir, name, false), name);
+export function lstatAt(dir: number, name: string): EntryInfo {
+  return os(() => statAt(dir, name), name);
 }
 
 export function openDir(parent: number, name: string, create: boolean): number {
@@ -151,7 +151,7 @@ export function writeAtomic(dir: number, name: string, data: Uint8Array): void {
 
 export function exists(dir: number, name: string): boolean {
   try {
-    statAt(dir, name, false);
+    statAt(dir, name);
     return true;
   } catch (error) {
     if (errnoOf(error) === ENOENT) return false;
@@ -172,9 +172,9 @@ function clearTree(parent: number, name: string): void {
       names = listAt(fd);
     } catch {}
     for (const child of names) {
-      let info: StatAt | undefined;
+      let info: EntryInfo | undefined;
       try {
-        info = statAt(fd, child, false);
+        info = statBytesAt(fd, child);
       } catch {}
       if (info !== undefined && isDir(info.mode)) {
         clearTree(fd, child.toString("utf8"));
@@ -193,9 +193,9 @@ function clearTree(parent: number, name: string): void {
 }
 
 export function removeTree(dir: number, name: string): void {
-  let info: StatAt;
+  let info: EntryInfo;
   try {
-    info = statAt(dir, name, false);
+    info = statAt(dir, name);
   } catch (error) {
     if (errnoOf(error) === ENOENT) return;
     throw new OsError(errnoOf(error), name);

@@ -74,6 +74,7 @@ printf 'ts\\n' >>{routes}/$PPID
 exec "$(dirname "$0")/ardia-ts.bin" "$@"
 """
 TS_LIBC = "ardia-libc.so"
+ESBUILD_SHIM = "#!/bin/sh\nexec esbuild \"$@\"\n"
 TEST_ENTITLEMENTS = """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict><key>com.apple.security.cs.disable-library-validation</key><true/></dict></plist>
@@ -613,6 +614,8 @@ class Installation:
         sign_for_tests(libexec)
         (libexec / "ardia-ts").write_text(TS_PROBE.format(routes=shlex.quote(str(self.routes))))
         (libexec / "ardia-ts").chmod(0o755)
+        (libexec / "esbuild").write_text(ESBUILD_SHIM)
+        (libexec / "esbuild").chmod(0o755)
         self.ts_installed = True
         if every_row:
             (self.root / "served.txt").write_text("".join(f"{name} ts\n" for name in served_table()))

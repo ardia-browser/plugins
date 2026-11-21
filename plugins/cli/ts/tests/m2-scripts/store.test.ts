@@ -4,9 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import "../libc-loaded.ts";
-import { removeDirAt, statAt, swapAt } from "../../src/libc.ts";
+import { removeDirAt, statAt, statBytesAt, swapAt } from "../../src/libc.ts";
 import { parseScripts } from "../../src/scripts/args.ts";
-import { findEsbuild, installed } from "../../src/scripts/build.ts";
+import { findEsbuild, installed, packagedExecutable } from "../../src/scripts/build.ts";
 import { exists, OsError, openDir, readFile, removeTree, StoreError, stagingDir, writeAtomic, writeFile } from "../../src/scripts/store-fs.ts";
 
 const scratch = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "ardia-scripts-store-")));
@@ -19,19 +19,31 @@ function folder(name: string): [string, number] {
   return [dir, fs.openSync(dir, O_RDONLY | O_DIRECTORY)];
 }
 
-test("statAt reports a link as a link, swapAt exchanges two folders and removeDirAt removes only an empty one", () => {
+test("one addon answers D7's statAt and removeDirAt call shapes and the store's raw-byte names, and swapAt exchanges folders", () => {
   const [dir, fd] = folder("addon");
   fs.mkdirSync(path.join(dir, "a"));
   fs.mkdirSync(path.join(dir, "b"));
   fs.writeFileSync(path.join(dir, "a", "marker"), "a");
   fs.symlinkSync("a", path.join(dir, "link"));
+  const info = statAt(fd, "a");
+  const real = fs.statSync(path.join(dir, "a"), { bigint: true });
+  assert.equal(info.mode & 0o170000, 0o040000);
+  assert.equal(info.uid, process.getuid?.());
+  assert.equal(info.dev, real.dev);
+  assert.equal(info.ino, real.ino);
+  assert.ok(Math.abs(info.mtime - Number(real.mtimeMs) / 1000) < 1);
   assert.equal(statAt(fd, "link").mode & 0o170000, 0o120000);
-  assert.equal(statAt(fd, "link", true).mode & 0o170000, 0o040000);
-  assert.equal(statAt(fd, "a").uid, process.getuid?.());
+  const bytes = statBytesAt(fd, Buffer.from("link"));
+  assert.equal(bytes.mode & 0o170000, 0o120000);
+  assert.equal(typeof bytes.ino, "bigint");
+  for (const name of ["a/marker", ".", ".."]) assert.throws(() => statAt(fd, name), (error: NodeJS.ErrnoException) => error.code === "EINVAL");
   swapAt(fd, "a", "b");
   assert.ok(fs.existsSync(path.join(dir, "b", "marker")));
   assert.throws(() => removeDirAt(fd, "b"), (error: NodeJS.ErrnoException) => error.code === "ENOTEMPTY");
+  assert.throws(() => removeDirAt(fd, "b/x"), (error: NodeJS.ErrnoException) => error.code === "EINVAL");
   removeDirAt(fd, "a");
+  fs.rmSync(path.join(dir, "b", "marker"));
+  removeDirAt(fd, Buffer.from("b"));
   assert.throws(() => swapAt(fd, "a", "b"), (error: NodeJS.ErrnoException) => error.code === "ENOENT");
   fs.closeSync(fd);
 });
@@ -97,22 +109,36 @@ test("the argv parser serves only what argparse reads the same way", () => {
   }
 });
 
-test("esbuild comes from <root>/libexec/esbuild when installed, else from the test override", () => {
+test("a packaged ardia runs only <root>/libexec/esbuild; the test override and PATH count only outside a package", () => {
   const root = path.join(scratch, "root");
   fs.mkdirSync(path.join(root, "libexec"), { recursive: true });
-  const saved = process.env.ARDIA_TEST_ESBUILD;
-  delete process.env.ARDIA_TEST_ESBUILD;
+  const elsewhere = path.join(scratch, "elsewhere");
+  fs.mkdirSync(elsewhere);
+  fs.writeFileSync(path.join(elsewhere, "esbuild"), "#!/bin/sh\n", { mode: 0o755 });
+  const saved = { override: process.env.ARDIA_TEST_ESBUILD, path: process.env.PATH };
+  process.env.ARDIA_TEST_ESBUILD = path.join(elsewhere, "esbuild");
+  process.env.PATH = `${elsewhere}:/usr/bin:/bin`;
   try {
-    assert.equal(installed(root), false);
-    fs.writeFileSync(path.join(root, "libexec", "esbuild"), "#!/bin/sh\n", { mode: 0o755 });
-    assert.equal(installed(root), true);
-    assert.equal(findEsbuild(root), path.join(root, "libexec", "esbuild"));
-    fs.chmodSync(path.join(root, "libexec", "esbuild"), 0o644);
-    assert.equal(findEsbuild(root), null);
-    process.env.ARDIA_TEST_ESBUILD = "/dev/esbuild";
-    assert.equal(findEsbuild(root), "/dev/esbuild");
+    assert.equal(packagedExecutable("/$bunfs/root/ardia-ts"), true);
+    assert.equal(packagedExecutable(path.join(scratch, "src", "main.ts")), false);
+    assert.equal(installed(true), true);
+    assert.equal(installed(false), false);
+    assert.equal(findEsbuild(root, true), null);
+    const bundled = path.join(root, "libexec", "esbuild");
+    fs.writeFileSync(bundled, "#!/bin/sh\n", { mode: 0o755 });
+    assert.equal(findEsbuild(root, true), bundled);
+    fs.chmodSync(bundled, 0o644);
+    assert.equal(findEsbuild(root, true), null);
+    fs.rmSync(bundled);
+    fs.symlinkSync(path.join(elsewhere, "esbuild"), bundled);
+    assert.equal(findEsbuild(root, true), null);
+    assert.equal(findEsbuild(root, false), path.join(elsewhere, "esbuild"));
+    delete process.env.ARDIA_TEST_ESBUILD;
+    assert.equal(findEsbuild(root, false), path.join(elsewhere, "esbuild"));
   } finally {
-    if (saved === undefined) delete process.env.ARDIA_TEST_ESBUILD;
-    else process.env.ARDIA_TEST_ESBUILD = saved;
+    for (const [key, value] of [["ARDIA_TEST_ESBUILD", saved.override], ["PATH", saved.path]] as const) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
   }
 });

@@ -17,7 +17,7 @@ type Native = {
   unlinkAt(dir: number, name: Name): number;
   sizeAt(dir: number, name: Name): number;
   listAt(dir: number): Buffer[] | number;
-  statAt(dir: number, name: Name, follow: boolean): number[] | number;
+  statAt(dir: number, name: Name): [number, number, bigint, bigint, number] | number;
   swapAt(dir: number, first: string, second: string): number;
   removeDirAt(dir: number, name: Name): number;
   lock(fd: number, exclusive: boolean, wait: boolean): number;
@@ -146,13 +146,20 @@ export function listAt(dir: number): Buffer[] {
   return names;
 }
 
-export type StatAt = { mode: number; uid: number; nlink: number };
+export type EntryInfo = { mode: number; uid: number; dev: bigint; ino: bigint; mtime: number };
 
-export function statAt(dir: number, name: Name, follow = false): StatAt {
-  const fields = native().statAt(dir, name, follow);
-  if (typeof fields === "number") throw errnoError(-fields, "fstatat", name);
-  const [mode, uid, nlink] = fields as [number, number, number];
-  return { mode, uid, nlink };
+function entryInfo(info: [number, number, bigint, bigint, number] | number, name: Name): EntryInfo {
+  if (typeof info === "number") throw errnoError(-info, "fstatat", name);
+  const [mode, owner, dev, ino, mtime] = info;
+  return { mode, uid: owner, dev, ino, mtime };
+}
+
+export function statAt(dir: number, name: string): EntryInfo {
+  return entryInfo(native().statAt(dir, name), name);
+}
+
+export function statBytesAt(dir: number, name: Name): EntryInfo {
+  return entryInfo(native().statAt(dir, name), name);
 }
 
 export function swapAt(dir: number, first: string, second: string): void {

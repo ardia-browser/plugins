@@ -81,11 +81,17 @@ export function which(name: string): string | null {
   return null;
 }
 
-export function findEsbuild(root: string | null = installRoot()): string | null {
+export function packagedExecutable(modulePath: string = decodeURIComponent(new URL(import.meta.url).pathname)): boolean {
+  return modulePath.startsWith("/$bunfs/");
+}
+
+export function findEsbuild(root: string | null = installRoot(), packaged: boolean = packagedExecutable()): string | null {
+  if (packaged) {
+    const bundled = bundledEsbuild(root);
+    return bundled !== null && executable(bundled) && !isSymlink(bundled) ? bundled : null;
+  }
   const override = envSet(TEST_ESBUILD);
   if (override !== undefined) return override;
-  const bundled = bundledEsbuild(root);
-  if (bundled !== null && fs.existsSync(bundled)) return executable(bundled) && !isSymlink(bundled) ? bundled : null;
   for (const parent of root === null ? [] : [root, ...parentsOf(root)]) {
     const modules = `${parent}/node_modules`;
     const native = `${modules}/@esbuild/${ESBUILD_PACKAGE}/bin/esbuild`;
@@ -96,9 +102,8 @@ export function findEsbuild(root: string | null = installRoot()): string | null 
   return which("esbuild");
 }
 
-export function installed(root: string | null = installRoot()): boolean {
-  const bundled = bundledEsbuild(root);
-  return bundled !== null && fs.existsSync(bundled);
+export function installed(packaged: boolean = packagedExecutable()): boolean {
+  return packaged;
 }
 
 function identity(path: string): Identity | null {

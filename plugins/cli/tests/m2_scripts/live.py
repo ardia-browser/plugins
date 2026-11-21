@@ -4,8 +4,8 @@ in the same throwaway folders one side after the other, and diffs stdout, stderr
 
   python -m tests.m2_scripts.live --esbuild DIR [--scenario NAME]...
 
-DIR holds the esbuild binary. The TypeScript side runs behind the Rust router (rust/target/release/ardia,
-ts/dist/ardia-ts and the addon beside it), as installed.
+DIR holds the esbuild binary: Python finds it on PATH, the TypeScript side as installed, at <root>/libexec/esbuild,
+behind the Rust router (rust/target/release/ardia, ts/dist/ardia-ts and the addon beside it).
 """
 import argparse
 import json
@@ -118,7 +118,7 @@ def snapshot(scripts: Path) -> dict:
     return found
 
 
-def install_ts(scratch: Path) -> Path:
+def install_ts(scratch: Path, esbuild: Path) -> Path:
     root = scratch / "cli"
     libexec = root / "libexec"
     (root / "bin").mkdir(parents=True)
@@ -130,6 +130,7 @@ def install_ts(scratch: Path) -> Path:
     harness.sign_for_tests(libexec)
     (libexec / "ardia-ts").write_text('#!/bin/sh\nexec "$(dirname "$0")/ardia-ts.bin" "$@"\n')
     (libexec / "ardia-ts").chmod(0o755)
+    shutil.copy2(esbuild / "esbuild", libexec / "esbuild")
     (root / "served.txt").write_text((CLI / "served.txt").read_text())
     return root / "bin" / "ardia"
 
@@ -167,7 +168,7 @@ def main(argv: list[str]) -> int:
     scratch = Path(tempfile.mkdtemp(prefix="ardia-live-"))
     failures = 0
     try:
-        ts = install_ts(scratch)
+        ts = install_ts(scratch, args.esbuild)
         for name, steps in chosen.items():
             box = scratch / "box"
             fake = name != "quiet-ardia"
