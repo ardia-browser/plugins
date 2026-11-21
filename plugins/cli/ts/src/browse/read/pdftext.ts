@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { type GroupChild, spawnGroup } from "../../proc/group.ts";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -34,14 +34,26 @@ function startsPdf(data: Uint8Array): boolean {
 }
 
 function run(file: string): { done: Promise<[string, number]>; kill: () => void } {
-  const child = spawn(tools.osascript, ["-l", "JavaScript", "-e", PDFTEXT_JXA, file], { stdio: ["ignore", "pipe", "ignore"] });
-  const chunks: Buffer[] = [];
-  child.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
-  const done = new Promise<[string, number]>((resolve, reject) => {
-    child.on("error", reject);
-    child.on("close", (code, signal) => resolve([new TextDecoder("utf-8").decode(Buffer.concat(chunks)).replace(/\r\n?/gu, "\n"), code ?? (signal ? 1 : 0)]));
+  const started = spawnGroup([tools.osascript, "-l", "JavaScript", "-e", PDFTEXT_JXA, file], { stdout: "pipe" });
+  let group: GroupChild | null = null;
+  let killed = false;
+  const done = started.then((child) => {
+    group = child;
+    if (killed) child.signal("SIGKILL");
+    const chunks: Buffer[] = [];
+    child.child.stdout?.on("data", (chunk: Buffer) => chunks.push(chunk));
+    return child.closed.then((code): [string, number] => {
+      child.forget();
+      return [new TextDecoder("utf-8").decode(Buffer.concat(chunks)).replace(/\r\n?/gu, "\n"), code < 0 ? 1 : code];
+    });
   });
-  return { done, kill: () => child.kill("SIGKILL") };
+  return {
+    done,
+    kill: () => {
+      killed = true;
+      (group as GroupChild | null)?.signal("SIGKILL");
+    },
+  };
 }
 
 export async function textFromBytes(data: Uint8Array): Promise<string> {

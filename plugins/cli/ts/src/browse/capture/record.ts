@@ -1,4 +1,4 @@
-import type { FileSink, Subprocess } from "bun";
+import { type GroupChild, spawnGroup } from "../../proc/group.ts";
 import { codePoints } from "../../pystr.ts";
 import { pyStrip } from "../../pylib/str.ts";
 import { Cancelled, currentSignal, sleep } from "../cdp/cancel.ts";
@@ -17,7 +17,7 @@ export const FRAME_RATE = 25;
 export const ENCODER_WAIT = 60;
 export const STDERR_TAIL = 400;
 
-export type Encoder = Subprocess<"pipe", "ignore", "pipe">;
+export type Encoder = { group: GroupChild; stderr: Buffer[]; status: number | null };
 export type Recording = { cast: Screencast; process: Encoder; path: string; pump: Promise<void>; halt: AbortController };
 
 export function encoderArgv(ffmpeg: string, target: string): string[] {
@@ -48,19 +48,32 @@ export function encoderArgv(ffmpeg: string, target: string): string[] {
   ];
 }
 
-export function spawnEncoder(ffmpeg: string, target: string): Encoder {
-  return Bun.spawn(encoderArgv(ffmpeg, target), { stdin: "pipe", stdout: "ignore", stderr: "pipe" });
+export async function spawnEncoder(ffmpeg: string, target: string): Promise<Encoder> {
+  const group = await spawnGroup(encoderArgv(ffmpeg, target), { stdin: "pipe", stdout: "ignore", stderr: "pipe" });
+  const encoder: Encoder = { group, stderr: [], status: null };
+  group.child.stdin?.on("error", () => {});
+  group.child.stderr?.on("data", (chunk: Buffer) => encoder.stderr.push(chunk));
+  void group.closed.then((status) => {
+    encoder.status = status;
+    group.forget();
+  });
+  return encoder;
 }
 
-async function pump(cast: Screencast, stdin: FileSink, halt: AbortSignal): Promise<void> {
+function write(encoder: Encoder, data: Buffer): Promise<void> {
+  const stdin = encoder.group.child.stdin;
+  if (stdin === null || stdin.destroyed) return Promise.reject(new Error("closed"));
+  return new Promise((resolve, reject) => {
+    stdin.write(data, (error) => (error ? reject(error) : resolve()));
+  });
+}
+
+async function pump(cast: Screencast, encoder: Encoder, halt: AbortSignal): Promise<void> {
   try {
     for (;;) {
       await sleep(1 / FRAME_RATE, halt);
       const latest = cast.latest;
-      if (latest !== null) {
-        stdin.write(Buffer.from(latest[1], "base64"));
-        await stdin.flush();
-      }
+      if (latest !== null) await write(encoder, Buffer.from(latest[1], "base64"));
     }
   } catch {
     return;
@@ -102,19 +115,19 @@ export async function cmdRecord(ctx: Ctx, argv: string[]): Promise<Result> {
   const target = ctx.path(args[1] as string);
   let encoder: Encoder;
   try {
-    encoder = spawnEncoder(ffmpeg, target);
+    encoder = await spawnEncoder(ffmpeg, target);
   } catch (error) {
     await cast.stop(ctx.state);
     releaseClaim(ctx, page.targetId, "record");
     throw error;
   }
   const halt = new AbortController();
-  capture.recording = { cast, process: encoder, path: args[1] as string, pump: pump(cast, encoder.stdin, halt.signal), halt };
+  capture.recording = { cast, process: encoder, path: args[1] as string, pump: pump(cast, encoder, halt.signal), halt };
   ctx.state.leases.add("record");
   return new Result({ path: args[1], started: true }, `✓ Recording started (${args[1]})`);
 }
 
-function finished(process: Encoder, seconds: number, signal: AbortSignal | null): Promise<boolean> {
+function finished(encoder: Encoder, seconds: number, signal: AbortSignal | null): Promise<boolean> {
   return new Promise((resolve, reject) => {
     const done = () => {
       clearTimeout(timer);
@@ -130,36 +143,30 @@ function finished(process: Encoder, seconds: number, signal: AbortSignal | null)
     }, seconds * 1000);
     if (signal?.aborted) return cancel();
     signal?.addEventListener("abort", cancel, { once: true });
-    process.exited.then(
-      () => {
-        done();
-        resolve(true);
-      },
-      () => {
-        done();
-        resolve(true);
-      },
-    );
+    void encoder.group.closed.then(() => {
+      done();
+      resolve(true);
+    });
   });
 }
 
-async function closeEncoder(process: Encoder): Promise<void> {
+async function closeEncoder(encoder: Encoder): Promise<void> {
   try {
-    await process.stdin.end();
+    encoder.group.child.stdin?.end();
   } catch {}
   let ended: boolean;
   try {
-    ended = await finished(process, ENCODER_WAIT, currentSignal());
+    ended = await finished(encoder, ENCODER_WAIT, currentSignal());
   } catch (error) {
-    process.kill("SIGKILL");
+    encoder.group.signal("SIGKILL");
     throw error;
   }
   if (!ended) {
-    process.kill();
+    encoder.group.signal("SIGTERM");
     throw new BrowseError(`ffmpeg didn't finish the WebM in ${ENCODER_WAIT} s`);
   }
-  if (process.exitCode !== 0) {
-    const said = codePoints(await new Response(process.stderr).text()).slice(-STDERR_TAIL).join("");
+  if ((await encoder.group.closed) !== 0) {
+    const said = codePoints(Buffer.concat(encoder.stderr).toString("utf8")).slice(-STDERR_TAIL).join("");
     throw new BrowseError(`ffmpeg failed: ${pyStrip(said)}`);
   }
 }

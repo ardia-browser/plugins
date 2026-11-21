@@ -1,5 +1,6 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import os from "node:os";
+import { registerGroup, unregisterGroup } from "../libc.ts";
 
 export type Ran = { code: number; stdout: Buffer; stderr: Buffer };
 export type Stdio = "pipe" | "ignore" | "inherit";
@@ -58,7 +59,10 @@ export function liveGroups(): number[] {
 }
 
 export function killLiveGroups(): void {
-  for (const pid of GROUPS) signalGroup(pid, "SIGKILL");
+  for (const pid of GROUPS) {
+    signalGroup(pid, "SIGKILL");
+    unregisterGroup(pid);
+  }
   GROUPS.clear();
 }
 
@@ -74,6 +78,7 @@ export class GroupChild {
     readonly pid: number,
   ) {
     GROUPS.add(pid);
+    registerGroup(pid);
     child.on("exit", () => {
       this.reaped = true;
     });
@@ -97,6 +102,7 @@ export class GroupChild {
     if (!this.live) return;
     this.live = false;
     GROUPS.delete(this.pid);
+    unregisterGroup(this.pid);
   }
 }
 
