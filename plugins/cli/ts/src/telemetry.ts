@@ -124,11 +124,9 @@ export function readConsent(root: string): JsonObject | undefined {
 const MS_EPOCH_FLOOR = 100_000_000_000n;
 
 function bigintSeconds(value: bigint): number {
-  return value > MS_EPOCH_FLOOR ? Number(value) / 1000 : Number(value);
-}
-
-function bigintOverflowsFloat(value: bigint): boolean {
-  return !Number.isFinite(value > MS_EPOCH_FLOOR ? Number(value / 1000n) : Number(value));
+  if (value <= MS_EPOCH_FLOOR) return Number(value);
+  const scaled = Number(value) / 1000;
+  return Number.isFinite(scaled) ? scaled : Number(value / 1000n);
 }
 
 function epochSeconds(value: Value | undefined): number | undefined {
@@ -153,11 +151,6 @@ function unreadableExpiry(doc: JsonObject): boolean {
   return doc.get("sharing") === true && typeof until === "string" && typeof parseIso(until) !== "object";
 }
 
-function expiryOverflows(doc: JsonObject): boolean {
-  const until = doc.get("sharingUntil");
-  return doc.get("sharing") === true && typeof until === "bigint" && bigintOverflowsFloat(until);
-}
-
 export function consentUnreadable(argv: string[]): boolean {
   const target = cliTarget(argv);
   try {
@@ -174,9 +167,14 @@ export function sharingId(doc: JsonObject | undefined): string | undefined {
   const until = doc.get("sharingUntil");
   if (until !== undefined && until !== null) {
     const seconds = epochSeconds(until);
-    if (seconds !== undefined && seconds <= now()) return undefined;
+    if (seconds === undefined || !Number.isFinite(seconds) || seconds <= now()) return undefined;
   }
   return validId(doc.get("installId"));
+}
+
+export function consentedInstall(root: string): string | undefined {
+  if (optedOut()) return undefined;
+  return sharingId(readConsent(root));
 }
 
 export function uuid7(): string {
@@ -272,8 +270,7 @@ function record(call: Call, status: number, python: string | null, crash: number
   const target = cliTarget(call.argv);
   if (target === undefined) return;
   const doc = readConsent(target.root);
-  if (doc !== undefined && (unreadableExpiry(doc) || expiryOverflows(doc))) return;
-  const installId = sharingId(doc);
+  const installId = optedOut() ? undefined : sharingId(doc);
   const distinctId = installId ?? LOCAL_ONLY_ID;
   const session = sessionId(doc);
   const shaped: [string, [string, Value][]][] = [];

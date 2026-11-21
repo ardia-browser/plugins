@@ -1,16 +1,18 @@
-import { readSync } from "node:fs";
 import { now } from "./clock.ts";
 import { dumps, Float, type JsonObject, object, parse, TELEMETRY_JSON_DEPTH, type Value } from "./json.ts";
 import { logsRequest } from "./otlp.ts";
+import { cleanEvent } from "./telemetry-schema.ts";
 import { close, closeDir, type Dir, readPrivate, takeLock, takeLockRetrying, unlinkQuietly, writePrivate } from "./privatefs.ts";
 import { truthy } from "./py.ts";
 import { utf8 } from "./pystr.ts";
 import { FLUSH_INTERVAL_S, FLUSH_STATE, MAX_EVENTS, newest, openFolder, readLines, SPOOL, SPOOL_LOCK, writeLines } from "./spool.ts";
-import { LOGS_URL, loopbackUrl, readConsent, sharingId } from "./telemetry.ts";
+import { consentedInstall, LOGS_URL, loopbackUrl } from "./telemetry.ts";
 
 const INGEST_KEY_HEADER = "X-Ardia-Key";
 const CLI_INGEST_KEY = "ak_cli_67adb8ebc49841125eda860e";
 const FLUSH_LOCK = "cli-flush.lock";
+const ACKED = "cli-flush-acked.json";
+const MAX_ACKED_BYTES = 64 * 1024;
 const BATCH_SIZE = 100;
 const MAX_BODY_BYTES = 500_000;
 const FIRST_BACKOFF_S = 30;
@@ -19,6 +21,7 @@ const SEND_TIMEOUT_MS = 5_000;
 const SEND_BUDGET_S = 12;
 export const FLUSH_DEADLINE_MS = 30_000;
 const MAX_CONFIG_BYTES = 64 * 1024;
+const CONFIG_TIMEOUT_MS = 5_000;
 const MAX_STATE_BYTES = 64 * 1024;
 
 export type FlushResult = "busy" | "off" | "done" | "failed" | "revoked";
@@ -41,7 +44,7 @@ export async function post(url: string, body: Buffer): Promise<number> {
 }
 
 function consent(root: string): string | undefined {
-  return sharingId(readConsent(root));
+  return consentedInstall(root);
 }
 
 function validRecord(record: Value | undefined, installId: string): record is JsonObject {
@@ -55,11 +58,14 @@ function validRecord(record: Value | undefined, installId: string): record is Js
   );
 }
 
-function parseLines(lines: Buffer[], installId: string): JsonObject[] {
+function parseLines(lines: Buffer[], installId: string, dropped: Set<string>): JsonObject[] {
   const records: JsonObject[] = [];
   for (const line of lines) {
     const record = parse(line, TELEMETRY_JSON_DEPTH);
-    if (validRecord(record, installId)) records.push(record);
+    if (!validRecord(record, installId) || dropped.has(record.get("uuid") as string)) continue;
+    const clean = cleanEvent(record);
+    if (clean === undefined) dropped.add(record.get("uuid") as string);
+    else records.push(clean);
   }
   return records.slice(Math.max(0, records.length - MAX_EVENTS));
 }
@@ -138,6 +144,25 @@ function writeState(dir: Dir, failures: bigint, nextAt: number): void {
 function forget(dir: Dir): void {
   unlinkQuietly(SPOOL, dir);
   unlinkQuietly(FLUSH_STATE, dir);
+  unlinkQuietly(ACKED, dir);
+}
+
+function readAcked(dir: Dir): Set<string> {
+  let raw: Buffer | undefined;
+  try {
+    raw = readPrivate(ACKED, dir, MAX_ACKED_BYTES);
+  } catch {
+    return new Set();
+  }
+  const parsed = raw === undefined ? undefined : parse(raw, 4);
+  const uuids = parsed instanceof Map ? parsed.get("uuids") : undefined;
+  return new Set(Array.isArray(uuids) ? uuids.filter((uuid): uuid is string => typeof uuid === "string") : []);
+}
+
+function writeAcked(dir: Dir, sent: Set<string>): void {
+  try {
+    writePrivate(ACKED, dir, utf8(dumps(object([["uuids", [...sent]]]), "compact")));
+  } catch {}
 }
 
 export async function flush(root: string, url: string, environment: string, send: Post = post): Promise<FlushResult> {
@@ -150,17 +175,18 @@ export async function flush(root: string, url: string, environment: string, send
       let lock = takeLockRetrying(SPOOL_LOCK, dir);
       if (lock === undefined) return "busy";
       let pending: JsonObject[];
+      const sent = readAcked(dir);
       try {
         if (installId === undefined) {
           forget(dir);
           return "off";
         }
-        pending = parseLines(readLines(dir), installId);
+        pending = parseLines(readLines(dir), installId, sent);
       } finally {
         close(lock);
       }
-      const sent = new Set<string>();
       const result = await sendAll(pending, url, environment, sent, () => consent(root) === installId, send);
+      if (sent.size > 0) writeAcked(dir, sent);
       const current = consent(root);
       lock = takeLockRetrying(SPOOL_LOCK, dir);
       if (lock === undefined) return result;
@@ -170,6 +196,7 @@ export async function flush(root: string, url: string, environment: string, send
           return "off";
         }
         writeLines(dir, newest(readLines(dir).filter((line) => keepLine(line, current, sent))));
+        unlinkQuietly(ACKED, dir);
       } finally {
         close(lock);
       }
@@ -184,25 +211,38 @@ export async function flush(root: string, url: string, environment: string, send
   }
 }
 
-function readConfig(): Value | undefined {
-  const chunks: Buffer[] = [];
-  let total = 0;
-  while (total < MAX_CONFIG_BYTES) {
-    const chunk = Buffer.alloc(MAX_CONFIG_BYTES - total);
-    let got: number;
-    try {
-      got = readSync(0, chunk, 0, chunk.length, null);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "EAGAIN" || (error as NodeJS.ErrnoException).code === "EINTR") continue;
-      throw error;
-    }
-    if (got === 0) break;
-    chunks.push(chunk.subarray(0, got));
-    total += got;
-  }
-  const raw = Buffer.concat(chunks);
-  const text = new TextDecoder("utf-8", { fatal: true }).decode(raw);
-  return text === "" ? new Map() : parse(utf8(text), TELEMETRY_JSON_DEPTH);
+function readConfig(): Promise<Value | undefined> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let total = 0;
+    const done = () => {
+      process.stdin.removeAllListeners();
+      process.stdin.destroy();
+      try {
+        const text = new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks).subarray(0, MAX_CONFIG_BYTES));
+        resolve(text === "" ? new Map() : parse(utf8(text), TELEMETRY_JSON_DEPTH));
+      } catch (error) {
+        reject(error);
+      }
+    };
+    const timer = setTimeout(() => reject(new Error("the flusher's config never arrived")), CONFIG_TIMEOUT_MS);
+    process.stdin.on("data", (chunk: Buffer) => {
+      chunks.push(chunk);
+      total += chunk.length;
+      if (total >= MAX_CONFIG_BYTES) {
+        clearTimeout(timer);
+        done();
+      }
+    });
+    process.stdin.on("end", () => {
+      clearTimeout(timer);
+      done();
+    });
+    process.stdin.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+  });
 }
 
 export function flushTarget(config: Value | undefined): { root: string; url: string; environment: string } | undefined {
@@ -218,7 +258,7 @@ export function flushTarget(config: Value | undefined): { root: string; url: str
 
 export async function flushMain(): Promise<void> {
   try {
-    const target = flushTarget(readConfig());
+    const target = flushTarget(await readConfig());
     if (target !== undefined) await flush(target.root, target.url, target.environment);
   } catch {}
 }
