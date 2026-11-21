@@ -1,0 +1,5 @@
+{
+  "lookahead": 8,
+  "methods": ["Page.getFrameTree", "Target.getTargets", "Target.activateTarget"],
+  "probes": ["() => document.visibilityState === 'hidden'", "() => document.readyState"]
+}

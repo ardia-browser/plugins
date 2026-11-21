@@ -1,0 +1,7 @@
+(el) => {
+  const fields = 'input:not([type=hidden]):not([disabled]), textarea:not([disabled]), select:not([disabled]), [contenteditable=""], [contenteditable=true], [tabindex]:not([tabindex="-1"])';
+  const target = el.matches(fields) ? el : el.querySelector(fields) || el;
+  if (target.focus) target.focus();
+  const active = document.activeElement;
+  return !!active && active !== document.body && (active === el || el.contains(active));
+}

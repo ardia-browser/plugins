@@ -1,0 +1,1 @@
+(el) => ({ type: el.type || null, value: 'value' in el ? String(el.value) : null, required: el.required === true })

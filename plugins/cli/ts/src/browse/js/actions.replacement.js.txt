@@ -1,0 +1,10 @@
+(old) => {
+  const active = document.activeElement;
+  if (!active || active === old || active === document.body) return null;
+  const info = ardiaBrowse.info(active);
+  if (!info.editable || info.disabled) return null;
+  const keys = ["id", "name", "placeholder", "aria-label", "title"];
+  const same = active.tagName === old.tagName && (active.type || "") === (old.type || "")
+    && keys.some((key) => old.getAttribute(key) && old.getAttribute(key) === active.getAttribute(key));
+  return same ? active : null;
+}

@@ -1,0 +1,1 @@
+(s) => { const found = ardiaBrowse.queryAll(s); return {matched: found.length, text: found.map((el) => ardiaBrowse.readable(el)).filter(Boolean).join('\n\n')}; }

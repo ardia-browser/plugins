@@ -1,0 +1,9 @@
+() => {
+  const spot = globalThis.ardiaDragList;
+  globalThis.ardiaDragList = null;
+  if (!spot || !spot.list.isConnected) return null;
+  const key = (n) => (n.textContent || "").replace(/\s+/g, " ").trim();
+  const items = Array.from(spot.list.children).filter((n) => n.tagName === spot.tag);
+  const hits = items.filter((n) => key(n) === spot.text);
+  return hits.length === 1 ? { to: items.indexOf(hits[0]) + 1, count: items.length } : null;
+}

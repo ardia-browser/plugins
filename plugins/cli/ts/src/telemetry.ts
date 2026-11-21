@@ -3,9 +3,11 @@ import { iso, now, parseIso } from "./clock.ts";
 import { dataRoot, installedDataDir } from "./control.ts";
 import { Float, type JsonObject, object, parse, TELEMETRY_JSON_DEPTH, TooDeep, type Value } from "./json.ts";
 import { abspath, envSet, join, realpath, uid } from "./paths.ts";
-import { O_NOFOLLOW, O_NONBLOCK, O_RDONLY, readFd } from "./privatefs.ts";
+import { closeDir, O_NOFOLLOW, O_NONBLOCK, O_RDONLY, readFd } from "./privatefs.ts";
 import { isSpace, strip } from "./py.ts";
 import { appendToSpool, discardSpool, keepLocalCopy, startFlush } from "./spool.ts";
+import { reportingAllowed } from "./browse/metrics.ts";
+import { strerror } from "./libc.ts";
 import { recordUsage } from "./usage.ts";
 import { exceptionProperties } from "./crash.ts";
 import { cliVersion, isDevBuild } from "./version.ts";
@@ -287,4 +289,61 @@ function record(call: Call, status: number, python: string | null, crash: number
   }
   const spooled = appendToSpool(target.root, records);
   if (spooled !== undefined) startFlush(spooled, target, python);
+}
+
+const EXCEPTION_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,60}$/;
+const MAX_EXCEPTIONS = 10;
+const reportedExceptions = new Set<string>();
+
+export type ExceptionWhere = { dataRoot: string; testEndpoint: boolean };
+
+function exceptionType(error: unknown): string {
+  const name = error instanceof Error ? error.name : "Error";
+  return EXCEPTION_NAME.test(name) ? name : "Error";
+}
+
+function exceptionValue(error: unknown): string {
+  const errno = (error as NodeJS.ErrnoException | undefined)?.errno;
+  if (typeof errno === "number" && Math.abs(errno) > 0 && Math.abs(errno) < 1000 && typeof (error as NodeJS.ErrnoException).syscall === "string") {
+    return `[Errno ${Math.abs(errno)}] ${strerror(Math.abs(errno))}`;
+  }
+  return exceptionType(error);
+}
+
+export function reportException(error: unknown, mechanism: string, where: ExceptionWhere, fatal = false): void {
+  try {
+    if (!reportingAllowed()) return;
+    if (where.testEndpoint || optedOut() || TEST_ENDPOINT_ENV.some((name) => envSet(name) !== undefined)) return;
+    const url = logsUrl();
+    if (url === undefined) return;
+    const root = abspath(dataRoot(where.dataRoot));
+    const environment = environmentFor(root);
+    const doc = readConsent(root);
+    const installId = sharingId(doc);
+    const kind = exceptionType(error);
+    const value = exceptionValue(error);
+    const key = `${kind}|${value}||`;
+    if (reportedExceptions.has(key) || reportedExceptions.size >= MAX_EXCEPTIONS) return;
+    reportedExceptions.add(key);
+    const entry: JsonObject = object([
+      ["type", kind],
+      ["value", value],
+      ["mechanism", object([["type", mechanism], ["handled", false], ["synthetic", false]])],
+      ["stacktrace", object([["type", "raw"], ["frames", []]])],
+    ]);
+    const properties: [string, Value][] = [
+      ["$exception_level", fatal ? "fatal" : "error"],
+      ["source", mechanism],
+      ["$exception_types", [kind]],
+      ["$exception_values", [value]],
+      ["$exception_list", [entry]],
+      ["error_code", null],
+      ["cli_version", cliVersion()],
+      ["$environment", environment],
+    ];
+    commonProperties(properties, doc, sessionId(doc));
+    const records = [event("$exception", installId ?? LOCAL_ONLY_ID, properties)];
+    keepLocalCopy(root, records, installId !== undefined);
+    if (installId !== undefined) closeDir(appendToSpool(root, records));
+  } catch {}
 }

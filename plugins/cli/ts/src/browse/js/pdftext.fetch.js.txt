@@ -1,0 +1,9 @@
+async (limit) => {
+  const response = await fetch(location.href, { credentials: "include" });
+  if (!response.ok) return { error: `HTTP ${response.status}` };
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.length > limit) return { error: `the PDF is ${bytes.length} bytes, over the ${limit}-byte limit` };
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return { data: btoa(binary) };
+}

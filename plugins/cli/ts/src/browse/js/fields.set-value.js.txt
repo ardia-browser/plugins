@@ -1,0 +1,13 @@
+(el, value) => {
+  const before = el.value;
+  el.value = value;
+  const stored = el.value;
+  const same = el.type === "color" ? stored.toLowerCase() === value.toLowerCase() : stored === value;
+  if (!same && el.type !== "range") {
+    el.value = before;
+    return { set: false, stored };
+  }
+  el.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+  return { set: true, stored: el.value };
+}

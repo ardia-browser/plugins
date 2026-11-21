@@ -1,0 +1,18 @@
+(el) => {
+  const shown = (node) => node.checkVisibility ? node.checkVisibility({ checkVisibilityCSS: true }) : !!node.offsetParent;
+  const dialogs = [...document.querySelectorAll("dialog[open], [role=dialog], [role=alertdialog], [aria-modal=true]")]
+    .filter((node) => shown(node) && !node.contains(el));
+  const dialog = dialogs[dialogs.length - 1];
+  if (dialog) {
+    const labelled = dialog.getAttribute("aria-labelledby");
+    const name = (dialog.getAttribute("aria-label") || (labelled && document.getElementById(labelled)?.innerText) || dialog.innerText || "")
+      .trim().split("\n")[0].slice(0, 60);
+    return name ? `the dialog "${name}" is open and holds the page still` : "an open dialog holds the page still";
+  }
+  const locked = (node) => {
+    const style = node && getComputedStyle(node);
+    return !!style && (style.position === "fixed" || /hidden|clip/.test(style.overflowY));
+  };
+  if (locked(document.body) || locked(document.documentElement)) return "the page's scrolling is locked, usually by an open menu or overlay";
+  return null;
+}

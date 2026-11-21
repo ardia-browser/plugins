@@ -16,6 +16,12 @@ type Native = {
   renameAt(dir: number, from: string, to: string): number;
   unlinkAt(dir: number, name: Name): number;
   sizeAt(dir: number, name: Name): number;
+  statAt(dir: number, name: string): [number, number, bigint, bigint, number] | number;
+  armWatchdog(dir: number, name: string, dev: bigint, ino: bigint, ms: number, code: number, fireDelay?: number): number;
+  disarmWatchdog(): number;
+  renameExclusiveAt(fromDir: number, from: string, toDir: number, to: string): number;
+  removeDirAt(dir: number, name: string): number;
+  nonBlocking(fd: number): number;
   listAt(dir: number): Buffer[] | number;
   lock(fd: number, exclusive: boolean, wait: boolean): number;
   watchLifeline(fd: number): number;
@@ -23,7 +29,7 @@ type Native = {
   strerror(errno: number): string | number;
 };
 
-const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "openFileAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "listAt", "lock", "watchLifeline", "writeSome", "strerror"];
+const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "openFileAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "statAt", "armWatchdog", "disarmWatchdog", "renameExclusiveAt", "removeDirAt", "nonBlocking", "listAt", "lock", "watchLifeline", "writeSome", "strerror"];
 const ERRNO_NAMES = new Map<number, string>(Object.entries(constants.errno).map(([name, value]) => [value, name]));
 const EWOULDBLOCK = constants.errno.EWOULDBLOCK ?? constants.errno.EAGAIN;
 
@@ -135,6 +141,35 @@ export function unlinkAt(dir: number, name: Name): void {
 
 export function sizeAt(dir: number, name: Name): number {
   return checked(native().sizeAt(dir, name), "fstatat", name);
+}
+
+export type EntryInfo = { mode: number; uid: number; dev: bigint; ino: bigint; mtime: number };
+
+export function statAt(dir: number, name: string): EntryInfo {
+  const info = native().statAt(dir, name);
+  if (typeof info === "number") throw errnoError(-info, "fstatat", name);
+  const [mode, owner, dev, ino, mtime] = info;
+  return { mode, uid: owner, dev, ino, mtime };
+}
+
+export function armWatchdog(dir: number, name: string, dev: bigint, ino: bigint, ms: number, code: number): number {
+  return native().armWatchdog(dir, name, dev, ino, Math.max(1, Math.min(86_400_000, Math.round(ms))), code);
+}
+
+export function disarmWatchdog(): number {
+  return native().disarmWatchdog();
+}
+
+export function renameExclusiveAt(fromDir: number, from: string, toDir: number, to: string): void {
+  checked(native().renameExclusiveAt(fromDir, from, toDir, to), "renameatx_np", to);
+}
+
+export function removeDirAt(dir: number, name: string): void {
+  checked(native().removeDirAt(dir, name), "unlinkat", name);
+}
+
+export function nonBlocking(fd: number): void {
+  checked(native().nonBlocking(fd), "fcntl");
 }
 
 export function listAt(dir: number): Buffer[] {

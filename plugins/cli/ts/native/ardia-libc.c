@@ -8,13 +8,18 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <string.h>
+#include <time.h>
 #include <sys/file.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#if defined(__linux__)
+#include <sys/syscall.h>
+#endif
 #if defined(__APPLE__)
 #include <sys/ucred.h>
 #include <sys/un.h>
@@ -29,6 +34,7 @@ typedef int napi_valuetype;
 typedef napi_value (*napi_callback)(napi_env env, napi_callback_info info);
 #define napi_ok 0
 #define napi_number 3
+#define napi_bigint 9
 #endif
 #ifndef NAPI_AUTO_LENGTH
 #define NAPI_AUTO_LENGTH SIZE_MAX
@@ -43,6 +49,8 @@ napi_status napi_get_value_bool(napi_env env, napi_value value, bool *result);
 napi_status napi_get_value_string_utf8(napi_env env, napi_value value, char *buf, size_t bufsize, size_t *result);
 napi_status napi_create_int32(napi_env env, int32_t value, napi_value *result);
 napi_status napi_create_double(napi_env env, double value, napi_value *result);
+napi_status napi_create_bigint_uint64(napi_env env, uint64_t value, napi_value *result);
+napi_status napi_get_value_bigint_uint64(napi_env env, napi_value value, uint64_t *result, bool *lossless);
 napi_status napi_get_boolean(napi_env env, bool value, napi_value *result);
 napi_status napi_get_null(napi_env env, napi_value *result);
 napi_status napi_create_string_utf8(napi_env env, const char *str, size_t length, napi_value *result);
@@ -54,7 +62,7 @@ napi_status napi_set_element(napi_env env, napi_value object, uint32_t index, na
 napi_status napi_create_function(napi_env env, const char *utf8name, size_t length, napi_callback cb, void *data, napi_value *result);
 napi_status napi_set_named_property(napi_env env, napi_value object, const char *utf8name, napi_value value);
 
-#define MAX_ARGS 4
+#define MAX_ARGS 8
 
 typedef struct {
   napi_env env;
@@ -276,6 +284,43 @@ static napi_value size_at(napi_env env, napi_callback_info info) {
   return number(env, (double)found.st_size);
 }
 
+static bool plain_name(const char *name) {
+  return name[0] != 0 && strchr(name, '/') == NULL && strcmp(name, ".") != 0 && strcmp(name, "..") != 0;
+}
+
+static napi_value big(napi_env env, uint64_t value) {
+  napi_value result = NULL;
+  napi_create_bigint_uint64(env, value, &result);
+  return result;
+}
+
+static napi_value stat_at(napi_env env, napi_callback_info info) {
+  Call call;
+  int32_t dir;
+  char name[PATH_MAX];
+  struct stat found;
+  napi_value result = NULL;
+  if (!take_args(env, info, 2, &call) || call.argc != 2) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &dir)) return NULL;
+  if (dir < 0) return status(env, -EBADF);
+  int checked = name_arg(&call, 1, name, sizeof(name));
+  if (checked != 0) return status(env, checked);
+  if (!plain_name(name)) return status(env, -EINVAL);
+  if (fstatat(dir, name, &found, AT_SYMLINK_NOFOLLOW) != 0) return status(env, failed());
+#if defined(__APPLE__)
+  double mtime = (double)found.st_mtimespec.tv_sec + (double)found.st_mtimespec.tv_nsec / 1e9;
+#else
+  double mtime = (double)found.st_mtim.tv_sec + (double)found.st_mtim.tv_nsec / 1e9;
+#endif
+  napi_value fields[5] = {number(env, (double)found.st_mode), number(env, (double)found.st_uid), big(env, (uint64_t)found.st_dev),
+                          big(env, (uint64_t)found.st_ino), number(env, mtime)};
+  if (napi_create_array(env, &result) != napi_ok) return status(env, -ENOMEM);
+  for (uint32_t index = 0; index < 5; index += 1) {
+    if (fields[index] == NULL || napi_set_element(env, result, index, fields[index]) != napi_ok) return status(env, -ENOMEM);
+  }
+  return result;
+}
+
 static void finish_listing(DIR *stream) {
   rewinddir(stream);
   closedir(stream);
@@ -413,6 +458,165 @@ static napi_value watch_lifeline(napi_env env, napi_callback_info info) {
   return status(env, -started);
 }
 
+static bool bigint_arg(Call *call, size_t index, uint64_t *out) {
+  napi_valuetype type;
+  bool lossless = false;
+  if (napi_typeof(call->env, call->argv[index], &type) != napi_ok || type != napi_bigint) return false;
+  return napi_get_value_bigint_uint64(call->env, call->argv[index], out, &lossless) == napi_ok && lossless;
+}
+
+enum { WATCHDOG_IDLE, WATCHDOG_ARMED, WATCHDOG_FIRING, WATCHDOG_DISARMED };
+static atomic_int watchdog_state = WATCHDOG_IDLE;
+
+typedef struct {
+  int dir;
+  char name[PATH_MAX];
+  uint64_t dev;
+  uint64_t ino;
+  int64_t deadline;
+  int64_t fire_delay;
+  int code;
+} Watchdog;
+
+static Watchdog watchdog;
+
+static int64_t monotonic_ms(void) {
+  struct timespec clock;
+  clock_gettime(CLOCK_MONOTONIC, &clock);
+  return (int64_t)clock.tv_sec * 1000 + clock.tv_nsec / 1000000;
+}
+
+static void nap_ms(int64_t ms) {
+  struct timespec pause = {.tv_sec = (time_t)(ms / 1000), .tv_nsec = (long)(ms % 1000) * 1000000L};
+  while (nanosleep(&pause, &pause) != 0 && errno == EINTR) {
+  }
+}
+
+static void *watchdog_thread(void *argument) {
+  (void)argument;
+  for (;;) {
+    if (atomic_load(&watchdog_state) != WATCHDOG_ARMED) return NULL;
+    int64_t left = watchdog.deadline - monotonic_ms();
+    if (left <= 0) break;
+    nap_ms(left < 50 ? left : 50);
+  }
+  int expected = WATCHDOG_ARMED;
+  if (!atomic_compare_exchange_strong(&watchdog_state, &expected, WATCHDOG_FIRING)) return NULL;
+  if (watchdog.fire_delay > 0) nap_ms(watchdog.fire_delay);
+  struct stat found;
+  if (fstatat(watchdog.dir, watchdog.name, &found, AT_SYMLINK_NOFOLLOW) == 0 && S_ISSOCK(found.st_mode)
+      && (uint64_t)found.st_dev == watchdog.dev && (uint64_t)found.st_ino == watchdog.ino) {
+    unlinkat(watchdog.dir, watchdog.name, 0);
+  }
+  _exit(watchdog.code);
+  return NULL;
+}
+
+static napi_value arm_watchdog(napi_env env, napi_callback_info info) {
+  Call call;
+  int32_t dir, ms, code, fire_delay = 0;
+  uint64_t dev, ino;
+  char name[PATH_MAX];
+  if (!take_args(env, info, 6, &call) || call.argc < 6 || call.argc > 7) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &dir) || !int_arg(&call, 4, &ms) || !int_arg(&call, 5, &code)) return NULL;
+  if (call.argc == 7 && !int_arg(&call, 6, &fire_delay)) return NULL;
+  if (dir < 0) return status(env, -EBADF);
+  if (ms < 1 || ms > 86400000 || code < 0 || code > 255 || fire_delay < 0 || fire_delay > 10000) return status(env, -EINVAL);
+  if (!bigint_arg(&call, 2, &dev) || !bigint_arg(&call, 3, &ino)) return status(env, -EINVAL);
+  int checked = name_arg(&call, 1, name, sizeof(name));
+  if (checked != 0) return status(env, checked);
+  if (!plain_name(name)) return status(env, -EINVAL);
+  struct stat folder;
+  if (fstat(dir, &folder) != 0) return status(env, failed());
+  if (!S_ISDIR(folder.st_mode)) return status(env, -ENOTDIR);
+  int expected = WATCHDOG_IDLE;
+  if (!atomic_compare_exchange_strong(&watchdog_state, &expected, WATCHDOG_ARMED)) return status(env, -EBUSY);
+  int copy = fcntl(dir, F_DUPFD_CLOEXEC, 0);
+  if (copy < 0) {
+    int error = failed();
+    atomic_store(&watchdog_state, WATCHDOG_DISARMED);
+    return status(env, error);
+  }
+  watchdog.dir = copy;
+  memcpy(watchdog.name, name, sizeof(name));
+  watchdog.dev = dev;
+  watchdog.ino = ino;
+  watchdog.code = code;
+  watchdog.fire_delay = fire_delay;
+  watchdog.deadline = monotonic_ms() + ms;
+  pthread_t thread;
+  pthread_attr_t attributes;
+  int started = pthread_attr_init(&attributes);
+  if (started == 0) {
+    pthread_attr_setdetachstate(&attributes, PTHREAD_CREATE_DETACHED);
+    started = pthread_create(&thread, &attributes, watchdog_thread, NULL);
+    pthread_attr_destroy(&attributes);
+  }
+  if (started != 0) {
+    atomic_store(&watchdog_state, WATCHDOG_DISARMED);
+    close(copy);
+    return status(env, -started);
+  }
+  return status(env, 0);
+}
+
+static napi_value disarm_watchdog(napi_env env, napi_callback_info info) {
+  Call call;
+  if (!take_args(env, info, 0, &call) || call.argc != 0) return status(env, -EINVAL);
+  int expected = WATCHDOG_ARMED;
+  if (atomic_compare_exchange_strong(&watchdog_state, &expected, WATCHDOG_DISARMED)) {
+    close(watchdog.dir);
+    return status(env, 0);
+  }
+  return status(env, expected == WATCHDOG_FIRING ? -EBUSY : -EINVAL);
+}
+
+static napi_value rename_exclusive_at(napi_env env, napi_callback_info info) {
+  Call call;
+  int32_t from_dir, to_dir;
+  char from[PATH_MAX], to[PATH_MAX];
+  if (!take_args(env, info, 4, &call) || call.argc != 4) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &from_dir) || !int_arg(&call, 2, &to_dir)) return NULL;
+  if (from_dir < 0 || to_dir < 0) return status(env, -EBADF);
+  int checked = name_arg(&call, 1, from, sizeof(from));
+  if (checked == 0) checked = name_arg(&call, 3, to, sizeof(to));
+  if (checked != 0) return status(env, checked);
+  if (!plain_name(from) || !plain_name(to)) return status(env, -EINVAL);
+#if defined(__APPLE__)
+  int done = renameatx_np(from_dir, from, to_dir, to, RENAME_EXCL);
+#elif defined(__linux__)
+  int done = (int)syscall(SYS_renameat2, from_dir, from, to_dir, to, 1u);
+#else
+  int done = -1;
+  errno = ENOSYS;
+#endif
+  return status(env, done == 0 ? 0 : failed());
+}
+
+static napi_value remove_dir_at(napi_env env, napi_callback_info info) {
+  Call call;
+  int32_t dir;
+  char name[PATH_MAX];
+  if (!take_args(env, info, 2, &call) || call.argc != 2) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &dir)) return NULL;
+  if (dir < 0) return status(env, -EBADF);
+  int checked = name_arg(&call, 1, name, sizeof(name));
+  if (checked != 0) return status(env, checked);
+  if (!plain_name(name)) return status(env, -EINVAL);
+  return status(env, unlinkat(dir, name, AT_REMOVEDIR) == 0 ? 0 : failed());
+}
+
+static napi_value non_blocking(napi_env env, napi_callback_info info) {
+  Call call;
+  int32_t fd;
+  if (!take_args(env, info, 1, &call) || call.argc != 1) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &fd)) return NULL;
+  if (fd < 0) return status(env, -EBADF);
+  int now = fcntl(fd, F_GETFL);
+  if (now < 0) return status(env, failed());
+  return status(env, fcntl(fd, F_SETFL, now | O_NONBLOCK) == 0 ? 0 : failed());
+}
+
 static bool define(napi_env env, napi_value exports, const char *name, napi_callback callback) {
   napi_value function = NULL;
   return napi_create_function(env, name, NAPI_AUTO_LENGTH, callback, NULL, &function) == napi_ok
@@ -428,6 +632,12 @@ __attribute__((visibility("default"))) napi_value napi_register_module_v1(napi_e
       && define(env, exports, "renameAt", rename_at)
       && define(env, exports, "unlinkAt", unlink_at)
       && define(env, exports, "sizeAt", size_at)
+      && define(env, exports, "statAt", stat_at)
+      && define(env, exports, "armWatchdog", arm_watchdog)
+      && define(env, exports, "disarmWatchdog", disarm_watchdog)
+      && define(env, exports, "renameExclusiveAt", rename_exclusive_at)
+      && define(env, exports, "removeDirAt", remove_dir_at)
+      && define(env, exports, "nonBlocking", non_blocking)
       && define(env, exports, "listAt", list_at)
       && define(env, exports, "lock", lock)
       && define(env, exports, "watchLifeline", watch_lifeline)

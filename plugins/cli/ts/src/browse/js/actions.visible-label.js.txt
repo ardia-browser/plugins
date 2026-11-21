@@ -1,0 +1,11 @@
+(el) => {
+  if (!(el instanceof HTMLInputElement) || !/^(checkbox|radio)$/.test(el.type)) return null;
+  const shown = (node) => {
+    const rect = node.getBoundingClientRect();
+    return rect.width >= 2 && rect.height >= 2 && (!node.checkVisibility || node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }));
+  };
+  const labels = [...(el.labels || [])];
+  const wrapping = el.closest("label");
+  if (wrapping && !labels.includes(wrapping)) labels.push(wrapping);
+  return labels.find(shown) || null;
+}

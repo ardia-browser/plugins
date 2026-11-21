@@ -1903,6 +1903,174 @@ parity harness rather than stripped wholesale:
   with `ardia <command>: interrupted` and status 130. CPython has exactly this window between its signal check and the
   blocking `write` in its buffered writer, so no code closes it.
 
+The TypeScript browse daemon's CDP link (M3, not served yet) differs from Python's in these ways, each covered by
+`ts/tests/m3/link.test.ts`, `browser.test.ts` or the link scenarios (`docs/m3-harness.md`):
+
+- The 256 MB message cap is checked once a frame has arrived, so the frame is already in memory; Python stops reading
+  at the cap. Chromium is the only peer, and it never sends a frame over 268,435,456 bytes.
+- No send-stall check: Bun's WebSocket shows no backpressure, so Python's "the browser read nothing for 30 s" can't be
+  reproduced. A stalled browser is caught by the command's own timeout.
+- A failed connection's detail text, shown only for an explicit endpoint (`can't connect to --port N (…)`): a refused
+  port reads `Failed to connect` (Python: `[Errno 61] Connect call failed (…)`); a refused handshake reads
+  `server rejected WebSocket connection (Expected 101 status code)` (Python names the HTTP status). Both raise the
+  same `Unreachable` error with the same exit status. A URL the WebSocket can't open (a host with a space, a bad
+  percent escape) reads `the endpoint isn't a URL a WebSocket can open (<invalid endpoint>)`, where Python reports the
+  lookup's `[Errno 8] …`. An endpoint is only ever described by the scheme, host and port of a successful URL parse,
+  else as `<invalid endpoint>`, so the session token and any user info never reach an error, a log line or telemetry.
+- Once `close` starts, the connection is done for good: a later `open` fails with `connection_lost` and opens nothing.
+- A malformed endpoint is refused with a fixed message that names the problem without repeating the URL's text: `the
+  endpoint's port isn't a number`, `the endpoint's bracketed host isn't an IPv4 or IPv6 address`, `the endpoint isn't a
+  ws:// or wss:// URL` (Python quotes the port, the host or the scheme). An endpoint is described only when the URL
+  parser and Python's split agree on its host.
+- A command with a timeout of zero, or one already cancelled, fails as a plain timeout or cancellation before anything
+  is sent, mutating or not (Python reports a zero-timeout mutation as `outcome_unknown` though it never sent it).
+- Each command is read once when it's sent: a method that isn't a string is refused, and the params are serialized once,
+  so a getter or `toJSON` can't change what goes out or send a second command with the same id.
+- `close` while the connection is still being set up ends it: the setup fails with `connection_lost` and no socket is
+  left open. Python's setup would finish and keep its socket. A second setup started while one is running waits for
+  that one instead of opening another socket.
+- `Target.attachToTarget` and `Target.attachToBrowserTarget` always go through the attach bookkeeping (the 16-attach cap
+  and the late detach), whoever sends them; the link refuses one sent any other way, before it reaches the wire.
+- Frames Chromium never sends: a reply whose `id` is written `1.0` answers command 1 (Python ignores a float id); a
+  message holding `NaN` or `Infinity` is dropped (Python accepts it); a binary frame must be UTF-8 (Python's
+  `json.loads` also takes UTF-16 and UTF-32), else it's skipped, as Python skips one it can't decode; a text frame
+  that isn't UTF-8 closes with 1003 (Python 1007), and both end in `connection_lost`.
+- Cancellation is explicit: an abandoned command stops at its next CDP call or `sleep`, not at any `await`.
+
+The TypeScript browse daemon itself (`libexec/ardia-ts daemon`, slice D2 of M3, not served yet) keeps Python's files,
+protocol and answers (`docs/browse-daemon-protocol.md`), except for these, each covered by `ts/tests/m3/daemon*.test.ts`
+or the `daemon/*` harness scenarios:
+
+- Its answers carry `"daemon": "ts/<version>"`; Python's carry none. Clients and telemetry tell the two apart by it.
+- It checks its spawn config before it touches anything: a key that isn't 24 hex digits, a relative `data_root`, a
+  session or namespace that isn't a session name, or a field of the wrong type ends it with exit 2 and
+  `ardia-ts daemon: <what's wrong>` in `<key>.log`. Python takes such a config as it is.
+- It enters `Browse/` by path and then checks that `.` is the folder it opened (same device and inode), where Python
+  calls `fchdir` on the open folder. A folder swapped in between ends it with exit 2 (`the Browse folder changed while
+  the daemon started`) before it binds anything.
+- `<key>.log` holds JavaScript stack traces where Python's holds tracebacks; the line format
+  (`<time> ardia_cli.browse <LEVEL> <message>`) and the redaction are the same. A `$exception` event it reports has an
+  empty `stacktrace.frames`, as the other native entries' do.
+- Cancelling a command during `Target.attachToTarget` detaches the session the late answer opens (plugins#11's attach
+  rule, in the link); Python on this branch leaves it attached.
+- Under heavy load it can resume a few milliseconds later than Python after a CDP reply, so the `load` event may
+  already be in when it first checks, and the isolated world `open` would have made for its readiness probe is made by
+  the next command instead. The harness's Ctrl-C comparison shows this as a request moving between steps; the answers
+  don't change.
+
+These are intentional: Python behaves the other way, and the TypeScript daemon fixes it.
+
+- It never lets Bun own `<key>.sock`. Under the session lock it binds inside a private folder, `Browse/.<key>.bind/`
+  (0700; one left by a crash is swept first), records the socket's device and inode, and moves it to `<key>.sock` with an
+  exclusive rename (`renameatx_np` `RENAME_EXCL`, `renameat2` `RENAME_NOREPLACE`) that never replaces an entry created
+  there meanwhile, checks the identity again, and removes the folder. So no client can find the socket before it is
+  published, and closing the server can't unlink the path. At exit it unlinks `<key>.sock` (through the folder
+  descriptor) only if the device and inode are still the ones it bound, compared exactly. A socket file someone replaced
+  is left alone.
+- Once `close` has marked the session closing, the rest of it (closing tabs, ending the daemon) runs to the end within
+  its own 10 s deadline, even if the client goes away. Python cancels it there and strands the session, which then
+  refuses every command until its idle exit.
+- Shutdown deadlines are hard. Endpoint discovery (`/json/version`) honours cancellation and gives up after 3 s in all,
+  where Python's 3 s applies to each socket operation, so a server that trickles bytes held Python forever. Shielded
+  temp-tab work has its own 10 s deadline. Waiting for `tabs.lock` or `claims/.lock` gives up after 5 s with `lock_busy`;
+  Python waits for as long as another process holds them. A native watchdog thread in the addon is armed the moment
+  the daemon starts stopping, on every path (`close`, a signal, the idle exit, a lost connection), before anything else
+  runs. 15 s later it exits the daemon (status 1) whatever JavaScript is doing, even stuck in a synchronous lock wait,
+  after unlinking its own socket with the inode check; it touches no JavaScript, lock or log. Firing and disarming
+  exclude each other (one atomic state, armed to firing or armed to disarmed): a clean exit disarms it only if it wins,
+  else it waits for the fire, and the session lock is held until then, so no successor publishes a socket the fire might
+  still unlink. If it can't be armed (a folder descriptor that isn't a folder, no thread), the daemon unlinks its socket
+  with the same check and exits 1 at once instead of cleaning up unguarded. Log writes never
+  block: stdout and stderr are made non-blocking at start, and a write that would block is dropped.
+- An attach publishes its session only once `Page.enable` and the frame refresh have succeeded and the session is still
+  attached; a crashed tab's session (which skips the enable) is published only if it is still attached. Otherwise the
+  page stays unattached and needs enabling, and the half-made CDP session is detached. Losing the session or the tab
+  during the enable is never swallowed, a lost connection while probing a crashed tab included, and nothing is
+  published once the connection is gone. Python keeps the session id and skips the enable on the next command.
+- A temporary tab is created at `about:blank#ardia-temp-<nonce>` (then navigated by its reader), with the nonce kept in
+  its reservation in the tab registry until `createTarget` answers. An answer that arrives after its command was
+  cancelled or ran out of time closes the tab (counted in the log); one that never arrives (the daemon stopped, or 30 s
+  passed) leaves the reservation, and the daemon's `drain` at exit or the next connect's sweep closes any tab still
+  showing that marker. Python creates the tab at plain `about:blank`, waits for the answer however long it takes, and
+  drops the reservation on any failure. Openers aren't followed: a temporary tab opens nothing before it is recorded.
+- A queued command's `caller` takes effect only once it holds the command lock, so it can't relabel the command that is
+  running. Python sets it as the request arrives.
+- `close` waits for the command lock at most as long as a command queued behind a `script` would (300 s), then answers
+  `session_busy` and leaves the session as it was. Python waits without limit. The lock never hands itself to a waiter
+  whose time ran out while the daemon was busy; that waiter gets its `session_busy`.
+- Control-file discovery is checked for cancellation before and after it reads the file.
+- The tab registry's instance for a `ws://` endpoint leaves out any user info, so `user:password@` never reaches
+  `tabs-<hash>.json` (the hash is of that cleaned instance). Python keeps the user info in it.
+- The client starts the daemon without `ARDIA_WS`, `ARDIA_PORT`, `ARDIA_CDP_URL` or `AGENT_BROWSER_CDP` in its
+  environment, after moving the one the daemon would have used into the config's `ws` or `port`, read by the same
+  parser the daemon's resolver uses, which is Python's `int`: surrounding ASCII whitespace or any non-ASCII Unicode
+  space, a sign, underscores between digits and any Unicode decimal digit (`+9222`, `9_222`, full-width digits); the error
+  quotes the value as Python's `repr` does. An `ARDIA_PORT` that
+  isn't a valid port stays in the environment, so the daemon still reports it, even with `ARDIA_CDP_URL` set. The daemon writes the
+  endpoint label without any query, fragment or user info, whatever the client sent.
+- A request line may be 16 MiB including its newline; one byte more is dropped unanswered.
+
+Its page core (slice D3: `browse/state/page.ts`, `state.ts`, `refs.ts`, `apptabs.ts` and the command table in
+`browse/commands/`) follows `page.py`, `state.py` and `tabs.py`, except for these, each covered by
+`ts/tests/m3/core*.test.ts`, the `core/*` harness scenarios or the human tier (`tests/m3/human_core.py`):
+
+- It never sends `Runtime.enable` or `Debugger.enable` on a page session (ardia#2812 row 8). Python doesn't either
+  unless console capture asks for it; in TypeScript that is the one opt-in path left (`Page.enableRuntime`, for slice
+  D6), and the harness fails any TS run that sends either on a page session.
+- The busy probe, sent before any command on a tab whose page stopped answering in the last 120 s, evaluates `1` in the
+  `ardia-browse` isolated world (made first with `Page.createIsolatedWorld` when the document has none yet) instead of
+  the page's main world, within the same 3 s. Before any frame of the tab is known it evaluates `1` without a context,
+  as Python does, since there is no world to put it in. The harness compares it through the `busy-probe-isolated`
+  divergence.
+- Setup that a cancelled or failed command cut short after the session was published (`keepAwake`, the layout metrics,
+  a setup restore) is done again on the tab's next use, `Page.enable` first. Python marks the tab ready and never
+  finishes it; after a Ctrl-C during attach, its next `open --show` can time out on that half-made session.
+- `tab active`'s fallback probe follows plugins#11: at most 8 probes at a time, a probe the attach cap refuses counts as
+  not probed rather than inactive and is tried again in up to three passes (0.25 s, then 0.5 s apart), and tabs still
+  unprobed after that end the command with `attaches_unanswered` instead of `no_tab`. Python on this branch probes all
+  tabs at once and reads a refusal as inactive.
+- Ardia's tab list (`windows`, for the app tab ids and following a replaced page) is asked over the control socket in
+  one exchange with a 6 s deadline; Python allows 3 s to connect and 3 s for the answer.
+- A ref resolves only to the backend node it was issued for. Python follows a ref whose page reloaded the same address,
+  or whose element was redrawn, to the one node with the same role and name; TypeScript fails it as a stale ref, with
+  the same `stale_ref` code, exit status and wording (naming the likely successor's ref), so a command never acts on a
+  node it wasn't given. `followed_redrawn_ref` and `followed_ref_after_reload` never fire.
+- A page call is bound to the document and frame its isolated world was made for. Each world gets a handle (one more
+  `Runtime.evaluate` of `globalThis`, kept as its remote object id), and every call is `Runtime.callFunctionOn` on that
+  handle rather than on a numeric execution context id, which Chromium can reuse in another process. Right after the
+  handle is made, a `Page.getFrameTree` request (one more than Python sends per world) binds it to the loader the
+  renderer reports, so a navigation whose event hasn't arrived yet can't hand the call a world in the new document. A renderer that no
+  longer has the handle's document refuses it, and the call fails with `document_changed` (a read retries once in a
+  fresh world). The frame's loader is also checked after the world is made, after the helper library goes in and right
+  before the call is sent. An element from another frame is never re-homed into this frame's world. Python can run such
+  a call on the new document. The harness compares the calls through the `world-handle` divergence, and its replay
+  serves the handle from the recorded context.
+- A lost connection is never read as an answer: a page title, a visibility check, the busy probe, the active-tab
+  probe and the setup restore pass `connection_lost` on, where Python's catch-all reads it as an empty title, a
+  visible tab, an inactive tab or lost setup (releasing the route claim).
+- Setup restored after a reattach is done in full or left to be done again: a cancel or lost connection partway keeps
+  it pending, and the next use replays the steps not yet applied on that session. An init script whose registration is
+  ambiguous (cancelled, timed out or answered with an unknown outcome) may be installed without its id, so the session
+  is detached instead (`setup_session_dropped`) and the next use attaches a new one and replays everything; it isn't
+  reported as lost setup.
+- A tab that had crashed before the session attached keeps its CDP session as a handle for `reload` only; the session
+  counts as attached once `Page.enable` and the frame refresh finish. A connection whose target discovery was cancelled
+  or failed is dropped, so the next command connects and discovers again.
+- When `set viewport`'s tab leaves its off-screen copy and the replacement tab fails to load, the replacement is closed
+  and the session's tab, label and pin go back to the original (`offscreen_handoff_rolled_back`, counted only when the
+  close succeeded). Every such close takes the tab registry's close reservation first, as the temporary-tab sweep does;
+  a replacement whose reservation is refused, that Chromium won't close, or whose creation was answered after a cancel
+  goes on the list of tabs the daemon keeps closing (each retry reserves again) and is handed to the next connect's sweep
+  at exit. The command's own error is kept, with any closing error as its cause, and the answer reports it even when that
+  cause is a lost connection (the session is still marked lost, so the next command gets `connection_lost`). Python leaves the session on the half-made tab.
+- Two metric flags are TypeScript-only: `offscreen_handoff_rolled_back` (the rollback above closed the replacement) and
+  `setup_session_dropped` (an ambiguous init-script registration detached the session). They count from the TypeScript
+  client onward (M1, plugins#14), whose flag list carries them. While the Python client fronts the TS daemon, its
+  `command_metrics.clean()` drops names it doesn't know, and the Python side is frozen, so neither is reported then.
+- The caller counts as announced to Ardia's control socket only after the handshake finished, so a cancelled one is
+  tried again by the next command; Python records it before. A cancelled active-tab lookup (`tab active`) ends its HTTP
+  request at once.
+
 ## Linux
 
 The same CLI, with these differences:

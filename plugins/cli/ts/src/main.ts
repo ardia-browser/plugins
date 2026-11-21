@@ -46,6 +46,7 @@ function failWithoutAddon(message: string, lifeline: number): Promise<number> {
 }
 
 async function main(words: string[]): Promise<number> {
+  if (words[0] === "daemon") process.exit(await (await import("./browse/daemon/main.ts")).daemonMain(words.slice(1)));
   const routed = takeMarker(words);
   if (routed === undefined) {
     try {

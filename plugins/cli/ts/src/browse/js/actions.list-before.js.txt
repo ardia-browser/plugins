@@ -1,0 +1,20 @@
+(source, target) => {
+  let item = source;
+  while (item.parentElement && !item.parentElement.contains(target)) item = item.parentElement;
+  const list = item.parentElement;
+  if (!list || item.contains(target)) return null;
+  const like = (n) => n.tagName === item.tagName;
+  const items = Array.from(list.children).filter(like);
+  const onto = Array.from(list.children).find((n) => n.contains(target));
+  if (!onto || !like(onto) || items.length < 2) return null;
+  const role = (item.getAttribute("role") || "").toLowerCase();
+  const carrier = source.closest("[draggable=true]") || source;
+  const sortable = /^(LI|TR|OPTION|DT)$/.test(item.tagName) || ["listitem", "row", "option", "treeitem"].includes(role)
+    || carrier === item || !!source.closest("[aria-roledescription*=sortable i]");
+  if (!sortable) return null;
+  const key = (n) => (n.textContent || "").replace(/\s+/g, " ").trim();
+  const text = key(item);
+  if (!text || items.filter((n) => key(n) === text).length !== 1) return null;
+  globalThis.ardiaDragList = { list, tag: item.tagName, text };
+  return { from: items.indexOf(item) + 1, count: items.length };
+}

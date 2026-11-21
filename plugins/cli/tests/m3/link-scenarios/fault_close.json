@@ -1,0 +1,61 @@
+{
+ "live_only": "the tap closes the connection",
+ "ops": [
+  {
+   "op": "open"
+  },
+  {
+   "op": "fault",
+   "fault": {
+    "kind": "close",
+    "at": 1,
+    "code": 1011
+   }
+  },
+  {
+   "op": "send",
+   "method": "Browser.getVersion"
+  },
+  {
+   "op": "wait_lost"
+  },
+  {
+   "op": "open"
+  },
+  {
+   "op": "fault",
+   "fault": {
+    "kind": "close",
+    "at": 1,
+    "code": 1001
+   }
+  },
+  {
+   "op": "send",
+   "method": "Browser.getVersion"
+  },
+  {
+   "op": "open"
+  },
+  {
+   "op": "fault",
+   "fault": {
+    "kind": "close",
+    "at": 1,
+    "code": 4000
+   }
+  },
+  {
+   "op": "send",
+   "method": "Browser.getVersion"
+  },
+  {
+   "op": "open"
+  },
+  {
+   "op": "send",
+   "method": "Browser.getVersion",
+   "keep": "keys"
+  }
+ ]
+}

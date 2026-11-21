@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ardia-browser/plugins/plugins/cli/tests/m3/protocol.schema.json",
+  "title": "ardia browse daemon protocol",
+  "description": "The machine form of docs/browse-daemon-protocol.md. Fields are only ever added; a reader ignores fields it doesn't know.",
+  "$defs": {
+    "config": {
+      "type": "object",
+      "required": ["session", "key", "data_root"],
+      "properties": {
+        "session": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"},
+        "namespace": {"type": "string", "pattern": "^([A-Za-z0-9][A-Za-z0-9._-]{0,63})?$"},
+        "key": {"type": "string", "pattern": "^[0-9a-f]{24}$"},
+        "data_root": {"type": "string", "pattern": "^/"},
+        "ws": {"type": ["string", "null"]},
+        "port": {"type": ["integer", "null"], "minimum": 1, "maximum": 65535},
+        "data_dir": {"type": ["string", "null"]},
+        "endpoint_label": {"type": ["string", "null"]},
+        "idle_timeout_ms": {"type": ["number", "null"], "minimum": 0},
+        "debug": {"type": "boolean"},
+        "no_auto_dialog": {"type": ["boolean", "null"]},
+        "pin_tab": {"type": ["boolean", "null"]},
+        "harness_seed": {"type": "integer", "minimum": 0}
+      }
+    },
+    "caller": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {"name": {"type": "string", "minLength": 1}, "app": {"type": "string", "pattern": "^/"}}
+    },
+    "options": {
+      "type": "object",
+      "properties": {
+        "json": {"type": ["boolean", "null"]},
+        "humanize": {"type": ["boolean", "null"]},
+        "timeout_ms": {"type": ["integer", "number", "string", "null"]},
+        "max_output": {"type": ["integer", "null"]},
+        "full": {"type": ["boolean", "null"]},
+        "no_changes": {"type": ["boolean", "null"]},
+        "no_text": {"type": ["boolean", "null"]},
+        "content_boundaries": {"type": ["boolean", "null"]},
+        "annotate": {"type": ["boolean", "null"]},
+        "screenshot_dir": {"type": ["string", "null"]},
+        "screenshot_format": {"type": ["string", "null"]},
+        "screenshot_quality": {"type": ["string", "integer", "null"]},
+        "no_auto_dialog": {"type": ["boolean", "null"]},
+        "capture_console": {"type": ["boolean", "null"]},
+        "show": {"type": ["boolean", "null"]},
+        "enable": {"type": "array", "items": {"type": "string"}},
+        "init_scripts": {"type": "array", "items": {"type": "string"}},
+        "pin_tab": {"type": ["boolean", "null"]},
+        "_session": {"type": "string"}
+      }
+    },
+    "request": {
+      "type": "object",
+      "required": ["argv"],
+      "properties": {
+        "argv": {"type": "array", "items": {"type": "string"}},
+        "options": {"$ref": "#/$defs/options"},
+        "cwd": {"type": ["string", "null"]},
+        "env": {"type": ["object", "null"], "additionalProperties": {"type": "string"}},
+        "stdin": {"type": ["string", "null"]},
+        "telemetry": {"type": ["boolean", "null"]},
+        "caller": {"anyOf": [{"$ref": "#/$defs/caller"}, {"type": "null"}]},
+        "beside_if_busy": {"type": ["boolean", "null"]},
+        "patient_queue": {"type": ["boolean", "null"]}
+      }
+    },
+    "answer": {
+      "type": "object",
+      "required": ["exit", "out", "err"],
+      "properties": {
+        "exit": {"type": "integer", "minimum": 0, "maximum": 255},
+        "out": {"type": "string"},
+        "err": {"type": "string"},
+        "code": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,40}$"},
+        "metrics": {"type": "object", "additionalProperties": {"type": ["integer", "number", "boolean"]}},
+        "busy_elsewhere": {"const": true},
+        "daemon": {"type": "string", "pattern": "^ts/[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,4}([-.][a-z0-9.]{1,24})?$"}
+      }
+    }
+  },
+  "oneOf": [{"$ref": "#/$defs/request"}, {"$ref": "#/$defs/answer"}, {"$ref": "#/$defs/config"}]
+}

@@ -1,0 +1,20 @@
+() => {
+  let best = null, bestScore = 0;
+  for (const el of document.querySelectorAll("body *")) {
+    if (el.childElementCount < 4) continue;
+    const kinds = new Map();
+    for (const child of el.children) {
+      const key = child.tagName + "." + ((typeof child.className === "string" && child.className.trim().split(/\s+/)[0]) || "");
+      kinds.set(key, (kinds.get(key) || 0) + 1);
+    }
+    const [key, count] = [...kinds.entries()].sort((a, b) => b[1] - a[1])[0];
+    if (count < 4) continue;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 100 || rect.height < 100) continue;
+    let linked = 0;
+    for (const child of el.children) if (child.tagName + "." + ((typeof child.className === "string" && child.className.trim().split(/\s+/)[0]) || "") === key && child.querySelector("a[href]")) linked++;
+    const score = count * (1 + linked / count) * Math.log2(2 + (el.innerText || "").length / 1000);
+    if (score > bestScore) { best = el; bestScore = score; }
+  }
+  return best;
+}
