@@ -207,6 +207,26 @@ for (const [where, start] of transports) {
       }
     });
 
+    test("a slow Ardia never gets a second status check while the first is still waiting", async () => {
+      let asked = 0;
+      let waiting = 0;
+      let mostAtOnce = 0;
+      const slow = async () => {
+        waiting += 1;
+        mostAtOnce = Math.max(mostAtOnce, waiting);
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+        waiting -= 1;
+        return ++asked < 3 ? linking : linked;
+      };
+      const { host } = await openStatus(start, { "programs.status": slow });
+      try {
+        await shown(host, "s1", (t) => t.props.markdown.includes("is on your PATH"), "the status after a slow link");
+        assert.equal(mostAtOnce, 1);
+      } finally {
+        host.stop();
+      }
+    });
+
     test("an Ardia that can't answer is said so, with Check Again", async () => {
       const { host } = await openStatus(start, {
         "programs.status": () => {

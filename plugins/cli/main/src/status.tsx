@@ -57,13 +57,15 @@ export function CommandLineStatus(_props: ViewProps) {
   const [shown, setShown] = useState<Shown>({ kind: "loading" });
   const [retrying, setRetrying] = useState(false);
   const [polls, setPolls] = useState(0);
+  const [requests] = useState(() => ({ latest: 0 }));
 
   const load = async (problem?: string) => {
+    const mine = ++requests.latest;
     try {
       const status = await ardia.programs.status();
-      setShown({ kind: "status", status, problem });
+      if (mine === requests.latest) setShown({ kind: "status", status, problem });
     } catch (error) {
-      setShown({ kind: "unreachable", problem: messageOf(error) });
+      if (mine === requests.latest) setShown({ kind: "unreachable", problem: messageOf(error) });
     }
   };
 
@@ -78,8 +80,7 @@ export function CommandLineStatus(_props: ViewProps) {
     const timers = globalThis as HostTimers;
     if (typeof timers.setTimeout !== "function") return;
     const timer = timers.setTimeout(() => {
-      setPolls((count) => count + 1);
-      void load();
+      void load().finally(() => setPolls((count) => count + 1));
     }, LINKING_POLL_MS);
     return () => timers.clearTimeout?.(timer);
   }, [linking, polls]);
