@@ -89,19 +89,20 @@ restore_keychains() {
 }
 
 sign() {
-  local folder keychain keychain_password identity signed=0 file submission status id work line import_output
+  local folder keychain keychain_password identity signed=0 file submission status id work line import_output previous_keychain_list
   folder=$(cd "$1" && pwd)
   need DEVELOPER_ID_P12_BASE64 DEVELOPER_ID_P12_PASSWORD ASC_API_KEY_P8_BASE64 ASC_API_KEY_ID ASC_API_ISSUER_ID APPLE_TEAM_ID
   [ -f "$folder/plugin.json" ] || die "$folder isn't the cli plugin folder"
   work=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/sign-macos.XXXXXX")
   keychain="$work/signing.keychain-db"
+  previous_keychain_list=$(security list-keychains -d user) || die "the keychain search list couldn't be read, so it couldn't be restored after signing"
   previous_keychains=()
   while IFS= read -r line; do
     line=${line#"${line%%[![:space:]]*}"}
     line=${line#\"}
     line=${line%\"}
     [ -z "$line" ] || previous_keychains+=("$line")
-  done < <(security list-keychains -d user)
+  done <<<"$previous_keychain_list"
   sign_work=$work
   sign_keychain=$keychain
   trap restore_keychains EXIT
