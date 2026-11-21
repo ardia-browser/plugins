@@ -172,10 +172,12 @@ class Page:
         self.unanswered_at = 0.0
 
     async def attach(self, browser):
+        from ardia_cli.browse.connection import claimed_attach
+
         self.browser = browser
         self.worlds.clear()
         try:
-            result = await browser.send("Target.attachToTarget", {"targetId": self.target_id, "flatten": True})
+            result = await claimed_attach(browser, "Target.attachToTarget", {"targetId": self.target_id, "flatten": True})
         except Gated as error:
             from ardia_cli import command_metrics
             from ardia_cli.browse import tabs
