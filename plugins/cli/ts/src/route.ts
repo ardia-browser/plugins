@@ -40,7 +40,13 @@ export function labelOf(route: Route): string | undefined {
 export function route(argv: string[], table: Map<string, ServingSide> = servedTable()): Route {
   const parsed = parseRoute(argv);
   const label = labelOf(parsed);
-  return label !== undefined && !table.has(label.replace(/ /g, ":")) ? { kind: "python" } : parsed;
+  return label !== undefined && !servedRow(label, table) ? { kind: "python" } : parsed;
+}
+
+export function servedRow(label: string, table: Map<string, ServingSide>): boolean {
+  if (table.has(label)) return true;
+  const space = label.indexOf(" ");
+  return space > 0 && table.get(`${label.slice(0, space)} *`) === "ts";
 }
 
 function same(argv: string[], words: string[]): boolean {

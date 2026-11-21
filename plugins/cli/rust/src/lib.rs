@@ -66,34 +66,6 @@ fn value_of<'a>(argv: &'a [String], index: &mut usize, name: &str) -> Option<&'a
     Some(value)
 }
 
-const SHARED_VALUE_FLAGS: &[&str] = &["--port", "--ws", "--data-dir", "--timeout"];
-
-fn skip_shared(argv: &[String], mut index: usize) -> Option<usize> {
-    while let Some(token) = argv.get(index) {
-        let name = token.split('=').next().unwrap_or(token);
-        if SHARED_VALUE_FLAGS.contains(&name) {
-            if token.contains('=') {
-                index += 1;
-                continue;
-            }
-            argv.get(index + 1)?;
-            index += 2;
-            continue;
-        }
-        if token == "--json" {
-            index += 1;
-            continue;
-        }
-        break;
-    }
-    Some(index)
-}
-
-pub fn command_word(argv: &[String]) -> Option<&str> {
-    let start = skip_shared(argv, 0)?;
-    argv.get(start).map(String::as_str).filter(|word| !word.starts_with('-'))
-}
-
 pub fn serves(label: &str) -> bool {
     router::Table::compiled().side(label) == Some(router::Side::Rust)
 }
@@ -397,20 +369,15 @@ fn handle(root: Option<&Path>, raw: &[OsString], python: Option<&Path>) -> Handl
     let table = router::Table::load(root);
     let label = match route.label() {
         Some(label) => label.to_string(),
-        None => match command_word(&argv).filter(|word| table.serves_command_in_ts(word)) {
-            Some(word) => word.to_string(),
+        None => match table.typescript_label(raw) {
+            Some(label) => label,
             None => return Handled::Python,
         },
     };
     if standard_fds::any_closed_at_start() || standard_fds::any_is_a_directory() || printable::stdout_unusable() || printable::stderr_unusable() {
         return Handled::Python;
     }
-    let side = if route.label().is_some() {
-        table.side(&label)
-    } else {
-        Some(router::Side::Ts)
-    };
-    match side {
+    match table.side(&label) {
         Some(router::Side::Rust) => run_rust(route, &argv, python),
         Some(router::Side::Ts) => match router::ts_program(root) {
             Some(program) => run_ts(&program, raw),
@@ -445,21 +412,6 @@ mod tests {
 
     fn routed(words: &[&str]) -> Route {
         route(&words.iter().map(|word| word.to_string()).collect::<Vec<_>>())
-    }
-
-    #[test]
-    fn finds_the_command_word_after_shared_flags() {
-        let words = |list: &[&str]| list.iter().map(|word| word.to_string()).collect::<Vec<_>>();
-        assert_eq!(command_word(&words(&["hooks", "list", "--json"])), Some("hooks"));
-        assert_eq!(command_word(&words(&["--data-dir", "x", "--json", "hooks", "list"])), Some("hooks"));
-        assert_eq!(command_word(&words(&["--port=1", "computer", "--help"])), Some("computer"));
-        assert_eq!(command_word(&words(&["--data-dir"])), None);
-        assert_eq!(command_word(&words(&["--bogus", "hooks"])), None);
-        let table = router::Table::parse("hooks:list ts\ncomputer:help ts\nwindows rust\nfeedback rust\n").unwrap();
-        assert!(table.serves_command_in_ts("hooks"));
-        assert!(table.serves_command_in_ts("computer"));
-        assert!(!table.serves_command_in_ts("windows"));
-        assert!(!table.serves_command_in_ts("hook"));
     }
 
     #[test]

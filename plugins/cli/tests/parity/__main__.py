@@ -52,7 +52,7 @@ def main() -> int:
         progress(outcome)
     served = harness.served_commands()
     if args.command or args.case:
-        served = [name for name in served if any(outcome.case.command == name for outcome in outcomes)]
+        served = [name for name in served if any(harness.served_row(outcome.case.command, served) == name for outcome in outcomes)]
     summary = harness.summarize(outcomes, served)
     if args.report:
         head = subprocess.run(["git", "-C", str(harness.CLI), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()

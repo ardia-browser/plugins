@@ -1815,11 +1815,7 @@ SIGHUP on unless they were ignored (a Ctrl-C to the whole group reaches the chil
 turns into one), holds the lease, and then ends by the child's signal or with its status. Status 253 means the
 TypeScript program couldn't serve the call exactly (it may only have asked read-only questions): the router then restores
 every disposition it changed and execs the bundled Python with the original argv and environment, byte for byte, as for any other
-command. Without `libexec/ardia-ts` everything goes where it would without the row. A row names a command by its
-telemetry label with `:` between the words (`hooks:list`, `computer:refresh`); for a command the router doesn't parse
-itself, it skips the shared flags (`--data-dir`, `--port`, `--ws`, `--timeout`, `--json`), and when any `ts` row starts
-with the command's first word it runs the TypeScript program, which checks its own full label against the table and
-hands back (253) when that row is missing. The router reads
+command. Without `libexec/ardia-ts` everything goes where it would without the row. The router reads
 `<root>/served.txt` when it is a regular file (not a link) of at most 64 KiB and valid, else the table built into it.
 `--entry ts` installs the router, the TypeScript program behind a probe, and a `served.txt` naming `ts` for every row;
 `--entry rust` installs the shipped layout, the TypeScript program included when a built-in row says `ts` and it is

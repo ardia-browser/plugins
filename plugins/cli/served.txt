@@ -4,14 +4,7 @@ tabs rust
 groups rust
 windows rust
 commands rust
-computer:help ts
-computer:h ts
-computer:update ts
-computer:channel ts
-computer:skills ts
-computer:refresh ts
-computer:mcp-config ts
-computer:setup ts
-hooks:install ts
-hooks:uninstall ts
+computer * ts
+hooks install ts
+hooks uninstall ts
 on ts
