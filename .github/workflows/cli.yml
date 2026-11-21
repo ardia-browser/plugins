@@ -67,6 +67,30 @@ jobs:
         working-directory: plugins/cli
         run: '"$RUNNER_TEMP/venv/bin/python" -m unittest -v tests.test_m3_harness'
 
+  main:
+    name: Manifest v2 main on ubuntu-24.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: plugins/cli
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        if: hashFiles('plugins/cli/main/package.json') != ''
+        with:
+          node-version: 24.22.2
+      - name: Install, type check, build and test plugins/cli/main
+        if: hashFiles('plugins/cli/main/package.json') != ''
+        working-directory: plugins/cli/main
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run typecheck
+          npm run build
+          npm test
+
   python:
     name: Python tests on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}

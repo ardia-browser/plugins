@@ -17,7 +17,7 @@ version=${ARDIA_PLUGIN_VERSION:-$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' "
 build_manifest_v2_main() {
   dest=$1
   [ -d "$here/main" ] || return 0
-  (cd "$here/main" && npm ci --no-audit --no-fund --silent && npm run --silent build)
+  (cd "$here/main" && npm ci --ignore-scripts --no-audit --no-fund --silent && npm run --silent build)
   mkdir -p "$dest/dist"
   cp "$here/main/dist/main.js" "$dest/dist/main.js"
 }
