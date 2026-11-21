@@ -11,6 +11,7 @@ const FLUSH_FAILURE = "Exception ignored on flushing sys.stdout:\nBrokenPipeErro
 async function run(args: ScriptsArgs, out: Say): Promise<Ending> {
   if (args.sub === "new") return { status: runNew(args, out) };
   if (args.sub === "list") return { status: await runList(args, out) };
+  if (args.sub === "test") return { status: await (await import("./test-cli.ts")).runTestCommand(args, out) };
   return runChange(args, out);
 }
 

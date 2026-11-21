@@ -1,6 +1,7 @@
+import { environment } from "../argparse-env.ts";
 const NEGATIVE_NUMBER = /^-\p{Nd}+$|^-\p{Nd}*\.\p{Nd}+$/u;
 
-export type Sub = "new" | "install" | "uninstall" | "list";
+export type Sub = "new" | "test" | "install" | "uninstall" | "list";
 
 export type ScriptsArgs = {
   sub: Sub;
@@ -9,7 +10,11 @@ export type ScriptsArgs = {
   match: string[] | null;
   dataDir?: string;
   json: boolean;
+  hoisted?: string[];
+  rest?: string[];
 };
+
+export const TEST_SPEC = "ardia scripts test";
 
 const SHARED_VALUE_FLAGS = ["--port", "--ws", "--data-dir", "--timeout"];
 const SHARED_BOOL_FLAGS = ["--json"];
@@ -18,14 +23,19 @@ const SUBCOMMANDS = ["new", "test", "install", "uninstall", "list"];
 
 type Leaf = { values: string[]; flags: string[]; positional: "name" | "file" | null };
 
-const LEAVES: Record<Sub, Leaf> = {
+const LEAVES: Record<Exclude<Sub, "test">, Leaf> = {
   new: { values: ["--match"], flags: [], positional: "name" },
   install: { values: ["--data-dir"], flags: [], positional: "file" },
   uninstall: { values: ["--data-dir"], flags: [], positional: "name" },
   list: { values: ["--data-dir"], flags: ["--json"], positional: null },
 };
 
+export function testOptions(): string[] {
+  return environment().parser(TEST_SPEC).actions.flatMap((action) => action.option_strings);
+}
+
 export function allowedFlags(sub: Sub): string[] {
+  if (sub === "test") return [...TOP_FLAGS, ...testOptions()];
   const leaf = LEAVES[sub];
   return [...TOP_FLAGS, ...leaf.values, ...leaf.flags];
 }
@@ -67,8 +77,9 @@ export function parseScripts(argv: readonly string[]): ScriptsArgs | undefined {
   index = takeShared(argv, index + 1, hoisted);
   if (index === undefined) return undefined;
   const sub = argv[index];
-  if (sub === undefined || !SUBCOMMANDS.includes(sub) || sub === "test") return undefined;
-  const leaf = LEAVES[sub as Sub];
+  if (sub === undefined || !SUBCOMMANDS.includes(sub)) return undefined;
+  if (sub === "test") return { sub, match: null, json: false, hoisted, rest: argv.slice(index + 1) };
+  const leaf = LEAVES[sub as Exclude<Sub, "test">];
   const known = [...leaf.values, ...leaf.flags];
   if (hoisted.some((token) => token.startsWith("--") && !known.includes(flagName(token)))) return undefined;
   const parsed: ScriptsArgs = { sub: sub as Sub, match: null, json: false };

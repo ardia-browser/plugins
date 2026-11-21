@@ -60,6 +60,7 @@ hooks list ts
 hooks run ts
 on ts
 scripts new ts
+scripts test ts
 scripts install ts
 scripts uninstall ts
 scripts list ts

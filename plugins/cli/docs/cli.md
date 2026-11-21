@@ -2157,7 +2157,7 @@ parity harness rather than stripped wholesale:
 - `ardia browse` under `--json`: errors carry a code where Python's have none (see "JSON error codes"); these are the
   parity cases marked `intentional`.
 
-The TypeScript browse daemon's CDP link (M3, not served yet) differs from Python's in these ways, each covered by
+The TypeScript CDP link (M3), which the browse daemon and `ardia scripts test` both use, differs from Python's in these ways, each covered by
 `ts/tests/m3/link.test.ts`, `browser.test.ts` or the link scenarios (`docs/m3-harness.md`):
 
 - The 256 MB message cap is checked once a frame has arrived, so the frame is already in memory; Python stops reading
