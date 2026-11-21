@@ -1,0 +1,20 @@
+{
+ "steps": [
+  {"argv": ["open", "{fixture}/dialogs.html?kind=prompt", "--no-changes"], "session": "dialogs"},
+  {"argv": ["wait", "900"], "session": "dialogs"},
+  {"argv": ["dialog"], "session": "dialogs"},
+  {"argv": ["--json", "dialog", "status"], "session": "dialogs"},
+  {"argv": ["dialog", "close"], "session": "dialogs"},
+  {"argv": ["dialog", "accept", "Ada", "Lovelace"], "session": "dialogs"},
+  {"argv": ["dialog", "status"], "session": "dialogs"},
+  {"argv": ["wait", "--text", "answered"], "session": "dialogs"},
+  {"argv": ["get", "title"], "session": "dialogs"},
+  {"argv": ["--json", "dialog", "dismiss"], "session": "dialogs"},
+  {"argv": ["open", "{fixture}/dialogs.html?kind=confirm", "--no-changes"], "session": "dialogs"},
+  {"argv": ["wait", "900"], "session": "dialogs"},
+  {"argv": ["dialog", "status"], "session": "dialogs"},
+  {"argv": ["--json", "dialog", "dismiss"], "session": "dialogs"},
+  {"argv": ["wait", "--text", "answered"], "session": "dialogs"},
+  {"argv": ["get", "title"], "session": "dialogs"}
+ ]
+}

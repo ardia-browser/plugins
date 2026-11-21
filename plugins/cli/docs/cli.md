@@ -2046,8 +2046,9 @@ Its page core (slice D3: `browse/state/page.ts`, `state.ts`, `refs.ts`, `apptabs
   a call on the new document. The harness compares the calls through the `world-handle` divergence, and its replay
   serves the handle from the recorded context.
 - A lost connection is never read as an answer: a page title, a visibility check, the busy probe, the active-tab
-  probe and the setup restore pass `connection_lost` on, where Python's catch-all reads it as an empty title, a
-  visible tab, an inactive tab or lost setup (releasing the route claim).
+  probe, the setup restore and the readiness poll after `back` and `forward` pass `connection_lost` on, where Python's catch-all reads it as an empty title, a
+  visible tab, an inactive tab, lost setup (releasing the route claim) or a page still loading (polling until the
+  command's timeout).
 - Setup restored after a reattach is done in full or left to be done again: a cancel or lost connection partway keeps
   it pending, and the next use replays the steps not yet applied on that session. An init script whose registration is
   ambiguous (cancelled, timed out or answered with an unknown outcome) may be installed without its id, so the session
@@ -2067,6 +2068,23 @@ Its page core (slice D3: `browse/state/page.ts`, `state.ts`, `refs.ts`, `apptabs
   `setup_session_dropped` (an ambiguous init-script registration detached the session). They count from the TypeScript
   client onward (M1, plugins#14), whose flag list carries them. While the Python client fronts the TS daemon, its
   `command_metrics.clean()` drops names it doesn't know, and the Python side is frozen, so neither is reported then.
+- `dialog accept` and `dialog dismiss` send `Page.handleJavaScriptDialog` shielded from Ctrl-C, so the answer the
+  user asked for always reaches the dialog. The request skips the busy probe: an open dialog blocks the page's
+  scripts, so after a page call went unanswered (a `get title` behind a prompt) the probe can't be answered and Python
+  fails `dialog accept` with `page_busy`, leaving the dialog open; TypeScript answers the dialog. When the browser
+  rejects or doesn't answer the request, the daemon sends a dismiss (5 s deadline) and reports the first error. That
+  dismiss is counted (`dialog_dismissed_after_failure`) only when it went through. A dismiss the browser also rejects
+  leaves the dialog as the browser has it, and a lost connection skips the dismiss. Python sends the one request.
+- `tab close` keeps the registry's close reservation only when the close succeeded: when `Target.closeTarget` fails,
+  the reservation is released and the tab stays the session's, and after a Ctrl-C the tab goes on the list of tabs the
+  daemon keeps closing (`tab_close_interrupted`). Python finishes the reservation either way, dropping the tab from the
+  registry's opened list while it may still be open. After the Ctrl-C the session's tab is no longer that tab, and
+  another `tab close` on it answers `tab_closing`. `tab new` and `window new` queue a tab whose creation was answered
+  after a Ctrl-C for closing, as `set viewport` does; Python leaves it open.
+- `tab new` and `window new` with global page setup (`--enable`, `--init-script`, `--capture-console`) answer
+  `unsupported` until the init-script slice lands, as `open` does.
+- Two more TypeScript-only metric flags, `tab_close_interrupted` and `dialog_dismissed_after_failure`, follow the rule
+  for `offscreen_handoff_rolled_back` above.
 - The caller counts as announced to Ardia's control socket only after the handshake finished, so a cancelled one is
   tried again by the next command; Python records it before. A cancelled active-tab lookup (`tab active`) ends its HTTP
   request at once.

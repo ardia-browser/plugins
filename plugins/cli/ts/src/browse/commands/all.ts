@@ -17,6 +17,9 @@ import "../flows/flowlog.ts";
 import "../flows/flows.ts";
 import "../flows/flowrun.ts";
 import "../auth/vault.ts";
+import "./tabs.ts";
+import "./nav.ts";
+import "./reading.ts";
 import { findAct } from "../act/find-act.ts";
 import { findActions } from "./find.ts";
 

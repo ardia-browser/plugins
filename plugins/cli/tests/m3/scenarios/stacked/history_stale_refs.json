@@ -1,0 +1,13 @@
+{
+ "steps": [
+  {"argv": ["open", "{fixture}/login.html", "--no-changes"], "session": "stale"},
+  {"argv": ["open", "{fixture}/form.html", "--no-changes"], "session": "stale"},
+  {"argv": ["snapshot", "-i"], "session": "stale"},
+  {"argv": ["back"], "session": "stale"},
+  {"argv": ["--json", "click", "@e1"], "session": "stale"},
+  {"argv": ["snapshot", "-i"], "session": "stale"},
+  {"argv": ["forward"], "session": "stale"},
+  {"argv": ["--json", "click", "@e11"], "session": "stale"},
+  {"argv": ["get", "url"], "session": "stale"}
+ ]
+}

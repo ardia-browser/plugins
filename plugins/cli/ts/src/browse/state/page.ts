@@ -33,6 +33,7 @@ export const ROUTE_PATTERNS = [{ urlPattern: "*", requestStage: "Request" }];
 const BUSY_WHY = (probe: number) =>
   `the page's own scripts are keeping its tab busy, so it isn't answering. While it stays that way, commands on this tab give up after ${formatG(probe)} s instead of waiting; \`ardia browse reload\` it, or work from a lighter page (search results, the site's own API, or \`read --http <url>\`)`;
 const CRASH_SAFE = new Set(["Inspector.enable", "Page.reload", "Page.navigate"]);
+const BUSY_SAFE = new Set(["Page.handleJavaScriptDialog"]);
 const OTHER_WORLD = "same JavaScript world";
 const NO_SESSION = "Session with given id not found";
 export const FRAME_GONE = "That frame is gone. Run `ardia browse frame main` or snapshot again";
@@ -392,7 +393,7 @@ export class Page {
     const session = options.session ?? top;
     if (session === null || top === null) throw new BrowseError(DETACHED, null, "tab_detached");
     if (this.crashed && !CRASH_SAFE.has(method)) throw new BrowseError(CRASHED, null, "tab_crashed");
-    if (this.unansweredAt && monotonic() - this.unansweredAt < BUSY_MEMORY) await this.stillBusy(method);
+    if (this.unansweredAt && monotonic() - this.unansweredAt < BUSY_MEMORY && !BUSY_SAFE.has(method)) await this.stillBusy(method);
     options.guard?.();
     if (this.session !== top) throw new BrowseError(DETACHED, null, "tab_detached");
     if (session !== top && !this.oopifs.has(session)) throw new BrowseError(FRAME_GONE, null, "frame_gone");
