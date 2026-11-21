@@ -512,6 +512,17 @@ fn groups(listing: &Listing, tree: &Value) -> Shape<Rendered> {
     Ok(out)
 }
 
+const SOCKET_ERROR_CODES: [&str; 8] =
+    ["bad_request", "unknown_method", "unknown_command", "refused", "no_window", "failed", "unsupported_protocol", "password_manager_plugin"];
+
+pub fn recorded_socket_code(code: &str) -> &str {
+    if SOCKET_ERROR_CODES.contains(&code) {
+        code
+    } else {
+        "other"
+    }
+}
+
 pub fn method_failed(kind: Kind, listing: &Listing, code: &str, message: &str) -> Rendered {
     let out = Rendered::default();
     match kind {
@@ -528,7 +539,7 @@ pub fn method_failed(kind: Kind, listing: &Listing, code: &str, message: &str) -
             if code == "unknown_method" {
                 out.fail(1, Some(code), format!("ardia {command}: this Ardia doesn't know {command} yet; update Ardia"))
             } else {
-                out.fail(1, Some(code), format!("ardia {command}: {message}"))
+                out.fail(1, Some(recorded_socket_code(code)), format!("ardia {command}: {message}"))
             }
         }
     }

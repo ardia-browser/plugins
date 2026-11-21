@@ -263,6 +263,9 @@
    "apply"
   ],
   "stdin": "[{\"op\": \"tab.mute\", \"tabs\": [\"tab-1\"]}, {\"op\": \"group.create\", \"name\": \"R\", \"pinned\": false}]",
+  "error_codes": {
+   "gone": "other"
+  },
   "control": {
    "replies": {
     "apply": {

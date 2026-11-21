@@ -859,7 +859,7 @@
      "app": "Ardia",
      "version": "1.0"
     },
-    "pause": 31
+    "pause": 3
    },
    "replies": {
     "workspace": {
@@ -869,7 +869,7 @@
     }
    }
   },
-  "note": "Ardia stops reading for 31 s after hello: the 120 KB request (over the 64 KB high-water mark, under Linux's 128 KB per-argument limit) waits in drain() with no deadline, and the 30 s reply deadline starts only once it is written"
+  "note": "Ardia stops reading for 3 s after hello: the 120 KB request (over the 64 KB high-water mark, under Linux's 128 KB per-argument limit) waits in drain() and goes through once Ardia reads again, inside the 30 s deadline that covers sending and the reply"
  },
  {
   "id": "protocol--small-request-to-a-stalled-reader-times-out",

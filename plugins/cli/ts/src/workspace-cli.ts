@@ -2,6 +2,7 @@ import { openSync, closeSync, fstatSync } from "node:fs";
 import type { Option, Parsed, Positional, Spec } from "./argv.ts";
 import { call as callControl } from "./control.ts";
 import { dumps, type JsonObject, object, type Value } from "./json.ts";
+import { recordedSocketCode } from "./error-codes.ts";
 import { errnoOf, strerror } from "./paths.ts";
 import { shown } from "./printable.ts";
 import { readFd } from "./privatefs.ts";
@@ -294,7 +295,7 @@ function titlesOf(reply: JsonObject): Titles {
 }
 
 function methodFailed(context: Context, command: string, code: string, message: string): number {
-  context.noteErrorCode(code);
+  context.noteErrorCode(recordedSocketCode(code));
   if (code === "unknown_method") context.complain(`ardia ${command}: this Ardia doesn't know ${command} yet; update Ardia`);
   else context.complain(`ardia ${command}: ${message}`);
   return 1;
@@ -337,7 +338,7 @@ async function applyOps(context: Context, parsed: Parsed, command: string, ops: 
 }
 
 function codeText(code: Value | undefined): string | undefined {
-  return typeof code === "string" ? code : undefined;
+  return typeof code === "string" && code !== "" ? recordedSocketCode(code) : undefined;
 }
 
 function textOrNone(item: Value | undefined): string {

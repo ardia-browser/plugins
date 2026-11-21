@@ -654,6 +654,9 @@
    "tab-1",
    "tab-2"
   ],
+  "error_codes": {
+   "not_found": "other"
+  },
   "control": {
    "replies": {
     "apply": {
@@ -665,6 +668,89 @@
        "code": "not_found",
        "message": "no tab tab-1"
       }
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-close-failed-documented",
+  "command": "tabs close",
+  "argv": [
+   "tabs",
+   "close",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": false,
+      "applied": 0,
+      "results": [],
+      "error": {
+       "code": "no_window",
+       "message": "no tab tab-1"
+      }
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-listing-free-text-code",
+  "command": "tabs",
+  "argv": [
+   "tabs"
+  ],
+  "error_codes": {
+   "secret_text": "other"
+  },
+  "control": {
+   "replies": {
+    "workspace": {
+     "error": {
+      "code": "secret_text",
+      "message": "x"
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-groups-listing-documented-code",
+  "command": "groups",
+  "argv": [
+   "groups"
+  ],
+  "control": {
+   "replies": {
+    "workspace": {
+     "error": {
+      "code": "refused",
+      "message": "x"
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-close-refused-free-text",
+  "command": "tabs close",
+  "argv": [
+   "tabs",
+   "close",
+   "tab-1"
+  ],
+  "error_codes": {
+   "user_secret_value": "other"
+  },
+  "control": {
+   "replies": {
+    "apply": {
+     "error": {
+      "code": "user_secret_value",
+      "message": "x"
      }
     }
    }
@@ -769,7 +855,7 @@
   "control": null
  },
  {
-  "id": "m2a-groups-create-24",
+  "id": "m2a-groups-create-28",
   "command": "groups create",
   "argv": [
    "groups",
@@ -832,7 +918,7 @@
   }
  },
  {
-  "id": "m2a-groups-create-25",
+  "id": "m2a-groups-create-29",
   "command": "groups create",
   "argv": [
    "groups",
@@ -872,7 +958,7 @@
   }
  },
  {
-  "id": "m2a-groups-update-26",
+  "id": "m2a-groups-update-30",
   "command": "groups update",
   "argv": [
    "groups",
@@ -915,7 +1001,7 @@
   }
  },
  {
-  "id": "m2a-groups-update-27",
+  "id": "m2a-groups-update-31",
   "command": "groups update",
   "argv": [
    "groups",
@@ -955,7 +1041,7 @@
   }
  },
  {
-  "id": "m2a-groups-rename-28",
+  "id": "m2a-groups-rename-32",
   "command": "groups rename",
   "argv": [
    "groups",
@@ -994,7 +1080,7 @@
   }
  },
  {
-  "id": "m2a-groups-move-29",
+  "id": "m2a-groups-move-33",
   "command": "groups move",
   "argv": [
    "groups",
@@ -1036,7 +1122,7 @@
   }
  },
  {
-  "id": "m2a-groups-move-30",
+  "id": "m2a-groups-move-34",
   "command": "groups move",
   "argv": [
    "groups",
@@ -1079,7 +1165,7 @@
   }
  },
  {
-  "id": "m2a-groups-ungroup-31",
+  "id": "m2a-groups-ungroup-35",
   "command": "groups ungroup",
   "argv": [
    "groups",
@@ -1117,7 +1203,7 @@
   }
  },
  {
-  "id": "m2a-groups-close-32",
+  "id": "m2a-groups-close-36",
   "command": "groups close",
   "argv": [
    "groups",
@@ -1156,7 +1242,7 @@
   }
  },
  {
-  "id": "m2a-groups-delete-33",
+  "id": "m2a-groups-delete-37",
   "command": "groups delete",
   "argv": [
    "groups",

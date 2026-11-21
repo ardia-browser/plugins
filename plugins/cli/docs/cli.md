@@ -1925,6 +1925,18 @@ parity harness rather than stripped wholesale:
 - `ardia apply` with JSON nested deeper than about 9,994 levels: Python crashes with a `RecursionError` traceback. The
   TypeScript side prints `that isn't JSON (maximum recursion depth exceeded ...)` and exits 1. `ardia call` params at that
   depth give Python's own `is nested deeper than 64 levels` either way.
+- An error code Ardia sends that isn't one the control socket documents (`bad_request`, `unknown_method`,
+  `unknown_command`, `refused`, `no_window`, `failed`, `unsupported_protocol`, `password_manager_plugin`) is recorded
+  in telemetry as `other` by `tabs`, `groups`, `apply` and their verbs, as `ardia call` already did. Python records any
+  lowercase code as given, so text Ardia put in the code could reach telemetry.
+- One deadline covers sending a request and waiting for its answer, and the connection closes when it passes. Python
+  waits without a limit while a large request is still being written to an Ardia that stopped reading, and starts the
+  answer's deadline only once it's written; an Ardia that stalls past the whole timeout now gets `didn't answer ... in N
+  s` instead of an answer that came late.
+- `ardia events` after Ardia sends a line nested too deeply to read: Python's reader stops and the command waits
+  forever. The TypeScript side prints the events read before it, then `ardia: ... (Ardia sent a line nested too
+  deeply to read)` and exits 2. Its events queue also drops the oldest events once the waiting ones take more than
+  32 MB, counting each raw line and its parsed form, besides Python's cap of 1,000 events.
 
 ## Linux
 
