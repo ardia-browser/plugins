@@ -212,7 +212,7 @@ describe("4: open never navigates a borrowed tab", () => {
     state.attached = "TARGET";
     await state.page("TARGET");
     const navigateBefore = calls(browser, "Page.navigate");
-    const result = await dispatch(new Ctx(state, {}, "/", {}, null, "open"), "open", ["http://127.0.0.1/x.html"]);
+    const result = await dispatch(new Ctx(state, { no_changes: true }, "/", {}, null, "open"), "open", ["http://127.0.0.1/x.html"]);
     expect(calls(browser, "Target.createTarget")).toBe(1);
     expect(state.current).toBe("OWN");
     expect((result.data as Record<string, unknown>)["left"]).toBe(state.tabId("TARGET"));

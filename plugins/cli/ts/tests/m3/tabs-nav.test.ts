@@ -354,7 +354,7 @@ describe("test_browse_borrowed, ported", () => {
     expect([(result.data as Record<string, unknown>)["targetId"], state.current, state.attached]).toEqual(["USER", "USER", "USER"]);
     const userSession = browser.sent.find((entry) => entry.method === "Target.attachToTarget" && entry.params["targetId"] === "USER");
     expect(userSession).toBeDefined();
-    await dispatch(ctxOf(state, "open", { no_changes: true }), "open", ["about:blank"]).catch(() => null);
+    await dispatch(ctxOf(state, "open", { no_changes: true, timeout_ms: 200 }), "open", ["about:blank"]).catch(() => null);
     expect(browser.methods()).toContain("Target.createTarget");
     expect(browser.sent.filter((entry) => entry.method === "Page.navigate" && entry.session === "SESSION-1")).toEqual([]);
     expect(state.current).toBe("MINE");
