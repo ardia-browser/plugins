@@ -124,11 +124,12 @@ jobs:
       - name: The vendored plugin schema is ardia's
         if: matrix.os == 'ubuntu-24.04'
         run: |
+          ardia_ref=plugins-v2/native-ui-and-wiring
           set -euo pipefail
-          url=https://raw.githubusercontent.com/ardia-browser/ardia/main/docs/plugin.schema.json
+          url=https://raw.githubusercontent.com/ardia-browser/ardia/$ardia_ref/docs/plugin.schema.json
           if ! curl -fsSL "$url" -o "$RUNNER_TEMP/ardia-plugin.schema.json"; then
-            echo "::warning::ardia main doesn't publish docs/plugin.schema.json yet: the vendored schema wasn't compared"
+            echo "::warning::ardia $ardia_ref doesn't publish docs/plugin.schema.json: the vendored schema wasn't compared"
             exit 0
           fi
           diff -u "$RUNNER_TEMP/ardia-plugin.schema.json" ardia_cli/schemas/plugin.schema.json \
-            || { echo "::error::ardia_cli/schemas/plugin.schema.json isn't ardia main's docs/plugin.schema.json: copy it over"; exit 1; }
+            || { echo "::error::ardia_cli/schemas/plugin.schema.json isn't ardia $ardia_ref's docs/plugin.schema.json: copy it over"; exit 1; }
