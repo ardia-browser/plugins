@@ -182,7 +182,7 @@ def served_table(path: Path = SERVED_TABLE) -> dict[str, str]:
         if not words:
             continue
         label = " ".join(words[:-1])
-        if len(words) < 2 or words[-1] not in SERVING_SIDES or label in rows or "*" in words[:-2] or (words[-2] == "*" and len(words) != 3):
+        if len(words) < 2 or words[-1] not in SERVING_SIDES or label in rows:
             raise ValueError(f"{path.name}:{number}: each row is a command and who serves it ({' or '.join(SERVING_SIDES)}), once: {line!r}")
         rows[label] = words[-1]
     return rows
@@ -193,8 +193,8 @@ def served_row(command: str | None, served) -> str | None:
         return None
     if command in served:
         return command
-    wildcard = f"{command.split(' ', 1)[0]} *"
-    return wildcard if " " in command and wildcard in served else None
+    family = f"{command.split(' ', 1)[0]} *"
+    return family if " " in command and family in served else None
 
 
 def served_commands(path: Path = SERVED_TABLE) -> list[str]:

@@ -129,7 +129,7 @@ class ServedTable(unittest.TestCase):
         self.assertTrue(set(table.values()) <= set(harness.SERVING_SIDES))
         scratch = Path(tempfile.mkdtemp(prefix="ars", dir="/tmp"))
         try:
-            for body in ("tabs\n", "tabs go\n", "tabs rust\ntabs ts\n", "tabs rust extra\n", "* call ts\n", "call * x ts\n", "tabs open ts\ntabs open rust\n"):
+            for body in ("tabs\n", "tabs go\n", "tabs rust\ntabs ts\n", "tabs rust extra\n", "tabs open ts\ntabs open rust\n"):
                 with self.subTest(body=body):
                     (scratch / "served.txt").write_text(body)
                     with self.assertRaises(ValueError):
@@ -137,12 +137,19 @@ class ServedTable(unittest.TestCase):
         finally:
             shutil.rmtree(scratch, True)
 
-    def test_rows_name_one_or_two_words_and_a_wildcard_covers_a_family(self):
-        table = {"tabs": "rust", "tabs open": "ts", "call *": "ts"}
+    def test_rows_name_one_or_two_words_and_a_family_row_covers_its_subcommands(self):
+        table = {"tabs": "rust", "tabs open": "ts", "skills install": "ts", "call *": "ts"}
         self.assertEqual(harness.served_row("tabs open", table), "tabs open")
+        self.assertEqual(harness.served_row("skills install", table), "skills install")
         self.assertEqual(harness.served_row("call history", table), "call *")
         self.assertIsNone(harness.served_row("tabs close", table))
         self.assertIsNone(harness.served_row("call", table))
+        scratch = Path(tempfile.mkdtemp(prefix="ars", dir="/tmp"))
+        try:
+            (scratch / "served.txt").write_text("--version rust\ntabs rust\nskills install ts\ncall * ts\n")
+            self.assertEqual(harness.served_table(scratch / "served.txt"), {"--version": "rust", "tabs": "rust", "skills install": "ts", "call *": "ts"})
+        finally:
+            shutil.rmtree(scratch, True)
 
     def test_the_typescript_entry_embeds_the_same_table(self):
         source = (CLI / "ts" / "src" / "served.ts").read_text()
