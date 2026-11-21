@@ -3,7 +3,7 @@ import { dumps, type JsonObject, type Value } from "../json.ts";
 import { home } from "../paths.ts";
 import { strOf } from "../py.ts";
 import { formatG, MethodError, Unreachable } from "../stream.ts";
-import { exitStatus, type GroupChild, SpawnFailed, spawnGroup } from "../proc/group.ts";
+import { exitStatus, type GroupChild, signalGroup, SpawnFailed, spawnGroup } from "../proc/group.ts";
 import { strerror } from "../paths.ts";
 import type { Hook } from "./model.ts";
 import type { LogSink } from "./log.ts";
@@ -231,7 +231,7 @@ export class HookRunner {
       if (timedOut) status = await this.stopGroup(child, exited, pumps);
     } finally {
       this.process = undefined;
-      child.forget();
+      if (!timedOut) child.forget();
     }
     if (timedOut) this.log.write(`hook ${this.hook.name}: stopped after its ${formatG(this.hook.timeout)} s timeout (with anything it left running)`);
     else if (status !== 0) this.log.write(`hook ${this.hook.name}: ${argv[0]} exited with status ${status === null ? "None" : status}`);
@@ -248,11 +248,20 @@ export class HookRunner {
   }
 
   private async stopGroup(child: GroupChild, exited: Promise<number>, pumps: Lines[]): Promise<number | null> {
-    for (const [signal, grace] of [["SIGTERM", this.killGrace], ["SIGKILL", DRAIN_GRACE]] as const) {
-      child.signal(signal);
-      const all = await within(Promise.all([exited, ...pumps.map((entry) => entry.done)]), grace);
-      if (all !== TIMED_OUT) return all[0];
+    child.signal("SIGTERM");
+    const graceEnds = performance.now() + this.killGrace * 1000;
+    const killOnce = () => {
+      if (child.groupAlive()) child.signal("SIGKILL");
+      child.forget();
+    };
+    const drained = await within(Promise.all([exited, ...pumps.map((entry) => entry.done)]), this.killGrace);
+    if (drained !== TIMED_OUT) {
+      setTimeout(killOnce, Math.max(0, graceEnds - performance.now()));
+      return drained[0];
     }
+    killOnce();
+    const killed = await within(Promise.all([exited, ...pumps.map((entry) => entry.done)]), DRAIN_GRACE);
+    if (killed !== TIMED_OUT) return killed[0];
     child.child.stdout?.destroy();
     child.child.stderr?.destroy();
     const last = await within(exited, DRAIN_GRACE);
@@ -273,9 +282,18 @@ export class HookRunner {
   async stop(grace = 2): Promise<void> {
     this.close();
     const child = this.process;
-    if (child !== undefined && !child.exited) child.signal("SIGTERM");
-    if ((await within(this.task, grace)) === TIMED_OUT && child !== undefined) child.signal("SIGKILL");
+    if (child === undefined) {
+      await within(this.task, grace);
+      return;
+    }
+    signalGroup(child.pid, "SIGTERM");
+    const graceEnds = performance.now() + grace * 1000;
+    await within(this.task, grace);
+    if (signalGroup(child.pid, 0)) await sleep((graceEnds - performance.now()) / 1000);
+    if (signalGroup(child.pid, 0)) signalGroup(child.pid, "SIGKILL");
+    child.forget();
   }
+
 }
 
 function statusOf(child: GroupChild): number {

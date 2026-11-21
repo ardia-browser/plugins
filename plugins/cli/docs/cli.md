@@ -1904,11 +1904,14 @@ parity harness rather than stripped wholesale:
   blocking `write` in its buffered writer, so no code closes it.
 - `ardia computer`, `ardia on` and `ardia hooks`: every helper program they start (codesign, ditto, lsregister,
   launchctl, systemctl, the driver's quiet `stop` and `telemetry disable`, hook and decide programs) runs in its own
-  process group, and a timeout or a stop signals the whole group (SIGTERM, then SIGKILL after the grace), where
-  Python's `subprocess.run` timeouts kill only the child. Groups still alive when the program exits are killed.
-- Hook and decide programs, and the cua-driver that `ardia computer` hands over to, don't see `BUN_*`, `JSC_*`,
-  `NODE_*`, `UV_*` or `MIMALLOC_*` variables from the shell that started `ardia`: the router keeps them from the
-  TypeScript program (see above), and the program passes on the environment it has. Python passed them through.
+  process group. A timeout or a stop sends the group one SIGTERM, then at the end of the grace exactly one SIGKILL if
+  any member is left, whether or not the program itself has exited, and then forgets the group; Python's timeouts
+  stopped only the program, so a descendant that ignored SIGTERM and closed its output kept running. Groups still
+  alive when ardia exits are killed.
+- Hook and decide programs, and the cua-driver that `ardia computer` hands over to, inherit ardia's environment on
+  purpose, as with Python: they are programs the user configured. The one exception is that they don't see `BUN_*`,
+  `JSC_*`, `NODE_*`, `UV_*` or `MIMALLOC_*` variables from the shell that started `ardia`, because the router keeps
+  those from the TypeScript program (see above).
 - `ardia computer` hands over to cua-driver with `execve` from the libc addon, as Python's `os.execve` does, so the
   driver keeps the pid; before it, the addon marks every descriptor above 2 close-on-exec, clears the signal mask and
   ignores SIGPIPE and SIGXFSZ, which is the state Python's process hands over.

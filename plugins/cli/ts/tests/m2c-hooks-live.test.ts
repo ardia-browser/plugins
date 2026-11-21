@@ -100,7 +100,7 @@ test("a run past its timeout loses its whole process group, and a failing one is
   assert.equal(await missing.runOnce(value({ event: "tab.opened" }) as JsonObject), null);
   assert.ok(log.lines.includes("hook gone: can't run /nonexistent/x: No such file or directory"));
   for (const runner of [slow, failing, missing]) await runner.stop();
-  assert.deepEqual(liveGroups(), []);
+  await until(() => liveGroups().length === 0, 2);
 });
 
 test("a child that exits but leaves its stdout open is stopped at the deadline", async () => {
@@ -194,4 +194,44 @@ test("hooks run from a fake app survive a missing socket and log the retry once"
   await running;
   assert.equal(log.lines.filter((line) => line.endsWith("; retrying")).length, 1);
   void os;
+});
+
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const IGNORES_TERM = (pidFile: string) => `(trap '' TERM; exec >/dev/null 2>&1 </dev/null; echo $$ > ${pidFile}.self; exec sleep 30) & echo $! > ${pidFile}; wait`;
+
+test("a timed-out hook's descendant that ignores SIGTERM and closed its output is killed at the end of the grace", async () => {
+  const dir = folder();
+  const pidFile = path.join(dir, "pid");
+  const log = memoryLog();
+  const runner = new HookRunner(hook({ name: "stubborn", on: ["tab.opened"], run: ["/bin/sh", "-c", IGNORES_TERM(pidFile)], timeout: 0.4 }), log, true, 100, 0.3);
+  const started = performance.now();
+  await runner.runOnce(value({ event: "tab.opened" }) as JsonObject);
+  const descendant = Number(fs.readFileSync(pidFile, "utf8"));
+  assert.ok(log.lines.some((line) => line.startsWith("hook stubborn: stopped after its 0.4 s timeout")));
+  await until(() => !alive(descendant), 3);
+  assert.ok(performance.now() - started >= 650);
+  await until(() => liveGroups().length === 0, 2);
+  await runner.stop();
+});
+
+test("stopping the runner kills a TERM-ignoring descendant once the grace is over", async () => {
+  const dir = folder();
+  const pidFile = path.join(dir, "pid");
+  const runner = new HookRunner(hook({ name: "stubborn", on: ["tab.opened"], run: ["/bin/sh", "-c", IGNORES_TERM(pidFile)], timeout: 60 }), memoryLog(), true);
+  runner.offer(value({ event: "tab.opened" }) as JsonObject);
+  await until(() => fs.existsSync(pidFile) && fs.readFileSync(pidFile, "utf8").trim() !== "");
+  const descendant = Number(fs.readFileSync(pidFile, "utf8"));
+  const started = performance.now();
+  await runner.stop(0.3);
+  assert.ok(performance.now() - started >= 250);
+  await until(() => !alive(descendant), 2);
+  assert.deepEqual(liveGroups(), []);
 });
