@@ -121,3 +121,32 @@ test("only the app's documented error codes reach telemetry; anything else is ot
   assert.equal(methodFailed("tabs", emptyListing(), "user_typed_text", "x").errorCode, "other");
   assert.equal(methodFailed("groups", emptyListing(), "unknown_method", "x").errorCode, "unknown_method");
 });
+
+test("an over-deep line fails every pending call at once, and later calls too", async () => {
+  const { connection, peer, cleanup } = await pair();
+  try {
+    const started = performance.now();
+    const first = stopOf(connection.request("windows", undefined, 30));
+    const second = stopOf(connection.request("workspace", undefined, 30));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    peer.write(`${"[".repeat(10_000)}${"]".repeat(10_000)}\n`);
+    for (const stop of [await first, await second]) assert.deepEqual([stop.reason, stop.kind], [UNREADABLE_LINE, "lost"]);
+    assert.ok(performance.now() - started < 3000);
+    const later = await stopOf(connection.request("windows", undefined, 30));
+    assert.deepEqual([later.reason, later.kind], [UNREADABLE_LINE, "lost"]);
+  } finally {
+    cleanup();
+  }
+});
+
+test("an event with a very wide array is queued; its size is counted without spreading it into a call", async () => {
+  const { connection, peer, cleanup } = await pair();
+  try {
+    const wide = `{"event": "tab.opened", "data": [${Array.from({ length: 300_000 }, () => "0").join(",")}]}`;
+    const next = connection.nextEvent();
+    peer.write(`${wide}\n`);
+    assert.equal((await next).raw, wide);
+  } finally {
+    cleanup();
+  }
+});

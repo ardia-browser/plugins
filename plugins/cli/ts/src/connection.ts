@@ -30,7 +30,9 @@ function retainedSize(value: Value): number {
   for (let item = pending.pop(); item !== undefined; item = pending.pop()) {
     size += 16;
     if (typeof item === "string") size += item.length * 2;
-    else if (Array.isArray(item)) pending.push(...item);
+    else if (Array.isArray(item)) {
+      for (const child of item) pending.push(child);
+    }
     else if (item instanceof Map) {
       for (const [key, child] of item) {
         size += 16 + key.length * 2;
@@ -107,6 +109,8 @@ export class Connection {
         if (!(error instanceof TooDeep)) throw error;
         this.readerStopped = true;
         this.buffer = Buffer.alloc(0);
+        for (const request of this.pending.values()) request.lost ??= UNREADABLE_LINE;
+        this.pending.clear();
         this.notify();
         return;
       }
@@ -230,6 +234,7 @@ export class Connection {
 
   async request(method: string, params: Value | undefined, timeout: number): Promise<Value> {
     if (this.lost !== undefined) throw new Stop(this.lost, "closed");
+    if (this.readerStopped) throw new Stop(UNREADABLE_LINE, "lost");
     this.nextId += 1n;
     const ident = this.nextId;
     const request = object([
