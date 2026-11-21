@@ -36,6 +36,20 @@ def known_browse_commands() -> list:
     return sorted(known | set(aliases))
 
 
+DAEMON_METRICS = CLI / "ts" / "src" / "browse" / "metrics.ts"
+
+
+def daemon_metric_sets(*names: str) -> set:
+    source = DAEMON_METRICS.read_text(encoding="utf-8")
+    found = set()
+    for name in names:
+        body = re.search(rf"export const {name} = new Set\(\[(.*?)\]\);", source, re.S)
+        if body is None:
+            raise AssertionError(f"{DAEMON_METRICS.name} has no {name} set")
+        found |= set(re.findall(r'"([a-z0-9_]+)"', body.group(1)))
+    return found
+
+
 def ts_tables() -> str:
     if str(CLI) not in sys.path:
         sys.path.insert(0, str(CLI))
@@ -50,6 +64,8 @@ def ts_tables() -> str:
     flags = (command_metrics.FLAGS | command_metrics.READ_FLAGS | command_metrics.ACT_FLAGS | command_metrics.CHANGE_FLAGS
              | command_metrics.FLOW_FLAGS)
     counts = command_metrics.COUNTS | command_metrics.ACT_COUNTS | command_metrics.CHANGE_COUNTS | command_metrics.FLOW_COUNTS
+    flags |= daemon_metric_sets("FLAGS", "READ_FLAGS", "ACT_FLAGS", "CHANGE_FLAGS", "FLOW_FLAGS")
+    counts |= daemon_metric_sets("COUNTS", "ACT_COUNTS", "CHANGE_COUNTS", "FLOW_COUNTS")
     return (
         words("VALUE_FLAGS", browse_cli.VALUE_FLAGS)
         + words("BOOL_FLAGS", browse_cli.BOOL_FLAGS)
