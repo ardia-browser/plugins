@@ -1,23 +1,17 @@
 import { type JsonObject, type Value } from "./json.ts";
 import { METRIC_COUNTS, METRIC_DURATIONS, METRIC_MAX_COUNT, METRIC_MAX_MS } from "./telemetry-tables.ts";
 import { isMetricFlag } from "./command-metrics.ts";
+import { strerror } from "./paths.ts";
+import { EXCEPTION_SOURCES, EXCEPTION_TYPES, knownCommand, knownExceptionType, knownFlags, knownSubcommand, OTHER_NAME } from "./telemetry-names.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})?$/;
-const COMMAND = /^[a-z][a-z0-9-]{0,31}$/;
-const SUBCOMMAND = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/;
 const ERROR_CODE = /^[a-z][a-z0-9_]{0,40}$/;
 const FLAGS = /^(?:--?[a-z][a-z0-9-]{0,40}(?:,--?[a-z][a-z0-9-]{0,40}){0,19})?$/;
 const VERSION = /^\d{1,4}\.\d{1,4}\.\d{1,4}(?:(?:-[a-z]{1,16}\.\d{1,4})|(?:\.dev\d{1,4}))?$/;
 const WATCH_REPORT = /^FB-[A-Z0-9]{2,16}$/;
-const SOURCE = /^[a-z][a-z_]{0,39}$/;
-const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]{0,60}$/;
 const ERRNO_VALUE = /^\[Errno \d{1,4}\] [A-Za-z0-9 ,.'()/-]{1,80}$/;
-const MODULE = /^[A-Za-z_][A-Za-z0-9_.]{0,120}$/;
-const FUNCTION = /^[A-Za-z0-9_<>.]{1,100}$/;
-const OTHER = "<other>";
 const MAX_EXCEPTIONS = 10;
-const MAX_FRAMES = 50;
 const ENVIRONMENTS = ["production", "test", "dev"];
 const SERVED_BY = ["python", "rust", "ts"];
 const LEVELS = ["fatal", "error"];
@@ -51,10 +45,28 @@ function wholeUpTo(ceiling: number): Check {
   return (value) => (typeof value === "bigint" && value >= 0n && value <= BigInt(ceiling) ? value : undefined);
 }
 
+const ERRNO_PARTS = /^\[Errno (\d{1,4})\] (.*)$/s;
+
+function exactErrno(value: string): boolean {
+  const parts = ERRNO_PARTS.exec(value);
+  if (parts === null || !ERRNO_VALUE.test(value)) return false;
+  try {
+    return strerror(Number(parts[1])) === parts[2];
+  } catch {
+    return false;
+  }
+}
+
 function exceptionValue(value: Value): Value | undefined {
   if (typeof value !== "string") return undefined;
-  return IDENTIFIER.test(value) || ERRNO_VALUE.test(value) || FIXED_MESSAGES.has(value) ? value : undefined;
+  return FIXED_MESSAGES.has(value) || EXCEPTION_TYPES.has(value) || exactErrno(value) ? value : OTHER_NAME;
 }
+
+const closed = (name: (value: string) => string): Check => (value) => (typeof value === "string" ? name(value) : undefined);
+const exceptionType = closed(knownExceptionType);
+const exceptionSource = closed((value) => (EXCEPTION_SOURCES.has(value) ? value : OTHER_NAME));
+const noFrames: Check = (value) => (Array.isArray(value) ? [] : undefined);
+const flagList: Check = (value) => (typeof value === "string" && FLAGS.test(value) ? knownFlags(value) : undefined);
 
 function listOf(check: Check, limit: number): Check {
   return (value) => {
@@ -83,27 +95,11 @@ function shape(fields: [string, Check][]): Check {
   };
 }
 
-const label = (value: Value): Value | undefined => (value === OTHER || (typeof value === "string" && MODULE.test(value)) ? value : undefined);
-const functionName = (value: Value): Value | undefined => (value === OTHER || (typeof value === "string" && FUNCTION.test(value)) ? value : undefined);
-const lineNumber: Check = (value) => (value === null || (typeof value === "bigint" && value >= 0n && value < 10_000_000n) ? value : undefined);
-
-const FRAME = shape([
-  ["platform", oneOf(["custom"])],
-  ["lang", oneOf(["python"])],
-  ["function", functionName],
-  ["module", label],
-  ["filename", label],
-  ["lineno", lineNumber],
-  ["colno", (value) => (value === null ? null : undefined)],
-  ["resolved", boolean],
-  ["in_app", boolean],
-]);
-
 const EXCEPTION_ENTRY = shape([
-  ["type", text(IDENTIFIER)],
+  ["type", exceptionType],
   ["value", exceptionValue],
-  ["mechanism", shape([["type", text(SOURCE)], ["handled", boolean], ["synthetic", boolean]])],
-  ["stacktrace", shape([["type", oneOf(["raw"])], ["frames", listOf(FRAME, MAX_FRAMES)]])],
+  ["mechanism", shape([["type", exceptionSource], ["handled", boolean], ["synthetic", boolean]])],
+  ["stacktrace", shape([["type", oneOf(["raw"])], ["frames", noFrames]])],
 ]);
 
 const COMMON: [string, Check][] = [
@@ -116,17 +112,17 @@ const COMMON: [string, Check][] = [
 
 const SCHEMAS: Record<string, Map<string, Check>> = {
   cli_command: new Map([
-    ["command", text(COMMAND)],
-    ["subcommand", orNull(text(SUBCOMMAND))],
+    ["command", closed(knownCommand)],
+    ["subcommand", orNull(closed(knownSubcommand))],
     ["exit_code", exitCode],
-    ["flags", text(FLAGS)],
+    ["flags", flagList],
     ["served_by", oneOf(SERVED_BY)],
     ...COMMON,
   ]),
   $exception: new Map([
     ["$exception_level", oneOf(LEVELS)],
-    ["source", text(SOURCE)],
-    ["$exception_types", listOf(text(IDENTIFIER), MAX_EXCEPTIONS)],
+    ["source", exceptionSource],
+    ["$exception_types", listOf(exceptionType, MAX_EXCEPTIONS)],
     ["$exception_values", listOf(exceptionValue, MAX_EXCEPTIONS)],
     ["$exception_list", listOf(EXCEPTION_ENTRY, MAX_EXCEPTIONS)],
     ...COMMON,

@@ -84,12 +84,26 @@ function leftovers(root: string): { spool: string | null; failures: unknown } {
   return { spool: read("cli-queue.jsonl"), failures: state === null ? null : JSON.parse(state).failures };
 }
 
+function withoutFrames(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withoutFrames);
+  if (value === null || typeof value !== "object") return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, inner] of Object.entries(value)) {
+    if (key === "stringValue" && typeof inner === "string" && inner.includes('"frames":')) {
+      const entries = JSON.parse(inner) as { stacktrace: { frames: unknown[] } }[];
+      for (const entry of entries) entry.stacktrace.frames = [];
+      out[key] = JSON.stringify(entries);
+    } else out[key] = withoutFrames(inner);
+  }
+  return out;
+}
+
 async function both(lines: string[], consent?: Record<string, unknown>): Promise<void> {
   const pythonRoot = box(lines, consent);
   const tsRoot = box(lines, consent);
   seen.length = 0;
   const pythonResult = await viaPython(pythonRoot);
-  const pythonBodies = withoutPythonVersion(seen.splice(0));
+  const pythonBodies = withoutFrames(withoutPythonVersion(seen.splice(0)));
   const tsResult = await flush(tsRoot, URL, "dev");
   const tsBodies = withoutPythonVersion(seen.splice(0));
   assert.equal(tsResult, pythonResult);
@@ -141,7 +155,7 @@ test("a rejected batch is dropped, an oversized one split, like Python", async (
 });
 
 test("a large backlog goes in batches like Python", { timeout: 30_000 }, async () => {
-  const lines = Array.from({ length: 130 }, (_, index) => record(uid(1000 + index), { command: "x", exit_code: index }));
+  const lines = Array.from({ length: 130 }, (_, index) => record(uid(1000 + index), { command: "tabs", exit_code: index }));
   await both(lines);
 });
 
@@ -172,7 +186,7 @@ test("the flusher refuses a URL that isn't loopback or ardia.dev", async () => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test("only the CLI's events and fields are uploaded; free text is dropped", async () => {
+test("only the CLI's events and fields are uploaded; free text is dropped or replaced by other", async () => {
   const root = box([
     record(uid(3001), { command: "tabs", exit_code: 0, title: "Bank statement", flags: "--json", extra: { nested: 1 }, total_ms: 5 }),
     record(uid(3002), { command: "Free text here", exit_code: 0 }),
@@ -187,10 +201,14 @@ test("only the CLI's events and fields are uploaded; free text is dropped", asyn
   const keys = records.map((logRecord) => logRecord.attributes.map((item) => item.key).filter((key) => !key.startsWith("$lib") && !["$os", "$os_version", "arch", "$process_person_profile", "$geoip_disable"].includes(key)));
   assert.deepEqual(keys, [
     ["event", "uuid", "distinct_id", "command", "exit_code", "flags", "total_ms"],
-    ["event", "uuid", "distinct_id", "exit_code"],
+    ["event", "uuid", "distinct_id", "command", "exit_code"],
     ["event", "uuid", "distinct_id", "command"],
-    ["event", "uuid", "distinct_id", "$exception_level", "source", "$exception_types", "$exception_list", "cli_version", "$environment"],
+    ["event", "uuid", "distinct_id", "$exception_level", "source", "$exception_types", "$exception_values", "$exception_list", "cli_version", "$environment"],
   ]);
+  const valueOf = (index: number, key: string) => JSON.stringify(records[index]?.attributes.find((item) => item.key === key)?.value);
+  assert.equal(valueOf(1, "command"), JSON.stringify({ stringValue: "other" }));
+  assert.equal(valueOf(2, "command"), JSON.stringify({ stringValue: "other" }));
+  assert.equal(valueOf(3, "$exception_values"), JSON.stringify({ stringValue: '["other"]' }));
   assert.equal(fs.existsSync(path.join(root, "Telemetry", "cli-queue.jsonl")), false);
   fs.rmSync(root, { recursive: true, force: true });
 });

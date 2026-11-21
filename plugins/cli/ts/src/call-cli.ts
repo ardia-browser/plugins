@@ -17,7 +17,7 @@ const WIDEST_ID = 2n ** 53n;
 const TOO_OLD =
   "this Ardia is too old to list its methods (it has no `methods` method): update Ardia. " +
   "`ardia call` still sends the methods it knows: hello, commands, windows, workspace, apply, run, subscribe";
-const FAMILIES = new Set(
+export const FAMILIES = new Set(
   (
     "hello caller commands windows workspace offscreen apply subscribe answer run methods app window tab tabs group groups folder folders " +
     "pin pins space spaces profile profiles history bookmarks bookmark favorites cookies storage sitedata downloads download passwords " +
