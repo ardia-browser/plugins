@@ -42,6 +42,8 @@ verify_tree() {
   local root=$1 label=$2 count=0 file details expected
   for expected in "${expect_mach_os[@]}"; do
     [ -f "$root/$expected" ] || die "$label has no $expected"
+    [ ! -L "$root/$expected" ] || die "$expected in $label is a link"
+    file -b "$root/$expected" | grep -q '^Mach-O' || die "$expected in $label isn't a Mach-O, so it can't carry the team's signature"
   done
   while IFS= read -r -d '' file; do
     codesign --verify --strict --test-requirement="=$(requirement)" "$file" >/dev/null 2>&1 \
