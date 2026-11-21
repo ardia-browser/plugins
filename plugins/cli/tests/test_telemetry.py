@@ -4,6 +4,7 @@ import io
 import json
 import os
 import shutil
+import ssl
 import stat
 import subprocess
 import sys
@@ -11,6 +12,7 @@ import tempfile
 import threading
 import time
 import unittest
+import urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
@@ -219,6 +221,21 @@ class CommandEventTest(TelemetryCase):
         records = self.spool()
         self.assertEqual([record["event"] for record in records], ["cli_command"])
         self.assertEqual(records[0]["properties"]["error_code"], "stdout_closed")
+
+    def test_a_read_http_certificate_failure_is_sent_as_a_code_without_the_site(self):
+        verify = ssl.SSLCertVerificationError(1, "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate")
+        with mock.patch("urllib.request.urlopen", side_effect=urllib.error.URLError(verify)):
+            status, _, err = self.run_cli("browse", "read", "--http", "https://private-site.example/secret/page?token=abc")
+        self.assertEqual(status, 1)
+        self.assertIn("certificate verify failed", err)
+        record, = self.spool()
+        props = record["properties"]
+        self.assertEqual((props["command"], props["subcommand"], props["exit_code"]), ("browse", "read", 1))
+        self.assertEqual(props["error_code"], "fetch_cert_untrusted")
+        self.assertIn("--http", props["flags"].split(","))
+        text = self.spool_text()
+        for leak in ("private-site", "secret/page", "token=abc"):
+            self.assertNotIn(leak, text)
 
     def test_subcommands_unknown_commands_and_help(self):
         self.run_cli("config", "path")

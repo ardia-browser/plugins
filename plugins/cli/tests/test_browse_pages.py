@@ -4,9 +4,12 @@ import json
 import os
 import time
 import shutil
+import socket
+import ssl
 import sys
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -15,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ardia_cli.browse import cli as browse_cli
 from ardia_cli import command_metrics
-from ardia_cli.browse import commands, daemon, readpages, script
+from ardia_cli.browse import commands, daemon, readpages, readurl, script
 from ardia_cli.browse.errors import BrowseError, OutcomeUnknown, Usage
 
 SCRATCH = Path.home() / "ardia-scratch"
@@ -809,6 +812,72 @@ class ReadRouting(unittest.TestCase):
         self.assertRegex(result.data["pages"][0]["readAt"], r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC$")
         self.assertIn("=== [2/2] ✗ http://a/bad\nhttp://a/bad answered HTTP 404", result.text)
         self.assertTrue(result.failed)
+
+
+class FetchErrorCodes(unittest.TestCase):
+    URL = "https://secret-host.example/private/path?token=abc"
+
+    def failing(self, error):
+        with mock.patch("urllib.request.urlopen", side_effect=error):
+            with self.assertRaises(BrowseError) as caught:
+                readurl.fetch(self.URL, 5)
+        return caught.exception
+
+    def test_a_certificate_the_store_does_not_trust_is_told_apart(self):
+        verify = ssl.SSLCertVerificationError(1, "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate")
+        error = self.failing(urllib.error.URLError(verify))
+        self.assertEqual(error.code, "fetch_cert_untrusted")
+        self.assertEqual(error.message, f"Couldn't fetch {self.URL}: {verify}")
+
+    def test_other_failures_get_their_own_kind(self):
+        cases = [
+            (urllib.error.URLError(ssl.SSLError(1, "[SSL: TLSV1_ALERT_PROTOCOL_VERSION] tlsv1 alert protocol version")), "fetch_tls"),
+            (urllib.error.URLError(socket.gaierror(-2, "Name or service not known")), "fetch_dns"),
+            (urllib.error.URLError(TimeoutError("timed out")), "fetch_timeout"),
+            (TimeoutError("timed out"), "fetch_timeout"),
+            (socket.timeout("timed out"), "fetch_timeout"),
+            (urllib.error.URLError(ConnectionRefusedError(111, "Connection refused")), "fetch_refused"),
+            (ConnectionRefusedError(111, "Connection refused"), "fetch_refused"),
+            (urllib.error.URLError(ConnectionResetError(104, "Connection reset by peer")), "fetch_failed"),
+            (urllib.error.URLError("unknown url type: x"), "fetch_failed"),
+            (OSError("boom"), "fetch_failed"),
+        ]
+        for raised, code in cases:
+            with self.subTest(raised=repr(raised)):
+                self.assertEqual(self.failing(raised).code, code)
+
+    def test_a_certificate_error_raised_bare_is_still_a_certificate_error(self):
+        self.assertEqual(self.failing(ssl.SSLCertVerificationError(1, "certificate verify failed")).code, "fetch_cert_untrusted")
+
+    def test_a_code_is_one_telemetry_keeps_and_carries_no_url(self):
+        from ardia_cli import telemetry
+
+        for reason in (ssl.SSLCertVerificationError(1, "x"), ssl.SSLError(1, "x"), socket.gaierror(-2, "x"), TimeoutError(), ConnectionRefusedError(), OSError()):
+            code = self.failing(urllib.error.URLError(reason)).code
+            self.assertRegex(code, telemetry.ERROR_CODE)
+            self.assertNotIn("secret-host", code)
+
+    def test_an_http_status_is_not_a_fetch_failure(self):
+        refused = urllib.error.HTTPError(self.URL, 404, "Not Found", {}, None)
+        with mock.patch("urllib.request.urlopen", side_effect=refused):
+            self.assertEqual(readurl.fetch(self.URL, 5), (404, "", "", self.URL))
+
+    def test_the_command_reports_the_code_to_telemetry(self):
+        from ardia_cli import telemetry
+
+        verify = ssl.SSLCertVerificationError(1, "certificate verify failed")
+        stderr = io.StringIO()
+        with mock.patch("urllib.request.urlopen", side_effect=urllib.error.URLError(verify)), \
+                mock.patch.object(telemetry, "note_error_code") as noted, mock.patch("sys.stderr", stderr):
+            error = None
+            try:
+                readurl.run(self.URL, {}, {})
+            except BrowseError as caught:
+                error = caught
+            self.assertIsNotNone(error)
+            browse_cli.print_error(error, False)
+        noted.assert_called_once_with("fetch_cert_untrusted")
+        self.assertIn("Couldn't fetch", stderr.getvalue())
 
 
 class ScriptPieces(unittest.TestCase):
