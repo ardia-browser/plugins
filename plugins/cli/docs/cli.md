@@ -534,7 +534,7 @@ PNG in Python, so nothing is added to the page. The page still sees what a perso
 focus, scrolling, and the DOM changes those lead to (`select` and `pushstate` dispatch their `input`/`change` and
 `popstate` events from the isolated world, and `fill` on a date, time or other typed input its `input`/`change`). An
 action's network watch uses the Network domain of the command's own CDP session, which the page can't observe. Only `eval`, `wait --fn`, init scripts and the React hook run in the
-main world. `wait --fn` is the caller's JavaScript like `eval`, so it runs where the page's own globals are; it's
+main world (`eval --isolated` and `wait --fn … --isolated` don't). `wait --fn` is the caller's JavaScript like `eval`, so it runs where the page's own globals are; it's
 evaluated every 100 ms until it's truthy. There's no `--enable-automation`.
 
 A tab `open` makes in the background tells its page the window it belongs to from its first script:
@@ -1955,11 +1955,10 @@ connection of its own, asking only read-only questions (`hello`, `workspace`, `w
 connection, or one in a case not marked `fallback`, is a mismatch. `--command NAME` and `--case ID` narrow a run, `--keep` keeps both
 sandboxes, and `--report` prints the table as JSON (per command: cases, passing, native, served) for a given commit.
 
-The Rust entry stays `bin/ardia` and routes. A call whose stdout or stderr is open read-only or non-blocking goes to Python
-whatever its row says, since Python's failure there is an unhandled exception native code can't reproduce, and so does
-a call started with fd 0, 1 or 2 closed (noted by a constructor that runs before Rust's runtime reopens them on
-`/dev/null`; Python then gets them closed again), and so does a call with fd 0, 1 or 2 open on a directory, which CPython's
-`init_sys_streams` refuses at startup (`<stdin> is a directory, cannot continue`, status 1). A listing whose stdout later fails with anything but EPIPE ends as
+A call started with fd 0, 1 or 2 closed, with stdout open read-only, or with fd 0, 1 or 2 open on a directory runs the
+command in TypeScript: output to a closed stdout is dropped, a read-only stdout fails with `ardia <command>: Bad file
+descriptor` (status 1). Python fails there at startup or crashes (`AttributeError` on a closed stdout, `OSError: [Errno
+9]` and status 120 on a read-only one, `<stdin> is a directory, cannot continue` from CPython's `init_sys_streams`). A listing whose stdout later fails with anything but EPIPE ends as
 Python's would after its traceback. Each line is written as CPython 3.13's `BufferedWriter` writes it (its buffer is
 stdout's `st_blksize`): straight to the descriptor while what is left is at least one buffer long, then the shorter rest
 through the buffer. A failure while writing straight leaves nothing behind, so the call prints the exception line and
@@ -2064,11 +2063,8 @@ status, the lines Python prints on stderr for a failure (its final exception lin
 block) and the telemetry it records, except for these, each asserted by name in `tests/test_closed_stdout.py` and the
 parity harness rather than stripped wholesale:
 
-- A call Python serves after a native hand-back (status 253) may show one extra control connection before Python's own,
-  holding only read-only questions: the native side asked before it found it couldn't serve the reply exactly.
-- With a `MIMALLOC_*` variable set (in any case), Python's own bundled mimalloc prints its diagnostics on stderr, while
-  a natively served call prints none: the router keeps those variables from the TypeScript program so Bun's mimalloc
-  can't change what it prints or how it runs, and the Rust side has no mimalloc.
+- With a `MIMALLOC_*` variable set (in any case), Bun's own mimalloc reads it, so the diagnostics it prints on stderr,
+  if any, are Bun's, not those of Python's bundled mimalloc.
 - Python's traceback, the `Traceback (most recent call last):` header and its frames, isn't printed; the exception line
   and any `Exception ignored ...` block are. A `$exception` telemetry event carries the same type, value, mechanism
   and level, with an empty `stacktrace.frames`: the frames name Python's own functions and line numbers. So that event
@@ -2131,7 +2127,7 @@ parity harness rather than stripped wholesale:
   batch line and eval joins the pieces with spaces, so `eval document.querySelectorAll("[title]").length` ran as
   `querySelectorAll([title])` (5 of 27 bench runs retried for it). The TypeScript daemon reads the code as the rest of
   the line after the command word and its leading flags; a single fully quoted argument loses only its outer quotes, and
-  trailing `--timeout`, `--out`, `--max-output` (and eval's `--stdin`, `--main-world`) stay flags. Other lines are
+  trailing `--timeout`, `--out`, `--max-output` (and eval's `--stdin`, `--main-world`, `--isolated`) stay flags. Other lines are
   split as before. Test: `ts/tests/batch-code-line.test.ts`.
 - `ardia browse`: a value in an argument slot that takes user text is never read as a shared option: the user and
   password of `set credentials|auth`, the text of `fill` and `type`, `keyboard type|inserttext`'s text, and the values
@@ -2409,10 +2405,6 @@ Its read side (slice D4: `browse/snapshot/collect.ts`, `take.ts`, `browse/read/`
   exception line (`FileNotFoundError: [Errno 2] No such file or directory: '<path>'`). A file that isn't UTF-8 or a
   state file that isn't JSON reads `UnicodeDecodeError: 'utf-8' codec can't decode the file: invalid utf-8` or
   `JSONDecodeError: Expecting value: line 1 column 1 (char 0)`, without Python's byte position.
-- `find` serves the `text` action itself. Its other actions are D5's (`findActions.act`), so until D5 lands they
-  answer `unsupported` once the element is found. `snapshot`'s site-notes and saved-flow headers are D7's
-  (`snapshotHeaders`). `diff screenshot`, `diff url --screenshot` and React hydration in `vitals` are D5's and D6's
-  (`mediaHooks`).
 - A snapshot records each frame's document (its loader) when it reads that frame's tree, and checks it again before it
   names clickable elements, before it reads field values and before it hands out refs. If a document changed in
   between, the snapshot fails with `document_changed` (`snapshot_document_changed`) instead of mixing two documents' refs.
@@ -2429,12 +2421,12 @@ commands in `browse/commands/act.ts` and `batch.ts`) follows `actions.py`, `inpu
 observer, `react.py` and `batch`, except for these, each covered by `ts/tests/m3/act-ported.test.ts`, the `act/d5_*`
 harness scenarios or the human tier (`tests/m3/human_act.py`):
 
-- On macOS every editing shortcut carries its editing command on `Input.dispatchKeyEvent` (ardia#2812 row 20): Meta
-  with a, c, x, v and z (`selectAll`, `copy`, `cut`, `paste`, `undo`), Shift+Meta+z (`redo`), Meta and Alt with the
-  arrows (line and word movement, with `AndModifySelection` under Shift), and with Backspace and Delete (line and word
-  deletion). Linux and Windows send none, and Control is not an editing modifier on macOS. Python sends `selectAll`,
-  `undo` and `redo` for Control or Meta with a, z, y and Shift+z on every platform. The harness compares this through
-  the `editing-commands` divergence and fails a TS run that sends a macOS Meta shortcut without its command.
+- Editing commands on `Input.dispatchKeyEvent`: as in Python, Control or Meta with a, z, y and Shift+z send `selectAll`,
+  `undo` and `redo` on every platform, so `press Control+a` still selects all on a Mac. On macOS every other editing
+  shortcut also carries its command (ardia#2812 row 20): Meta with c, x and v (`copy`, `cut`, `paste`), Meta and Alt
+  with the arrows (line and word movement, with `AndModifySelection` under Shift), and with Backspace and Delete (line
+  and word deletion); Linux and Windows send only Python's three. The harness compares this through the
+  `editing-commands` divergence and fails a TS run that sends a macOS Meta shortcut without its command.
 - `click --touch` (new) taps only when the page itself reports touch (`navigator.maxTouchPoints` above 0 and
   `ontouchstart` present, so whichever client turned emulation on); otherwise it is a mouse click and the answer says
   so (ardia#2812 row 1). No other command sends a touch event, and the harness fails a TS run that sends one before
@@ -2472,17 +2464,19 @@ Its scripting, flows and raw-access commands (slice D7: `browse/commands/{pagejs
 each covered by `ts/tests/m3/d7.test.ts`, the `d7.*` function oracle (`tests/m3/oracle_fns_d7.py`) or the `js/*`
 scenarios:
 
-- `eval` runs in the `ardia-browse` isolated world (ardia#2812 rows 8 and 9): `Runtime.callFunctionOn` on the world's
-  handle with `function (source) { return (0, eval)(source); }`, where Python sends a main-world `Runtime.evaluate`.
-  The page's DOM is the same; its own JavaScript globals (`window.app`, a framework's store) aren't there, and
-  nothing the code defines leaks into the page. `eval --main-world` keeps Python's call exactly. A `ReferenceError`
-  in the isolated world adds a line saying so (`eval_isolated_reference_error`); the wrapper's own stack frames are
-  taken out of an error, so it reads as Python's does. `clipboard read` goes through the same isolated evaluation.
-  The harness compares it through the `eval-isolated` divergence.
+- `eval` and `wait --fn` run in the page's main world by default, with Python's exact `Runtime.evaluate` (no
+  `Runtime.enable`, no context id), and `--main-world` is accepted and changes nothing. `--isolated` opts into the
+  `ardia-browse` isolated world (ardia#2812 rows 8 and 9): `Runtime.callFunctionOn` on the world's handle with
+  `function (source) { return (0, eval)(source); }`. There the page's DOM is the same, its own JavaScript globals
+  (`window.app`, a framework's store) aren't there, and nothing the code defines leaks into the page. A
+  `ReferenceError` under `--isolated` adds a line saying so (`eval_isolated_reference_error`); the wrapper's own stack
+  frames are taken out of an error, so it reads as Python's does. `clipboard read` always uses the isolated
+  evaluation. Python has neither flag. The harness compares the isolated form through the `eval-isolated` divergence.
 - `script`'s controller lives in the isolated world of its temporary tab: it is installed with
   `Runtime.callFunctionOn` on the world's handle and returned by reference, and its worker is started from there, so
   neither `__ardiaScript` nor the worker is visible to a page (`script-isolated` divergence). Every later controller
-  call is Python's, on the controller's own object id. `page.evaluate()` inside a script is `eval`, so it is isolated too.
+  call is Python's, on the controller's own object id. `page.evaluate()` and `page.eval()` inside a script are `eval`, so
+  they run in the page's main world, as in Python.
 - `cdp`, `eval`, init scripts and the raw session per tab and per browser follow plugins#11 (full-control/cli
   3917106), which isn't on main yet: its params checks, timeouts, `result_too_large`, `borrowed_tab`, the 16-attach cap
   and the `using` hold on `--target` tabs. Integers in `cdp` params are sent exactly, past 2^53 too, as Python sends them.
@@ -2490,10 +2484,6 @@ scenarios:
   permission to the tab's origin with `Browser.grantPermissions` ahead of any prompt (`permission_granted`). A prompt
   already on screen isn't answered; that needs Ardia's control socket to offer it. Python has no such setting and
   answers `Unknown setting: permission`.
-- `set credentials`, `flow run`'s page tier and `auth login`'s typing come from slices D6, D4 and D5: until they land,
-  `set credentials` and `auth login` answer `unsupported`, and `flow run` opens its reader tab and waits for
-  `domcontentloaded` and `load` without D4's network settle. Flow steps record no requests until D5's network watch
-  calls `flowlog.capture`.
 - The flow log, the hinted sites and the raw sessions live beside the session's state, not in Python's `extras`
   dictionary: nothing outside these modules can see or change them.
 - Keychain and plugin processes are started without a shell, from an argv array, and the Keychain secret goes only to
@@ -2552,11 +2542,10 @@ scenarios:
 - The temporary tabs D2 opens carry `#ardia-temp-<nonce>` in their `about:blank` URL; the harness's `temp-tab-nonce`
   rule compares them with Python's plain `about:blank`.
 
-- `ardia call`, `methods`, `run`, `events`, `apply` and the `tabs` and `groups` verbs serve from TypeScript only for an
-  argv argparse reads one way: exact option names (no abbreviations), option values that don't start with `-`, no `--`,
-  and the positional arguments together in one run. Anything else (help, a usage error, `--opt=value` on a switch, a
-  split positional run that Python 3.13 still accepts) goes to Python before anything is sent, so it prints exactly
-  what argparse prints.
+- `ardia call`, `methods`, `run`, `events`, `apply` and the `tabs` and `groups` verbs read their arguments with narrow
+  parsers for the shapes argparse reads one way. Any other argv (help, a usage error, an abbreviated option,
+  `--opt=value` on a switch, a split positional run that Python 3.13 still accepts) is read by M2-F's argparse
+  (`ts/src/argparse.ts`), which prints exactly what CPython's argparse prints, before anything is sent.
 - An `ardia run` whose `commands` catalog, or whose command's `variants`, is a number or `false` (not something Python
   can iterate): Python crashes with a `TypeError` traceback while building the "did you mean" hint, after Ardia has
   already refused the command. The TypeScript side prints Ardia's refusal without a hint and exits 1.
@@ -2628,9 +2617,7 @@ scenarios:
   stopped only the program, so a descendant that ignored SIGTERM and closed its output kept running. Groups still
   alive when ardia exits are killed.
 - Hook and decide programs, and the cua-driver that `ardia computer` hands over to, inherit ardia's environment on
-  purpose, as with Python: they are programs the user configured. The one exception is that they don't see `BUN_*`,
-  `JSC_*`, `NODE_*`, `UV_*` or `MIMALLOC_*` variables from the shell that started `ardia`, because the router keeps
-  those from the TypeScript program (see above).
+  purpose, as with Python: they are programs the user configured, and they see the user's whole environment.
 - `ardia computer` hands over to cua-driver with `execve` from the libc addon, as Python's `os.execve` does, so the
   driver keeps the pid; before it, the addon marks every descriptor above 2 close-on-exec, clears the signal mask and
   ignores SIGPIPE and SIGXFSZ, which is the state Python's process hands over.
@@ -2639,9 +2626,6 @@ scenarios:
 - A cua-driver download that fails prints `couldn't download <asset>: <reason>` with Bun's network error as the
   reason, where Python printed urllib's (`<urlopen error ...>`, `HTTP Error 404: Not Found`); the https-only rule,
   the redirect refusal and the checksum check are the same.
-- `--help` for `ardia computer setup`, `ardia computer mcp-config`, `ardia hooks <command>` and `ardia on` is served
-  only at 80 columns, and an argument error only when its usage line fits the terminal; at other widths argparse
-  wraps the text and Python serves the call.
 
 - `ardia scripts` with a hand-edited `meta.json` whose fields have the wrong types (a `matches` that isn't a list of
   text, a `name` that isn't text, an `installed_at` that doesn't compare with the others'): Python fails with a

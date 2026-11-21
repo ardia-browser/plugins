@@ -35,15 +35,14 @@ live, so input works without switching the user's view. On one that doesn't, `op
 
 ## Refs
 
-A ref belongs to its document. After a navigation, a new document or an Ardia restart it's reported as stale
-(`Stale ref @e4: … Run snapshot again`). When the page redraws an element in place, the ref follows the new one
-(`→ @e4 was redrawn, so this used the same button "Save", now @e19`) only if its role and name were and still are
-unique on the page, inside the same named dialog, row or form; otherwise the error names the new ref. An element
+A ref points only at the element it was issued for. When that element is gone (a navigation, a new document, a
+redraw, an Ardia restart), the command fails with `stale_ref`: ``Stale ref @e4: … Run `ardia browse snapshot -i` again and use the new
+refs``, or, when the same element came back under a new ref, `… is now @e19 … use that ref`. An element
 keeps its number across snapshots of the same page, and a number never moves to another element. Long runs of one role fold into one line in change reports
 (`+ 48 options in combobox "Start time" (…; e8…e55)`); the refs in it work.
 
 In a `batch`, a line can carry its own flags (`--no-changes`), and a last line `close` closes your tabs once every
-line succeeded. On `stale_ref`, the answer has the new refs.
+line succeeded. On `stale_ref`, take a new snapshot (or use the ref the error names) and rerun from that line.
 
 ## Custom inputs, covered elements, drag
 
@@ -81,6 +80,8 @@ reason (`data.reason`) and, for a tab, what Ardia has there. Pick another tab or
   prints.
 - `tab_detached`: Ardia took the tab away mid-command (it closed, crashed or went to sleep). Run the command again;
   a multi-page `read` already retries that page in a new tab.
+- `frame_gone`: the frame chosen with `ardia browse frame` is gone. Run `ardia browse frame main` or pick another frame.
+- `attaches_unanswered`: Ardia hasn't answered DevTools attaches yet. Retry, or `ardia browse close` the session.
 - `setup_lost`: the tab was attached again after Ardia detached it, but the init scripts, `set` overrides or routes the
   error names couldn't be put back, so they are off. Set them again, then rerun the command.
 - `--session name` (or `AGENT_BROWSER_SESSION`) gives its own tabs, refs and captures; cookies and logins are the
@@ -90,7 +91,8 @@ reason (`data.reason`) and, for a tab, what Ardia has there. Pick another tab or
 
 Snapshots, `read` and locating run in an isolated world or through the browser; the page sees only what a person's
 input would cause. `eval`, `wait --fn`, `page.evaluate` in scripts, init scripts and `open --enable react-devtools` run
-in the page's own world. `console` and `errors` start capturing on first use (or with `open --capture-console`).
+in the page's own world, where its globals are; `eval --isolated` (and `wait --fn … --isolated`) run in an isolated
+world instead, which shares the DOM but leaves nothing the page can see. `console` and `errors` start capturing on first use (or with `open --capture-console`).
 
 ## Output cap
 
