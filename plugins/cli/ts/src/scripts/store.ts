@@ -58,6 +58,8 @@ function byInstall(left: JsonObject, right: JsonObject): number {
   }
 }
 
+type Committed = { id: string; aside: string | null; kind: "added" | "replaced" | "removed" };
+
 export class Store {
   readonly path: string;
   rootFd: number | null = null;
@@ -299,23 +301,24 @@ export class Store {
     } else plan = current.map((meta) => [meta, recordId(meta)]);
     let stagedExtension: string | null = null;
     let oldExtension: string | null = null;
-    let published = false;
+    let committed: Committed | null = null;
     try {
       stagedExtension = plan.length > 0 ? this.buildExtension(plan, generation) : null;
+      if (record !== null) committed = this.commitRecord(stagedRecord, recordId(record), add === undefined);
+      stagedRecord = null;
       if (plan.length === 0 && this.extensionPresent()) writeAtomic(root, GENERATION, generationText(generation));
       oldExtension = this.publishExtension(stagedExtension);
-      published = true;
-      if (record !== null) this.commitRecord(stagedRecord, recordId(record), add === undefined);
     } catch (error) {
-      if (published) {
+      if (committed !== null) {
         try {
-          this.restoreExtension(stagedExtension, oldExtension);
+          this.undoRecord(committed);
         } catch {}
       }
       if (stagedRecord) removeTree(this.recordsFd as number, stagedRecord);
-      if (stagedExtension) removeTree(root, stagedExtension);
+      if (stagedExtension && exists(root, stagedExtension)) removeTree(root, stagedExtension);
       throw error;
     }
+    if (committed?.aside) removeTree(this.recordsFd as number, committed.aside);
     for (const leftover of [oldExtension, stagedExtension]) {
       if (leftover && exists(root, leftover)) removeTree(root, leftover);
     }
@@ -323,18 +326,29 @@ export class Store {
     return [record, generation];
   }
 
-  commitRecord(staged: string | null, id: string, removing: boolean): void {
+  commitRecord(staged: string | null, id: string, removing: boolean): Committed {
     const records = this.recordsFd as number;
     if (removing) {
-      const trash = `.old-${id}-${tokenHex()}`;
-      renameIn(records, id, trash);
-      removeTree(records, trash);
-      return;
+      const aside = `.old-${id}-${tokenHex()}`;
+      renameIn(records, id, aside);
+      return { id, aside, kind: "removed" };
     }
     if (exists(records, id)) {
       if (!isDir(lstatAt(records, id).mode)) throw new StoreError(`${this.path}/scripts/${id} isn't a folder the ardia command made`);
       swap(records, staged as string, id);
-      removeTree(records, staged as string);
-    } else renameIn(records, staged as string, id);
+      return { id, aside: staged as string, kind: "replaced" };
+    }
+    renameIn(records, staged as string, id);
+    return { id, aside: null, kind: "added" };
   }
+
+  undoRecord(committed: Committed): void {
+    const records = this.recordsFd as number;
+    if (committed.kind === "removed") renameIn(records, committed.aside as string, committed.id);
+    else if (committed.kind === "replaced") {
+      swap(records, committed.aside as string, committed.id);
+      removeTree(records, committed.aside as string);
+    } else removeTree(records, committed.id);
+  }
+
 }

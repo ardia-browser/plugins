@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { install, refresh } from "../src/skills.ts";
 import { SKILL_FILES } from "../src/skill-files.ts";
+import "./libc-loaded.ts";
 
 let home = "";
 let saved: string | undefined;

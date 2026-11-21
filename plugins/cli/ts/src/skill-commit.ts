@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
-import { chmodSync, constants, copyFileSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, constants, copyFileSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { swapAt } from "./libc.ts";
 import { join } from "./paths.ts";
 
 export class SkillError extends Error {}
@@ -92,11 +93,39 @@ function writeInto(stage: string, shown: string, name: string, data: Buffer): vo
   chmodSync(target, 0o644);
 }
 
+const SWAP_UNSUPPORTED = new Set(["ENOTSUP", "EOPNOTSUPP", "EINVAL", "ENOSYS", "EXDEV"]);
+
+function asideOf(parent: string, name: string): string {
+  return join(parent, `.${name}.old`);
+}
+
+export function recoverAside(parent: string, name: string): void {
+  const aside = asideOf(parent, name);
+  const left = lstatOrUndefined(aside);
+  if (left === undefined || left.isSymbolicLink() || !left.isDirectory()) return;
+  if (lstatOrUndefined(join(parent, name)) === undefined) renameSync(aside, join(parent, name));
+  else rmSync(aside, { recursive: true, force: true });
+}
+
+function swapped(parent: string, stageName: string, name: string): boolean {
+  const dir = openSync(parent, constants.O_RDONLY | constants.O_DIRECTORY);
+  try {
+    swapAt(dir, stageName, name);
+    return true;
+  } catch (error) {
+    if (SWAP_UNSUPPORTED.has(String((error as { code?: unknown }).code))) return false;
+    throw error;
+  } finally {
+    closeSync(dir);
+  }
+}
+
 export function commitPack(folder: string, dirs: string[], previous: string[], files: [string, Buffer][], markerName: string, marker: Buffer): void {
   const parent = safeParent(folder, dirs, true);
   const found = lstatOrUndefined(folder);
   if (found !== undefined && !found.isDirectory() && !found.isSymbolicLink()) throw new SkillError(`${folder} isn't a folder; move it away first`);
   const name = folder.slice(folder.lastIndexOf("/") + 1);
+  recoverAside(parent, name);
   const stage = mkdtempSync(join(parent, `.${name}.stage-`));
   try {
     const existing = lstatOrUndefined(folder);
@@ -107,8 +136,8 @@ export function commitPack(folder: string, dirs: string[], previous: string[], f
     writeInto(stage, folder, markerName, marker);
     chmodSync(stage, existing !== undefined && existing.isDirectory() && !existing.isSymbolicLink() ? existing.mode & 0o7777 : 0o777 & ~process.umask());
     if (existing === undefined) renameSync(stage, folder);
-    else {
-      const old = join(parent, `.${name}.old-${randomBytes(6).toString("hex")}`);
+    else if (!swapped(parent, stage.slice(stage.lastIndexOf("/") + 1), name)) {
+      const old = asideOf(parent, name);
       renameSync(folder, old);
       try {
         renameSync(stage, folder);

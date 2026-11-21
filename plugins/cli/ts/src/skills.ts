@@ -5,7 +5,7 @@ import { errnoOf, home, join, strerror } from "./paths.ts";
 import { reprStr } from "./py.ts";
 import { codePoints, utf8 } from "./pystr.ts";
 import { CUA_VERSION, Refused, skillPack } from "./cua-skill.ts";
-import { chainIsSafe, commitPack, replaceFile, safeParent, SkillError } from "./skill-commit.ts";
+import { chainIsSafe, commitPack, recoverAside, replaceFile, safeParent, SkillError } from "./skill-commit.ts";
 import { SKILL_FILES, SKILL_HASHES } from "./skill-files.ts";
 import { cliHome } from "./usage.ts";
 import { cliVersion } from "./version.ts";
@@ -147,6 +147,7 @@ function safeRelative(name: Value): name is string {
 }
 
 function readMarker(folder: string, skill = SKILL_NAME): JsonObject | undefined {
+  recoverFolder(folder);
   const marker = join(folder, MARKER);
   if (isLink(marker) || !isFile(marker)) return undefined;
   let data: Value | undefined;
@@ -198,7 +199,14 @@ function sameHashes(found: Map<string, string>, version: JsonObject): boolean {
 
 const SKILL_DIRS = Object.values(TARGETS).flat();
 
+function recoverFolder(folder: string): void {
+  try {
+    if (chainIsSafe(folder, SKILL_DIRS)) recoverAside(parent(folder), folder.slice(folder.lastIndexOf("/") + 1));
+  } catch {}
+}
+
 function ownedFiles(folder: string, adopt = false): string[] | undefined {
+  recoverFolder(folder);
   if (!chainIsSafe(folder, SKILL_DIRS) || isLink(folder) || !isDir(folder)) return undefined;
   const marked = markedFiles(folder);
   if (marked !== undefined || !adopt) return marked;
