@@ -17,6 +17,8 @@ Examples:
   ardia windows --json
   ardia tabs --json
   ardia groups create tab-1 tab-2 --name Work --icon \u{1f680}
+  ardia methods
+  ardia call run -p command=newTab
 `;
 
 const COMMANDS: [string, string][] = [
@@ -38,6 +40,8 @@ const COMMANDS: [string, string][] = [
   ["tabs", "list and organize tabs"],
   ["groups", "list and organize tab groups"],
   ["apply", "apply several tab and group operations at once (JSON)"],
+  ["call", "send any method to Ardia's control socket (ardia methods lists them)"],
+  ["methods", "list the methods ardia call can send"],
   ["plugins", "install, list and manage plugins"],
   ["feedback", "report a problem or idea to Ardia's developer (agents welcome)"],
   ["star", "star the Ardia repo on GitHub, only after the user says yes"],

@@ -638,7 +638,7 @@ class Installation:
         return self.scratch / f"c{number}"
 
 
-def reap(marker: str) -> None:
+def marked(marker: str, containing: str = "") -> list[int]:
     if sys.platform == "darwin":
         listing = subprocess.run(["/bin/ps", "-x", "-E", "-ww", "-o", "pid=,command="], capture_output=True).stdout.decode("utf-8", "replace")
     else:
@@ -653,13 +653,20 @@ def reap(marker: str) -> None:
             except OSError:
                 continue
     pattern = re.compile(rf"(ARDIA_PARITY_BOX=)?{re.escape(marker)}(/|\s|$)")
+    found = []
     for line in listing.splitlines():
         pid_text, _, rest = line.strip().partition(" ")
-        if pid_text.isdigit() and int(pid_text) != os.getpid() and pattern.search(rest):
-            try:
-                os.kill(int(pid_text), signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
-                pass
+        if pid_text.isdigit() and int(pid_text) != os.getpid() and pattern.search(rest) and containing in rest:
+            found.append(int(pid_text))
+    return found
+
+
+def reap(marker: str, containing: str = "") -> None:
+    for pid in marked(marker, containing):
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
 
 
 def write_stub(directory: Path, name: str, spec: dict, log: Path):
