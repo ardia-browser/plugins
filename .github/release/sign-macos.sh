@@ -82,15 +82,29 @@ check() {
   done
 }
 
+restore_keychains() {
+  security list-keychains -d user -s ${previous_keychains[@]+"${previous_keychains[@]}"} >/dev/null 2>&1 || true
+  security delete-keychain "$sign_keychain" >/dev/null 2>&1 || true
+  rm -rf "$sign_work"
+}
+
 sign() {
-  local folder keychain keychain_password identity signed=0 file submission status id work
+  local folder keychain keychain_password identity signed=0 file submission status id work line import_output
   folder=$(cd "$1" && pwd)
   need DEVELOPER_ID_P12_BASE64 DEVELOPER_ID_P12_PASSWORD ASC_API_KEY_P8_BASE64 ASC_API_KEY_ID ASC_API_ISSUER_ID APPLE_TEAM_ID
   [ -f "$folder/plugin.json" ] || die "$folder isn't the cli plugin folder"
   work=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/sign-macos.XXXXXX")
   keychain="$work/signing.keychain-db"
-  previous_keychains=$(security list-keychains -d user | tr -d '"' | tr '\n' ' ')
-  trap 'security list-keychains -d user -s '"$previous_keychains"' >/dev/null 2>&1 || true; security delete-keychain "'"$keychain"'" >/dev/null 2>&1 || true; rm -rf "'"$work"'"' EXIT
+  previous_keychains=()
+  while IFS= read -r line; do
+    line=${line#"${line%%[![:space:]]*}"}
+    line=${line#\"}
+    line=${line%\"}
+    [ -z "$line" ] || previous_keychains+=("$line")
+  done < <(security list-keychains -d user)
+  sign_work=$work
+  sign_keychain=$keychain
+  trap restore_keychains EXIT
   keychain_password=$(openssl rand -hex 24)
   printf '%s' "$DEVELOPER_ID_P12_BASE64" | base64 --decode >"$work/identity.p12" || die "DEVELOPER_ID_P12_BASE64 isn't base64"
   printf '%s' "$ASC_API_KEY_P8_BASE64" | base64 --decode >"$work/notary.p8" || die "ASC_API_KEY_P8_BASE64 isn't base64"
@@ -104,10 +118,10 @@ sign() {
     || die "Apple's Developer ID G2 intermediate certificate couldn't be downloaded"
   [ "$(shasum -a 256 "$work/developer-id-g2.cer" | cut -d' ' -f1)" = "$developer_id_g2_sha256" ] \
     || die "Apple's Developer ID G2 intermediate certificate doesn't match its pinned SHA-256"
-  security import "$work/developer-id-g2.cer" -k "$keychain" >/dev/null 2>&1 || true
+  import_output=$(security import "$work/developer-id-g2.cer" -k "$keychain" 2>&1) \
+    || die "Apple's Developer ID G2 intermediate certificate couldn't be imported: $import_output"
   security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" >/dev/null
-  # shellcheck disable=SC2086
-  security list-keychains -d user -s "$keychain" $previous_keychains
+  security list-keychains -d user -s "$keychain" ${previous_keychains[@]+"${previous_keychains[@]}"}
   identity=$(security find-identity -v -p codesigning "$keychain" | awk -F'"' -v team="($APPLE_TEAM_ID)" '/Developer ID Application:/ && index($2, team) { print $2; exit }')
   [ -n "$identity" ] || die "the certificate holds no Developer ID Application identity for team $APPLE_TEAM_ID"
   echo "Signing as $identity"
