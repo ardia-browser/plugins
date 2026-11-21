@@ -1,4 +1,4 @@
-import "../libc-loaded.ts";
+import { BUILT_LIBC } from "../libc-loaded.ts";
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -174,7 +174,8 @@ describe("helper groups and the daemon's exit", () => {
     const source = path.resolve(import.meta.dir, "../../src/browse/auth/run.ts");
     fs.writeFileSync(
       runner,
-      `import { run } from ${JSON.stringify(source)};\n` +
+      `import { loadLibc } from ${JSON.stringify(path.resolve(import.meta.dir, "../../src/libc.ts"))};\nloadLibc(${JSON.stringify(BUILT_LIBC)});\n` +
+        `import { run } from ${JSON.stringify(source)};\n` +
         `run(["/bin/sh", "-c", "trap '' TERM; (trap '' TERM; sleep 30) & echo $! > ${pidFile}; wait"], { timeout: 60 }).catch(() => {});\n` +
         `const end = Date.now() + 5000; while (!require("node:fs").existsSync(${JSON.stringify(pidFile)}) && Date.now() < end) await Bun.sleep(20);\n` +
         "process.exit(0);\n",

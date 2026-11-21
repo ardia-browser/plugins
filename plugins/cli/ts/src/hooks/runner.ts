@@ -248,7 +248,7 @@ export class HookRunner {
   }
 
   private async stopGroup(child: GroupChild, exited: Promise<number>, pumps: Lines[]): Promise<number | null> {
-    const stopping = child.terminate(this.killGrace, DRAIN_GRACE);
+    const stopping = child.terminate(this.killGrace, DRAIN_GRACE).catch(() => {});
     const finished = Promise.all([exited, ...pumps.map((entry) => entry.done)]);
     const drained = await within(finished, this.killGrace);
     if (drained !== TIMED_OUT) return drained[0];

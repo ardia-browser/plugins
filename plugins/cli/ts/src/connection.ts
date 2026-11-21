@@ -63,6 +63,7 @@ export class Connection {
   private writeFailure: string | undefined;
   private pumpTimer: ReturnType<typeof setTimeout> | undefined;
   private waiters = new Set<() => void>();
+  private readonly wakeOnInterrupt = (): void => this.notify();
   private events: Queued[] = [];
   private eventBytes = 0;
   private dropped = 0;
@@ -236,10 +237,10 @@ export class Connection {
           resolve();
         };
         this.waiters.add(finish);
-        this.onWake(finish);
+        this.onWake(this.wakeOnInterrupt);
       });
       this.waiters.delete(finish);
-      this.onWake(undefined);
+      if (this.waiters.size === 0) this.onWake(undefined);
     }
   }
 

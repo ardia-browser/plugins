@@ -3,6 +3,7 @@ import { METRIC_COUNTS, METRIC_DURATIONS, METRIC_MAX_COUNT, METRIC_MAX_MS } from
 import { isMetricFlag } from "./command-metrics.ts";
 import { strerror } from "./paths.ts";
 import { CODES } from "./browse/codes.ts";
+import { cliVersion } from "./version.ts";
 import { SOCKET_ERROR_CODES } from "./error-codes.ts";
 import { EXCEPTION_SOURCES, EXCEPTION_TYPES, knownCommand, knownExceptionType, knownFlags, knownSubcommand, OTHER_NAME } from "./telemetry-names.ts";
 
@@ -158,6 +159,10 @@ export function cleanEvent(record: JsonObject): JsonObject | undefined {
     if (check === undefined) continue;
     const clean = check(value);
     if (clean !== undefined) kept.set(key, clean);
+  }
+  if (kept.has("cli_version")) {
+    if (VERSION.test(cliVersion())) kept.set("cli_version", cliVersion());
+    else kept.delete("cli_version");
   }
   return new Map<string, Value>([...record].map(([key, value]): [string, Value] => [key, key === "properties" ? kept : value]));
 }

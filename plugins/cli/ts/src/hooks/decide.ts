@@ -185,7 +185,7 @@ export class Decider {
         size += chunk.length;
         if (size > OUTPUT_LIMIT) {
           over = true;
-          void this.kill(child);
+          this.kill(child).catch(() => {});
           resolve(Buffer.alloc(0));
         }
       });
