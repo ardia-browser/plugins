@@ -2101,6 +2101,12 @@ parity harness rather than stripped wholesale:
   daemon`, while served.txt has `browse-daemon ts`; `ARDIA_BROWSE_DAEMON=python` picks Python's for differential runs),
   and a side daemon for `busy_elsewhere` the same way. A command handed to the Python client starts the same daemon:
   `client.spawn` reads the installed served.txt.
+- `ardia browse batch`: an `eval` or `script` line keeps its code as typed (an intentional fix). Python shell-splits every
+  batch line and eval joins the pieces with spaces, so `eval document.querySelectorAll("[title]").length` ran as
+  `querySelectorAll([title])` (5 of 27 bench runs retried for it). The TypeScript daemon reads the code as the rest of
+  the line after the command word and its leading flags; a single fully quoted argument loses only its outer quotes, and
+  trailing `--timeout`, `--out`, `--max-output` (and eval's `--stdin`, `--main-world`) stay flags. Other lines are
+  split as before. Test: `ts/tests/batch-code-line.test.ts`.
 - `ardia browse`: a value in an argument slot that takes user text is never read as a shared option: the user and
   password of `set credentials|auth`, the text of `fill` and `type`, `keyboard type|inserttext`'s text, and the values
   of `cookies set` and `storage <kind> set`. Python's parser takes a password like `--port=9222` there as `--port`

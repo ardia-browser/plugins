@@ -4,6 +4,7 @@ import { isSpace, strip } from "../../py.ts";
 import { groupThousands } from "../../pylib/format.ts";
 import { pyLen, splitlines } from "../../pylib/str.ts";
 import { shlexSplit } from "../../pylib/shlex.ts";
+import { codeLine } from "./batch-line.ts";
 import { redact } from "../../redact.ts";
 import { BrowseError, ConnectionLost, OutcomeUnknown, Usage } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
@@ -265,7 +266,7 @@ function parsedLine(line: string): string[] {
     } catch {
       throw new Usage(`A batch command must be a JSON array of strings or a command line: ${line}`);
     }
-  } else item = shlexSplit(line);
+  } else item = codeLine(line) ?? shlexSplit(line);
   if (!Array.isArray(item) || !item.every((part) => typeof part === "string")) throw new Usage(`A batch command must be a JSON array of strings or a command line: ${line}`);
   return item as string[];
 }
