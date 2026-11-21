@@ -371,6 +371,6 @@ class RustClosedStdout(ClosedStdout, unittest.TestCase):
     entry = "rust"
 
 
-@harness.requires(harness.ts_binary() and harness.binary(), ("rust", "ts"), "build plugins/cli/ts and plugins/cli/rust first, or set ARDIA_TS_CLI and ARDIA_RUST_CLI")
+@harness.requires(harness.ts_binary() and harness.binary(), ("rust", "ts"), "these check calls the Rust router handed to Python (closed or read-only stdio), which M4 removed; docs/cli.md lists what TypeScript does")
 class TsClosedStdout(ClosedStdout, unittest.TestCase):
     entry = "ts"

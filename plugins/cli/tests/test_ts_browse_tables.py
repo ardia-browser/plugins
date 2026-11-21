@@ -98,43 +98,56 @@ def ts_tables() -> str:
     )
 
 
+TS_HELP_ADDITIONS = (
+    ("OVERVIEW", "  click <sel>                Click element (or @ref) [--new-tab]\n",
+     "  click <sel>                Click element (or @ref) [--new-tab] [--touch]\n"),
+    ("OVERVIEW", "  eval <js>                  Run JavaScript in the page [-b base64] [--stdin] [--timeout 2m]\n",
+     "  eval <js>                  Run JavaScript in the page [-b base64] [--stdin] [--timeout 2m] [--isolated]\n"),
+    ("OVERVIEW", "             set device|geo|offline|headers|credentials|media\n",
+     "             set device|geo|offline|headers|credentials|media|permission\n"),
+    ("click", "[--button left|right|middle] [--humanize]", "[--button left|right|middle] [--touch] [--humanize]"),
+    ("click", "one that enables it in the same batch.",
+     "one that enables it in the same batch.\n--touch taps instead when the page supports touch (it reports touch points), and clicks otherwise, saying so."),
+    ("press", "Modifiers: Control, Alt, Shift, Meta (Meta+a selects all on macOS).",
+     "Modifiers: Control, Alt, Shift, Meta. Control or Meta with a selects all, with z undoes and with y or Shift+z redoes;\n"
+     "on macOS Meta+c/x/v, Meta and Alt with the arrows, Backspace and Delete also edit as they do in a text field."),
+    ("wait", "--fn evaluates in the page's main world, like eval. Timeouts default to 25 s.",
+     "--fn evaluates in the page's main world, like eval (--isolated: in an isolated world). Timeouts default to 25 s."),
+    ("eval", "| --stdin [--timeout 2m] [--out <file>]\n", "| --stdin [--timeout 2m] [--out <file>] [--isolated]\n"),
+    ("eval", "Runs in the page's main world (the one place, with init scripts and the React hook, that does).",
+     "Runs in the page's main world (the one place, with init scripts and the React hook, that does), where the\n"
+     "page's own globals are; --main-world says so explicitly. --isolated runs it in an isolated world instead: the\n"
+     "same DOM, none of the page's JavaScript, and nothing it defines is visible to the page."),
+    ("set", "  | credentials <user> <pass> | media [dark|light|no-preference] [reduced-motion]\n\n",
+     "  | credentials <user> <pass> | media [dark|light|no-preference] [reduced-motion]\n"
+     "  | permission geolocation|notifications|camera|microphone|clipboard [more …]\n\n"
+     "set permission grants those permissions to the tab's site ahead of any prompt.\n"),
+)
+
+
+def with_ts_additions(name: str, text: str) -> str:
+    for target, old, new in TS_HELP_ADDITIONS:
+        if target != name:
+            continue
+        if text.count(old) != 1:
+            raise AssertionError(f"the TypeScript help addition for {name} no longer applies to Python's help: {old!r}")
+        text = text.replace(old, new)
+    return text
+
+
 def ts_help() -> str:
     if str(CLI) not in sys.path:
         sys.path.insert(0, str(CLI))
     from ardia_cli.browse import help as browse_help
 
-    rows = "".join(f"  {json.dumps(name)}: {json.dumps(text, ensure_ascii=False)},\n" for name, text in browse_help.COMMANDS.items())
-    return (f"export const OVERVIEW = {json.dumps(browse_help.OVERVIEW, ensure_ascii=False)};\n"
+    rows = "".join(f"  {json.dumps(name)}: {json.dumps(with_ts_additions(name, text), ensure_ascii=False)},\n"
+                   for name, text in browse_help.COMMANDS.items())
+    return (f"export const OVERVIEW = {json.dumps(with_ts_additions('OVERVIEW', browse_help.OVERVIEW), ensure_ascii=False)};\n"
             f"export const COMMANDS: Readonly<Record<string, string>> = {{\n{rows}}};\n")
 
 
-RUST_TABLES = CLI / "rust" / "src" / "browse_tables.rs"
-REGENERATE_RUST = "python -c 'from tests.test_ts_browse_tables import rust_tables; print(rust_tables(), end=\"\")' > rust/src/browse_tables.rs"
-
-
-def rust_words(name: str, values) -> str:
-    return f"pub const {name}: &[&str] = &[{', '.join(json.dumps(value) for value in sorted(values))}];\n"
-
-
-def rust_tables() -> str:
-    if str(CLI) not in sys.path:
-        sys.path.insert(0, str(CLI))
-    from ardia_cli.browse import cli as browse_cli
-
-    owns = ", ".join(f"({json.dumps(name)}, &[{', '.join(json.dumps(flag) for flag in sorted(flags))}])"
-                     for name, flags in sorted(browse_cli.COMMAND_OWNS.items()))
-    return (
-        rust_words("VALUE_FLAGS", browse_cli.VALUE_FLAGS)
-        + rust_words("LAUNCH_STOPS", set(browse_cli.LAUNCH_ONLY) | set(browse_cli.LAUNCH_HINTS))
-        + f"pub const COMMAND_OWNS: &[(&str, &[&str])] = &[{owns}];\n"
-    )
-
-
 class TsBrowseTables(unittest.TestCase):
-    def test_rust_router_tables_match_python(self):
-        self.assertEqual(RUST_TABLES.read_text(), rust_tables(), f"rust/src/browse_tables.rs is stale; regenerate it: {REGENERATE_RUST}")
-
-    def test_help_matches_python(self):
+    def test_help_is_python_help_plus_the_typescript_additions(self):
         self.assertEqual(HELP.read_text(), ts_help(), "ts/src/browse/help-text.ts is stale; regenerate it: "
                          "python -c 'from tests.test_ts_browse_tables import ts_help; print(ts_help(), end=\"\")' > ts/src/browse/help-text.ts")
 

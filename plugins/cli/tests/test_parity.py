@@ -84,7 +84,7 @@ class RustParityTable(ParityTable, unittest.TestCase):
     entry = "rust"
 
 
-@harness.requires(both_programs(), ("rust", "ts"), "build plugins/cli/rust (the router) and plugins/cli/ts (bun run build), or set ARDIA_RUST_CLI and ARDIA_TS_CLI")
+@harness.requires(harness.ts_binary(), ("ts",), "build plugins/cli/ts (bun run build) or set ARDIA_TS_CLI")
 class TsParityTable(ParityTable, unittest.TestCase):
     entry = "ts"
 
@@ -125,7 +125,7 @@ class RustDeepFixtures(DeepFixtures, unittest.TestCase):
     entry = "rust"
 
 
-@harness.requires(both_programs(), ("rust", "ts"), "build plugins/cli/rust (the router) and plugins/cli/ts (bun run build), or set ARDIA_RUST_CLI and ARDIA_TS_CLI")
+@harness.requires(harness.ts_binary(), ("ts",), "build plugins/cli/ts (bun run build) or set ARDIA_TS_CLI")
 class TsDeepFixtures(DeepFixtures, unittest.TestCase):
     entry = "ts"
 
@@ -205,7 +205,7 @@ class HarnessRules(unittest.TestCase):
         self.assertEqual(harness.expected_route("ts", served, self.case(command="tabs", argv=["tabs"]), ts_installed=True), "ts")
         self.assertEqual(harness.expected_route("rust", served, self.case(fallback=True), ts_installed=True), "python")
 
-    @harness.requires(harness.ts_binary() and harness.binary(), ("rust", "ts"), "build plugins/cli/ts and plugins/cli/rust first")
+    @harness.requires(harness.ts_binary(), ("ts",), "build plugins/cli/ts first")
     def test_the_typescript_addon_comes_from_beside_the_chosen_program(self):
         with tempfile.TemporaryDirectory() as elsewhere:
             program = Path(elsewhere) / "ardia-ts"
@@ -1020,7 +1020,7 @@ class RustProcess(EntryProcess, unittest.TestCase):
     entry = "rust"
 
 
-@harness.requires(both_programs(), ("rust", "ts"), "build plugins/cli/rust (the router) and plugins/cli/ts (bun run build), or set ARDIA_RUST_CLI and ARDIA_TS_CLI")
+@harness.requires(both_programs(), ("rust", "ts"), "these check the Rust router's hand-off to the TypeScript program and Python, which M4 removed")
 class TsProcess(EntryProcess, unittest.TestCase):
     entry = "ts"
     hand_backs = (["--data-dir", "/nowhere-�", "windows"],)
