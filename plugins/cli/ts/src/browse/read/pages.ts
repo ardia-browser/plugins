@@ -6,15 +6,16 @@ import { urljoin, urlsplit } from "../../pylib/urllib.ts";
 import { codePoints } from "../../pystr.ts";
 import { redact } from "../../redact.ts";
 import { checkCancelled, currentSignal, sleep, withSignal } from "../cdp/cancel.ts";
-import { BrowseError, ConnectionLost, Gated, OutcomeUnknown, Usage } from "../daemon-errors.ts";
+import { BrowseError, ConnectionLost, OutcomeUnknown, Usage } from "../daemon-errors.ts";
 import { capNotice, OUTPUT_CAP, Result, spill } from "../daemon/render.ts";
-import { HTTPS_ONLY_NOTE, siteSilent, waitForLoad } from "../commands/core.ts";
+import { HTTPS_ONLY_NOTE, NavigationRefused, siteSilent, startNavigation, waitForLoad } from "../commands/core.ts";
 import type { Ctx } from "../commands/ctx.ts";
 import { normalizeUrl } from "../commands/parse.ts";
 import { READPAGES_EXTRACT, READPAGES_LINKS } from "../js/index.ts";
 import { add, count, flag } from "../metrics.ts";
 import { Page, quiet } from "../state/page.ts";
 import { record } from "../state/records.ts";
+import { REATTACH_TRIES } from "../state/state.ts";
 import * as temptabs from "../state/temptabs.ts";
 import { monotonic } from "../state/wait.ts";
 import { FLAGS as URL_FLAGS, postProcess } from "./readurl.ts";
@@ -305,10 +306,18 @@ export async function openReader(ctx: Ctx, opened: string[]): Promise<Page> {
   if (!state.targetInfos.has(targetId)) state.targetInfos.set(targetId, { targetId, url: "about:blank", title: "", type: "page" });
   const page = readers.makePage(state, targetId);
   state.pages.set(targetId, page);
-  await page.attach(state.browser as NonNullable<typeof state.browser>);
-  await page.keepAwake();
-  await page.enableNetwork();
-  return page;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await page.attach(state.browser as NonNullable<typeof state.browser>);
+      await page.keepAwake();
+      await page.enableNetwork();
+      return page;
+    } catch (error) {
+      if (!(error instanceof BrowseError) || error instanceof ConnectionLost || error.code !== "tab_detached" || attempt >= REATTACH_TRIES) throw error;
+      if (!state.targetInfos.has(targetId)) throw error;
+      flag("reattached_after_detach", true);
+    }
+  }
 }
 
 export function readAt(): string {
@@ -329,15 +338,16 @@ function thin(got: Record<string, unknown>, selector: string | null): boolean {
 
 export async function goto(page: Page, url: string, timeout: number, keepPartial = false): Promise<string | null> {
   const deadline = monotonic() + timeout;
+  await page.state.reattach(page, url);
   const before = await beforeNavigating(page, url);
   let earlier = new Set(page.network.fetchesStarted.keys());
   const oldLoaders = new Set([...page.frames.values()].map((frame) => frame.loader).filter((loader): loader is string => Boolean(loader)));
   page.network.fetchesBusyUntil = 0;
   let result: Record<string, unknown>;
   try {
-    result = await page.send("Page.navigate", { url }, { timeout });
+    result = await startNavigation(page, url, timeout);
   } catch (error) {
-    if (error instanceof Gated) throw new BrowseError(`Ardia's policy only lets the ardia command open web pages; ${url} isn't one`, null, "policy_refused");
+    if (error instanceof NavigationRefused) throw new BrowseError(`Ardia's policy only lets the ardia command open web pages; ${url} isn't one`, null, "policy_refused");
     if (error instanceof OutcomeUnknown) throw siteSilent(url, timeout, error);
     throw error;
   }
@@ -368,6 +378,7 @@ export async function goto(page: Page, url: string, timeout: number, keepPartial
     earlier = new Set([...earlier, ...[...page.network.fetchLoaders].filter(([, fetchLoader]) => oldLoaders.has(fetchLoader)).map(([id]) => id)]);
     await settle(page, Math.min(deadline, monotonic() + SETTLE_LIMIT), earlier);
   } else await afterSameDocument(page, before, deadline, earlier);
+  await page.state.reattach(page, url);
   await page.refreshFrames();
   return null;
 }
@@ -391,6 +402,19 @@ export async function extractFilled(page: Page, selector: string | null, timeout
   return got;
 }
 
+async function extractAfterDetach(page: Page, url: string, selector: string | null, timeout: number): Promise<Record<string, unknown>> {
+  const loaded = page.loader(page.mainFrame);
+  try {
+    return await extractFilled(page, selector, timeout);
+  } catch (error) {
+    if (!(error instanceof BrowseError) || error instanceof ConnectionLost || error.code !== "tab_detached") throw error;
+    await page.state.reattach(page, url);
+    await page.refreshFrames();
+    if (page.loader(page.mainFrame) !== loaded) throw error;
+    return extractFilled(page, selector, timeout);
+  }
+}
+
 export async function readIn(page: Page, url: string, selector: string | null, timeout: number, options: Options): Promise<PageRecord> {
   const out: PageRecord = { url, source: "browser" };
   let partial: string | null;
@@ -402,9 +426,9 @@ export async function readIn(page: Page, url: string, selector: string | null, t
       if (selector) out["note"] = `${url} is a PDF, so -s ${selector} doesn't apply; this is the whole document's text`;
       return out;
     }
-    got = await extractFilled(page, selector, timeout);
+    got = await extractAfterDetach(page, url, selector, timeout);
   } catch (error) {
-    if (!quiet(error)) throw error;
+    if (!quiet(error) || (error instanceof OutcomeUnknown && page.state.targetInfos.has(page.targetId))) throw error;
     out["error"] = (error as BrowseError).text;
     return out;
   }
@@ -466,8 +490,9 @@ export async function readTabs(ctx: Ctx, urls: readonly string[], selector: stri
           const [index, url] = item;
           for (let attempt = 0; attempt < READER_TRIES; attempt += 1) {
             if (page === null || page.sessionId === null) page = await openReader(ctx, opened);
+            const sent = page.navigationsSent;
             records[index] = await readers.readIn(page, url, selector, timeout, options);
-            if (page.sessionId !== null || !("error" in (records[index] as PageRecord)) || attempt + 1 === READER_TRIES) break;
+            if (page.sessionId !== null || !("error" in (records[index] as PageRecord)) || page.navigationsSent !== sent || attempt + 1 === READER_TRIES) break;
             add("read_tabs_reopened");
           }
         }

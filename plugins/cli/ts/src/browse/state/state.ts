@@ -2,6 +2,7 @@ import http from "node:http";
 import { formatG } from "../../pylib/format.ts";
 import { Browser } from "../cdp/browser.ts";
 import { Cancelled, currentSignal, shield, sleep } from "../cdp/cancel.ts";
+import { envelopeGone } from "../cdp/raw.ts";
 import { BrowseError, CdpError, ConnectionLost } from "../daemon-errors.ts";
 import { announce, announcePath, type Caller, sameCaller } from "../daemon/announce.ts";
 import { release as releaseClaims } from "../daemon/claims.ts";
@@ -9,7 +10,7 @@ import { type Endpoint, unreachableMessage } from "../endpoint.ts";
 import { clock, flag, spent } from "../metrics.ts";
 import { wallSeconds } from "../tokens.ts";
 import { APP_TAB, appTabError, appTabTarget } from "./apptabs.ts";
-import { type Element, Page, quiet, WORLD_NAME } from "./page.ts";
+import { detachedError, type Element, Page, quiet, WORLD_NAME } from "./page.ts";
 import * as pierce from "./pierce.ts";
 import { type Json, record } from "./records.ts";
 import { parseRef, Refs } from "./refs.ts";
@@ -26,6 +27,13 @@ export const PROBE_TIMEOUT = 3.0;
 export const PROBE_FANOUT = 8;
 export const PROBE_PASSES = 3;
 export const PROBE_BACKOFF = 0.25;
+export const REATTACH_TRIES = 3;
+const ENDED_SESSIONS_KEPT = 64;
+
+function rememberEnded(ended: Set<string>, session: string): void {
+  ended.add(session);
+  if (ended.size > ENDED_SESSIONS_KEPT) ended.delete(ended.values().next().value as string);
+}
 const NTH_SUFFIX = /(?:>>)\s*nth=-?\d+\s*$/u;
 export const UNKNOWN = Symbol("unknown");
 export const NO_PAGE =
@@ -151,6 +159,8 @@ export class State extends Refs implements temptabs.TempTabState {
   endpoint: Endpoint | null = null;
   readonly pages = new Map<string, Page>();
   readonly sessions = new Map<string, Page>();
+  readonly endedSessions = new Set<string>();
+  private readonly attachesInFlight = new Map<Page, Promise<boolean>>();
   readonly tabIds = new Map<string, string>();
   nextTab = 1;
   readonly labels = new Map<string, string>();
@@ -412,7 +422,10 @@ export class State extends Refs implements temptabs.TempTabState {
     } else if (method === "Target.targetDestroyed") {
       this.forgetTarget(String(params["targetId"]));
     } else if (method === "Target.detachedFromTarget") {
-      this.sessions.get(String(params["sessionId"]))?.detach();
+      const session = String(params["sessionId"]);
+      const owner = this.sessions.get(session);
+      if (owner !== undefined) owner.endSession(session);
+      else rememberEnded(this.endedSessions, session);
     }
     for (const listener of [...this.listeners]) listener(null, method, params);
   }
@@ -450,30 +463,65 @@ export class State extends Refs implements temptabs.TempTabState {
       page = new Page(this, targetId);
       this.pages.set(targetId, page);
     }
-    if (page.session === null || page.browser !== this.browser) await page.attach(this.browser as Browser);
+    if (this.attachesInFlight.has(page) || !this.attachedFully(page)) {
+      const before = page.attaches;
+      if ((await this.attachShared(page)) || before > 0) flag("reattached_after_detach", true);
+    }
     if (page.needsEnable && !page.crashed) await page.enablePage();
     this.hadTab = true;
     spent("attach_ms", started);
     return page;
   }
 
-  async reattach(page: Page): Promise<Page> {
-    if (page.session !== null && page.browser === this.browser) return page;
-    const detached = () =>
-      new BrowseError(
-        "Ardia detached this tab from the ardia command while it was in use (the tab closed, crashed, went to sleep or moved to a window Ardia keeps for itself). Run the command again",
-        null,
-        "tab_detached",
-      );
-    if (this.pages.get(page.targetId) !== page || !this.targetInfos.has(page.targetId)) throw detached();
+  attachedFully(page: Page): boolean {
+    return (page.sessionId !== null || (page.crashed && page.attaching !== null)) && page.browser === this.browser;
+  }
+
+  async reattach(page: Page, url: string | null = null): Promise<Page> {
+    if (!this.attachesInFlight.has(page) && this.attachedFully(page)) return page;
+    let recovered: boolean;
     try {
-      await page.attach(this.browser as Browser);
+      recovered = await this.attachShared(page);
     } catch (error) {
-      if (error instanceof CdpError) throw detached();
+      if (error instanceof CdpError || (error instanceof BrowseError && !(error instanceof ConnectionLost) && error.code === "tab_detached")) throw detachedError(url ?? page.url);
       throw error;
     }
-    flag("reattached_after_detach", true);
+    if (recovered || page.attaches > 1) flag("reattached_after_detach", true);
     return page;
+  }
+
+  private async attachShared(page: Page): Promise<boolean> {
+    let recovered = false;
+    for (let round = 1; ; round += 1) {
+      const running = this.attachesInFlight.get(page);
+      if (running !== undefined) recovered = (await running) || recovered;
+      else if (!this.attachedFully(page)) {
+        const attempt = this.attachBounded(page);
+        this.attachesInFlight.set(page, attempt);
+        try {
+          recovered = (await attempt) || recovered;
+        } finally {
+          if (this.attachesInFlight.get(page) === attempt) this.attachesInFlight.delete(page);
+        }
+      }
+      if (this.attachedFully(page)) return recovered || round > 1;
+      if (round >= REATTACH_TRIES) throw detachedError(page.url);
+    }
+  }
+
+  private async attachBounded(page: Page): Promise<boolean> {
+    for (let attempt = 1; ; attempt += 1) {
+      if (this.pages.get(page.targetId) !== page || !this.targetInfos.has(page.targetId)) throw detachedError(page.url);
+      try {
+        await page.attach(this.browser as Browser);
+        return attempt > 1;
+      } catch (error) {
+        const ended = error instanceof CdpError && envelopeGone(error);
+        if (error instanceof CdpError && !ended) throw error;
+        if (!ended && (!(error instanceof BrowseError) || error instanceof ConnectionLost || error.code !== "tab_detached")) throw error;
+        if (attempt >= REATTACH_TRIES) throw detachedError(page.url);
+      }
+    }
   }
 
   async followLostTab(): Promise<string> {

@@ -282,7 +282,17 @@ mouse position, so a humanized path starts where the last one ended. `ardia brow
   never detaches a tab itself: a `Network.disable` the page doesn't confirm in 2 s (Chromium waits on the page's main
   thread and on a pending navigation) leaves the session as it is, and a change report counts only requests that began
   after its own `Network.enable` returned, so a late event from an earlier capture isn't reported as this action's
-  write. `Inspector.detached` ("Render process gone.") is only an event, sent when the tab's renderer exits normally:
+  write. In the TypeScript CLI (the port of plugins#5), `open` and a multi-page `read` attach again right before
+  `Page.navigate` and send it once: when Ardia had already ended the session (the navigation answers that the session
+  is gone, so it never ran), it's sent once on the new session; when the session ends while `Page.navigate` is in
+  flight, the outcome is settled by whether the tab's main-frame loader changed, never by sending it again.
+  `State.reattach` tries up to 3 times when the new session is itself ended while it's set up, console and network
+  capture count as on only once the new session confirms them, the settle probe attaches again instead of failing a
+  page that loaded, and a tab that's really gone fails as `tab_detached` naming the URL the command was opening (left
+  out for `about:` pages). Actions (`click`, `fill`, …) are never retried: one cut off mid-way stays an unknown
+  outcome. Watch `error_code` `tab_detached` on `open` and `read` (84 in 13 days before, 63 of them on `open`) and
+  `reattached_after_detach`, which should take its place.
+  `Inspector.detached` ("Render process gone.") is only an event, sent when the tab's renderer exits normally:
   the session stays attached, and Chromium sends its calls on to the next renderer, so the CLI keeps it.
 - **A crashed tab.** A renderer that dies leaves the CDP session attached but answers nothing, so `Page.enable` on
   attach waited its 30 s and every command after it too, `reload` included. `Inspector.targetCrashed` now marks the

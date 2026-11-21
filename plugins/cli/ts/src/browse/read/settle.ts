@@ -20,7 +20,8 @@ export async function probe(page: Page): Promise<Probe> {
     const list = Array.isArray(got) ? got : [];
     return [list[0] ?? null, list[1] ?? null, Boolean(list[2])];
   } catch (error) {
-    if (!quiet(error) || (error as BrowseError).code === "tab_detached") throw error;
+    if (!quiet(error)) throw error;
+    if ((error as BrowseError).code === "tab_detached") await page.state.reattach(page);
     return [null, null, true];
   }
 }

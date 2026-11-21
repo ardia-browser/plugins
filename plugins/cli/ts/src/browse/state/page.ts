@@ -1,5 +1,6 @@
 import { formatG } from "../../pylib/format.ts";
 import { type Browser, type CdpResult, DETACH_WAIT, isMutation } from "../cdp/browser.ts";
+import { envelopeGone } from "../cdp/raw.ts";
 import { Cancelled, currentSignal, sleep, untilCancelled } from "../cdp/cancel.ts";
 import { BrowseError, CdpError, CdpTimeout, ConnectionLost, Gated, NotFocusable, OutcomeUnknown, PageBusy } from "../daemon-errors.ts";
 import { LIBRARY, PAGE_FOCUS_INSIDE } from "../js/index.ts";
@@ -19,6 +20,11 @@ export const HIDDEN_TAB =
   "[{tab}] is a background tab, and this Ardia doesn't deliver mouse or keyboard input to background tabs. use: ardia browse tab {tab} --show (or open <url> --show)";
 export const DETACHED =
   "Ardia detached this tab from the ardia command while it was in use (the tab closed, crashed, went to sleep or moved to a window Ardia keeps for itself). Run the command again";
+
+export function detachedError(url: string | null = null): BrowseError {
+  if (!url || url.startsWith("about:")) return new BrowseError(DETACHED, null, "tab_detached");
+  return new BrowseError(DETACHED.replace("this tab from", `this tab (${url}) from`), null, "tab_detached");
+}
 export const CRASHED = "This tab's page crashed. `ardia browse reload` brings it back; `ardia browse close` or `tab close` closes it";
 export const SETUP_NAMES: Readonly<Record<string, string>> = {
   "Emulation.setDeviceMetricsOverride": "the viewport or device size",
@@ -123,6 +129,7 @@ export class Page {
   readonly scriptIds = new Map<string, string>();
   readonly overrides = new Map<string, CdpResult | null>();
   attaches = 0;
+  navigationsSent = 0;
   needsRestore = false;
   url = "";
   title = "";
@@ -169,6 +176,7 @@ export class Page {
       throw error;
     }
     const session = String(result["sessionId"]);
+    if (this.state.endedSessions.delete(session)) throw new BrowseError(DETACHED, null, "tab_detached");
     this.attaching = session;
     this.state.sessions.set(session, this);
     this.attaches += 1;
@@ -217,14 +225,8 @@ export class Page {
     await oopif.autoAttach(this, this.session);
     await this.refreshFrames();
     if (pending !== null) this.publish(pending);
-    if (this.runtimeOn) {
-      this.runtimeOn = false;
-      await this.enableRuntime();
-    }
-    if (this.networkOn) {
-      this.networkOn = false;
-      await this.enableNetwork();
-    }
+    if (this.runtimeOn) await this.enableRuntime(true);
+    if (this.networkOn) await this.enableNetwork(true);
     if (this.needsRestore) await this.restoreSetup();
     if (this.awake || this.state.opened.has(this.targetId)) await this.keepAwake();
     let viewport: Viewport = null;
@@ -378,6 +380,11 @@ export class Page {
     await waitUntil(async () => (await this.call("() => document.readyState", [], { frame: this.mainFrame })) === "complete", timeout, 0.1, "the crashed page to reload");
   }
 
+  endSession(session: string): void {
+    if (this.sessionId === session || this.attaching === session) this.detach();
+    else this.state.sessions.delete(session);
+  }
+
   detach(): void {
     if (this.sessionId) this.state.sessions.delete(this.sessionId);
     if (this.attaching) this.state.sessions.delete(this.attaching);
@@ -413,6 +420,10 @@ export class Page {
       if (session !== top && error instanceof CdpError && error.cdpMessage.includes(NO_SESSION)) {
         oopif.detached(this, session);
         throw new BrowseError(FRAME_GONE, null, "frame_gone");
+      }
+      if (session === top && error instanceof CdpError && envelopeGone(error)) {
+        this.endSession(top);
+        throw new BrowseError(DETACHED, null, "tab_detached");
       }
       if (error instanceof Cancelled && dropped.signal.aborted && !outer?.aborted) {
         if (unknown) throw new OutcomeUnknown(`\`${method}\``, `Ardia detached the tab before it answered ${method}`);
@@ -676,14 +687,14 @@ export class Page {
     }
   }
 
-  async enableRuntime(): Promise<void> {
-    if (this.runtimeOn) return;
+  async enableRuntime(again = false): Promise<void> {
+    if (this.runtimeOn && !again) return;
     await this.send("Runtime.enable");
     this.runtimeOn = true;
   }
 
-  async enableNetwork(): Promise<void> {
-    if (this.networkOn) return;
+  async enableNetwork(again = false): Promise<void> {
+    if (this.networkOn && !again) return;
     await this.send("Network.enable", { maxTotalBufferSize: 50 * 1024 * 1024, maxResourceBufferSize: 10 * 1024 * 1024 });
     this.networkOn = true;
   }

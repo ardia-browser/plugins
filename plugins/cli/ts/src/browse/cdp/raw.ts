@@ -61,6 +61,12 @@ export function forgetTarget(state: State, targetId: string | null): void {
   raw.reset.delete(targetId);
 }
 
+const ENVELOPE_GONE = ["Session with given id not found", "no attached session has that sessionId"];
+
+export function envelopeGone(error: CdpError): boolean {
+  return error.cdpCode === SESSION_NOT_FOUND_CODE || ENVELOPE_GONE.some((gone) => error.cdpMessage.includes(gone));
+}
+
 export function sessionGone(error: CdpError): boolean {
   return error.cdpCode === SESSION_NOT_FOUND_CODE || SESSION_GONE.some((gone) => error.cdpMessage.includes(gone));
 }

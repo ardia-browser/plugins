@@ -21,10 +21,11 @@ import { cdpError, FakeBrowser, frameTree, LOADER, MAIN, stateWith } from "./cor
 const PYTHON = process.env["ARDIA_TEST_PYTHON"] ?? "python3";
 const CLI = new URL("../../..", import.meta.url).pathname;
 const cleanups: (() => void)[] = [];
+const registeredSnapshots = Refs.snapshots;
 
 afterEach(() => {
   for (const cleanup of cleanups.splice(0)) cleanup();
-  Refs.snapshots = null;
+  Refs.snapshots = registeredSnapshots;
 });
 
 function navigateTo(state: State, session: string | null, loader: string): void {

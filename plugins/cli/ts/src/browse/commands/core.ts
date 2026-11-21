@@ -4,10 +4,11 @@ import { hostnameOf, urlsplit } from "../../pylib/urllib.ts";
 import { type Browser } from "../cdp/browser.ts";
 import { Cancelled, shield, sleep, untilCancelled } from "../cdp/cancel.ts";
 import * as temptabs from "../state/temptabs.ts";
-import { BrowseError, Gated, OutcomeUnknown, Usage } from "../daemon-errors.ts";
+import { BrowseError, CdpError, ConnectionLost, Gated, OutcomeUnknown, Usage } from "../daemon-errors.ts";
+import { envelopeGone } from "../cdp/raw.ts";
 import { Result } from "../daemon/render.ts";
 import { flag } from "../metrics.ts";
-import { type Page, quiet } from "../state/page.ts";
+import { detachedError, type Page, quiet } from "../state/page.ts";
 import { type State } from "../state/state.ts";
 import { monotonic, waitUntil } from "../state/wait.ts";
 import { afterSameDocument, beforeNavigating } from "../read/settle.ts";
@@ -107,12 +108,88 @@ export function siteSilent(url: string, timeout: number, error: OutcomeUnknown):
   );
 }
 
+function sessionGone(error: unknown): boolean {
+  if (error instanceof BrowseError && error.code === "tab_detached") return true;
+  return error instanceof CdpError && envelopeGone(error);
+}
+
+export class NavigationRefused extends BrowseError {
+  constructor(readonly refusal: Gated) {
+    super(refusal.text, refusal.data, refusal.code);
+  }
+}
+
+function canonical(url: string): string {
+  try {
+    return new URL(url).href;
+  } catch {
+    return url;
+  }
+}
+
+async function ownNavigation(page: Page, url: string, seen: string | null): Promise<string | null> {
+  await page.refreshFrames();
+  const loader = page.loader(page.mainFrame);
+  if (loader === null || loader === seen) return null;
+  const landed = canonical(page.url);
+  if (landed === canonical(url)) return loader;
+  let history: Record<string, unknown>;
+  try {
+    history = await page.send("Page.getNavigationHistory");
+  } catch (error) {
+    if (!(error instanceof CdpError)) throw error;
+    return null;
+  }
+  const entries = Array.isArray(history["entries"]) ? (history["entries"] as Record<string, unknown>[]) : [];
+  const current = entries[Number(history["currentIndex"])];
+  if (current === undefined || current["transitionType"] !== "typed") return null;
+  if (canonical(String(current["url"] || "")) !== landed || canonical(String(current["userTypedURL"] || "")) !== canonical(url)) return null;
+  await page.refreshFrames();
+  return page.loader(page.mainFrame) === loader && canonical(page.url) === landed ? loader : null;
+}
+
+export function navigationUnchecked(url: string): string {
+  return `Ardia detached the tab before it answered Page.navigate for ${url}, and the tab couldn't be checked afterwards to see whether the page loaded`;
+}
+
+export async function startNavigation(page: Page, url: string, timeout: number): Promise<Record<string, unknown>> {
+  for (let resent = false; ; resent = true) {
+    await page.state.reattach(page, url);
+    const session = page.session;
+    const seen = page.loader(page.mainFrame);
+    try {
+      const result = await page.send("Page.navigate", { url }, { timeout });
+      page.navigationsSent += 1;
+      return result;
+    } catch (error) {
+      if (sessionGone(error)) {
+        if (session !== null) page.endSession(session);
+        if (!resent) continue;
+        throw detachedError(url);
+      }
+      page.navigationsSent += 1;
+      if (error instanceof Gated) throw new NavigationRefused(error);
+      if (!(error instanceof OutcomeUnknown) || page.session !== null) throw error;
+      let loader: string | null;
+      try {
+        await page.state.reattach(page, url);
+        loader = await ownNavigation(page, url, seen);
+      } catch (failure) {
+        if (!(failure instanceof BrowseError) || failure instanceof ConnectionLost || failure instanceof OutcomeUnknown) throw failure;
+        throw new OutcomeUnknown("`Page.navigate`", navigationUnchecked(url));
+      }
+      if (loader === null) throw error;
+      return { loaderId: loader };
+    }
+  }
+}
+
 async function sendNavigate(ctx: Ctx, page: Page, url: string): Promise<Record<string, unknown>> {
   let result: Record<string, unknown>;
   try {
-    result = await page.send("Page.navigate", { url }, { timeout: ctx.timeout });
+    result = await startNavigation(page, url, ctx.timeout);
   } catch (error) {
-    if (error instanceof Gated) {
+    if (error instanceof NavigationRefused) {
       throw new BrowseError(`Ardia's policy only lets the ardia command open web pages (http, https, data, about:blank); ${url} isn't one`, null, "policy_refused");
     }
     if (error instanceof OutcomeUnknown) throw siteSilent(url, ctx.timeout, error);
@@ -123,6 +200,7 @@ async function sendNavigate(ctx: Ctx, page: Page, url: string): Promise<Record<s
 }
 
 export async function navigate(ctx: Ctx, page: Page, url: string, until = "load"): Promise<void> {
+  await ctx.state.reattach(page, url);
   if (page.crashed) {
     await sendNavigate(ctx, page, url);
     await page.recovered(ctx.timeout);
@@ -144,7 +222,7 @@ export async function navigate(ctx: Ctx, page: Page, url: string, until = "load"
         "its content so far is here, and `wait --load load` waits for the rest";
     }
   }
-  await ctx.state.reattach(page);
+  await ctx.state.reattach(page, url);
   await page.refreshFrames();
 }
 
