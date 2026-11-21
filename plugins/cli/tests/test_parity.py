@@ -675,13 +675,12 @@ class EntryProcess:
             self.assertNotIn("�".encode(), new.stderr)
 
     def flusher_running(self) -> bool:
-        return bool(subprocess.run(["pgrep", "-f", f"{self.python} .*flush_main"], capture_output=True, text=True).stdout.split())
+        return bool(harness.marked(str(self.scratch), "flush_main"))
 
     def flushers_done(self) -> None:
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline:
-            running = subprocess.run(["pgrep", "-f", f"{self.python} .*flush_main"], capture_output=True, text=True).stdout.split()
-            if not running:
+            if not harness.marked(str(self.scratch), "flush_main"):
                 return
             time.sleep(0.1)
         self.fail("a telemetry flusher outlived its deadline")
@@ -806,7 +805,7 @@ class EntryProcess:
                     self.assertFalse(kept, "the flusher kept a descriptor it inherited")
                 finally:
                     fake.close()
-                    subprocess.run(["pkill", "-f", f"{self.python} .*flush_main"], capture_output=True)
+                    harness.reap(str(self.scratch), "flush_main")
                     self.flushers_done()
 
     def small_volume(self) -> Path:
@@ -831,7 +830,8 @@ class EntryProcess:
 
     def spool_cut_short_leaves_no_partial_record(self, spool_size: int):
         limit_of_one_append = 4096
-        limit = spool_size + 64
+        room_left_for_a_rewrite = 8192
+        limit = spool_size + 64 if spool_size <= limit_of_one_append else room_left_for_a_rewrite
         (self.case / "home").mkdir()
         on_full_volume = sys.platform == "darwin"
         data = (self.small_volume() if on_full_volume else self.case) / "data"
@@ -872,7 +872,7 @@ class EntryProcess:
                         except OSError:
                             pass
                 if spool_size > limit_of_one_append:
-                    os.truncate(filler_path, filler_path.stat().st_size - 8192)
+                    os.truncate(filler_path, filler_path.stat().st_size - room_left_for_a_rewrite)
             run(cut_short)
             self.assertTrue(spool.read_bytes().endswith(b"\n"), "the cut append left a partial record")
             filler_path.unlink(missing_ok=True)
@@ -1162,11 +1162,11 @@ class TsProcess(EntryProcess, unittest.TestCase):
         self.assertIn(b"--version".hex(), log.read_text())
 
     def test_an_ignored_sigchld_neither_loses_the_status_nor_reaches_the_child(self):
-        reports = (f'#!/bin/sh\nexec "{self.python}" -I -c "import signal, sys; print(signal.getsignal(signal.SIGCHLD) == signal.SIG_IGN)"\n')
+        reports = f"#!{self.python} -I\nimport signal\nprint(signal.getsignal(signal.SIGCHLD) == signal.SIG_IGN)\n"
         bare = self.bare_install(reports, with_ts=False, served="windows ts\n")
         (bare / "libexec").mkdir()
         child = bare / "libexec" / "ardia-ts"
-        child.write_text(f'#!/bin/sh\nexec "{self.python}" -I -c "import os, signal, sys; sys.exit(int(os.environ[\'CODE\']) if signal.getsignal(signal.SIGCHLD) == signal.SIG_DFL else 9)"\n')
+        child.write_text(f"#!{self.python} -I\nimport os, signal, sys\nsys.exit(int(os.environ['CODE']) if signal.getsignal(signal.SIGCHLD) == signal.SIG_DFL else 9)\n")
         child.chmod(0o755)
         for ignored in (False, True):
             for code, expected in (("253", (0, f"{ignored}\n".encode())), ("7", (7, b""))):
