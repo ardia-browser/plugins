@@ -24,6 +24,10 @@
 #include <sys/un.h>
 #include <stdlib.h>
 #if defined(__APPLE__)
+#include <libproc.h>
+#include <stdlib.h>
+#include <sys/proc_info.h>
+#include <sys/sysctl.h>
 #include <sys/ucred.h>
 int pthread_fchdir_np(int fd);
 #endif
@@ -769,6 +773,63 @@ static napi_value non_blocking(napi_env env, napi_callback_info info) {
   return status(env, fcntl(fd, F_SETFL, now | O_NONBLOCK) == 0 ? 0 : failed());
 }
 
+#if defined(__APPLE__)
+#define MAX_PROCARGS (256 * 1024)
+_Static_assert(sizeof(struct proc_bsdshortinfo) == 64, "proc_bsdshortinfo is 64 bytes");
+
+static size_t procargs_capacity(void) {
+  int value = 0;
+  size_t size = sizeof(value);
+  int mib[2] = {CTL_KERN, KERN_ARGMAX};
+  if (sysctl(mib, 2, &value, &size, NULL, 0) != 0 || value <= 0) return MAX_PROCARGS;
+  return (size_t)value < MAX_PROCARGS ? (size_t)value : MAX_PROCARGS;
+}
+
+static napi_value process_args(napi_env env, int pid) {
+  napi_value result = NULL;
+  size_t capacity = procargs_capacity();
+  char *raw = malloc(capacity);
+  if (raw == NULL) return NULL;
+  size_t size = capacity;
+  int mib[3] = {CTL_KERN, KERN_PROCARGS2, pid};
+  if (sysctl(mib, 3, raw, &size, NULL, 0) != 0 || size > capacity) size = 0;
+  napi_create_buffer_copy(env, size, raw, NULL, &result);
+  free(raw);
+  return result;
+}
+#endif
+
+static napi_value process_info(napi_env env, napi_callback_info info) {
+  Call call;
+  int32_t pid;
+  napi_value result = NULL;
+  if (!take_args(env, info, 1, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &pid)) return NULL;
+#if defined(__APPLE__)
+  struct proc_bsdshortinfo bsd;
+  if (pid <= 0 || proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, &bsd, (int)sizeof(bsd)) != (int)sizeof(bsd)) {
+    napi_get_null(env, &result);
+    return result;
+  }
+  char path[PROC_PIDPATHINFO_MAXSIZE];
+  int length = proc_pidpath(pid, path, sizeof(path));
+  if (length < 0 || (size_t)length > sizeof(path)) length = 0;
+  napi_value parent = NULL;
+  napi_value executable = NULL;
+  napi_value args = process_args(env, pid);
+  if (args == NULL || napi_create_array(env, &result) != napi_ok || napi_create_double(env, (double)bsd.pbsi_ppid, &parent) != napi_ok
+      || napi_create_buffer_copy(env, (size_t)length, path, NULL, &executable) != napi_ok || napi_set_element(env, result, 0, parent) != napi_ok
+      || napi_set_element(env, result, 1, executable) != napi_ok || napi_set_element(env, result, 2, args) != napi_ok) {
+    return status(env, -ENOMEM);
+  }
+  return result;
+#else
+  (void)pid;
+  napi_get_null(env, &result);
+  return result;
+#endif
+}
+
 static bool define(napi_env env, napi_value exports, const char *name, napi_callback callback) {
   napi_value function = NULL;
   return napi_create_function(env, name, NAPI_AUTO_LENGTH, callback, NULL, &function) == napi_ok
@@ -798,7 +859,8 @@ __attribute__((visibility("default"))) napi_value napi_register_module_v1(napi_e
       && define(env, exports, "lock", lock)
       && define(env, exports, "watchLifeline", watch_lifeline)
       && define(env, exports, "writeSome", write_some)
-      && define(env, exports, "strerror", error_text);
+      && define(env, exports, "strerror", error_text)
+      && define(env, exports, "processInfo", process_info);
   return ok ? exports : NULL;
 }
 
