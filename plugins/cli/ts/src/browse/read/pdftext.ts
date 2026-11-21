@@ -39,7 +39,7 @@ function run(file: string): { done: Promise<[string, number]>; kill: () => Promi
   let killed = false;
   const done = started.then((child) => {
     group = child;
-    if (killed) void child.terminate();
+    if (killed) child.terminate().catch(() => {});
     const chunks: Buffer[] = [];
     child.child.stdout?.on("data", (chunk: Buffer) => chunks.push(chunk));
     return child.closed.then((code): [string, number] => {
@@ -73,7 +73,7 @@ export async function textFromBytes(data: Uint8Array): Promise<string> {
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
-      void child.kill();
+      child.kill().catch(() => {});
     }, EXTRACT_TIMEOUT * 1000);
     try {
       [stdout, status] = await untilCancelled(child.done);

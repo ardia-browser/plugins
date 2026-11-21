@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { after, test } from "node:test";
 import { BUILT_LIBC } from "./libc-loaded.ts";
 import { flush } from "../src/flush.ts";
+import { cliVersion } from "../src/version.ts";
 
 const TS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CLI = path.resolve(TS, "..");
@@ -72,6 +73,16 @@ function withoutPythonVersion(bodies: Seen[]): unknown[] {
   });
 }
 
+function withRunningVersion(bodies: unknown[]): unknown[] {
+  return bodies.map((body) => {
+    const copy = structuredClone(body) as { resourceLogs: { scopeLogs: { logRecords: { attributes: Attribute[] }[] }[] }[] };
+    for (const logRecord of copy.resourceLogs[0]?.scopeLogs[0]?.logRecords ?? []) {
+      for (const item of logRecord.attributes) if (item.key === "cli_version") item.value = { stringValue: cliVersion() };
+    }
+    return copy;
+  });
+}
+
 function leftovers(root: string): { spool: string | null; failures: unknown } {
   const read = (name: string) => {
     try {
@@ -103,7 +114,7 @@ async function both(lines: string[], consent?: Record<string, unknown>): Promise
   const tsRoot = box(lines, consent);
   seen.length = 0;
   const pythonResult = await viaPython(pythonRoot);
-  const pythonBodies = withoutFrames(withoutPythonVersion(seen.splice(0)));
+  const pythonBodies = withRunningVersion(withoutFrames(withoutPythonVersion(seen.splice(0))) as unknown[]);
   const tsResult = await flush(tsRoot, URL, "dev");
   const tsBodies = withoutPythonVersion(seen.splice(0));
   assert.equal(tsResult, pythonResult);

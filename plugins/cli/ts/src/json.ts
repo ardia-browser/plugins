@@ -63,8 +63,12 @@ export function parse(bytes: Uint8Array, depthLimit: number, strict = false): Va
   return text === undefined ? undefined : parseText(text, depthLimit, strict);
 }
 
+const BYTE_ORDER_MARKS = [[0xef, 0xbb, 0xbf], [0xfe, 0xff], [0xff, 0xfe], [0x00, 0x00, 0xfe, 0xff]];
+
 export function parseStrict(bytes: Uint8Array, depthLimit: number): Value | undefined {
-  return parse(bytes, depthLimit, true);
+  if (BYTE_ORDER_MARKS.some((mark) => mark.every((byte, index) => bytes[index] === byte))) return undefined;
+  const text = decodeJsonBytes(bytes);
+  return text === undefined ? undefined : parseText(text, depthLimit, true);
 }
 
 export function parseText(text: string, depthLimit = Number.POSITIVE_INFINITY, strict = false): Value | undefined {
@@ -165,7 +169,7 @@ class Parser {
       this.at += 1;
       this.space();
       const item = this.value();
-      if (item === undefined) return undefined;
+      if (item === undefined || (this.strict && map.has(key))) return undefined;
       map.set(key, item);
       this.space();
       const next = this.peek();

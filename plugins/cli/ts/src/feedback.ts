@@ -206,17 +206,26 @@ function callerName(): string {
   }
 }
 
+const APP_VERSION = /^\d{1,4}\.\d{1,4}\.\d{1,4}(?:-[a-z]{1,16}\.\d{1,4})?$/;
+const APP_BUILD = /^[A-Za-z0-9]{1,16}$/;
+const APP_CHANNELS = ["stable", "nightly"];
+
+function appVersion(value: Value | undefined): string | null {
+  return typeof value === "string" && APP_VERSION.test(value) ? value : null;
+}
+
 function appBuild(value: Value | undefined): string | null {
-  if (typeof value === "string") return value;
-  if (typeof value === "bigint") return value.toString();
-  return null;
+  const text = typeof value === "bigint" && value >= 0n ? value.toString() : value;
+  return typeof text === "string" && APP_BUILD.test(text) ? text : null;
+}
+
+function appChannel(value: Value | undefined): string | null {
+  return typeof value === "string" && APP_CHANNELS.includes(value) ? value : null;
 }
 
 function body(args: FeedbackArgs, title: string, description: string, truncated: boolean, found: Attachment[], doc: JsonObject | undefined, installId: string, environment: string, home: string | undefined): JsonObject {
   const info = systemInfo();
   const aboutClean = args.about ? freeText(args.about, MAX_COMMAND)[0] : null;
-  const version = doc?.get("lastVersion");
-  const channel = doc?.get("channel");
   return object([
     ["kind", args.kind],
     ["title", title],
@@ -224,9 +233,9 @@ function body(args: FeedbackArgs, title: string, description: string, truncated:
     ["source", "cli"],
     ["install_id", installId],
     ["session_id", sessionId(doc)],
-    ["app_version", typeof version === "string" ? version : null],
+    ["app_version", appVersion(doc?.get("lastVersion"))],
     ["app_build", appBuild(doc?.get("lastBuild"))],
-    ["channel", typeof channel === "string" ? channel : null],
+    ["channel", appChannel(doc?.get("channel"))],
     ["os_version", info.osVersion],
     ["arch", info.arch],
     ["cli_version", cliVersion()],

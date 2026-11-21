@@ -1262,7 +1262,7 @@ def compare(new: Observed, python: Observed, fallback: bool = False, label: str 
     return mismatches
 
 
-INTENTIONAL_KEYS = frozenset({"why", "stdout", "stderr", "status", "daemon_requests", "usage", "files"})
+INTENTIONAL_KEYS = frozenset({"why", "stdout", "stderr", "status", "daemon_requests", "usage", "files", "no_consent"})
 
 
 def intended(python: "Observed", case: Case, places: dict | None = None) -> tuple["Observed", list[str]]:
@@ -1271,7 +1271,7 @@ def intended(python: "Observed", case: Case, places: dict | None = None) -> tupl
     spec = case.intentional or {}
     problems = []
     if set(spec) - INTENTIONAL_KEYS or not isinstance(spec.get("why"), str) or len(spec) < 2:
-        return python, [f"intentional takes why and at least one of stdout, stderr, status, daemon_requests, usage, files, not {sorted(spec)}"]
+        return python, [f"intentional takes why and at least one of stdout, stderr, status, daemon_requests, usage, files, no_consent, not {sorted(spec)}"]
     changes = {}
     for name in ("stdout", "stderr"):
         if name in spec:
@@ -1279,9 +1279,23 @@ def intended(python: "Observed", case: Case, places: dict | None = None) -> tupl
     for name in ("status", "daemon_requests", "usage", "files"):
         if name in spec:
             changes[name] = spec[name]
-    if all(getattr(python, name) == value for name, value in changes.items()):
+    if changes and all(getattr(python, name) == value for name, value in changes.items()):
         problems.append(f"intentional ({spec['why']}) expects what Python already does; drop it")
     return replace(python, **changes), problems
+
+
+def without_consent(new: "Observed", python: "Observed") -> tuple["Observed", list[str]]:
+    from dataclasses import replace
+
+    problems = []
+    if new.queued or not new.telemetry or any(record.get("distinct_id") != "local" or record.get("sent") is not False for record in new.telemetry):
+        problems.append("intentional no_consent expects only local, unsent telemetry and nothing queued")
+    if python.telemetry and all(record.get("distinct_id") == "local" for record in python.telemetry) and not python.queued:
+        problems.append("intentional no_consent expects what Python already does; drop it")
+    cli = ("cli-home/Usage", "data/Telemetry")
+    files = {name: change for name, change in python.files.items() if not name.startswith(cli)}
+    files.update({name: change for name, change in new.files.items() if name.startswith(cli)})
+    return replace(python, telemetry=new.telemetry, queued=new.queued, files=files), problems
 
 
 def without_cli_records(python: "Observed") -> "Observed":
@@ -1351,6 +1365,9 @@ def check_case(install: Installation, case: Case, served: dict[str, str], keep: 
     if case.intentional is not None and expected == "ts":
         python, intent_problems = intended(python, case, places_of(box))
         problems += intent_problems
+        if case.intentional.get("no_consent") is True:
+            python, consent_problems = without_consent(new, python)
+            problems += consent_problems
         applied = True
     if case.env.get("ARDIA_BROWSE_FOR_PLUGIN") and expected == "ts":
         python = without_cli_records(python)

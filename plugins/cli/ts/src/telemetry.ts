@@ -128,8 +128,7 @@ export function readConsent(root: string): JsonObject | undefined {
     if (!info.isFile() || info.uid !== uid() || info.size > MAX_CONSENT_BYTES) return undefined;
     const doc = parseStrict(readFd(fd, MAX_CONSENT_BYTES + 1), TELEMETRY_JSON_DEPTH);
     return doc instanceof Map ? doc : undefined;
-  } catch (error) {
-    if (error instanceof TooDeep) throw error;
+  } catch {
     return undefined;
   } finally {
     closeSync(fd);
@@ -168,13 +167,8 @@ function unreadableExpiry(doc: JsonObject): boolean {
 
 export function consentUnreadable(argv: string[]): boolean {
   const target = cliTarget(argv);
-  try {
-    const doc = target === undefined ? undefined : readConsent(target.root);
-    return doc !== undefined && unreadableExpiry(doc);
-  } catch (error) {
-    if (error instanceof TooDeep) return false;
-    throw error;
-  }
+  const doc = target === undefined ? undefined : readConsent(target.root);
+  return doc !== undefined && unreadableExpiry(doc);
 }
 
 export function sharingId(doc: JsonObject | undefined): string | undefined {

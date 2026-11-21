@@ -93,8 +93,7 @@ process.on("exit", killLiveGroups);
 
 function tracked(pid: number): boolean {
   try {
-    const registered = registerGroup(pid);
-    return registered === null || registered === 0;
+    return registerGroup(pid) === 0;
   } catch {
     return false;
   }
@@ -163,24 +162,30 @@ export class GroupChild {
   }
 
   private async stop(grace: number, drain: number): Promise<void> {
-    if (this.live) {
-      this.signal("SIGTERM");
-      const ends = performance.now() + grace * 1000;
-      for (let left = ends - performance.now(); left > 0 && this.groupAlive(); left = ends - performance.now()) await sleepMs(Math.min(STOP_POLL_MS, left));
-      if (this.groupAlive()) this.signal("SIGKILL");
-      this.unregister();
+    try {
+      if (this.live) {
+        this.signal("SIGTERM");
+        const ends = performance.now() + grace * 1000;
+        for (let left = ends - performance.now(); left > 0 && this.groupAlive(); left = ends - performance.now()) await sleepMs(Math.min(STOP_POLL_MS, left));
+        if (this.groupAlive()) this.signal("SIGKILL");
+        this.unregister();
+      }
+      if (drain > 0) await Promise.race([this.closed, sleepMs(drain * 1000)]);
+    } finally {
+      this.release();
     }
-    if (drain > 0) await Promise.race([this.closed, sleepMs(drain * 1000)]);
-    this.release();
   }
 
   untracked(): void {
     groupStats.untracked += 1;
     this.stopping = Promise.resolve();
-    this.signal("SIGKILL");
-    this.live = false;
-    GROUPS.delete(this.pid);
-    this.release();
+    try {
+      this.signal("SIGKILL");
+    } finally {
+      this.live = false;
+      GROUPS.delete(this.pid);
+      this.release();
+    }
   }
 }
 
@@ -257,11 +262,12 @@ function collect(group: GroupChild, options: RunOptions, limit: number, grace: n
     const stop = (why: "timeout" | "cancelled") => {
       if (settled || group.terminating) return;
       settle(() => reject(why === "cancelled" ? new RunCancelled() : new RunTimedOut()));
-      void group.terminate(grace / 1000);
+      group.terminate(grace / 1000).catch(() => {});
     };
     const deadline = setTimeout(() => stop("timeout"), options.timeout * 1000);
     const cancel = () => stop("cancelled");
     signal?.addEventListener("abort", cancel, { once: true });
+    if (signal?.aborted) cancel();
     void group.closed.then((code) => {
       group.forget();
       settle(() => resolve({ code, stdout: out.take(), stderr: err.take() }));
