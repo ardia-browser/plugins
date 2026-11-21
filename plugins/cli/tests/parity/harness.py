@@ -1,4 +1,5 @@
 import base64
+import datetime
 import difflib
 import functools
 import fcntl
@@ -42,10 +43,22 @@ QUEUED = {"uuid": "0190a1b2-c3d4-7e5f-8a9b-000000000001", "event": "cli_command"
           "timestamp": "2026-01-01T00:00:00.000Z", "properties": {"command": "earlier"}}
 DEFAULT_HELLO = {"result": {"app": "Ardia", "version": "1.0"}}
 STUBBED_HELPERS = ("open", "xdg-open", "osascript", "security", "esbuild", "cua-driver", "git", "node", "pbcopy", "pbpaste",
-                   "screencapture", "ffmpeg", "defaults", "launchctl", "say", "afplay", "codesign", "ditto", "systemctl")
+                   "screencapture", "ffmpeg", "defaults", "launchctl", "say", "afplay", "codesign", "ditto", "systemctl", "gh", "curl",
+                   "wget")
+OUTSIDE_WORLD = ("gh", "curl", "wget")
 DENIED_PROGRAMS = ("/bin/launchctl", "/usr/bin/security", "/usr/bin/codesign", "/usr/bin/ditto", "/usr/bin/osascript",
                    "/usr/bin/open", "/usr/bin/pbcopy", "/usr/bin/pbpaste", "/usr/sbin/screencapture", "/usr/bin/say",
-                   "/usr/bin/afplay", "/usr/bin/defaults", "/usr/bin/curl", "/usr/bin/ssh")
+                   "/usr/bin/afplay", "/usr/bin/defaults", "/usr/bin/curl", "/usr/bin/ssh", "/opt/homebrew/bin/gh", "/usr/local/bin/gh",
+                   "/opt/homebrew/bin/wget", "/usr/local/bin/wget")
+
+
+def denied_programs() -> tuple:
+    found = set(DENIED_PROGRAMS)
+    for name in OUTSIDE_WORLD:
+        where = shutil.which(name)
+        if where:
+            found.update({where, os.path.realpath(where)})
+    return tuple(sorted(found))
 ROOTS = ("home", "cli-home", "data", "cwd", "tmp", "outside")
 PLACES = ("box", "home", "cli_home", "data", "cwd", "tmp", "outside", "cli")
 HARNESS_FILES = ("helpers.log", "stubs")
@@ -716,6 +729,24 @@ def file_changes(before: dict, after: dict) -> dict:
     return changes
 
 
+UTC_STAMP = re.compile(rb'"at": "(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})Z"')
+STAMPED_FILES = ("cli-home/Usage/feedback.jsonl",)
+
+
+def scrub_stamps(found: dict, window: tuple[float, float]) -> dict:
+    def marker(match) -> bytes:
+        at = datetime.datetime.strptime(match.group(1).decode(), "%Y-%m-%dT%H:%M:%S").replace(tzinfo=datetime.timezone.utc).timestamp()
+        start, end = window
+        return b'"at": "<now utc>"' if start - NOW_SLACK - 1 <= at <= end + NOW_SLACK else match.group(0)
+
+    out = dict(found)
+    for rel in STAMPED_FILES:
+        entry = out.get(rel)
+        if entry and entry[0] == "file":
+            out[rel] = (entry[0], entry[1], UTC_STAMP.sub(marker, entry[2]))
+    return out
+
+
 def scrub_times(value, window: tuple[float, float]):
     if isinstance(value, dict):
         return {key: time_marker(child, window) if TIME_KEYS.search(key) else scrub_times(child, window) for key, child in value.items()}
@@ -773,7 +804,7 @@ class Installation:
         shutil.copytree(CLI / "tests" / "fixtures", self.source / "tests" / "fixtures")
         subprocess.run([str(self.python), "-I", "-m", "compileall", "-q", str(self.source)], check=True)
         self.profile = self.scratch / "sandbox.sb"
-        self.profile.write_text(SANDBOX_PROFILE.format(denied=" ".join(f'(literal "{program}")' for program in DENIED_PROGRAMS)))
+        self.profile.write_text(SANDBOX_PROFILE.format(denied=" ".join(f'(literal "{program}")' for program in denied_programs())))
         self.counter = 0
         self.counter_lock = threading.Lock()
 
@@ -1112,7 +1143,25 @@ def with_credential(command: list[str], spec: dict | None, box: Path) -> tuple[l
     return wrapper + command, (given,), held, later
 
 
+FEEDBACK_SERVICE_ENV = "ARDIA_FEEDBACK_URL"
+
+
+@functools.lru_cache(maxsize=None)
+def checkout_build(program: str) -> bool:
+    said = subprocess.run([program, "--version"], capture_output=True, text=True, timeout=30, env={"PATH": "/usr/bin:/bin", "ARDIA_TELEMETRY": "0"}).stdout
+    return ".dev" in said or " 0.0.0" in said
+
+
+def check_no_outside_world(install: "Installation", case: Case):
+    if "feedback" not in case.argv or FEEDBACK_SERVICE_ENV in case.env:
+        return
+    program = install.root / "bin" / ("ardia.bin" if install.standalone else "ardia")
+    if not checkout_build(str(program)):
+        raise UnsafeCase(f"case {case.id}: ardia feedback with a release build would post to ardia.dev; run the harness on a checkout build")
+
+
 def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[Observed, list]:
+    check_no_outside_world(install, case)
     build = None if side == "python" else PARITY_BUILD
     places = materialize(box, case, build)
     control = case.control
@@ -1173,7 +1222,7 @@ def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[O
         if daemon:
             daemon.close()
     window = (started, time.time())
-    after = tree(box)
+    after = scrub_stamps(tree(box), window)
     records, queued, served, labels = read_telemetry(box, box / "data", window)
     usage_text = read_inside(box, box / "cli-home" / "Usage" / "usage.json")
     usage = scrub_times(json.loads(usage_text), window) if usage_text is not None else None
