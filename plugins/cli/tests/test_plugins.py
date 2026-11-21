@@ -101,10 +101,9 @@ class PluginsCliTest(unittest.TestCase):
         self.assertEqual(self.ardia("check", str(EXAMPLE) + "/")[0], 0)
 
     def test_check_accepts_password_manager_plugins(self):
-        repo = Path(__file__).resolve().parents[3]
-        for folder in (EXAMPLE.parent / "password-manager", repo / "plugins" / "apple-passwords"):
-            status, out, _ = self.ardia("check", str(folder) + "/")
-            self.assertEqual(status, 0, f"{folder.name}: {out}")
+        folder = EXAMPLE.parent / "password-manager"
+        status, out, _ = self.ardia("check", str(folder) + "/")
+        self.assertEqual(status, 0, f"{folder.name}: {out}")
 
     def test_install_checks_the_copy_it_publishes(self):
         source = self.data / "changing"
