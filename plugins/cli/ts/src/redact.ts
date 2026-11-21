@@ -17,6 +17,10 @@ function urlQuote(text: string): string {
   if (/[\ud800-\udfff]/.test(text.replaceAll(/[\ud800-\udbff][\udc00-\udfff]/g, ""))) {
     throw new PyException("UnicodeEncodeError", "'utf-8' codec can't encode character: surrogates not allowed");
   }
+  return percentEncoded(text);
+}
+
+function percentEncoded(text: string): string {
   let out = "";
   for (const byte of utf8(text)) {
     const safe = (byte >= 0x30 && byte <= 0x39) || (byte >= 0x41 && byte <= 0x5a) || (byte >= 0x61 && byte <= 0x7a) || byte === 0x5f || byte === 0x2e || byte === 0x2d || byte === 0x7e;
@@ -74,6 +78,26 @@ export function redact(text: string): string {
   let out = text;
   for (const secret of ordered) if (out.includes(secret)) out = out.replaceAll(secret, MASK);
   return maskTokenQueries(out);
+}
+
+export class Secrets {
+  private readonly held: string[] = [];
+
+  known(): boolean {
+    return this.held.length > 0;
+  }
+
+  add(secret: string): void {
+    if (secret === "") return;
+    for (const form of [secret, percentEncoded(secret)]) if (!this.held.includes(form)) this.held.push(form);
+  }
+
+  redact(text: string): string {
+    const ordered = [...this.held].sort((a, b) => codePoints(b).length - codePoints(a).length);
+    let out = text;
+    for (const secret of ordered) out = out.replaceAll(secret, MASK);
+    return maskTokenQueries(out);
+  }
 }
 
 export function unsafeTail(text: string): number {

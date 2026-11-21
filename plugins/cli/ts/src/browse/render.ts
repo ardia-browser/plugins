@@ -1,7 +1,7 @@
 import { dumps, type JsonObject, type Value } from "../json.ts";
 import { inert, jsonSafe } from "../printable.ts";
 import type { BrowseError } from "./errors.ts";
-import type { Secrets } from "./redact.ts";
+import type { Secrets } from "../redact.ts";
 
 function sanitize(value: Value, secrets: Secrets): Value {
   if (typeof value === "string") return secrets.redact(value);

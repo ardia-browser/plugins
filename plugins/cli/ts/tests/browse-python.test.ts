@@ -6,7 +6,7 @@ import "./libc-loaded.ts";
 import { parseDuration, pythonFloat, pythonInt } from "../src/browse/args.ts";
 import { formatG, PythonCrash } from "../src/browse/errors.ts";
 import { loadAnswer } from "../src/browse/pyjson.ts";
-import { Secrets } from "../src/browse/redact.ts";
+import { Secrets } from "../src/redact.ts";
 import { decodeStdin } from "../src/browse/stdio.ts";
 
 const CLI = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");

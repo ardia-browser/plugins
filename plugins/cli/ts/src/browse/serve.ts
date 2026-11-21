@@ -11,7 +11,7 @@ import { type BrowseError, builtinCrash, PythonCrash, unreachable } from "./erro
 import { Absent, CONNECT_WAIT_MS, connect, exchange, type Link, Stalled } from "./exchange.ts";
 import { encodeError } from "./output.ts";
 import { loadAnswer } from "./pyjson.ts";
-import type { Secrets } from "./redact.ts";
+import type { Secrets } from "../redact.ts";
 import { agentEnv, endpointChoice, endpointKey, namespaceName, optionsFrom, rootOf, sessionKey, sessionName, urlsWithSecrets } from "./request.ts";
 import { closeDir } from "../privatefs.ts";
 import { checkSocket, lockHeld, NoDaemon, openBrowseDir, osFailure } from "./session.ts";

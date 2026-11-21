@@ -10,7 +10,7 @@ import { Interrupted } from "./exchange.ts";
 import { Printer } from "./output.ts";
 import { checkRequest, CODE, dropCredential, message, pluginMode, PluginRefusal, REFUSED, takeAccess, UNAVAILABLE, UNAVAILABLE_WHY } from "./plugin.ts";
 import { dumps, object, type Value } from "../json.ts";
-import { Secrets } from "./redact.ts";
+import { Secrets } from "../redact.ts";
 import { renderError } from "./render.ts";
 import { environmentIsText, Refused, Unported } from "./request.ts";
 import { handedBack, HandBack, roundTrip } from "./serve.ts";
