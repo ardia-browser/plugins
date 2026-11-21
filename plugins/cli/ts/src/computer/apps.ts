@@ -1,5 +1,6 @@
 import { accessSync, chmodSync, closeSync, constants, mkdirSync, openSync, readFileSync, readlinkSync, realpathSync, renameSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { rollbackOnStop, stopPoint } from "../after-update.ts";
 import { dumps, type JsonObject, type Value } from "../json.ts";
 import { flock } from "../libc.ts";
 import { envSet, expandUser, home, join, purePath } from "../paths.ts";
@@ -226,27 +227,40 @@ export async function placeApp(source: string): Promise<string> {
   }
   const previous: Value = ours ? readRecord() : null;
   let newHash: string | null;
+  const forget = rollbackOnStop(() => {
+    if (lexists(staging())) removePath(staging());
+  });
   try {
     if (lexists(staging())) removePath(staging());
     await copyApp(source, staging());
     await checkApp(staging());
     newHash = await codeHash(staging());
     if (!newHash) throw new Refused(`couldn't read the code hash of ${staging()}`);
+    stopPoint();
+    forget();
     saveRecord(new Map<string, Value>([["path", dest], ["version", VERSION], ["cdhash", newHash], ["state", "pending"], ["previous", previous]]));
   } catch (error) {
+    forget();
     if (lexists(staging())) removePath(staging());
     throw error;
   }
+  const undo = () => {
+    if (lexists(retired()) && !lexists(dest)) renameSync(retired(), dest);
+    if (lexists(staging())) removePath(staging());
+    restoreRecord(previous);
+  };
+  const forgetUndo = rollbackOnStop(undo);
   try {
+    stopPoint();
     if (ours) {
       await runDriverQuietly(join(dest, APP_BINARY), "stop");
       renameSync(dest, retired());
     }
     renameSync(staging(), dest);
+    forgetUndo();
   } catch (error) {
-    if (lexists(retired()) && !lexists(dest)) renameSync(retired(), dest);
-    if (lexists(staging())) removePath(staging());
-    restoreRecord(previous);
+    forgetUndo();
+    undo();
     throw error;
   }
   saveRecord(new Map<string, Value>([["path", dest], ["version", VERSION], ["cdhash", newHash], ["state", "committed"]]));

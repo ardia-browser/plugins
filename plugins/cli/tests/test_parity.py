@@ -2,6 +2,7 @@ import base64
 import dataclasses
 import errno
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -12,6 +13,7 @@ import socket
 import signal
 import subprocess
 import sys
+import tarfile
 import tempfile
 import threading
 import time
@@ -1461,6 +1463,48 @@ class BuildSmoke(unittest.TestCase):
                 self.assertIn(words, done.stderr)
                 self.assertLess(time.monotonic() - started, 5)
                 self.assertFalse((Path(scratch) / "out").exists() and any((Path(scratch) / "out").iterdir()))
+
+    @unittest.skipUnless((sys.platform, os.uname().machine) in (("darwin", "arm64"), ("linux", "x86_64")) and shutil.which("npm"), "packs on Apple silicon or Linux x86_64, with npm for plugins/cli/main")
+    def test_ardia_sign_cmd_signs_the_folder_both_tarballs_are_packed_from(self):
+        platform = "macos-arm64" if sys.platform == "darwin" else "linux-x64"
+        names = (f"ardia-cli-7.7.7-{platform}.tar.gz", f"cli-plugin-7.7.7-{platform}.tar.gz")
+        with tempfile.TemporaryDirectory() as scratch:
+            sign = Path(scratch) / "sign.sh"
+            sign.write_text("""#!/bin/sh
+set -eu
+[ -f "$1/plugin.json" ] && [ -f "$1/dist/main.js" ] || { echo "the folder isn't complete" >&2; exit 1; }
+for packed in "$(dirname "$1")"/cli-plugin-*; do [ ! -e "$packed" ] || { echo "packed before signing" >&2; exit 1; }; done
+for macho in bin/ardia bin/ardia-libc.so libexec/esbuild; do printf '%s\\n' "$macho" >>"$(dirname "$1/$macho")/signed-by-test"; done
+""")
+            sign.chmod(0o755)
+
+            def build(out: str, **extra: str) -> dict[str, list[tuple[str, ...]]]:
+                env = {**{key: value for key, value in os.environ.items() if key != "ARDIA_SIGN_CMD"}, "ARDIA_PLUGIN_VERSION": "7.7.7", **extra}
+                done = subprocess.run(["sh", str(CLI / "build.sh"), str(Path(scratch) / out)], env=env, capture_output=True, text=True, timeout=600)
+                self.assertEqual(done.returncode, 0, done.stderr)
+                listed = {}
+                for name in names:
+                    tarball = Path(scratch) / out / name
+                    digest = hashlib.sha256(tarball.read_bytes()).hexdigest()
+                    self.assertEqual((Path(scratch) / out / f"{name}.sha256").read_text().split()[0], digest)
+                    with tarfile.open(tarball) as packed:
+                        listed[name] = [(member.name, member.type, oct(member.mode), member.uname, member.gname,
+                                         hashlib.sha256(packed.extractfile(member).read()).hexdigest() if member.isfile() else "") for member in packed]
+                return listed
+
+            plain = build("plain")
+            signed = build("signed", ARDIA_SIGN_CMD=f'"{sign}" "$1"')
+            for name in names:
+                markers = [entry for entry in signed[name] if entry[0].endswith("/signed-by-test")]
+                self.assertEqual(sorted(entry[0].split("/", 1)[1] for entry in markers), ["bin/signed-by-test", "libexec/signed-by-test"], name)
+                self.assertEqual([entry for entry in signed[name] if entry not in markers], plain[name], name)
+                self.assertFalse([entry for entry in plain[name] if "signed-by-test" in entry[0]], name)
+
+            failing = subprocess.run(["sh", str(CLI / "build.sh"), str(Path(scratch) / "refused")], capture_output=True, text=True, timeout=600,
+                                     env={**os.environ, "ARDIA_PLUGIN_VERSION": "7.7.7", "ARDIA_SIGN_CMD": "exit 3"})
+            self.assertEqual(failing.returncode, 1, failing.stderr)
+            self.assertIn("ARDIA_SIGN_CMD failed", failing.stderr)
+            self.assertFalse([path.name for path in (Path(scratch) / "refused").iterdir() if path.name.endswith((".tar.gz", ".sha256"))])
 
     def test_every_release_job_that_runs_build_sh_sets_up_the_pinned_bun(self):
         workflows = CLI.parent.parent / ".github" / "workflows"

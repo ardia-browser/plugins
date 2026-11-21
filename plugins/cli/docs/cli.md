@@ -2123,6 +2123,15 @@ parity harness rather than stripped wholesale:
   update, the old build's daemon (or Python's, whose key has no stamp) is left alone under its old key until it idles
   out or `close --all` stops it, and the client starts its own. The daemon's `<key>.json` also records `build`, which
   `session list --json` shows.
+- `ardia skills install --auto`, `ardia skills refresh` and `ardia computer refresh`, the afterUpdate commands Ardia
+  runs after an update, stop when Ardia does (an intentional fix). On SIGTERM, SIGINT or SIGHUP they stop within a few
+  milliseconds, and within 50 ms when the process that started them goes away (their parent pid changes, to 1 or a
+  subreaper), which they check between steps and between the files of a skills folder. A step either finishes or is
+  rolled back: a skills folder is swapped in whole or its staging folder removed, a half-downloaded cua-driver archive
+  is removed, a CuaDriver.app copy is removed or its swap undone. Nothing else is written, and the command dies by the
+  signal it got (SIGTERM for a lost parent). Python dies at once by SIGTERM and SIGHUP, leaving its staging folders,
+  raises KeyboardInterrupt on SIGINT wherever it is, and keeps running, and writing, when Ardia quits. Test:
+  `ts/tests/after-update-stop.test.ts`.
 - `ardia browse batch`: an `eval` or `script` line keeps its code as typed (an intentional fix). Python shell-splits every
   batch line and eval joins the pieces with spaces, so `eval document.querySelectorAll("[title]").length` ran as
   `querySelectorAll([title])` (5 of 27 bench runs retried for it). The TypeScript daemon reads the code as the rest of

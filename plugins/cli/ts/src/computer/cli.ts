@@ -1,4 +1,5 @@
 import { isatty } from "node:tty";
+import { guardedAfterUpdate } from "../after-update.ts";
 import { parseArgs } from "../argparse-env.ts";
 import { dumps, type Value } from "../json.ts";
 import { execProgram } from "../libc.ts";
@@ -89,14 +90,14 @@ async function setup(io: CommandIo, argv: readonly string[]): Promise<number> {
 async function refresh(io: CommandIo): Promise<number> {
   if (!supported()) return 0;
   const dest = installedApp();
-  const failed = await guarded(io, async () => {
+  const failed = await guardedAfterUpdate(() => guarded(io, async () => {
     return withApplicationsLock(async () => {
       if (!(await recover((line) => io.err(line)))) return 1;
       if (!isDirectory(dest) || appVersion(dest) === VERSION || !(await installedByArdia(dest))) return 0;
       io.out(await placeApp(await ensureDriver((line) => io.err(line))));
       return 0;
     });
-  });
+  }));
   return failed ?? 0;
 }
 

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
+import { rollbackOnStop, stopPoint } from "./after-update.ts";
 import { join } from "./paths.ts";
 import { toStderr } from "./printable.ts";
 import { readTar, TarError } from "./tar.ts";
@@ -162,6 +163,7 @@ export async function skillPack(): Promise<Map<string, Buffer>> {
   if (!(isRealDir(folder) && cacheIsIntact(folder))) {
     mkdirSync(home, { recursive: true });
     const work = mkdtempSync(join(home, ".skills-"));
+    const forget = rollbackOnStop(() => rmSync(work, { recursive: true, force: true }));
     try {
       const archive = await fetchVerified(SKILLS_ASSET, SKILLS_SHA256);
       const staged = join(work, "skills");
@@ -169,6 +171,7 @@ export async function skillPack(): Promise<Map<string, Buffer>> {
       const names = extract(archive, SKILLS_ASSET, SKILLS_TOP, staged, keepsSkillFile);
       if (!names.includes("SKILL.md")) throw new Refused(`${SKILLS_ASSET} has no SKILL.md`);
       if (!cacheIsIntact(staged)) throw new Refused(`${SKILLS_ASSET} doesn't hold the files this ardia pins`);
+      stopPoint();
       let existing;
       try {
         existing = lstatSync(folder);
@@ -183,6 +186,7 @@ export async function skillPack(): Promise<Map<string, Buffer>> {
         if (!isFile(join(folder, "SKILL.md"))) throw error;
       }
     } finally {
+      forget();
       rmSync(work, { recursive: true, force: true });
     }
   }

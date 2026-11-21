@@ -4,6 +4,7 @@ import { dumps, type JsonObject, object, parseText, type Value } from "./json.ts
 import { errnoOf, home, join, strerror } from "./paths.ts";
 import { reprStr } from "./py.ts";
 import { codePoints, utf8 } from "./pystr.ts";
+import { stepBoundary } from "./after-update.ts";
 import { CUA_VERSION, Refused, skillPack } from "./cua-skill.ts";
 import { chainIsSafe, commitPack, recoverAside, replaceFile, safeParent, SkillError } from "./skill-commit.ts";
 import { SKILL_FILES, SKILL_HASHES } from "./skill-files.ts";
@@ -345,6 +346,7 @@ export async function install(targets: string[], project: boolean, computerUse =
   const out: string[] = [];
   for (const [folder, names] of written) {
     const label = names.join(", ");
+    await stepBoundary();
     try {
       installInto(folder, computerUse ? undefined : [], true, replace);
     } catch (error) {
@@ -356,12 +358,15 @@ export async function install(targets: string[], project: boolean, computerUse =
     installed.push(absolute(folder));
     out.push(`${label}: ${folder}`);
     if (computerUse) {
+      await stepBoundary();
       const [line, failed] = await companionLine(companionFolder(folder));
       out.push(`${label}: ${line}`);
+      await stepBoundary();
       if (failed) status = 1;
       else noteCompanions(folder, [...COMPANIONS]);
     }
   }
+  await stepBoundary();
   if (installed.length > 0) saveRecord([...recordedFolders(), ...installed]);
   return { status, out };
 }
@@ -416,6 +421,7 @@ export async function refresh(): Promise<Lines> {
       continue;
     }
     kept.push(folder);
+    await stepBoundary();
     try {
       installInto(folder, undefined);
     } catch (error) {
@@ -429,6 +435,7 @@ export async function refresh(): Promise<Lines> {
     const cua = companionFolder(folder);
     const ours = markedFiles(cua, CUA_SKILL) !== undefined && !isLink(cua);
     if ((companions === undefined && !present(cua)) || (ours && (companions === undefined || mentions(companions, CUA_SKILL)))) {
+      await stepBoundary();
       const [line, failed] = await companionLine(cua);
       out.push(line.startsWith("error") ? line : `refreshed ${cua}`);
       if (failed) {
@@ -436,8 +443,10 @@ export async function refresh(): Promise<Lines> {
         continue;
       }
     }
+    await stepBoundary();
     if (companions === undefined) noteCompanions(folder, [...COMPANIONS]);
   }
+  await stepBoundary();
   saveRecord(kept);
   return { status, out };
 }

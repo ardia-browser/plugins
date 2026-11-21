@@ -3,10 +3,12 @@
 # from beside itself (bin/ardia-libc.so), and esbuild (libexec/esbuild), the helper `ardia scripts` and userscripts
 # bundle with. No Python, no Rust: axe-core and every other asset are embedded in bin/ardia.
 #
-#   plugins/cli/scripts/build.sh <version> <out dir> [--platform macos-arm64|linux-x64]
+#   plugins/cli/scripts/build.sh <version> <out dir> [--platform macos-arm64|linux-x64] [--from <folder>]
 #   plugins/cli/scripts/build.sh -h | --help
 #
-# Writes <out dir>/ardia-cli-<version>-<platform>.tar.gz and its .sha256 (sha256sum format). The platform defaults to
+# Writes <out dir>/ardia-cli-<version>-<platform>.tar.gz and its .sha256 (sha256sum format). --from packs the bin and
+# libexec folders of a folder built before (plugins/cli/build.sh's signed plugin folder) instead of building them, with
+# the same layout, after checking that its ardia says <version>. The platform defaults to
 # the host's (macos-arm64 on Apple silicon, linux-x64 on Linux x86_64) and must be the host's: the build runs the
 # program it made. Needs Bun 1.3.14 (on PATH or ~/.bun/bin/bun), a C compiler (xcrun clang on macOS, cc on Linux) and
 # the network for esbuild from npm, which is pinned by sha256 and npm's sha512 integrity and cached in
@@ -28,10 +30,12 @@ version=$1
 out=$2
 shift 2
 platform=
+from=
 while [ $# -gt 0 ]; do
   case $1 in
     --platform) [ $# -ge 2 ] || usage; platform=$2; shift 2 ;;
     --platform=*) platform=${1#--platform=}; shift ;;
+    --from) [ $# -ge 2 ] || usage; from=$2; shift 2 ;;
     *) usage ;;
   esac
 done
@@ -77,6 +81,38 @@ else
 fi
 
 cli_dir=$(cd "$(dirname "$0")/.." && pwd)
+
+pack() {
+  links=$(find "$root" -type l | head -n 5)
+  [ -z "$links" ] || { echo "build.sh: the CLI has links, and Ardia refuses them: $links" >&2; exit 1; }
+  tarball=ardia-cli-$version-$platform.tar.gz
+  if [ "$platform" = linux-x64 ]; then
+    tar --sort=name --owner=0 --group=0 --numeric-owner --no-xattrs --no-acls --no-selinux \
+      -czf "$out/$tarball.part" -C "$work" "ardia-cli-$version"
+  else
+    COPYFILE_DISABLE=1 tar --no-mac-metadata --no-xattrs --uid 0 --gid 0 --uname root --gname wheel \
+      -czf "$out/$tarball.part" -C "$work" "ardia-cli-$version"
+  fi
+  mv "$out/$tarball.part" "$out/$tarball"
+  (cd "$out" && sha256 "$tarball" >"$tarball.sha256")
+  printf '%s\n' "$out/$tarball"
+}
+
+if [ -n "$from" ]; then
+  from=$(cd "$from" && pwd)
+  mkdir -p "$out"
+  out=$(cd "$out" && pwd)
+  work=$(mktemp -d "${TMPDIR:-/tmp}/ardia-cli-build.XXXXXX")
+  trap 'rm -rf "$work"' EXIT
+  root=$work/ardia-cli-$version
+  mkdir "$root"
+  cp -pR "$from/bin" "$from/libexec" "$root/"
+  mkdir "$root/.leases"
+  [ "$("$root/bin/ardia" --version)" = "ardia $version" ] || { echo "build.sh: the ardia in $from doesn't say $version" >&2; exit 1; }
+  pack
+  exit 0
+fi
+
 bun=$(command -v bun 2>/dev/null || true)
 [ -n "$bun" ] || bun=$HOME/.bun/bin/bun
 [ -x "$bun" ] || { echo "build.sh: the TypeScript ardia builds with Bun $bun_version, and there's no bun on PATH or at ~/.bun/bin/bun (CI: oven-sh/setup-bun with bun-version: $bun_version)" >&2; exit 1; }
@@ -142,17 +178,4 @@ mkdir "$root/.leases"
 [ ! -e "$root/python" ] || { echo "build.sh: the CLI has a python folder, and it ships no Python" >&2; exit 1; }
 elsewhere=$(awk 'NF >= 2 && $NF != "ts" { print $0 }' "$cli_dir/served.txt" | head -n 3)
 [ -z "$elsewhere" ] || { echo "build.sh: served.txt routes rows somewhere other than TypeScript: $elsewhere" >&2; exit 1; }
-links=$(find "$root" -type l | head -n 5)
-[ -z "$links" ] || { echo "build.sh: the CLI has links, and Ardia refuses them: $links" >&2; exit 1; }
-
-tarball=ardia-cli-$version-$platform.tar.gz
-if [ "$platform" = linux-x64 ]; then
-  tar --sort=name --owner=0 --group=0 --numeric-owner --no-xattrs --no-acls --no-selinux \
-    -czf "$out/$tarball.part" -C "$work" "ardia-cli-$version"
-else
-  COPYFILE_DISABLE=1 tar --no-mac-metadata --no-xattrs --uid 0 --gid 0 --uname root --gname wheel \
-    -czf "$out/$tarball.part" -C "$work" "ardia-cli-$version"
-fi
-mv "$out/$tarball.part" "$out/$tarball"
-(cd "$out" && sha256 "$tarball" >"$tarball.sha256")
-printf '%s\n' "$out/$tarball"
+pack

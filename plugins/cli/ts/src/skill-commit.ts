@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { chmodSync, closeSync, constants, copyFileSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { stopPoint } from "./after-update.ts";
 import { swapAt } from "./libc.ts";
 import { join } from "./paths.ts";
 
@@ -132,9 +133,14 @@ export function commitPack(folder: string, dirs: string[], previous: string[], f
     if (existing !== undefined && existing.isDirectory() && !existing.isSymbolicLink()) {
       carry(folder, stage, new Set([...previous, ...files.map(([file]) => file), markerName]));
     }
-    for (const [file, data] of files) writeInto(stage, folder, file, data);
+    for (const [file, data] of files) {
+      stopPoint();
+      writeInto(stage, folder, file, data);
+    }
+    stopPoint();
     writeInto(stage, folder, markerName, marker);
     chmodSync(stage, existing !== undefined && existing.isDirectory() && !existing.isSymbolicLink() ? existing.mode & 0o7777 : 0o777 & ~process.umask());
+    stopPoint();
     if (existing === undefined) renameSync(stage, folder);
     else if (!swapped(parent, stage.slice(stage.lastIndexOf("/") + 1), name)) {
       const old = asideOf(parent, name);
@@ -156,6 +162,7 @@ export function replaceFile(folder: string, dirs: string[], name: string, data: 
   safeParent(folder, dirs, false);
   const info = lstatOrUndefined(folder);
   if (info === undefined || info.isSymbolicLink() || !info.isDirectory()) throw new SkillError(`${folder} isn't a plain folder; move it away first`);
+  stopPoint();
   const staging = join(folder, `.ardia-skill-${randomBytes(6).toString("base64url")}`);
   try {
     writeFileSync(staging, data, { flag: "wx", mode: 0o644 });

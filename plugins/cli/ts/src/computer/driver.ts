@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { rollbackOnStop, stopPoint } from "../after-update.ts";
 import { closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeSync } from "node:fs";
 import { cliHome } from "../usage.ts";
 import { join } from "../paths.ts";
@@ -314,6 +315,7 @@ export async function ensureDriver(speak: Speaker): Promise<string> {
   const home = versionHome();
   mkdirSync(home, { recursive: true });
   const work = mkdtempSync(join(home, ".driver-"));
+  const forget = rollbackOnStop(() => rmSync(work, { recursive: true, force: true }));
   try {
     const archive = await fetchVerified(DRIVER_ASSET, DRIVER_SHA256, work, speak);
     const staged = join(work, "tree");
@@ -322,6 +324,7 @@ export async function ensureDriver(speak: Speaker): Promise<string> {
     unlinkSync(archive);
     if (!isRegular(join(staged, APP_NAME, APP_BINARY))) throw new Refused(`${DRIVER_ASSET} has no ${APP_NAME}/${APP_BINARY}`);
     await checkApp(join(staged, APP_NAME));
+    stopPoint();
     for (const name of DRIVER_NOTICES) if (isRegular(join(staged, name))) renameSync(join(staged, name), join(home, name));
     try {
       renameSync(join(staged, APP_NAME), app);
@@ -330,6 +333,7 @@ export async function ensureDriver(speak: Speaker): Promise<string> {
       await checkApp(app);
     }
   } finally {
+    forget();
     rmSync(work, { recursive: true, force: true });
   }
   speak(`step installed ${app}`);

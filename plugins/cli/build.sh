@@ -6,9 +6,14 @@
 #   plugin.json's. Ardia refuses links in a plugin's programs and makes .leases itself, so the folder has neither. Also
 #   leaves in <out dir> the command's tarball (ardia-cli-<version>-<platform>.tar.gz) and the folder packed as Ardia's
 #   release fetches it (cli-plugin-<version>-<platform>.tar.gz), each with its .sha256.
+#   ARDIA_SIGN_CMD, when set, signs the folder before anything is packed: once the folder is complete (plugin.json,
+#   dist/main.js, no links) it runs as sh -c "$ARDIA_SIGN_CMD" ardia-sign <out dir>/cli, with the folder as $1, and
+#   should sign bin/ardia, bin/ardia-libc.so and libexec/esbuild in place. The build fails if it exits non-zero; after
+#   it, the signed ardia must still say the version, and both tarballs and their .sha256 files are packed from the
+#   signed folder, with the same layout as without it.
 set -eu
 
-case "${1:-}" in ''|-h|--help) sed -n '2,8s/^# \{0,1\}//p' "$0"; exit 0 ;; esac
+case "${1:-}" in ''|-h|--help) sed -n '2,13s/^# \{0,1\}//p' "$0"; exit 0 ;; esac
 
 here=$(cd "$(dirname "$0")" && pwd)
 out=$(mkdir -p "$1" && cd "$1" && pwd)
@@ -37,7 +42,13 @@ sed "s/^\( *\"version\": *\)\"[^\"]*\"/\1\"$version\"/" "$here/plugin.json" | gr
 build_manifest_v2_main "$dest"
 links=$(find "$dest" -type l | head -n 5)
 [ -z "$links" ] || { echo "build.sh: Ardia copies a plugin's programs without links, and these are links: $links" >&2; exit 1; }
+if [ -n "${ARDIA_SIGN_CMD:-}" ]; then
+  sh -c "$ARDIA_SIGN_CMD" ardia-sign "$dest" || { rm -f "$tarball" "$tarball.sha256"; echo "build.sh: ARDIA_SIGN_CMD failed on $dest" >&2; exit 1; }
+  links=$(find "$dest" -type l | head -n 5)
+  [ -z "$links" ] || { echo "build.sh: after ARDIA_SIGN_CMD, the plugin folder has links, which Ardia refuses: $links" >&2; exit 1; }
+fi
 [ "$("$dest/bin/ardia" --version)" = "ardia $version" ] || { echo "build.sh: the built ardia doesn't say $version" >&2; exit 1; }
+[ -z "${ARDIA_SIGN_CMD:-}" ] || "$here/scripts/build.sh" "$version" "$out" --from "$dest" >/dev/null
 packed="cli-plugin-$version-$platform.tar.gz"
 case $(uname -s) in
   Darwin) (cd "$out" && COPYFILE_DISABLE=1 tar --no-mac-metadata -czf "$packed" cli) ;;

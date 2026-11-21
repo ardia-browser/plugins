@@ -87,7 +87,10 @@ ENTRIES.push(
     run: async (parsed, call) => {
       const skills = await import("./skills.ts");
       const computerUse = parsed.get("no_cua") !== true;
-      if (parsed.get("auto") === true) return skillsSaid(await skills.installDetected(computerUse), call);
+      if (parsed.get("auto") === true) {
+        const { guardedAfterUpdate } = await import("./after-update.ts");
+        return skillsSaid(await guardedAfterUpdate(() => skills.installDetected(computerUse)), call);
+      }
       const targets = list(parsed, "target");
       return skillsSaid(await skills.install(targets.length > 0 ? targets : ["general"], parsed.get("project") === true, computerUse, parsed.get("replace") === true), call);
     },
@@ -95,7 +98,10 @@ ENTRIES.push(
   {
     path: ["skills", "refresh"],
     spec: { options: [] },
-    run: async (_parsed, call) => skillsSaid(await (await import("./skills.ts")).refresh(), call),
+    run: async (_parsed, call) => {
+      const [{ guardedAfterUpdate }, skills] = await Promise.all([import("./after-update.ts"), import("./skills.ts")]);
+      return skillsSaid(await guardedAfterUpdate(() => skills.refresh()), call);
+    },
   },
   {
     path: ["skills", "get"],
