@@ -185,10 +185,23 @@ def served_table(path: Path = SERVED_TABLE) -> dict[str, str]:
         words = line.split()
         if not words:
             continue
-        if len(words) != 2 or words[1] not in SERVING_SIDES or words[0] in rows:
+        label = " ".join(words[:-1])
+        if len(words) < 2 or words[-1] not in SERVING_SIDES or label in rows:
             raise ValueError(f"{path.name}:{number}: each row is a command and who serves it ({' or '.join(SERVING_SIDES)}), once: {line!r}")
-        rows[words[0]] = words[1]
+        rows[label] = words[-1]
     return rows
+
+
+def served_row(command: str | None, served) -> str | None:
+    if command is None:
+        return None
+    if command in served:
+        return command
+    group = command.split(" ", 1)[0]
+    if " " in command and group in GROUP_ROWS and group in served:
+        return group
+    family = f"{group} *"
+    return family if " " in command and family in served else None
 
 
 def served_commands(path: Path = SERVED_TABLE) -> list[str]:
@@ -201,20 +214,8 @@ def route_from(lines: list[str]) -> str:
     return "ts" if "ts" in lines else "rust"
 
 
-def row_of(command: str, served) -> str | None:
-    if command in served:
-        return command
-    group = command.split(" ", 1)[0]
-    return group if group != command and group in GROUP_ROWS and group in served else None
-
-
-def row_name(command: str) -> str:
-    group = command.split(" ", 1)[0]
-    return group if group in GROUP_ROWS else command
-
-
 def expected_route(entry: str, served: dict[str, str], case: "Case", ts_installed: bool) -> str:
-    row = row_of(case.command, served)
+    row = served_row(case.command, served)
     if case.fallback or row is None:
         return "python"
     side = "ts" if entry == "ts" else served[row]
@@ -1275,7 +1276,7 @@ def summarize(outcomes: list[Outcome], served: list[str] | dict[str, str]) -> di
     served = [name for name in served if name not in SWITCH_ROWS]
     commands = {}
     for outcome in outcomes:
-        name = row_name(outcome.case.command)
+        name = served_row(outcome.case.command, served) or outcome.case.command
         row = commands.setdefault(name, {"cases": 0, "passed": 0, "native": 0, "intentional": 0, "failed": [], "served": name in served})
         row["cases"] += 1
         row["intentional"] += outcome.intentional

@@ -386,15 +386,19 @@ fn handle(root: Option<&Path>, raw: &[OsString], python: Option<&Path>) -> Handl
         return Handled::Python;
     };
     let route = parse_route(&argv);
+    let table = router::Table::load(root);
     let label = match route.label() {
-        Some(label) => label,
-        None if browse_route::invoked(raw) => browse_route::LABEL,
-        None => return Handled::Python,
+        Some(label) => label.to_string(),
+        None if browse_route::invoked(raw) => browse_route::LABEL.to_string(),
+        None => match table.typescript_label(raw) {
+            Some(label) => label,
+            None => return Handled::Python,
+        },
     };
     if standard_fds::any_closed_at_start() || standard_fds::any_is_a_directory() || printable::stdout_unusable() || printable::stderr_unusable() {
         return Handled::Python;
     }
-    match router::Table::load(root).side(label) {
+    match table.side(&label) {
         Some(router::Side::Rust) => run_rust(route, &argv, python),
         Some(router::Side::Ts) => match router::ts_program(root) {
             Some(program) => run_ts(&program, raw),

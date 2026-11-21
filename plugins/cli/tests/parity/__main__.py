@@ -35,7 +35,7 @@ def main() -> int:
         return 2
     cases = harness.load_cases()
     if args.command:
-        cases = [case for case in cases if case.command in args.command or harness.row_name(case.command) in args.command]
+        cases = [case for case in cases if case.command in args.command or harness.served_row(case.command, harness.served_commands()) in args.command]
     if args.case:
         cases = [case for case in cases if case.id in args.case]
     if (args.command or args.case) and not cases:
@@ -52,7 +52,7 @@ def main() -> int:
         progress(outcome)
     served = harness.served_commands()
     if args.command or args.case:
-        served = [name for name in served if any(harness.row_name(outcome.case.command) == name for outcome in outcomes)]
+        served = [name for name in served if any(harness.served_row(outcome.case.command, served) == name for outcome in outcomes)]
     summary = harness.summarize(outcomes, served)
     if args.report:
         head = subprocess.run(["git", "-C", str(harness.CLI), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
