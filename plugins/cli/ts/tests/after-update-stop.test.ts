@@ -91,6 +91,17 @@ fs.writeFileSync(pidFile, String(child.pid));
 process.exit(0);
 `;
 
+const BLOCKING_PARENT = `
+const { spawn } = require("node:child_process");
+const fs = require("node:fs");
+const [program, pidFile, logFile, ...argv] = process.argv.slice(1);
+const log = fs.openSync(logFile, "w");
+const blockTerm = "use POSIX; sigprocmask(SIG_BLOCK, POSIX::SigSet->new(SIGTERM)) or die; exec { $ARGV[0] } @ARGV or die";
+const child = spawn("/usr/bin/perl", ["-e", blockTerm, program, ...argv], { stdio: ["ignore", log, log] });
+fs.writeFileSync(pidFile, String(child.pid));
+setInterval(() => {}, 1000);
+`;
+
 const PARENT = `
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
@@ -228,3 +239,13 @@ for (const argv of [["skills", "install", "--auto"], ["skills", "refresh"]]) {
     assert.deepEqual(snapshot(b.home), before);
   }, 30_000);
 }
+
+test("skills install --auto started with SIGTERM blocked, as older Ardias start it, stops when Ardia goes away", async () => {
+  const b = box();
+  const launched = await launch(b, ["skills", "install", "--auto"], BLOCKING_PARENT);
+  await until(downloadInFlight(b), 10_000, "the cua-driver skill download");
+  process.kill(launched.child, "SIGTERM");
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.ok(alive(launched.child), "SIGTERM wasn't blocked, so this test proves nothing");
+  await stopAndCheck(b, launched, "parent dies");
+}, 30_000);
