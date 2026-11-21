@@ -322,6 +322,25 @@ pub fn die_by(signal: libc::c_int) -> i32 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_label_is_every_word_but_the_side() {
+        let table = Table::parse("config set ts\nplugins list rust\n").unwrap();
+        assert_eq!(table.side("config set"), Some(Side::Ts));
+        assert_eq!(table.side("plugins list"), Some(Side::Rust));
+        assert_eq!(table.side("config"), None);
+    }
+
+    #[test]
+    fn command_labels_skip_shared_flags_as_python_does() {
+        let label = |words: &[&str]| crate::command_label(&words.iter().map(|word| word.to_string()).collect::<Vec<_>>());
+        assert_eq!(label(&["--json", "config", "--data-dir", "d", "set", "k"]), Some("config set".to_string()));
+        assert_eq!(label(&["config", "--data-dir=d", "get"]), Some("config get".to_string()));
+        assert_eq!(label(&["config"]), Some("config".to_string()));
+        assert_eq!(label(&["config", "--help"]), Some("config".to_string()));
+        assert_eq!(label(&["--data-dir"]), None);
+        assert_eq!(label(&["--version"]), None);
+    }
+
     use super::*;
 
     #[test]

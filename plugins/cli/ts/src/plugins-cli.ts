@@ -28,7 +28,7 @@ function pluginsFolder(args: Args): string {
   return join(files.places(args["data_dir"] as string | undefined).folder, "plugins");
 }
 
-async function ask(args: Args, method: string, params: Value, timeout = 30): Promise<Reply> {
+async function ask(args: Args, method: string, params: Value | undefined, timeout = 30): Promise<Reply> {
   try {
     return { ok: true, result: await callControl(args["data_dir"] as string | undefined, method, params, timeout) };
   } catch (error) {
@@ -141,7 +141,7 @@ function pluginLine(plugin: Value): [string, Value[]] {
 }
 
 async function cmdList(args: Args, io: Io): Promise<number> {
-  const reply = await ask(args, "plugins", null);
+  const reply = await ask(args, "plugins", undefined);
   const plugins: Value = reply.ok ? reply.result : filesListing(args);
   if (args["json"]) {
     io.say(dumps(plugins, "indented"));

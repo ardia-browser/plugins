@@ -260,6 +260,8 @@ def check_array(value, schema, path, name) -> list[Problem]:
         problems.append(Problem(path, f"{name} must have at least {schema['minItems']} item{'s' if schema['minItems'] != 1 else ''}"))
     if isinstance(schema.get("maxItems"), int) and len(value) > schema["maxItems"]:
         problems.append(Problem(path, f"{name} must have at most {schema['maxItems']} item{'s' if schema['maxItems'] != 1 else ''}"))
+    if schema.get("uniqueItems") is True:
+        problems += [Problem(path, f"{name} has {show(item)} twice") for item in repeated(value)]
     prefix = schema.get("prefixItems") if isinstance(schema.get("prefixItems"), list) else []
     for index, item in enumerate(value):
         if index < len(prefix):
@@ -272,6 +274,14 @@ def check_array(value, schema, path, name) -> list[Problem]:
                 break
             problems += validate(item, schema["items"], path + (index,), False)
     return problems
+
+
+def repeated(values: list) -> list:
+    twice = []
+    for index, item in enumerate(values):
+        if not any(json_equal(seen, item) for seen in twice) and any(json_equal(earlier, item) for earlier in values[:index]):
+            twice.append(item)
+    return twice
 
 
 def check_object(value, schema, path, name, root, noun) -> list[Problem]:

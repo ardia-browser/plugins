@@ -25,6 +25,7 @@
   {"why": "a password manager with no fill", "manifest": {"manifest": 1, "name": "pm", "title": "PM", "version": "1.0.0", "passwordManager": {"fields": ["login"]}}},
   {"why": "a password manager with no fields", "manifest": {"manifest": 1, "name": "pm", "title": "PM", "version": "1.0.0", "passwordManager": {"fill": "system", "fields": []}}},
   {"why": "a password manager with a field it can't badge", "manifest": {"manifest": 1, "name": "pm", "title": "PM", "version": "1.0.0", "passwordManager": {"fill": "system", "fields": ["creditCard"]}}},
+  {"why": "a password manager naming a field twice", "manifest": {"manifest": 1, "name": "pm", "title": "PM", "version": "1.0.0", "passwordManager": {"fill": "system", "fields": ["login", "login"]}}},
   {"why": "a password manager with an unknown key", "manifest": {"manifest": 1, "name": "pm", "title": "PM", "version": "1.0.0", "passwordManager": {"fill": "system", "fields": ["login"], "autofill": true}}},
   {"why": "a password manager setting up codes some other way", "manifest": {"manifest": 1, "name": "pm", "title": "PM", "version": "1.0.0", "passwordManager": {"fill": "system", "fields": ["oneTimeCode"], "verificationCodeSetup": "helper"}}},
   {"why": "a password manager with passkeys of its own", "manifest": {"manifest": 1, "name": "pm", "title": "PM", "version": "1.0.0", "passwordManager": {"fill": "system", "fields": ["login"], "passkeys": "plugin"}}},

@@ -1799,7 +1799,9 @@ fail scans up to the hard `RLIMIT_NOFILE`, capped at 2^20; only that last fallba
 which uses `close_range` and, when that fails (kernels older than 5.9), falls back to a scan bounded by the soft limit
 that can miss a descriptor above a lowered limit. The flusher is detached but stays a child of the Rust entry, which never
 waits for it, so while that call is still running (blocked on its output, say) a flusher that already finished shows as
-a zombie until the call exits and it is reparented and reaped; it holds no descriptors meanwhile. A command whose row in `served.txt` says `rust` it serves itself; one that
+a zombie until the call exits and it is reparented and reaped; it holds no descriptors meanwhile. Each `served.txt` row is a
+command label, which may be several words (`config set`), then `rust` or `ts`; the label is the one Python records in
+telemetry, the first one or two words after any shared flags. A command whose row in `served.txt` says `rust` it serves itself; one that
 says `ts` it runs as a child, `<root>/libexec/ardia-ts`, whose first argument `--ardia-routed=2:<sigint>:<fd>:<hex caller>`
 carries whether SIGINT was ignored when ardia started, the lifeline descriptor and the caller's hello JSON, since Bun by
 itself can learn none of them. The lifeline is the read end of a pipe whose write end only the router holds: the child sees EOF on it
@@ -1902,6 +1904,20 @@ parity harness rather than stripped wholesale:
   so that write blocks until a second Ctrl-C or until a reader drains the pipe, and only then does the listing end
   with `ardia <command>: interrupted` and status 130. CPython has exactly this window between its signal check and the
   blocking `write` in its buffered writer, so no code closes it.
+- `ardia browse plugin run` (TypeScript) goes through the credential-provider boundary: the plugin gets only `PATH`,
+  `HOME`, `LANG`, `LC_*`, `TMPDIR`, `USER`, `LOGNAME` and `SHELL`, runs in its own process group that is killed on a
+  timeout or Ctrl-C, and its reply must be an object of exactly `protocol`, `success`, `data` and `error` with `success`
+  `true` and exit status 0. A failure reads `Plugin NAME returned an error` or `Plugin NAME sent a malformed reply`
+  (error code `plugin_failed`). Python passes the plugin's own error and protocol text into its message and accepts
+  any truthy `success`, which lets a plugin put arbitrary text in front of the agent.
+- `config`, `theme` and `plugins` in TypeScript hand back to Python, before they print or write anything, for what
+  they don't model: `--help`, argparse errors (a missing or extra argument, an unknown or abbreviated option, a shared
+  flag the command doesn't take), a regular-expression construct with no exact JavaScript equivalent (named groups,
+  back references, Unicode `\b`), JSON nested deeper than 900 levels (Python's `RecursionError`), and text with a lone
+  surrogate that would have to be written to a file (Python's `UnicodeEncodeError`). These aren't differences in
+  output, only in which program prints it.
+- A schema `pattern` with `\w` or `\d` outside `re.ASCII` (the theme checks) is matched with the JavaScript engine's
+  Unicode tables, which may differ from CPython 3.13's on characters assigned in a newer Unicode version.
 
 ## Linux
 
