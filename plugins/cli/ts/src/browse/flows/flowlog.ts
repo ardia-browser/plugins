@@ -6,7 +6,7 @@ import { pyLoads } from "../cdp/params.ts";
 import { Cancelled, currentSignal, later, withSignal } from "../cdp/cancel.ts";
 import type { Ctx } from "../commands/ctx.ts";
 import { hooks } from "../commands/index.ts";
-import { type Flags, parse } from "../commands/parse.ts";
+import { type Flags, leadingSelector, parse, SELECTOR_ALIAS, withSelector } from "../commands/parse.ts";
 import { BrowseError, ConnectionLost, Usage } from "../daemon-errors.ts";
 import * as flowurl from "../flowurl.ts";
 import { FLOWLOG_FIELD } from "../js/index.ts";
@@ -31,9 +31,9 @@ const CREDENTIAL_HEADER = /^(authorization|proxy-authorization|cookie)$|token|cs
 const NO_HUMANIZE: Flags = { "--no-humanize": "bool" };
 const COMMAND_FLAGS: Readonly<Record<string, Flags>> = {
   open: { "--enable": "multi", "--init-script": "multi", "--capture-console": "bool", "--headers": "value", "--label": "value", "--show": "bool" },
-  click: { "--new-tab": "bool", "--button": "value", "--no-humanize": "bool" },
+  click: { "--new-tab": "bool", "--button": "value", "--no-humanize": "bool", "--selector": "value" },
   type: { "--no-humanize": "bool", "--delay": "value" },
-  find: { "--name": "value", "--exact": "bool", "--partial": "bool", "--no-humanize": "bool" },
+  find: { "--name": "value", "--exact": "bool", "--partial": "bool", "--no-humanize": "bool", "--nth": "value" },
 };
 const SCRIPT = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/giu;
 const ATTRIBUTE = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*("[^"]*"|'[^']*'|[^\s"'>]+)/gu;
@@ -319,7 +319,12 @@ function describeFind(options: Record<string, unknown>, given: string[], step: S
     rest = args.slice(1);
   }
   const action = rest[0] ?? "click";
-  const flags = [...(wanted ? ["--name", wanted] : []), ...(options["exact"] ? ["--exact"] : []), ...(options["partial"] ? ["--partial"] : [])];
+  const flags = [
+    ...(wanted ? ["--name", wanted] : []),
+    ...(options["exact"] ? ["--exact"] : []),
+    ...(options["partial"] ? ["--partial"] : []),
+    ...(options["nth"] !== undefined ? ["--nth", String(options["nth"])] : []),
+  ];
   if (TYPING.has(action)) {
     const text = rest.slice(1).join(" ");
     step.replay = [...head, action, text, ...flags];
@@ -332,7 +337,8 @@ async function describe(state: State, page: Page | null, name: string, argv: str
   let options: Record<string, unknown>;
   let args: string[];
   try {
-    [options, args] = parse(argv, COMMAND_FLAGS[name] ?? NO_HUMANIZE);
+    [options, args] = parse(name === "fill" ? leadingSelector(argv) : argv, COMMAND_FLAGS[name] ?? NO_HUMANIZE, name === "click" ? SELECTOR_ALIAS : {});
+    if (name === "click") args = withSelector(options, args, 0, 0);
   } catch (error) {
     if (!(error instanceof Usage)) throw error;
     step.why = "its arguments didn't parse";

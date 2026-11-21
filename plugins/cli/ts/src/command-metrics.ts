@@ -5,6 +5,7 @@ export const TS_ONLY_FLAGS: readonly string[] = [
   "dialog_dismissed_after_failure",
   "eval_isolated_reference_error",
   "eval_main_world",
+  "guessed_syntax",
   "offscreen_handoff_rolled_back",
   "oopif_attach_refused",
   "permission_granted",

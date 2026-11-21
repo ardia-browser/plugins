@@ -776,6 +776,20 @@ stopped: `[2 of 200 rows match "staples"; scrolled to the end of the list]`. A h
 hidden, so the page may not have drawn every row: ardia browse tab t3 --show, then read again`. The inbox of the expenses fixture (200
 mails, 40 a page) reads in about 3 s, and its 2,682-row grid in about 16 s.
 
+### Forms agents guess
+
+The TypeScript CLI also takes the forms agents typed in the bench and got `Unknown …` for, each costing a turn:
+
+- `get attribute <sel> <name>` is `get attr <sel> <name>`; the help now gives `attr`'s real order, selector first.
+- `-s <sel>` or `--selector <sel>` names the element on `screenshot`, `get`, `click` and `fill` (before the text), as
+  the positional selector does.
+- `links [pattern]` is `read --links <pattern> --list` (every link without a pattern; `-s` and `--limit` pass through).
+- `find role … --nth <n>` picks match n of several (from 0, like `find nth`) instead of failing as ambiguous, and an
+  ambiguous `find role` error mentions it; `--nth` on another locator is a usage error pointing at `find nth`.
+
+Each sets `guessed_syntax` in telemetry, and the new flags are in the `flags` table; watch `guessed_syntax` against
+`error_code` `usage` and `unknown_command` on `browse`, and `--help` runs, which these should lower.
+
 ### Batch
 
 `ardia browse batch [--bail] [--json]` runs commands one after another in one call and one daemon request. With no
@@ -2078,6 +2092,8 @@ status, the lines Python prints on stderr for a failure (its final exception lin
 block) and the telemetry it records, except for these, each asserted by name in `tests/test_closed_stdout.py` and the
 parity harness rather than stripped wholesale:
 
+- The forms agents guess (`get attribute`, `-s`/`--selector` on `screenshot`, `get`, `click` and `fill`, `links`,
+  `find role … --nth`) are TypeScript-only; Python answers them with Unknown flag or Unknown command.
 - The TypeScript daemon answers every exit 1 with a code (`command_failed` when the failure has none of its own),
   a failed `batch` adds `failed_step_index` and `failed_step_command` to the event, and telemetry's `flags` keeps the
   TypeScript-only `--touch`, `--isolated` and `--main-world` (parity cases mark these `intentional` with a

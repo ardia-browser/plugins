@@ -33,7 +33,7 @@ def known_browse_commands() -> list:
     from ardia_cli import telemetry
 
     aliases, known = telemetry.browse_names()
-    return sorted(known | set(aliases))
+    return sorted(known | set(aliases) | set(TS_HELP_COMMANDS))
 
 
 DAEMON_METRICS = CLI / "ts" / "src" / "browse" / "metrics.ts"
@@ -59,7 +59,7 @@ def ts_tables() -> str:
 
     shared = browse_cli.VALUE_FLAGS | browse_cli.BOOL_FLAGS
     local = {name: sorted(set(re.findall(r"(?<![\w-])(--?[a-z][a-z0-9-]*)", with_ts_additions(name, usage_text))) - shared)
-             for name, usage_text in sorted(browse_help.COMMANDS.items())}
+             for name, usage_text in sorted({**browse_help.COMMANDS, **TS_HELP_COMMANDS}.items())}
     owns = {name: sorted(flags) for name, flags in sorted(browse_cli.COMMAND_OWNS.items())}
     flags = (command_metrics.FLAGS | command_metrics.READ_FLAGS | command_metrics.ACT_FLAGS | command_metrics.CHANGE_FLAGS
              | command_metrics.FLOW_FLAGS)
@@ -107,6 +107,26 @@ TS_HELP_ADDITIONS = (
      "             set device|geo|offline|headers|credentials|media|permission\n"),
     ("OVERVIEW", "set device|geo|offline|\nheaders|credentials|media, network route,",
      "set device|geo|offline|\nheaders|credentials|media|permission, network route,"),
+    ("OVERVIEW", "(--links <pattern>: every matching link; -s sel)\n",
+     "(--links <pattern>: every matching link; -s sel)\n"
+     "  links [pattern]            List the session tab's links whose URL contains pattern (read --links … --list)\n"),
+    ("OVERVIEW", "Get Info:    get text|html|value|attr <name>|title|url|count|box|styles <sel>\n",
+     "Get Info:    get text|html|value|title|url|count|box|styles <sel> | attr <sel> <name> (or -s <sel>)\n"),
+    ("OVERVIEW", "             find role <role> <action> --name <name>: exact name first, several matches list refs\n",
+     "             find role <role> <action> --name <name>: exact name first, several matches list refs\n"
+     "             --nth <n> picks match n of several (from 0)\n"),
+    ("get", "ardia browse get text|html|value|attr <name>|title|url|count|box|styles <sel>\n",
+     "ardia browse get text|html|value|title|url|count|box|styles <sel> | attr <sel> <name>\n\n"
+     "attribute works as attr. The selector can also come as -s <sel> or --selector <sel>.\n"),
+    ("screenshot", "Without a path it saves under $TMPDIR/ardia-browse/screenshots.",
+     "Without a path it saves under $TMPDIR/ardia-browse/screenshots.\n-s <sel> or --selector <sel> names the element to capture, like [sel]."),
+    ("click", "one that enables it in the same batch.",
+     "one that enables it in the same batch.\nThe selector can also come as -s <sel> or --selector <sel>."),
+    ("fill", "Prints what changed.",
+     "Prints what changed. The selector can also come as -s <sel> or --selector <sel>, before the text."),
+    ("find", "An element that isn't there yet is waited for up to 1.5 s.",
+     "An element that isn't there yet is waited for up to 1.5 s. find role … --nth <n> picks match n of several\n"
+     "(from 0, like find nth) and says which; it works only with find role."),
     ("click", "[--button left|right|middle] [--humanize]", "[--button left|right|middle] [--touch] [--humanize]"),
     ("click", "one that enables it in the same batch.",
      "one that enables it in the same batch.\n--touch taps instead when the page supports touch (it reports touch points), and clicks otherwise, saying so."),
@@ -129,6 +149,13 @@ TS_HELP_ADDITIONS = (
 )
 
 
+TS_HELP_COMMANDS = {
+    "links": "ardia browse links [pattern] [--limit n]\n\n"
+             "Lists the links on the session's tab whose URL contains the pattern (* or none: every link), in page\n"
+             "order: read's link listing as one command.",
+}
+
+
 def with_ts_additions(name: str, text: str) -> str:
     for target, old, new in TS_HELP_ADDITIONS:
         if target != name:
@@ -145,7 +172,7 @@ def ts_help() -> str:
     from ardia_cli.browse import help as browse_help
 
     rows = "".join(f"  {json.dumps(name)}: {json.dumps(with_ts_additions(name, text), ensure_ascii=False)},\n"
-                   for name, text in browse_help.COMMANDS.items())
+                   for name, text in {**browse_help.COMMANDS, **TS_HELP_COMMANDS}.items())
     return (f"export const OVERVIEW = {json.dumps(with_ts_additions('OVERVIEW', browse_help.OVERVIEW), ensure_ascii=False)};\n"
             f"export const COMMANDS: Readonly<Record<string, string>> = {{\n{rows}}};\n")
 

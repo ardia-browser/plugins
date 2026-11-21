@@ -60,6 +60,16 @@ export function splitGlobals(argv: readonly string[]): { found: Found; rest: str
       rest.push(...argv.slice(index - 1));
       break;
     }
+    if (command === "fill" && positionals.length === 0 && (token === "-s" || token === "--selector" || token.startsWith("--selector="))) {
+      const value = token.startsWith("--selector=") ? token.slice("--selector=".length) : argv[index];
+      rest.push(token);
+      if (!token.startsWith("--selector=") && index < argv.length) {
+        rest.push(argv[index] as string);
+        index += 1;
+      }
+      if (value !== undefined) positionals.push(value);
+      continue;
+    }
     if (command !== undefined && opaqueSlot(command, positionals)) {
       positionals.push(token);
       rest.push(token);

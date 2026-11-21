@@ -93,11 +93,35 @@ export function closestNames(wanted: string, names: readonly string[]): string[]
   return names.slice(0, MAX_CANDIDATES);
 }
 
-export async function findRole(ctx: Ctx, page: Page, frame: string, role: string, name: string | null, exact: boolean): Promise<[Element, string, string]> {
+async function nthOfRole(page: Page, frame: string, role: string, found: Candidate[], nth: number, shown: string): Promise<[Element, string, string]> {
+  const resolved: [Element, string][] = [];
+  for (const [node, nodeName] of found) {
+    const element = await page.resolveBackend(Number(node["backendDOMNodeId"]), frame, `role=${role}`);
+    if (element !== null) resolved.push([element, nodeName]);
+    if (resolved.length > nth) break;
+  }
+  const picked = resolved[nth];
+  if (picked === undefined) {
+    const count = resolved.length;
+    throw new BrowseError(`--nth ${nth} asks for match ${nth + 1}, and only ${count} ${shown} element${count === 1 ? "" : "s"} match (--nth counts from 0)`, { matches: count }, "not_found");
+  }
+  return [picked[0], shown, picked[1]];
+}
+
+export async function findRole(
+  ctx: Ctx,
+  page: Page,
+  frame: string,
+  role: string,
+  name: string | null,
+  exact: boolean,
+  nth: number | null = null,
+): Promise<[Element, string, string]> {
   const tree = await page.send("Accessibility.getFullAXTree", { frameId: frame }, { timeout: 60, session: page.sessionFor(frame) });
   const nodes = Array.isArray(tree["nodes"]) ? tree["nodes"] : [];
   const [found, how] = roleCandidates(nodes, role, name, exact);
   const shown = ROLE_NAMES[role] ?? role;
+  if (nth !== null) return nthOfRole(page, frame, role, found, nth, shown);
   const resolved: [Element, string][] = [];
   for (const [node, nodeName] of found.slice(0, MAX_CANDIDATES + 1)) {
     const element = await page.resolveBackend(Number(node["backendDOMNodeId"]), frame, `role=${role}`);
@@ -117,17 +141,21 @@ export async function findRole(ctx: Ctx, page: Page, frame: string, role: string
   const listed = resolved.slice(0, MAX_CANDIDATES).map(([element, nodeName]) => ({ ref: `@${ctx.state.addRef(page, element, shown, nodeName)}`, name: nodeName }));
   const more = found.length > MAX_CANDIDATES ? ` (and ${found.length - MAX_CANDIDATES} more)` : "";
   const kind = how === "exact" ? "are named exactly" : "have names containing";
-  const fix = how === "exact" ? "Use one of their refs" : "Use a ref, or the full name";
+  const fix = how === "exact" ? "Use one of their refs (or --nth <n>, from 0)" : "Use a ref, or the full name (or --nth <n>, from 0)";
   const lines = listed.map((item) => `  ${shown} "${shownName(item.name)}" [ref=${item.ref.slice(1)}]`).join("\n");
   throw new BrowseError(`${found.length} ${shown}s ${kind} "${name}"${more}, so nothing was clicked. ${fix}:\n${lines}`, { candidates: listed }, "ambiguous");
 }
 
 export async function cmdFind(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, given] = parse(argv, { "--name": "value", "--exact": "bool", "--partial": "bool", "--no-humanize": "bool" });
+  const [options, given] = parse(argv, { "--name": "value", "--exact": "bool", "--partial": "bool", "--no-humanize": "bool", "--nth": "value" });
   need(given, 1, "find <locator> <value> [action] [text]");
   if (options["exact"] && options["partial"]) throw new Usage("find takes --exact or --partial, not both");
   const [locator, args, wantedName] = findArguments(given, (options["name"] as string | undefined) ?? null);
   need(args, 1, "find <locator> <value> [action] [text]");
+  const nth = options["nth"] === undefined ? null : pyIntArg(String(options["nth"]));
+  if (nth !== null && locator !== "role") throw new Usage(`--nth works with find role; for a CSS selector use \`find nth <n> <selector>\``);
+  if (nth !== null && nth < 0) throw new Usage("--nth counts from 0, so it takes 0 or more");
+  if (nth !== null) flag("guessed_syntax", true);
   const page = await ctx.state.page();
   const frame = frameOrMain(ctx, page);
   const exact = Boolean(options["exact"]);
@@ -149,7 +177,7 @@ export async function cmdFind(ctx: Ctx, argv: string[]): Promise<Result> {
     let element: Element | null = null;
     let role = "";
     let name = "";
-    if (locator === "role") [element, role, name] = await findRole(ctx, page, frame, value, wantedName, exact);
+    if (locator === "role") [element, role, name] = await findRole(ctx, page, frame, value, wantedName, exact, nth);
     else if (locator === "text") element = await fromRemote("(t, e) => ardiaBrowse.findText(t, e)", [value, exact], `text=${value}`);
     else if (locator === "label") element = await fromRemote("(t, e) => ardiaBrowse.findLabel(t, e)", [value, exact], `label=${value}`);
     else if (locator === "placeholder" || locator === "alt" || locator === "title") {

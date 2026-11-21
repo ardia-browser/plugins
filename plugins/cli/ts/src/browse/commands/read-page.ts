@@ -114,3 +114,16 @@ export async function cmdRead(ctx: Ctx, argv: string[]): Promise<Result> {
 }
 
 register("read", cmdRead);
+
+export function linksArgs(argv: readonly string[]): string[] {
+  const [options, given] = parse(argv, { "--limit": "value" });
+  if (given.length > 1) throw new Usage(`links takes one pattern, not ${given.length} (links [pattern] [--limit n])`);
+  const out = ["--links", given[0] ?? "*", "--list"];
+  if (options["limit"] !== undefined) out.push("--limit", String(options["limit"]));
+  return out;
+}
+
+register("links", (ctx, argv) => {
+  flag("guessed_syntax", true);
+  return cmdRead(ctx, linksArgs(argv));
+});

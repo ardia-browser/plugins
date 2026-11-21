@@ -1,3 +1,4 @@
+import { flag } from "../metrics.ts";
 import { isSpace, strip } from "../../py.ts";
 import { decimalValue } from "../../pylib/unicode.ts";
 import { Usage } from "../daemon-errors.ts";
@@ -19,6 +20,39 @@ function digitsAsZero(text: string): string {
   return mapped;
 }
 const SCHEME = /^([a-zA-Z][a-zA-Z0-9+.-]*):/u;
+
+export const SELECTOR_FLAG: Flags = { "--selector": "value" };
+export const SELECTOR_ALIAS: Readonly<Record<string, string>> = { "-s": "--selector" };
+
+export function withSelector(options: Parsed, args: string[], at = 0, extra = Number.POSITIVE_INFINITY): string[] {
+  const given = options["selector"];
+  if (typeof given !== "string") return args;
+  if (given === "" || given === "--") throw new Usage("-s/--selector needs a selector");
+  if (args.length > at + extra) throw new Usage("give the selector once: as a word or with -s/--selector, not both");
+  flag("guessed_syntax", true);
+  return [...args.slice(0, at), given, ...args.slice(at)];
+}
+
+export function isSelectorFlag(token: string): boolean {
+  return token === "-s" || token === "--selector" || token.startsWith("--selector=");
+}
+
+export function leadingSelector(argv: readonly string[]): string[] {
+  const out: string[] = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index] as string;
+    if (token === "--" || !token.startsWith("-")) return [...out, ...argv.slice(index)];
+    if (!isSelectorFlag(token)) {
+      out.push(token);
+      continue;
+    }
+    const value = token.startsWith("--selector=") ? token.slice("--selector=".length) : argv[index + 1];
+    if (value === undefined || value === "" || value === "--") throw new Usage("-s/--selector needs a selector");
+    flag("guessed_syntax", true);
+    return [...out, value, ...argv.slice(token.startsWith("--selector=") ? index + 1 : index + 2)];
+  }
+  return out;
+}
 
 export function parse(
   argv: readonly string[],

@@ -17,7 +17,8 @@ import { record } from "../state/records.ts";
 import { navigate, pageTitle } from "./core.ts";
 import type { Ctx } from "./ctx.ts";
 import { register } from "./index.ts";
-import { need, normalizeUrl, parse } from "./parse.ts";
+import { need, normalizeUrl, parse, SELECTOR_ALIAS, SELECTOR_FLAG, withSelector } from "./parse.ts";
+import { flag } from "../metrics.ts";
 import { readTextPy } from "./pyfile.ts";
 import { currentOrNew, frameOrMain, originOf, pyIntArg, resolve } from "./shared.ts";
 import "../snapshot/collect.ts";
@@ -88,8 +89,13 @@ function boxText(value: number): string {
 }
 
 export async function cmdGet(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [, args] = parse(argv);
+  const [options, given] = parse(argv, SELECTOR_FLAG, SELECTOR_ALIAS);
+  const args = withSelector(options, given, 1, given[0] === "attr" || given[0] === "attribute" ? 1 : 0);
   need(args, 1, "get text|html|value|attr|title|url|count|box|styles|cdp-url [selector]");
+  if (args[0] === "attribute") {
+    args[0] = "attr";
+    flag("guessed_syntax", true);
+  }
   const what = args[0] as string;
   if (what === "cdp-url") {
     await ctx.state.connect();

@@ -374,6 +374,8 @@ describe("refs", () => {
 describe("the command table", () => {
   const ctx = () => new Ctx(stateWith(new FakeBrowser()), {}, "/", {}, null);
 
+  const TYPESCRIPT_ONLY = ["links"];
+
   test("every Python command is in the table and served", async () => {
     const python = process.env["ARDIA_TEST_PYTHON"] ?? "python3";
     const listed = spawnSync(python, ["-c", "from ardia_cli.browse import commands, capture, audit, flows, react, media; print('\\n'.join(sorted(commands.COMMANDS)))"], {
@@ -383,7 +385,7 @@ describe("the command table", () => {
     expect(listed.status).toBe(0);
     const names = listed.stdout.trim().split("\n");
     const fullControl = names.includes("cdp") ? [] : ["cdp"];
-    expect(Object.keys(OWNERS).sort()).toEqual([...names, "auth", ...fullControl].sort());
+    expect(Object.keys(OWNERS).sort()).toEqual([...names, "auth", ...fullControl, ...TYPESCRIPT_ONLY].sort());
     expect(Object.keys(OWNERS).filter((name) => !served(name))).toEqual([]);
   });
 

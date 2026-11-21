@@ -7,9 +7,9 @@ import { pyFloatOrUndefined, reprText } from "../../pylib/str.ts";
 import { roundHalfEven } from "../../pylib/format.ts";
 import type { Ctx } from "../commands/ctx.ts";
 import { register } from "../commands/index.ts";
-import { need, parse } from "../commands/parse.ts";
+import { need, parse, SELECTOR_ALIAS, SELECTOR_FLAG } from "../commands/parse.ts";
 import { resolve } from "../commands/shared.ts";
-import { BrowseError, Gated } from "../daemon-errors.ts";
+import { BrowseError, Gated, Usage } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
 import { flag } from "../metrics.ts";
 import { pyError, pyFloat, pyIntArg } from "../pyerror.ts";
@@ -154,8 +154,9 @@ export async function cmdScreenshot(ctx: Ctx, argv: string[]): Promise<Result> {
       "--out": "value",
       "--if-changed": "bool",
       "--threshold": "value",
+      ...SELECTOR_FLAG,
     },
-    { "-f": "--full" },
+    { "-f": "--full", ...SELECTOR_ALIAS },
   );
   for (const key of ["screenshot_dir", "screenshot_format", "screenshot_quality"]) {
     if (options[key]) ctx.options[key] = options[key];
@@ -167,7 +168,14 @@ export async function cmdScreenshot(ctx: Ctx, argv: string[]): Promise<Result> {
   if (fmt !== "png" && fmt !== "jpeg") throw new BrowseError("--screenshot-format takes png or jpeg");
   const qualityGiven = ctx.options["screenshot_quality"] || ctx.env["AGENT_BROWSER_SCREENSHOT_QUALITY"];
   const quality = qualityGiven ? pyIntArg(String(qualityGiven)) : null;
-  let selector: string | null = null;
+  let selector: string | null = typeof options["selector"] === "string" ? (options["selector"] as string) : null;
+  if (selector === "" || selector === "--") throw new Usage("-s/--selector needs a selector");
+  if (selector !== null) {
+    flag("guessed_syntax", true);
+    if (options["out"] && args.length > 0) throw new Usage("screenshot takes its path once: as a word or as --out, not both");
+    if (args.length > 1) throw new Usage("with -s/--selector, screenshot takes one path");
+    if (args.length === 1 && !isPath(args[0] as string)) throw new Usage(`give the selector once: ${args[0]} isn't a file path, and -s/--selector already names the element`);
+  }
   let target = (options["out"] as string | undefined) || null;
   for (const arg of args) {
     if (target === null && isPath(arg)) target = arg;
