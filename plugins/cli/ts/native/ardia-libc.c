@@ -812,6 +812,7 @@ static napi_value non_blocking(napi_env env, napi_callback_info info) {
   int now = fcntl(fd, F_GETFL);
   if (now < 0) return status(env, failed());
   return status(env, fcntl(fd, F_SETFL, now | O_NONBLOCK) == 0 ? 0 : failed());
+}
 
 static char **split_blob(Call *call, size_t index, int *error) {
   void *data = NULL;

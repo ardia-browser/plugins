@@ -50,7 +50,7 @@ async function viaPython(root: string): Promise<string> {
 from pathlib import Path
 from ardia_cli import telemetry
 print(telemetry.flush(Path(sys.argv[1]), sys.argv[3], "dev"))`;
-  const child = spawn(PYTHON, ["-I", "-c", script, root, CLI, URL], { env: { PATH: process.env.PATH ?? "/usr/bin:/bin", TZ: process.env.TZ ?? "Etc/UTC" } });
+  const child = spawn(PYTHON, ["-I", "-c", script, root, CLI, URL], { env: { PATH: process.env.PATH ?? "/usr/bin:/bin", TZ: Intl.DateTimeFormat().resolvedOptions().timeZone } });
   let out = "";
   let err = "";
   child.stdout.on("data", (chunk) => (out += chunk));
