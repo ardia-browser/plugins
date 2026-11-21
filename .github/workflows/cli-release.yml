@@ -2,7 +2,7 @@ name: Command Line release
 
 on:
   pull_request:
-    paths: ["plugins/cli/**", ".github/workflows/cli-release.yml"]
+    paths: ["plugins/cli/**", ".github/workflows/cli-release.yml", ".github/release/sign-macos.sh"]
   push:
     tags: ["cli-v*"]
   workflow_dispatch:
@@ -106,8 +106,71 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  signing-script:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: It fails closed without the cli-release secrets
+        run: |
+          set -euo pipefail
+          bash -n .github/release/sign-macos.sh
+          mkdir -p "$RUNNER_TEMP/cli" && echo '{}' > "$RUNNER_TEMP/cli/plugin.json"
+          if out=$(env -i PATH=/usr/bin:/bin .github/release/sign-macos.sh "$RUNNER_TEMP/cli" 2>&1); then
+            echo "::error::sign-macos.sh signed nothing yet exited 0"; exit 1
+          fi
+          grep -q "missing DEVELOPER_ID_P12_BASE64 DEVELOPER_ID_P12_PASSWORD ASC_API_KEY_P8_BASE64 ASC_API_KEY_ID ASC_API_ISSUER_ID APPLE_TEAM_ID" <<<"$out"
+
+  build-signed-macos:
+    needs: version
+    if: needs.version.outputs.publish == 'true'
+    name: Build, sign and notarize on macos-arm64
+    runs-on: macos-15
+    timeout-minutes: 75
+    environment: cli-release
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.2
+      - name: Build, then sign and notarize before packing
+        env:
+          DEVELOPER_ID_P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          ASC_API_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          ARDIA_SIGN_CMD: '"$GITHUB_WORKSPACE/.github/release/sign-macos.sh" "$1"'
+        run: ARDIA_PLUGIN_VERSION="$VERSION" plugins/cli/build.sh "$RUNNER_TEMP/out"
+      - name: Every Mach-O in both tarballs is signed by the team
+        env:
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+        run: |
+          .github/release/sign-macos.sh --check "$RUNNER_TEMP/out" "$VERSION"
+          echo "- macos-arm64, signed and notarized: $(cut -d' ' -f1 "$RUNNER_TEMP/out/cli-plugin-$VERSION-macos-arm64.tar.gz.sha256")" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-macos-arm64-signed
+          path: |
+            ${{ runner.temp }}/out/ardia-cli-${{ env.VERSION }}-macos-arm64.tar.gz
+            ${{ runner.temp }}/out/ardia-cli-${{ env.VERSION }}-macos-arm64.tar.gz.sha256
+            ${{ runner.temp }}/out/cli-plugin-${{ env.VERSION }}-macos-arm64.tar.gz
+            ${{ runner.temp }}/out/cli-plugin-${{ env.VERSION }}-macos-arm64.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
+
   publish:
-    needs: [version, build]
+    needs: [version, build, build-signed-macos]
     if: needs.version.outputs.publish == 'true'
     runs-on: ubuntu-24.04
     permissions:
@@ -121,16 +184,23 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
+          name: cli-linux-x64
           path: ${{ runner.temp }}/assets
-          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-macos-arm64-signed
+          path: ${{ runner.temp }}/assets
       - name: Release
         run: |
           set -euo pipefail
           assets="$RUNNER_TEMP/assets"
+          for file in "cli-plugin-$VERSION-macos-arm64.tar.gz" "ardia-cli-$VERSION-macos-arm64.tar.gz" "cli-plugin-$VERSION-linux-x64.tar.gz" "ardia-cli-$VERSION-linux-x64.tar.gz"; do
+            test -f "$assets/$file" || { echo "::error::$file is missing"; exit 1; }
+          done
           cp plugins/cli/install.sh "$assets/install.sh"
           (cd "$assets" && sha256sum install.sh > install.sh.sha256 && sha256sum -c ./*.sha256)
           gh release view "cli-v$VERSION" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 && { echo "::error::cli-v$VERSION is already released"; exit 1; }
           gh release create "cli-v$VERSION" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Command Line $VERSION" \
-            --notes "The ardia command $VERSION. Ardia pins it in apps/browser/official-plugins.json (scripts/release/official-plugins.py pin cli $VERSION); install.sh installs it by hand with --version $VERSION --sha256 <the tarball's .sha256>." \
+            --notes "The ardia command $VERSION. Its macOS Mach-Os are Developer ID-signed and notarized. Ardia pins it in apps/browser/official-plugins.json (scripts/release/official-plugins.py pin cli $VERSION); install.sh installs it by hand with --version $VERSION --sha256 <the tarball's .sha256>." \
             "$assets"/*
           echo "Released cli-v$VERSION: pin it in ardia with scripts/release/official-plugins.py pin cli $VERSION" >> "$GITHUB_STEP_SUMMARY"
