@@ -54,6 +54,13 @@ export function leadingSelector(argv: readonly string[]): string[] {
   return out;
 }
 
+const TRUE_WORDS = ["true", "1", "yes", "on"];
+
+function boolValue(name: string, inline: string | null): true {
+  if (inline === null || TRUE_WORDS.includes(inline.toLowerCase())) return true;
+  throw new Usage(`${name} takes no value: give ${name}, or leave it out`);
+}
+
 export function parse(
   argv: readonly string[],
   flags: Flags = {},
@@ -81,7 +88,7 @@ export function parse(
     if (Object.hasOwn(flags, name)) {
       const kind = flags[name] as Kind;
       const key = name.replace(/^-+/u, "").replaceAll("-", "_");
-      if (kind === "bool") options[key] = true;
+      if (kind === "bool") options[key] = boolValue(name, inline);
       else {
         if (inline === null) {
           if (index >= argv.length) throw new Usage(`${name} needs a value`);

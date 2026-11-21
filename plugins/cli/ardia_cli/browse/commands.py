@@ -69,6 +69,15 @@ def command(*names):
     return register
 
 
+TRUE_WORDS = ("true", "1", "yes", "on")
+
+
+def bool_value(name: str, inline: str | None) -> bool:
+    if inline is None or inline.lower() in TRUE_WORDS:
+        return True
+    raise Usage(f"{name} takes no value: give {name}, or leave it out")
+
+
 def parse(argv: list[str], flags: dict[str, str] | None = None, aliases: dict[str, str] | None = None):
     flags = flags or {}
     aliases = aliases or {}
@@ -87,7 +96,7 @@ def parse(argv: list[str], flags: dict[str, str] | None = None, aliases: dict[st
             kind = flags[name]
             key = name.lstrip("-").replace("-", "_")
             if kind == "bool":
-                options[key] = True
+                options[key] = bool_value(name, inline)
             else:
                 if inline is None:
                     if index >= len(argv):

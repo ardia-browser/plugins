@@ -113,6 +113,7 @@ export async function dispatch(ctx: Ctx, name: string, argv: string[]): Promise<
   if (Object.hasOwn(SKIPPED, name)) throw new BrowseError(`\`${name}\` isn't part of ardia browse: ${SKIPPED[name]}`, null, "unsupported");
   const handler = COMMANDS.get(name);
   if (handler === undefined) throw new Usage(`Unknown command: ${name}. Run \`ardia browse --help\``);
+  if (ctx.state) ctx.state.leftOffscreen = null;
   if (name !== "batch" && hooks.before) await hooks.before(ctx, name, argv);
   const step = hooks.begin ? await hooks.begin(ctx, name, argv) : null;
   let result: Result;

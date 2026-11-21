@@ -216,7 +216,7 @@ describe("4: open never navigates a borrowed tab", () => {
     expect(calls(browser, "Target.createTarget")).toBe(1);
     expect(state.current).toBe("OWN");
     expect((result.data as Record<string, unknown>)["left"]).toBe(state.tabId("TARGET"));
-    expect(result.text).toContain("since this session uses your tab");
+    expect(String(result.text).split("\n")[0]).toContain("the tab you picked with `tab active` [");
     expect(browser.sent.filter((entry) => entry.method === "Page.navigate" && entry.session === "SESSION-1")).toHaveLength(navigateBefore);
   });
 });

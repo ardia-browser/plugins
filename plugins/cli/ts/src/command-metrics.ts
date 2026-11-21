@@ -9,6 +9,7 @@ export const TS_ONLY_FLAGS: readonly string[] = [
   "guessed_syntax",
   "offscreen_handoff_rolled_back",
   "oopif_attach_refused",
+  "open_here",
   "permission_granted",
   "read_oopif_frames",
   "route_enable_undone",
@@ -18,6 +19,7 @@ export const TS_ONLY_FLAGS: readonly string[] = [
   "setup_session_dropped",
   "snapshot_document_changed",
   "snapshot_oopif_frames",
+  "stale_ref_after_open",
   "tab_close_interrupted",
 ];
 

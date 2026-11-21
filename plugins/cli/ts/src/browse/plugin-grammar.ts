@@ -69,6 +69,8 @@ export function daemonParse(argv: readonly string[], grammar: Grammar): Parsed {
     if (kind !== undefined) {
       const key = keyOf(name);
       if (kind === "bool") {
+        const word = inline?.toLowerCase();
+        if (word !== undefined && !["true", "1", "yes", "on"].includes(word)) return { usage: `${name} takes no value: give ${name}, or leave it out` };
         options.set(key, true);
         continue;
       }
@@ -113,7 +115,7 @@ export function pluginVerdict(rest: readonly string[]): Verdict {
   if (name === "batch") return { allowed: false, why: `\`${command}\``, nested: true };
   if (name === "open") {
     const parsed = daemonParse(argv, DAEMON_GRAMMAR.open as Grammar);
-    if ("options" in parsed && parsed.options.has("read")) return { allowed: false, why: `\`${command} --read\``, nested: true };
+    if ("options" in parsed && parsed.options.get("read") === true) return { allowed: false, why: `\`${command} --read\``, nested: true };
   }
   const allowed = PLUGIN_FLAGS[name];
   const grammar = DAEMON_GRAMMAR[name];

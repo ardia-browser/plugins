@@ -127,6 +127,11 @@ TS_HELP_ADDITIONS = (
     ("find", "An element that isn't there yet is waited for up to 1.5 s.",
      "An element that isn't there yet is waited for up to 1.5 s. find role … --nth <n> picks match n of several\n"
      "(from 0, like find nth) and says which; it works only with find role."),
+    ("open", "[--capture-console] [--label name]\n", "[--capture-console] [--label name] [--here]\n"),
+    ("open", "When the session was using the user's tab (`tab active`), the answer\nnames both: `→ [t4] is this session's tab now …; `tab t3` goes back`.",
+     "When the session is using the user's tab (`tab active`), open goes to a new background tab of its own and its\n"
+     "first line says so, leaving the user's tab as it was; open --here <url> navigates the picked tab instead.\n"
+     "A ref from the page a later open replaced fails as stale and names both pages; `tab new <url>` keeps both."),
     ("click", "[--button left|right|middle] [--humanize]", "[--button left|right|middle] [--touch] [--humanize]"),
     ("click", "one that enables it in the same batch.",
      "one that enables it in the same batch.\n--touch taps instead when the page supports touch (it reports touch points), and clicks otherwise, saying so."),

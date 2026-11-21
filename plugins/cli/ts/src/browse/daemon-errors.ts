@@ -42,8 +42,8 @@ function capitalized(text: string): string {
 }
 
 export class StaleRef extends BrowseError {
-  constructor(ref: string, why: string) {
-    const fix = why.includes("is now @") ? "use that ref" : "Run `ardia browse snapshot -i` again and use the new refs";
+  constructor(ref: string, why: string, given: string | null = null) {
+    const fix = given ?? (why.includes("is now @") ? "use that ref" : "Run `ardia browse snapshot -i` again and use the new refs");
     super(`Stale ref @${ref}: ${why}. ${capitalized(fix)}`, null, "stale_ref");
   }
 }

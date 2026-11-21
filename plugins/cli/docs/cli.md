@@ -588,7 +588,15 @@ visible (each tab is probed through a flat session and an isolated world, then d
 when there's no such page, as on New Tab. Once a session's tab closes it doesn't move on to whatever the user is
 looking at: commands fail with `tab_gone` until `tab active`, `tab <id>` or `open`. A tab taken with `tab active` is
 the user's: the session reads it, clicks and types in it, but `open` never navigates it: it opens its own background
-tab, as with no tab; to navigate the user's tab, pick it by id with `tab <id>`. The same goes for every command that
+tab, as with no tab, and in the TypeScript CLI its answer's first line says so (`→ Opened in a new background tab [t2];
+the tab you picked with \`tab active\` [t1] is unchanged (\`open --here <url>\` navigates it, \`tab t1\` goes back)`,
+where it used to come after the page's title). To navigate the user's tab, `open --here <url>` (TypeScript; telemetry
+`open_here`; it needs a URL, and once the session switched to another tab by id it has no picked tab, so it's a usage
+error; a failed navigation leaves the session on the tab it was on; it refuses `--enable` and `--init-script`, the global
+one too, since it never sets up a tab it didn't open, and `--show` on a tab Ardia keeps off-screen), or pick it by id with `tab <id>`. A ref from a page that a later
+`open` replaced in the same tab fails as `stale_ref` naming both pages and how to keep both: `Stale ref @e84: it was on
+"People directory"; \`open\` replaced it in this tab with "Team calendar". To keep both pages, open the second with
+\`ardia browse tab new <url>\`` (telemetry `stale_ref_after_open`; four bench runs of `multitab` lost a command here). The same goes for every command that
 loads a URL (`vitals <url>`, `diff url`, `a11y <url>`, `record start <path> <url>`, and `auth login` when the tab isn't
 on the credential's origin; script's `page.goto` is `open`), while `back`, `forward`, `reload` and `pushstate` refuse
 it (`borrowed_tab`), and so does anything that changes its site data: storage set/remove/clear, cookies set/clear,

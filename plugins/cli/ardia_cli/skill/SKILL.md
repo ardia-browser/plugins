@@ -53,7 +53,7 @@ EOF
   `find role button click --name Save` need no refs.
 - `fill` types, and sets date (`YYYY-MM-DD`), time, color and range inputs; on a grid cell it opens, sets and
   commits. `select` picks in a `<select>`, typeahead, chip input or custom dropdown.
-- `open <url>` moves your session to a background tab; `tab t<N>` (`tab list`) switches back, in a batch too.
+- `open <url>` uses its own tab (`--here`: the `tab active` one); `tab new <url>` adds one; `tab t<N>` switches.
 
 ## Loops
 

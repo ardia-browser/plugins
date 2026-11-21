@@ -3,6 +3,19 @@ import { flag } from "../metrics.ts";
 import type { Element, Page } from "./page.ts";
 
 export const NAVIGATED_REFS_KEPT = 4000;
+export const OPEN_REPLACED_KEPT = 16;
+export const OPEN_TITLE_SHOWN = 80;
+
+export type OpenReplaced = { target: string; documents: Set<string>; from: string; to: string };
+
+function documentKey(frame: string, loader: string): string {
+  return JSON.stringify([frame, loader]);
+}
+
+function shownTitle(title: string): string {
+  const chars = [...title.replace(/\s+/gu, " ").trim()];
+  return chars.length > OPEN_TITLE_SHOWN ? `${chars.slice(0, OPEN_TITLE_SHOWN - 1).join("")}…` : chars.join("");
+}
 
 export type Ref = {
   id: string;
@@ -54,6 +67,31 @@ export abstract class Refs {
   currentRefs: string[] = [];
   generation = 0;
   lastSnapshot: string | null = null;
+  readonly openReplaced: OpenReplaced[] = [];
+
+  documentsOf(page: Page): Set<string> {
+    return new Set([...page.frames].filter(([, frame]) => frame.loader).map(([frameId, frame]) => documentKey(frameId, frame.loader as string)));
+  }
+
+  noteOpenReplaced(page: Page, documents: Set<string>, from: string, to: string): void {
+    const now = this.documentsOf(page);
+    const replaced = new Set([...documents].filter((key) => !now.has(key)));
+    if (replaced.size === 0) return;
+    this.openReplaced.push({ target: page.targetId, documents: replaced, from: shownTitle(from), to: shownTitle(to) });
+    while (this.openReplaced.length > OPEN_REPLACED_KEPT) this.openReplaced.shift();
+  }
+
+  staleAfterOpen(ref: Ref): StaleRef | null {
+    const key = documentKey(ref.frame, ref.loader);
+    const replaced = this.openReplaced.find((entry) => entry.target === ref.target && entry.documents.has(key));
+    if (replaced === undefined) return null;
+    flag("stale_ref_after_open", true);
+    return new StaleRef(
+      ref.id,
+      `it was on "${replaced.from}"; \`open\` replaced it in this tab with "${replaced.to}"`,
+      "To keep both pages, open the second with `ardia browse tab new <url>`",
+    );
+  }
 
   setRefs(refs: Ref[], snapshotText: string | null, page: Page | null = null): void {
     this.generation += 1;
@@ -126,7 +164,7 @@ export abstract class Refs {
     const ref = this.refs.get(refId);
     if (ref === undefined) {
       const old = this.navigatedRefs.get(refId);
-      if (old !== undefined) throw new StaleRef(refId, await this.afterNavigation(old));
+      if (old !== undefined) throw this.staleAfterOpen(old) ?? new StaleRef(refId, await this.afterNavigation(old));
       if (digits(refId.slice(1)) && Number(refId.slice(1)) <= this.issuedRefs) throw new StaleRef(refId, "it came from an earlier snapshot, and refs are never reused");
       throw new BrowseError(`Unknown ref: ${refId}`, null, "unknown_ref");
     }
@@ -141,8 +179,8 @@ export abstract class Refs {
     }
     await page.refreshFrames();
     const frame = page.frames.get(ref.frame);
-    if (frame === undefined) throw new StaleRef(refId, "its frame is gone");
-    if (frame.loader !== ref.loader) throw new StaleRef(refId, "the page navigated since that snapshot");
+    if (frame === undefined) throw this.staleAfterOpen(ref) ?? new StaleRef(refId, "its frame is gone");
+    if (frame.loader !== ref.loader) throw this.staleAfterOpen(ref) ?? new StaleRef(refId, "the page navigated since that snapshot");
     const element = await page.resolveBackend(ref.backend, ref.frame, `@${refId}`);
     let gone: string;
     if (element === null) gone = "the element is no longer in the page";
