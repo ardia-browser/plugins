@@ -1,10 +1,11 @@
+import base64
 import json
 import os
+import re
 import select
 import shutil
-import signal
-import site
 import socket
+import signal
 import subprocess
 import sys
 import tempfile
@@ -14,131 +15,250 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-CLI = Path(__file__).resolve().parents[1]
-CRATE = CLI / "rust"
-INSTALL_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from parity import harness
+
+CLI = harness.CLI
+INSTALL_ID = harness.INSTALL_ID
 KEPT_ENV = ("PATH", "LANG", "LC_ALL", "LC_CTYPE", "TMPDIR", "USER", "LOGNAME", "SHELL")
-VOLATILE = ("uuid", "timestamp")
-QUEUED = {"uuid": "0190a1b2-c3d4-7e5f-8a9b-000000000001", "event": "cli_command", "distinct_id": INSTALL_ID, "timestamp": "2026-01-01T00:00:00.000Z",
-          "properties": {"command": "earlier"}}
-VOLATILE_PROPERTIES = ("$session_id", "total_ms", "startup_ms", "served_by")
-
-TREE = {
-    "profiles": [{"id": "p-1", "name": "Personal"}],
-    "windows": [
-        {
-            "id": "w-1", "kind": "normal", "focused": True, "profile": "p-1",
-            "spaces": [{
-                "profile": "p-1", "profileName": "Personal", "shown": True,
-                "topApps": [{"type": "tab", "id": "tab-9", "url": "https://mail.example/", "title": "Mail", "pin": "tile", "active": False, "muted": False, "asleep": True, "pid": 501, "cpu": 0.25, "memory": 90_500_000}],
-                "pinned": [{"type": "group", "id": "g-0", "label": "Pinned é", "icon": "symbol:star", "color": "neutral", "pinned": True, "items": []}],
-                "tabs": [
-                    {"type": "group", "id": "g-1", "name": "Work", "label": "Work", "icon": "\U0001f680", "color": "blue", "collapsed": False, "pinned": False, "parent": None, "items": [
-                        {"type": "tab", "id": "tab-2", "url": "https://b.example/?q=\u0085", "title": "B\u001b[31m red", "pin": None, "active": False, "muted": True, "asleep": False, "pid": 777, "cpu": 87.35, "memory": 412_000_000},
-                        {"type": "group", "id": "g-2", "name": "", "label": "Docs \"quoted\"", "icon": None, "color": "neutral", "collapsed": True, "pinned": False, "parent": "g-1", "items": [
-                            {"type": "tab", "id": "tab-3", "url": "https://c.example/", "title": "C\ud800", "pin": None, "active": False, "muted": False, "asleep": False, "pid": 777, "cpu": 87.35, "memory": 412_000_000},
-                        ]},
-                    ]},
-                    {"type": "folder", "id": "f-1", "name": "Later", "items": [
-                        {"type": "tab", "id": "tab-4", "url": "about:blank", "title": "", "pin": "row", "active": False, "muted": False, "asleep": True, "pid": None, "cpu": None, "memory": None},
-                    ]},
-                    {"type": "tab", "id": "tab-1", "url": "https://a.example/", "title": "A 日本", "pin": None, "active": True, "muted": False, "asleep": False, "pid": 501, "cpu": 2.5, "memory": 1_500_000.0},
-                ],
-            }],
-        },
-        {"id": 2, "kind": "popup", "focused": False, "spaces": [{"profile": "p-2", "profileName": "", "shown": False, "topApps": [], "pinned": None, "tabs": [
-            {"type": "tab", "id": "tab-7", "url": "https://d.example/", "title": None, "active": True, "pid": True, "cpu": 0, "memory": 0},
-        ]}]},
-    ],
-}
-WINDOWS = [
-    {"id": 1, "kind": "normal", "focused": True, "profileName": "Personal", "tabs": [
-        {"id": 11, "title": "A é", "url": "https://a.example/", "active": True, "pinned": False, "group": None},
-        {"id": 12, "title": None, "url": "https://b.example/\u0007", "active": False, "pinned": True, "group": "g-1"},
-        {"id": 13, "active": False},
-    ]},
-    {"id": 2, "kind": "popup", "focused": False, "profile": "p-2", "tabs": []},
-    "not a window",
-]
-COMMANDS = [
-    {"id": "new-tab", "title": "New Tab"},
-    {"id": "toggle-sidebar", "title": "Toggle Sidebar", "variants": ["left", "right"]},
-    {"id": "a-very-long-command-id-that-goes-past-forty-characters", "title": "Long", "variants": "xy"},
-    {"id": 7, "title": 3.0},
-    "skipped",
-]
+binary = harness.binary
 
 
-def binary():
-    named = os.environ.get("ARDIA_RUST_CLI")
-    if named:
-        return Path(named)
-    for profile in ("release", "debug"):
-        found = CRATE / "target" / profile / "ardia"
-        if found.exists():
-            return found
-    return None
+def FakeArdia(path: Path, replies: dict):
+    replies = dict(replies)
+    return harness.FakeArdia(path, replies.pop("hello", harness.DEFAULT_HELLO), replies, [])
 
 
-class FakeArdia:
-    def __init__(self, path: Path, replies: dict):
-        self.replies = replies
-        self.requests = []
-        self.server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.server.bind(str(path))
-        self.server.listen(8)
-        self.server.settimeout(0.2)
-        self.stopped = threading.Event()
-        self.thread = threading.Thread(target=self.accept, daemon=True)
-        self.thread.start()
-
-    def accept(self):
-        while not self.stopped.is_set():
-            try:
-                connection, _ = self.server.accept()
-            except (socket.timeout, OSError):
-                continue
-            threading.Thread(target=self.talk, args=(connection,), daemon=True).start()
-
-    def talk(self, connection):
-        with connection, connection.makefile("rb") as lines:
-            for line in lines:
-                request = json.loads(line)
-                method = request.get("method")
-                self.requests.append((method, request.get("params")))
-                reply = self.replies.get(method, {"result": None})
-                if callable(reply):
-                    reply = reply()
-                if reply == "close":
-                    return
-                if isinstance(reply, bytes):
-                    connection.sendall(reply)
-                    continue
-                connection.sendall(json.dumps({"id": request["id"], **reply}).encode() + b"\n")
-
-    def close(self):
-        self.stopped.set()
-        self.server.close()
-        self.thread.join(2)
-
-
-@unittest.skipUnless(binary(), "build apps/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
-class RustParity(unittest.TestCase):
+@unittest.skipUnless(binary(), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
+class ParityTable(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.scratch = Path(tempfile.mkdtemp(prefix="arp", dir="/tmp"))
-        cls.root = cls.scratch / "cli"
-        (cls.root / "bin").mkdir(parents=True)
-        shutil.copy2(binary(), cls.root / "bin" / "ardia")
-        subprocess.run([sys.executable, "-m", "venv", "--without-pip", str(cls.root / "python")], check=True)
-        packages = subprocess.run([str(cls.root / "python" / "bin" / "python3"), "-I", "-c", "import site; print(site.getsitepackages()[0])"],
-                                  check=True, capture_output=True, text=True).stdout.strip()
-        (Path(packages) / "ardia-checkout.pth").write_text("\n".join([str(CLI), *site.getsitepackages()]) + "\n")
-        cls.python = cls.root / "python" / "bin" / "python3"
+        cls.outcomes, cls.install = harness.run_all(harness.load_cases(), binary())
+        cls.summary = harness.summarize(cls.outcomes, harness.served_commands())
 
     @classmethod
     def tearDownClass(cls):
-        shutil.rmtree(cls.scratch, True)
+        cls.install.close()
+
+    def test_every_case_matches(self):
+        failed = [outcome.report() for outcome in self.outcomes if not outcome.passed]
+        self.assertFalse(failed, f"{len(failed)} of {len(self.outcomes)} parity cases differ:\n" + "\n".join(failed))
+
+    def test_rust_serves_only_proven_commands(self):
+        self.assertEqual(self.summary["unproven_but_served"], [], "rust/served.txt lists commands without passing parity cases")
+
+    def test_the_table_has_each_served_command_at_least_once(self):
+        for name in harness.served_commands():
+            self.assertGreater(self.summary["commands"][name]["cases"], 0, name)
+
+
+class ProtocolAgrees(unittest.TestCase):
+    def test_rust_and_python_speak_the_same_control_protocol(self):
+        from ardia_cli import control
+
+        rust = (CLI / "rust" / "src" / "control.rs").read_text()
+        constants = dict(re.findall(r"pub const (PROTOCOL|MIN_APP_PROTOCOL): i128 = (\d+);", rust))
+        self.assertEqual(int(constants["PROTOCOL"]), control.PROTOCOL)
+        self.assertEqual(int(constants["MIN_APP_PROTOCOL"]), control.MIN_APP_PROTOCOL)
+
+
+class HarnessRules(unittest.TestCase):
+    def case(self, **row):
+        return harness.Case.from_dict({"id": "t", "command": "windows", "argv": ["windows"], **row}, "test")
+
+    def test_a_case_cannot_reach_outside_its_sandbox(self):
+        for row in ({"files": {"../x": "y"}}, {"files": {"data/../../x": "y"}}, {"files": {"/etc/x": "y"}}, {"files": {"elsewhere/x": "y"}},
+                    {"argv": ["windows", "--data-dir", "/d"]}, {"argv": ["windows", "--data-dir=/d"]}, {"argv": ["windows", "--data-dir", "{data}/../../x"]},
+                    {"argv": ["config", "path", "~/x"]}, {"argv": ["plugins", "install", "../../x"]}, {"argv": ["plugins", "install", "{cli}/../x"]}, {"env": {"HOME": None}}, {"env": {"ARDIA_CLI_HOME": "/x"}}, {"env": {"PATH": "/bin"}},
+                    {"env": {"ARDIA_DATA_DIR": "/Users/someone/Ardia"}}, {"helpers": {"../launchctl": {}}}, {"helpers": {"/bin/sh": {}}},
+                    {"env": {"ARDIA_CONFIG_HOME": "{box}/../sibling"}}, {"env": {"XDG_CONFIG_HOME": "/elsewhere"}}, {"env": {"XDG_DATA_HOME": "../.."}},
+                    {"env": {"ARDIA_CONFIG_HOME": "{cli}/x"}}, {"env": {"SOME_DIR": "/elsewhere"}}):
+            with self.subTest(row=row), self.assertRaises(harness.UnsafeCase):
+                self.case(**row)
+        self.case(argv=["windows", "--data-dir", "{box}/elsewhere"], env={"ARDIA_DATA_DIR": None, "COLUMNS": "80"})
+        self.case(argv=["theme", "check", "../evil"])
+        self.case(argv=["plugins", "call", "x", '{"who": "you/../me"}'])
+
+    def test_a_fallback_may_only_ask_read_only_questions_first(self):
+        python = [[{"id": 1, "method": "hello", "params": {"protocol": 4}}, {"id": 2, "method": "apply", "params": {"ops": []}}]]
+        read_first = [[{"id": 1, "method": "hello", "params": {"protocol": 4}}, {"id": 2, "method": "workspace"}]] + python
+        mutate_first = [[{"id": 1, "method": "hello", "params": {"protocol": 4}}, {"id": 2, "method": "apply", "params": {"ops": []}}]] + python
+        self.assertEqual(harness.fallback_requests(read_first, python), python)
+        self.assertEqual(harness.fallback_requests(mutate_first, python), mutate_first)
+
+    def test_times_are_scrubbed_only_when_they_are_now(self):
+        window = (1_763_500_000.0, 1_763_500_001.0)
+        scrubbed = harness.scrub_times({"last_at": 1_763_500_000.5, "first_ms": 1_763_500_000_000, "next_at": 0, "open_at": False, "done_at": None,
+                                        "count": 5, "later_at": 9_999_999_999.0, "earlier_at": 1_700_000_000}, window)
+        self.assertEqual(scrubbed, {"last_at": "<now float s>", "first_ms": "<now int ms>", "next_at": 0, "open_at": False, "done_at": None,
+                                    "count": 5, "later_at": 9_999_999_999.0, "earlier_at": 1_700_000_000})
+
+    def test_comparisons_keep_json_types(self):
+        self.assertNotEqual(harness.exact([[{"id": True, "method": "hello"}]]), harness.exact([[{"id": 1, "method": "hello"}]]))
+        self.assertNotEqual(harness.exact([{"id": 2, "method": "windows"}]), harness.exact([{"id": 2, "method": "windows", "params": "<absent>"}]))
+        self.assertNotEqual(harness.exact([{"id": 2, "method": "windows"}]), harness.exact([{"id": 2, "method": "windows", "extra": 1}]))
+        self.assertNotEqual(harness.exact({"usage": True}), harness.exact({"usage": 1}))
+        self.assertNotEqual(harness.exact({"n": 1.0}), harness.exact({"n": 1}))
+
+    def test_fixtures_are_never_written_through_a_link(self):
+        outside = Path(tempfile.mkdtemp(prefix="arpout", dir="/tmp")).resolve()
+        box = Path(tempfile.mkdtemp(prefix="arpbox", dir="/tmp")).resolve() / "c1"
+        try:
+            case = self.case(files={"data/away": {"link": str(outside)}, "data/away/sub/file": "x"})
+            with self.assertRaises(harness.UnsafeCase):
+                harness.materialize(box, case)
+            self.assertEqual(list(outside.iterdir()), [])
+        finally:
+            shutil.rmtree(outside, True)
+            shutil.rmtree(box.parent, True)
+
+    def test_a_data_dir_through_a_fixture_link_is_refused(self):
+        box = Path(tempfile.mkdtemp(prefix="arpbox", dir="/tmp")).resolve() / "c1"
+        outside = Path(tempfile.mkdtemp(prefix="arpout", dir="/tmp")).resolve()
+        install = harness.Installation(binary() or Path(sys.executable))
+        try:
+            case = self.case(argv=["config", "init", "--data-dir", "{data}/away"], files={"data/away": {"link": str(outside)}})
+            with self.assertRaises(harness.UnsafeCase):
+                harness.run_side(install, "python", case, box)
+            self.assertEqual(list(outside.iterdir()), [])
+        finally:
+            install.close()
+            shutil.rmtree(outside, True)
+            shutil.rmtree(box.parent, True)
+
+    def test_telemetry_timestamps_are_checked_against_the_run(self):
+        window = (1_763_500_000.0, 1_763_500_001.0)
+        now, stale = {"timestamp": "2025-11-18T21:06:40.500Z"}, {"timestamp": "2000-01-01T00:00:00.000Z"}
+        harness.scrub_timestamp(now, window)
+        harness.scrub_timestamp(stale, window)
+        self.assertEqual(now["timestamp"], "<now float s>")
+        self.assertEqual(stale["timestamp"], "2000-01-01T00:00:00.000Z")
+
+    def test_a_reply_that_cannot_be_written_does_not_hide_the_next_request(self):
+        scratch = Path(tempfile.mkdtemp(prefix="arpsock", dir="/tmp")).resolve()
+        fake = harness.FakeArdia(scratch / "s.sock", harness.DEFAULT_HELLO, {"windows": {"result": ["x" * 65536]}}, [])
+        try:
+            client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            client.connect(str(scratch / "s.sock"))
+            client.shutdown(socket.SHUT_RD)
+            client.sendall(b'{"id":1,"method":"windows"}\n{"id":2,"method":"commands"}\n')
+            client.close()
+        finally:
+            fake.close()
+            shutil.rmtree(scratch, True)
+        self.assertEqual([method for method, _ in fake.requests], ["windows", "commands"])
+        self.assertTrue(fake.complete)
+
+    def test_flush_deadlines_compare_as_offsets(self):
+        window = (1_763_500_000.0, 1_763_500_001.0)
+        self.assertNotEqual(harness.scrub_times({"next_at": 1_763_500_002.0}, window), harness.scrub_times({"next_at": 1_763_500_101.0}, window))
+        self.assertEqual(harness.scrub_times({"next_at": 1_763_500_061.2}, window), harness.scrub_times({"next_at": 1_763_500_060.9}, (1_763_499_999.8, 1_763_500_000.8)))
+
+    def test_helpers_log_each_argument_whole(self):
+        scratch = Path(tempfile.mkdtemp(prefix="arpstub", dir="/tmp"))
+        try:
+            log = scratch / "log"
+            harness.write_stub(scratch, "tool", {}, log)
+            for argv in (["a b"], ["a", "b"], ["x\ny"], ["x\ry"], [""], []):
+                subprocess.run([str(scratch / "tool"), *argv], check=True, capture_output=True)
+            lines = log.read_text().splitlines()
+            self.assertEqual(len(lines), 6)
+            self.assertEqual(len(set(lines)), 6)
+        finally:
+            shutil.rmtree(scratch, True)
+
+    @unittest.skipUnless(sys.platform == "darwin", "sandbox-exec is macOS's")
+    def test_the_sandbox_keeps_writes_sockets_and_helpers_inside(self):
+        install = harness.Installation(binary() or Path(sys.executable))
+        try:
+            box = install.box()
+            box.mkdir()
+            outside = install.scratch / "outside-the-box"
+            script = f"echo in > {box}/in; echo out > {outside}; /bin/launchctl list >/dev/null 2>&1 || echo launchctl-denied"
+            done = subprocess.run(install.confined(["/bin/sh", "-c", script], box), capture_output=True, text=True, timeout=30)
+            self.assertTrue((box / "in").exists())
+            self.assertFalse(outside.exists())
+            self.assertIn("launchctl-denied", done.stdout)
+        finally:
+            install.close()
+
+    @unittest.skipUnless(binary(), "needs the Rust ardia")
+    def test_detached_children_of_the_installation_are_reaped_whatever_their_environment(self):
+        install = harness.Installation(binary())
+        try:
+            child = subprocess.Popen([str(install.python), "-c", "import time; time.sleep(30)"], env={}, start_new_session=True)
+            listed = lambda: str(install.scratch).encode() in subprocess.run(["/bin/ps", "-x", "-ww", "-o", "command="], capture_output=True).stdout
+            self.assertTrue(sys.platform != "darwin" or harness.wait_until(listed, 5))
+        finally:
+            install.close()
+        child.wait(timeout=5)
+        self.assertEqual(child.returncode, -signal.SIGKILL)
+
+    def test_detached_children_are_reaped(self):
+        box = Path(tempfile.mkdtemp(prefix="reap", dir="/tmp")).resolve()
+        try:
+            child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"], env={**os.environ, "ARDIA_PARITY_BOX": str(box)},
+                                     start_new_session=True)
+            listed = lambda: str(box).encode() in subprocess.run(["/bin/ps", "-x", "-E", "-ww", "-o", "command="], capture_output=True).stdout
+            self.assertTrue(sys.platform != "darwin" or harness.wait_until(listed, 5))
+            harness.reap(str(box))
+            child.wait(timeout=5)
+            self.assertEqual(child.returncode, -signal.SIGKILL)
+        finally:
+            shutil.rmtree(box, True)
+
+
+@unittest.skipUnless(binary(), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
+class HarnessCatches(unittest.TestCase):
+    def test_the_seeder_refuses_a_secret_inside_a_binary_fixture(self):
+        from parity import record
+
+        recorder = record.Recorder()
+        recorder.baseline = {"ARDIA_WS": "ws://127.0.0.1:9/devtools/browser/x?token=parity-secret-1234567890"}
+        case = {"argv": ["windows"], "env": {}, "files": {"data/blob": {"base64": base64.b64encode(b"\x00\xff" + recorder.baseline["ARDIA_WS"].encode()).decode()}}}
+        with self.assertRaises(record.Skip):
+            recorder.check_private(case)
+        recorder.baseline = {"ARDIA_NOTE": "café-parity-marker-0123"}
+        case = {"argv": ["windows"], "env": {}, "files": {"data/blob": {"base64": base64.b64encode(b"\x00\xff" + "café-parity-marker-0123".encode()).decode()}}}
+        with self.assertRaises(record.Skip):
+            recorder.check_private(case)
+    def test_a_binary_that_hands_everything_to_python_proves_nothing(self):
+        for launch in ('-I -m ardia_cli "$@"', '-I -c "import runpy, sys; sys.argv[0] = \'ardia\'; runpy.run_module(\'ardia_cli\', run_name=\'__main__\')" "$@"',
+                       '-I -c "import sys; from ardia_cli.cli import main; sys.exit(main(sys.argv[1:]))" ardia "$@"'):
+            with self.subTest(launch=launch):
+                self.impostor_fails(launch)
+
+    def impostor_fails(self, launch):
+        scratch = Path(tempfile.mkdtemp(prefix="arh", dir="/tmp"))
+        try:
+            impostor = scratch / "ardia"
+            impostor.write_text('#!/bin/sh\nhere=$(cd "$(dirname "$0")/.." && pwd)\nexec "$here/python/bin/python3" ' + launch + '\n')
+            impostor.chmod(0o755)
+            cases = [case for case in harness.load_cases() if case.id in ("version--version", "windows--windows") or case.id.startswith("tabs--tabs-json")]
+            self.assertTrue(cases)
+            outcomes, install = harness.run_all(cases, impostor)
+            install.close()
+            self.assertTrue(all(not outcome.passed for outcome in outcomes), [outcome.case.id for outcome in outcomes if outcome.passed])
+            self.assertTrue(all("expected rust to serve it, but python did" in outcome.problems for outcome in outcomes))
+            summary = harness.summarize(outcomes, ["--version", "windows", "tabs"])
+            self.assertEqual(summary["unproven_but_served"], ["--version", "tabs", "windows"])
+        finally:
+            shutil.rmtree(scratch, True)
+
+
+@unittest.skipUnless(binary(), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
+class RustProcess(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.install = harness.Installation(binary())
+        cls.scratch = cls.install.scratch
+        cls.root = cls.install.root
+        cls.python = cls.install.python
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.install.close()
 
     def setUp(self):
         self.case = Path(tempfile.mkdtemp(prefix="c", dir=self.scratch))
@@ -156,124 +276,6 @@ class RustParity(unittest.TestCase):
         })
         env.update(extra)
         return env
-
-    def run_side(self, side, argv, replies, extra, stdin, socket_ok, hello, consent):
-        data = self.case / "data"
-        data.mkdir(parents=True)
-        (self.case / "home").mkdir(exist_ok=True)
-        (data / "telemetry.json").write_text(json.dumps({"sharing": True, "installId": INSTALL_ID, **consent}))
-        (data / "Telemetry").mkdir(mode=0o700)
-        (data / "Telemetry" / "cli-flush.json").write_text(json.dumps({"failures": 0, "next_at": 9e12}))
-        if consent.get("sharing", True) is True:
-            (data / "Telemetry" / "cli-queue.jsonl").write_text(json.dumps(QUEUED) + "\n")
-        fake = None
-        if socket_ok:
-            fake = FakeArdia(data / "ArdiaControl.sock", {"hello": hello, **replies})
-        command = [str(self.root / "bin" / "ardia")] if side == "rust" else [str(self.python), "-I", "-m", "ardia_cli"]
-        try:
-            done = subprocess.run(command + list(argv), input=stdin, capture_output=True, env=self.environment(extra), timeout=60)
-        finally:
-            if fake:
-                fake.close()
-        kept = self.case / side
-        kept.mkdir()
-        for name in ("data", "cli-home"):
-            if (self.case / name).exists():
-                (self.case / name).rename(kept / name)
-        return done, (fake.requests if fake else []), kept / "data"
-
-    def telemetry(self, data: Path):
-        local = data / "Telemetry" / "local"
-        records = []
-        for path in sorted(local.glob("cli-*.jsonl")) if local.exists() else []:
-            records += [json.loads(line) for line in path.read_text().splitlines()]
-        spool = data / "Telemetry" / "cli-queue.jsonl"
-        queued = [json.loads(line) for line in spool.read_text().splitlines()] if spool.exists() else []
-        served = [record["properties"].get("served_by") for record in records if record["event"] == "cli_command"]
-        for record in records + queued:
-            for key in VOLATILE:
-                record.pop(key, None)
-            for key in VOLATILE_PROPERTIES:
-                record["properties"].pop(key, None)
-        return records, queued, served
-
-    def usage(self, side: str):
-        path = self.case / side / "cli-home" / "Usage" / "usage.json"
-        return json.loads(path.read_text()) if path.exists() else None
-
-    def check(self, *argv, replies=None, extra=None, stdin=b"", socket_ok=True, hello=None, served="rust", consent=None):
-        replies = replies or {}
-        hello = hello or {"result": {"app": "Ardia", "version": "1.0"}}
-        sides = [self.run_side(side, argv, replies, extra or {}, stdin, socket_ok, hello, consent or {}) for side in ("rust", "python")]
-        (rust, rust_requests, rust_data), (python, python_requests, python_data) = sides
-        label = " ".join(argv) or "(no arguments)"
-        self.assertEqual(rust.stdout, python.stdout, f"stdout of {label}")
-        self.assertEqual(rust.stderr, python.stderr, f"stderr of {label}")
-        self.assertEqual(rust.returncode, python.returncode, f"exit code of {label}")
-        rust_records, rust_queue, rust_served = self.telemetry(rust_data)
-        python_records, python_queue, python_served = self.telemetry(python_data)
-        if served == "rust":
-            self.assertEqual(rust_requests, python_requests, f"requests of {label}")
-        else:
-            self.assertEqual(rust_requests[-len(python_requests):] if python_requests else rust_requests, python_requests, f"requests of {label}")
-        self.assertEqual(rust_records, python_records, f"telemetry of {label}")
-        self.assertEqual(rust_queue, python_queue, f"queued telemetry of {label}")
-        self.assertEqual(self.usage("rust"), self.usage("python"), f"usage of {label}")
-        if python_served:
-            self.assertEqual(python_served, ["python"])
-            self.assertEqual(rust_served, [served], f"who served {label}")
-        self.case = Path(tempfile.mkdtemp(prefix="c", dir=self.scratch))
-        return rust
-
-    def test_listings_match(self):
-        workspace = {"workspace": {"result": TREE}}
-        for argv in (
-            ["tabs"], ["tabs", "--json"], ["tabs", "--flat"], ["tabs", "--flat", "--json"], ["tabs", "--usage"],
-            ["tabs", "--usage", "--json"], ["tabs", "--pid", "777"], ["tabs", "--pid=501", "--json"], ["tabs", "--pid", "1"],
-            ["--json", "tabs", "--window", "w-1", "--profile=p-1"], ["tabs", "--window", ""], ["groups"], ["groups", "--json"],
-        ):
-            self.check(*argv, replies=workspace)
-        self.check("windows", replies={"windows": {"result": WINDOWS}})
-        self.check("windows", "--json", replies={"windows": {"result": WINDOWS}})
-        self.check("commands", replies={"commands": {"result": COMMANDS}})
-        self.check("--json", "commands", replies={"commands": {"result": COMMANDS}})
-        self.check("windows", replies={"windows": {"result": None}})
-        self.check("windows", replies={"windows": {"result": [{"id": 1, "profileName": "p\u001c \u0085", "tabs": []}]}})
-        self.check("commands", "--json", replies={"commands": {"result": [{"memory": 807960295084425.2, "cpu": 0.30000000000000004, "big": 1e300}]}})
-
-    def test_the_data_dir_flag_wins(self):
-        other = self.case / "elsewhere"
-        other.mkdir()
-        rust = self.check("tabs", "--data-dir", str(other), replies={"workspace": {"result": TREE}})
-        self.assertEqual(rust.returncode, 2)
-
-    def test_failures_match(self):
-        self.check("tabs", replies={"workspace": {"error": {"code": "unknown_method", "message": "no"}}})
-        self.check("groups", replies={"workspace": {"error": {"code": "refused", "message": "private \u001b window"}}})
-        self.check("tabs", "--usage", replies={"workspace": {"error": {"code": "bad_request", "message": "params: not usage"}}})
-        self.check("windows", replies={"windows": {"error": {"message": "broken"}}})
-        self.check("commands", replies={"commands": {"error": None}})
-        self.check("tabs", "--pid", "5", replies={"workspace": {"result": {"windows": []}}})
-        self.check("windows", replies={"windows": "close"})
-        self.check("windows", replies={"windows": b"not json\n"})
-        self.check("windows", socket_ok=False)
-        self.check("tabs", hello={"result": {"app": "Something"}})
-        self.check("tabs", hello={"error": {"code": "x", "message": "go away"}})
-        self.check("windows", replies={"windows": {"error": {"code": 7, "message": ["a", 1.5]}}})
-
-    def test_consent_matches(self):
-        for until in ("2020-01-01T00:00:00+0000", "20200101T000000Z", "2999-01-01 10", "2020-01-01T08:05.5Z", "2999-01-01T08.5+05.5", 1_000, 99_999_999_999_999):
-            self.check("windows", replies={"windows": {"result": []}}, consent={"sharingUntil": until})
-        self.check("windows", replies={"windows": {"result": []}}, consent={"sharing": False})
-        self.check("windows", replies={"windows": {"result": []}}, consent={"sessionOpen": True, "sessionId": INSTALL_ID, "watchReport": "FB-AB12"})
-
-    def test_an_expiry_it_cannot_read_goes_to_python(self):
-        for until in ("2030-W01-1T00:00:00+00:00", "2999-W01-1", "2020-02-30T00:00:00Z", "not a date"):
-            self.check("windows", replies={"windows": {"result": []}}, consent={"sharingUntil": until}, served="python")
-
-    def test_opt_outs_match(self):
-        for name, value in (("ARDIA_TELEMETRY", "off\u001c"), ("ARDIA_TELEMETRY", " No\u001f"), ("DO_NOT_TRACK", "0\u001f"), ("DO_NOT_TRACK", "\u001c")):
-            self.check("windows", replies={"windows": {"result": []}}, extra={name: value})
 
     def test_an_ignored_interrupt_stays_ignored_after_the_hand_off(self):
         data = self.case / "data"
@@ -293,33 +295,6 @@ class RustParity(unittest.TestCase):
             events.kill()
             events.communicate()
             fake.close()
-
-    def test_shapes_it_cannot_mirror_go_to_python(self):
-        self.check("tabs", replies={"workspace": {"result": 3}}, served="python")
-        self.check("tabs", replies={"workspace": {"result": "oops"}}, served="python")
-        self.check("windows", replies={"windows": {"result": [{"id": 1, "tabs": ["x"]}]}}, served="python")
-        self.check("commands", replies={"commands": {"result": [{"id": "a", "variants": 5}]}}, served="python")
-        self.check("commands", replies={"commands": {"error": {"code": "failed", "message": ["\u00e9"]}}}, served="python")
-
-    def test_other_commands_pass_through(self):
-        ops = {"apply": {"result": {"ok": True, "applied": 1, "results": [{"op": "open", "tabs": ["tab-8"]}], "tabs": [{"id": "tab-8", "title": "New"}]}}}
-        self.check("tabs", "open", "https://example.com", replies=ops, served="python")
-        self.check("apply", replies=ops, stdin=b'[{"op": "tab.close", "tabs": ["tab-1"]}]', served="python")
-        self.check("tabs", "--win", "w-1", replies={"workspace": {"result": TREE}}, served="python")
-        self.check("tabs", "--bogus", served="python")
-        self.check("bogus", served="python")
-        self.check("--port", "1", "tabs", served="python")
-        self.check("skills", "list", served="python")
-        self.check("config", "path", served="python")
-        self.check("tabs", "--help", served="python")
-
-    def test_version_and_help_match(self):
-        self.check("--version")
-        for columns in ("200", "100", "80", "60", "56", "0", "abc", " 70 ", "-3"):
-            self.check("--help", extra={"COLUMNS": columns})
-        self.check("-h", extra={"COLUMNS": "120"})
-        self.check(extra={"COLUMNS": "90"})
-        self.check("--help", extra={"COLUMNS": "40"}, served="python")
 
     def test_ctrl_c_stops_a_command_blocked_on_its_output(self):
         tabs = [{"type": "tab", "id": f"tab-{index}", "title": "t" * 40, "url": "https://example.com/" + "p" * 40} for index in range(3000)]
@@ -466,6 +441,7 @@ class Collector(BaseHTTPRequestHandler):
 
     def log_message(self, *args):
         pass
+
 
 
 if __name__ == "__main__":

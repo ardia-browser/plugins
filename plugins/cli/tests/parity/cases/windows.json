@@ -1,0 +1,267 @@
+[
+ {
+  "id": "windows--windows",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": [
+      {
+       "id": 1,
+       "kind": "normal",
+       "focused": true,
+       "profileName": "Personal",
+       "tabs": [
+        {
+         "id": 11,
+         "title": "A \u00e9",
+         "url": "https://a.example/",
+         "active": true,
+         "pinned": false,
+         "group": null
+        },
+        {
+         "id": 12,
+         "title": null,
+         "url": "https://b.example/\u0007",
+         "active": false,
+         "pinned": true,
+         "group": "g-1"
+        },
+        {
+         "id": 13,
+         "active": false
+        }
+       ]
+      },
+      {
+       "id": 2,
+       "kind": "popup",
+       "focused": false,
+       "profile": "p-2",
+       "tabs": []
+      },
+      "not a window"
+     ]
+    }
+   }
+  }
+ },
+ {
+  "id": "windows--windows-json",
+  "command": "windows",
+  "argv": [
+   "windows",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": [
+      {
+       "id": 1,
+       "kind": "normal",
+       "focused": true,
+       "profileName": "Personal",
+       "tabs": [
+        {
+         "id": 11,
+         "title": "A \u00e9",
+         "url": "https://a.example/",
+         "active": true,
+         "pinned": false,
+         "group": null
+        },
+        {
+         "id": 12,
+         "title": null,
+         "url": "https://b.example/\u0007",
+         "active": false,
+         "pinned": true,
+         "group": "g-1"
+        },
+        {
+         "id": 13,
+         "active": false
+        }
+       ]
+      },
+      {
+       "id": 2,
+       "kind": "popup",
+       "focused": false,
+       "profile": "p-2",
+       "tabs": []
+      },
+      "not a window"
+     ]
+    }
+   }
+  }
+ },
+ {
+  "id": "windows--windows-2",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": null
+    }
+   }
+  },
+  "note": "a null result"
+ },
+ {
+  "id": "windows--windows-3",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": [
+      {
+       "id": 1,
+       "profileName": "p\u001c \u0085",
+       "tabs": []
+      }
+     ]
+    }
+   }
+  },
+  "note": "Python's whitespace in a profile name"
+ },
+ {
+  "id": "windows--windows-4",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "error": {
+      "message": "broken"
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "windows--windows-5",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": "close"
+   }
+  },
+  "note": "Ardia hangs up mid-call"
+ },
+ {
+  "id": "windows--windows-6",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": "not json\n"
+    }
+   }
+  },
+  "note": "a reply that isn't JSON"
+ },
+ {
+  "id": "windows--windows-7",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": null,
+  "note": "Ardia isn't running"
+ },
+ {
+  "id": "windows--windows-8",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "error": {
+      "code": 7,
+      "message": [
+       "a",
+       1.5
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "windows--windows-26",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": [
+      {
+       "id": 1,
+       "tabs": [
+        "x"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  "note": "a shape Rust can't mirror",
+  "fallback": true
+ },
+ {
+  "id": "windows--stray-replies-ignored",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": "{\"id\":null,\"error\":{\"code\":\"bad_request\",\"message\":\"no id\"}}\n{\"id\":99,\"result\":\"not yours\"}\n{\"id\":\"2\",\"result\":\"a string id\"}\n{\"event\":\"tab.opened\",\"data\":{}}\n{\"id\":2,\"result\":[{\"id\": 1, \"kind\": \"normal\", \"focused\": true, \"profileName\": \"Personal\", \"tabs\": []}]}\n"
+    }
+   }
+  },
+  "note": "Ardia sends lines that aren't this call's reply (null, unknown and string ids, an event) before the reply"
+ },
+ {
+  "id": "windows--stray-replies-ignored-json",
+  "command": "windows",
+  "argv": [
+   "windows",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": "{\"id\":null,\"error\":{\"code\":\"bad_request\",\"message\":\"no id\"}}\n{\"id\":99,\"result\":\"not yours\"}\n{\"id\":\"2\",\"result\":\"a string id\"}\n{\"event\":\"tab.opened\",\"data\":{}}\n{\"id\":2,\"result\":[{\"id\": 1, \"kind\": \"normal\", \"focused\": true, \"profileName\": \"Personal\", \"tabs\": []}]}\n"
+    }
+   }
+  }
+ }
+]

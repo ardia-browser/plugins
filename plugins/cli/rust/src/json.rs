@@ -301,7 +301,7 @@ impl Parser<'_> {
         }
         match text.parse::<i128>() {
             Ok(number) => Some(Value::Int(number)),
-            Err(_) if text.len() > 4300 => None,
+            Err(_) if text.trim_start_matches('-').len() > 4300 => None,
             Err(_) => Some(Value::BigInt(text.to_string())),
         }
     }
@@ -454,6 +454,14 @@ fn write_value(value: &Value, style: Style, ensure_ascii: bool, depth: usize, ou
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn integers_stop_at_python_s_4300_digits_not_counting_the_sign() {
+        for (sign, digits, reads) in [("", 4300, true), ("", 4301, false), ("-", 4300, true), ("-", 4301, false)] {
+            let text = format!("{sign}1{}", "0".repeat(digits - 1));
+            assert_eq!(parse(text.as_bytes()).is_some(), reads, "{sign}{digits} digits");
+        }
+    }
+
     use super::*;
 
     #[test]

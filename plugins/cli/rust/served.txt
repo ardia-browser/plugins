@@ -1,0 +1,6 @@
+--version
+--help
+tabs
+groups
+windows
+commands

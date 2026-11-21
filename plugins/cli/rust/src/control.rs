@@ -50,6 +50,7 @@ pub fn interrupted() -> bool {
 #[derive(Debug, PartialEq)]
 pub enum Failure {
     Unreachable { message: String, sent: bool },
+    Incompatible { message: String },
     Method { code: String, message: String },
     Interrupted,
     Unported,
@@ -60,6 +61,7 @@ impl Failure {
         match self {
             Failure::Unreachable { sent: true, .. } => Some("connection_dropped"),
             Failure::Unreachable { sent: false, .. } => Some("unreachable"),
+            Failure::Incompatible { .. } => Some("unsupported_protocol"),
             _ => None,
         }
     }
@@ -348,20 +350,27 @@ pub fn connect(path: &Path, timeout: f64, caller: &Caller) -> Result<Connection,
                 return Err(unreachable(Some(&format!("something other than Ardia answers on {name}"))));
             }
             let spoken = match info.get("protocol") {
-                Some(Value::Int(spoken)) => *spoken,
-                _ => 1,
+                Some(Value::Int(spoken)) => spoken.to_string(),
+                Some(Value::BigInt(spoken)) => spoken.clone(),
+                _ => "1".to_string(),
             };
-            if spoken < MIN_APP_PROTOCOL {
-                let version = info.get("version").and_then(Value::as_str).unwrap_or("");
-                return Err(Failure::Unreachable {
+            let older = match spoken.parse::<i128>() {
+                Ok(number) => number < MIN_APP_PROTOCOL,
+                Err(_) => spoken.starts_with('-'),
+            };
+            if older {
+                let version = match info.get("version") {
+                    None => String::new(),
+                    Some(version) => py::str_of(version).map_err(|_| Failure::Unported)?,
+                };
+                return Err(Failure::Incompatible {
                     message: format!("Ardia {version} speaks control protocol {spoken}, and this ardia needs {MIN_APP_PROTOCOL} or later: update Ardia"),
-                    sent: false,
                 });
             }
             connection.info = info;
             Ok(connection)
         }
-        Err(Failure::Method { code, message }) if code == "unsupported_protocol" => Err(Failure::Unreachable { message, sent: false }),
+        Err(Failure::Method { code, message }) if code == "unsupported_protocol" => Err(Failure::Incompatible { message }),
         Err(Failure::Method { message, .. }) => Err(unreachable(Some(&format!("hello failed: {message}")))),
         Err(Failure::Unreachable { message, .. }) => Err(Failure::Unreachable { message, sent: false }),
         Err(other) => Err(other),
@@ -443,7 +452,7 @@ mod tests {
             ))
         });
         let failure = call(Some(dir.to_str().unwrap()), "windows", None, &caller()).unwrap_err();
-        assert!(matches!(&failure, Failure::Unreachable { message, sent: false } if message.contains("update Ardia") && !message.contains(NOT_REACHABLE)));
+        assert!(matches!(&failure, Failure::Incompatible { message } if message.contains("update Ardia") && !message.contains(NOT_REACHABLE)));
         server.join().unwrap();
         let _ = std::fs::remove_dir_all(&dir);
 
@@ -456,9 +465,8 @@ mod tests {
         let failure = call(Some(dir.to_str().unwrap()), "windows", None, &caller()).unwrap_err();
         assert_eq!(
             failure,
-            Failure::Unreachable {
-                message: "update the command".into(),
-                sent: false
+            Failure::Incompatible {
+                message: "update the command".into()
             }
         );
         server.join().unwrap();

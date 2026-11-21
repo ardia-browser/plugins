@@ -58,7 +58,31 @@ fn value_of<'a>(argv: &'a [String], index: &mut usize, name: &str) -> Option<&'a
     Some(value)
 }
 
+const SERVED: &str = include_str!("../served.txt");
+
+pub fn serves(label: &str) -> bool {
+    SERVED.lines().map(str::trim).any(|line| line == label)
+}
+
+impl Route {
+    pub fn label(&self) -> Option<&'static str> {
+        match self {
+            Route::Version => Some("--version"),
+            Route::Help => Some("--help"),
+            Route::Listing(kind, _) => Some(kind.name()),
+            Route::Python => None,
+        }
+    }
+}
+
 pub fn route(argv: &[String]) -> Route {
+    match parse_route(argv) {
+        route if route.label().is_some_and(|label| !serves(label)) => Route::Python,
+        route => route,
+    }
+}
+
+fn parse_route(argv: &[String]) -> Route {
     if argv == ["--version"] {
         return Route::Version;
     }
@@ -216,8 +240,8 @@ fn serve_listing(kind: Kind, listing: &Listing, argv: &[String], python: Option<
             }
             commands::render(kind, listing, &result).ok()?
         }
-        Err(failure @ control::Failure::Unreachable { .. }) => {
-            let control::Failure::Unreachable { message, .. } = &failure else {
+        Err(failure @ (control::Failure::Unreachable { .. } | control::Failure::Incompatible { .. })) => {
+            let (control::Failure::Unreachable { message, .. } | control::Failure::Incompatible { message }) = &failure else {
                 unreachable!()
             };
             Rendered {
@@ -330,6 +354,16 @@ mod tests {
                 }
             )
         );
+    }
+
+    #[test]
+    fn serves_only_what_the_table_lists() {
+        for label in ["--version", "--help", "tabs", "groups", "windows", "commands"] {
+            assert!(serves(label), "{label}");
+        }
+        assert!(!serves("tabs open"));
+        assert!(!serves(""));
+        assert!(SERVED.lines().all(|line| line == line.trim() && !line.is_empty()));
     }
 
     #[test]

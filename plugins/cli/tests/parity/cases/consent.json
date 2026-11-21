@@ -1,0 +1,301 @@
+[
+ {
+  "id": "windows--windows-9",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "consent": {
+   "sharingUntil": "2020-01-01T00:00:00+0000"
+  }
+ },
+ {
+  "id": "windows--windows-10",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "consent": {
+   "sharingUntil": "20200101T000000Z"
+  }
+ },
+ {
+  "id": "windows--windows-11",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "consent": {
+   "sharingUntil": "2999-01-01 10"
+  }
+ },
+ {
+  "id": "windows--windows-12",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "consent": {
+   "sharingUntil": "2020-01-01T08:05.5Z"
+  }
+ },
+ {
+  "id": "windows--windows-13",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "consent": {
+   "sharingUntil": "2999-01-01T08.5+05.5"
+  }
+ },
+ {
+  "id": "windows--windows-14",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "consent": {
+   "sharingUntil": 1000
+  }
+ },
+ {
+  "id": "windows--windows-15",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "consent": {
+   "sharingUntil": 99999999999999
+  }
+ },
+ {
+  "id": "windows--windows-16",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "consent": {
+   "sharing": false
+  }
+ },
+ {
+  "id": "windows--windows-17",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "consent": {
+   "sessionOpen": true,
+   "sessionId": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+   "watchReport": "FB-AB12"
+  }
+ },
+ {
+  "id": "windows--windows-18",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "consent": {
+   "sharingUntil": "2030-W01-1T00:00:00+00:00"
+  },
+  "note": "an expiry Rust can't read goes to Python",
+  "fallback": true
+ },
+ {
+  "id": "windows--windows-19",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "consent": {
+   "sharingUntil": "2999-W01-1"
+  },
+  "note": "an expiry Rust can't read goes to Python",
+  "fallback": true
+ },
+ {
+  "id": "windows--windows-20",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "consent": {
+   "sharingUntil": "2020-02-30T00:00:00Z"
+  },
+  "note": "an expiry Rust can't read goes to Python",
+  "fallback": true
+ },
+ {
+  "id": "windows--windows-21",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "consent": {
+   "sharingUntil": "not a date"
+  },
+  "note": "an expiry Rust can't read goes to Python",
+  "fallback": true
+ },
+ {
+  "id": "windows--windows-22",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "env": {
+   "ARDIA_TELEMETRY": "off\u001c"
+  }
+ },
+ {
+  "id": "windows--windows-23",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "env": {
+   "ARDIA_TELEMETRY": " No\u001f"
+  }
+ },
+ {
+  "id": "windows--windows-24",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "env": {
+   "DO_NOT_TRACK": "0\u001f"
+  }
+ },
+ {
+  "id": "windows--windows-25",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": []
+    }
+   }
+  },
+  "env": {
+   "DO_NOT_TRACK": "\u001c"
+  }
+ }
+]
