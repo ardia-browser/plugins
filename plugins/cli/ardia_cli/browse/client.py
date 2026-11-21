@@ -11,6 +11,7 @@ from ardia_cli.browse.errors import BrowseError, OutcomeUnknown, Unreachable
 
 START_TIMEOUT = 15.0
 MAX_RESPONSE = 256 * 1024 * 1024
+RECV_CHUNK = 24 * 3600.0
 
 
 def endpoint_key(ws: str | None, port: int | None, root: Path) -> tuple[str, str]:
@@ -128,7 +129,7 @@ def request(sock: socket.socket, payload: dict) -> dict:
     seconds = answer_deadline(payload)
     deadline = time.monotonic() + seconds
     with sock:
-        sock.settimeout(seconds)
+        sock.settimeout(min(seconds, RECV_CHUNK))
         try:
             sock.sendall((json.dumps(payload, ensure_ascii=False) + "\n").encode())
         except (BrokenPipeError, ConnectionResetError):
@@ -141,13 +142,13 @@ def request(sock: socket.socket, payload: dict) -> dict:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise stalled(payload, seconds)
-            sock.settimeout(remaining)
+            sock.settimeout(min(remaining, RECV_CHUNK))
             try:
                 chunk = sock.recv(1 << 20)
             except ConnectionResetError:
                 raise gone(payload) from None
             except TimeoutError:
-                raise stalled(payload, seconds) from None
+                continue
             if not chunk:
                 break
             chunks.append(chunk)

@@ -139,6 +139,9 @@ def temporary_limit():
                        "idle sessions with `ardia browse close --all`", code="temporary_limit")
 
 
+HOLD_MARK = "#"
+
+
 class Registry:
     def __init__(self, browse_fd: int | None, key: str, session: str):
         self.browse_fd = browse_fd
@@ -186,7 +189,12 @@ class Registry:
         opened = data.get("opened")
         return isinstance(opened, dict) and sum(1 for owner in opened.values() if owner.get("temporary")) <= MAX_TEMPORARIES
 
+    @staticmethod
+    def owner(key: str) -> str:
+        return key.split(HOLD_MARK, 1)[0]
+
     def live(self, key: str) -> bool:
+        key = self.owner(key)
         return key == self.key or paths.lock_held(f"{key}.lock", self.browse_fd)
 
     def compact(self, data: dict):
@@ -342,6 +350,25 @@ class Registry:
                 raise BrowseError(f"That tab can't be used: {why}", data={"targetId": target}, code="tab_closing")
             data["using"][self.key] = {"session": self.session, "target": target}
 
+    @contextlib.contextmanager
+    def holding(self, instance: str | None, target: str):
+        if self.browse_fd is None:
+            yield
+            return
+        from ardia_cli.browse.errors import BrowseError
+
+        hold = f"{self.key}{HOLD_MARK}{target}"
+        with self._open(instance) as data:
+            why = self.refusal(data, target)
+            if why:
+                raise BrowseError(f"That tab can't be used: {why}", data={"targetId": target}, code="tab_closing")
+            data["using"][hold] = {"session": self.session, "target": target}
+        try:
+            yield
+        finally:
+            with self._open(instance) as data:
+                data["using"].pop(hold, None)
+
     def reserve_close(self, instance: str | None, target: str) -> bool:
         if self.browse_fd is None:
             return True
@@ -349,7 +376,7 @@ class Registry:
             held = data["closing"].get(target, {})
             if self.refusal(data, target) or (held.get("key") == self.key and held.get("run") == self.run):
                 return False
-            if any(key != self.key and entry.get("target") == target and self.live(key) for key, entry in data["using"].items()):
+            if any(self.owner(key) != self.key and entry.get("target") == target and self.live(key) for key, entry in data["using"].items()):
                 return False
             data["closing"][target] = {"key": self.key, "session": self.session, "run": self.run, "at": time.time()}
             return True
@@ -381,7 +408,8 @@ class Registry:
             return
         for instance in list(self.instances):
             with self._open(instance) as data:
-                data["using"].pop(self.key, None)
+                for key in [key for key in data["using"] if self.owner(key) == self.key]:
+                    del data["using"][key]
                 for target in [target for target, owner in data["opened"].items() if owner.get("key") == self.key and not owner.get("temporary")]:
                     del data["opened"][target]
 
@@ -393,7 +421,7 @@ class Registry:
                       if owner.get("key") != self.key and not owner.get("temporary") and self.live(owner.get("key", ""))}
             using: dict[str, list[str]] = {}
             for key, entry in data["using"].items():
-                if key != self.key and self.live(key):
+                if self.owner(key) != self.key and self.live(key):
                     using.setdefault(entry["target"], []).append(entry["session"])
             return opened, using
 
