@@ -261,6 +261,7 @@ function commandRecord(call: Call, status: number | bigint, crashed: boolean, di
     ["exit_code", BigInt(status)],
     ["error_code", code],
     ["flags", flagNames(call.argv, call.allowedFlags)],
+    ...call.metrics,
   ];
   timings(call, properties);
   properties.push(["cli_version", cliVersion()], ["$environment", environment], ["served_by", SERVED_BY]);

@@ -1,0 +1,521 @@
+[
+ {
+  "id": "m2a-methods-list",
+  "command": "methods",
+  "argv": [
+   "methods"
+  ],
+  "control": {
+   "replies": {
+    "methods": {
+     "result": [
+      {
+       "name": "windows",
+       "description": "Windows and their tabs",
+       "mutates": false,
+       "params": null,
+       "result": {
+        "type": "array"
+       }
+      },
+      {
+       "name": "history.search",
+       "description": "Search history\u0007",
+       "mutates": false,
+       "params": {
+        "type": "object",
+        "properties": {
+         "query": {
+          "type": "string"
+         },
+         "limit": {
+          "type": "integer"
+         }
+        }
+       },
+       "result": {
+        "type": "array"
+       },
+       "area": "history",
+       "since": [
+        1,
+        2
+       ]
+      },
+      {
+       "name": "tabs.close",
+       "description": "Close tabs",
+       "mutates": true,
+       "params": {
+        "type": "object"
+       },
+       "result": {
+        "type": "object"
+       }
+      },
+      {
+       "method": "notes.list",
+       "mutating": true
+      },
+      "plain.name"
+     ]
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-methods-wrapper",
+  "command": "methods",
+  "argv": [
+   "methods"
+  ],
+  "control": {
+   "replies": {
+    "methods": {
+     "result": {
+      "methods": {
+       "a.b": {
+        "description": "A",
+        "mutates": true
+       },
+       "c": "just text",
+       "d": {
+        "name": "renamed",
+        "x": 1
+       }
+      }
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-methods-descriptor-dict",
+  "command": "methods",
+  "argv": [
+   "methods"
+  ],
+  "control": {
+   "replies": {
+    "methods": {
+     "result": {
+      "methods": {
+       "description": "x"
+      },
+      "other": {
+       "mutating": true
+      }
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-methods-json",
+  "command": "methods",
+  "argv": [
+   "methods",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "methods": {
+     "result": [
+      {
+       "name": "windows",
+       "description": "Windows and their tabs",
+       "mutates": false,
+       "params": null,
+       "result": {
+        "type": "array"
+       }
+      },
+      {
+       "name": "history.search",
+       "description": "Search history\u0007",
+       "mutates": false,
+       "params": {
+        "type": "object",
+        "properties": {
+         "query": {
+          "type": "string"
+         },
+         "limit": {
+          "type": "integer"
+         }
+        }
+       },
+       "result": {
+        "type": "array"
+       },
+       "area": "history",
+       "since": [
+        1,
+        2
+       ]
+      },
+      {
+       "name": "tabs.close",
+       "description": "Close tabs",
+       "mutates": true,
+       "params": {
+        "type": "object"
+       },
+       "result": {
+        "type": "object"
+       }
+      },
+      {
+       "method": "notes.list",
+       "mutating": true
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-methods-name",
+  "command": "methods",
+  "argv": [
+   "methods",
+   "history.search"
+  ],
+  "control": {
+   "replies": {
+    "methods": {
+     "result": [
+      {
+       "name": "windows",
+       "description": "Windows and their tabs",
+       "mutates": false,
+       "params": null,
+       "result": {
+        "type": "array"
+       }
+      },
+      {
+       "name": "history.search",
+       "description": "Search history\u0007",
+       "mutates": false,
+       "params": {
+        "type": "object",
+        "properties": {
+         "query": {
+          "type": "string"
+         },
+         "limit": {
+          "type": "integer"
+         }
+        }
+       },
+       "result": {
+        "type": "array"
+       },
+       "area": "history",
+       "since": [
+        1,
+        2
+       ]
+      },
+      {
+       "name": "tabs.close",
+       "description": "Close tabs",
+       "mutates": true,
+       "params": {
+        "type": "object"
+       },
+       "result": {
+        "type": "object"
+       }
+      },
+      {
+       "method": "notes.list",
+       "mutating": true
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-methods-name-json",
+  "command": "methods",
+  "argv": [
+   "--json",
+   "methods",
+   "history.search"
+  ],
+  "control": {
+   "replies": {
+    "methods": {
+     "result": [
+      {
+       "name": "windows",
+       "description": "Windows and their tabs",
+       "mutates": false,
+       "params": null,
+       "result": {
+        "type": "array"
+       }
+      },
+      {
+       "name": "history.search",
+       "description": "Search history\u0007",
+       "mutates": false,
+       "params": {
+        "type": "object",
+        "properties": {
+         "query": {
+          "type": "string"
+         },
+         "limit": {
+          "type": "integer"
+         }
+        }
+       },
+       "result": {
+        "type": "array"
+       },
+       "area": "history",
+       "since": [
+        1,
+        2
+       ]
+      },
+      {
+       "name": "tabs.close",
+       "description": "Close tabs",
+       "mutates": true,
+       "params": {
+        "type": "object"
+       },
+       "result": {
+        "type": "object"
+       }
+      },
+      {
+       "method": "notes.list",
+       "mutating": true
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-methods-name-mutating",
+  "command": "methods",
+  "argv": [
+   "methods",
+   "notes.list"
+  ],
+  "control": {
+   "replies": {
+    "methods": {
+     "result": [
+      {
+       "name": "windows",
+       "description": "Windows and their tabs",
+       "mutates": false,
+       "params": null,
+       "result": {
+        "type": "array"
+       }
+      },
+      {
+       "name": "history.search",
+       "description": "Search history\u0007",
+       "mutates": false,
+       "params": {
+        "type": "object",
+        "properties": {
+         "query": {
+          "type": "string"
+         },
+         "limit": {
+          "type": "integer"
+         }
+        }
+       },
+       "result": {
+        "type": "array"
+       },
+       "area": "history",
+       "since": [
+        1,
+        2
+       ]
+      },
+      {
+       "name": "tabs.close",
+       "description": "Close tabs",
+       "mutates": true,
+       "params": {
+        "type": "object"
+       },
+       "result": {
+        "type": "object"
+       }
+      },
+      {
+       "method": "notes.list",
+       "mutating": true
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-methods-name-missing",
+  "command": "methods",
+  "argv": [
+   "methods",
+   "histroy.search"
+  ],
+  "control": {
+   "replies": {
+    "methods": {
+     "result": [
+      {
+       "name": "windows",
+       "description": "Windows and their tabs",
+       "mutates": false,
+       "params": null,
+       "result": {
+        "type": "array"
+       }
+      },
+      {
+       "name": "history.search",
+       "description": "Search history\u0007",
+       "mutates": false,
+       "params": {
+        "type": "object",
+        "properties": {
+         "query": {
+          "type": "string"
+         },
+         "limit": {
+          "type": "integer"
+         }
+        }
+       },
+       "result": {
+        "type": "array"
+       },
+       "area": "history",
+       "since": [
+        1,
+        2
+       ]
+      },
+      {
+       "name": "tabs.close",
+       "description": "Close tabs",
+       "mutates": true,
+       "params": {
+        "type": "object"
+       },
+       "result": {
+        "type": "object"
+       }
+      },
+      {
+       "method": "notes.list",
+       "mutating": true
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-methods-too-old",
+  "command": "methods",
+  "argv": [
+   "methods"
+  ],
+  "control": {
+   "replies": {
+    "methods": {
+     "error": {
+      "code": "unknown_method",
+      "message": "unknown method methods"
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-methods-failed",
+  "command": "methods",
+  "argv": [
+   "methods"
+  ],
+  "control": {
+   "replies": {
+    "methods": {
+     "error": {
+      "code": "failed",
+      "message": "broke"
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-methods-invalid",
+  "command": "methods",
+  "argv": [
+   "methods"
+  ],
+  "control": {
+   "replies": {
+    "methods": {}
+   }
+  }
+ },
+ {
+  "id": "m2a-methods-dropped",
+  "command": "methods",
+  "argv": [
+   "methods"
+  ],
+  "control": {
+   "replies": {
+    "methods": "close"
+   }
+  }
+ },
+ {
+  "id": "m2a-methods-not-running",
+  "command": "methods",
+  "argv": [
+   "methods"
+  ],
+  "control": null
+ },
+ {
+  "id": "m2a-methods-long-names",
+  "command": "methods",
+  "argv": [
+   "methods"
+  ],
+  "control": {
+   "replies": {
+    "methods": {
+     "result": [
+      "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "short",
+      {
+       "name": "éé",
+       "description": 5
+      }
+     ]
+    }
+   }
+  }
+ }
+]

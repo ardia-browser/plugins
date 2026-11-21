@@ -1,0 +1,1 @@
+{"id": "seed--call-test-not-running-exits-2--call-windows--1", "command": "call windows", "argv": ["call", "windows"], "env": {"XDG_CONFIG_HOME": "", "XDG_STATE_HOME": "", "XDG_DATA_HOME": "", "ARDIA_CONFIG_HOME": ""}, "control": null, "note": "from test_call.Call.test_not_running_exits_2"}

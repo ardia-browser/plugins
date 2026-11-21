@@ -1,0 +1,271 @@
+[
+ {
+  "id": "m2a-run-json",
+  "command": "run",
+  "argv": [
+   "run",
+   "newTab",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "run": {
+     "result": {
+      "ok": true,
+      "té": [
+       1
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-run-colon",
+  "command": "run",
+  "argv": [
+   "run",
+   "selectTab:last",
+   "--tab",
+   "tab-1",
+   "--window",
+   "0123456789012345"
+  ],
+  "control": {
+   "replies": {
+    "run": {
+     "result": null
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-run-colon-empty-arg",
+  "command": "run",
+  "argv": [
+   "run",
+   "selectTab:"
+  ],
+  "control": {
+   "replies": {
+    "run": {
+     "result": null
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-run-unknown-command",
+  "command": "run",
+  "argv": [
+   "run",
+   "newTabb"
+  ],
+  "control": {
+   "replies": {
+    "run": {
+     "error": {
+      "code": "unknown_command",
+      "message": "unknown command newTabb"
+     }
+    },
+    "commands": {
+     "result": [
+      {
+       "id": "newTab",
+       "title": "New Tab"
+      },
+      {
+       "id": "selectTab",
+       "title": "Select Tab",
+       "variants": [
+        "1",
+        "2",
+        "3",
+        "last"
+       ]
+      },
+      {
+       "id": 7
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-run-bad-variant",
+  "command": "run",
+  "argv": [
+   "run",
+   "selectTab",
+   "lsat"
+  ],
+  "control": {
+   "replies": {
+    "run": {
+     "error": {
+      "code": "bad_request",
+      "message": "selectTab takes 1, 2, 3 or last"
+     }
+    },
+    "commands": {
+     "result": [
+      {
+       "id": "newTab",
+       "title": "New Tab"
+      },
+      {
+       "id": "selectTab",
+       "title": "Select Tab",
+       "variants": [
+        "1",
+        "2",
+        "3",
+        "last"
+       ]
+      },
+      {
+       "id": 7
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-run-bad-request-no-arg",
+  "command": "run",
+  "argv": [
+   "run",
+   "selectTab"
+  ],
+  "control": {
+   "replies": {
+    "run": {
+     "error": {
+      "code": "bad_request",
+      "message": "selectTab needs an arg"
+     }
+    },
+    "commands": {
+     "result": [
+      {
+       "id": "newTab",
+       "title": "New Tab"
+      },
+      {
+       "id": "selectTab",
+       "title": "Select Tab",
+       "variants": [
+        "1",
+        "2",
+        "3",
+        "last"
+       ]
+      },
+      {
+       "id": 7
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-run-refused",
+  "command": "run",
+  "argv": [
+   "run",
+   "newTab"
+  ],
+  "control": {
+   "replies": {
+    "run": {
+     "error": {
+      "code": "no_window",
+      "message": "no window"
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-run-commands-null",
+  "command": "run",
+  "argv": [
+   "run",
+   "newTabb"
+  ],
+  "control": {
+   "replies": {
+    "run": {
+     "error": {
+      "code": "unknown_command",
+      "message": "unknown"
+     }
+    },
+    "commands": {
+     "result": null
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-run-commands-dict",
+  "command": "run",
+  "argv": [
+   "run",
+   "newTabb"
+  ],
+  "control": {
+   "replies": {
+    "run": {
+     "error": {
+      "code": "unknown_command",
+      "message": "unknown"
+     }
+    },
+    "commands": {
+     "result": {
+      "newTab": 1
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-run-dropped",
+  "command": "run",
+  "argv": [
+   "run",
+   "newTab"
+  ],
+  "control": {
+   "replies": {
+    "run": "close"
+   }
+  }
+ },
+ {
+  "id": "m2a-run-not-running",
+  "command": "run",
+  "argv": [
+   "run",
+   "newTab"
+  ],
+  "control": null
+ },
+ {
+  "id": "m2a-run-hello-closes",
+  "command": "run",
+  "argv": [
+   "run",
+   "newTab"
+  ],
+  "control": {
+   "replies": {},
+   "hello": "close"
+  }
+ }
+]

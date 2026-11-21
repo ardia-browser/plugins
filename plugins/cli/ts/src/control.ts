@@ -1,8 +1,8 @@
 import { lstatSync } from "node:fs";
 import { createConnection, type Socket } from "node:net";
 import { peerUid } from "./libc.ts";
-import { Connection, Stop } from "./connection.ts";
-import { field, object, same, type Value } from "./json.ts";
+import { Connection, type EventLine, Stop } from "./connection.ts";
+import { dumps, field, object, same, type Value } from "./json.ts";
 import { baseName, errnoOf, join, LINUX, purePath, envSet, expandUser, home, strerror, uid } from "./paths.ts";
 import { MIN_APP_PROTOCOL, PROTOCOL, SOCKET_FILE } from "./protocol.ts";
 import { strOf, truthy, Unsupported } from "./py.ts";
@@ -14,7 +14,7 @@ export const NOT_REACHABLE = LINUX
 const SUN_PATH_MAX = 103;
 const LINUX_SUN_PATH_MAX = 107;
 const CONNECT_TIMEOUT = 5;
-const CALL_TIMEOUT = 30;
+export const CALL_TIMEOUT = 30;
 const ENOENT = 2;
 const ENOTDIR = 20;
 const ECONNREFUSED = LINUX ? 111 : 61;
@@ -22,9 +22,10 @@ const ECONNREFUSED = LINUX ? 111 : 61;
 export type Failure =
   | { kind: "unreachable"; message: string; sent: boolean }
   | { kind: "incompatible"; message: string }
+  | { kind: "invalid"; message: string }
   | { kind: "method"; code: string; message: string }
   | { kind: "interrupted" }
-  | { kind: "unported" };
+  | { kind: "unported"; code?: string; message?: string };
 
 export class ControlFailure extends Error {
   constructor(readonly failure: Failure) {
@@ -34,6 +35,7 @@ export class ControlFailure extends Error {
 
 export function errorCode(failure: Failure): string | undefined {
   if (failure.kind === "unreachable") return failure.sent ? "connection_dropped" : "unreachable";
+  if (failure.kind === "invalid") return "connection_dropped";
   return failure.kind === "incompatible" ? "unsupported_protocol" : undefined;
 }
 
@@ -131,7 +133,7 @@ export function catchInterrupts(): () => void {
   };
 }
 
-async function callOn(connection: Connection, method: string, params: Value | undefined, timeout: number): Promise<Value> {
+async function callOn(connection: Connection, method: string, params: Value | undefined, timeout: number, requireOutcome = false): Promise<Value> {
   let reply: Value;
   try {
     reply = await connection.request(method, params, timeout);
@@ -143,7 +145,11 @@ async function callOn(connection: Connection, method: string, params: Value | un
   }
   const error = field(reply, "error");
   if (error !== undefined) throw new ControlFailure(methodFailure(error));
-  return field(reply, "result") ?? null;
+  const result = field(reply, "result");
+  if (requireOutcome && result === undefined) {
+    throw new ControlFailure({ kind: "invalid", message: `Ardia's answer to ${method} had neither a result nor an error` });
+  }
+  return result ?? null;
 }
 
 function methodFailure(error: Value): Failure {
@@ -152,8 +158,9 @@ function methodFailure(error: Value): Failure {
   try {
     return { kind: "method", code: truthy(code) ? strOf(code) : "failed", message: truthy(message) ? strOf(message) : "failed" };
   } catch (failure) {
-    if (failure instanceof Unsupported) return { kind: "unported" };
-    throw failure;
+    if (!(failure instanceof Unsupported)) throw failure;
+    const lossy = (value: Value | undefined) => (truthy(value) && value !== undefined ? (typeof value === "string" ? value : dumps(value, "spaced")) : "failed");
+    return { kind: "unported", code: lossy(code), message: lossy(message) };
   }
 }
 
@@ -198,7 +205,29 @@ function peerOf(fd: number): number | undefined {
   }
 }
 
-export async function call(dataDir: string | undefined, method: string, params: Value | undefined): Promise<Value> {
+export class Session {
+  constructor(private readonly connection: Connection) {}
+
+  call(method: string, params: Value | undefined, timeout: number = CALL_TIMEOUT, requireOutcome = false): Promise<Value> {
+    return callOn(this.connection, method, params, timeout, requireOutcome);
+  }
+
+  async nextEvent(): Promise<EventLine> {
+    try {
+      return await this.connection.nextEvent();
+    } catch (error) {
+      if (!(error instanceof Stop)) throw error;
+      if (error.kind === "interrupted") throw new ControlFailure({ kind: "interrupted" });
+      throw new ControlFailure({ kind: "unreachable", message: `${NOT_REACHABLE} (${error.reason})`, sent: false });
+    }
+  }
+
+  takeDropped(): number {
+    return this.connection.takeDropped();
+  }
+}
+
+export async function withSession<T>(dataDir: string | undefined, work: (session: Session) => Promise<T>): Promise<T> {
   const path = join(dataRoot(dataDir), SOCKET_FILE);
   checkSocket(path);
   const socket = await connectSocket(path, CONNECT_TIMEOUT);
@@ -214,9 +243,13 @@ export async function call(dataDir: string | undefined, method: string, params: 
       wakeAll = wake;
     });
     await hello(connection, name, routedCaller());
-    return await callOn(connection, method, params, CALL_TIMEOUT);
+    return await work(new Session(connection));
   } finally {
     connection?.close();
     socket.destroy();
   }
+}
+
+export function call(dataDir: string | undefined, method: string, params: Value | undefined, timeout: number = CALL_TIMEOUT, requireOutcome = false): Promise<Value> {
+  return withSession(dataDir, (session) => session.call(method, params, timeout, requireOutcome));
 }

@@ -1,3 +1,4 @@
+import { recordedSocketCode } from "./error-codes.ts";
 import { object, type Value } from "./json.ts";
 
 export type Kind = "tabs" | "groups" | "windows" | "commands";
@@ -49,5 +50,5 @@ export function methodFailed(kind: Kind, listing: Listing, code: string, message
     return failed(1, "unknown_method", `ardia ${kind}: this Ardia doesn't know --usage and --pid yet; update Ardia`);
   }
   if (code === "unknown_method") return failed(1, code, `ardia ${kind}: this Ardia doesn't know ${kind} yet; update Ardia`);
-  return failed(1, code, `ardia ${kind}: ${message}`);
+  return failed(1, recordedSocketCode(code), `ardia ${kind}: ${message}`);
 }

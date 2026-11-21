@@ -1,5 +1,5 @@
 import { Float, floatRepr, isWideInt, type JsonObject, type Value } from "./json.ts";
-import { codePoints, joinCodePoints } from "./pystr.ts";
+import { codePoints, joinCodePoints, SPLIT_TEXT } from "./pystr.ts";
 
 export class Unsupported extends Error {
   constructor() {
@@ -155,20 +155,45 @@ export function isNumberSpace(ch: string): boolean {
   return SPACES.has(point) && !INFORMATION_SEPARATORS.has(point);
 }
 
-export function rstrip(text: string, strip: (ch: string) => boolean = isSpace): string {
+function leadingUnits(text: string, drop: (ch: string) => boolean): number {
+  let units = 0;
+  for (const point of codePoints(text)) {
+    if (!drop(point)) break;
+    units += point.length;
+  }
+  return units;
+}
+
+function keptUnits(text: string, drop: (ch: string) => boolean): number {
+  const points = codePoints(text);
+  let units = text.length;
+  for (let index = points.length - 1; index >= 0 && drop(points[index] ?? ""); index -= 1) units -= (points[index] as string).length;
+  return units;
+}
+
+function pointSlice(text: string, drop: (ch: string) => boolean, fromStart: boolean, fromEnd: boolean): string {
   const chars = codePoints(text);
+  let start = 0;
+  while (fromStart && start < chars.length && drop(chars[start] ?? "")) start += 1;
   let end = chars.length;
-  while (end > 0 && strip(chars[end - 1] ?? "")) end -= 1;
-  return joinCodePoints(chars.slice(0, end));
+  while (fromEnd && end > start && drop(chars[end - 1] ?? "")) end -= 1;
+  return joinCodePoints(chars.slice(start, end));
+}
+
+export function rstrip(text: string, strip: (ch: string) => boolean = isSpace): string {
+  if (text.includes(SPLIT_TEXT)) return pointSlice(text, strip, false, true);
+  return text.slice(0, keptUnits(text, strip));
+}
+
+export function lstrip(text: string, drop: (ch: string) => boolean = isSpace): string {
+  if (text.includes(SPLIT_TEXT)) return pointSlice(text, drop, true, false);
+  return text.slice(leadingUnits(text, drop));
 }
 
 export function strip(text: string, drop: (ch: string) => boolean): string {
-  const chars = codePoints(text);
-  let start = 0;
-  while (start < chars.length && drop(chars[start] ?? "")) start += 1;
-  let end = chars.length;
-  while (end > start && drop(chars[end - 1] ?? "")) end -= 1;
-  return joinCodePoints(chars.slice(start, end));
+  if (text.includes(SPLIT_TEXT)) return pointSlice(text, drop, true, true);
+  const start = leadingUnits(text, drop);
+  return start === text.length ? "" : text.slice(start, keptUnits(text, drop));
 }
 
 function charCount(text: string): number {
@@ -204,4 +229,35 @@ export function fixed(value: number, digits: number): string {
   const text = quotient.toString().padStart(digits + 1, "0");
   const shown = digits > 0 ? `${text.slice(0, -digits)}.${text.slice(-digits)}` : text;
   return (negative ? "-" : "") + shown;
+}
+
+function significant(value: number, exponent: number): string {
+  return fixed(value, 5 - exponent).replace(".", "").replace(/^0+/, "");
+}
+
+export function formatG(value: number): string {
+  if (Number.isNaN(value)) return "nan";
+  if (!Number.isFinite(value)) return value > 0 ? "inf" : "-inf";
+  if (value === 0) return Object.is(value, -0) ? "-0" : "0";
+  const sign = value < 0 ? "-" : "";
+  const size = Math.abs(value);
+  let exponent = Math.floor(Math.log10(size));
+  if (exponent > 5) {
+    const [mantissa = "", power = "0"] = size.toExponential(5).split("e");
+    const trimmed = mantissa.replace(/\.?0+$/, "");
+    const shift = Number(power);
+    if (shift < 6) return sign + String(Number(trimmed) * 10 ** shift);
+    return `${sign}${trimmed}e+${String(shift).padStart(2, "0")}`;
+  }
+  let digits = significant(size, exponent);
+  if (digits.length > 6) exponent += 1;
+  else if (digits.length < 6) exponent -= 1;
+  if (exponent > 5) return formatG(value >= 0 ? 1e6 : -1e6);
+  digits = significant(size, exponent).slice(0, 6);
+  if (exponent < -4) {
+    const mantissa = `${digits[0]}.${digits.slice(1)}`.replace(/\.?0+$/, "");
+    return `${sign}${mantissa}e-${String(-exponent).padStart(2, "0")}`;
+  }
+  const text = fixed(size, 5 - exponent);
+  return sign + (text.includes(".") ? text.replace(/\.?0+$/, "") : text);
 }

@@ -77,6 +77,7 @@ function renderReply(kind: Kind, listing: Listing, reply: Reply): Rendered | und
   switch (failure.kind) {
     case "unreachable":
     case "incompatible":
+    case "invalid":
       return failed(2, errorCode(failure), `ardia: ${failure.message}`);
     case "method":
       return methodFailed(kind, listing, failure.code, failure.message);

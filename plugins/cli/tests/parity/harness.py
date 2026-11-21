@@ -244,6 +244,8 @@ def decode_blob(value) -> bytes:
         return base64.b64decode(value["base64"])
     if isinstance(value, dict) and "json" in value:
         return json.dumps(value["json"]).encode()
+    if isinstance(value, dict) and "parts" in value:
+        return b"".join(part["repeat"].encode() * int(part["times"]) if isinstance(part, dict) and "repeat" in part else decode_blob(part) for part in value["parts"])
     raise ValueError(f"not a blob: {value!r}")
 
 
@@ -274,6 +276,7 @@ class Case:
     helpers: dict = field(default_factory=dict)
     fallback: bool = False
     normalize: list = field(default_factory=list)
+    error_codes: dict = field(default_factory=dict)
     source: str = ""
     note: str = ""
 
@@ -290,7 +293,7 @@ class Case:
     def to_dict(self) -> dict:
         row = {"id": self.id, "command": self.command, "argv": self.argv}
         defaults = Case(id="", command="", argv=[])
-        for name in ("stdin", "env", "control", "daemon", "credential", "intentional", "cdp_rules", "consent", "files", "helpers", "fallback", "normalize", "note"):
+        for name in ("stdin", "env", "control", "daemon", "credential", "intentional", "cdp_rules", "consent", "files", "helpers", "fallback", "normalize", "error_codes", "note"):
             value = getattr(self, name)
             if value != getattr(defaults, name):
                 row[name] = value
@@ -474,7 +477,10 @@ class FakeArdia:
                         connection.shutdown(socket.SHUT_WR)
                     if method == "subscribe":
                         for event in self.events:
-                            self.send(connection, json.dumps(event).encode() + b"\n")
+                            self.send(connection, (decode_blob(event["raw"]) if isinstance(event, dict) and "raw" in event else json.dumps(event).encode() + b"\n"))
+                    if then == "close":
+                        ending = "scripted"
+                        return
                     if pause:
                         self.stopped.wait(pause)
                 ending = "eof"
@@ -1247,6 +1253,8 @@ def check_case(install: Installation, case: Case, served: dict[str, str], keep: 
             shutil.rmtree(box, True)
     problems = []
     new, python = observed["new"], observed["python"]
+    if case.error_codes:
+        recode_errors(python, case.error_codes)
     named = command_of(case.argv, labels[-1] if labels else None)
     if named is not None and named != case.command:
         problems.append(f"this call is {named!r}, the case says {case.command!r}")
@@ -1270,6 +1278,13 @@ def check_case(install: Installation, case: Case, served: dict[str, str], keep: 
         if not seen.transcript_complete:
             problems.append(f"the {side} side left a control connection open past the drain deadline, so its transcript may be cut short")
     return Outcome(case, compare(new, python, case.fallback, install.entry), new.route, labels, problems, applied)
+
+
+def recode_errors(observed: Observed, codes: dict) -> None:
+    for record in [*observed.telemetry, *observed.queued]:
+        properties = record.get("properties", {})
+        if record.get("event") == "cli_command" and properties.get("error_code") in codes:
+            properties["error_code"] = codes[properties["error_code"]]
 
 
 def summarize(outcomes: list[Outcome], served: list[str] | dict[str, str]) -> dict:

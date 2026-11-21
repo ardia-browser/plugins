@@ -4,6 +4,7 @@ import { dumps, field, object, parse, TooDeep, type Value } from "./json.ts";
 import { errnoOf, strerror } from "./paths.ts";
 import { MAX_LINE_BYTES } from "./protocol.ts";
 import { utf8 } from "./pystr.ts";
+import { formatG } from "./py.ts";
 
 const CONTROL_JSON_DEPTH = 9991;
 const HIGH_WATER = 64 * 1024;
@@ -12,8 +13,33 @@ const POLL_MS = 100;
 const RETRY_WRITE_MS = 1;
 const EAGAIN = new Set(["EAGAIN", "EWOULDBLOCK"]);
 const EPIPE = 32;
+const EVENT_QUEUE_CAP = 1000;
+export const EVENT_QUEUE_BYTES = 32 * 1024 * 1024;
+export const UNREADABLE_LINE = "Ardia sent a line nested too deeply to read";
+const LOSSY_UTF8 = new TextDecoder("utf-8", { fatal: false });
 
 type Pending = { reply?: Value; lost?: string };
+
+export type EventLine = { message: Value; raw: string };
+
+type Queued = EventLine & { size: number };
+
+function retainedSize(value: Value): number {
+  let size = 0;
+  const pending: Value[] = [value];
+  for (let item = pending.pop(); item !== undefined; item = pending.pop()) {
+    size += 16;
+    if (typeof item === "string") size += item.length * 2;
+    else if (Array.isArray(item)) pending.push(...item);
+    else if (item instanceof Map) {
+      for (const [key, child] of item) {
+        size += 16 + key.length * 2;
+        pending.push(child);
+      }
+    }
+  }
+  return size;
+}
 
 export class Stop extends Error {
   constructor(
@@ -35,6 +61,9 @@ export class Connection {
   private writeFailure: string | undefined;
   private pumpTimer: ReturnType<typeof setTimeout> | undefined;
   private wake: (() => void) | undefined;
+  private events: Queued[] = [];
+  private eventBytes = 0;
+  private dropped = 0;
 
   constructor(
     readonly socket: Socket,
@@ -78,18 +107,53 @@ export class Connection {
         if (!(error instanceof TooDeep)) throw error;
         this.readerStopped = true;
         this.buffer = Buffer.alloc(0);
+        this.notify();
         return;
       }
       if (message === undefined) return this.lose("Ardia sent a line that isn't JSON");
       const id = field(message, "id");
-      if (typeof id !== "bigint") continue;
-      const request = this.pending.get(id);
-      if (request === undefined) continue;
+      const request = typeof id === "bigint" ? this.pending.get(id) : undefined;
+      if (request === undefined || typeof id !== "bigint") {
+        this.queueEvent(message, line);
+        continue;
+      }
       this.pending.delete(id);
       request.reply = message;
       this.notify();
     }
     if (this.buffer.length > MAX_LINE_BYTES + 2) this.lose("Ardia sent a line longer than 1 MB");
+  }
+
+  private queueEvent(message: Value, line: Buffer): void {
+    if (!(message instanceof Map) || typeof message.get("decide") === "string" || typeof message.get("event") !== "string") return;
+    const raw = LOSSY_UTF8.decode(line).replace(/\n+$/, "");
+    const size = line.length + raw.length * 2 + retainedSize(message);
+    while (this.events.length > 0 && (this.events.length >= EVENT_QUEUE_CAP || this.eventBytes + size > EVENT_QUEUE_BYTES)) {
+      this.eventBytes -= (this.events.shift() as Queued).size;
+      this.dropped += 1;
+    }
+    this.events.push({ message, raw, size });
+    this.eventBytes += size;
+    this.notify();
+  }
+
+  takeDropped(): number {
+    const dropped = this.dropped;
+    this.dropped = 0;
+    return dropped;
+  }
+
+  async nextEvent(): Promise<EventLine> {
+    for (;;) {
+      const queued = this.events.shift();
+      if (queued !== undefined) {
+        this.eventBytes -= queued.size;
+        return { message: queued.message, raw: queued.raw };
+      }
+      if (this.lost !== undefined) throw new Stop(this.lost, "closed");
+      if (this.readerStopped) throw new Stop(UNREADABLE_LINE, "closed");
+      await this.until(() => this.events.length > 0 || this.lost !== undefined || this.readerStopped, undefined);
+    }
   }
 
   private socketOpen(): boolean {
@@ -136,11 +200,12 @@ export class Connection {
     if (this.pumpTimer === undefined) this.pump();
   }
 
-  private async drain(): Promise<void> {
+  private async drain(deadline: number): Promise<boolean> {
     if (this.writeFailure !== undefined) throw new Stop("the connection broke (Connection lost)", "lost");
-    if (this.unsentBytes <= HIGH_WATER) return;
-    await this.until(() => this.writeFailure !== undefined || this.unsentBytes <= LOW_WATER, undefined);
+    if (this.unsentBytes <= HIGH_WATER) return true;
+    const drained = await this.until(() => this.writeFailure !== undefined || this.unsentBytes <= LOW_WATER, deadline);
     if (this.writeFailure !== undefined) throw new Stop(this.writeFailure, "lost");
+    return drained;
   }
 
   private async until(done: () => boolean, deadline: number | undefined): Promise<boolean> {
@@ -175,24 +240,33 @@ export class Connection {
     const line = utf8(`${dumps(request, "compact")}\n`);
     if (line.length > MAX_LINE_BYTES) throw new Stop("the request is longer than 1 MB", "too_long");
     const waiting: Pending = {};
+    const deadline = performance.now() + timeout * 1000;
+    const timedOut = () => {
+      this.pending.delete(ident);
+      this.close();
+      return new Stop(`Ardia didn't answer ${method} in ${formatG(timeout)} s`, "timeout");
+    };
     this.pending.set(ident, waiting);
+    let drained: boolean;
     try {
       this.send(line);
-      await this.drain();
+      drained = await this.drain(deadline);
     } catch (error) {
       this.pending.delete(ident);
       throw error;
     }
-    const answered = await this.until(() => waiting.reply !== undefined || waiting.lost !== undefined, performance.now() + timeout * 1000);
+    if (!drained) throw timedOut();
+    await this.until(() => waiting.reply !== undefined || waiting.lost !== undefined, deadline);
     if (waiting.reply !== undefined) return waiting.reply;
     if (waiting.lost !== undefined) throw new Stop(waiting.lost, "lost");
-    if (!answered) this.pending.delete(ident);
-    throw new Stop(`Ardia didn't answer ${method} in ${timeout} s`, "timeout");
+    throw timedOut();
   }
 
   close(): void {
     if (this.pumpTimer !== undefined) clearTimeout(this.pumpTimer);
     this.pumpTimer = undefined;
+    this.unsent = [];
+    this.unsentBytes = 0;
     this.socket.destroy();
   }
 }

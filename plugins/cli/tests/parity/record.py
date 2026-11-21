@@ -11,6 +11,7 @@ the reason they were dropped. Re-running it rewrites the seeded tables.
 import argparse
 import base64
 import contextlib
+import errno
 import functools
 import hashlib
 import io
@@ -520,6 +521,10 @@ def main() -> int:
             first, second, labels, places = replay_twice(root, case)
         except harness.UnsafeCase as error:
             return key, test, label, row, None, None, [], str(error)
+        except OSError as error:
+            if error.errno != errno.E2BIG:
+                raise
+            return key, test, label, row, None, None, [], "its argv is over what the system passes to a program"
         differing = reproduces(first, expect, places)
         if differing:
             return key, test, label, row, first, second, labels, f"replay doesn't reproduce the test's {differing}"

@@ -103,3 +103,11 @@ fn hands_groups_deeper_than_python_walks_to_python() {
     });
     checked.unwrap().join().unwrap();
 }
+
+#[test]
+fn only_documented_socket_error_codes_reach_telemetry() {
+    let listing = Listing::default();
+    assert_eq!(method_failed(Kind::Tabs, &listing, "refused", "x").error_code.as_deref(), Some("refused"));
+    assert_eq!(method_failed(Kind::Groups, &listing, "secret text", "x").error_code.as_deref(), Some("other"));
+    assert_eq!(method_failed(Kind::Tabs, &listing, "user_value", "x").error_code.as_deref(), Some("other"));
+}

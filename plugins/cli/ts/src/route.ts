@@ -1,7 +1,13 @@
+import type { CommandRoute } from "./commands.ts";
 import { emptyListing, type Kind, type Listing } from "./listing.ts";
 import { servedTable, type ServingSide } from "./served.ts";
 
-export type Route = { kind: "version" } | { kind: "help" } | { kind: "listing"; what: Kind; listing: Listing } | { kind: "python" };
+export type Route =
+  | { kind: "version" }
+  | { kind: "help" }
+  | { kind: "listing"; what: Kind; listing: Listing }
+  | { kind: "command"; route: CommandRoute }
+  | { kind: "python" };
 
 const U64_MAX = (1n << 64n) - 1n;
 const PY_INT_MAX_STR_DIGITS = 4300;
@@ -28,11 +34,16 @@ class Cursor {
 export function labelOf(route: Route): string | undefined {
   if (route.kind === "version") return "--version";
   if (route.kind === "help") return "--help";
+  if (route.kind === "command") return route.route.label;
   return route.kind === "listing" ? route.what : undefined;
 }
 
-export function route(argv: string[], table: Map<string, ServingSide> = servedTable()): Route {
-  const parsed = parseRoute(argv);
+export function route(argv: string[], table: Map<string, ServingSide> = servedTable(), commands?: (argv: string[]) => CommandRoute | undefined): Route {
+  let parsed = parseRoute(argv);
+  if (parsed.kind === "python" && commands !== undefined) {
+    const found = commands(argv);
+    if (found !== undefined) parsed = { kind: "command", route: found };
+  }
   const label = labelOf(parsed);
   return label !== undefined && !table.has(label) ? { kind: "python" } : parsed;
 }
