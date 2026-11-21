@@ -1923,6 +1923,12 @@ parity harness rather than stripped wholesale:
   activationEvents only go with a main), so it can call ok a manifest Ardia refuses. Neither side checks what depends on
   the running app: built-in-only keys (`alwaysOn`, `official`, `autoInstall`, `afterUpdate`), the app version and the
   app's current settings.
+- `plugins install` (TypeScript) copies a plugin folder by descriptor: each folder and file is opened without following
+  links, and a link, FIFO, socket or device met during the copy fails the install with the same message Python gives for
+  a link found beforehand (or `isn't a regular file or folder` for the others), with the size cap counted as it copies.
+  The finished copy is walked once more before it's published and refused if it holds a link, a special file or a
+  hard-linked file. Python checks for links in one pass and then copies with `copytree`, which recreates a link that
+  appeared in between, and it copies FIFOs and devices.
 - A schema `pattern` with `\w` or `\d` outside `re.ASCII` (the theme checks) is matched with the JavaScript engine's
   Unicode tables, which may differ from CPython 3.13's on characters assigned in a newer Unicode version.
 

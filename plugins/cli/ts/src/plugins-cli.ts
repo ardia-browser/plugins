@@ -6,7 +6,7 @@ import * as files from "./config-files.ts";
 import { ConfigError } from "./config-files.ts";
 import { call as callControl, ControlFailure, errorCode, type Failure, Unsendable } from "./control.ts";
 import { dumps, type JsonObject, type Value } from "./json.ts";
-import { renamePaths } from "./libc.ts";
+import { listAt, openAt, renamePaths } from "./libc.ts";
 import { expandUser, join, NeedsPython, purePath } from "./paths.ts";
 import { strOf, truthy, Unsupported } from "./py.ts";
 import { JsonDecodeError, JsonValueError } from "./pyjson.ts";
@@ -159,47 +159,107 @@ async function cmdList(args: Args, io: Io): Promise<number> {
   return 0;
 }
 
-function walk(source: string, visit: (path: string, info: fs.Stats) => void): void {
-  for (const name of fs.readdirSync(source)) {
-    const path = join(source, name);
-    const info = fs.lstatSync(path);
-    visit(path, info);
-    if (info.isDirectory()) walk(path, visit);
+const READ_FILE = fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK;
+const WRITE_NEW = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW;
+const CHUNK = 1 << 20;
+
+function notReal(path: string, link: boolean): ConfigError {
+  return new ConfigError(link ? `${path} is a link; a plugin's files must be real files` : `${path} isn't a regular file or folder; a plugin's files must be real files`);
+}
+
+class Copy {
+  total = 0;
+  constructor(readonly source: string) {}
+
+  count(bytes: number): void {
+    this.total += bytes;
+    if (this.total > MAX_COPY) throw new ConfigError(`${this.source} is over 200 MB`);
+  }
+
+  file(input: number, path: string, target: string): void {
+    const info = fs.fstatSync(input);
+    if (!info.isFile()) throw notReal(path, false);
+    const output = fs.openSync(target, WRITE_NEW, 0o600);
+    try {
+      const buffer = Buffer.alloc(CHUNK);
+      for (;;) {
+        const read = fs.readSync(input, buffer, 0, CHUNK, null);
+        if (read === 0) break;
+        this.count(read);
+        let written = 0;
+        while (written < read) written += fs.writeSync(output, buffer, written, read - written);
+      }
+      fs.fchmodSync(output, info.mode & 0o7777);
+      fs.futimesSync(output, info.atime, info.mtime);
+    } finally {
+      fs.closeSync(output);
+    }
+  }
+
+  dir(input: number, path: string, target: string): void {
+    const info = fs.fstatSync(input);
+    if (!info.isDirectory()) throw notReal(path, false);
+    fs.mkdirSync(target);
+    for (const raw of listAt(input)) {
+      const name = raw.toString("utf8");
+      if (!Buffer.from(name, "utf8").equals(raw)) throw new ConfigError(`${path} holds a file name that isn't UTF-8`);
+      const from = join(path, name);
+      const to = join(target, name);
+      let child: number;
+      try {
+        child = openAt(input, name, READ_FILE);
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === "ELOOP") throw notReal(from, true);
+        if (code === "ENXIO" || code === "EOPNOTSUPP") throw notReal(from, false);
+        throw osError(error, from);
+      }
+      try {
+        const kind = fs.fstatSync(child);
+        if (kind.isDirectory()) this.dir(child, from, to);
+        else if (kind.isFile()) this.file(child, from, to);
+        else throw notReal(from, false);
+      } finally {
+        fs.closeSync(child);
+      }
+    }
+    fs.chmodSync(target, info.mode & 0o7777);
+    fs.utimesSync(target, info.atime, info.mtime);
   }
 }
 
-function copyStat(source: string, target: string): void {
-  const info = fs.statSync(source);
-  fs.chmodSync(target, info.mode & 0o7777);
-  fs.utimesSync(target, info.atime, info.mtime);
+function withOpen<T>(path: string, flags: number, run: (fd: number) => T): T {
+  let fd: number;
+  try {
+    fd = fs.openSync(path, flags);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ELOOP") throw notReal(path, true);
+    throw osError(error, path);
+  }
+  try {
+    return run(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 function copyFile(source: string, target: string): void {
-  fs.copyFileSync(source, target, fs.constants.COPYFILE_EXCL);
-  copyStat(source, target);
+  withOpen(source, READ_FILE, (fd) => new Copy(source).file(fd, source, target));
 }
 
-function copyDir(source: string, target: string): void {
-  fs.mkdirSync(target);
-  for (const name of fs.readdirSync(source)) {
-    const from = join(source, name);
-    const to = join(target, name);
-    const info = fs.lstatSync(from);
-    if (info.isSymbolicLink()) fs.symlinkSync(fs.readlinkSync(from), to);
-    else if (info.isDirectory()) copyDir(from, to);
-    else copyFile(from, to);
+export function copyTree(source: string, target: string): void {
+  withOpen(source, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY, (fd) => new Copy(source).dir(fd, source, target));
+}
+
+export function verifyCopy(path: string): void {
+  const info = fs.lstatSync(path);
+  if (info.isSymbolicLink()) throw notReal(path, true);
+  if (info.isDirectory()) {
+    for (const name of fs.readdirSync(path)) verifyCopy(join(path, name));
+    return;
   }
-  copyStat(source, target);
-}
-
-function copyTree(source: string, target: string): void {
-  let total = 0;
-  walk(source, (path, info) => {
-    if (info.isSymbolicLink()) throw new ConfigError(`${path} is a link; a plugin's files must be real files`);
-    if (info.isFile()) total += info.size;
-  });
-  if (total > MAX_COPY) throw new ConfigError(`${source} is over 200 MB`);
-  copyDir(source, target);
+  if (!info.isFile()) throw notReal(path, false);
+  if (info.nlink > 1) throw new ConfigError(`${path} is a hard link; a plugin's files must be its own`);
 }
 
 class NotImplemented extends Error {}
@@ -330,6 +390,7 @@ async function cmdInstall(args: Args, io: Io): Promise<number> {
     } catch (error) {
       throw osError(error);
     }
+    verifyCopy(staged);
     const copied = readManifest(staged);
     const again = [...manifestProblems(args, copied), ...(copied.get("name") === name ? [] : [`its name changed to ${text(copied.get("name") ?? null)} while it was copied`])];
     if (again.length > 0) throw new ConfigError(again.join("; "));
