@@ -510,11 +510,23 @@ describe("EditingShortcuts (ardia#2812 row 20)", () => {
     expect(editingCommands(META, "Backspace", "darwin")).toEqual(["deleteToBeginningOfLine"]);
   });
 
-  test("Linux and Windows send none, and Control is not an editing modifier on macOS", () => {
-    for (const platform of ["linux", "win32"]) expect(editingCommands(4, "a", platform)).toBeNull();
-    expect(editingCommands(2, "a", "darwin")).toBeNull();
+  test("0.4.0's selectAll, undo and redo go with Control or Meta on every platform; the rest of the macOS set is Meta and Alt on macOS only", () => {
+    for (const platform of ["linux", "win32", "darwin"]) {
+      for (const modifier of [2, 4, 4 | 1, 2 | 1]) {
+        expect(editingCommands(modifier, "a", platform)).toEqual(["selectAll"]);
+        expect(editingCommands(modifier, "Z", platform)).toEqual(["undo"]);
+        expect(editingCommands(modifier, "y", platform)).toEqual(["redo"]);
+        expect(editingCommands(modifier | 8, "z", platform)).toEqual(["redo"]);
+      }
+    }
+    for (const platform of ["linux", "win32"]) {
+      expect(editingCommands(4, "c", platform)).toBeNull();
+      expect(editingCommands(4, "ArrowLeft", platform)).toBeNull();
+    }
+    expect(editingCommands(2, "c", "darwin")).toBeNull();
+    expect(editingCommands(2, "ArrowLeft", "darwin")).toBeNull();
     expect(editingCommands(0, "a", "darwin")).toBeNull();
-    expect(editingCommands(4 | 1, "a", "darwin")).toBeNull();
+    expect(editingCommands(1, "a", "darwin")).toBeNull();
   });
 
   test("press sends the command on the key down only", async () => {

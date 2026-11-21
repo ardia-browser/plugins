@@ -5,7 +5,7 @@ import { BrowseError, ConnectionLost, OutcomeUnknown } from "../daemon-errors.ts
 import { Page, type PageInput, type Viewport, type Element } from "../state/page.ts";
 import { roundCoordinate } from "./human.ts";
 import { FocusedKeyTarget, type HeldKeys, Keyboard, KeyTarget } from "./keyboard.ts";
-import { MODIFIER_BITS, MODIFIER_KEYS, parseCombo, parseKey, RELEASE_TIMEOUT } from "./keys.ts";
+import { EDITING_SHORTCUTS, MODIFIER_BITS, MODIFIER_KEYS, parseCombo, parseKey, RELEASE_TIMEOUT } from "./keys.ts";
 import { Mouse } from "./mouse.ts";
 
 const MAC_EDITING: ReadonlyMap<string, readonly string[]> = new Map(
@@ -45,6 +45,11 @@ const ALT = MODIFIER_BITS["Alt"] as number;
 const SHIFT = MODIFIER_BITS["Shift"] as number;
 
 export function editingCommands(bits: number, key: string, platform: string = process.platform): string[] | null {
+  if (bits & (CONTROL | META) && pyLen(key) === 1) {
+    const shortcut = JSON.stringify([key.toLowerCase(), ...(bits & SHIFT ? ["Shift"] : [])]);
+    const command = EDITING_SHORTCUTS.get(shortcut);
+    if (command !== undefined) return [command];
+  }
   if (platform !== "darwin") return null;
   if (bits & CONTROL) return null;
   const meta = Boolean(bits & META);
