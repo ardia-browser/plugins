@@ -78,6 +78,10 @@ TS_PROBE = """#!/bin/sh
 printf 'ts\\n' >>{routes}/$PPID
 exec "$(dirname "$0")/ardia-ts.bin" "$@"
 """
+ENTRY_PROBE = """#!/bin/sh
+printf 'ts\\n' >>{routes}/$$
+exec "$(dirname "$0")/ardia.bin" "$@"
+"""
 TS_LIBC = "ardia-libc.so"
 ESBUILD_SHIM = "#!/bin/sh\nexec esbuild \"$@\"\n"
 TEST_ENTITLEMENTS = """<?xml version="1.0" encoding="UTF-8"?>
@@ -150,14 +154,14 @@ def codesign(*words: str) -> None:
     subprocess.run(["/usr/bin/codesign", "--force", *words], check=True, capture_output=True)
 
 
-def sign_for_tests(libexec: Path) -> None:
+def sign_for_tests(libexec: Path, program: str = "ardia-ts.bin") -> None:
     if sys.platform != "darwin":
         return
     with tempfile.NamedTemporaryFile("w", suffix=".entitlements") as entitlements:
         entitlements.write(TEST_ENTITLEMENTS)
         entitlements.flush()
         codesign("--sign", "-", "--options", "runtime", str(libexec / TS_LIBC))
-        codesign("--sign", "-", "--options", "runtime", "--entitlements", entitlements.name, str(libexec / "ardia-ts.bin"))
+        codesign("--sign", "-", "--options", "runtime", "--entitlements", entitlements.name, str(libexec / program))
 
 
 def entry_binary(entry: str) -> Path | None:
@@ -762,13 +766,17 @@ class Installation:
         self.counter_lock = threading.Lock()
 
     def install_ts(self, program: Path, router: Path | None, every_row: bool):
-        if every_row:
-            if router is None or not router.exists():
-                raise FileNotFoundError("the ts entry runs behind the Rust router: build plugins/cli/rust or set ARDIA_RUST_CLI")
-            shutil.copy2(router, self.root / "bin" / "ardia")
         addon = ts_libc(program)
         libexec = self.root / "libexec"
         libexec.mkdir()
+        if every_row and (router is None or not router.exists()):
+            shutil.copy2(program, self.root / "bin" / "ardia.bin")
+            shutil.copy2(addon, self.root / "bin" / TS_LIBC)
+            sign_for_tests(self.root / "bin", "ardia.bin")
+            (self.root / "bin" / "ardia").write_text(ENTRY_PROBE.format(routes=shlex.quote(str(self.routes))))
+            (self.root / "bin" / "ardia").chmod(0o755)
+        elif every_row:
+            shutil.copy2(router, self.root / "bin" / "ardia")
         shutil.copy2(program, libexec / "ardia-ts.bin")
         shutil.copy2(addon, libexec / TS_LIBC)
         sign_for_tests(libexec)

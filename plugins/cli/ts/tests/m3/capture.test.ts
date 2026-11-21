@@ -324,16 +324,12 @@ describe("a11y", () => {
     expect(() => axeSource(path.join(scratchDir(), "nope.js"))).toThrow(AXE_MISSING);
   });
 
-  test("the embedded axe-core is the pinned file, the same version Python's build ships", () => {
+  test("the embedded axe-core is the pinned file", () => {
     const vendor = path.resolve(import.meta.dir, "..", "..", "vendor");
     const manifest = JSON.parse(fs.readFileSync(path.join(vendor, "axe.json"), "utf8"));
     for (const [name, sha] of Object.entries(manifest.files as Record<string, string>)) {
       expect(createHash("sha256").update(fs.readFileSync(path.join(vendor, name))).digest("hex")).toBe(sha);
     }
-    const build = fs.readFileSync(path.resolve(vendor, "..", "..", "scripts", "build.sh"), "utf8");
-    expect(build).toContain(`axe_version=${manifest.version}\n`);
-    expect(build).toContain(`axe_sha256=${manifest.tarballSha256}\n`);
-    expect(build).toContain(`axe_sha512=${manifest.tarballSha512}\n`);
     const source = axeSource();
     expect(source).toContain(`axe.version="${manifest.version}"`);
   });

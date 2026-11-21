@@ -38,10 +38,10 @@ it never changes what a connection may do, and both ends strip control and invis
 characters (the app keeps `app` only when it's an absolute, outermost `.app` path). When several run at once the pill
 names the most recent one; a pill that hid and shows again without a new name says "The ardia command".
 
-Code: `plugins/cli` (`ardia_cli`, `rust`, `install.sh`, `build.sh`, `scripts/build.sh`). It runs on macOS (Apple silicon) and Linux
+Code: `plugins/cli` (`ts`, `install.sh`, `build.sh`, `scripts/build.sh`; `ardia_cli` is the Python reference the parity harness compares against until the switch). It runs on macOS (Apple silicon) and Linux
 (x86_64). Dependencies are pinned with hashes in `plugins/cli/requirements.lock` (regenerate with `uv pip compile
 requirements.in --python-version 3.13 --python-platform aarch64-apple-darwin --generate-hashes --no-annotate
---no-header -o requirements.lock`, then copy the pins into `pyproject.toml`). uv writes the hash of every file a
+--no-header -o requirements.lock`); the Python tests use it until the switch, and nothing ships it. uv writes the hash of every file a
 pinned version publishes, so the one lock covers both platforms: compiled with `--python-platform
 x86_64-manylinux_2_28` it comes out byte for byte the same, and it carries the cp313 manylinux x86_64 wheels of the
 native packages (aiohttp, pydantic-core, multidict, yarl, frozenlist, propcache, websockets). Check that again when
@@ -1405,8 +1405,8 @@ app's), even inside the tree. Both are decided by file identity (`st_dev`, `st_i
 resolving symlinks), not by path spelling, since APFS is case-insensitive. A script directly in the home folder or
 `/` may import nothing. Otherwise the build fails
 before anything is injected or published, so a script can't bundle `ArdiaControl.json` or other files and send
-them to a page. `data:` imports are allowed. The tarball ships esbuild in `ardia_cli/bin/esbuild` and an installed
-CLI uses only that one; from the repo (`python -m ardia_cli`) it falls back to
+them to a page. `data:` imports are allowed. The tarball ships esbuild in `libexec/esbuild` and an installed
+CLI uses only that one; from the repo it falls back to
 `node_modules/@esbuild/darwin-arm64/bin/esbuild` (`@esbuild/linux-x64` on Linux) in a parent folder of the package,
 then `esbuild` on PATH. It never
 looks in the cwd.
@@ -1834,32 +1834,45 @@ ignored), which brings the agent skill copies up to date.
 
 `plugins/cli/scripts/build.sh <version> <out dir> [--platform macos-arm64|linux-x64]` writes
 `ardia-cli-<version>-<platform>.tar.gz` and its `.sha256` (`sha256sum` format). The platform defaults to the host's
-and must be the host's, since the bundled Python installs the wheels and runs the checks; the Linux tarball builds on
-any x86_64 Linux with uv. Both hold python-build-standalone CPython 3.13 (release and sha256 pinned in the script per
-platform: `aarch64-apple-darwin` and `x86_64-unknown-linux-gnu` `install_only_stripped`), the locked dependencies and
-`ardia_cli` in its site-packages, pruned of tests, idlelib, Tk, ensurepip, the unused libpython (a dylib on macOS; on
-Linux `python3.13` links it statically, so the `.so` goes too) and `__pycache__`, plus `bin/ardia`, an sh launcher
-that resolves its links and runs `python3 -I -m ardia_cli`, and esbuild (the npm `@esbuild/darwin-arm64` or
-`@esbuild/linux-x64` tarball, the same version, its sha256 and npm's sha512 pinned in the script) in
-`ardia_cli/bin/esbuild`. Downloads are cached in `~/Library/Caches/ardia-cli-build` on macOS and
-`${XDG_CACHE_HOME:-~/.cache}/ardia-cli-build` on Linux. The macOS tarball is about 18 MB, 52 MB installed; the Linux
-one about 26 MB, 76 MB installed. `ardia --version` takes about 10 ms; the first command about 1 s while Python writes its
-bytecode cache, later ones about 0.15 s.
+and must be the host's, since the build runs what it made. It holds three files and no Python or Rust:
 
-`plugins/cli/build.sh <out dir>` builds the plugin folder Ardia bundles (`<out dir>/cli`: the tarball's tree with
-`plugin.json`, Python's `bin/python3` as the interpreter itself and no links, which Ardia refuses in a plugin's
-programs), and packs it as `cli-plugin-<version>-<platform>.tar.gz` beside the tarball, each with its `.sha256`.
+- `bin/ardia`, the TypeScript command (`ts/src`) compiled by Bun 1.3.14 into one executable (`bun build --compile
+  --minify`, with `.env`, `bunfig.toml`, `tsconfig.json` and `package.json` autoloading off, so the folder it runs in
+  never changes it). axe-core and every other asset are embedded in it;
+- `bin/ardia-libc.so`, the Node-API addon (`ts/native/ardia-libc.c`) for the libc calls Bun lacks. `bin/ardia` loads it
+  from beside its own resolved path, so the link in `~/.local/bin` finds it; without it every command but `--version`
+  exits 252 with one line;
+- `libexec/esbuild`, the helper `ardia scripts` and userscripts bundle with (the npm `@esbuild/darwin-arm64` or
+  `@esbuild/linux-x64` tarball, its version, sha256 and npm's sha512 pinned in the script, cached in
+  `~/Library/Caches/ardia-cli-build` on macOS and `${XDG_CACHE_HOME:-~/.cache}/ardia-cli-build` on Linux);
+
+plus an empty `.leases/` for `install.sh`. It needs Bun 1.3.14 and a C compiler (`xcrun clang`, or `cc` on Linux).
+
+`plugins/cli/build.sh <out dir>` builds the plugin folder Ardia bundles (`<out dir>/cli`: the tarball's tree without
+`.leases`, with `plugin.json` and, once `plugins/cli/main` exists, the manifest-v2 `dist/main.js` built from it), checks
+it has no links (Ardia refuses them in a plugin's programs) and that `bin/ardia --version` says the version, and packs
+it as `cli-plugin-<version>-<platform>.tar.gz` beside the tarball, each with its `.sha256`.
+
+Sizes for the macOS build (TypeScript entry of 2026-11-20): `bin/ardia` 63.5 MB, `ardia-libc.so` 54 KB, esbuild
+10.6 MB; the folder is 74 MB, the plugin tarball 28.3 MB. 0.4.0 with CPython was 42.6 MB and 15.2 MB: Bun's runtime is
+most of the difference.
+
+**Signing.** Nothing here is signed with a Developer ID; the Mach-Os stay ad hoc signed, as the toolchains leave them.
+Ardia's release (`scripts/release/export-sign.sh`) signs every executable Mach-O and `*.so` in the bundled copy with
+its Developer ID and `--options runtime`, inside out with the rest of the app, and notarizes it with the app.
+`bin/ardia` runs under the hardened runtime with no entitlements: JavaScriptCore can't map JIT memory, so it runs on
+its interpreter, `SharedArrayBuffer` is undefined (the code never uses it or `Atomics.wait`; sleeps go through
+`Bun.sleepSync`), and `bun:ffi` crashes, which is why the libc calls are an addon. The addon must carry the same Team
+ID as `bin/ardia`, or library validation refuses it. The macOS tarball for hand installs stays unsigned, as it always
+was (`install.sh` clears its quarantine).
 
 **Releasing** (`.github/workflows/cli-release.yml`): bump `version` in `plugin.json`, merge, and push the tag
-`cli-v<version>` (the workflow refuses a tag that isn't `plugin.json`'s version). It builds on macOS (arm64) and Linux
-(x86_64), checks each build says its version and the folder has no links, and publishes the GitHub release
-`cli-v<version>` with `cli-plugin-<version>-macos-arm64.tar.gz`, `ardia-cli-<version>-macos-arm64.tar.gz`,
-`ardia-cli-<version>-linux-x64.tar.gz` (and the Linux plugin folder), `install.sh` and a `.sha256` for each. Every pull
-request runs the same build as a dry run, and `workflow_dispatch` runs it with `dry_run` (default on). It needs no
-secrets beyond the workflow's own token: nothing here is signed with a Developer ID. The Mach-Os stay ad hoc signed, as
-the toolchains leave them; Ardia's release signs the bundled copy with its own identity and hardened runtime, inside
-out, with the rest of the app, and notarizes it with the app. The macOS tarball for hand installs stays unsigned, as it
-always was (`install.sh` clears its quarantine).
+`cli-v<version>` (the workflow refuses a tag that isn't `plugin.json`'s version). It builds with Bun on macOS (arm64)
+and Linux (x86_64), checks each build says its version, carries the addon and esbuild, has no `python/` and no links,
+and publishes the GitHub release `cli-v<version>` with `cli-plugin-<version>-<platform>.tar.gz`,
+`ardia-cli-<version>-<platform>.tar.gz`, `install.sh` and a `.sha256` for each. Every pull request runs the same build
+as a dry run, and `workflow_dispatch` runs it with `dry_run` (default on). It needs no secrets beyond the workflow's own
+token.
 
 Then in ardia: `scripts/release/official-plugins.py pin cli <version>` writes the release's SHA-256s into
 `apps/browser/official-plugins.json`, and the next Ardia release bundles it.

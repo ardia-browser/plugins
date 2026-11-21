@@ -276,3 +276,14 @@ export function loadPlist(data: Buffer): PlistValue {
   if (data.subarray(0, 8).toString("latin1") === "bplist00") return parseBinary(data);
   return parseXml(data.toString("utf8"));
 }
+
+export function topLevelString(raw: Uint8Array, key: string): string | undefined {
+  let parsed: PlistValue;
+  try {
+    parsed = loadPlist(Buffer.from(raw.buffer, raw.byteOffset, raw.byteLength));
+  } catch {
+    return undefined;
+  }
+  const value = parsed instanceof Map ? parsed.get(key) : undefined;
+  return typeof value === "string" ? value : undefined;
+}

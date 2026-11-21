@@ -1,9 +1,9 @@
---version rust
---help rust
-tabs rust
-groups rust
-windows rust
-commands rust
+--version ts
+--help ts
+tabs ts
+groups ts
+windows ts
+commands ts
 browse ts
 browse-daemon ts
 call * ts

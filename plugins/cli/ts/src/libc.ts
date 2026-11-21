@@ -35,9 +35,11 @@ type Native = {
   strerror(errno: number): string | number;
   execProgram(path: string, argv: Buffer, env: Buffer): number;
   zoneName(seconds: number): string | number;
+  processInfo(pid: number): [number, Buffer, Buffer] | null | number;
 };
 
-const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "connectAt", "socketInfoAt", "openFileAt", "mkdirAt", "renameAt", "renamePaths", "unlinkAt", "sizeAt", "statAt", "armWatchdog", "disarmWatchdog", "registerGroup", "unregisterGroup", "renameExclusiveAt", "removeDirAt", "swapAt", "nonBlocking", "listAt", "lock", "watchLifeline", "writeSome", "strerror", "execProgram", "zoneName"];
+
+const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "connectAt", "socketInfoAt", "openFileAt", "mkdirAt", "renameAt", "renamePaths", "unlinkAt", "sizeAt", "statAt", "armWatchdog", "disarmWatchdog", "registerGroup", "unregisterGroup", "renameExclusiveAt", "removeDirAt", "swapAt", "nonBlocking", "listAt", "lock", "watchLifeline", "writeSome", "strerror", "execProgram", "zoneName", "processInfo"];
 const ERRNO_NAMES = new Map<number, string>(Object.entries(constants.errno).map(([name, value]) => [value, name]));
 const EWOULDBLOCK = constants.errno.EWOULDBLOCK ?? constants.errno.EAGAIN;
 
@@ -276,4 +278,13 @@ export function zoneName(seconds: number): string {
   const name = native().zoneName(seconds);
   if (typeof name === "number") throw errnoError(-name, "localtime_r");
   return name;
+}
+
+export type ProcessFacts = { ppid: number; path: Buffer; args: Buffer };
+
+export function processInfo(pid: number): ProcessFacts | null {
+  const facts = native().processInfo(pid);
+  if (typeof facts === "number") throw errnoError(-facts, "proc_pidinfo");
+  if (facts === null) return null;
+  return { ppid: facts[0], path: facts[1], args: facts[2] };
 }

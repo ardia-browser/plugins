@@ -1,4 +1,5 @@
 import { fstatSync } from "node:fs";
+import { callerWire, currentCaller } from "./caller.ts";
 import { parse, TooDeep, type Value } from "./json.ts";
 
 export const HAND_BACK = 253;
@@ -48,6 +49,6 @@ export function takeMarker(words: string[]): Routed | undefined {
 }
 
 export function routedCaller(): Value {
-  if (current === undefined) throw new Error("ardia-ts runs only through ardia");
+  current ??= callerWire(currentCaller());
   return current;
 }

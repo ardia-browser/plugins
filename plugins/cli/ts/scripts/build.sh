@@ -8,7 +8,9 @@
 # The version defaults to $ARDIA_CLI_VERSION, else 0.0.0.dev0; the target to the host's; the output to
 # plugins/cli/ts/dist/ardia-ts, and the addon goes in the same folder, built for the target's architecture.
 # --node-headers names an official Node include/node folder to check the addon's Node-API declarations against.
-# The program never reads .env or bunfig.toml from the folder it runs in.
+# The program never reads .env or bunfig.toml from the folder it runs in, and Bun's runtime switches (BUN_BE_BUN,
+# BUN_OPTIONS, BUN_INSPECT and its variants) are renamed in the binary to names with "=", which no environment
+# variable can have, so the signed program never runs code it wasn't built with.
 set -eu
 
 here=$(cd "$(dirname "$0")/.." && pwd)
@@ -66,4 +68,10 @@ $compiler $warnings $platform -O2 $link -o "$addon" native/ardia-libc.c
   --no-compile-autoload-tsconfig --no-compile-autoload-package-json \
   --define "ARDIA_CLI_VERSION=\"$version\"" \
   ${target:+--target=$target} --outfile "$out" >/dev/null
+perl -0777 -pi -e 'for my $name (qw(BUN_BE_BUN BUN_OPTIONS BUN_INSPECT BUN_INSPECT_CONNECT_TO BUN_INSPECT_NOTIFY BUN_INSPECT_PRELOAD)) {
+  (my $unmatchable = $name) =~ s/^BUN_/BUN=/;
+  my $count = s/\x00\Q$name\E\x00/\x00$unmatchable\x00/g;
+  die "build.sh: Bun reads $name in $count places, not 1: check the runtime-switch seal against this Bun\n" unless $count == 1;
+}' "$out"
+[ "$(uname -s)" != Darwin ] || codesign --force --sign - "$out" 2>/dev/null
 echo "$out"
