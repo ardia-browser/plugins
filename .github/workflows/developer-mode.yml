@@ -1,0 +1,134 @@
+name: Developer Mode plugin
+
+on:
+  pull_request:
+    paths: ["plugins/developer-mode/**", ".github/workflows/developer-mode.yml"]
+  push:
+    branches: [main]
+    paths: ["plugins/developer-mode/**", ".github/workflows/developer-mode.yml"]
+    tags: ["developer-mode-v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Pack and check everything, publish nothing
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: developer-mode-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  pack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      publish: ${{ steps.check.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - id: check
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          dir=plugins/developer-mode
+          version=$(python3 - "$dir/plugin.json" <<'PY'
+          import json, re, sys
+          m = json.load(open(sys.argv[1]))
+          problems = []
+          if m.get("name") != "developer-mode": problems.append("name must be developer-mode")
+          if m.get("manifest") != 1: problems.append("manifest must be 1")
+          if not re.fullmatch(r"\d+\.\d+\.\d+(-[a-z]+\.\d+)?", str(m.get("version"))): problems.append("version isn't a version")
+          for key in ("process", "page", "programs", "hooks", "tools", "permissions"):
+              if key in m: problems.append(f"{key}: this plugin must never run code or reach pages")
+          if "passwordManager" in m: problems.append("passwordManager: not this plugin's job")
+          switches = {s.get("key") for s in m.get("siteSwitches") or []}
+          rows = {r.get("key"): r for r in (m.get("settings") or {}).get("rows") or []}
+          bar = m.get("pageBar") or {}
+          when = bar.get("when") or {}
+          unknown = sorted(set(when) - {"siteSwitch", "localAddresses"})
+          if unknown: problems.append("pageBar.when: unknown keys " + ", ".join(unknown))
+          if not {"siteSwitch", "localAddresses"} & set(when): problems.append("pageBar.when must name a site switch or a local addresses row")
+          if "siteSwitch" in when and when["siteSwitch"] not in switches: problems.append("pageBar.when.siteSwitch isn't one of siteSwitches")
+          if "localAddresses" in when:
+              row = rows.get(when["localAddresses"])
+              if not row or row.get("type") != "toggle": problems.append("pageBar.when.localAddresses isn't a toggle row")
+              elif row.get("default") is not False: problems.append("the local addresses row must default to off")
+          if not m.get("official"): problems.append("official must be true")
+          if problems:
+              print("\n".join(problems), file=sys.stderr); sys.exit(1)
+          print(m["version"])
+          PY
+          )
+          extra=$(find "$dir" -type f ! -name plugin.json ! -name README.md | head -1)
+          [ -z "$extra" ] || { echo "::error::$extra: the plugin is its manifest and README only"; exit 1; }
+          publish=false
+          if [ "$EVENT" = push ] && [[ "$REF" == refs/tags/* ]]; then
+            [ "$REF" = "refs/tags/developer-mode-v$version" ] || { echo "::error::the tag $REF isn't developer-mode-v$version"; exit 1; }
+            publish=true
+          elif [ "$EVENT" = workflow_dispatch ] && [ "$DRY_RUN" = false ]; then
+            [ "$REF" = "refs/tags/developer-mode-v$version" ] || { echo "::error::publish only from the tag developer-mode-v$version, not $REF"; exit 1; }
+            publish=true
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+      - name: Pack
+        env:
+          VERSION: ${{ steps.check.outputs.version }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/out"
+          mkdir -p "$out"
+          file="developer-mode-plugin-$VERSION-macos-arm64.tar.gz"
+          tar -C plugins --owner=0 --group=0 --numeric-owner --sort=name --mtime='2026-01-01 00:00Z' -czf "$out/$file" developer-mode
+          (cd "$out" && sha256sum "$file" > "$file.sha256" && cat "$file.sha256")
+          links=$(tar -tvzf "$out/$file" | grep -c '^l' || true)
+          [ "$links" = 0 ] || { echo "::error::the plugin folder has links: Ardia refuses them"; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: developer-mode
+          path: ${{ runner.temp }}/out/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: pack
+    if: needs.pack.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.pack.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: developer-mode
+          path: ${{ runner.temp }}/assets
+      - name: Release
+        run: |
+          set -euo pipefail
+          assets="$RUNNER_TEMP/assets"
+          (cd "$assets" && sha256sum -c ./*.sha256)
+          gh release view "developer-mode-v$VERSION" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 && { echo "::error::developer-mode-v$VERSION is already released"; exit 1; }
+          if tag=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/developer-mode-v$VERSION" --jq '.object.type + " " + .object.sha' 2>&1); then
+            read -r kind sha <<< "$tag"
+            if [ "$kind" = tag ]; then sha=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$sha" --jq '.object.sha'); fi
+            [ "$sha" = "$GITHUB_SHA" ] || { echo "::error::the tag developer-mode-v$VERSION is on $sha, not the packed commit $GITHUB_SHA"; exit 1; }
+          elif [[ "$tag" != *"HTTP 404"* ]]; then
+            echo "::error::couldn't look up the tag developer-mode-v$VERSION: $tag"
+            exit 1
+          fi
+          prerelease=()
+          [[ "$VERSION" != *-* ]] || prerelease=(--prerelease)
+          gh release create "developer-mode-v$VERSION" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Developer Mode $VERSION" \
+            --notes "Ardia pins it in apps/browser/official-plugins.json (scripts/release/official-plugins.py pin developer-mode $VERSION)." \
+            "${prerelease[@]}" "$assets"/*
