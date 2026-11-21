@@ -53,3 +53,7 @@ plugins enable ts
 plugins disable ts
 plugins call ts
 plugins path ts
+computer * ts
+hooks install ts
+hooks uninstall ts
+on ts

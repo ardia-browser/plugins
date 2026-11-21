@@ -2,6 +2,9 @@ import type { CommandRoute } from "./commands.ts";
 import { type Command, parseCommand as parseConfigCommand } from "./cli-command.ts";
 import { emptyListing, type Kind, type Listing } from "./listing.ts";
 import { servedTable, type ServingSide } from "./served.ts";
+import type { CommandRoute as FamilyRoute } from "./serve-commands.ts";
+import { label as computerLabel } from "./computer/label.ts";
+import { arrange } from "./hooks/route.ts";
 
 export type Route =
   | { kind: "version" }
@@ -9,7 +12,8 @@ export type Route =
   | { kind: "listing"; what: Kind; listing: Listing }
   | { kind: "command"; route: CommandRoute }
   | { kind: "config"; command: Command }
-  | { kind: "python" };
+  | { kind: "python" }
+  | FamilyRoute;
 
 const U64_MAX = (1n << 64n) - 1n;
 const PY_INT_MAX_STR_DIGITS = 4300;
@@ -38,6 +42,9 @@ export function labelOf(route: Route): string | undefined {
   if (route.kind === "help") return "--help";
   if (route.kind === "command") return route.route.label;
   if (route.kind === "config") return route.command.label;
+  if (route.kind === "computer") return `computer ${computerLabel(route.argv)}`;
+  if (route.kind === "hooks") return route.verb === "" ? "hooks" : `hooks ${route.verb}`;
+  if (route.kind === "on") return "on";
   return route.kind === "listing" ? route.what : undefined;
 }
 
@@ -66,6 +73,9 @@ export function parseRoute(argv: string[]): Route {
   if (argv.length === 0 || same(argv, ["--help"]) || same(argv, ["-h"])) return { kind: "help" };
   const config = parseConfigCommand(argv);
   if (config !== undefined) return { kind: "config", command: config };
+  if (argv[0] === "computer") return { kind: "computer", argv: argv.slice(1) };
+  const arranged = arrange(argv);
+  if (arranged !== undefined) return arranged.path[0] === "on" ? { kind: "on", argv } : { kind: "hooks", verb: arranged.path[1] ?? "", argv };
   const listing = emptyListing();
   const cursor = new Cursor(argv);
   let kind: Kind | undefined;
