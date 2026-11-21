@@ -5,3 +5,5 @@ groups rust
 windows rust
 commands rust
 feedback ts
+pinned ts
+history ts

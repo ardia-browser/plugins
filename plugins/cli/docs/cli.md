@@ -1902,6 +1902,17 @@ parity harness rather than stripped wholesale:
   so that write blocks until a second Ctrl-C or until a reader drains the pipe, and only then does the listing end
   with `ardia <command>: interrupted` and status 130. CPython has exactly this window between its signal check and the
   blocking `write` in its buffered writer, so no code closes it.
+- The telemetry flusher is the TypeScript program itself (started with `--ardia-telemetry-flush`), not the bundled
+  Python. It sends the same OTLP body except that each record's attributes leave out `python_version`, which no longer
+  describes the program; `cli_command` events already say `served_by`. A 3xx answer from the ingest service is a retry,
+  not a redirect to follow, so a spool is never posted anywhere but the configured URL.
+- `ardia feedback` leaves `python_version` out of the report's diagnostics for the same reason. A redirect from the
+  feedback service is reported as `the feedback service answered HTTP 3xx` instead of being followed, so a report and its
+  attachments only ever go to the configured URL. When the network fails, the reason in `Not sent: the network failed
+  (…)` is the runtime's wording (a refused connection still reads `[Errno 61] Connection refused`).
+- argv shapes that make argparse print usage or an error (`--help`, an unknown or abbreviated option, an invalid
+  `--kind`/`--target`/`--days`/`--limit`, positionals on both sides of an option) are handed back to Python, which
+  prints them; the served commands never print argparse's text themselves.
 
 ## Linux
 
