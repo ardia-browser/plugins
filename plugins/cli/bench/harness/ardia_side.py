@@ -1,4 +1,5 @@
 import datetime
+import fcntl
 import json
 import os
 import shutil
@@ -202,36 +203,55 @@ def ensure_instance(opts):
     return launch(opts)
 
 
+def lock_held(path):
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError:
+        return False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return True
+    except OSError:
+        return False
+    finally:
+        os.close(fd)
+    return False
+
+
 def browse_daemons(data):
     found = []
-    for f in (data / "Browse").glob("*.json") if (data / "Browse").is_dir() else []:
+    browse = data / "Browse"
+    for entry in browse.glob("*.json") if browse.is_dir() else []:
+        lock = browse / f"{entry.stem}.lock"
+        if not lock_held(lock):
+            continue
         try:
-            pid = int(json.loads(f.read_text()).get("pid"))
+            pid = int(json.loads(entry.read_text()).get("pid"))
         except (OSError, ValueError, TypeError, AttributeError):
             continue
-        info = proc_info(pid)
-        if info and ("ardia_cli" in info["command"] or "python" in info["command"]):
-            found.append(pid)
+        if pid > 1 and proc_info(pid):
+            found.append((pid, lock))
     return found
 
 
 def stop_browse_daemons(data):
-    pids = browse_daemons(data)
-    for pid in pids:
+    daemons = browse_daemons(data)
+    for pid, _ in daemons:
         try:
             os.kill(pid, signal.SIGTERM)
         except ProcessLookupError:
             pass
     end = time.monotonic() + 5
-    while time.monotonic() < end and any(proc_info(p) for p in pids):
+    while time.monotonic() < end and any(lock_held(lock) and proc_info(pid) for pid, lock in daemons):
         time.sleep(0.2)
-    for pid in pids:
-        if proc_info(pid):
+    for pid, lock in daemons:
+        if lock_held(lock) and proc_info(pid):
             try:
                 os.kill(pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
-    return pids
+    return [pid for pid, _ in daemons]
 
 
 def prepare_tab(opts, task):
