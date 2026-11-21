@@ -1012,9 +1012,9 @@
   },
   "note": "finding 6: the router's refusal when the client hands back",
   "intentional": {
-   "why": "under --json every error is one JSON line with a code on stdout (AI plugin contract §3); text mode stays Python's",
+   "why": "the router and its Python hand-back are gone: the TypeScript client reads the step itself and refuses it as a plugin step",
    "stdout": {
-    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) runs only on the TypeScript client, and its TypeScript client asked for Python; nothing was sent\",\"code\":\"plugin_refused\"}\n"
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `get ti�tle` for a plugin, only page steps; nothing was sent\",\"code\":\"plugin_refused\"}\n"
    },
    "stderr": {
     "text": ""
@@ -3841,12 +3841,12 @@
   },
   "note": "round 5: false padded with U+001C is false for the router as for the client and Python",
   "intentional": {
-   "why": "the router refuses a plugin call its TypeScript client handed back, in text since --json is false",
+   "why": "the router and its Python hand-back are gone: the TypeScript client reads the step itself and refuses it as a plugin step",
    "stdout": {
     "text": ""
    },
    "stderr": {
-    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) runs only on the TypeScript client, and its TypeScript client asked for Python; nothing was sent\n"
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `get ti�tle` for a plugin, only page steps; nothing was sent\n"
    },
    "status": 77,
    "daemon_requests": [],

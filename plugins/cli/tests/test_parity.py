@@ -61,6 +61,12 @@ class ParityTable:
         failed = [outcome.report() for outcome in self.outcomes if not outcome.passed]
         self.assertFalse(failed, f"{len(failed)} of {len(self.outcomes)} parity cases differ:\n" + "\n".join(failed))
 
+    def test_no_case_routes_to_python(self):
+        if not self.install.standalone:
+            self.skipTest("the entry runs behind a router that can hand back")
+        routed = sorted({outcome.case.id for outcome in self.outcomes if outcome.route != "ts"})
+        self.assertEqual(routed, [], "with argparse ts on, every argv in the table is served by TypeScript")
+
     def test_it_serves_only_proven_commands(self):
         self.assertEqual(self.summary["unproven_but_served"], [], "served.txt lists commands without passing parity cases")
 
@@ -152,6 +158,11 @@ class ServedTable(unittest.TestCase):
             self.assertEqual(harness.served_table(scratch / "served.txt"), {"--version": "rust", "tabs": "rust", "skills install": "ts", "call *": "ts"})
         finally:
             shutil.rmtree(scratch, True)
+
+    def test_every_row_is_served_by_typescript(self):
+        elsewhere = {name: side for name, side in harness.served_table().items() if side != "ts"}
+        self.assertEqual(elsewhere, {}, "served.txt routes a row away from TypeScript")
+        self.assertIn("argparse", harness.served_table())
 
     def test_the_typescript_entry_embeds_the_same_table(self):
         source = (CLI / "ts" / "src" / "served.ts").read_text()

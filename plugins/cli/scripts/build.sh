@@ -139,6 +139,9 @@ unset ARDIA_BROWSE_FOR_PLUGIN ARDIA_DATA_DIR
 rm -rf "$work/cli-home" "$work/no-ardia" "$work/smoke"
 mkdir "$root/.leases"
 [ "$("$root/bin/ardia" --version)" = "ardia $version" ] || { echo "build.sh: the built ardia doesn't say $version" >&2; exit 1; }
+[ ! -e "$root/python" ] || { echo "build.sh: the CLI has a python folder, and it ships no Python" >&2; exit 1; }
+elsewhere=$(awk 'NF >= 2 && $NF != "ts" { print $0 }' "$cli_dir/served.txt" | head -n 3)
+[ -z "$elsewhere" ] || { echo "build.sh: served.txt routes rows somewhere other than TypeScript: $elsewhere" >&2; exit 1; }
 links=$(find "$root" -type l | head -n 5)
 [ -z "$links" ] || { echo "build.sh: the CLI has links, and Ardia refuses them: $links" >&2; exit 1; }
 

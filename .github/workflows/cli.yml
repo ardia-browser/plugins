@@ -124,7 +124,7 @@ jobs:
       - name: The vendored plugin schema is ardia's
         if: matrix.os == 'ubuntu-24.04'
         run: |
-          ardia_ref=plugins-v2/official-plugins
+          ardia_ref=main
           set -euo pipefail
           url=https://raw.githubusercontent.com/ardia-browser/ardia/$ardia_ref/docs/plugin.schema.json
           if ! curl -fsSL "$url" -o "$RUNNER_TEMP/ardia-plugin.schema.json"; then

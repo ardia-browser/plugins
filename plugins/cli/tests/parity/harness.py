@@ -738,6 +738,7 @@ class Installation:
         self.routes.mkdir()
         (self.root / "bin").mkdir(parents=True)
         self.ts_installed = False
+        self.standalone = False
         try:
             if entry == "ts":
                 self.install_ts(entry_program, router or binary(), every_row=True)
@@ -770,6 +771,7 @@ class Installation:
         libexec = self.root / "libexec"
         libexec.mkdir()
         if every_row and (router is None or not router.exists()):
+            self.standalone = True
             shutil.copy2(program, self.root / "bin" / "ardia.bin")
             shutil.copy2(addon, self.root / "bin" / TS_LIBC)
             sign_for_tests(self.root / "bin", "ardia.bin")
@@ -1307,7 +1309,7 @@ def check_case(install: Installation, case: Case, served: dict[str, str], keep: 
         problems.append(f"this call is {named!r}, the case says {case.command!r}")
     if python.route != "python":
         problems.append("the Python side never started the bundled Python")
-    expected = expected_route(install.entry, served, case, install.ts_installed)
+    expected = "ts" if install.standalone else expected_route(install.entry, served, case, install.ts_installed)
     if new.route != expected:
         problems.append(f"expected {expected} to serve it, but {new.route} did")
     if new.served_by and new.served_by[-1] != new.route:
