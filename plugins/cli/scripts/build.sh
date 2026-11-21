@@ -110,6 +110,15 @@ chmod 755 "$root/libexec/esbuild"
 rm -rf "$work/esbuild"
 [ "$("$root/libexec/esbuild" --version)" = "$esbuild_version" ] || { echo "build.sh: the bundled esbuild doesn't run" >&2; exit 1; }
 
+probe=$work/probe.js
+printf 'process.stdout.write("runtime-switch-open")\n' >"$probe"
+for switch in "BUN_BE_BUN=1" "BUN_OPTIONS=--preload=$probe"; do
+  if env "$switch" "$root/bin/ardia" "$probe" 2>&1 </dev/null | grep -q runtime-switch-open; then
+    echo "build.sh: bin/ardia still runs other code with $switch" >&2
+    exit 1
+  fi
+done
+rm "$probe"
 mkdir "$root/.leases"
 [ "$("$root/bin/ardia" --version)" = "ardia $version" ] || { echo "build.sh: the built ardia doesn't say $version" >&2; exit 1; }
 links=$(find "$root" -type l | head -n 5)
