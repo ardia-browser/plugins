@@ -21,7 +21,7 @@ const MAX_FRAMES = 50;
 const ENVIRONMENTS = ["production", "test", "dev"];
 const SERVED_BY = ["python", "rust", "ts"];
 const LEVELS = ["fatal", "error"];
-const FIXED_MESSAGES = new Set([
+export const FIXED_MESSAGES: ReadonlySet<string> = new Set([
   "division by zero", "integer division or modulo by zero", "float division by zero", "integer modulo by zero",
   "list index out of range", "tuple index out of range", "string index out of range", "list assignment index out of range",
   "pop from empty list", "pop from an empty set", "pop from an empty deque", "deque index out of range",

@@ -50,9 +50,11 @@ test("reads XML plists", () => {
   <key>CFBundleName</key><string>Tom &amp; Jerry&#x2122;&#+65;&#xD800;</string>
 </dict></plist>`;
   const raw = Buffer.from(text);
-  assert.equal(topLevelString(raw, "CFBundleName"), "Tom & Jerry™A&#xD800;");
-  assert.equal(topLevelString(raw, "CFBundleDisplayName"), "");
-  assert.equal(topLevelString(raw, "Missing"), undefined);
+  assert.equal(topLevelString(raw, "CFBundleName"), undefined, "plistlib refuses &#+65; and &#xD800;, so Python reads no name");
+  const good = Buffer.from(text.replace("&#+65;&#xD800;", "&#65;"));
+  assert.equal(topLevelString(good, "CFBundleName"), "Tom & Jerry™A");
+  assert.equal(topLevelString(good, "CFBundleDisplayName"), "");
+  assert.equal(topLevelString(good, "Missing"), undefined);
   assert.equal(topLevelString(Buffer.from([0x3c, 0xff]), "x"), undefined);
 });
 

@@ -1,3 +1,5 @@
+const NEGATIVE_NUMBER = /^-\p{Nd}+$|^-\p{Nd}*\.\p{Nd}+$/u;
+
 export type Sub = "new" | "install" | "uninstall" | "list";
 
 export type ScriptsArgs = {
@@ -74,7 +76,7 @@ export function parseScripts(argv: readonly string[]): ScriptsArgs | undefined {
   let positional: string | undefined;
   for (let at = 0; at < tokens.length; at += 1) {
     const token = tokens[at] as string;
-    if (token.startsWith("-") && token !== "-") {
+    if (token.startsWith("-") && token !== "-" && !NEGATIVE_NUMBER.test(token)) {
       const equals = token.indexOf("=");
       const name = equals < 0 ? token : token.slice(0, equals);
       if (leaf.flags.includes(token)) {
@@ -86,7 +88,7 @@ export function parseScripts(argv: readonly string[]): ScriptsArgs | undefined {
       if (equals >= 0) value = token.slice(equals + 1);
       else {
         const next = tokens[at + 1];
-        if (next === undefined || (next.startsWith("-") && next !== "-")) return undefined;
+        if (next === undefined || (next.startsWith("-") && next !== "-" && !NEGATIVE_NUMBER.test(next))) return undefined;
         value = next;
         at += 1;
       }

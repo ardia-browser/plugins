@@ -1,7 +1,7 @@
 import { dumps, type JsonObject, type Value } from "./json.ts";
 import { type Kind, type Listing, type Rendered, rendered } from "./listing.ts";
 import { shown } from "./printable.ts";
-import { charCount, dict, getOrNull, iterateOrEmpty, left, length, rstrip, strOf, truthy, Unsupported } from "./py.ts";
+import { charCount, dict, getOrNull, iterateOrEmpty, left, length, PythonError, rstrip, strOf, truthy, Unsupported } from "./py.ts";
 import { groups, tabs } from "./render-tabs.ts";
 
 export function pretty(value: Value): string {
@@ -17,15 +17,30 @@ function firstTruthy(...values: (Value | undefined)[]): Value | undefined {
 }
 
 export function render(kind: Kind, listing: Listing, result: Value): Rendered {
-  if (kind === "windows") return windows(listing, result);
-  if (kind === "commands") return commands(listing, result);
-  if (kind === "tabs") return tabs(listing, result);
-  return groups(listing, result);
+  try {
+    if (kind === "windows") return windows(listing, result);
+    if (kind === "commands") return commands(listing, result);
+    if (kind === "tabs") return tabs(listing, result);
+    return groups(listing, result);
+  } catch (error) {
+    if (!(error instanceof PythonError)) throw error;
+    return { lines: error.printed, complaint: undefined, status: 1, errorCode: undefined, crash: error };
+  }
 }
 
 function windows(listing: Listing, result: Value): Rendered {
   if (listing.json) return rendered([pretty(result)]);
   const out: string[] = [];
+  try {
+    windowLines(result, out);
+  } catch (error) {
+    if (error instanceof PythonError) error.printed = [...out];
+    throw error;
+  }
+  return rendered(out);
+}
+
+function windowLines(result: Value, out: string[]): void {
   for (const window of iterateOrEmpty(result)) {
     if (!(window instanceof Map)) continue;
     const flags = [strOf(window.has("kind") ? window.get("kind") : "normal")];
@@ -45,7 +60,6 @@ function windows(listing: Listing, result: Value): Rendered {
       out.push(shown(`  ${marks} ${strOf(tab.get("id") ?? null)}  ${title}  ${url}${group}`));
     }
   }
-  return rendered(out);
 }
 
 function commands(listing: Listing, result: Value): Rendered {
@@ -63,7 +77,7 @@ function commands(listing: Listing, result: Value): Rendered {
   return rendered(out);
 }
 
-const DEEPEST_GROUP_PYTHON_SURELY_WALKS = 500;
+const PYTHON_GENERATOR_DEPTH = 989;
 
 export function walk(items: Value, depth: number, into: [JsonObject, number][]): void {
   const pending: [Value[], number, number][] = [[iterateOrEmpty(items), 0, depth]];
@@ -79,7 +93,7 @@ export function walk(items: Value, depth: number, into: [JsonObject, number][]):
     into.push([item, level]);
     const type = item.get("type");
     if (type !== "group" && type !== "folder") continue;
-    if (level >= DEEPEST_GROUP_PYTHON_SURELY_WALKS) throw new Unsupported();
+    if (level + 1 >= PYTHON_GENERATOR_DEPTH) throw new PythonError("RecursionError", "maximum recursion depth exceeded");
     pending.push([iterateOrEmpty(item.get("items") ?? null), 0, level + 1]);
   }
 }

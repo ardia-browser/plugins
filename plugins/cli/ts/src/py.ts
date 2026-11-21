@@ -1,10 +1,31 @@
 import { Float, floatRepr, isWideInt, type JsonObject, type Value } from "./json.ts";
 import { codePoints, joinCodePoints, SPLIT_TEXT } from "./pystr.ts";
+import { reprText } from "./pyrepr.ts";
 
 export class Unsupported extends Error {
   constructor() {
     super("a shape only Python renders");
   }
+}
+
+export class PythonError extends Error {
+  printed: string[] = [];
+
+  constructor(
+    readonly kind: string,
+    readonly text: string,
+  ) {
+    super(`${kind}: ${text}`);
+  }
+}
+
+export function typeName(value: Value | undefined): string {
+  if (value === undefined || value === null) return "NoneType";
+  if (typeof value === "boolean") return "bool";
+  if (typeof value === "bigint") return "int";
+  if (value instanceof Float) return "float";
+  if (typeof value === "string") return "str";
+  return Array.isArray(value) ? "list" : "dict";
 }
 
 export function truthy(value: Value | undefined): boolean {
@@ -18,7 +39,7 @@ export function truthy(value: Value | undefined): boolean {
 
 export function dict(value: Value | undefined): JsonObject {
   if (value instanceof Map) return value;
-  throw new Unsupported();
+  throw new PythonError("AttributeError", `'${typeName(value)}' object has no attribute 'get'`);
 }
 
 export function getOrNull(value: Value | undefined, key: string): Value {
@@ -30,14 +51,14 @@ export function iterateOrEmpty(value: Value | undefined): Value[] {
   if (Array.isArray(value)) return value;
   if (typeof value === "string") return codePoints(value);
   if (value instanceof Map) return [...value.keys()];
-  throw new Unsupported();
+  throw new PythonError("TypeError", `'${typeName(value)}' object is not iterable`);
 }
 
 export function length(value: Value | undefined): number {
   if (Array.isArray(value)) return value.length;
   if (typeof value === "string") return codePoints(value).length;
   if (value instanceof Map) return value.size;
-  throw new Unsupported();
+  throw new PythonError("TypeError", `object of type '${typeName(value)}' has no len()`);
 }
 
 export function isInt(value: Value | undefined): boolean {
@@ -68,20 +89,7 @@ export function equalsInt(value: Value | undefined, wanted: bigint): boolean {
 }
 
 export function reprStr(text: string): string {
-  for (const ch of text) {
-    if (!((ch >= " " && ch <= "~") || ch === "\t" || ch === "\n" || ch === "\r")) throw new Unsupported();
-  }
-  const quote = text.includes("'") && !text.includes('"') ? '"' : "'";
-  let out = quote;
-  for (const ch of text) {
-    if (ch === "\\") out += "\\\\";
-    else if (ch === "\t") out += "\\t";
-    else if (ch === "\n") out += "\\n";
-    else if (ch === "\r") out += "\\r";
-    else if (ch === quote) out += `\\${ch}`;
-    else out += ch;
-  }
-  return out + quote;
+  return reprText(text);
 }
 
 type ReprFrame = { entries: [string | undefined, Value][]; next: number; close: string };

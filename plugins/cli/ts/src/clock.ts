@@ -117,20 +117,59 @@ export function parseIso(text: string): Iso {
   return parseIsoAt(text.replaceAll("Z", "+00:00")) ?? "invalid";
 }
 
+function weekday(days: number): number {
+  return (((days + 3) % 7) + 7) % 7;
+}
+
+function longIsoYear(year: number): boolean {
+  const first = weekday(daysFromCivil(year, 1, 1));
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  return first === 3 || (leap && first === 2);
+}
+
+function weekDate(bytes: string, extended: boolean): [number, number] | undefined {
+  const year = digits(bytes.slice(0, 4), 4);
+  let at = extended ? 6 : 5;
+  const week = digits(bytes.slice(at, at + 2), 2);
+  at += 2;
+  if (year === undefined || week === undefined || year < 1) return undefined;
+  let day = 1;
+  const more = bytes[at];
+  if (more !== undefined && more !== "T" && more !== " " && more !== "+") {
+    if ((more === "-") !== extended) return undefined;
+    if (extended) at += 1;
+    const given = digits(bytes.slice(at, at + 1), 1);
+    if (given === undefined) return undefined;
+    day = given;
+    at += 1;
+  }
+  if (week < 1 || week > (longIsoYear(year) ? 53 : 52) || day < 1 || day > 7) return undefined;
+  const fourth = daysFromCivil(year, 1, 4);
+  const days = fourth - weekday(fourth) + (week - 1) * 7 + (day - 1);
+  return [at, days * 86_400];
+}
+
 function parseIsoAt(text: string): Iso | undefined {
   const bytes = Buffer.from(text, "utf8").toString("latin1");
   const extended = bytes[4] === "-";
-  if (bytes[extended ? 5 : 4] === "W") return "unported";
-  if (extended && bytes[7] !== "-") return undefined;
-  const prefix = extended ? 10 : 8;
-  if (bytes.length < prefix) return undefined;
-  const [year, month, day] = extended
-    ? [digits(bytes.slice(0, 4), 4), digits(bytes.slice(5, 7), 2), digits(bytes.slice(8, 10), 2)]
-    : [digits(bytes.slice(0, 4), 4), digits(bytes.slice(4, 6), 2), digits(bytes.slice(6, 8), 2)];
+  let prefix: number;
+  let base: number;
+  if (bytes[extended ? 5 : 4] === "W") {
+    const week = weekDate(bytes, extended);
+    if (week === undefined) return undefined;
+    [prefix, base] = week;
+  } else {
+    if (extended && bytes[7] !== "-") return undefined;
+    prefix = extended ? 10 : 8;
+    if (bytes.length < prefix) return undefined;
+    const [year, month, day] = extended
+      ? [digits(bytes.slice(0, 4), 4), digits(bytes.slice(5, 7), 2), digits(bytes.slice(8, 10), 2)]
+      : [digits(bytes.slice(0, 4), 4), digits(bytes.slice(4, 6), 2), digits(bytes.slice(6, 8), 2)];
+    if (year === undefined || month === undefined || day === undefined) return undefined;
+    if (year < 1 || month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) return undefined;
+    base = daysFromCivil(year, month, day) * 86_400;
+  }
   const rest = text.slice(prefix);
-  if (year === undefined || month === undefined || day === undefined) return undefined;
-  if (year < 1 || month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) return undefined;
-  const base = daysFromCivil(year, month, day) * 86_400;
   const chars = [...rest];
   if (chars.length === 0) return { at: naiveToUtc(base) };
   const time = chars.slice(1).join("");

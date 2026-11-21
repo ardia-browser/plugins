@@ -10,7 +10,7 @@ import { utf8 } from "./pystr.ts";
 import { Unsupported } from "./py.ts";
 import { render } from "./render.ts";
 import { Call, finish } from "./telemetry.ts";
-import { osCrash } from "./crash.ts";
+import { crashValue, osCrash } from "./crash.ts";
 
 const TOP_FLAGS = ["-h", "--help", "--version", "--skill"];
 const LISTING_FLAGS = [...TOP_FLAGS, "--data-dir", "--json"];
@@ -65,7 +65,10 @@ async function ask(kind: Kind, listing: Listing): Promise<Reply> {
 function renderReply(kind: Kind, listing: Listing, reply: Reply): Rendered | undefined {
   if (reply.ok) {
     const result = reply.result;
-    if ((kind === "tabs" || kind === "groups") && (typeof result === "boolean" || typeof result === "bigint")) return undefined;
+    if ((kind === "tabs" || kind === "groups") && (typeof result === "boolean" || typeof result === "bigint")) {
+      const status = typeof result === "boolean" ? (result ? 1 : 0) : Number(BigInt.asUintN(8, result));
+      return { lines: [], complaint: undefined, status, errorCode: undefined };
+    }
     try {
       return render(kind, listing, result);
     } catch (error) {
@@ -122,10 +125,11 @@ export async function serveListing(kind: Kind, listing: Listing, argv: string[],
       finish(call, 1, python, osCrash(out.failed.errno));
       return out.reportCrash();
     }
-    const errno = shown.complaint === undefined ? undefined : out.complain(shown.complaint);
+    const said = shown.crash !== undefined ? shown.crash.message : shown.complaint;
+    const errno = said === undefined ? undefined : out.complain(said);
     if (errno !== undefined) return complaintFailed(call, errno, python);
   }
-  finish(call, status, python);
+  finish(call, status, python, shown.crash === undefined ? undefined : { kind: shown.crash.kind, value: crashValue(shown.crash.kind, shown.crash.text) });
   return status;
 }
 

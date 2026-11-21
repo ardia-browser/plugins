@@ -162,7 +162,7 @@ function validId(value: Value | undefined): string | undefined {
 
 function unreadableExpiry(doc: JsonObject): boolean {
   const until = doc.get("sharingUntil");
-  return doc.get("sharing") === true && typeof until === "string" && typeof parseIso(until) !== "object";
+  return doc.get("sharing") === true && typeof until === "string" && parseIso(until) === "unported";
 }
 
 export function consentUnreadable(argv: string[]): boolean {

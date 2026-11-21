@@ -1,3 +1,4 @@
+import { PythonError } from "./py.ts";
 import fs from "node:fs";
 import { randomBytes } from "node:crypto";
 import { installedDataDir } from "./control.ts";
@@ -7,6 +8,13 @@ import { isLoneSurrogate, JsonDecodeError, JsonValueError, loads } from "./pyjso
 import { EEXIST, effects, ENOTDIR, fromErrno, isFile, isSymlink, lexists, mkdirs, nameOf, os, osError, parentOf, PyOSError, umaskDefault } from "./pyos.ts";
 import { get, isDict, isList, reprText } from "./pyvalue.ts";
 import { codePoints } from "./pystr.ts";
+
+function encodeFailure(text: string): PythonError {
+  const points = codePoints(text);
+  const at = points.findIndex((point) => point.length === 1 && (point.charCodeAt(0) & 0xf800) === 0xd800);
+  const unit = (points[at] as string).charCodeAt(0).toString(16).padStart(4, "0");
+  return new PythonError("UnicodeEncodeError", `'utf-8' codec can't encode character '\\u${unit}' in position ${at}: surrogates not allowed`);
+}
 
 export const CONFIG_FILE = "config.json";
 export const CONFIG_SCHEMA = "config.schema.json";
@@ -182,7 +190,7 @@ export function writeText(path: string, text: string, overwrite = true): void {
       if (!(wrapped instanceof PyOSError && wrapped.notFound)) throw wrapped;
     }
   }
-  if (isLoneSurrogate(text)) throw new NeedsPython("writing text Python can't encode");
+  if (isLoneSurrogate(text)) throw encodeFailure(text);
   effects.done = true;
   const [fd, temp] = makeTemp(parentOf(target), `.${nameOf(target)}.`, ".tmp");
   try {

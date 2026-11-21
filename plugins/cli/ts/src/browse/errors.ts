@@ -1,3 +1,4 @@
+import { crashValue } from "../crash.ts";
 import type { Crash } from "../crash.ts";
 import { ALIASES, MUTATING } from "./tables.ts";
 
@@ -22,7 +23,7 @@ export class PythonCrash extends Error {
 }
 
 export function builtinCrash(kind: string, message: string): PythonCrash {
-  return new PythonCrash({ kind, value: kind }, `${kind}: ${message}`);
+  return new PythonCrash({ kind, value: crashValue(kind, message) }, `${kind}: ${message}`);
 }
 
 export function unreachable(message: string): BrowseError {

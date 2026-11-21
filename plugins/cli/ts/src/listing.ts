@@ -1,3 +1,4 @@
+import type { PythonError } from "./py.ts";
 import { recordedSocketCode } from "./error-codes.ts";
 import { object, type Value } from "./json.ts";
 
@@ -34,7 +35,7 @@ export function paramsOf(kind: Kind, listing: Listing): Value | undefined {
   return params;
 }
 
-export type Rendered = { lines: string[]; complaint: string | undefined; status: number; errorCode: string | undefined };
+export type Rendered = { lines: string[]; complaint: string | undefined; status: number; errorCode: string | undefined; crash?: PythonError };
 
 export function rendered(lines: string[] = []): Rendered {
   return { lines, complaint: undefined, status: 0, errorCode: undefined };

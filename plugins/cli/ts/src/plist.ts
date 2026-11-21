@@ -43,15 +43,30 @@ export function dumpsXml(value: Map<string, PlistValue>): string {
 
 class Malformed extends Error {}
 
+const NAMED: Readonly<Record<string, string>> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+
+function xmlChar(code: number): boolean {
+  return code === 0x9 || code === 0xa || code === 0xd || (code >= 0x20 && code <= 0xd7ff) || (code >= 0xe000 && code <= 0xfffd) || (code >= 0x10000 && code <= 0x10ffff);
+}
+
 function decodeEntities(text: string): string {
-  return text.replace(/&(#x[0-9a-fA-F]+|#[0-9]+|amp|lt|gt|quot|apos);/g, (_, name: string) => {
-    if (name === "amp") return "&";
-    if (name === "lt") return "<";
-    if (name === "gt") return ">";
-    if (name === "quot") return '"';
-    if (name === "apos") return "'";
-    return String.fromCodePoint(name.startsWith("#x") ? Number.parseInt(name.slice(2), 16) : Number.parseInt(name.slice(1), 10));
-  });
+  let out = "";
+  let at = 0;
+  for (let amp = text.indexOf("&"); amp >= 0; amp = text.indexOf("&", at)) {
+    const end = text.indexOf(";", amp);
+    if (end < 0) throw new Malformed();
+    const name = text.slice(amp + 1, end);
+    let piece: string;
+    if (/^#x[0-9a-fA-F]+$/.test(name) || /^#[0-9]+$/.test(name)) {
+      const code = name.startsWith("#x") ? Number.parseInt(name.slice(2), 16) : Number.parseInt(name.slice(1), 10);
+      if (!xmlChar(code)) throw new Malformed();
+      piece = String.fromCodePoint(code);
+    } else if (Object.hasOwn(NAMED, name)) piece = NAMED[name] as string;
+    else throw new Malformed();
+    out += text.slice(at, amp) + piece;
+    at = end + 1;
+  }
+  return out + text.slice(at);
 }
 
 type Token = { kind: "open" | "close" | "empty"; name: string } | { kind: "text"; text: string };

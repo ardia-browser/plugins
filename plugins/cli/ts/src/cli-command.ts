@@ -1,3 +1,5 @@
+import { PythonError } from "./py.ts";
+import { crashValue } from "./crash.ts";
 import { constants } from "node:os";
 import { errnoOf, NeedsPython } from "./paths.ts";
 import { effects } from "./pyos.ts";
@@ -213,6 +215,11 @@ export async function serveCommand(command: Command, handler: Handler, python: s
     status = await handler(command.args, io);
   } catch (error) {
     if (error instanceof NeedsPython && !io.committed && !effects.done) return undefined;
+    if (error instanceof PythonError) {
+      toStderr(`${error.message}\n`);
+      finish(io.call, 1, python, { kind: error.kind, value: crashValue(error.kind, error.text) });
+      return 1;
+    }
     if (!(error instanceof StdoutBroken)) throw error;
     status = 141;
   }

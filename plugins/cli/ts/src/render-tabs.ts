@@ -1,7 +1,7 @@
 import { dumps, type JsonObject, type Value } from "./json.ts";
 import { failed, type Listing, type Rendered, rendered } from "./listing.ts";
 import { shown } from "./printable.ts";
-import { dict, equalsInt, fixed, getOrNull, isInt, isNumber, iterateOrEmpty, number, right, strOf, truthy } from "./py.ts";
+import { dict, equalsInt, fixed, getOrNull, isInt, isNumber, iterateOrEmpty, number, PythonError, right, strOf, truthy } from "./py.ts";
 import { flatGroups, flatTabs, groupLine, pretty, SECTIONS, shownOf, tabLine, walk } from "./render.ts";
 
 type Heat = [boolean, number, number];
@@ -99,7 +99,13 @@ function printTree(out: string[], tree: Value): void {
         if (!truthy(items)) continue;
         out.push(`    ${section}`);
         const walked: [JsonObject, number][] = [];
-        walk(items, 0, walked);
+        let stopped: PythonError | undefined;
+        try {
+          walk(items, 0, walked);
+        } catch (error) {
+          if (!(error instanceof PythonError)) throw error;
+          stopped = error;
+        }
         for (const [item, depth] of walked) {
           const indent = `      ${"    ".repeat(depth)}`;
           const type = item.get("type");
@@ -108,6 +114,10 @@ function printTree(out: string[], tree: Value): void {
             const folderName = truthy(item.get("name")) ? (item.get("name") ?? "") : "";
             out.push(`${indent}  folder ${shownOf(item.get("id") ?? null)}  ${shown(dumps(folderName, "spaced"))}`);
           } else out.push(groupLine(item, `${indent}  `));
+        }
+        if (stopped !== undefined) {
+          stopped.printed = [...out];
+          throw stopped;
         }
       }
     }

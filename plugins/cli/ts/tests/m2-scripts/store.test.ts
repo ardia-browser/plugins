@@ -100,9 +100,10 @@ test("the argv parser serves only what argparse reads the same way", () => {
   assert.deepEqual(parseScripts(["--data-dir", "/a", "scripts", "list", "--data-dir", "/b"]), { sub: "list", match: null, json: false, dataDir: "/b" });
   assert.deepEqual(parseScripts(["scripts", "new", "--match", "x", "n", "--match=y"]), { sub: "new", match: ["x", "y"], json: false, name: "n" });
   assert.deepEqual(parseScripts(["scripts", "install", "-"]), { sub: "install", match: null, json: false, file: "-" });
+  assert.deepEqual(parseScripts(["scripts", "new", "-5"]), { sub: "new", match: null, json: false, name: "-5" });
   for (const argv of [
     ["scripts"], ["scripts", "test", "x"], ["scripts", "list", "-h"], ["scripts", "list", "--js"], ["scripts", "list", "x"], ["scripts", "new"],
-    ["scripts", "new", "a", "b"], ["scripts", "new", "-5"], ["scripts", "new", "x", "--match"], ["scripts", "new", "x", "--match", "-y"],
+    ["scripts", "new", "a", "b"], ["scripts", "new", "x", "--match"], ["scripts", "new", "x", "--match", "-y"],
     ["--json", "scripts", "new", "x"], ["--port", "9", "scripts", "list"], ["scripts", "list", "--json=1"], ["scripts", "list", "--"], ["--data-dir"],
   ]) {
     assert.equal(parseScripts(argv), undefined, JSON.stringify(argv));
