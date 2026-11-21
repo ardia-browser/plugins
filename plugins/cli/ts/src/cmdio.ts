@@ -19,7 +19,10 @@ export class CommandIo {
   exec: Exec | undefined;
   errorCode: string | undefined;
 
-  constructor(readonly json = false) {}
+  constructor(
+    readonly json = false,
+    private readonly sink: ((stream: 1 | 2, text: string) => void) | undefined = undefined,
+  ) {}
 
   private clean(text: string): string {
     return this.json ? jsonSafe(text) : inert(text);
@@ -34,12 +37,16 @@ export class CommandIo {
   }
 
   err(line: string): void {
-    toStderr(`${inert(line)}\n`);
+    if (this.sink !== undefined) this.sink(2, `${inert(line)}\n`);
+    else toStderr(`${inert(line)}\n`);
   }
 
   exitWith(parsed: { status: number; stdout: string; stderr: string }): number {
     if (parsed.stdout) this.write(parsed.stdout);
-    if (parsed.stderr) toStderr(inert(parsed.stderr));
+    if (parsed.stderr) {
+      if (this.sink !== undefined) this.sink(2, inert(parsed.stderr));
+      else toStderr(inert(parsed.stderr));
+    }
     return parsed.status;
   }
 
@@ -47,6 +54,10 @@ export class CommandIo {
     const text = this.pending.join("");
     this.pending = [];
     if (text === "") return { kind: "ok" };
+    if (this.sink !== undefined) {
+      this.sink(1, text);
+      return { kind: "ok" };
+    }
     try {
       writeWhole(1, utf8(text));
       return { kind: "ok" };

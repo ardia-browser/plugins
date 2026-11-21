@@ -643,5 +643,283 @@
    "uninstall",
    "now"
   ]
+ },
+ {
+  "id": "on--argv-0",
+  "command": "on",
+  "argv": [
+   "on"
+  ]
+ },
+ {
+  "id": "on--argv-1",
+  "command": "on",
+  "argv": [
+   "on",
+   "tab.opened"
+  ]
+ },
+ {
+  "id": "on--argv-2",
+  "command": "on",
+  "argv": [
+   "on",
+   "nope",
+   "--",
+   "echo"
+  ]
+ },
+ {
+  "id": "on--argv-3",
+  "command": "on",
+  "argv": [
+   "on",
+   "tab.idle",
+   "--",
+   "echo"
+  ]
+ },
+ {
+  "id": "on--argv-4",
+  "command": "on",
+  "argv": [
+   "on",
+   "tab.idle",
+   "--idle",
+   "30s",
+   "--",
+   "echo"
+  ]
+ },
+ {
+  "id": "on--argv-5",
+  "command": "on",
+  "argv": [
+   "on",
+   "tab.opened",
+   "--idle",
+   "30m",
+   "--",
+   "echo"
+  ]
+ },
+ {
+  "id": "on--argv-6",
+  "command": "on",
+  "argv": [
+   "on",
+   "tab.idle",
+   "--idle",
+   "x",
+   "--",
+   "echo"
+  ]
+ },
+ {
+  "id": "on--argv-7",
+  "command": "on",
+  "argv": [
+   "on",
+   "tab.opened",
+   "--timeout",
+   "x",
+   "--",
+   "echo"
+  ]
+ },
+ {
+  "id": "on--argv-8",
+  "command": "on",
+  "argv": [
+   "on",
+   "tab.opened",
+   "--timeout",
+   "0",
+   "--",
+   "echo"
+  ]
+ },
+ {
+  "id": "on--argv-9",
+  "command": "on",
+  "argv": [
+   "on",
+   "tab.opened",
+   "--timeout",
+   "nan",
+   "--",
+   "echo"
+  ]
+ },
+ {
+  "id": "on--argv-10",
+  "command": "on",
+  "argv": [
+   "on",
+   "tab.opened",
+   "--",
+   ""
+  ]
+ },
+ {
+  "id": "on--argv-11",
+  "command": "on",
+  "argv": [
+   "on",
+   "tab.opened,,",
+   "--"
+  ]
+ },
+ {
+  "id": "on--argv-12",
+  "command": "on",
+  "argv": [
+   "on",
+   ",",
+   "--",
+   "echo"
+  ]
+ },
+ {
+  "id": "on--argv-13",
+  "command": "on",
+  "argv": [
+   "on",
+   "tab.opened",
+   "extra",
+   "--",
+   "echo"
+  ]
+ },
+ {
+  "id": "on--argv-14",
+  "command": "on",
+  "argv": [
+   "on",
+   "--bogus",
+   "tab.opened",
+   "--",
+   "echo"
+  ]
+ },
+ {
+  "id": "on--argv-15",
+  "command": "on",
+  "argv": [
+   "on",
+   "tab.opned",
+   "--",
+   "echo"
+  ]
+ },
+ {
+  "id": "on--argv-16",
+  "command": "on",
+  "argv": [
+   "on",
+   "--data-dir"
+  ]
+ },
+ {
+  "id": "on--argv-17",
+  "command": "on",
+  "argv": [
+   "on",
+   "tab.opened",
+   "--timeout"
+  ]
+ },
+ {
+  "id": "on--argv-18",
+  "command": "on",
+  "argv": [
+   "on",
+   "--full-urls=1",
+   "tab.opened",
+   "--",
+   "echo"
+  ]
+ },
+ {
+  "id": "on--help-80",
+  "command": "on",
+  "argv": [
+   "on",
+   "--help"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  }
+ },
+ {
+  "id": "on--help",
+  "command": "on",
+  "argv": [
+   "on",
+   "--help"
+  ],
+  "fallback": true,
+  "note": "argparse wraps help at 98 columns: Python serves it"
+ },
+ {
+  "id": "on--hoisted-port",
+  "command": "on",
+  "argv": [
+   "--port",
+   "9",
+   "on",
+   "tab.opened",
+   "--",
+   "echo"
+  ]
+ },
+ {
+  "id": "hooks-run--argv-0",
+  "command": "hooks run",
+  "argv": [
+   "hooks",
+   "run",
+   "x"
+  ]
+ },
+ {
+  "id": "hooks-run--argv-1",
+  "command": "hooks run",
+  "argv": [
+   "hooks",
+   "run",
+   "--log"
+  ]
+ },
+ {
+  "id": "hooks-run--argv-2",
+  "command": "hooks run",
+  "argv": [
+   "hooks",
+   "run",
+   "--json"
+  ]
+ },
+ {
+  "id": "hooks-run--argv-3",
+  "command": "hooks run",
+  "argv": [
+   "hooks",
+   "run",
+   "--log=-",
+   "--bogus"
+  ]
+ },
+ {
+  "id": "hooks-run--help-80",
+  "command": "hooks run",
+  "argv": [
+   "hooks",
+   "run",
+   "--help"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  }
  }
 ]

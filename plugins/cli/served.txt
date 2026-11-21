@@ -14,3 +14,4 @@ computer:mcp-config ts
 computer:setup ts
 hooks:install ts
 hooks:uninstall ts
+on ts

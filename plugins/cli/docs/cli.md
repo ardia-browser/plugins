@@ -1815,7 +1815,11 @@ SIGHUP on unless they were ignored (a Ctrl-C to the whole group reaches the chil
 turns into one), holds the lease, and then ends by the child's signal or with its status. Status 253 means the
 TypeScript program couldn't serve the call exactly (it may only have asked read-only questions): the router then restores
 every disposition it changed and execs the bundled Python with the original argv and environment, byte for byte, as for any other
-command. Without `libexec/ardia-ts` everything goes where it would without the row. The router reads
+command. Without `libexec/ardia-ts` everything goes where it would without the row. A row names a command by its
+telemetry label with `:` between the words (`hooks:list`, `computer:refresh`); for a command the router doesn't parse
+itself, it skips the shared flags (`--data-dir`, `--port`, `--ws`, `--timeout`, `--json`), and when any `ts` row starts
+with the command's first word it runs the TypeScript program, which checks its own full label against the table and
+hands back (253) when that row is missing. The router reads
 `<root>/served.txt` when it is a regular file (not a link) of at most 64 KiB and valid, else the table built into it.
 `--entry ts` installs the router, the TypeScript program behind a probe, and a `served.txt` naming `ts` for every row;
 `--entry rust` installs the shipped layout, the TypeScript program included when a built-in row says `ts` and it is
@@ -1902,6 +1906,24 @@ parity harness rather than stripped wholesale:
   so that write blocks until a second Ctrl-C or until a reader drains the pipe, and only then does the listing end
   with `ardia <command>: interrupted` and status 130. CPython has exactly this window between its signal check and the
   blocking `write` in its buffered writer, so no code closes it.
+- `ardia computer`, `ardia on` and `ardia hooks`: every helper program they start (codesign, ditto, lsregister,
+  launchctl, systemctl, the driver's quiet `stop` and `telemetry disable`, hook and decide programs) runs in its own
+  process group, and a timeout or a stop signals the whole group (SIGTERM, then SIGKILL after the grace), where
+  Python's `subprocess.run` timeouts kill only the child. Groups still alive when the program exits are killed.
+- Hook and decide programs, and the cua-driver that `ardia computer` hands over to, don't see `BUN_*`, `JSC_*`,
+  `NODE_*`, `UV_*` or `MIMALLOC_*` variables from the shell that started `ardia`: the router keeps them from the
+  TypeScript program (see above), and the program passes on the environment it has. Python passed them through.
+- `ardia computer` hands over to cua-driver with `execve` from the libc addon, as Python's `os.execve` does, so the
+  driver keeps the pid; before it, the addon marks every descriptor above 2 close-on-exec, clears the signal mask and
+  ignores SIGPIPE and SIGXFSZ, which is the state Python's process hands over.
+- An uncaught exception from `launchctl` or `systemctl` that Python lets end the command (one that can't be started,
+  like `/bin/launchctl` in a sandbox) prints only the exception line, as above.
+- A cua-driver download that fails prints `couldn't download <asset>: <reason>` with Bun's network error as the
+  reason, where Python printed urllib's (`<urlopen error ...>`, `HTTP Error 404: Not Found`); the https-only rule,
+  the redirect refusal and the checksum check are the same.
+- `--help` for `ardia computer setup`, `ardia computer mcp-config`, `ardia hooks <command>` and `ardia on` is served
+  only at 80 columns, and an argument error only when its usage line fits the terminal; at other widths argparse
+  wraps the text and Python serves the call.
 
 ## Linux
 
