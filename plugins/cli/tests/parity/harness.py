@@ -181,10 +181,20 @@ def served_table(path: Path = SERVED_TABLE) -> dict[str, str]:
         words = line.split()
         if not words:
             continue
-        if len(words) != 2 or words[1] not in SERVING_SIDES or words[0] in rows:
+        label = " ".join(words[:-1])
+        if len(words) < 2 or words[-1] not in SERVING_SIDES or label in rows:
             raise ValueError(f"{path.name}:{number}: each row is a command and who serves it ({' or '.join(SERVING_SIDES)}), once: {line!r}")
-        rows[words[0]] = words[1]
+        rows[label] = words[-1]
     return rows
+
+
+def served_row(command: str | None, served) -> str | None:
+    if command is None:
+        return None
+    if command in served:
+        return command
+    family = f"{command.split(' ', 1)[0]} *"
+    return family if " " in command and family in served else None
 
 
 def served_commands(path: Path = SERVED_TABLE) -> list[str]:
@@ -198,9 +208,10 @@ def route_from(lines: list[str]) -> str:
 
 
 def expected_route(entry: str, served: dict[str, str], case: "Case", ts_installed: bool) -> str:
-    if case.fallback or case.command not in served:
+    row = served_row(case.command, served)
+    if case.fallback or row is None:
         return "python"
-    side = "ts" if entry == "ts" else served[case.command]
+    side = "ts" if entry == "ts" else served[row]
     return "python" if side == "ts" and not ts_installed else side
 
 
@@ -1041,7 +1052,7 @@ def summarize(outcomes: list[Outcome], served: list[str] | dict[str, str]) -> di
     served = list(served)
     commands = {}
     for outcome in outcomes:
-        row = commands.setdefault(outcome.case.command, {"cases": 0, "passed": 0, "native": 0, "failed": [], "served": outcome.case.command in served})
+        row = commands.setdefault(outcome.case.command, {"cases": 0, "passed": 0, "native": 0, "failed": [], "served": served_row(outcome.case.command, served) is not None})
         row["cases"] += 1
         if outcome.passed:
             row["passed"] += 1
@@ -1050,8 +1061,11 @@ def summarize(outcomes: list[Outcome], served: list[str] | dict[str, str]) -> di
         if outcome.native:
             row["native"] += 1
     for name in served:
-        commands.setdefault(name, {"cases": 0, "passed": 0, "native": 0, "failed": [], "served": True})
-    proven = sorted(name for name, row in commands.items() if row["cases"] and row["passed"] == row["cases"] and row["native"])
+        if not any(served_row(command, served) == name for command in commands):
+            commands.setdefault(name, {"cases": 0, "passed": 0, "native": 0, "failed": [], "served": True})
+    whole = {name for name, row in commands.items() if row["cases"] and row["passed"] == row["cases"] and row["native"]}
+    covered = {name: [command for command in commands if served_row(command, served) == name] for name in served}
+    proven = sorted(whole - set(served) | {name for name, rows in covered.items() if rows and all(command in whole for command in rows)})
     return {"served": served, "proven": proven, "unproven_but_served": sorted(set(served) - set(proven)), "commands": dict(sorted(commands.items()))}
 
 
