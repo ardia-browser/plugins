@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { constants } from "node:os";
-import { test } from "node:test";
+import { test } from "bun:test";
 import { BUILT_LIBC } from "./libc-loaded.ts";
 
 type Raw = Record<string, (...args: unknown[]) => unknown>;

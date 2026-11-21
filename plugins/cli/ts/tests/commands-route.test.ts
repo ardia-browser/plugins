@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "bun:test";
 import { parseCommand } from "../src/commands.ts";
 import { route } from "../src/route.ts";
 import { servedTable } from "../src/served.ts";

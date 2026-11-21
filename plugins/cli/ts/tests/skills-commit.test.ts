@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, test } from "node:test";
+import { afterEach, beforeEach, test } from "bun:test";
 import { install, refresh } from "../src/skills.ts";
 import { SKILL_FILES } from "../src/skill-files.ts";
 import "./libc-loaded.ts";

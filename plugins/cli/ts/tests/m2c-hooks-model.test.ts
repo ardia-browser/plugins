@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { test } from "node:test";
+import { test } from "bun:test";
 import "./libc-loaded.ts";
 import { Float, type JsonObject, type Value } from "../src/json.ts";
 import { JsonDecodeError, JsonValueError, loads, parseConfigJson } from "../src/pylib/jsonloads.ts";

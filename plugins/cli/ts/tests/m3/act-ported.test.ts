@@ -529,13 +529,23 @@ describe("EditingShortcuts (ardia#2812 row 20)", () => {
     expect(editingCommands(1, "a", "darwin")).toBeNull();
   });
 
-  test("press sends the command on the key down only", async () => {
-    const page = new FakeRenderer();
-    await page.input.pressCombo("Meta+Shift+z", false);
-    const keys = page.params.filter(([method]) => method === "Input.dispatchKeyEvent").map(([, params]) => params);
-    const down = keys.find((params) => params["key"] === "z" && params["type"] === "rawKeyDown") as Record<string, unknown>;
-    expect(down["commands"]).toEqual(process.platform === "darwin" ? ["redo"] : undefined);
-    expect(keys.filter((params) => params["commands"]).length).toBe(process.platform === "darwin" ? 1 : 0);
+  test("press sends the command on the key down only, on macOS and elsewhere", async () => {
+    const real = process.platform;
+    try {
+      for (const platform of ["darwin", "linux"] as const) {
+        Object.defineProperty(process, "platform", { value: platform });
+        for (const [combo, key, expected] of [["Meta+Shift+z", "z", ["redo"]], ["Meta+c", "c", platform === "darwin" ? ["copy"] : undefined]] as const) {
+          const page = new FakeRenderer();
+          await page.input.pressCombo(combo, false);
+          const keys = page.params.filter(([method]) => method === "Input.dispatchKeyEvent").map(([, params]) => params);
+          const down = keys.find((params) => params["key"] === key && params["type"] === "rawKeyDown") as Record<string, unknown>;
+          expect([platform, combo, down["commands"]]).toEqual([platform, combo, expected]);
+          expect(keys.filter((params) => params["commands"]).length).toBe(expected === undefined ? 0 : 1);
+        }
+      }
+    } finally {
+      Object.defineProperty(process, "platform", { value: real });
+    }
   });
 });
 

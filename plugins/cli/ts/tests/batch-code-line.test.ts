@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "bun:test";
 import { codeLine } from "../src/browse/commands/batch-line.ts";
 
 test("an eval line keeps its JavaScript quotes", () => {

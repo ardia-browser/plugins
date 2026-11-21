@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
-import { test } from "node:test";
+import { test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import { getCloseMatches as closeMatches } from "../src/pylib/close.ts";
 import { dumps } from "../src/json.ts";
@@ -10,11 +10,11 @@ import { DecodeError, loads, Refused } from "../src/pyjson.ts";
 
 const PYTHON = process.env.ARDIA_TEST_PYTHON ?? "python3";
 const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
-const BUNDLED_PYTHON = "3.13";
-const version = spawnSync(PYTHON, ["-I", "-c", "import sys; print('%d.%d' % sys.version_info[:2])"], { encoding: "utf8" }).stdout?.trim();
+const BUNDLED_PYTHON = "3.13.16";
+const version = spawnSync(PYTHON, ["-I", "-c", "import sys; print('%d.%d.%d' % sys.version_info[:3])"], { encoding: "utf8" }).stdout?.trim();
 const skip = process.env.ARDIA_TEST_PYTHON === undefined && version !== BUNDLED_PYTHON ? `needs CPython ${BUNDLED_PYTHON}, the bundled one (set ARDIA_TEST_PYTHON)` : false;
 
-test("the oracle is the bundled CPython's version", { skip }, () => {
+test.skipIf(Boolean(skip))("the oracle is the bundled CPython's version", () => {
   assert.equal(version, BUNDLED_PYTHON);
 });
 
@@ -34,7 +34,7 @@ function decoded(text: string, strict: boolean): Record<string, string> {
   }
 }
 
-test("the params decoder gives CPython's value or its exact error for thousands of edge texts", { skip }, () => {
+test.skipIf(Boolean(skip))("the params decoder gives CPython's value or its exact error for thousands of edge texts", () => {
   for (const seed of [1, 2]) {
     for (const line of oracle("pyjson_oracle.py", seed).split("\n").filter(Boolean)) {
       const row = JSON.parse(line);
@@ -44,7 +44,7 @@ test("the params decoder gives CPython's value or its exact error for thousands 
   }
 });
 
-test("nearest names and %g match difflib and Python's formatting", { skip }, () => {
+test.skipIf(Boolean(skip))("nearest names and %g match difflib and Python's formatting", () => {
   for (const seed of [1, 2, 3]) {
     const rows = JSON.parse(oracle("close_matches_oracle.py", seed)) as { name: string; pool: string[]; found: string[]; values: number[]; g: string[] }[];
     for (const row of rows) {

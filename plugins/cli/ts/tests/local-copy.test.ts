@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { test } from "node:test";
+import { test } from "bun:test";
 import "./libc-loaded.ts";
 import { close, closeDir, openPrivate, takeLock } from "../src/privatefs.ts";
 import { discardSpool, isLocalFile, keepLocalCopy } from "../src/spool.ts";

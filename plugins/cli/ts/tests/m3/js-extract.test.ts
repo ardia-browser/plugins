@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { test } from "node:test";
+import { test } from "bun:test";
 import * as js from "../../src/browse/js/index.ts";
 
 const TS = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");

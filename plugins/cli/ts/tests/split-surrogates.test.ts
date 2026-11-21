@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "bun:test";
 import { dumps, parse } from "../src/json.ts";
 import { inert, shown } from "../src/printable.ts";
 import { charCount } from "../src/py.ts";

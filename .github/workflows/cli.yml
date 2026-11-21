@@ -51,7 +51,7 @@ jobs:
         run: curl -LsSf https://astral.sh/uv/0.12.15/install.sh | sh
       - name: Unit tests, some beside the Python CLI
         run: |
-          ~/.local/bin/uv venv --python 3.13 "$RUNNER_TEMP/unit-venv"
+          ~/.local/bin/uv venv --python 3.13.16 "$RUNNER_TEMP/unit-venv"
           ARDIA_TEST_PYTHON="$RUNNER_TEMP/unit-venv/bin/python" bun test ./tests
       - name: Parity with the Python CLI
         working-directory: plugins/cli
@@ -59,7 +59,7 @@ jobs:
           ARDIA_TS_CLI: ${{ github.workspace }}/plugins/cli/ts/dist/ardia-ts
           ARDIA_TEST_REQUIRES: ts
         run: |
-          ~/.local/bin/uv venv --python 3.13 "$RUNNER_TEMP/venv"
+          ~/.local/bin/uv venv --python 3.13.16 "$RUNNER_TEMP/venv"
           VIRTUAL_ENV="$RUNNER_TEMP/venv" ~/.local/bin/uv pip install --quiet --require-hashes --no-build -r requirements.lock
           "$RUNNER_TEMP/venv/bin/python" -m unittest -v tests.test_parity.TsParityTable tests.test_parity.TsDeepFixtures tests.test_parity.TsProcess tests.test_parity.HarnessRules tests.test_parity.HarnessCatches tests.test_parity.ServedTable tests.test_parity.ProtocolAgrees tests.test_parity.BuildSmoke tests.test_closed_stdout.TsClosedStdout tests.test_ts_browse_plugin
       - name: Browse daemon harness, replay mode (recordings answer the Python daemon, no browser)
@@ -113,7 +113,7 @@ jobs:
         run: curl -LsSf https://astral.sh/uv/0.12.15/install.sh | sh
       - name: Locked dependencies
         run: |
-          ~/.local/bin/uv venv --python 3.13 "$RUNNER_TEMP/venv"
+          ~/.local/bin/uv venv --python 3.13.16 "$RUNNER_TEMP/venv"
           VIRTUAL_ENV="$RUNNER_TEMP/venv" ~/.local/bin/uv pip install --quiet --require-hashes --no-build -r requirements.lock
       - run: '"$RUNNER_TEMP/venv/bin/python" -m unittest discover -s tests'
       - name: plugin.json passes ardia plugins check

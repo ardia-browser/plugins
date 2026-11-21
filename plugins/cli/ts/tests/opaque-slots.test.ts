@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "bun:test";
 import { splitGlobals, Usage } from "../src/browse/args.ts";
 import { optionsFrom } from "../src/browse/request.ts";
 

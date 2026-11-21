@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { test } from "node:test";
+import { test } from "bun:test";
 import { splitGlobals, Usage } from "../src/browse/args.ts";
 import { DAEMON_GRAMMAR, daemonParse, type Grammar, pluginVerdict } from "../src/browse/plugin-grammar.ts";
 import { ALIASES } from "../src/browse/tables.ts";

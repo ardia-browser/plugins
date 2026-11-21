@@ -130,11 +130,15 @@ GENERATORS = {
     "punycode.encode": lambda draw: [unicode_text(draw, 1, 12)],
     "ipv6.compressed": lambda draw: [draw.choice([h.strip("[]") for h in IP_HOSTS if h.startswith("[")] + ["::", "1::", "::1:2", "a:b:c:d:e:f:1:2"])],
 }
+STRINGPREP_DRIFT_HOSTS = ["\ub642\u10c2", "\u2241\U00010028\ua796\u0328\ucc74", "\u10a0", "\ua7c0"]
+
+
 FIXED = {
     "urlmatch.js": [[]],
     "urlmatch.ipv4": [[h] for h in IP_HOSTS if not h.startswith("[")],
     "urlmatch.canonical_host": [[h] for h in ASCII_HOSTS + IP_HOSTS + UNICODE_HOSTS if h],
-    "idna.encode": [[h] for h in UNICODE_HOSTS],
+    "idna.encode": [[h] for h in UNICODE_HOSTS + STRINGPREP_DRIFT_HOSTS],
+    "urlmatch.parse": [[f"http://{h}/*"] for h in STRINGPREP_DRIFT_HOSTS],
     "ipv6.compressed": [[h.strip("[]")] for h in IP_HOSTS if h.startswith("[")],
 }
 

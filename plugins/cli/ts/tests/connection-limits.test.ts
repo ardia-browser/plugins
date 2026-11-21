@@ -3,10 +3,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { createConnection, createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { test } from "node:test";
+import { test } from "bun:test";
 import { Connection, EVENT_QUEUE_BYTES, Stop, UNREADABLE_LINE } from "../src/connection.ts";
 import { recordedSocketCode } from "../src/error-codes.ts";
 import { emptyListing, methodFailed } from "../src/listing.ts";
+
+const EVENT_QUEUE_TEST_MS = 60_000;
 
 type Pair = { connection: Connection; client: Socket; peer: Socket; server: Server; cleanup: () => void };
 
@@ -111,7 +113,7 @@ test("the events queue is capped by bytes as well as entries, oldest dropped fir
   } finally {
     cleanup();
   }
-});
+}, EVENT_QUEUE_TEST_MS);
 
 test("only the app's documented error codes reach telemetry; anything else is other", () => {
   for (const code of ["bad_request", "unknown_method", "unknown_command", "refused", "no_window", "failed", "unsupported_protocol", "password_manager_plugin"]) {

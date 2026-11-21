@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "bun:test";
 import { jsonIntent, jsonIntentOfArgv } from "../src/browse/args.ts";
 
 test("--json counts only where the global parser reads it as the switch", () => {

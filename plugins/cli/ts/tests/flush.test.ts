@@ -6,7 +6,7 @@ import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { after, test } from "node:test";
+import { afterAll, test } from "bun:test";
 import { BUILT_LIBC } from "./libc-loaded.ts";
 import { flush } from "../src/flush.ts";
 import { cliVersion } from "../src/version.ts";
@@ -32,7 +32,7 @@ const server = createServer((request, response) => {
 });
 await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 const URL = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1/logs`;
-after(() => server.close());
+afterAll(() => server.close());
 
 function record(uuid: string, properties: Record<string, unknown>, extra: Record<string, unknown> = {}): string {
   return JSON.stringify({ uuid, event: "cli_command", distinct_id: INSTALL_ID, timestamp: "2026-11-20T10:11:12.345Z", properties, ...extra });
@@ -165,10 +165,10 @@ test("a rejected batch is dropped, an oversized one split, like Python", async (
   status = 200;
 });
 
-test("a large backlog goes in batches like Python", { timeout: 30_000 }, async () => {
+test("a large backlog goes in batches like Python", async () => {
   const lines = Array.from({ length: 130 }, (_, index) => record(uid(1000 + index), { command: "tabs", exit_code: index }));
   await both(lines);
-});
+}, 30_000);
 
 test("sharing off removes the spool like Python", async () => {
   await both(MIXED, { sharing: false });
@@ -268,10 +268,10 @@ test("the flusher honours DO_NOT_TRACK and ARDIA_TELEMETRY itself", async () => 
   }
 });
 
-test("a flusher whose config never arrives gives up", { timeout: 15_000 }, async () => {
+test("a flusher whose config never arrives gives up", async () => {
   const child = spawn(PROGRAM, ["--ardia-telemetry-flush"], { stdio: ["pipe", "ignore", "ignore"], env: { PATH: "/usr/bin:/bin" } });
   const started = Date.now();
   assert.equal(await new Promise<number | null>((resolve) => child.on("exit", resolve)), 0);
   assert.ok(Date.now() - started < 10_000);
   child.stdin.end();
-});
+}, 15_000);

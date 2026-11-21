@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
-import { test } from "node:test";
+import { test } from "bun:test";
 import "./libc-loaded.ts";
 import { parseDuration, pythonFloat, pythonInt } from "../src/browse/args.ts";
 import { formatG, PythonCrash } from "../src/browse/errors.ts";

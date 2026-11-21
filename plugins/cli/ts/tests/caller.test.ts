@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -106,7 +106,7 @@ test("names a bundle from its Info.plist, else its folder", () => {
   }
 });
 
-test("walks its own ancestry", { skip: globalThis.process.platform !== "darwin" }, () => {
+test.skipIf(Boolean(globalThis.process.platform !== "darwin"))("walks its own ancestry", () => {
   loadLibc(libcBeside(join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "ardia-ts")));
   const chain = ancestry(globalThis.process.pid);
   assert.ok(chain.length > 0);

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "bun:test";
 import { stdioErrorsFor } from "../src/browse/stdio.ts";
 
 test("plugin browse reads the locale on Linux as on macOS; other Linux browse goes to Python", () => {

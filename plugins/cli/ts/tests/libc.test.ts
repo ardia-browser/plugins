@@ -5,7 +5,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { test } from "node:test";
+import { test } from "bun:test";
 import { BUILT_LIBC } from "./libc-loaded.ts";
 import { dlopenReason, errnoError, flock, interruptsIgnored, LibcUnavailable, listAt, loadLibc, mkdirAt, openAt, peerUid, sizeAt as rawSizeAt, strerror, unlinkAt, watchLifeline } from "../src/libc.ts";
 import { close, closeDir, listDir, openPrivate, openPrivateFile, PathError, readPrivate, renameIn, sizeAt, takeLock, unlinkQuietly, writePrivate } from "../src/privatefs.ts";

@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { test } from "node:test";
+import { test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import { frontEnd, namespaceJson } from "../src/argparse-cli.ts";
 import { parseArgs } from "../src/argparse-env.ts";
@@ -32,14 +32,14 @@ function pythonCases(platform: string, out: string): { home: string; cases: Case
   return JSON.parse(readFileSync(out, "utf8"));
 }
 
-test("the checked-in argparse specs match the Python parsers", { skip: SKIP }, () => {
+test.skipIf(Boolean(SKIP))("the checked-in argparse specs match the Python parsers", () => {
   const done = spawnSync(PYTHON as string, ["-I", join(CLI, "tests", "argparse_specs.py"), "--check"], { cwd: CLI, encoding: "utf8" });
   assert.equal(done.stderr, "");
   assert.equal(done.status, 0);
 });
 
 for (const platform of ["darwin", "linux"]) {
-  test(`argparse output and values match CPython's on ${platform}`, { skip: SKIP, timeout: 300_000 }, () => {
+  test.skipIf(Boolean(SKIP))(`argparse output and values match CPython's on ${platform}`, () => {
     const scratch = mkdtempSync(join(tmpdir(), "argparse-diff-"));
     const saved = { ...process.env };
     try {
@@ -61,5 +61,5 @@ for (const platform of ["darwin", "linux"]) {
       Object.assign(process.env, saved);
       rmSync(scratch, { recursive: true, force: true });
     }
-  });
+  }, 300_000);
 }

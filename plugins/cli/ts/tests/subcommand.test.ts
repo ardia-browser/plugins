@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "bun:test";
 import { telemetrySubcommand } from "../src/telemetry.ts";
 
 test("cli_command's subcommand is a known name, other or unknown, never free text", () => {

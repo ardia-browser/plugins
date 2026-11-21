@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { test } from "node:test";
+import { test } from "bun:test";
 import "./libc-loaded.ts";
 import { CommandIo } from "../src/cmdio.ts";
 import { APP_BINARY, APP_NAME, bundledApp, BUNDLE_ID, cuaHome, extract, keepsDriverFile, Refused, tools, VERSION, versionHome } from "../src/computer/driver.ts";
@@ -228,7 +228,7 @@ macOnly("Info.plist reads in XML and binary form", () => {
   }
 });
 
-test("off macOS computer refresh does nothing and setup says it needs macOS", { skip: process.platform === "darwin" }, async () => {
+test.skipIf(Boolean(process.platform === "darwin"))("off macOS computer refresh does nothing and setup says it needs macOS", async () => {
   const box = sandbox();
   assert.equal(await run(box, ["refresh"]), 0);
   assert.ok(!fs.existsSync(cuaHome()));

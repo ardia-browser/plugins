@@ -3,7 +3,7 @@ import { chmodSync, closeSync, constants, mkdirSync, mkdtempSync, openSync, rena
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { test } from "node:test";
+import { test } from "bun:test";
 import "./libc-loaded.ts";
 import { connectAt, socketInfoAt } from "../src/libc.ts";
 import { checkSocket } from "../src/browse/session.ts";

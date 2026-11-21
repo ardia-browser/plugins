@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "bun:test";
 import { servedTable } from "../src/served.ts";
 
 test("served.txt rows name one or two words, or a family, then the side", () => {

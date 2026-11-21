@@ -5,7 +5,7 @@ import { createServer, type Server } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { test } from "node:test";
+import { test } from "bun:test";
 
 const TS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PROGRAM = process.env.ARDIA_TS_CLI ?? path.join(TS, "dist", "ardia-ts");
