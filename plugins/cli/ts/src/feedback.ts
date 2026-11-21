@@ -296,8 +296,13 @@ async function request(method: string, url: string, data: Buffer | Blob, headers
   } catch (error) {
     return [0, new Map(), `the network failed (${networkReason(error)})`];
   }
-  if (response.status >= 300) return [response.status, new Map(), serviceRefusal(response.status, await limitedBody(response, 8192))];
-  const raw = await limitedBody(response, 64 * 1024);
+  let raw: Buffer;
+  try {
+    raw = await limitedBody(response, response.status >= 300 ? 8192 : 64 * 1024);
+  } catch (error) {
+    return [0, new Map(), `the network failed (${networkReason(error)})`];
+  }
+  if (response.status >= 300) return [response.status, new Map(), serviceRefusal(response.status, raw)];
   let answer: Value | undefined;
   try {
     answer = raw.length > 0 ? parse(raw, 1000) : new Map();
@@ -466,7 +471,12 @@ export async function runFeedback(args: FeedbackArgs): Promise<Said> {
   if (slot === "duplicate") return { status: 0, out: ["Not sent again: the same report already went out in the last day."], err: [] };
   if (slot === "limited") return keep(home, entry, `${DAILY_LIMIT} reports already went out in the last day`);
   if (slot !== "ok") return keep(home, entry, "another ardia was updating the report count (try again)");
-  const outcome = await submit(base, payload, found);
+  let outcome: Outcome;
+  try {
+    outcome = await submit(base, payload, found);
+  } catch (error) {
+    outcome = { sent: false, reason: `the network failed (${networkReason(error)})` };
+  }
   if (!outcome.sent) {
     if (home !== undefined) releaseFeedbackSlot(home, digest);
     const kept = new Map(entry);
