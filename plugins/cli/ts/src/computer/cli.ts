@@ -1,5 +1,5 @@
 import { isatty } from "node:tty";
-import { requireDefaultWidth, parseOptions } from "../simple-argparse.ts";
+import { parseArgs } from "../argparse-env.ts";
 import { dumps, type Value } from "../json.ts";
 import { execProgram } from "../libc.ts";
 import { inert } from "../printable.ts";
@@ -35,29 +35,6 @@ checked by ardia. Use ardia browse for web pages in Ardia.
 Common commands: mcp, list-tools, describe <tool>, call <tool> '<json>', permissions status|grant, doctor, stop.
 update, channel and skills are ardia's job here: the driver updates with ardia, and ardia skills install adds its skill.
 `;
-const SETUP_USAGE = "usage: ardia computer setup [-h] [--no-grant]\n";
-const SETUP_HELP = `${SETUP_USAGE}
-Download the pinned cua-driver, put CuaDriver.app in /Applications and ask for
-its permissions.
-
-options:
-  -h, --help  show this help message and exit
-  --no-grant  stop before asking for the permissions
-`;
-const MCP_USAGE = `usage: ardia computer mcp-config [-h]
-                                 [--target {general,claude-code,codex,cursor,opencode}]
-`;
-const MCP_HELP = `${MCP_USAGE}
-Print the MCP server entry for an agent. It runs ardia computer mcp, so it
-keeps working across ardia and cua-driver updates.
-
-options:
-  -h, --help            show this help message and exit
-  --target {general,claude-code,codex,cursor,opencode}
-                        claude-code and codex print the command that adds it;
-                        the others print the JSON to paste (default: general)
-`;
-
 export function supported(): boolean {
   return process.platform === "darwin";
 }
@@ -80,8 +57,8 @@ async function guarded(io: CommandIo, work: () => Promise<number | undefined>): 
 }
 
 async function setup(io: CommandIo, argv: readonly string[]): Promise<number> {
-  const parsed = parseOptions(argv, [{ long: "--help", short: "-h", kind: "help" }, { long: "--no-grant", kind: "flag" }], "ardia computer setup", SETUP_USAGE, SETUP_HELP);
-  if (parsed.kind === "exit") return io.exitWith(parsed);
+  const parsed = parseArgs("ardia computer setup", argv);
+  if (!parsed.ok) return io.exitWith(parsed);
   if (!supported()) {
     io.err("ardia computer: computer use through cua-driver needs macOS here");
     return 1;
@@ -101,7 +78,7 @@ async function setup(io: CommandIo, argv: readonly string[]): Promise<number> {
   if ((await quietlyOurs(dest)) && (await signedByCua(dest))) {
     if ((await runDriverQuietly(`${dest}/${APP_BINARY}`, "telemetry", "disable")) === 0) io.out("cua-driver telemetry off (cua-driver telemetry enable turns it back on)");
   }
-  if (parsed.flags.has("--no-grant") || !(isatty(0) && isatty(1))) {
+  if (parsed.values.get("no_grant") === true || !(isatty(0) && isatty(1))) {
     io.out("next: ardia computer permissions grant");
     return 0;
   }
@@ -141,10 +118,11 @@ export function mcpConfig(target: string): string {
 }
 
 function printMcpConfig(io: CommandIo, argv: readonly string[]): number {
-  const parsed = parseOptions(argv, [{ long: "--help", short: "-h", kind: "help" }, { long: "--target", kind: "value", choices: TARGETS }], "ardia computer mcp-config", MCP_USAGE, MCP_HELP, { usageLine: "usage: ardia computer mcp-config [-h] [--target {general,claude-code,codex,cursor,opencode}]\n" });
-  if (parsed.kind === "exit") return io.exitWith(parsed);
+  const parsed = parseArgs("ardia computer mcp-config", argv);
+  if (!parsed.ok) return io.exitWith(parsed);
   try {
-    io.out(mcpConfig(parsed.values.get("--target") ?? "general"));
+    const target = parsed.values.get("target");
+    io.out(mcpConfig(typeof target === "string" ? target : "general"));
   } catch (error) {
     if (!(error instanceof Refused)) throw error;
     io.err(`ardia computer: ${error.message}`);
@@ -224,4 +202,4 @@ export function execDriver(exec: Exec): never {
   return execProgram(exec.binary, exec.argv, driverEnv());
 }
 
-export { inert, label, requireDefaultWidth, DRIVER_COMMANDS };
+export { inert, label, DRIVER_COMMANDS };

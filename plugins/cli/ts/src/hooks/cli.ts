@@ -1,38 +1,27 @@
 import { join } from "../paths.ts";
 import { LINUX, NeedsPython } from "../paths.ts";
-import { floatValue, type OptionSpec, parseOptions } from "../simple-argparse.ts";
+import type { ArgValue } from "../argparse.ts";
+import { environment, parseArgs } from "../argparse-env.ts";
 import type { CommandIo } from "../cmdio.ts";
 import type { CommandRoute } from "../serve-commands.ts";
 import type { Call } from "../telemetry.ts";
 import { configFolder } from "../configfiles.ts";
-import * as texts from "./texts.ts";
 import { HOOKS_FILE } from "./model.ts";
 import { arrange, type Verb } from "./route.ts";
 
 const TOP_FLAGS = ["-h", "--help", "--version", "--skill"];
 
-const DATA_DIR: OptionSpec = { long: "--data-dir", kind: "value" };
-const HELP: OptionSpec = { long: "--help", short: "-h", kind: "help" };
-const VERB_OPTIONS: Record<Verb, OptionSpec[]> = {
-  list: [HELP, DATA_DIR, { long: "--json", kind: "flag" }],
-  install: [HELP, DATA_DIR],
-  uninstall: [HELP, DATA_DIR],
-  run: [HELP, DATA_DIR, { long: "--log", kind: "value" }],
-};
-const VERB_TEXTS: Record<Verb, [string, string]> = {
-  list: [texts.LIST_USAGE, LINUX ? texts.LINUX_LIST_HELP : texts.LIST_HELP],
-  install: [texts.INSTALL_USAGE, LINUX ? texts.LINUX_INSTALL_HELP : texts.INSTALL_HELP],
-  uninstall: [texts.UNINSTALL_USAGE, LINUX ? texts.LINUX_UNINSTALL_HELP : texts.UNINSTALL_HELP],
-  run: [texts.RUN_USAGE, LINUX ? texts.LINUX_RUN_HELP : texts.RUN_HELP],
-};
-const ON_OPTIONS: OptionSpec[] = [
-  HELP,
-  DATA_DIR,
-  { long: "--match", kind: "value", repeat: true },
-  { long: "--timeout", kind: "value", float: true },
-  { long: "--idle", kind: "value" },
-  { long: "--full-urls", kind: "flag" },
-];
+function specOf(isOn: boolean, verb: Verb | undefined): string {
+  return isOn ? "ardia on" : `ardia hooks ${verb}`;
+}
+
+function optionStrings(spec: string): string[] {
+  return environment().parser(spec).actions.flatMap((action) => action.option_strings);
+}
+
+function text(value: ArgValue | undefined): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
 
 function flagNames(flags: readonly string[]): string[] {
   return flags.filter((token) => token.startsWith("--")).map((token) => token.split("=", 1)[0] as string);
@@ -47,13 +36,14 @@ export async function serveHooks(route: CommandRoute, argv: string[], call: Call
   const verb = path[1] as Verb | undefined;
   const isOn = path[0] === "on";
   if (!isOn && verb === undefined) return undefined;
-  const options = isOn ? ON_OPTIONS : VERB_OPTIONS[verb as Verb];
+  const spec = specOf(isOn, verb);
+  const options = optionStrings(spec);
   call.command = path[0] as string;
   call.subcommand = isOn ? undefined : verb;
-  call.allowedFlags = [...TOP_FLAGS, ...(isOn ? [] : ["-h", "--help"]), ...options.flatMap((option) => (option.short === undefined ? [option.long] : [option.short, option.long]))];
+  call.allowedFlags = [...TOP_FLAGS, ...(isOn ? [] : ["-h", "--help"]), ...options];
   void route;
   return settle(async () => {
-    const leafNames = new Set(options.flatMap((option) => (option.short === undefined ? [option.long] : [option.short, option.long])));
+    const leafNames = new Set(options);
     for (const name of flagNames(hoisted)) {
       if (!leafNames.has(name)) {
         io.err(`ardia: ${path.join(" ")} doesn't take ${name}`);
@@ -70,20 +60,28 @@ export async function serveHooks(route: CommandRoute, argv: string[], call: Call
         leaf = whole.slice(1, cut);
       }
     }
-    const [usage, help] = isOn ? [texts.ON_USAGE, texts.ON_HELP] : VERB_TEXTS[verb as Verb];
-    const prog = `ardia ${path.join(" ")}`;
-    const parsed = parseOptions(leaf, options, prog, usage, help, { extrasUsage: texts.TOP_USAGE, extrasProg: "ardia", ...(isOn ? { positionals: ["EVENT[,EVENT...]"], explicitUsage: true } : {}) });
-    if (parsed.kind === "exit") return io.exitWith(parsed);
-    const dataDir = parsed.values.get("--data-dir");
+    const parsed = parseArgs(spec, leaf);
+    if (!parsed.ok) return io.exitWith(parsed);
+    if (parsed.stderr) io.exitWith({ status: 0, stdout: "", stderr: parsed.stderr });
+    const values = parsed.values;
+    const dataDir = text(values.get("data_dir"));
     const commands = await import("./commands.ts");
     if (isOn) {
-      const timeout = parsed.values.has("--timeout") ? floatValue(parsed.values.get("--timeout") as string) : 60;
-      return commands.cmdOn(io, { dataDir, events: parsed.positionals[0] as string, match: parsed.repeated.get("--match") ?? [], timeout, idle: parsed.values.get("--idle"), fullUrls: parsed.flags.has("--full-urls"), program });
+      const match = values.get("match");
+      return commands.cmdOn(io, {
+        dataDir,
+        events: text(values.get("events")) as string,
+        match: Array.isArray(match) ? match.filter((item): item is string => typeof item === "string") : [],
+        timeout: Number(values.get("timeout")),
+        idle: text(values.get("idle")),
+        fullUrls: values.get("full_urls") === true,
+        program,
+      });
     }
-    if (verb === "list") return commands.hooksList(io, dataDir, parsed.flags.has("--json"));
+    if (verb === "list") return commands.hooksList(io, dataDir, values.get("json") === true);
     if (verb === "install") return commands.hooksInstall(io, dataDir);
     if (verb === "uninstall") return commands.hooksUninstall(io, dataDir);
-    return commands.hooksRun(io, dataDir, parsed.values.get("--log"));
+    return commands.hooksRun(io, dataDir, text(values.get("log")));
   });
 }
 
