@@ -65,7 +65,7 @@ export class Store {
   lockFd: number | null = null;
 
   constructor(readonly dataRoot: string) {
-    this.path = `${dataRoot.replace(/\/+$/, "") || "/"}/Scripts`.replace(/^\/\//, "/");
+    this.path = dataRoot === "/" ? "/Scripts" : dataRoot === "." ? "Scripts" : `${dataRoot}/Scripts`;
   }
 
   open(create: boolean): boolean {

@@ -35,19 +35,10 @@ function isSymlink(path: string): boolean {
   }
 }
 
-function bundledPackage(root: string | null): string | null {
-  if (root === null) return null;
-  let names: string[];
-  try {
-    names = fs.readdirSync(`${root}/python/lib`).filter((name) => name.startsWith("python3")).sort();
-  } catch {
-    return null;
-  }
-  for (const name of names) {
-    const found = `${root}/python/lib/${name}/site-packages/ardia_cli`;
-    if (fs.existsSync(found)) return found;
-  }
-  return null;
+const TEST_ESBUILD = "ARDIA_TEST_ESBUILD";
+
+export function bundledEsbuild(root: string | null): string | null {
+  return root === null ? null : `${root}/libexec/esbuild`;
 }
 
 function parentsOf(path: string): string[] {
@@ -91,12 +82,10 @@ export function which(name: string): string | null {
 }
 
 export function findEsbuild(root: string | null = installRoot()): string | null {
-  const here = bundledPackage(root);
-  if (here !== null) {
-    const bundled = `${here}/bin/esbuild`;
-    if (executable(bundled) && !isSymlink(bundled)) return bundled;
-    return null;
-  }
+  const override = envSet(TEST_ESBUILD);
+  if (override !== undefined) return override;
+  const bundled = bundledEsbuild(root);
+  if (bundled !== null && fs.existsSync(bundled)) return executable(bundled) && !isSymlink(bundled) ? bundled : null;
   for (const parent of root === null ? [] : [root, ...parentsOf(root)]) {
     const modules = `${parent}/node_modules`;
     const native = `${modules}/@esbuild/${ESBUILD_PACKAGE}/bin/esbuild`;
@@ -108,7 +97,8 @@ export function findEsbuild(root: string | null = installRoot()): string | null 
 }
 
 export function installed(root: string | null = installRoot()): boolean {
-  return bundledPackage(root) !== null;
+  const bundled = bundledEsbuild(root);
+  return bundled !== null && fs.existsSync(bundled);
 }
 
 function identity(path: string): Identity | null {
