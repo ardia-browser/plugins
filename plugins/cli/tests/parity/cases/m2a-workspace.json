@@ -1,0 +1,1252 @@
+[
+ {
+  "id": "m2a-tabs-open-0",
+  "command": "tabs open",
+  "argv": [
+   "tabs",
+   "open",
+   "a.example",
+   "https://b/",
+   "--group",
+   "Work",
+   "--pin",
+   "row",
+   "--activate",
+   "--before",
+   "tab-9",
+   "--window",
+   "w-1",
+   "--profile",
+   "p-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "open",
+        "tabs": [
+         "tab-1",
+         "tab-3"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-move-1",
+  "command": "tabs move",
+  "argv": [
+   "tabs",
+   "move",
+   "tab-1",
+   "tab-2",
+   "--top",
+   "--after",
+   "g-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.move",
+        "tabs": [
+         "tab-1",
+         "tab-2"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-move-2",
+  "command": "tabs move",
+  "argv": [
+   "tabs",
+   "move",
+   "tab-1",
+   "--group",
+   "",
+   "--window",
+   "w-2"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.move",
+        "tabs": [
+         "tab-1"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-pin-3",
+  "command": "tabs pin",
+  "argv": [
+   "tabs",
+   "pin",
+   "tab-1",
+   "--row"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.pin",
+        "tabs": [
+         "tab-1"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-pin-4",
+  "command": "tabs pin",
+  "argv": [
+   "tabs",
+   "pin",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.pin",
+        "outcomes": {
+         "tab-1": "pinned",
+         "tab-2": "already\u0007"
+        }
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-unpin-5",
+  "command": "tabs unpin",
+  "argv": [
+   "tabs",
+   "unpin",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.unpin",
+        "tabs": []
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-mute-6",
+  "command": "tabs mute",
+  "argv": [
+   "--json",
+   "tabs",
+   "mute",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.mute",
+        "tabs": [
+         "tab-1"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-unmute-7",
+  "command": "tabs unmute",
+  "argv": [
+   "tabs",
+   "unmute",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.unmute",
+        "tabs": [
+         "tab-1"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-sleep-8",
+  "command": "tabs sleep",
+  "argv": [
+   "tabs",
+   "sleep",
+   "tab-1",
+   "tab-2"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.sleep",
+        "tabs": [
+         "tab-1",
+         "tab-2"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-wake-9",
+  "command": "tabs wake",
+  "argv": [
+   "tabs",
+   "wake",
+   "tab-2"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.wake",
+        "tabs": [
+         "tab-2"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-close-10",
+  "command": "tabs close",
+  "argv": [
+   "tabs",
+   "close",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.close",
+        "tabs": [
+         "tab-1"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-activate-11",
+  "command": "tabs activate",
+  "argv": [
+   "tabs",
+   "activate",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.activate",
+        "tabs": [
+         "tab-1"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-rename-12",
+  "command": "tabs rename",
+  "argv": [
+   "tabs",
+   "rename",
+   "tab-1",
+   "Name é"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.rename",
+        "tabs": [
+         "tab-1"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-rename-13",
+  "command": "tabs rename",
+  "argv": [
+   "tabs",
+   "rename",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.rename",
+        "tabs": [
+         "tab-1"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-icon-14",
+  "command": "tabs icon",
+  "argv": [
+   "tabs",
+   "icon",
+   "tab-1",
+   "symbol:star"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.icon",
+        "tabs": [
+         "tab-1"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-icon-15",
+  "command": "tabs icon",
+  "argv": [
+   "tabs",
+   "icon",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.icon"
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-pin-both",
+  "command": "tabs pin",
+  "argv": [
+   "tabs",
+   "pin",
+   "tab-1",
+   "--row",
+   "--tile"
+  ],
+  "control": {
+   "replies": {}
+  }
+ },
+ {
+  "id": "m2a-tabs-close-failed",
+  "command": "tabs close",
+  "argv": [
+   "tabs",
+   "close",
+   "tab-1",
+   "tab-2"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": false,
+      "applied": 0,
+      "results": [],
+      "error": {
+       "code": "not_found",
+       "message": "no tab tab-1"
+      }
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-close-failed-plain",
+  "command": "tabs close",
+  "argv": [
+   "tabs",
+   "close",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": false
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-close-not-dict",
+  "command": "tabs close",
+  "argv": [
+   "tabs",
+   "close",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": [
+      1
+     ]
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-close-unknown-method",
+  "command": "tabs close",
+  "argv": [
+   "tabs",
+   "close",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "error": {
+      "code": "unknown_method",
+      "message": "x"
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-close-refused",
+  "command": "tabs close",
+  "argv": [
+   "tabs",
+   "close",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "error": {
+      "code": "refused",
+      "message": "private window"
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-close-dropped",
+  "command": "tabs close",
+  "argv": [
+   "tabs",
+   "close",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": "close"
+   }
+  }
+ },
+ {
+  "id": "m2a-tabs-close-not-running",
+  "command": "tabs close",
+  "argv": [
+   "tabs",
+   "close",
+   "tab-1"
+  ],
+  "control": null
+ },
+ {
+  "id": "m2a-groups-create-24",
+  "command": "groups create",
+  "argv": [
+   "groups",
+   "create",
+   "tab-1",
+   "tab-2",
+   "--url",
+   "https://a",
+   "--url",
+   "b",
+   "--name",
+   "N",
+   "--icon",
+   "🚀",
+   "--color",
+   "blue",
+   "--collapsed",
+   "--parent",
+   "P",
+   "--unpinned",
+   "--window",
+   "w",
+   "--profile",
+   "p",
+   "--after",
+   "g-0"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "group.create",
+        "group": "g-1",
+        "label": "Work é",
+        "icon": "🚀",
+        "tabs": [
+         "tab-1",
+         "tab-2"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-groups-create-25",
+  "command": "groups create",
+  "argv": [
+   "groups",
+   "create"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "group.create",
+        "group": "g-2",
+        "tabs": [
+         "tab-1"
+        ],
+        "icon": "symbol:star",
+        "label": ""
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-groups-update-26",
+  "command": "groups update",
+  "argv": [
+   "groups",
+   "update",
+   "Work",
+   "--name",
+   "",
+   "--color",
+   "none",
+   "--collapse"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "group.update",
+        "group": "g-1",
+        "label": "Work é",
+        "icon": "🚀"
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-groups-update-27",
+  "command": "groups update",
+  "argv": [
+   "groups",
+   "update",
+   "Work",
+   "--reset-icon",
+   "--expand"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "group.update",
+        "group": "g-1",
+        "label": "Work é",
+        "icon": "none"
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-groups-rename-28",
+  "command": "groups rename",
+  "argv": [
+   "groups",
+   "rename",
+   "g-1",
+   "New"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "group.update",
+        "group": "g-1",
+        "label": "Work é",
+        "icon": "🚀"
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-groups-move-29",
+  "command": "groups move",
+  "argv": [
+   "groups",
+   "move",
+   "g-1",
+   "--top",
+   "--pin",
+   "--before",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "group.move",
+        "group": "g-1",
+        "label": "Work é",
+        "icon": "🚀"
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-groups-move-30",
+  "command": "groups move",
+  "argv": [
+   "groups",
+   "move",
+   "g-1",
+   "--parent",
+   "P",
+   "--unpin",
+   "--profile",
+   "p"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "group.move",
+        "group": "g-1",
+        "label": "Work é",
+        "icon": "🚀"
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-groups-ungroup-31",
+  "command": "groups ungroup",
+  "argv": [
+   "groups",
+   "ungroup",
+   "g-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "group.ungroup",
+        "group": "g-1",
+        "label": "Work é",
+        "icon": "🚀"
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-groups-close-32",
+  "command": "groups close",
+  "argv": [
+   "groups",
+   "close",
+   "g-1",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "group.close",
+        "group": "g-1",
+        "label": "Work é",
+        "icon": "🚀"
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-groups-delete-33",
+  "command": "groups delete",
+  "argv": [
+   "groups",
+   "delete",
+   "g-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 2,
+      "results": [
+       {
+        "op": "group.delete",
+        "group": "g-1",
+        "label": null,
+        "icon": "🚀"
+       },
+       {
+        "op": "group.weird"
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "m2a-groups-update-nothing",
+  "command": "groups update",
+  "argv": [
+   "groups",
+   "update",
+   "g-1"
+  ],
+  "control": {
+   "replies": {}
+  }
+ },
+ {
+  "id": "m2a-groups-update-icon-and-reset",
+  "command": "groups update",
+  "argv": [
+   "groups",
+   "update",
+   "g-1",
+   "--icon",
+   "x",
+   "--reset-icon"
+  ],
+  "control": {
+   "replies": {}
+  }
+ },
+ {
+  "id": "m2a-groups-move-nothing",
+  "command": "groups move",
+  "argv": [
+   "groups",
+   "move",
+   "g-1"
+  ],
+  "control": {
+   "replies": {}
+  }
+ },
+ {
+  "id": "m2a-groups-move-empty-parent",
+  "command": "groups move",
+  "argv": [
+   "groups",
+   "move",
+   "g-1",
+   "--parent",
+   ""
+  ],
+  "control": {
+   "replies": {}
+  }
+ }
+]

@@ -65,8 +65,10 @@ class ParityTable:
         self.assertEqual(self.summary["unproven_but_served"], [], "served.txt lists commands without passing parity cases")
 
     def test_the_table_has_each_served_command_at_least_once(self):
-        for name in harness.served_commands():
-            self.assertGreater(self.summary["commands"][name]["cases"], 0, name)
+        served = harness.served_commands()
+        for name in served:
+            cases = sum(row["cases"] for command, row in self.summary["commands"].items() if harness.served_row(command, served) == name)
+            self.assertGreater(cases, 0, name)
 
 
 @harness.requires(binary(), ("rust",), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
@@ -127,13 +129,20 @@ class ServedTable(unittest.TestCase):
         self.assertTrue(set(table.values()) <= set(harness.SERVING_SIDES))
         scratch = Path(tempfile.mkdtemp(prefix="ars", dir="/tmp"))
         try:
-            for body in ("tabs\n", "tabs go\n", "tabs rust\ntabs ts\n", "tabs rust extra\n"):
+            for body in ("tabs\n", "tabs go\n", "tabs rust\ntabs ts\n", "tabs rust extra\n", "* call ts\n", "call * x ts\n", "tabs open ts\ntabs open rust\n"):
                 with self.subTest(body=body):
                     (scratch / "served.txt").write_text(body)
                     with self.assertRaises(ValueError):
                         harness.served_table(scratch / "served.txt")
         finally:
             shutil.rmtree(scratch, True)
+
+    def test_rows_name_one_or_two_words_and_a_wildcard_covers_a_family(self):
+        table = {"tabs": "rust", "tabs open": "ts", "call *": "ts"}
+        self.assertEqual(harness.served_row("tabs open", table), "tabs open")
+        self.assertEqual(harness.served_row("call history", table), "call *")
+        self.assertIsNone(harness.served_row("tabs close", table))
+        self.assertIsNone(harness.served_row("call", table))
 
     def test_the_typescript_entry_embeds_the_same_table(self):
         source = (CLI / "ts" / "src" / "served.ts").read_text()

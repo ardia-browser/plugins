@@ -33,16 +33,17 @@ impl Table {
             let words: Vec<&str> = line.split_whitespace().collect();
             match words[..] {
                 [] => continue,
-                [label, side] => {
+                [.., side] if words.len() >= 2 => {
                     let side = match side {
                         "rust" => Side::Rust,
                         "ts" => Side::Ts,
                         _ => return None,
                     };
-                    if rows.iter().any(|(known, _)| known == label) {
+                    let label = words[..words.len() - 1].join(" ");
+                    if rows.iter().any(|(known, _)| *known == label) {
                         return None;
                     }
-                    rows.push((label.to_string(), side));
+                    rows.push((label, side));
                 }
                 _ => return None,
             }
@@ -63,6 +64,49 @@ impl Table {
     pub fn side(&self, label: &str) -> Option<Side> {
         self.0.iter().find(|(known, _)| known == label).map(|(_, side)| *side)
     }
+
+    pub fn typescript_label(&self, raw: &[OsString]) -> Option<String> {
+        let words = command_words(raw);
+        let command = words.first()?;
+        let mut candidates = Vec::new();
+        if let Some(verb) = words.get(1) {
+            candidates.push(format!("{command} {verb}"));
+        }
+        candidates.push(format!("{command} *"));
+        candidates.push(command.clone());
+        candidates.into_iter().find(|label| self.side(label) == Some(Side::Ts))
+    }
+}
+
+const SHARED_VALUE_FLAGS: [&str; 4] = ["--port", "--ws", "--data-dir", "--timeout"];
+
+fn skip_shared(raw: &[OsString], mut index: usize) -> usize {
+    while let Some(token) = raw.get(index).and_then(|token| token.to_str()) {
+        if token == "--json" {
+            index += 1;
+            continue;
+        }
+        let name = token.split('=').next().unwrap_or(token);
+        if SHARED_VALUE_FLAGS.contains(&name) {
+            index += if token.contains('=') { 1 } else { 2 };
+            continue;
+        }
+        break;
+    }
+    index
+}
+
+fn command_words(raw: &[OsString]) -> Vec<String> {
+    let mut words = Vec::new();
+    let index = skip_shared(raw, 0);
+    let Some(command) = raw.get(index).and_then(|token| token.to_str()) else {
+        return words;
+    };
+    words.push(command.to_string());
+    if let Some(verb) = raw.get(skip_shared(raw, index + 1)).and_then(|token| token.to_str()) {
+        words.push(verb.to_string());
+    }
+    words
 }
 
 fn read_table(path: &Path) -> Option<String> {
@@ -364,6 +408,19 @@ mod tests {
             assert_eq!(Table::parse(body), None, "{body:?}");
         }
         assert_eq!(Table::parse(""), Some(Table(Vec::new())));
+    }
+
+    #[test]
+    fn multi_word_labels_and_wildcards_pick_the_typescript_program() {
+        let table = Table::parse("tabs rust\ntabs open ts\ncall * ts\nrun ts\n").unwrap();
+        let words = |words: &[&str]| words.iter().map(OsString::from).collect::<Vec<_>>();
+        assert_eq!(table.typescript_label(&words(&["tabs", "open", "x"])), Some("tabs open".to_string()));
+        assert_eq!(table.typescript_label(&words(&["--json", "tabs", "--data-dir", "/d", "open"])), Some("tabs open".to_string()));
+        assert_eq!(table.typescript_label(&words(&["call", "history.search"])), Some("call *".to_string()));
+        assert_eq!(table.typescript_label(&words(&["--timeout=5", "run", "newTab"])), Some("run".to_string()));
+        assert_eq!(table.typescript_label(&words(&["tabs", "close", "x"])), None);
+        assert_eq!(table.typescript_label(&words(&["tabs"])), None);
+        assert_eq!(table.typescript_label(&words(&["browse", "snapshot"])), None);
     }
 
     #[test]

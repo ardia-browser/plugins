@@ -4,3 +4,27 @@ tabs rust
 groups rust
 windows rust
 commands rust
+call * ts
+methods ts
+run ts
+events ts
+apply ts
+tabs open ts
+tabs move ts
+tabs pin ts
+tabs unpin ts
+tabs mute ts
+tabs unmute ts
+tabs sleep ts
+tabs wake ts
+tabs close ts
+tabs activate ts
+tabs rename ts
+tabs icon ts
+groups create ts
+groups update ts
+groups rename ts
+groups move ts
+groups ungroup ts
+groups close ts
+groups delete ts

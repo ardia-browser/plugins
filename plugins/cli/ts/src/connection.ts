@@ -4,6 +4,7 @@ import { dumps, field, object, parse, TooDeep, type Value } from "./json.ts";
 import { errnoOf, strerror } from "./paths.ts";
 import { MAX_LINE_BYTES } from "./protocol.ts";
 import { utf8 } from "./pystr.ts";
+import { formatG } from "./py.ts";
 
 const CONTROL_JSON_DEPTH = 9991;
 const HIGH_WATER = 64 * 1024;
@@ -12,8 +13,12 @@ const POLL_MS = 100;
 const RETRY_WRITE_MS = 1;
 const EAGAIN = new Set(["EAGAIN", "EWOULDBLOCK"]);
 const EPIPE = 32;
+const EVENT_QUEUE_CAP = 1000;
+const LOSSY_UTF8 = new TextDecoder("utf-8", { fatal: false });
 
 type Pending = { reply?: Value; lost?: string };
+
+export type EventLine = { message: Value; raw: string };
 
 export class Stop extends Error {
   constructor(
@@ -35,6 +40,8 @@ export class Connection {
   private writeFailure: string | undefined;
   private pumpTimer: ReturnType<typeof setTimeout> | undefined;
   private wake: (() => void) | undefined;
+  private events: EventLine[] = [];
+  private dropped = 0;
 
   constructor(
     readonly socket: Socket,
@@ -82,14 +89,41 @@ export class Connection {
       }
       if (message === undefined) return this.lose("Ardia sent a line that isn't JSON");
       const id = field(message, "id");
-      if (typeof id !== "bigint") continue;
-      const request = this.pending.get(id);
-      if (request === undefined) continue;
+      const request = typeof id === "bigint" ? this.pending.get(id) : undefined;
+      if (request === undefined || typeof id !== "bigint") {
+        this.queueEvent(message, line);
+        continue;
+      }
       this.pending.delete(id);
       request.reply = message;
       this.notify();
     }
     if (this.buffer.length > MAX_LINE_BYTES + 2) this.lose("Ardia sent a line longer than 1 MB");
+  }
+
+  private queueEvent(message: Value, line: Buffer): void {
+    if (!(message instanceof Map) || typeof message.get("decide") === "string" || typeof message.get("event") !== "string") return;
+    if (this.events.length >= EVENT_QUEUE_CAP) {
+      this.events.shift();
+      this.dropped += 1;
+    }
+    this.events.push({ message, raw: LOSSY_UTF8.decode(line).replace(/\n+$/, "") });
+    this.notify();
+  }
+
+  takeDropped(): number {
+    const dropped = this.dropped;
+    this.dropped = 0;
+    return dropped;
+  }
+
+  async nextEvent(): Promise<EventLine> {
+    for (;;) {
+      const queued = this.events.shift();
+      if (queued !== undefined) return queued;
+      if (this.lost !== undefined) throw new Stop(this.lost, "closed");
+      await this.until(() => this.events.length > 0 || this.lost !== undefined, undefined);
+    }
   }
 
   private socketOpen(): boolean {
@@ -187,7 +221,7 @@ export class Connection {
     if (waiting.reply !== undefined) return waiting.reply;
     if (waiting.lost !== undefined) throw new Stop(waiting.lost, "lost");
     if (!answered) this.pending.delete(ident);
-    throw new Stop(`Ardia didn't answer ${method} in ${timeout} s`, "timeout");
+    throw new Stop(`Ardia didn't answer ${method} in ${formatG(timeout)} s`, "timeout");
   }
 
   close(): void {

@@ -29,6 +29,7 @@ export class Call {
   subcommand: string | undefined;
   allowedFlags: readonly string[] = [];
   errorCode: string | undefined;
+  metrics: [string, bigint][] = [];
 
   constructor(readonly argv: string[]) {}
 
@@ -250,6 +251,7 @@ function commandRecord(call: Call, status: number, crashed: boolean, distinctId:
     ["exit_code", BigInt(status)],
     ["error_code", code],
     ["flags", flagNames(call.argv, call.allowedFlags)],
+    ...call.metrics,
   ];
   timings(call, properties);
   properties.push(["cli_version", cliVersion()], ["$environment", environment], ["served_by", SERVED_BY]);
