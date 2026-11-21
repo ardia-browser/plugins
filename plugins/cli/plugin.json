@@ -4,7 +4,7 @@
   "name": "cli",
   "title": "Command Line",
   "description": "Drive Ardia from your terminal or an agent.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "requires": "0.2.48",
   "icon": "terminal.fill",
   "keywords": [
