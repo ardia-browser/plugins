@@ -17,13 +17,16 @@ type Native = {
   unlinkAt(dir: number, name: Name): number;
   sizeAt(dir: number, name: Name): number;
   listAt(dir: number): Buffer[] | number;
+  statAt(dir: number, name: Name, follow: boolean): number[] | number;
+  swapAt(dir: number, first: string, second: string): number;
+  removeDirAt(dir: number, name: Name): number;
   lock(fd: number, exclusive: boolean, wait: boolean): number;
   watchLifeline(fd: number): number;
   writeSome(fd: number, bytes: Uint8Array, offset: number): number;
   strerror(errno: number): string | number;
 };
 
-const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "openFileAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "listAt", "lock", "watchLifeline", "writeSome", "strerror"];
+const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "openFileAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "listAt", "statAt", "swapAt", "removeDirAt", "lock", "watchLifeline", "writeSome", "strerror"];
 const ERRNO_NAMES = new Map<number, string>(Object.entries(constants.errno).map(([name, value]) => [value, name]));
 const EWOULDBLOCK = constants.errno.EWOULDBLOCK ?? constants.errno.EAGAIN;
 
@@ -141,6 +144,23 @@ export function listAt(dir: number): Buffer[] {
   const names = native().listAt(dir);
   if (typeof names === "number") throw errnoError(-names, "openat");
   return names;
+}
+
+export type StatAt = { mode: number; uid: number; nlink: number };
+
+export function statAt(dir: number, name: Name, follow = false): StatAt {
+  const fields = native().statAt(dir, name, follow);
+  if (typeof fields === "number") throw errnoError(-fields, "fstatat", name);
+  const [mode, uid, nlink] = fields as [number, number, number];
+  return { mode, uid, nlink };
+}
+
+export function swapAt(dir: number, first: string, second: string): void {
+  checked(native().swapAt(dir, first, second), "renameatx_np", second);
+}
+
+export function removeDirAt(dir: number, name: Name): void {
+  checked(native().removeDirAt(dir, name), "unlinkat", name);
 }
 
 export function flock(fd: number, exclusive: boolean, wait: boolean): boolean {

@@ -18,6 +18,8 @@
 #if defined(__APPLE__)
 #include <sys/ucred.h>
 #include <sys/un.h>
+#else
+#include <sys/syscall.h>
 #endif
 
 #ifndef SRC_JS_NATIVE_API_TYPES_H_
@@ -276,6 +278,54 @@ static napi_value size_at(napi_env env, napi_callback_info info) {
   return number(env, (double)found.st_size);
 }
 
+static napi_value stat_at(napi_env env, napi_callback_info info) {
+  Call call;
+  int32_t dir;
+  bool follow;
+  char name[PATH_MAX];
+  struct stat found;
+  napi_value fields = NULL;
+  if (!take_args(env, info, 3, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &dir) || !bool_arg(&call, 2, &follow)) return NULL;
+  int checked = name_arg(&call, 1, name, sizeof(name));
+  if (checked != 0) return status(env, checked);
+  if (fstatat(dir, name, &found, follow ? 0 : AT_SYMLINK_NOFOLLOW) != 0) return status(env, failed());
+  if (napi_create_array(env, &fields) != napi_ok) return status(env, -ENOMEM);
+  double values[3] = {(double)found.st_mode, (double)found.st_uid, (double)found.st_nlink};
+  for (uint32_t index = 0; index < 3; index += 1) {
+    if (napi_set_element(env, fields, index, number(env, values[index])) != napi_ok) return status(env, -ENOMEM);
+  }
+  return fields;
+}
+
+static napi_value swap_at(napi_env env, napi_callback_info info) {
+  Call call;
+  int32_t dir;
+  char first[PATH_MAX], second[PATH_MAX];
+  if (!take_args(env, info, 3, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &dir)) return NULL;
+  int checked = name_arg(&call, 1, first, sizeof(first));
+  if (checked == 0) checked = name_arg(&call, 2, second, sizeof(second));
+  if (checked != 0) return status(env, checked);
+#if defined(__APPLE__)
+  int swapped = renameatx_np(dir, first, dir, second, RENAME_SWAP);
+#else
+  int swapped = (int)syscall(SYS_renameat2, dir, first, dir, second, 2u);
+#endif
+  return status(env, swapped == 0 ? 0 : failed());
+}
+
+static napi_value remove_dir_at(napi_env env, napi_callback_info info) {
+  Call call;
+  int32_t dir;
+  char name[PATH_MAX];
+  if (!take_args(env, info, 2, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &dir)) return NULL;
+  int checked = name_arg(&call, 1, name, sizeof(name));
+  if (checked != 0) return status(env, checked);
+  return status(env, unlinkat(dir, name, AT_REMOVEDIR) == 0 ? 0 : failed());
+}
+
 static void finish_listing(DIR *stream) {
   rewinddir(stream);
   closedir(stream);
@@ -429,6 +479,9 @@ __attribute__((visibility("default"))) napi_value napi_register_module_v1(napi_e
       && define(env, exports, "unlinkAt", unlink_at)
       && define(env, exports, "sizeAt", size_at)
       && define(env, exports, "listAt", list_at)
+      && define(env, exports, "statAt", stat_at)
+      && define(env, exports, "swapAt", swap_at)
+      && define(env, exports, "removeDirAt", remove_dir_at)
       && define(env, exports, "lock", lock)
       && define(env, exports, "watchLifeline", watch_lifeline)
       && define(env, exports, "writeSome", write_some)

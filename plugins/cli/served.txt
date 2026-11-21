@@ -4,3 +4,7 @@ tabs rust
 groups rust
 windows rust
 commands rust
+scripts new ts
+scripts install ts
+scripts uninstall ts
+scripts list ts

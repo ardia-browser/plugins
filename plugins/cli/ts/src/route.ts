@@ -1,7 +1,13 @@
 import { emptyListing, type Kind, type Listing } from "./listing.ts";
 import { servedTable, type ServingSide } from "./served.ts";
+import { parseScripts, type ScriptsArgs } from "./scripts/args.ts";
 
-export type Route = { kind: "version" } | { kind: "help" } | { kind: "listing"; what: Kind; listing: Listing } | { kind: "python" };
+export type Route =
+  | { kind: "version" }
+  | { kind: "help" }
+  | { kind: "listing"; what: Kind; listing: Listing }
+  | { kind: "scripts"; args: ScriptsArgs }
+  | { kind: "python" };
 
 const U64_MAX = (1n << 64n) - 1n;
 const PY_INT_MAX_STR_DIGITS = 4300;
@@ -28,6 +34,7 @@ class Cursor {
 export function labelOf(route: Route): string | undefined {
   if (route.kind === "version") return "--version";
   if (route.kind === "help") return "--help";
+  if (route.kind === "scripts") return `scripts ${route.args.sub}`;
   return route.kind === "listing" ? route.what : undefined;
 }
 
@@ -44,6 +51,8 @@ function same(argv: string[], words: string[]): boolean {
 export function parseRoute(argv: string[]): Route {
   if (same(argv, ["--version"])) return { kind: "version" };
   if (argv.length === 0 || same(argv, ["--help"]) || same(argv, ["-h"])) return { kind: "help" };
+  const scripts = parseScripts(argv);
+  if (scripts !== undefined) return { kind: "scripts", args: scripts };
   const listing = emptyListing();
   const cursor = new Cursor(argv);
   let kind: Kind | undefined;

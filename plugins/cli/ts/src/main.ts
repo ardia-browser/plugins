@@ -22,10 +22,12 @@ async function serve(argv: string[], python: string | null): Promise<number | un
   const { consentUnreadable, dataDirArg, leadingTokens } = await import("./telemetry.ts");
   const named = [process.env.ARDIA_DATA_DIR, process.env.ARDIA_CLI_HOME, dataDirArg(leadingTokens(argv))];
   if (chosen.kind === "listing") named.push(chosen.listing.dataDir);
+  if (chosen.kind === "scripts") named.push(chosen.args.dataDir);
   if (!paths.pathsAreText() || named.some(paths.needsAccountLookup) || consentUnreadable(argv)) return undefined;
   const { serveHelp, serveListing } = await import("./serve.ts");
   try {
     if (chosen.kind === "help") return serveHelp(argv, python);
+    if (chosen.kind === "scripts") return await (await import("./scripts/serve.ts")).serveScripts(chosen.args, argv, python);
     return await serveListing(chosen.what, chosen.listing, argv, python);
   } catch (error) {
     if (error instanceof paths.NeedsPython) return undefined;

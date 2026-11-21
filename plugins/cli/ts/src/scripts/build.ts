@@ -5,6 +5,7 @@ import { installRoot } from "../install.ts";
 import { parseText, type Value } from "../json.ts";
 import { codeOf, envSet, errnoOf, expandUser, home, purePath, realpath, strerror } from "../paths.ts";
 import { pyStrip, splitlines } from "../pylib/str.ts";
+import { Interrupted } from "./output.ts";
 import { runCaptured, Timeout } from "./run.ts";
 import { displayPath, type RawSourceMap } from "./sourcemap.ts";
 import { type Meta, fileName, parseMeta, ScriptError } from "./userscript.ts";
@@ -211,7 +212,7 @@ function inputNames(text: string): string[] {
   return inputs instanceof Map ? [...inputs.keys()] : [];
 }
 
-export async function build(given: string, sourcemap = false, dataDirs: readonly string[] = []): Promise<Build> {
+export async function build(given: string, sourcemap = false, dataDirs: readonly string[] = [], stopped: () => boolean = () => false): Promise<Build> {
   const path = purePath(given);
   const source = readSource(path);
   const meta = parseMeta(source, fileName(path));
@@ -230,8 +231,9 @@ export async function build(given: string, sourcemap = false, dataDirs: readonly
     if (sourcemap) command.push("--sourcemap=external");
     let done: Awaited<ReturnType<typeof runCaptured>>;
     try {
-      done = await runCaptured(command, { cwd: parentDir(entry), timeoutMs: ESBUILD_TIMEOUT_MS });
+      done = await runCaptured(command, { cwd: parentDir(entry), timeoutMs: ESBUILD_TIMEOUT_MS, stopped });
     } catch (error) {
+      if (error instanceof Interrupted) throw error;
       if (error instanceof Timeout) throw new ScriptError("esbuild took over 60 s");
       const code = errnoOf(error);
       throw new ScriptError(`can't run esbuild (${code ? strerror(code) : (codeOf(error) ?? String(error))})`);

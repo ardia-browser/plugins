@@ -1,4 +1,7 @@
 import { spawn } from "node:child_process";
+import { Interrupted } from "./output.ts";
+
+const STOP_POLL_MS = 50;
 
 export class Timeout extends Error {
   override readonly name = "Timeout";
@@ -23,7 +26,7 @@ function hookExit(): void {
   });
 }
 
-export function runCaptured(argv: string[], options: { cwd: string; timeoutMs: number }): Promise<Captured> {
+export function runCaptured(argv: string[], options: { cwd: string; timeoutMs: number; stopped?: () => boolean }): Promise<Captured> {
   hookExit();
   return new Promise((resolve, reject) => {
     const [program, ...args] = argv as [string, ...string[]];
@@ -34,14 +37,21 @@ export function runCaptured(argv: string[], options: { cwd: string; timeoutMs: n
     let settled = false;
     const pid = child.pid;
     if (pid !== undefined) groups.add(pid);
+    let stoppedEarly = false;
     const timer = setTimeout(() => {
       timedOut = true;
       if (pid !== undefined) killGroup(pid);
     }, options.timeoutMs);
+    const watch = setInterval(() => {
+      if (!options.stopped?.() || stoppedEarly) return;
+      stoppedEarly = true;
+      if (pid !== undefined) killGroup(pid);
+    }, STOP_POLL_MS);
     const finish = (run: () => void) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      clearInterval(watch);
       if (pid !== undefined) groups.delete(pid);
       run();
     };
@@ -50,7 +60,8 @@ export function runCaptured(argv: string[], options: { cwd: string; timeoutMs: n
     child.on("error", (error) => finish(() => reject(error)));
     child.on("close", (status) =>
       finish(() => {
-        if (timedOut) reject(new Timeout());
+        if (stoppedEarly) reject(new Interrupted());
+        else if (timedOut) reject(new Timeout());
         else resolve({ status, stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8") });
       }),
     );

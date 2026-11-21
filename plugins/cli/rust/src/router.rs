@@ -31,21 +31,20 @@ impl Table {
         let mut rows: Vec<(String, Side)> = Vec::new();
         for line in text.lines() {
             let words: Vec<&str> = line.split_whitespace().collect();
-            match words[..] {
-                [] => continue,
-                [label, side] => {
-                    let side = match side {
-                        "rust" => Side::Rust,
-                        "ts" => Side::Ts,
-                        _ => return None,
-                    };
-                    if rows.iter().any(|(known, _)| known == label) {
-                        return None;
-                    }
-                    rows.push((label.to_string(), side));
-                }
-                _ => return None,
+            let Some((side, label)) = words.split_last() else { continue };
+            if label.is_empty() {
+                return None;
             }
+            let side = match *side {
+                "rust" => Side::Rust,
+                "ts" => Side::Ts,
+                _ => return None,
+            };
+            let label = label.join(" ");
+            if rows.iter().any(|(known, _)| *known == label) {
+                return None;
+            }
+            rows.push((label, side));
         }
         Some(Table(rows))
     }
@@ -364,6 +363,15 @@ mod tests {
             assert_eq!(Table::parse(body), None, "{body:?}");
         }
         assert_eq!(Table::parse(""), Some(Table(Vec::new())));
+    }
+
+    #[test]
+    fn a_label_may_name_a_subcommand() {
+        let table = Table::parse("scripts list ts\nscripts  new   ts\n").unwrap();
+        assert_eq!(table.side("scripts list"), Some(Side::Ts));
+        assert_eq!(table.side("scripts new"), Some(Side::Ts));
+        assert_eq!(table.side("scripts"), None);
+        assert_eq!(Table::parse("scripts list ts\nscripts list rust\n"), None);
     }
 
     #[test]

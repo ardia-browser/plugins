@@ -181,9 +181,10 @@ def served_table(path: Path = SERVED_TABLE) -> dict[str, str]:
         words = line.split()
         if not words:
             continue
-        if len(words) != 2 or words[1] not in SERVING_SIDES or words[0] in rows:
+        label = " ".join(words[:-1])
+        if len(words) < 2 or words[-1] not in SERVING_SIDES or label in rows:
             raise ValueError(f"{path.name}:{number}: each row is a command and who serves it ({' or '.join(SERVING_SIDES)}), once: {line!r}")
-        rows[words[0]] = words[1]
+        rows[label] = words[-1]
     return rows
 
 
@@ -726,7 +727,8 @@ def read_inside(box: Path, path: Path) -> str | None:
 
 def places_of(box: Path) -> dict:
     return {"box": str(box), "home": str(box / "home"), "cli_home": str(box / "cli-home"), "data": str(box / "data"),
-            "cwd": str(box / "cwd"), "tmp": str(box / "tmp"), "outside": str(box / "outside"), "cli": str(box.parent / "src")}
+            "cwd": str(box / "cwd"), "tmp": str(box / "tmp"), "outside": str(box / "outside"), "cli": str(box.parent / "src"),
+            "harness_pid": str(os.getpid())}
 
 
 def materialize(box: Path, case: Case) -> dict:
@@ -919,7 +921,14 @@ def apply_normalizers(observed: Observed, case: Case, places: dict) -> Observed:
     observed.stdout = scrub(observed.stdout)
     observed.stderr = scrub(observed.stderr)
     observed.files = {rel: (change[:3] + (scrub(change[3]),) if change[:2] == ("written", "file") else change) for rel, change in observed.files.items()}
+    observed.helpers = [scrub_helper(line, scrub) for line in observed.helpers]
     return observed
+
+
+def scrub_helper(line: str, scrub) -> str:
+    name, *args = line.split(" =")
+    shown = [base64.b64encode(scrub(base64.b64decode(arg))).decode() for arg in args]
+    return " =".join([name, *shown])
 
 
 def text_of(value) -> str:

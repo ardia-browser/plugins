@@ -1,0 +1,1406 @@
+[
+ {
+  "id": "scripts--new-basic",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new",
+   "hide sidebar"
+  ]
+ },
+ {
+  "id": "scripts--new-plain",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new",
+   "my-script.v2"
+  ]
+ },
+ {
+  "id": "scripts--new-unicode",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new",
+   "日本"
+  ]
+ },
+ {
+  "id": "scripts--new-underscore",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new",
+   "a_b"
+  ]
+ },
+ {
+  "id": "scripts--new-kelvin",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new",
+   "KK"
+  ]
+ },
+ {
+  "id": "scripts--new-dot",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new",
+   "."
+  ]
+ },
+ {
+  "id": "scripts--new-spaced",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new",
+   "  spaced  "
+  ]
+ },
+ {
+  "id": "scripts--new-matches",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new",
+   "x",
+   "--match",
+   "https://a.com/*",
+   "--match=*://*.b.org/p*"
+  ]
+ },
+ {
+  "id": "scripts--new-all-urls",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new",
+   "x",
+   "--match",
+   "<all_urls>"
+  ]
+ },
+ {
+  "id": "scripts--new-idn-match",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new",
+   "x",
+   "--match",
+   "https://bücher.de/*"
+  ]
+ },
+ {
+  "id": "scripts--new-bad-match",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new",
+   "x",
+   "--match",
+   "nope"
+  ]
+ },
+ {
+  "id": "scripts--new-bad-match-second",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new",
+   "x",
+   "--match",
+   "https://ok.com/*",
+   "--match",
+   "http://a:99999/*"
+  ]
+ },
+ {
+  "id": "scripts--new-blank",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new",
+   "   "
+  ]
+ },
+ {
+  "id": "scripts--new-newline",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new",
+   "a\nb"
+  ]
+ },
+ {
+  "id": "scripts--new-exists",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new",
+   "x"
+  ],
+  "files": {
+   "cwd/x.user.ts": "old\n"
+  }
+ },
+ {
+  "id": "scripts--new-exists-dir",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new",
+   "x"
+  ],
+  "files": {
+   "cwd/x.user.ts": {
+    "dir": true
+   }
+  }
+ },
+ {
+  "id": "scripts--new-quote",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new",
+   "say \"hi\" é  "
+  ]
+ },
+ {
+  "id": "scripts--new-slash",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new",
+   "a/b c"
+  ]
+ },
+ {
+  "id": "scripts--new-control-chars",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new",
+   "bell\u0007name"
+  ]
+ },
+ {
+  "id": "scripts--new-hoisted-json",
+  "command": "scripts new",
+  "argv": [
+   "--json",
+   "scripts",
+   "new",
+   "x"
+  ],
+  "fallback": true
+ },
+ {
+  "id": "scripts--new-help",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new",
+   "-h"
+  ],
+  "fallback": true
+ },
+ {
+  "id": "scripts--new-missing-name",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new"
+  ],
+  "fallback": true
+ },
+ {
+  "id": "scripts--new-two-names",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new",
+   "a",
+   "b"
+  ],
+  "fallback": true
+ },
+ {
+  "id": "scripts--new-dash-name",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new",
+   "-5"
+  ],
+  "fallback": true
+ },
+ {
+  "id": "scripts--new-abbrev",
+  "command": "scripts new",
+  "argv": [
+   "scripts",
+   "new",
+   "x",
+   "--mat",
+   "https://a.com/*"
+  ],
+  "fallback": true
+ },
+ {
+  "id": "scripts--install-missing",
+  "command": "scripts install",
+  "argv": [
+   "scripts",
+   "install",
+   "nope.user.ts"
+  ]
+ },
+ {
+  "id": "scripts--install-missing-relative",
+  "command": "scripts install",
+  "argv": [
+   "scripts",
+   "install",
+   "./sub/../nope.user.ts"
+  ]
+ },
+ {
+  "id": "scripts--install-dir",
+  "command": "scripts install",
+  "argv": [
+   "scripts",
+   "install",
+   "d.user.ts"
+  ],
+  "files": {
+   "cwd/d.user.ts": {
+    "dir": true
+   }
+  }
+ },
+ {
+  "id": "scripts--install-latin1",
+  "command": "scripts install",
+  "argv": [
+   "scripts",
+   "install",
+   "x.user.ts"
+  ],
+  "files": {
+   "cwd/x.user.ts": {
+    "base64": "Ly8gY2Fm6Qpjb25zb2xlLmxvZygxKTsK"
+   }
+  }
+ },
+ {
+  "id": "scripts--install-no-footer",
+  "command": "scripts install",
+  "argv": [
+   "scripts",
+   "install",
+   "x.user.ts"
+  ],
+  "files": {
+   "cwd/x.user.ts": "// ==UserScript==\n// @name x\n"
+  }
+ },
+ {
+  "id": "scripts--install-bad-run-at",
+  "command": "scripts install",
+  "argv": [
+   "scripts",
+   "install",
+   "x.user.ts"
+  ],
+  "files": {
+   "cwd/x.user.ts": "// ==UserScript==\n// @run-at whenever\n// ==/UserScript==\n"
+  }
+ },
+ {
+  "id": "scripts--install-bad-match",
+  "command": "scripts install",
+  "argv": [
+   "scripts",
+   "install",
+   "x.user.ts"
+  ],
+  "files": {
+   "cwd/x.user.ts": "// ==UserScript==\n// @match ftp://*.x/\u0000\n// ==/UserScript==\n"
+  }
+ },
+ {
+  "id": "scripts--install-regex-include",
+  "command": "scripts install",
+  "argv": [
+   "scripts",
+   "install",
+   "x.user.ts"
+  ],
+  "files": {
+   "cwd/x.user.ts": "// ==UserScript==\n// @include /https?:.*/\n// ==/UserScript==\n"
+  }
+ },
+ {
+  "id": "scripts--install-txt",
+  "command": "scripts install",
+  "argv": [
+   "scripts",
+   "install",
+   "x.txt"
+  ],
+  "files": {
+   "cwd/x.txt": "// ==UserScript==\n// @name x\n// @match https://example.com/*\n// @grant GM_setValue\n// ==/UserScript==\nconsole.log(1);\n"
+  }
+ },
+ {
+  "id": "scripts--install-esbuild-nothing",
+  "command": "scripts install",
+  "argv": [
+   "scripts",
+   "install",
+   "x.user.ts"
+  ],
+  "files": {
+   "cwd/x.user.ts": "// ==UserScript==\n// @name x\n// @match https://example.com/*\n// @grant GM_setValue\n// ==/UserScript==\nconsole.log(1);\n"
+  },
+  "normalize": [
+   [
+    "ardia-script-[A-Za-z0-9_]+",
+    "ardia-script-X"
+   ]
+  ]
+ },
+ {
+  "id": "scripts--install-esbuild-fails",
+  "command": "scripts install",
+  "argv": [
+   "scripts",
+   "install",
+   "x.user.ts"
+  ],
+  "files": {
+   "cwd/x.user.ts": "// ==UserScript==\n// @name x\n// @match https://example.com/*\n// @grant GM_setValue\n// ==/UserScript==\nconsole.log(1);\n"
+  },
+  "helpers": {
+   "esbuild": {
+    "exit": 1,
+    "stdout": "boom"
+   }
+  },
+  "normalize": [
+   [
+    "ardia-script-[A-Za-z0-9_]+",
+    "ardia-script-X"
+   ]
+  ]
+ },
+ {
+  "id": "scripts--install-crlf-bom",
+  "command": "scripts install",
+  "argv": [
+   "scripts",
+   "install",
+   "x.user.ts"
+  ],
+  "files": {
+   "cwd/x.user.ts": "﻿// ==UserScript==\r\n// @name crlf\r\n// @match https://example.com/*\r\n// ==/UserScript==\r\n"
+  },
+  "normalize": [
+   [
+    "ardia-script-[A-Za-z0-9_]+",
+    "ardia-script-X"
+   ]
+  ]
+ },
+ {
+  "id": "scripts--install-in-data",
+  "command": "scripts install",
+  "argv": [
+   "scripts",
+   "install",
+   "{data}/x.user.ts"
+  ],
+  "files": {
+   "data/x.user.ts": "// ==UserScript==\n// @name x\n// @match https://example.com/*\n// @grant GM_setValue\n// ==/UserScript==\nconsole.log(1);\n"
+  }
+ },
+ {
+  "id": "scripts--install-in-data-arg",
+  "command": "scripts install",
+  "argv": [
+   "scripts",
+   "install",
+   "x.user.ts",
+   "--data-dir",
+   "{outside}"
+  ],
+  "env": {
+   "DO_NOT_TRACK": "1"
+  },
+  "files": {
+   "outside/x.user.ts": "// ==UserScript==\n// @name x\n// @match https://example.com/*\n// @grant GM_setValue\n// ==/UserScript==\nconsole.log(1);\n",
+   "cwd/x.user.ts": {
+    "link": "{outside}/x.user.ts"
+   }
+  }
+ },
+ {
+  "id": "scripts--install-hoisted-json",
+  "command": "scripts install",
+  "argv": [
+   "--json",
+   "scripts",
+   "install",
+   "x.user.ts"
+  ],
+  "fallback": true
+ },
+ {
+  "id": "scripts--install-port",
+  "command": "scripts install",
+  "argv": [
+   "scripts",
+   "install",
+   "x.user.ts",
+   "--port",
+   "9"
+  ],
+  "fallback": true
+ },
+ {
+  "id": "scripts--uninstall-no-control",
+  "command": "scripts uninstall",
+  "argv": [
+   "scripts",
+   "uninstall",
+   "x"
+  ]
+ },
+ {
+  "id": "scripts--uninstall-control-mode",
+  "command": "scripts uninstall",
+  "argv": [
+   "scripts",
+   "uninstall",
+   "x"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc-123\", \"token\": \"0123456789abcdef0123\", \"pid\": {harness_pid}, \"generation\": 4}",
+    "mode": 420
+   }
+  }
+ },
+ {
+  "id": "scripts--uninstall-control-json",
+  "command": "scripts uninstall",
+  "argv": [
+   "scripts",
+   "uninstall",
+   "x"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{nope",
+    "mode": 384
+   }
+  }
+ },
+ {
+  "id": "scripts--uninstall-control-list",
+  "command": "scripts uninstall",
+  "argv": [
+   "scripts",
+   "uninstall",
+   "x"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "[1]",
+    "mode": 384
+   }
+  }
+ },
+ {
+  "id": "scripts--uninstall-control-port",
+  "command": "scripts uninstall",
+  "argv": [
+   "scripts",
+   "uninstall",
+   "x"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 70000, \"browser\": \"/devtools/browser/abc-123\", \"token\": \"0123456789abcdef0123\", \"pid\": {harness_pid}, \"generation\": 4}",
+    "mode": 384
+   }
+  }
+ },
+ {
+  "id": "scripts--uninstall-control-port-bool",
+  "command": "scripts uninstall",
+  "argv": [
+   "scripts",
+   "uninstall",
+   "x"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": true, \"browser\": \"/devtools/browser/abc-123\", \"token\": \"0123456789abcdef0123\", \"pid\": {harness_pid}, \"generation\": 4}",
+    "mode": 384
+   }
+  }
+ },
+ {
+  "id": "scripts--uninstall-control-browser",
+  "command": "scripts uninstall",
+  "argv": [
+   "scripts",
+   "uninstall",
+   "x"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/a/b\", \"token\": \"0123456789abcdef0123\", \"pid\": {harness_pid}, \"generation\": 4}",
+    "mode": 384
+   }
+  }
+ },
+ {
+  "id": "scripts--uninstall-control-token",
+  "command": "scripts uninstall",
+  "argv": [
+   "scripts",
+   "uninstall",
+   "x"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc-123\", \"token\": \"short\", \"pid\": {harness_pid}, \"generation\": 4}",
+    "mode": 384
+   }
+  }
+ },
+ {
+  "id": "scripts--uninstall-control-dead",
+  "command": "scripts uninstall",
+  "argv": [
+   "scripts",
+   "uninstall",
+   "x"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc-123\", \"token\": \"0123456789abcdef0123\", \"pid\": 2147483646, \"generation\": 4}",
+    "mode": 384
+   }
+  }
+ },
+ {
+  "id": "scripts--uninstall-control-link",
+  "command": "scripts uninstall",
+  "argv": [
+   "scripts",
+   "uninstall",
+   "x"
+  ],
+  "files": {
+   "outside/c.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc-123\", \"token\": \"0123456789abcdef0123\", \"pid\": {harness_pid}, \"generation\": 4}",
+    "mode": 384
+   },
+   "data/Chromium/ArdiaControl.json": {
+    "link": "{outside}/c.json"
+   }
+  }
+ },
+ {
+  "id": "scripts--uninstall-none",
+  "command": "scripts uninstall",
+  "argv": [
+   "scripts",
+   "uninstall",
+   "x"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc-123\", \"token\": \"0123456789abcdef0123\", \"pid\": {harness_pid}, \"generation\": 4}",
+    "mode": 384
+   }
+  }
+ },
+ {
+  "id": "scripts--uninstall-wrong-name",
+  "command": "scripts uninstall",
+  "argv": [
+   "scripts",
+   "uninstall",
+   "nope"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc-123\", \"token\": \"0123456789abcdef0123\", \"pid\": {harness_pid}, \"generation\": 4}",
+    "mode": 384
+   },
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "1\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/hide-sidebar/meta.json": "{\n  \"name\": \"Hide Sidebar\",\n  \"namespace\": \"\",\n  \"version\": \"1.2\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [\n    \"https://x.org/*\"\n  ],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"hide-sidebar\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/hide-sidebar.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066490.25,\n  \"updated_at\": 1795066490.25,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/hide-sidebar/script.js": "console.log(\"hide-sidebar\");\n",
+   "data/Scripts/scripts/hide-sidebar/source.js": "// source\n",
+   "data/Scripts/extension/js/hide-sidebar.js": "console.log(\"hide-sidebar\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.1\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/s.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    },\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/hide-sidebar.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    },\n    {\n      \"matches\": [\n        \"*://*/*\"\n      ],\n      \"exclude_matches\": [\n        \"https://example.com/*\"\n      ],\n      \"include_globs\": [\n        \"https://x.org/*\"\n      ],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/hide-sidebar.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "1\n"
+  }
+ },
+ {
+  "id": "scripts--uninstall-superseded",
+  "command": "scripts uninstall",
+  "argv": [
+   "scripts",
+   "uninstall",
+   "s"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc-123\", \"token\": \"0123456789abcdef0123\", \"pid\": {harness_pid}, \"generation\": 4}",
+    "mode": 384
+   },
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "1\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.1\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/s.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "1\n",
+   "data/Scripts/status.json": "{\"generation\": 99, \"profiles\": {\"Default\": {\"ok\": true}, \"Work\": {\"disabled\": true}}}"
+  }
+ },
+ {
+  "id": "scripts--uninstall-error-profile",
+  "command": "scripts uninstall",
+  "argv": [
+   "scripts",
+   "uninstall",
+   "s"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc-123\", \"token\": \"0123456789abcdef0123\", \"pid\": {harness_pid}, \"generation\": 4}",
+    "mode": 384
+   },
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "1\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.1\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/s.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "1\n",
+   "data/Scripts/status.json": "{\"generation\": 99, \"profiles\": {\"Default\": {\"error\": \"manifest rejected\"}, \"B\": {\"removed\": true}, \"C\": 3, \"D\": {}}}"
+  }
+ },
+ {
+  "id": "scripts--uninstall-no-profiles",
+  "command": "scripts uninstall",
+  "argv": [
+   "scripts",
+   "uninstall",
+   "s"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc-123\", \"token\": \"0123456789abcdef0123\", \"pid\": {harness_pid}, \"generation\": 4}",
+    "mode": 384
+   },
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "1\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.1\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/s.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "1\n",
+   "data/Scripts/status.json": "{\"generation\": 99}"
+  }
+ },
+ {
+  "id": "scripts--uninstall-by-name",
+  "command": "scripts uninstall",
+  "argv": [
+   "scripts",
+   "uninstall",
+   "Hide Sidebar"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc-123\", \"token\": \"0123456789abcdef0123\", \"pid\": {harness_pid}, \"generation\": 4}",
+    "mode": 384
+   },
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "1\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/hide-sidebar/meta.json": "{\n  \"name\": \"Hide Sidebar\",\n  \"namespace\": \"\",\n  \"version\": \"1.2\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [\n    \"https://x.org/*\"\n  ],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"hide-sidebar\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/hide-sidebar.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066490.25,\n  \"updated_at\": 1795066490.25,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/hide-sidebar/script.js": "console.log(\"hide-sidebar\");\n",
+   "data/Scripts/scripts/hide-sidebar/source.js": "// source\n",
+   "data/Scripts/extension/js/hide-sidebar.js": "console.log(\"hide-sidebar\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.1\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/s.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    },\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/hide-sidebar.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    },\n    {\n      \"matches\": [\n        \"*://*/*\"\n      ],\n      \"exclude_matches\": [\n        \"https://example.com/*\"\n      ],\n      \"include_globs\": [\n        \"https://x.org/*\"\n      ],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/hide-sidebar.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "1\n",
+   "data/Scripts/status.json": "{\"generation\": 50, \"profiles\": {\"Default\": {\"ok\": true}}}"
+  }
+ },
+ {
+  "id": "scripts--uninstall-by-id",
+  "command": "scripts uninstall",
+  "argv": [
+   "scripts",
+   "uninstall",
+   "hide-sidebar",
+   "--data-dir",
+   "{data}"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc-123\", \"token\": \"0123456789abcdef0123\", \"pid\": {harness_pid}, \"generation\": 4}",
+    "mode": 384
+   },
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "1\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/hide-sidebar/meta.json": "{\n  \"name\": \"Hide Sidebar\",\n  \"namespace\": \"\",\n  \"version\": \"1.2\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [\n    \"https://x.org/*\"\n  ],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"hide-sidebar\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/hide-sidebar.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066490.25,\n  \"updated_at\": 1795066490.25,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/hide-sidebar/script.js": "console.log(\"hide-sidebar\");\n",
+   "data/Scripts/scripts/hide-sidebar/source.js": "// source\n",
+   "data/Scripts/extension/js/hide-sidebar.js": "console.log(\"hide-sidebar\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.1\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/s.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    },\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/hide-sidebar.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    },\n    {\n      \"matches\": [\n        \"*://*/*\"\n      ],\n      \"exclude_matches\": [\n        \"https://example.com/*\"\n      ],\n      \"include_globs\": [\n        \"https://x.org/*\"\n      ],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/hide-sidebar.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "1\n",
+   "data/Scripts/status.json": "{\"generation\": 50, \"profiles\": {\"Default\": {\"ok\": true}}}"
+  }
+ },
+ {
+  "id": "scripts--uninstall-timeout",
+  "command": "scripts uninstall",
+  "argv": [
+   "scripts",
+   "uninstall",
+   "s"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc-123\", \"token\": \"0123456789abcdef0123\", \"pid\": {harness_pid}, \"generation\": 4}",
+    "mode": 384
+   },
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "1\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.1\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/s.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "1\n"
+  }
+ },
+ {
+  "id": "scripts--uninstall-link-record",
+  "command": "scripts uninstall",
+  "argv": [
+   "scripts",
+   "uninstall",
+   "s"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc-123\", \"token\": \"0123456789abcdef0123\", \"pid\": {harness_pid}, \"generation\": 4}",
+    "mode": 384
+   },
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "1\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.1\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/s.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "1\n",
+   "outside/evil": {
+    "dir": true
+   },
+   "data/Scripts/scripts/evil": {
+    "link": "{outside}/evil"
+   }
+  }
+ },
+ {
+  "id": "scripts--uninstall-scripts-link",
+  "command": "scripts uninstall",
+  "argv": [
+   "scripts",
+   "uninstall",
+   "s"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc-123\", \"token\": \"0123456789abcdef0123\", \"pid\": {harness_pid}, \"generation\": 4}",
+    "mode": 384
+   },
+   "outside/S": {
+    "dir": true
+   },
+   "data/Scripts": {
+    "link": "{outside}/S"
+   }
+  }
+ },
+ {
+  "id": "scripts--list-empty",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list"
+  ]
+ },
+ {
+  "id": "scripts--list-empty-json",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list",
+   "--json"
+  ]
+ },
+ {
+  "id": "scripts--list-consistent",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list"
+  ],
+  "files": {
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "1\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/hide-sidebar/meta.json": "{\n  \"name\": \"Hide Sidebar\",\n  \"namespace\": \"\",\n  \"version\": \"1.2\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [\n    \"https://x.org/*\"\n  ],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"hide-sidebar\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/hide-sidebar.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066490.25,\n  \"updated_at\": 1795066490.25,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/hide-sidebar/script.js": "console.log(\"hide-sidebar\");\n",
+   "data/Scripts/scripts/hide-sidebar/source.js": "// source\n",
+   "data/Scripts/extension/js/hide-sidebar.js": "console.log(\"hide-sidebar\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.1\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/s.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    },\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/hide-sidebar.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    },\n    {\n      \"matches\": [\n        \"*://*/*\"\n      ],\n      \"exclude_matches\": [\n        \"https://example.com/*\"\n      ],\n      \"include_globs\": [\n        \"https://x.org/*\"\n      ],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/hide-sidebar.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "1\n"
+  }
+ },
+ {
+  "id": "scripts--list-consistent-json",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list",
+   "--json"
+  ],
+  "files": {
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "1\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/hide-sidebar/meta.json": "{\n  \"name\": \"Hide Sidebar\",\n  \"namespace\": \"\",\n  \"version\": \"1.2\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [\n    \"https://x.org/*\"\n  ],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"hide-sidebar\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/hide-sidebar.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066490.25,\n  \"updated_at\": 1795066490.25,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/hide-sidebar/script.js": "console.log(\"hide-sidebar\");\n",
+   "data/Scripts/scripts/hide-sidebar/source.js": "// source\n",
+   "data/Scripts/extension/js/hide-sidebar.js": "console.log(\"hide-sidebar\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.1\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/s.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    },\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/hide-sidebar.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    },\n    {\n      \"matches\": [\n        \"*://*/*\"\n      ],\n      \"exclude_matches\": [\n        \"https://example.com/*\"\n      ],\n      \"include_globs\": [\n        \"https://x.org/*\"\n      ],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/hide-sidebar.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "1\n",
+   "data/Scripts/status.json": "{\"generation\": 1, \"profiles\": {\"Default\": {\"ok\": true}}}"
+  }
+ },
+ {
+  "id": "scripts--list-reported",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list"
+  ],
+  "files": {
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "1\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.1\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/s.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "1\n",
+   "data/Scripts/status.json": "{\"generation\": 1, \"profiles\": {\"Default\": {\"ok\": true}, \"W\": {\"error\": \"x\"}}}"
+  }
+ },
+ {
+  "id": "scripts--list-reported-float",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list"
+  ],
+  "files": {
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "1\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.1\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/s.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "1\n",
+   "data/Scripts/status.json": "{\"generation\": 1.0, \"profiles\": {\"Default\": {\"ok\": true}}}"
+  }
+ },
+ {
+  "id": "scripts--list-reported-older",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list"
+  ],
+  "files": {
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "1\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.1\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/s.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "1\n",
+   "data/Scripts/status.json": "{\"generation\": 0, \"profiles\": {}}"
+  }
+ },
+ {
+  "id": "scripts--list-reported-text",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list"
+  ],
+  "files": {
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "1\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.1\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/s.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "1\n",
+   "data/Scripts/status.json": "{\"generation\": \"1\"}"
+  }
+ },
+ {
+  "id": "scripts--list-mismatch",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list"
+  ],
+  "files": {
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "1\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/hide-sidebar/meta.json": "{\n  \"name\": \"Hide Sidebar\",\n  \"namespace\": \"\",\n  \"version\": \"1.2\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [\n    \"https://x.org/*\"\n  ],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"hide-sidebar\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/hide-sidebar.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066490.25,\n  \"updated_at\": 1795066490.25,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/hide-sidebar/script.js": "console.log(\"hide-sidebar\");\n",
+   "data/Scripts/scripts/hide-sidebar/source.js": "// source\n",
+   "data/Scripts/extension/js/hide-sidebar.js": "console.log(\"hide-sidebar\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.1\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/s.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "1\n"
+  }
+ },
+ {
+  "id": "scripts--list-mismatch-json",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list",
+   "--json"
+  ],
+  "files": {
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "1\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/extension/manifest.json": "{}",
+   "data/Scripts/extension/generation": "1\n"
+  }
+ },
+ {
+  "id": "scripts--list-ahead",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list"
+  ],
+  "files": {
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "3\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.5\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/s.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "5\n"
+  }
+ },
+ {
+  "id": "scripts--list-behind",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list"
+  ],
+  "files": {
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "7\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.2\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/s.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "2\n"
+  }
+ },
+ {
+  "id": "scripts--list-stopped-uninstall",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list"
+  ],
+  "files": {
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "4\n",
+   "data/Scripts/status.json": "{\"generation\": 4, \"profiles\": {\"Default\": {\"ok\": true}}}",
+   "data/Scripts/scripts": {
+    "dir": true
+   }
+  }
+ },
+ {
+  "id": "scripts--list-removed-all",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list"
+  ],
+  "files": {
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "4\n",
+   "data/Scripts/status.json": "{\"generation\": 4, \"profiles\": {\"Default\": {\"removed\": true}}}",
+   "data/Scripts/scripts": {
+    "dir": true
+   }
+  }
+ },
+ {
+  "id": "scripts--list-bad-meta",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list"
+  ],
+  "files": {
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "1\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.1\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/s.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "1\n",
+   "data/Scripts/scripts/broken/meta.json": "{not json"
+  }
+ },
+ {
+  "id": "scripts--list-id-mismatch",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list"
+  ],
+  "files": {
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "1\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.1\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/s.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "1\n",
+   "data/Scripts/scripts/other/meta.json": "{\n  \"name\": \"else\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"else\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/else.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n"
+  }
+ },
+ {
+  "id": "scripts--list-link-record",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list"
+  ],
+  "files": {
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "1\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.1\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/s.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "1\n",
+   "outside/evil": {
+    "dir": true
+   },
+   "data/Scripts/scripts/evil": {
+    "link": "{outside}/evil"
+   }
+  }
+ },
+ {
+  "id": "scripts--list-scripts-link",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list"
+  ],
+  "files": {
+   "outside/S": {
+    "dir": true
+   },
+   "data/Scripts": {
+    "link": "{outside}/S"
+   }
+  }
+ },
+ {
+  "id": "scripts--list-hoisted",
+  "command": "scripts list",
+  "argv": [
+   "--data-dir",
+   "{data}",
+   "--json",
+   "scripts",
+   "list"
+  ],
+  "files": {
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "1\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.1\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/s.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "1\n"
+  }
+ },
+ {
+  "id": "scripts--list-data-dir-equals",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list",
+   "--data-dir={data}"
+  ],
+  "files": {
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "1\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.1\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/s.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "1\n"
+  }
+ },
+ {
+  "id": "scripts--list-untrusted",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list"
+  ],
+  "env": {
+   "ARDIA_DATA_DIR": "",
+   "DO_NOT_TRACK": "1"
+  },
+  "files": {
+   "home/Library/Application Support/com.ardia.browser/Scripts/generation": "2\n"
+  }
+ },
+ {
+  "id": "scripts--list-ordering",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list"
+  ],
+  "files": {
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "1\n",
+   "data/Scripts/scripts/b/meta.json": "{\n  \"name\": \"b\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"b\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/b.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 5.0,\n  \"updated_at\": 5.0,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/b/script.js": "console.log(\"b\");\n",
+   "data/Scripts/scripts/b/source.js": "// source\n",
+   "data/Scripts/extension/js/b.js": "console.log(\"b\");\n",
+   "data/Scripts/scripts/a/meta.json": "{\n  \"name\": \"a\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"a\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/a.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 5.0,\n  \"updated_at\": 5.0,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/a/script.js": "console.log(\"a\");\n",
+   "data/Scripts/scripts/a/source.js": "// source\n",
+   "data/Scripts/extension/js/a.js": "console.log(\"a\");\n",
+   "data/Scripts/scripts/c/meta.json": "{\n  \"name\": \"c\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"c\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/c.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1,\n  \"updated_at\": 1,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/c/script.js": "console.log(\"c\");\n",
+   "data/Scripts/scripts/c/source.js": "// source\n",
+   "data/Scripts/extension/js/c.js": "console.log(\"c\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.1\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/b.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    },\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/a.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    },\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/c.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "1\n"
+  }
+ },
+ {
+  "id": "scripts--list-generation-unicode",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list"
+  ],
+  "files": {
+   "data/Scripts/.lock": {
+    "text": "",
+    "mode": 384
+   },
+   "data/Scripts/generation": "١\n",
+   "data/Scripts/scripts/s/meta.json": "{\n  \"name\": \"s\",\n  \"namespace\": \"\",\n  \"version\": \"\",\n  \"description\": \"\",\n  \"matches\": [\n    \"https://example.com/*\"\n  ],\n  \"exclude_matches\": [],\n  \"includes\": [],\n  \"excludes\": [],\n  \"run_at\": \"document-end\",\n  \"inject_into\": \"page\",\n  \"noframes\": false,\n  \"warnings\": [],\n  \"id\": \"s\",\n  \"world\": \"MAIN\",\n  \"source_file\": \"{outside}/work/s.user.js\",\n  \"source\": \"source.js\",\n  \"installed_at\": 1795066481.509047,\n  \"updated_at\": 1795066481.509047,\n  \"updated\": false\n}\n",
+   "data/Scripts/scripts/s/script.js": "console.log(\"s\");\n",
+   "data/Scripts/scripts/s/source.js": "// source\n",
+   "data/Scripts/extension/js/s.js": "console.log(\"s\");\n",
+   "data/Scripts/extension/manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"Ardia Scripts\",\n  \"version\": \"1.0.1\",\n  \"description\": \"Userscripts installed with the ardia command.\",\n  \"content_scripts\": [\n    {\n      \"matches\": [\n        \"https://example.com/*\"\n      ],\n      \"exclude_matches\": [],\n      \"include_globs\": [],\n      \"exclude_globs\": [],\n      \"js\": [\n        \"js/s.js\"\n      ],\n      \"run_at\": \"document_end\",\n      \"all_frames\": true,\n      \"world\": \"MAIN\"\n    }\n  ]\n}\n",
+   "data/Scripts/extension/generation": "1\n"
+  }
+ },
+ {
+  "id": "scripts--list-extra",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list",
+   "x"
+  ],
+  "fallback": true
+ },
+ {
+  "id": "scripts--list-unknown-sub",
+  "command": "scripts",
+  "argv": [
+   "scripts",
+   "bogus"
+  ],
+  "fallback": true
+ },
+ {
+  "id": "scripts--list-port",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list",
+   "--port",
+   "9"
+  ],
+  "fallback": true
+ }
+]
