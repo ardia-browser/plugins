@@ -68,3 +68,4 @@ skills get ts
 skills list ts
 skills install ts
 skills refresh ts
+argparse ts

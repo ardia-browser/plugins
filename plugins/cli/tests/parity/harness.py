@@ -36,6 +36,7 @@ PROTECTED_ENV = frozenset({"HOME", "ARDIA_CLI_HOME", "TMPDIR", "PATH", "ARDIA_TE
                            "PYTHONHOME", "PYTHONSTARTUP", "PYTHONDONTWRITEBYTECODE", "ARDIA_PARITY_BOX",
                            "DYLD_INSERT_LIBRARIES", "LD_PRELOAD"})
 VOLATILE = ("uuid",)
+ARGPARSE_LABEL = "argparse"
 VOLATILE_PROPERTIES = ("$session_id", "total_ms", "startup_ms", "served_by")
 QUEUED = {"uuid": "0190a1b2-c3d4-7e5f-8a9b-000000000001", "event": "cli_command", "distinct_id": INSTALL_ID,
           "timestamp": "2026-01-01T00:00:00.000Z", "properties": {"command": "earlier"}}
@@ -215,12 +216,38 @@ def route_from(lines: list[str]) -> str:
     return "ts" if "ts" in lines else "rust"
 
 
+def served_as(entry: str, served: dict[str, str], case: "Case") -> str | None:
+    if entry == "ts" and ARGPARSE_LABEL in served and front_end_serves(case.argv):
+        return ARGPARSE_LABEL
+    if case.fallback:
+        return None
+    return served_row(case.command, served)
+
+
 def expected_route(entry: str, served: dict[str, str], case: "Case", ts_installed: bool) -> str:
-    row = served_row(case.command, served)
-    if case.fallback or row is None:
+    label = served_as(entry, served, case)
+    if label is None:
         return "python"
-    side = "ts" if entry == "ts" else served[row]
+    side = "ts" if entry == "ts" else served[label]
     return "python" if side == "ts" and not ts_installed else side
+
+
+_front_end_answers: dict = {}
+
+
+def probe_front_end(argvs: list) -> None:
+    from .argparse_route import served_by_front_end
+
+    pending = [list(argv) for argv in argvs if tuple(argv) not in _front_end_answers]
+    if pending:
+        for argv, answer in zip(pending, served_by_front_end(pending)):
+            _front_end_answers[tuple(argv)] = answer
+
+
+def front_end_serves(argv: list) -> bool:
+    if tuple(argv) not in _front_end_answers:
+        probe_front_end([argv])
+    return _front_end_answers[tuple(argv)]
 
 
 _blob_store = {}
@@ -1231,6 +1258,7 @@ class Outcome:
     python_labels: list
     problems: list
     intentional: bool = False
+    served_as: str | None = None
 
     @property
     def passed(self) -> bool:
@@ -1288,7 +1316,7 @@ def check_case(install: Installation, case: Case, served: dict[str, str], keep: 
     for side, seen in ((install.entry, new), ("python", python)):
         if not seen.transcript_complete:
             problems.append(f"the {side} side left a control connection open past the drain deadline, so its transcript may be cut short")
-    return Outcome(case, compare(new, python, case.fallback, install.entry), new.route, labels, problems, applied)
+    return Outcome(case, compare(new, python, case.fallback, install.entry), new.route, labels, problems, applied, served_as(install.entry, served, case))
 
 
 def recode_errors(observed: Observed, codes: dict) -> None:
@@ -1302,16 +1330,19 @@ def summarize(outcomes: list[Outcome], served: list[str] | dict[str, str]) -> di
     served = [name for name in served if name not in SWITCH_ROWS]
     commands = {}
     for outcome in outcomes:
-        name = served_row(outcome.case.command, served) or outcome.case.command
-        row = commands.setdefault(name, {"cases": 0, "passed": 0, "native": 0, "intentional": 0, "failed": [], "served": name in served})
-        row["cases"] += 1
-        row["intentional"] += outcome.intentional
-        if outcome.passed:
-            row["passed"] += 1
-        else:
-            row["failed"].append(outcome.case.id)
-        if outcome.native:
-            row["native"] += 1
+        names = [served_row(outcome.case.command, served) or outcome.case.command]
+        if outcome.served_as == ARGPARSE_LABEL and outcome.case.command != ARGPARSE_LABEL:
+            names.append(ARGPARSE_LABEL)
+        for name in names:
+            row = commands.setdefault(name, {"cases": 0, "passed": 0, "native": 0, "intentional": 0, "failed": [], "served": name in served})
+            row["cases"] += 1
+            row["intentional"] += outcome.intentional
+            if outcome.passed:
+                row["passed"] += 1
+            else:
+                row["failed"].append(outcome.case.id)
+            if outcome.native:
+                row["native"] += 1
     for name in served:
         commands.setdefault(name, {"cases": 0, "passed": 0, "native": 0, "intentional": 0, "failed": [], "served": True})
     proven = sorted(name for name, row in commands.items() if row["cases"] and row["passed"] == row["cases"] and row["native"])
@@ -1324,6 +1355,8 @@ def run_all(cases: list[Case], entry_program: Path, jobs: int = 6, keep: bool = 
 
     install = Installation(entry_program, entry=entry)
     served = served_table()
+    if entry == "ts" and ARGPARSE_LABEL in served:
+        probe_front_end([case.argv for case in cases])
     with ThreadPoolExecutor(max_workers=jobs) as pool:
         futures = [pool.submit(check_case, install, case, served, keep) for case in cases]
         outcomes = []

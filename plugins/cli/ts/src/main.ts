@@ -41,8 +41,8 @@ async function serve(argv: string[], python: string | null): Promise<number | un
     browseServed = true;
     return serveBrowse(argv, python);
   }
-  const [{ route }, paths, { parseCommand }] = await Promise.all([import("./route.ts"), import("./paths.ts"), import("./commands.ts")]);
-  const chosen = route(argv, undefined, parseCommand);
+  const [{ route, withArgparse }, paths, { parseCommand }] = await Promise.all([import("./route.ts"), import("./paths.ts"), import("./commands.ts")]);
+  const chosen = await withArgparse(route(argv, undefined, parseCommand), argv);
   if (chosen.kind === "python" || chosen.kind === "version") return undefined;
   const { consentUnreadable, dataDirArg, leadingTokens } = await import("./telemetry.ts");
   const named = [process.env.ARDIA_DATA_DIR, process.env.ARDIA_CLI_HOME, dataDirArg(leadingTokens(argv))];
@@ -59,6 +59,7 @@ async function serve(argv: string[], python: string | null): Promise<number | un
     if (chosen.kind === "config") return await (await import("./config-commands.ts")).serve(chosen.command, python);
     if (chosen.kind === "scripts") return await (await import("./scripts/serve.ts")).serveScripts(chosen.args, argv, python);
     if (chosen.kind === "tools") return await (await import("./serve-command.ts")).serveCommand(chosen.command, argv, python);
+    if (chosen.kind === "argparse") return (await import("./argparse-serve.ts")).serveArgparse(chosen.served, argv, python);
     return await serveListing(chosen.what, chosen.listing, argv, python);
   } catch (error) {
     if (error instanceof paths.NeedsPython) return undefined;

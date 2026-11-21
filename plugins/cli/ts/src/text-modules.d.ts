@@ -17,3 +17,8 @@ declare module "*plugin.schema.json" {
   const text: string;
   export default text;
 }
+
+declare module "*argparse-specs.json" {
+  const text: string;
+  export default text;
+}

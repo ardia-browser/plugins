@@ -1,5 +1,5 @@
 import { isatty } from "node:tty";
-import { requireDefaultWidth, parseOptions } from "../argparse.ts";
+import { requireDefaultWidth, parseOptions } from "../simple-argparse.ts";
 import { dumps, type Value } from "../json.ts";
 import { execProgram } from "../libc.ts";
 import { inert } from "../printable.ts";

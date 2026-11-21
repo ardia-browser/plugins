@@ -1,5 +1,6 @@
 import { constants } from "node:os";
 import { call as callControl, ControlFailure, errorCode, type Failure, interrupted } from "./control.ts";
+import { helpFor, ROOT } from "./argparse-env.ts";
 import { render as renderHelp } from "./help.ts";
 import type { Value } from "./json.ts";
 import { failed, type Kind, type Listing, methodFailed, methodOf, paramsOf, type Rendered } from "./listing.ts";
@@ -16,9 +17,8 @@ const LISTING_FLAGS = [...TOP_FLAGS, "--data-dir", "--json"];
 const GROUPS_FLAGS = [...LISTING_FLAGS, "--window", "--profile"];
 const TABS_FLAGS = [...GROUPS_FLAGS, "--flat", "--usage", "--pid"];
 
-export function serveHelp(argv: string[], python: string | null): number | undefined {
-  const text = renderHelp();
-  if (text === undefined) return undefined;
+export function serveHelp(argv: string[], python: string | null): number {
+  const text = renderHelp() ?? helpFor(ROOT);
   const call = new Call(argv);
   call.allowedFlags = TOP_FLAGS;
   const shown = utf8(inert(text));

@@ -1,6 +1,6 @@
 import { join } from "../paths.ts";
 import { LINUX, NeedsPython } from "../paths.ts";
-import { floatValue, type OptionSpec, parseOptions } from "../argparse.ts";
+import { floatValue, type OptionSpec, parseOptions } from "../simple-argparse.ts";
 import type { CommandIo } from "../cmdio.ts";
 import type { CommandRoute } from "../serve-commands.ts";
 import type { Call } from "../telemetry.ts";

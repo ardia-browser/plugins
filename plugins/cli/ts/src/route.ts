@@ -1,5 +1,6 @@
 import type { CommandRoute } from "./commands.ts";
 import { type Command, parseCommand as parseConfigCommand } from "./cli-command.ts";
+import type { Served } from "./argparse-cli.ts";
 import { emptyListing, type Kind, type Listing } from "./listing.ts";
 import { type CommandRoute as ToolsRoute, commandRoute } from "./commands-e.ts";
 import { servedTable, type ServingSide } from "./served.ts";
@@ -16,8 +17,11 @@ export type Route =
   | { kind: "config"; command: Command }
   | { kind: "scripts"; args: ScriptsArgs }
   | { kind: "tools"; command: ToolsRoute }
+  | { kind: "argparse"; served: Served }
   | { kind: "python" }
   | FamilyRoute;
+
+export const ARGPARSE_LABEL = "argparse";
 
 const U64_MAX = (1n << 64n) - 1n;
 const PY_INT_MAX_STR_DIGITS = 4300;
@@ -51,6 +55,7 @@ export function labelOf(route: Route): string | undefined {
   if (route.kind === "on") return "on";
   if (route.kind === "scripts") return `scripts ${route.args.sub}`;
   if (route.kind === "tools") return route.command.label;
+  if (route.kind === "argparse") return ARGPARSE_LABEL;
   return route.kind === "listing" ? route.what : undefined;
 }
 
@@ -68,6 +73,12 @@ export function servedRow(label: string, table: Map<string, ServingSide>): boole
   if (table.has(label)) return true;
   const space = label.indexOf(" ");
   return space > 0 && table.get(`${label.slice(0, space)} *`) === "ts";
+}
+
+export async function withArgparse(chosen: Route, argv: string[], table: Map<string, ServingSide> = servedTable()): Promise<Route> {
+  if (chosen.kind !== "python" || !table.has(ARGPARSE_LABEL)) return chosen;
+  const outcome = (await import("./argparse-cli.ts")).frontEndOutcome(argv);
+  return outcome.kind === "served" ? { kind: "argparse", served: outcome.served } : chosen;
 }
 
 function same(argv: string[], words: string[]): boolean {
