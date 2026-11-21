@@ -60,6 +60,10 @@ impl Table {
             .unwrap_or_else(Table::compiled)
     }
 
+    pub fn serves_command_in_ts(&self, word: &str) -> bool {
+        self.0.iter().any(|(label, side)| *side == Side::Ts && (label == word || label.strip_prefix(word).is_some_and(|rest| rest.starts_with(':'))))
+    }
+
     pub fn side(&self, label: &str) -> Option<Side> {
         self.0.iter().find(|(known, _)| known == label).map(|(_, side)| *side)
     }

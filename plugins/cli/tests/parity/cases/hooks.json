@@ -1,0 +1,647 @@
+[
+ {
+  "id": "hooks-list--none",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ]
+ },
+ {
+  "id": "hooks-list--none-json",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list",
+   "--json"
+  ]
+ },
+ {
+  "id": "hooks-list--good",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "{\"hooks\": [{\"name\": \"fresh\", \"on\": \"app.launched\", \"command\": \"newTab\"}, {\"name\": \"note\", \"on\": [\"tab.opened\", \"tab.closed\"], \"run\": [\"/bin/echo\", \"hi\"], \"timeout\": 2.5}, {\"name\": \"all\", \"on\": [\"*\"], \"run\": [\"~/bin/all\"], \"fullUrls\": true}, {\"name\": \"idle\", \"on\": [\"tab.idle\"], \"idle\": \"30m\", \"run\": [\"/bin/true\"]}, {\"name\": \"away\", \"on\": [\"user.idle\", \"user.active\"], \"idle\": \"2h\", \"run\": [\"/bin/true\"], \"timeout\": 86400}, {\"name\": \"standup\", \"at\": \"09:55\", \"days\": [\"mon\", \"fri\"], \"command\": \"openSettings\", \"arg\": \"general\"}, {\"name\": \"paris\", \"at\": \"23:59\", \"timezone\": \"Europe/Paris\", \"run\": [\"/bin/true\"]}, {\"name\": \"hourly\", \"every\": \"1h\", \"run\": [\"~/bin/tick\"]}, {\"name\": \"quarter\", \"every\": \" 15m \", \"run\": [\"~/bin/tick\"]}, {\"name\": \"daily\", \"every\": \"1d\", \"command\": \"x\"}, {\"name\": \"secs\", \"every\": \"90s\", \"command\": \"x\"}, {\"name\": \"ask\", \"on\": \"link.opening\", \"run\": [\"~/bin/route\"]}, {\"name\": \"cancel\", \"on\": [\"tab.opening\"], \"cancel\": true}, {\"name\": \"route\", \"on\": [\"link.opening\"], \"route\": {\"profile\": \"Work\", \"open\": \"littleArdia\"}, \"from\": [\"Slack\"]}, {\"name\": \"drop\", \"on\": [\"link.opening\"], \"drop\": true}, {\"name\": \"folder\", \"on\": [\"download.deciding\"], \"folder\": \"~/Downloads/x\"}, {\"name\": \"perm\", \"on\": [\"permission.requested\"], \"permission\": \"deny\", \"kinds\": \"camera\"}, {\"name\": \"jira\", \"omnibox\": {\"title\": \" Jira \", \"keyword\": \"j\"}, \"run\": [\"~/bin/jira\"]}, {\"name\": \"everywhere\", \"omnibox\": {\"title\": \"Search\", \"global\": true}, \"run\": [\"/bin/cat\"]}, {\"name\": \"\\u00fcn\\u00ef \\u2603\", \"on\": \"page.error\", \"run\": [\"/bin/echo\", \"a\\tb\"]}]}"
+  }
+ },
+ {
+  "id": "hooks-list--good-json",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list",
+   "--json"
+  ],
+  "files": {
+   "data/config/hooks.json": "{\"hooks\": [{\"name\": \"fresh\", \"on\": \"app.launched\", \"command\": \"newTab\"}, {\"name\": \"note\", \"on\": [\"tab.opened\", \"tab.closed\"], \"run\": [\"/bin/echo\", \"hi\"], \"timeout\": 2.5}, {\"name\": \"all\", \"on\": [\"*\"], \"run\": [\"~/bin/all\"], \"fullUrls\": true}, {\"name\": \"idle\", \"on\": [\"tab.idle\"], \"idle\": \"30m\", \"run\": [\"/bin/true\"]}, {\"name\": \"away\", \"on\": [\"user.idle\", \"user.active\"], \"idle\": \"2h\", \"run\": [\"/bin/true\"], \"timeout\": 86400}, {\"name\": \"standup\", \"at\": \"09:55\", \"days\": [\"mon\", \"fri\"], \"command\": \"openSettings\", \"arg\": \"general\"}, {\"name\": \"paris\", \"at\": \"23:59\", \"timezone\": \"Europe/Paris\", \"run\": [\"/bin/true\"]}, {\"name\": \"hourly\", \"every\": \"1h\", \"run\": [\"~/bin/tick\"]}, {\"name\": \"quarter\", \"every\": \" 15m \", \"run\": [\"~/bin/tick\"]}, {\"name\": \"daily\", \"every\": \"1d\", \"command\": \"x\"}, {\"name\": \"secs\", \"every\": \"90s\", \"command\": \"x\"}, {\"name\": \"ask\", \"on\": \"link.opening\", \"run\": [\"~/bin/route\"]}, {\"name\": \"cancel\", \"on\": [\"tab.opening\"], \"cancel\": true}, {\"name\": \"route\", \"on\": [\"link.opening\"], \"route\": {\"profile\": \"Work\", \"open\": \"littleArdia\"}, \"from\": [\"Slack\"]}, {\"name\": \"drop\", \"on\": [\"link.opening\"], \"drop\": true}, {\"name\": \"folder\", \"on\": [\"download.deciding\"], \"folder\": \"~/Downloads/x\"}, {\"name\": \"perm\", \"on\": [\"permission.requested\"], \"permission\": \"deny\", \"kinds\": \"camera\"}, {\"name\": \"jira\", \"omnibox\": {\"title\": \" Jira \", \"keyword\": \"j\"}, \"run\": [\"~/bin/jira\"]}, {\"name\": \"everywhere\", \"omnibox\": {\"title\": \"Search\", \"global\": true}, \"run\": [\"/bin/cat\"]}, {\"name\": \"\\u00fcn\\u00ef \\u2603\", \"on\": \"page.error\", \"run\": [\"/bin/echo\", \"a\\tb\"]}]}"
+  }
+ },
+ {
+  "id": "hooks-list--bad",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "{\"hooks\": [\"not an object\", {\"on\": \"tab.opened\"}, {\"name\": \"  \"}, {\"name\": \"dup\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"dup\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"k1\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"], \"matc\": []}, {\"name\": \"k2\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"], \"zzz\": 1}, {\"name\": \"k3\", \"on\": \"tab.opned\", \"run\": [\"/bin/true\"]}, {\"name\": \"k4\", \"on\": \"tab.opening\", \"run\": [\"/bin/true\"], \"timeout\": 5}, {\"name\": \"k5\", \"on\": [\"tab.opening\", \"tab.opened\"], \"run\": [\"/bin/true\"]}, {\"name\": \"k6\", \"run\": [\"/bin/true\"]}, {\"name\": \"k7\", \"on\": \"tab.opened\", \"at\": \"09:00\", \"run\": [\"/bin/true\"]}, {\"name\": \"k8\", \"at\": \"9:00\", \"run\": [\"/bin/true\"]}, {\"name\": \"k9\", \"at\": \"24:00\", \"run\": [\"/bin/true\"]}, {\"name\": \"k10\", \"at\": \"09:00\", \"days\": [\"monday\"], \"run\": [\"/bin/true\"]}, {\"name\": \"k11\", \"on\": \"tab.opened\", \"days\": [\"mon\"], \"run\": [\"/bin/true\"]}, {\"name\": \"k12\", \"at\": \"09:00\", \"timezone\": \"Mars/Base\", \"run\": [\"/bin/true\"]}, {\"name\": \"k13\", \"at\": \"09:00\", \"timezone\": \"/etc/passwd\", \"run\": [\"/bin/true\"]}, {\"name\": \"k14\", \"every\": \"30s\", \"run\": [\"/bin/true\"]}, {\"name\": \"k15\", \"every\": \"1x\", \"run\": [\"/bin/true\"]}, {\"name\": \"k16\", \"on\": \"tab.opened\", \"run\": \"/bin/true\"}, {\"name\": \"k17\", \"on\": \"tab.opened\", \"run\": []}, {\"name\": \"k18\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\", \"\"]}, {\"name\": \"k19\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"], \"command\": \"x\"}, {\"name\": \"k20\", \"on\": \"tab.opened\"}, {\"name\": \"k21\", \"on\": \"tab.opened\", \"command\": \"\"}, {\"name\": \"k22\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"], \"arg\": \"x\"}, {\"name\": \"k23\", \"on\": \"tab.opened\", \"command\": \"x\", \"arg\": 3}, {\"name\": \"k24\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"], \"timeout\": 0}, {\"name\": \"k25\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"], \"timeout\": true}, {\"name\": \"k26\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"], \"timeout\": 86401}, {\"name\": \"k27\", \"on\": \"tab.opened\", \"command\": \"x\", \"timeout\": 3}, {\"name\": \"k28\", \"on\": \"tab.idle\", \"run\": [\"/bin/true\"]}, {\"name\": \"k29\", \"on\": \"tab.idle\", \"idle\": \"30s\", \"run\": [\"/bin/true\"]}, {\"name\": \"k30\", \"on\": \"tab.opened\", \"idle\": \"30m\", \"run\": [\"/bin/true\"]}, {\"name\": \"k31\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"], \"fullUrls\": \"yes\"}, {\"name\": \"k32\", \"on\": \"tab.opened\", \"cancel\": true}, {\"name\": \"k33\", \"on\": \"tab.opening\", \"cancel\": false}, {\"name\": \"k34\", \"on\": \"link.opening\", \"route\": {\"profile\": \"\"}}, {\"name\": \"k35\", \"on\": \"link.opening\", \"route\": {\"open\": \"tabs\"}}, {\"name\": \"k36\", \"on\": \"link.opening\", \"route\": {}}, {\"name\": \"k37\", \"on\": \"download.deciding\", \"folder\": \"/tmp\"}, {\"name\": \"k38\", \"on\": \"download.deciding\", \"folder\": \"~/a/../b\"}, {\"name\": \"k39\", \"on\": \"permission.requested\", \"permission\": \"maybe\"}, {\"name\": \"k40\", \"on\": \"tab.opening\", \"cancel\": true, \"drop\": true}, {\"name\": \"k41\", \"omnibox\": {\"title\": \"x\"}, \"run\": [\"/bin/true\"]}, {\"name\": \"k42\", \"omnibox\": {\"title\": \"x\", \"keyword\": \"a b\"}, \"run\": [\"/bin/true\"]}, {\"name\": \"k43\", \"omnibox\": {\"title\": \"\", \"keyword\": \"a\"}, \"run\": [\"/bin/true\"]}, {\"name\": \"k44\", \"omnibox\": {\"title\": \"x\", \"global\": false}, \"run\": [\"/bin/true\"]}, {\"name\": \"k45\", \"omnibox\": {\"title\": \"x\", \"keyword\": \"a\"}, \"command\": \"y\"}, {\"name\": \"k46\", \"omnibox\": {\"title\": \"x\", \"keyword\": \"a\"}, \"cancel\": true}, {\"name\": \"k47\", \"omnibox\": \"x\", \"run\": [\"/bin/true\"]}, {\"name\": \"k48\", \"on\": \"link.opening\", \"run\": [\"/bin/true\"], \"from\": [1]}, {\"name\": \"k49\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"], \"from\": [\"x\"]}, {\"name\": \"k50\", \"on\": 5, \"run\": [\"/bin/true\"]}, {\"name\": \"k51\", \"on\": [], \"run\": [\"/bin/true\"]}, {\"name\": \"k52\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"], \"match\": 5}, {\"name\": \"k53\", \"on\": \"user.active\", \"idle\": \"1m\", \"command\": \"x\"}, {\"name\": \"k54\", \"at\": \"09:00\", \"timezone\": 5, \"run\": [\"/bin/true\"]}, {\"name\": \"k55\", \"on\": \"tab.opening\", \"rewrite\": \"x\"}, {\"name\": \"k56\", \"on\": \"tab.opening\", \"rewrite\": [{\"match\": \"x\"}]}]}"
+  }
+ },
+ {
+  "id": "hooks-list--bad-json",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list",
+   "--json"
+  ],
+  "files": {
+   "data/config/hooks.json": "{\"hooks\": [\"not an object\", {\"on\": \"tab.opened\"}, {\"name\": \"  \"}, {\"name\": \"dup\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"dup\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"k1\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"], \"matc\": []}, {\"name\": \"k2\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"], \"zzz\": 1}, {\"name\": \"k3\", \"on\": \"tab.opned\", \"run\": [\"/bin/true\"]}, {\"name\": \"k4\", \"on\": \"tab.opening\", \"run\": [\"/bin/true\"], \"timeout\": 5}, {\"name\": \"k5\", \"on\": [\"tab.opening\", \"tab.opened\"], \"run\": [\"/bin/true\"]}, {\"name\": \"k6\", \"run\": [\"/bin/true\"]}, {\"name\": \"k7\", \"on\": \"tab.opened\", \"at\": \"09:00\", \"run\": [\"/bin/true\"]}, {\"name\": \"k8\", \"at\": \"9:00\", \"run\": [\"/bin/true\"]}, {\"name\": \"k9\", \"at\": \"24:00\", \"run\": [\"/bin/true\"]}, {\"name\": \"k10\", \"at\": \"09:00\", \"days\": [\"monday\"], \"run\": [\"/bin/true\"]}, {\"name\": \"k11\", \"on\": \"tab.opened\", \"days\": [\"mon\"], \"run\": [\"/bin/true\"]}, {\"name\": \"k12\", \"at\": \"09:00\", \"timezone\": \"Mars/Base\", \"run\": [\"/bin/true\"]}, {\"name\": \"k13\", \"at\": \"09:00\", \"timezone\": \"/etc/passwd\", \"run\": [\"/bin/true\"]}, {\"name\": \"k14\", \"every\": \"30s\", \"run\": [\"/bin/true\"]}, {\"name\": \"k15\", \"every\": \"1x\", \"run\": [\"/bin/true\"]}, {\"name\": \"k16\", \"on\": \"tab.opened\", \"run\": \"/bin/true\"}, {\"name\": \"k17\", \"on\": \"tab.opened\", \"run\": []}, {\"name\": \"k18\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\", \"\"]}, {\"name\": \"k19\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"], \"command\": \"x\"}, {\"name\": \"k20\", \"on\": \"tab.opened\"}, {\"name\": \"k21\", \"on\": \"tab.opened\", \"command\": \"\"}, {\"name\": \"k22\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"], \"arg\": \"x\"}, {\"name\": \"k23\", \"on\": \"tab.opened\", \"command\": \"x\", \"arg\": 3}, {\"name\": \"k24\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"], \"timeout\": 0}, {\"name\": \"k25\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"], \"timeout\": true}, {\"name\": \"k26\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"], \"timeout\": 86401}, {\"name\": \"k27\", \"on\": \"tab.opened\", \"command\": \"x\", \"timeout\": 3}, {\"name\": \"k28\", \"on\": \"tab.idle\", \"run\": [\"/bin/true\"]}, {\"name\": \"k29\", \"on\": \"tab.idle\", \"idle\": \"30s\", \"run\": [\"/bin/true\"]}, {\"name\": \"k30\", \"on\": \"tab.opened\", \"idle\": \"30m\", \"run\": [\"/bin/true\"]}, {\"name\": \"k31\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"], \"fullUrls\": \"yes\"}, {\"name\": \"k32\", \"on\": \"tab.opened\", \"cancel\": true}, {\"name\": \"k33\", \"on\": \"tab.opening\", \"cancel\": false}, {\"name\": \"k34\", \"on\": \"link.opening\", \"route\": {\"profile\": \"\"}}, {\"name\": \"k35\", \"on\": \"link.opening\", \"route\": {\"open\": \"tabs\"}}, {\"name\": \"k36\", \"on\": \"link.opening\", \"route\": {}}, {\"name\": \"k37\", \"on\": \"download.deciding\", \"folder\": \"/tmp\"}, {\"name\": \"k38\", \"on\": \"download.deciding\", \"folder\": \"~/a/../b\"}, {\"name\": \"k39\", \"on\": \"permission.requested\", \"permission\": \"maybe\"}, {\"name\": \"k40\", \"on\": \"tab.opening\", \"cancel\": true, \"drop\": true}, {\"name\": \"k41\", \"omnibox\": {\"title\": \"x\"}, \"run\": [\"/bin/true\"]}, {\"name\": \"k42\", \"omnibox\": {\"title\": \"x\", \"keyword\": \"a b\"}, \"run\": [\"/bin/true\"]}, {\"name\": \"k43\", \"omnibox\": {\"title\": \"\", \"keyword\": \"a\"}, \"run\": [\"/bin/true\"]}, {\"name\": \"k44\", \"omnibox\": {\"title\": \"x\", \"global\": false}, \"run\": [\"/bin/true\"]}, {\"name\": \"k45\", \"omnibox\": {\"title\": \"x\", \"keyword\": \"a\"}, \"command\": \"y\"}, {\"name\": \"k46\", \"omnibox\": {\"title\": \"x\", \"keyword\": \"a\"}, \"cancel\": true}, {\"name\": \"k47\", \"omnibox\": \"x\", \"run\": [\"/bin/true\"]}, {\"name\": \"k48\", \"on\": \"link.opening\", \"run\": [\"/bin/true\"], \"from\": [1]}, {\"name\": \"k49\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"], \"from\": [\"x\"]}, {\"name\": \"k50\", \"on\": 5, \"run\": [\"/bin/true\"]}, {\"name\": \"k51\", \"on\": [], \"run\": [\"/bin/true\"]}, {\"name\": \"k52\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"], \"match\": 5}, {\"name\": \"k53\", \"on\": \"user.active\", \"idle\": \"1m\", \"command\": \"x\"}, {\"name\": \"k54\", \"at\": \"09:00\", \"timezone\": 5, \"run\": [\"/bin/true\"]}, {\"name\": \"k55\", \"on\": \"tab.opening\", \"rewrite\": \"x\"}, {\"name\": \"k56\", \"on\": \"tab.opening\", \"rewrite\": [{\"match\": \"x\"}]}]}"
+  }
+ },
+ {
+  "id": "hooks-list--empty-list",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "{\"hooks\": []}"
+  }
+ },
+ {
+  "id": "hooks-list--too-many",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "{\"hooks\": [{\"name\": \"h0\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h1\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h2\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h3\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h4\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h5\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h6\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h7\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h8\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h9\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h10\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h11\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h12\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h13\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h14\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h15\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h16\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h17\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h18\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h19\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h20\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h21\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h22\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h23\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h24\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h25\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h26\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h27\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h28\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h29\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h30\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h31\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h32\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h33\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h34\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h35\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h36\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h37\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h38\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h39\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h40\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h41\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h42\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h43\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h44\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h45\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h46\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h47\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h48\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h49\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h50\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h51\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h52\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h53\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h54\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h55\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h56\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h57\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h58\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h59\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h60\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h61\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h62\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h63\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h64\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h65\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h66\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h67\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h68\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h69\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h70\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h71\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h72\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h73\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h74\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h75\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h76\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h77\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h78\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h79\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h80\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h81\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h82\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h83\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h84\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h85\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h86\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h87\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h88\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h89\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h90\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h91\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h92\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h93\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h94\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h95\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h96\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h97\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h98\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h99\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h100\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h101\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h102\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h103\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h104\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h105\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h106\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h107\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h108\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h109\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h110\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h111\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h112\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h113\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h114\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h115\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h116\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h117\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h118\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h119\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h120\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h121\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h122\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h123\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h124\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h125\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h126\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h127\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h128\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h129\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h130\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h131\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h132\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h133\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h134\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h135\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h136\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h137\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h138\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h139\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h140\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h141\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h142\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h143\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h144\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h145\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h146\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h147\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h148\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h149\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h150\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h151\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h152\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h153\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h154\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h155\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h156\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h157\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h158\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h159\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h160\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h161\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h162\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h163\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h164\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h165\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h166\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h167\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h168\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h169\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h170\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h171\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h172\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h173\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h174\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h175\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h176\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h177\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h178\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h179\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h180\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h181\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h182\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h183\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h184\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h185\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h186\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h187\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h188\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h189\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h190\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h191\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h192\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h193\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h194\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h195\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h196\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h197\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h198\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h199\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}, {\"name\": \"h200\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}]}"
+  }
+ },
+ {
+  "id": "hooks-list--two-hundred",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list",
+   "--json"
+  ],
+  "files": {
+   "data/config/hooks.json": "{\"hooks\": [{\"name\": \"h0\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h1\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h2\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h3\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h4\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h5\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h6\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h7\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h8\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h9\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h10\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h11\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h12\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h13\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h14\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h15\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h16\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h17\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h18\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h19\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h20\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h21\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h22\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h23\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h24\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h25\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h26\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h27\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h28\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h29\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h30\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h31\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h32\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h33\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h34\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h35\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h36\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h37\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h38\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h39\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h40\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h41\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h42\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h43\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h44\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h45\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h46\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h47\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h48\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h49\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h50\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h51\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h52\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h53\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h54\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h55\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h56\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h57\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h58\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h59\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h60\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h61\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h62\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h63\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h64\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h65\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h66\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h67\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h68\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h69\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h70\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h71\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h72\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h73\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h74\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h75\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h76\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h77\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h78\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h79\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h80\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h81\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h82\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h83\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h84\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h85\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h86\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h87\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h88\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h89\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h90\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h91\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h92\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h93\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h94\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h95\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h96\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h97\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h98\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h99\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h100\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h101\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h102\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h103\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h104\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h105\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h106\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h107\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h108\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h109\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h110\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h111\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h112\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h113\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h114\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h115\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h116\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h117\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h118\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h119\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h120\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h121\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h122\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h123\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h124\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h125\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h126\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h127\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h128\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h129\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h130\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h131\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h132\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h133\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h134\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h135\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h136\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h137\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h138\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h139\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h140\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h141\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h142\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h143\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h144\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h145\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h146\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h147\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h148\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h149\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h150\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h151\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h152\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h153\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h154\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h155\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h156\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h157\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h158\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h159\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h160\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h161\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h162\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h163\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h164\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h165\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h166\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h167\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h168\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h169\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h170\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h171\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h172\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h173\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h174\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h175\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h176\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h177\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h178\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h179\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h180\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h181\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h182\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h183\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h184\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h185\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h186\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h187\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h188\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h189\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h190\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h191\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h192\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h193\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h194\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h195\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h196\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h197\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h198\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}, {\"name\": \"h199\", \"every\": \"1m\", \"run\": [\"/bin/true\"]}]}"
+  }
+ },
+ {
+  "id": "hooks-list--syntax-0",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "{\"hooks\": [1,]}"
+  }
+ },
+ {
+  "id": "hooks-list--syntax-1",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "{\"hooks\": [] , }"
+  }
+ },
+ {
+  "id": "hooks-list--syntax-2",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "{\"hooks\": NaN}"
+  }
+ },
+ {
+  "id": "hooks-list--syntax-3",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "{\"hooks\": [1e999]}"
+  }
+ },
+ {
+  "id": "hooks-list--syntax-4",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "[]"
+  }
+ },
+ {
+  "id": "hooks-list--syntax-5",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "{\"hooks\": {}}"
+  }
+ },
+ {
+  "id": "hooks-list--syntax-6",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": ""
+  }
+ },
+ {
+  "id": "hooks-list--syntax-7",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "   "
+  }
+ },
+ {
+  "id": "hooks-list--syntax-8",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "{\"hooks\": \"x\"} x"
+  }
+ },
+ {
+  "id": "hooks-list--syntax-9",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "﻿﻿{\"hooks\": []}"
+  }
+ },
+ {
+  "id": "hooks-list--syntax-10",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "﻿{\"hooks\": []}"
+  }
+ },
+ {
+  "id": "hooks-list--syntax-11",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "{\"a\": \"\\q\"}"
+  }
+ },
+ {
+  "id": "hooks-list--syntax-12",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "{\"a\": \"\\u12\"}"
+  }
+ },
+ {
+  "id": "hooks-list--syntax-13",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "{\"hooks\"\n:\n[\n{\"name\": \"x\" \"on\": 1}]}"
+  }
+ },
+ {
+  "id": "hooks-list--syntax-14",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "{\"a\": \"\u0001\"}"
+  }
+ },
+ {
+  "id": "hooks-list--syntax-15",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "{\"hooks\": [], \"hooks\": [{\"name\": \"x\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}]}"
+  }
+ },
+ {
+  "id": "hooks-list--syntax-16",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "{\"hooks\": [{\"name\": \"x\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"], \"timeout\": 100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}]}"
+  }
+ },
+ {
+  "id": "hooks-list--syntax-17",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "{\"hooks\": [{\"name\": \"\\ud83d\\ude00\", \"on\": \"tab.opened\", \"run\": [\"/bin/true\"]}]}"
+  }
+ },
+ {
+  "id": "hooks-list--syntax-18",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "{\"hooks\": [-]}"
+  }
+ },
+ {
+  "id": "hooks-list--syntax-19",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "{\"hooks\": [01]}"
+  }
+ },
+ {
+  "id": "hooks-list--latin1",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": {
+    "base64": "eyJob29rcyI6IFsi6SJdfQ=="
+   }
+  }
+ },
+ {
+  "id": "hooks-list--folder",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json/inner": "x"
+  }
+ },
+ {
+  "id": "hooks-list--data-dir",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list",
+   "--data-dir",
+   "{data}"
+  ],
+  "env": {
+   "ARDIA_DATA_DIR": "{data}/elsewhere"
+  },
+  "files": {
+   "data/config/hooks.json": "{\"hooks\": [{\"name\": \"fresh\", \"on\": \"app.launched\", \"command\": \"newTab\"}, {\"name\": \"note\", \"on\": [\"tab.opened\", \"tab.closed\"], \"run\": [\"/bin/echo\", \"hi\"], \"timeout\": 2.5}, {\"name\": \"all\", \"on\": [\"*\"], \"run\": [\"~/bin/all\"], \"fullUrls\": true}]}"
+  }
+ },
+ {
+  "id": "hooks-list--data-dir-equals",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list",
+   "--data-dir={data}",
+   "--json"
+  ],
+  "env": {
+   "ARDIA_DATA_DIR": "{data}/elsewhere"
+  },
+  "files": {
+   "data/config/hooks.json": "{\"hooks\": [{\"name\": \"fresh\", \"on\": \"app.launched\", \"command\": \"newTab\"}, {\"name\": \"note\", \"on\": [\"tab.opened\", \"tab.closed\"], \"run\": [\"/bin/echo\", \"hi\"], \"timeout\": 2.5}, {\"name\": \"all\", \"on\": [\"*\"], \"run\": [\"~/bin/all\"], \"fullUrls\": true}]}"
+  }
+ },
+ {
+  "id": "hooks-list--hoisted",
+  "command": "hooks list",
+  "argv": [
+   "--json",
+   "hooks",
+   "--data-dir",
+   "{data}",
+   "list"
+  ],
+  "env": {
+   "ARDIA_DATA_DIR": "{data}/elsewhere"
+  },
+  "files": {
+   "data/config/hooks.json": "{\"hooks\": [{\"name\": \"fresh\", \"on\": \"app.launched\", \"command\": \"newTab\"}, {\"name\": \"note\", \"on\": [\"tab.opened\", \"tab.closed\"], \"run\": [\"/bin/echo\", \"hi\"], \"timeout\": 2.5}, {\"name\": \"all\", \"on\": [\"*\"], \"run\": [\"~/bin/all\"], \"fullUrls\": true}]}"
+  }
+ },
+ {
+  "id": "hooks-list--installed-scratch",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "files": {
+   "data/config/hooks.json": "{\"hooks\": [{\"name\": \"fresh\", \"on\": \"app.launched\", \"command\": \"newTab\"}, {\"name\": \"note\", \"on\": [\"tab.opened\", \"tab.closed\"], \"run\": [\"/bin/echo\", \"hi\"], \"timeout\": 2.5}]}",
+   "home/Library/LaunchAgents/dev.ardia.hooks.plist": "x"
+  }
+ },
+ {
+  "id": "hooks-list--installed",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "env": {
+   "ARDIA_DATA_DIR": null,
+   "XDG_CONFIG_HOME": "",
+   "XDG_STATE_HOME": "",
+   "XDG_DATA_HOME": "",
+   "ARDIA_CONFIG_HOME": ""
+  },
+  "files": {
+   "home/.config/ardia/hooks.json": "{\"hooks\": [{\"name\": \"fresh\", \"on\": \"app.launched\", \"command\": \"newTab\"}, {\"name\": \"note\", \"on\": [\"tab.opened\", \"tab.closed\"], \"run\": [\"/bin/echo\", \"hi\"], \"timeout\": 2.5}]}",
+   "home/Library/LaunchAgents/dev.ardia.hooks.plist": "x"
+  },
+  "note": "launchctl is denied in the sandbox: state unknown"
+ },
+ {
+  "id": "hooks-list--installed-json",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list",
+   "--json"
+  ],
+  "env": {
+   "ARDIA_DATA_DIR": null,
+   "XDG_CONFIG_HOME": "",
+   "XDG_STATE_HOME": "",
+   "XDG_DATA_HOME": "",
+   "ARDIA_CONFIG_HOME": ""
+  },
+  "files": {
+   "home/Library/LaunchAgents/dev.ardia.hooks.plist": "x"
+  }
+ },
+ {
+  "id": "hooks-list--not-installed-home",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list"
+  ],
+  "env": {
+   "ARDIA_DATA_DIR": null,
+   "XDG_CONFIG_HOME": "",
+   "XDG_STATE_HOME": "",
+   "XDG_DATA_HOME": "",
+   "ARDIA_CONFIG_HOME": ""
+  }
+ },
+ {
+  "id": "hooks-list--argv-0",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list",
+   "x"
+  ]
+ },
+ {
+  "id": "hooks-list--argv-1",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list",
+   "--bogus"
+  ]
+ },
+ {
+  "id": "hooks-list--argv-2",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list",
+   "--data-dir"
+  ]
+ },
+ {
+  "id": "hooks-list--argv-3",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list",
+   "--json=1"
+  ]
+ },
+ {
+  "id": "hooks-list--argv-4",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list",
+   "--data"
+  ]
+ },
+ {
+  "id": "hooks-list--argv-5",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list",
+   "--data-dir",
+   "--json"
+  ]
+ },
+ {
+  "id": "hooks-list--port",
+  "command": "hooks list",
+  "argv": [
+   "--port",
+   "1",
+   "hooks",
+   "list"
+  ]
+ },
+ {
+  "id": "hooks-list--timeout-hoisted",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "--timeout=3",
+   "list"
+  ]
+ },
+ {
+  "id": "hooks-list--help-80",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list",
+   "--help"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  }
+ },
+ {
+  "id": "hooks-list--help",
+  "command": "hooks list",
+  "argv": [
+   "hooks",
+   "list",
+   "--help"
+  ],
+  "fallback": true,
+  "note": "argparse wraps help at 98 columns: Python serves it"
+ },
+ {
+  "id": "hooks-install--refused",
+  "command": "hooks install",
+  "argv": [
+   "hooks",
+   "install"
+  ]
+ },
+ {
+  "id": "hooks-install--refused-flag",
+  "command": "hooks install",
+  "argv": [
+   "hooks",
+   "install",
+   "--data-dir",
+   "{data}"
+  ],
+  "env": {
+   "ARDIA_DATA_DIR": null
+  }
+ },
+ {
+  "id": "hooks-install--help-80",
+  "command": "hooks install",
+  "argv": [
+   "hooks",
+   "install",
+   "-h"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  }
+ },
+ {
+  "id": "hooks-install--json",
+  "command": "hooks install",
+  "argv": [
+   "hooks",
+   "install",
+   "--json"
+  ]
+ },
+ {
+  "id": "hooks-install--hoisted-json",
+  "command": "hooks install",
+  "argv": [
+   "--json",
+   "hooks",
+   "install"
+  ]
+ },
+ {
+  "id": "hooks-uninstall--refused",
+  "command": "hooks uninstall",
+  "argv": [
+   "hooks",
+   "uninstall"
+  ]
+ },
+ {
+  "id": "hooks-uninstall--refused-flag",
+  "command": "hooks uninstall",
+  "argv": [
+   "hooks",
+   "uninstall",
+   "--data-dir={data}"
+  ],
+  "env": {
+   "ARDIA_DATA_DIR": null
+  }
+ },
+ {
+  "id": "hooks-uninstall--help-80",
+  "command": "hooks uninstall",
+  "argv": [
+   "hooks",
+   "uninstall",
+   "--help"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  }
+ },
+ {
+  "id": "hooks-uninstall--extra",
+  "command": "hooks uninstall",
+  "argv": [
+   "hooks",
+   "uninstall",
+   "now"
+  ]
+ }
+]

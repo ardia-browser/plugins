@@ -21,9 +21,11 @@ type Native = {
   watchLifeline(fd: number): number;
   writeSome(fd: number, bytes: Uint8Array, offset: number): number;
   strerror(errno: number): string | number;
+  execProgram(path: string, argv: Buffer, env: Buffer): number;
+  zoneName(seconds: number): string | number;
 };
 
-const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "openFileAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "listAt", "lock", "watchLifeline", "writeSome", "strerror"];
+const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "openFileAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "listAt", "lock", "watchLifeline", "writeSome", "strerror", "execProgram", "zoneName"];
 const ERRNO_NAMES = new Map<number, string>(Object.entries(constants.errno).map(([name, value]) => [value, name]));
 const EWOULDBLOCK = constants.errno.EWOULDBLOCK ?? constants.errno.EAGAIN;
 
@@ -182,4 +184,21 @@ export function strerror(errno: number): string {
   const text = native().strerror(errno);
   if (typeof text === "number") throw errnoError(-text, "strerror_r");
   return text;
+}
+
+function blob(words: readonly string[]): Buffer {
+  return Buffer.concat(words.map((word) => Buffer.from(`${word}\0`, "utf8")));
+}
+
+export function execProgram(path: string, argv: readonly string[], env: Record<string, string>): never {
+  const pairs = Object.entries(env).map(([name, value]) => `${name}=${value}`);
+  if ([path, ...argv, ...pairs].some((word) => word.includes("\0"))) throw errnoError(constants.errno.EINVAL, "execve", path);
+  const result = native().execProgram(path, blob(argv), blob(pairs));
+  throw errnoError(-result, "execve", path);
+}
+
+export function zoneName(seconds: number): string {
+  const name = native().zoneName(seconds);
+  if (typeof name === "number") throw errnoError(-name, "localtime_r");
+  return name;
 }

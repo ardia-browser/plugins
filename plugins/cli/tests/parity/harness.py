@@ -183,7 +183,7 @@ def served_table(path: Path = SERVED_TABLE) -> dict[str, str]:
             continue
         if len(words) != 2 or words[1] not in SERVING_SIDES or words[0] in rows:
             raise ValueError(f"{path.name}:{number}: each row is a command and who serves it ({' or '.join(SERVING_SIDES)}), once: {line!r}")
-        rows[words[0]] = words[1]
+        rows[words[0].replace(":", " ")] = words[1]
     return rows
 
 
@@ -604,7 +604,7 @@ class Installation:
         (libexec / "ardia-ts").chmod(0o755)
         self.ts_installed = True
         if every_row:
-            (self.root / "served.txt").write_text("".join(f"{name} ts\n" for name in served_table()))
+            (self.root / "served.txt").write_text("".join(f"{name.replace(' ', ':')} ts\n" for name in served_table()))
 
     def stray_routes(self) -> list[str]:
         return sorted(path.name for path in self.routes.iterdir())

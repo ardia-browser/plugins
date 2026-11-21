@@ -9,11 +9,14 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/file.h>
+#include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
 #if defined(__APPLE__)
 #include <sys/ucred.h>
@@ -413,6 +416,93 @@ static napi_value watch_lifeline(napi_env env, napi_callback_info info) {
   return status(env, -started);
 }
 
+static char **split_blob(Call *call, size_t index, int *error) {
+  void *data = NULL;
+  size_t length = 0;
+  bool is_buffer = false;
+  *error = -EINVAL;
+  if (napi_is_buffer(call->env, call->argv[index], &is_buffer) != napi_ok || !is_buffer) return NULL;
+  if (napi_get_buffer_info(call->env, call->argv[index], &data, &length) != napi_ok) return NULL;
+  if (length > 0 && ((char *)data)[length - 1] != 0) return NULL;
+  size_t count = 0;
+  for (size_t at = 0; at < length; at++) {
+    if (((char *)data)[at] == 0) count++;
+  }
+  char **words = calloc(count + 1, sizeof(char *));
+  char *copy = malloc(length + 1);
+  if (words == NULL || copy == NULL) {
+    free(words);
+    free(copy);
+    *error = -ENOMEM;
+    return NULL;
+  }
+  memcpy(copy, data, length);
+  size_t word = 0;
+  for (size_t at = 0; at < length; at += strlen(copy + at) + 1) words[word++] = copy + at;
+  words[word] = NULL;
+  *error = 0;
+  return words;
+}
+
+static void free_words(char **words) {
+  if (words == NULL) return;
+  if (words[0] != NULL) free(words[0]);
+  free(words);
+}
+
+static napi_value exec_program(napi_env env, napi_callback_info info) {
+  Call call;
+  char path[PATH_MAX];
+  int error = 0;
+  if (!take_args(env, info, 3, &call)) return status(env, -EINVAL);
+  int given = name_arg(&call, 0, path, sizeof path);
+  if (given != 0) return status(env, given);
+  char **argv = split_blob(&call, 1, &error);
+  if (argv == NULL) return status(env, error);
+  char **envp = split_blob(&call, 2, &error);
+  if (envp == NULL) {
+    free_words(argv);
+    return status(env, error);
+  }
+  if (argv[0] == NULL) {
+    free_words(argv);
+    free_words(envp);
+    return status(env, -EINVAL);
+  }
+  struct rlimit limit;
+  int highest = getrlimit(RLIMIT_NOFILE, &limit) == 0 && limit.rlim_cur != RLIM_INFINITY && limit.rlim_cur < 65536 ? (int)limit.rlim_cur : 65536;
+  for (int fd = 3; fd < highest; fd++) {
+    int flags = fcntl(fd, F_GETFD);
+    if (flags >= 0 && !(flags & FD_CLOEXEC)) fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
+  }
+  sigset_t none;
+  sigemptyset(&none);
+  signal(SIGPIPE, SIG_IGN);
+  signal(SIGXFSZ, SIG_IGN);
+  pthread_sigmask(SIG_SETMASK, &none, NULL);
+  execve(path, argv, envp);
+  int failure = failed();
+  free_words(argv);
+  free_words(envp);
+  return status(env, failure);
+}
+
+static napi_value zone_name(napi_env env, napi_callback_info info) {
+  Call call;
+  double seconds = 0;
+  char text[64];
+  napi_value result = NULL;
+  if (!take_args(env, info, 1, &call)) return status(env, -EINVAL);
+  if (napi_get_value_double(env, call.argv[0], &seconds) != napi_ok || !isfinite(seconds)) return status(env, -EINVAL);
+  time_t when = (time_t)seconds;
+  struct tm local;
+  tzset();
+  if (localtime_r(&when, &local) == NULL) return status(env, failed());
+  size_t length = strftime(text, sizeof text, "%Z", &local);
+  napi_create_string_utf8(env, text, length, &result);
+  return result;
+}
+
 static bool define(napi_env env, napi_value exports, const char *name, napi_callback callback) {
   napi_value function = NULL;
   return napi_create_function(env, name, NAPI_AUTO_LENGTH, callback, NULL, &function) == napi_ok
@@ -432,7 +522,9 @@ __attribute__((visibility("default"))) napi_value napi_register_module_v1(napi_e
       && define(env, exports, "lock", lock)
       && define(env, exports, "watchLifeline", watch_lifeline)
       && define(env, exports, "writeSome", write_some)
-      && define(env, exports, "strerror", error_text);
+      && define(env, exports, "strerror", error_text)
+      && define(env, exports, "execProgram", exec_program)
+      && define(env, exports, "zoneName", zone_name);
   return ok ? exports : NULL;
 }
 

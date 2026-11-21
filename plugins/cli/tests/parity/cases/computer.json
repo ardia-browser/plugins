@@ -1,0 +1,728 @@
+[
+ {
+  "id": "computer--bare",
+  "command": "computer help",
+  "argv": [
+   "computer"
+  ]
+ },
+ {
+  "id": "computer--help",
+  "command": "computer help",
+  "argv": [
+   "computer",
+   "--help"
+  ]
+ },
+ {
+  "id": "computer--h",
+  "command": "computer h",
+  "argv": [
+   "computer",
+   "-h"
+  ]
+ },
+ {
+  "id": "computer--help-json",
+  "command": "computer help",
+  "argv": [
+   "computer",
+   "--help",
+   "--json"
+  ]
+ },
+ {
+  "id": "computer--update",
+  "command": "computer update",
+  "argv": [
+   "computer",
+   "update"
+  ]
+ },
+ {
+  "id": "computer--update-args",
+  "command": "computer update",
+  "argv": [
+   "computer",
+   "update",
+   "--force"
+  ]
+ },
+ {
+  "id": "computer--channel",
+  "command": "computer channel",
+  "argv": [
+   "computer",
+   "channel",
+   "beta"
+  ]
+ },
+ {
+  "id": "computer--skills",
+  "command": "computer skills",
+  "argv": [
+   "computer",
+   "skills",
+   "install"
+  ]
+ },
+ {
+  "id": "computer--refresh",
+  "command": "computer refresh",
+  "argv": [
+   "computer",
+   "refresh"
+  ],
+  "note": "no CuaDriver.app ardia installed: nothing to do, but the lock file is made"
+ },
+ {
+  "id": "computer--mcp-general",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--target",
+   "general"
+  ],
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-claude-code",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--target",
+   "claude-code"
+  ],
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-codex",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--target",
+   "codex"
+  ],
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-cursor",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--target",
+   "cursor"
+  ],
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-opencode",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--target",
+   "opencode"
+  ],
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-default",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config"
+  ],
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-equals",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--target=codex"
+  ],
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-abbrev",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--tar",
+   "cursor"
+  ],
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-abbrev-equals",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--ta=opencode"
+  ],
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-repeat",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--target",
+   "codex",
+   "--target",
+   "cursor"
+  ],
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-json-flag",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--json"
+  ],
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-error-0",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--target",
+   "nope"
+  ],
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-error-0-80",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--target",
+   "nope"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  },
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-error-1",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--target"
+  ],
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-error-1-80",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--target"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  },
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-error-2",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "x"
+  ],
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-error-2-80",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "x"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  },
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-error-3",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "-x"
+  ],
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-error-3-80",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "-x"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  },
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-error-4",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--"
+  ],
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-error-4-80",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  },
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-error-5",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--",
+   "x"
+  ],
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-error-5-80",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--",
+   "x"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  },
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-error-6",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--target="
+  ],
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-error-6-80",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--target="
+  ],
+  "env": {
+   "COLUMNS": "80"
+  },
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-error-7",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--target",
+   "-x"
+  ],
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-error-7-80",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--target",
+   "-x"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  },
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-error-8",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--target",
+   "-1"
+  ],
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-error-8-80",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--target",
+   "-1"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  },
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-error-9",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--target",
+   "--help"
+  ],
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-error-9-80",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--target",
+   "--help"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  },
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-error-10",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--bogus=1"
+  ],
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-error-10-80",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--bogus=1"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  },
+  "files": {
+   "cli-home/current/bin/ardia": "#!/bin/sh\n"
+  }
+ },
+ {
+  "id": "computer--mcp-help",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--help"
+  ],
+  "fallback": true,
+  "note": "argparse wraps help at 98 columns: Python serves it"
+ },
+ {
+  "id": "computer--mcp-help-80",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--help"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  }
+ },
+ {
+  "id": "computer--mcp-h-80",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "-h",
+   "--target",
+   "nope"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  }
+ },
+ {
+  "id": "computer--mcp-error-then-help-80",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--target",
+   "nope",
+   "-h"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  }
+ },
+ {
+  "id": "computer--mcp-help-unknown-80",
+  "command": "computer mcp-config",
+  "argv": [
+   "computer",
+   "mcp-config",
+   "--bogus",
+   "--help"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  }
+ },
+ {
+  "id": "computer--setup-help-80",
+  "command": "computer setup",
+  "argv": [
+   "computer",
+   "setup",
+   "--help"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  }
+ },
+ {
+  "id": "computer--setup-h-80",
+  "command": "computer setup",
+  "argv": [
+   "computer",
+   "setup",
+   "-h"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  }
+ },
+ {
+  "id": "computer--setup-help",
+  "command": "computer setup",
+  "argv": [
+   "computer",
+   "setup",
+   "--help"
+  ],
+  "fallback": true,
+  "note": "argparse wraps help at 98 columns: Python serves it"
+ },
+ {
+  "id": "computer--setup-no-grant-help-80",
+  "command": "computer setup",
+  "argv": [
+   "computer",
+   "setup",
+   "--no-grant",
+   "--help"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  }
+ },
+ {
+  "id": "computer--setup-help-abbrev-80",
+  "command": "computer setup",
+  "argv": [
+   "computer",
+   "setup",
+   "--he"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  }
+ },
+ {
+  "id": "computer--setup-error-0",
+  "command": "computer setup",
+  "argv": [
+   "computer",
+   "setup",
+   "--nope"
+  ]
+ },
+ {
+  "id": "computer--setup-error-1",
+  "command": "computer setup",
+  "argv": [
+   "computer",
+   "setup",
+   "x",
+   "y"
+  ]
+ },
+ {
+  "id": "computer--setup-error-2",
+  "command": "computer setup",
+  "argv": [
+   "computer",
+   "setup",
+   "--no-grant=1"
+  ]
+ },
+ {
+  "id": "computer--setup-error-3",
+  "command": "computer setup",
+  "argv": [
+   "computer",
+   "setup",
+   "-"
+  ]
+ },
+ {
+  "id": "computer--setup-error-4",
+  "command": "computer setup",
+  "argv": [
+   "computer",
+   "setup",
+   "--no-g",
+   "--bogus"
+  ]
+ },
+ {
+  "id": "computer--setup-error-5",
+  "command": "computer setup",
+  "argv": [
+   "computer",
+   "setup",
+   "--help=x"
+  ]
+ },
+ {
+  "id": "computer--setup-error-6",
+  "command": "computer setup",
+  "argv": [
+   "computer",
+   "setup",
+   "-1"
+  ]
+ },
+ {
+  "id": "computer--setup-columns-narrow",
+  "command": "computer setup",
+  "argv": [
+   "computer",
+   "setup",
+   "--nope"
+  ],
+  "env": {
+   "COLUMNS": "40"
+  },
+  "fallback": true,
+  "note": "the usage line wraps at 38 columns: Python serves it"
+ }
+]

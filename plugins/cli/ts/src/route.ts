@@ -1,7 +1,10 @@
 import { emptyListing, type Kind, type Listing } from "./listing.ts";
 import { servedTable, type ServingSide } from "./served.ts";
+import type { CommandRoute } from "./serve-commands.ts";
+import { label as computerLabel } from "./computer/label.ts";
+import { arrange } from "./hooks/route.ts";
 
-export type Route = { kind: "version" } | { kind: "help" } | { kind: "listing"; what: Kind; listing: Listing } | { kind: "python" };
+export type Route = { kind: "version" } | { kind: "help" } | { kind: "listing"; what: Kind; listing: Listing } | { kind: "python" } | CommandRoute;
 
 const U64_MAX = (1n << 64n) - 1n;
 const PY_INT_MAX_STR_DIGITS = 4300;
@@ -28,13 +31,16 @@ class Cursor {
 export function labelOf(route: Route): string | undefined {
   if (route.kind === "version") return "--version";
   if (route.kind === "help") return "--help";
+  if (route.kind === "computer") return `computer ${computerLabel(route.argv)}`;
+  if (route.kind === "hooks") return route.verb === "" ? "hooks" : `hooks ${route.verb}`;
+  if (route.kind === "on") return "on";
   return route.kind === "listing" ? route.what : undefined;
 }
 
 export function route(argv: string[], table: Map<string, ServingSide> = servedTable()): Route {
   const parsed = parseRoute(argv);
   const label = labelOf(parsed);
-  return label !== undefined && !table.has(label) ? { kind: "python" } : parsed;
+  return label !== undefined && !table.has(label.replace(/ /g, ":")) ? { kind: "python" } : parsed;
 }
 
 function same(argv: string[], words: string[]): boolean {
@@ -44,6 +50,9 @@ function same(argv: string[], words: string[]): boolean {
 export function parseRoute(argv: string[]): Route {
   if (same(argv, ["--version"])) return { kind: "version" };
   if (argv.length === 0 || same(argv, ["--help"]) || same(argv, ["-h"])) return { kind: "help" };
+  if (argv[0] === "computer") return { kind: "computer", argv: argv.slice(1) };
+  const arranged = arrange(argv);
+  if (arranged !== undefined) return arranged.path[0] === "on" ? { kind: "on", argv } : { kind: "hooks", verb: arranged.path[1] ?? "", argv };
   const listing = emptyListing();
   const cursor = new Cursor(argv);
   let kind: Kind | undefined;

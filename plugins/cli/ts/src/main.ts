@@ -23,8 +23,9 @@ async function serve(argv: string[], python: string | null): Promise<number | un
   const named = [process.env.ARDIA_DATA_DIR, process.env.ARDIA_CLI_HOME, dataDirArg(leadingTokens(argv))];
   if (chosen.kind === "listing") named.push(chosen.listing.dataDir);
   if (!paths.pathsAreText() || named.some(paths.needsAccountLookup) || consentUnreadable(argv)) return undefined;
-  const { serveHelp, serveListing } = await import("./serve.ts");
   try {
+    if (chosen.kind === "computer" || chosen.kind === "hooks" || chosen.kind === "on") return await (await import("./serve-commands.ts")).serveCommand(chosen, argv, python);
+    const { serveHelp, serveListing } = await import("./serve.ts");
     if (chosen.kind === "help") return serveHelp(argv, python);
     return await serveListing(chosen.what, chosen.listing, argv, python);
   } catch (error) {
