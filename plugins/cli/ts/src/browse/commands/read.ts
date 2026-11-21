@@ -7,6 +7,8 @@ import { diff as diffViews, type View } from "../changes/report.ts";
 import { previous } from "../changes/views.ts";
 import { BrowseError, Usage } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
+import { hydration } from "../act/react.ts";
+import { capturePng, comparison, diffScreenshot } from "../media/commands.ts";
 import { take } from "../snapshot/take.ts";
 import type { Element, Page } from "../state/page.ts";
 import { frameOffset } from "../state/offsets.ts";
@@ -14,7 +16,7 @@ import * as pierce from "../state/pierce.ts";
 import { record } from "../state/records.ts";
 import { navigate, pageTitle } from "./core.ts";
 import type { Ctx } from "./ctx.ts";
-import { register, unsupported } from "./index.ts";
+import { register } from "./index.ts";
 import { need, normalizeUrl, parse } from "./parse.ts";
 import { readTextPy } from "./pyfile.ts";
 import { currentOrNew, frameOrMain, originOf, pyIntArg, resolve } from "./shared.ts";
@@ -23,11 +25,16 @@ import "../snapshot/collect.ts";
 export type Header = { key: string; data: unknown; line: string };
 export const snapshotHeaders: ((ctx: Ctx, page: Page) => Promise<Header | null>)[] = [];
 export const mediaHooks: {
-  diffScreenshot: ((ctx: Ctx, argv: string[]) => Promise<Result>) | null;
-  capturePng: ((page: Page, full: boolean) => Promise<Uint8Array>) | null;
-  comparePngs: ((a: Uint8Array, b: Uint8Array) => unknown) | null;
-  hydration: ((page: Page) => Promise<unknown>) | null;
-} = { diffScreenshot: null, capturePng: null, comparePngs: null, hydration: null };
+  diffScreenshot: (ctx: Ctx, argv: string[]) => Promise<Result>;
+  capturePng: (page: Page, full: boolean) => Promise<Uint8Array>;
+  comparePngs: (a: Uint8Array, b: Uint8Array) => unknown;
+  hydration: (page: Page) => Promise<unknown>;
+} = {
+  diffScreenshot: (ctx, argv) => diffScreenshot(ctx, argv),
+  capturePng: (page, full) => capturePng(page, full),
+  comparePngs: (before, after) => comparison(before, after, 0.1, null),
+  hydration: (page) => hydration(page),
+};
 
 const TEXT_OF = "(el) => (el.innerText != null ? el.innerText : el.textContent || '').trim()";
 
@@ -174,7 +181,7 @@ export async function cmdVitals(ctx: Ctx, argv: string[]): Promise<Result> {
   if (args.length) await navigate(ctx, page, normalizeUrl(args[0] as string));
   const data = record(await page.call("() => ardiaBrowse.vitals()", [], { frame: page.mainFrame, read: true }));
   const react = [...page.initScripts.values()].includes("react");
-  data["hydration"] = react && mediaHooks.hydration ? await mediaHooks.hydration(page) : null;
+  data["hydration"] = react ? await mediaHooks.hydration(page) : null;
   const hydration = record(data["hydration"] ?? {});
   const text = [
     `url: ${data["url"]}`,
@@ -217,7 +224,6 @@ export async function cmdDiff(ctx: Ctx, argv: string[]): Promise<Result> {
     return diffResult(before, after);
   }
   if (kind === "screenshot") {
-    if (mediaHooks.diffScreenshot === null) throw unsupported("`diff screenshot`");
     return mediaHooks.diffScreenshot(ctx, rest);
   }
   if (kind === "url") {
@@ -227,7 +233,6 @@ export async function cmdDiff(ctx: Ctx, argv: string[]): Promise<Result> {
       { "-s": "--selector", "-c": "--compact", "-d": "--depth" },
     );
     need(positional, 2, "diff url <url1> <url2>");
-    if (options["screenshot"] && (mediaHooks.capturePng === null || mediaHooks.comparePngs === null)) throw unsupported("`diff url --screenshot`");
     const page = await currentOrNew(ctx);
     const shots: Uint8Array[] = [];
     const texts: string[] = [];
@@ -239,10 +244,10 @@ export async function cmdDiff(ctx: Ctx, argv: string[]): Promise<Result> {
         selector: (options["selector"] as string | undefined) ?? null,
       });
       texts.push(text);
-      if (options["screenshot"] && mediaHooks.capturePng) shots.push(await mediaHooks.capturePng(page, Boolean(options["full"])));
+      if (options["screenshot"]) shots.push(await mediaHooks.capturePng(page, Boolean(options["full"])));
     }
     const result = diffResult(texts[0] as string, texts[1] as string);
-    if (shots.length && mediaHooks.comparePngs) (result.data as Record<string, unknown>)["screenshot"] = mediaHooks.comparePngs(shots[0] as Uint8Array, shots[1] as Uint8Array);
+    if (shots.length) (result.data as Record<string, unknown>)["screenshot"] = mediaHooks.comparePngs(shots[0] as Uint8Array, shots[1] as Uint8Array);
     return result;
   }
   throw new Usage(`Unknown diff kind: ${kind} (snapshot, screenshot, url)`);

@@ -5,7 +5,6 @@ import type { Ctx, Handler } from "./ctx.ts";
 
 export { ALIASES, canonical, MUTATING, SKIPPED };
 
-export const LATER_SLICE = "isn't served by the TypeScript daemon yet (it arrives with a later slice of the port)";
 
 export const OWNERS: Readonly<Record<string, string>> = {
   open: "D3",
@@ -105,23 +104,14 @@ export function handlerOf(name: string): Handler | undefined {
   return COMMANDS.get(name);
 }
 
-export function unsupported(what: string): BrowseError {
-  return new BrowseError(`${what} ${LATER_SLICE}`, null, "unsupported");
-}
-
 export async function dispatch(ctx: Ctx, name: string, argv: string[]): Promise<Result> {
   if (name === "auth") {
     if (argv[0] !== "login") throw new Usage("auth save|list|show|delete run without the daemon");
-    const login = COMMANDS.get("auth");
-    if (login === undefined) throw unsupported("`auth login`");
-    return login(ctx, argv.slice(1));
+    return (COMMANDS.get("auth") as Handler)(ctx, argv.slice(1));
   }
   if (Object.hasOwn(SKIPPED, name)) throw new BrowseError(`\`${name}\` isn't part of ardia browse: ${SKIPPED[name]}`, null, "unsupported");
   const handler = COMMANDS.get(name);
-  if (handler === undefined) {
-    if (Object.hasOwn(OWNERS, name)) throw unsupported(`\`${name}\``);
-    throw new Usage(`Unknown command: ${name}. Run \`ardia browse --help\``);
-  }
+  if (handler === undefined) throw new Usage(`Unknown command: ${name}. Run \`ardia browse --help\``);
   if (name !== "batch" && hooks.before) await hooks.before(ctx, name, argv);
   const step = hooks.begin ? await hooks.begin(ctx, name, argv) : null;
   let result: Result;

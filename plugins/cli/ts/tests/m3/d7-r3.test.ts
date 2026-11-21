@@ -43,6 +43,7 @@ describe("set credentials takes the password as an opaque positional", () => {
 
   test("dash-prefixed usernames and passwords reach the setter untouched", async () => {
     const seen: [string, string][] = [];
+    const realCredentials = setHooks.credentials;
     setHooks.credentials = async (_ctx, _page, user, password) => {
       seen.push([user, password]);
     };
@@ -52,7 +53,7 @@ describe("set credentials takes the password as an opaque positional", () => {
       }
       expect(seen).toEqual([["alice", "-x"], ["--foo", "--bar"], ["-u", "-1"]]);
     } finally {
-      setHooks.credentials = null;
+      setHooks.credentials = realCredentials;
     }
   });
 
@@ -153,14 +154,14 @@ describe("provider replies", () => {
         throw new BrowseError("anything at all, quoted \" or not", null, "not_found");
       },
     };
+    const realLogin = { ...loginHooks };
     loginHooks.actions = { typeInto: async () => {}, click: async () => {}, pressEnter: async () => {} };
     loginHooks.currentOrNew = async () => page as never;
     try {
       const error = (await login({ state, options: {}, humanize: false, timeout: 1 } as never, ["prof", "--credential-provider", "vault"]).catch((thrown: unknown) => thrown)) as BrowseError;
       expect(error.text).toBe("Credential provider vault: the login didn't finish (not_found)");
     } finally {
-      loginHooks.actions = null;
-      loginHooks.currentOrNew = null;
+      Object.assign(loginHooks, realLogin);
     }
   });
 });

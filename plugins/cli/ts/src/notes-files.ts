@@ -20,6 +20,8 @@ import {
 } from "./browse/paths.ts";
 import { renameAt, sizeAt } from "./libc.ts";
 import { type NotesRequest, pageSite } from "./notes.ts";
+import { codePoints } from "./pystr.ts";
+import { pyStrip, splitlines } from "./pylib/str.ts";
 
 export const DIR_NAME = "Notes";
 export const MAX_NOTE = 8 * 1024;
@@ -87,6 +89,25 @@ export function load(root: string, site: string): string | null {
   } finally {
     closeFd(folder);
   }
+}
+
+export function noteHeader(root: string, url: string | null): [string | null, string | null] {
+  const site = pageSite(url);
+  if (site === null) return [null, null];
+  let text: string | null;
+  try {
+    text = load(root, site);
+  } catch {
+    return [site, null];
+  }
+  const kept = pyStrip(text ?? "");
+  if (!kept) return [site, null];
+  const points = codePoints(kept);
+  const shown =
+    points.length <= HEADER_LIMIT ? kept : `${points.slice(0, HEADER_LIMIT).join("")}… (${points.length - HEADER_LIMIT} more characters: \`ardia notes get ${site}\`)`;
+  const lines = splitlines(shown);
+  if (lines.length === 0) lines.push("");
+  return [site, [`# notes for ${site} (ardia notes): ${lines[0]}`, ...lines.slice(1).map((line) => `# ${line}`)].join("\n")];
 }
 
 function localMinute(seconds: number): string {

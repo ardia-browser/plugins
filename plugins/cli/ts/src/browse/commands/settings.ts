@@ -9,7 +9,8 @@ import { refuseOnBorrowed } from "./borrowed.ts";
 import { allow, PERMISSIONS } from "./permissions.ts";
 import { engineOffscreen, leaveOffscreen } from "./core.ts";
 import type { Ctx } from "./ctx.ts";
-import { canonical, register, unsupported } from "./index.ts";
+import { canonical, register } from "./index.ts";
+import { enableCredentials } from "../capture/network.ts";
 import { need, parse } from "./parse.ts";
 
 export const OFFSCREEN_TIMEOUT = 10.0;
@@ -35,7 +36,7 @@ export const PROMPT_NOTE =
   "so set it before the page asks";
 
 export type CredentialsHook = (ctx: Ctx, page: Page, username: string, password: string) => Promise<void>;
-export const setHooks: { credentials: CredentialsHook | null } = { credentials: null };
+export const setHooks: { credentials: CredentialsHook } = { credentials: (ctx, page, username, password) => enableCredentials(ctx, page, username, password) };
 
 async function overridden(page: Page, method: string, params: Record<string, unknown>): Promise<void> {
   await page.send(method, params);
@@ -92,7 +93,6 @@ async function setCredentials(ctx: Ctx, argv: string[]): Promise<Result> {
   const password = argv[2] as string;
   const page = await ctx.state.page();
   refuseOnBorrowed(ctx, page, `change the ${canonical(named)} of`);
-  if (setHooks.credentials === null) throw unsupported("`set credentials`");
   try {
     await setHooks.credentials(ctx, page, username, password);
   } catch (error) {

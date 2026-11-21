@@ -10,19 +10,11 @@ import { type TabRow } from "../state/state.ts";
 import * as temptabs from "../state/temptabs.ts";
 import { newTab, offscreenNote, pageTitle, showTab, wantsShow } from "./core.ts";
 import { type Ctx } from "./ctx.ts";
-import { register, unsupported } from "./index.ts";
+import { register } from "./index.ts";
 import { need, parse } from "./parse.ts";
 
 export const APPEAR_WAIT = 3.0;
 export const DIALOG_FALLBACK_TIMEOUT = 5.0;
-
-export function refusePageSetup(ctx: Ctx, what: string): void {
-  const enable = ctx.options["enable"];
-  const scripts = ctx.options["init_scripts"];
-  if ((Array.isArray(enable) && enable.length > 0) || (Array.isArray(scripts) && scripts.length > 0) || ctx.options["capture_console"]) {
-    throw unsupported(`${what} with page setup`);
-  }
-}
 
 function abandonedTab(ctx: Ctx): (targetId: string) => void {
   return (late) => temptabs.mustClose(ctx.state, late, true);
@@ -82,7 +74,6 @@ export async function cmdTab(ctx: Ctx, argv: string[]): Promise<Result> {
     return new Result({ tabs }, tabs.map((tab) => tabLine(tab, state.session)).join("\n") || "No tabs");
   }
   if (action === "new") {
-    refusePageSetup(ctx, "`tab new`");
     const label = (options["label"] as string | undefined) ?? null;
     const page = await newTab(ctx, args[1] ?? null, label, false, wantsShow(ctx, options), abandonedTab(ctx));
     return new Result({ tabId: state.tabId(page.targetId), targetId: page.targetId, url: page.url }, page.url || "about:blank");
@@ -112,7 +103,6 @@ export async function cmdTab(ctx: Ctx, argv: string[]): Promise<Result> {
 export async function cmdWindow(ctx: Ctx, argv: string[]): Promise<Result> {
   const [, args] = parse(argv);
   if (args.length === 0 || args[0] !== "new") throw new Usage("Usage: ardia browse window new [url]");
-  refusePageSetup(ctx, "`window new`");
   const page = await newTab(ctx, args[1] ?? null, null, true, false, abandonedTab(ctx));
   return new Result({ tabId: ctx.state.tabId(page.targetId), url: page.url }, page.url || "about:blank");
 }

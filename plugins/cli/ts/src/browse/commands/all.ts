@@ -1,4 +1,5 @@
 import "./core.ts";
+import "./wait.ts";
 import "./read.ts";
 import "./read-page.ts";
 import "./find.ts";
@@ -20,9 +21,5 @@ import "../auth/vault.ts";
 import "./tabs.ts";
 import "./nav.ts";
 import "./reading.ts";
-import { findAct } from "../act/find-act.ts";
-import { findActions } from "./find.ts";
-
-findActions.act = findAct;
 
 export { dispatch, hooks, OWNERS, register, served } from "./index.ts";

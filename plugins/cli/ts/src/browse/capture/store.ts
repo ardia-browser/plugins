@@ -73,10 +73,3 @@ export function removeListener(state: State, listener: Listener | null): void {
   if (at >= 0) state.listeners.splice(at, 1);
 }
 
-export type Peers = {
-  take: ((state: State, page: Page, options: { interactive?: boolean }) => Promise<unknown>) | null;
-  frameOffset: ((page: Page, frameId: string) => Promise<[number, number]>) | null;
-};
-
-export const peers: Peers = { take: null, frameOffset: null };
-

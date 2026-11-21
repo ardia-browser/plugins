@@ -374,7 +374,7 @@ describe("refs", () => {
 describe("the command table", () => {
   const ctx = () => new Ctx(stateWith(new FakeBrowser()), {}, "/", {}, null);
 
-  test("every Python command is in the table; served ones run, the rest answer unsupported", async () => {
+  test("every Python command is in the table and served", async () => {
     const python = process.env["ARDIA_TEST_PYTHON"] ?? "python3";
     const listed = spawnSync(python, ["-c", "from ardia_cli.browse import commands, capture, audit, flows, react, media; print('\\n'.join(sorted(commands.COMMANDS)))"], {
       cwd: new URL("../../..", import.meta.url).pathname,
@@ -384,11 +384,7 @@ describe("the command table", () => {
     const names = listed.stdout.trim().split("\n");
     const fullControl = names.includes("cdp") ? [] : ["cdp"];
     expect(Object.keys(OWNERS).sort()).toEqual([...names, "auth", ...fullControl].sort());
-    for (const name of ["open", "get", "wait", "session"]) expect(served(name)).toBe(true);
-    for (const name of ["click", "fill", "press", "drag", "batch", "react"]) expect(served(name)).toBe(true);
-    const failure = (await dispatch(ctx(), "eval", ["1"]).catch((error: unknown) => error)) as BrowseError;
-    expect(failure.code).toBe("unsupported");
-    expect(failure.text).toContain("isn't served by the TypeScript daemon yet");
+    expect(Object.keys(OWNERS).filter((name) => !served(name))).toEqual([]);
   });
 
   test("unknown and skipped commands answer like Python", async () => {

@@ -15,9 +15,9 @@ import { flag } from "../metrics.ts";
 import { pyError, pyFloat, pyIntArg } from "../pyerror.ts";
 import { type Element, type Page, quiet } from "../state/page.ts";
 import { type Json, record } from "../state/records.ts";
-import { peers } from "../capture/store.ts";
 import { captureOf } from "../capture/store.ts";
-import { unsupported } from "../commands/index.ts";
+import { take } from "../snapshot/take.ts";
+import { frameOffset } from "../state/offsets.ts";
 import { type AnnotationRow, drawAnnotations, thresholdOf } from "./draw.ts";
 import { defaultPath } from "./paths.ts";
 import { type Comparison, comparePngs, encodePng } from "./png.ts";
@@ -80,8 +80,7 @@ function num(value: unknown): number {
 }
 
 async function annotations(ctx: Ctx, page: Page, full: boolean): Promise<[Annotation[], Viewport]> {
-  if (peers.take === null) throw unsupported("`screenshot --annotate`");
-  await peers.take(ctx.state, page, { interactive: true });
+  await take(ctx.state, page, { interactive: true });
   const rows: Annotation[] = [];
   const metrics = await page.send("Page.getLayoutMetrics");
   const viewport = record(metrics["cssVisualViewport"]);
@@ -125,16 +124,6 @@ async function viewportOf(page: Page): Promise<Json> {
 
 async function rect(page: Page, element: Element): Promise<Json> {
   return record(await page.call("(el) => ardiaBrowse.rect(el)", [element], { frame: element.frame }));
-}
-
-export async function frameOffset(page: Page, frame: string): Promise<[number, number]> {
-  if (peers.frameOffset !== null) return peers.frameOffset(page, frame);
-  if (frame === page.mainFrame) return [0, 0];
-  const owner = await page.send("DOM.getFrameOwner", { frameId: frame });
-  const quads = (await page.send("DOM.getContentQuads", { backendNodeId: owner["backendNodeId"] }))["quads"];
-  if (!Array.isArray(quads) || quads.length === 0) return [0, 0];
-  const quad = (quads[0] as number[]).map(Number);
-  return [Math.min(...quad.filter((_, index) => index % 2 === 0)), Math.min(...quad.filter((_, index) => index % 2 === 1))];
 }
 
 function isPath(arg: string): boolean {
@@ -314,12 +303,6 @@ export async function cmdHighlight(ctx: Ctx, argv: string[]): Promise<Result> {
   }
   return new Result({ highlighted: args[0] });
 }
-
-export const mediaPeers = {
-  diffScreenshot,
-  capturePng: (page: Page, full: boolean) => capturePng(page, full),
-  comparePngs: (before: Uint8Array, after: Uint8Array) => comparison(before, after, 0.1, null),
-};
 
 register("screenshot", cmdScreenshot);
 register("pdf", cmdPdf);

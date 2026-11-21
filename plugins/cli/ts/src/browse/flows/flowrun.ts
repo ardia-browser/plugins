@@ -15,7 +15,7 @@ import { Page } from "../state/page.ts";
 import * as temptabs from "../state/temptabs.ts";
 import { monotonic } from "../state/wait.ts";
 import { extractEmbedded, type Spec } from "./flowlog.ts";
-import { drift, fillUrl, headerOk, type Json, listGone, outputRequest, parseParams, runner, save } from "./flows.ts";
+import { drift, fillUrl, headerOk, type Json, listGone, outputRequest, parseParams, save } from "./flows.ts";
 
 export const RUN_TIMEOUT = 60.0;
 export const BODY_LIMIT = 8 * 1024 * 1024;
@@ -249,4 +249,3 @@ export async function run(ctx: Ctx, root: string, flow: Json, options: Record<st
   return new Result(data, runText(flow, shaped), true);
 }
 
-runner.run = run;

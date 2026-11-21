@@ -12,7 +12,8 @@ import type { Element, Page } from "../state/page.ts";
 import { record } from "../state/records.ts";
 import { monotonic } from "../state/wait.ts";
 import type { Ctx } from "./ctx.ts";
-import { register, unsupported } from "./index.ts";
+import { register } from "./index.ts";
+import { findAct } from "../act/find-act.ts";
 import { need, parse } from "./parse.ts";
 import { frameOrMain } from "./shared.ts";
 
@@ -25,7 +26,7 @@ const TEXT_OF = "(el) => (el.innerText != null ? el.innerText : el.textContent |
 const WORDS = /[\p{L}\p{N}\p{Mn}\p{Mc}\p{Pc}]+/gu;
 
 export type FindAct = (ctx: Ctx, page: Page, element: Element, ref: string, action: string, rest: string[], humanize: boolean) => Promise<Result>;
-export const findActions: { act: FindAct | null } = { act: null };
+export const findActions: { act: FindAct } = { act: (ctx, page, element, ref, action, rest, humanize) => findAct(ctx, page, element, ref, action, rest, humanize) };
 
 export function findArguments(given: readonly string[], name: string | null): [string, string[], string | null] {
   let locator = given[0] as string;
@@ -178,7 +179,6 @@ export async function cmdFind(ctx: Ctx, argv: string[]): Promise<Result> {
   const ref = ctx.state.addRef(page, element, role, name);
   element.label = `@${ref}`;
   if (action !== "text") {
-    if (findActions.act === null) throw unsupported(`\`find … ${action}\``);
     return findActions.act(ctx, page, element, ref, action, rest, ctx.humanize && !options["no_humanize"]);
   }
   const text = await page.call(TEXT_OF, [element], { frame: element.frame });

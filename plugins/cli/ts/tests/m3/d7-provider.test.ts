@@ -89,6 +89,7 @@ describe("provider data in later errors", () => {
         throw new BrowseError(`Element not found: ${selector}. Verify the selector`, null, "not_found");
       },
     };
+    const realLogin = { ...loginHooks };
     loginHooks.actions = { typeInto: async () => {}, click: async () => {}, pressEnter: async () => {} };
     loginHooks.currentOrNew = async () => page as never;
     try {
@@ -97,8 +98,7 @@ describe("provider data in later errors", () => {
       expect(error.text).not.toContain(MARK);
       expect(error.text).toContain("Credential provider vault");
     } finally {
-      loginHooks.actions = null;
-      loginHooks.currentOrNew = null;
+      Object.assign(loginHooks, realLogin);
     }
   });
 });

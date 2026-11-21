@@ -231,12 +231,6 @@ describe("tabs this session opens are closed through the registry", () => {
     stopRetries(state);
   });
 
-  test("tab new with page setup is refused until that slice lands", async () => {
-    const state = stateWith(new FakeBrowser());
-    const error = await failure(dispatch(ctxOf(state, "tab", { enable: ["react-devtools"] }), "tab", ["new"]));
-    expect(error.code).toBe("unsupported");
-  });
-
   test("picking a tab by id ends a borrowed tab", async () => {
     const browser = new FakeBrowser();
     const state = stateWith(browser);
@@ -360,7 +354,7 @@ describe("test_browse_borrowed, ported", () => {
     expect([(result.data as Record<string, unknown>)["targetId"], state.current, state.attached]).toEqual(["USER", "USER", "USER"]);
     const userSession = browser.sent.find((entry) => entry.method === "Target.attachToTarget" && entry.params["targetId"] === "USER");
     expect(userSession).toBeDefined();
-    await dispatch(ctxOf(state, "open"), "open", ["about:blank"]).catch(() => null);
+    await dispatch(ctxOf(state, "open", { no_changes: true }), "open", ["about:blank"]).catch(() => null);
     expect(browser.methods()).toContain("Target.createTarget");
     expect(browser.sent.filter((entry) => entry.method === "Page.navigate" && entry.session === "SESSION-1")).toEqual([]);
     expect(state.current).toBe("MINE");

@@ -13,9 +13,10 @@ import { monotonic, waitUntil } from "../state/wait.ts";
 import { afterSameDocument, beforeNavigating } from "../read/settle.ts";
 import { arrival, attach, settled } from "../changes/observe.ts";
 import { type Ctx } from "./ctx.ts";
-import { register, unsupported } from "./index.ts";
+import { register } from "./index.ts";
+import { cmdRead } from "./read-page.ts";
 import { need, normalizeUrl, parse } from "./parse.ts";
-import { applyOpenOptions, refuseUnservedSetup, takeOpenOptions } from "./setup.ts";
+import { applyOpenOptions, takeOpenOptions } from "./setup.ts";
 
 const DROPPED_CONNECTION = /ERR_(EMPTY_RESPONSE|CONNECTION_(RESET|CLOSED|REFUSED|TIMED_OUT)|TIMED_OUT|HTTP2_PROTOCOL_ERROR|SSL_PROTOCOL_ERROR|QUIC_PROTOCOL_ERROR)/u;
 const FAILED_HOSTS_KEPT = 50;
@@ -147,10 +148,6 @@ export async function navigate(ctx: Ctx, page: Page, url: string, until = "load"
   await page.refreshFrames();
 }
 
-function refuse(what: string): never {
-  throw unsupported(what);
-}
-
 export function wantsShow(ctx: Ctx, options: Record<string, unknown>): boolean {
   return Boolean(options["show"] || ctx.options["show"] || ["1", "true", "yes", "on"].includes(String(ctx.env["AGENT_BROWSER_SHOW_TAB"] || "").toLowerCase()));
 }
@@ -164,7 +161,6 @@ export async function newTab(
   abandoned: ((targetId: string) => void) | null = null,
 ): Promise<Page> {
   const state = ctx.state;
-  refuseUnservedSetup(ctx);
   await state.connect();
   const params: Record<string, unknown> = { url: "about:blank", background: true };
   if (window) params["newWindow"] = true;
@@ -339,8 +335,6 @@ export async function cmdOpen(ctx: Ctx, argv: string[]): Promise<Result> {
   });
   if (options["headers"]) throw new Usage("ardia browse can't scope headers to an origin at launch; run `ardia browse set headers <json>` before `open`");
   takeOpenOptions(ctx, options);
-  refuseUnservedSetup(ctx);
-  if (options["read"]) refuse("`open --read`");
   const state = ctx.state;
   await state.connect();
   const url = args.length > 0 ? normalizeUrl(args[0] as string) : null;
@@ -394,6 +388,12 @@ export async function cmdOpen(ctx: Ctx, argv: string[]): Promise<Result> {
         (background ? "it takes input without being shown" : `this Ardia doesn't deliver input there. use: ardia browse tab ${tab} --show (or open <url> --show)`);
     }
   }
+  if (options["read"]) {
+    flag("open_read", true);
+    const read = await cmdRead(ctx, []);
+    data["read"] = read.data;
+    return new Result(data, `${text}\n\n${read.text}`, true);
+  }
   const result = new Result(data, text);
   if (reporting) {
     const report = await arrival(ctx, page, cameFrom);
@@ -418,55 +418,6 @@ export function globMatch(pattern: string, url: string): boolean {
   return new RegExp(`^(?:${regex})$`, "u").test(url);
 }
 
-export async function cmdWait(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, args] = parse(
-    argv,
-    { "--text": "value", "--url": "value", "--load": "value", "--fn": "value", "--state": "value", "--timeout": "value", "--download": "bool" },
-    { "-t": "--text", "-u": "--url", "-l": "--load", "-f": "--fn" },
-  );
-  const timeout = options["timeout"] ? Number(options["timeout"]) / 1000 : ctx.timeout;
-  if (options["download"]) refuse("`wait --download`");
-  if (Object.keys(options).length === 0 && args.length > 0 && /^\d+(\.\d+)?$/u.test(args[0] as string)) {
-    const ms = Number(args[0]);
-    await sleep(ms / 1000);
-    return new Result({ ms: Math.trunc(ms), waited: "timeout" });
-  }
-  if (options["fn"] !== undefined) refuse("`wait --fn`");
-  const page = await ctx.state.page();
-  if (options["text"] !== undefined) {
-    const wanted = options["text"] as string;
-    await waitUntil(
-      () => page.call("(t) => !!document.body && document.body.innerText.includes(t)", [wanted], { frame: page.mainFrame, read: true }),
-      timeout,
-      0.1,
-      `text ${reprStr(wanted)}`,
-    );
-    return new Result({ text: wanted, waited: "text" }, wanted);
-  }
-  if (options["url"] !== undefined) {
-    const pattern = options["url"] as string;
-    await waitUntil(
-      async () => {
-        await page.refreshFrames();
-        return globMatch(pattern, page.url);
-      },
-      timeout,
-      0.1,
-      `the URL to match ${pattern}`,
-    );
-    return new Result({ url: page.url, waited: "url" }, page.url);
-  }
-  if (options["load"] !== undefined) {
-    const until = options["load"] as string;
-    if (!["load", "domcontentloaded", "networkidle"].includes(until)) throw new Usage("--load takes load, domcontentloaded or networkidle");
-    await page.refreshFrames();
-    await waitForLoad(page, page.loader(page.mainFrame), timeout, until);
-    return new Result({ state: until });
-  }
-  need(args, 1, "wait <selector|ms> | --text | --url | --load | --fn");
-  refuse("`wait <selector>`");
-}
-
 export async function cmdSession(ctx: Ctx, argv: string[]): Promise<Result> {
   const [, args] = parse(argv, { "--json": "bool" });
   const state = ctx.state;
@@ -484,5 +435,4 @@ export async function cmdSession(ctx: Ctx, argv: string[]): Promise<Result> {
 }
 
 register("open", cmdOpen);
-register("wait", cmdWait);
 register("session", cmdSession);

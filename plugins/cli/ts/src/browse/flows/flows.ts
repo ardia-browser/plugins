@@ -18,6 +18,7 @@ import { closeFd, entryInfo, listNames, O_CREAT, O_TRUNC, O_WRONLY, openPrivate,
 import { renameAt, unlinkAt } from "../../libc.ts";
 import * as shaping from "../shape.ts";
 import type { State } from "../state/state.ts";
+import { run } from "./flowrun.ts";
 import { baseDomain, type FlowRequest, type Log, logOf, materialize, type Step, type Typed } from "./flowlog.ts";
 
 export const VERSION = 1;
@@ -947,7 +948,7 @@ function saveText(name: string, path: string, flow: Json, report: Json, secrets:
 }
 
 export type FlowRunner = (ctx: Ctx, root: string, flow: Json, options: Record<string, unknown>) => Promise<Result>;
-export const runner: { run: FlowRunner | null } = { run: null };
+export const runner: { run: FlowRunner } = { run: (ctx, root, flow, options) => run(ctx, root, flow, options) };
 
 export async function cmdFlow(ctx: Ctx, argv: string[]): Promise<Result> {
   const state = ctx.state;
@@ -988,7 +989,6 @@ export async function cmdFlow(ctx: Ctx, argv: string[]): Promise<Result> {
     const page = state.current ? (state.pages.get(state.current) ?? null) : null;
     const site = locate(root, positional[0] as string, options["site"] as string | undefined, page ? page.url : null);
     const flow = load(root, site, positional[0] as string);
-    if (runner.run === null) throw new BrowseError("`flow run` isn't served by the TypeScript daemon yet", null, "unsupported");
     return runner.run(ctx, root, flow, options);
   }
   if (runsLocally([action])) {

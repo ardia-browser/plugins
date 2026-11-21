@@ -2,11 +2,18 @@ import { type Value } from "../../json.ts";
 import { codePoints } from "../../pystr.ts";
 import { plainParams } from "../cdp/params.ts";
 import { navigate } from "../commands/core.ts";
+import { currentOrNew } from "../commands/shared.ts";
+import { expectInput } from "../act/common.ts";
+import { clearField, focusField } from "../act/fields.ts";
+import { click } from "../act/pointer.ts";
+import { inputOf } from "../input/input.ts";
+import { pauseAfter } from "../input/human.ts";
+import { rng } from "../../pylib/random.ts";
 import type { Ctx } from "../commands/ctx.ts";
 import { register } from "../commands/index.ts";
 import { parse } from "../commands/parse.ts";
 import { BrowseError, ConnectionLost, Usage } from "../daemon-errors.ts";
-import { Cancelled } from "../cdp/cancel.ts";
+import { Cancelled, sleep } from "../cdp/cancel.ts";
 import { safeCode } from "../codes.ts";
 import { Result } from "../daemon/render.ts";
 import { browseDir, checkName, closeFd, listNames, openPrivateDirAt, readPrivateJson, unlinkQuietly, writePrivateJson } from "../paths.ts";
@@ -181,7 +188,30 @@ export type LoginActions = {
   click: (page: Page, element: Element, humanize: boolean) => Promise<void>;
   pressEnter: (page: Page, frame: string, humanize: boolean) => Promise<void>;
 };
-export const loginHooks: { actions: LoginActions | null; currentOrNew: ((ctx: Ctx) => Promise<Page>) | null } = { actions: null, currentOrNew: null };
+async function typeInto(page: Page, element: Element, frame: string, text: string, humanize: boolean, guard: Guard): Promise<void> {
+  const facts = await page.call("(el) => ardiaBrowse.info(el)", [element], { frame });
+  await focusField(page, element, facts !== null && typeof facts === "object" ? (facts as Record<string, unknown>) : {}, humanize);
+  await clearField(page, element, humanize);
+  const input = inputOf(page);
+  const keyboard = input.keyboard(element, guard);
+  const typing = async () => {
+    for (const char of text) {
+      await keyboard.typeChar(char, humanize ? null : 0);
+      if (humanize) await sleep(pauseAfter(char, rng()));
+    }
+  };
+  await expectInput(page, frame, () => input.gesture("auth login", typing), { keydown: codePoints(text).length }, "The typing");
+}
+
+async function pressEnter(page: Page, frame: string, humanize: boolean): Promise<void> {
+  const input = inputOf(page);
+  await expectInput(page, frame, () => input.gesture("auth login", () => input.pressCombo("Enter", humanize)), { keydown: 1 }, "The Enter press");
+}
+
+export const loginHooks: { actions: LoginActions; currentOrNew: (ctx: Ctx) => Promise<Page> } = {
+  actions: { typeInto, click: (page, element, humanize) => click(page, element, humanize), pressEnter },
+  currentOrNew: (ctx) => currentOrNew(ctx),
+};
 
 const LOGIN_FLAGS = {
   "--url": "value",
@@ -207,8 +237,7 @@ export async function login(ctx: Ctx, argv: string[]): Promise<Result> {
   const [options, args] = parse(argv, LOGIN_FLAGS);
   if (args.length === 0) throw new Usage("Usage: ardia browse auth login <name> [--username-selector S] [--password-selector S] [--submit-selector S]");
   const actions = loginHooks.actions;
-  const currentOrNew = loginHooks.currentOrNew;
-  if (actions === null || currentOrNew === null) throw new BrowseError("`auth login` isn't served by the TypeScript daemon yet (it arrives with the act slice)", null, "unsupported");
+  const pageFor = loginHooks.currentOrNew;
   const name = args[0] as string;
   const root = ctx.state.dataRoot;
   if (root === null) throw new BrowseError("This session has no data folder for auth profiles");
@@ -239,7 +268,7 @@ export async function login(ctx: Ctx, argv: string[]): Promise<Result> {
     }
     const humanize = ctx.humanize && !options["no_humanize"];
     const origins = new Set<string>(meta["origins"]);
-    const page = await currentOrNew(ctx);
+    const page = await pageFor(ctx);
     await page.refreshFrames();
     if (!origins.has(originOfFrame(page, page.mainFrame) ?? "")) await navigate(ctx, page, meta["url"]);
     const passwordSelector = meta["passwordSelector"] || "input[type=password]";

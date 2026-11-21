@@ -4,11 +4,11 @@ import { BrowseError } from "../daemon-errors.ts";
 import { REACT_HOOK } from "../js/index.ts";
 import type { Page } from "../state/page.ts";
 import type { Ctx } from "./ctx.ts";
-import { unsupported } from "./index.ts";
+import { startConsole } from "../capture/console.ts";
 import { addInitScript } from "./pagejs.ts";
 
 export type ConsoleStarter = (ctx: Ctx, page: Page) => Promise<void>;
-export const setupHooks: { startConsole: ConsoleStarter | null } = { startConsole: null };
+export const setupHooks: { startConsole: ConsoleStarter } = { startConsole: (ctx, page) => startConsole(ctx, page) };
 
 const PY_ERRORS: Readonly<Record<string, [string, number]>> = {
   ENOENT: ["FileNotFoundError", 2],
@@ -81,10 +81,6 @@ function list(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String) : [];
 }
 
-export function refuseUnservedSetup(ctx: Ctx): void {
-  if (ctx.options["capture_console"] && setupHooks.startConsole === null) throw unsupported("`--capture-console`");
-}
-
 export function takeOpenOptions(ctx: Ctx, options: Record<string, unknown>): void {
   const enable = list(ctx.options["enable"]);
   for (const value of list(options["enable"])) enable.push(...value.split(","));
@@ -100,8 +96,6 @@ export async function applyOpenOptions(ctx: Ctx, page: Page): Promise<void> {
   }
   for (const file of list(ctx.options["init_scripts"])) await addInitScript(ctx.state, page, await readScript(ctx.path(file)), null);
   if (ctx.options["capture_console"]) {
-    const start = setupHooks.startConsole;
-    if (start === null) throw unsupported("`--capture-console`");
-    await start(ctx, page);
+    await setupHooks.startConsole(ctx, page);
   }
 }

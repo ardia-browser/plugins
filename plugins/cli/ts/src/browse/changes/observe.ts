@@ -14,6 +14,11 @@ import { Refs } from "../state/refs.ts";
 import type { Listener, State } from "../state/state.ts";
 import { monotonic } from "../state/wait.ts";
 import { tokenHex } from "../tokens.ts";
+import "../snapshot/collect.ts";
+import { capture } from "../flows/flowlog.ts";
+import { hint } from "../flows/flows.ts";
+import { noteHeader } from "../../notes-files.ts";
+import { pageSite } from "../../notes.ts";
 import { cleanUrl } from "./urls.ts";
 import { diff, freshRows, moved, NAVIGATED_TEXT, OPENED_TEXT, type Report, type TextBlock, type View, type Write } from "./report.ts";
 import { addsText, asData, openedAnchors, renderReport } from "./text.ts";
@@ -21,7 +26,7 @@ import { markShown, remember, view, viewFrame } from "./views.ts";
 
 async function collect(state: State, page: Page): Promise<Node[]> {
   const snapshots = Refs.snapshots;
-  if (snapshots === null) throw new BrowseError("The page's accessibility snapshot isn't served by the TypeScript daemon yet (it arrives with a later slice of the port)", null, "unsupported");
+  if (snapshots === null) throw new Error("the snapshot collector isn't registered");
   return (await snapshots.collect(state, page)) as Node[];
 }
 
@@ -47,11 +52,21 @@ export const MIN_FRAME_TEXT = 200;
 const MARKER = /\x01([0-9]+)\x01/gu;
 
 export type ObserveHooks = {
-  arrivalNotes: ((state: State, before: View | null, after: View) => string | null) | null;
-  capture: ((page: Page, watch: NetworkWatch) => Promise<void>) | null;
+  arrivalNotes: (state: State, before: View | null, after: View) => string | null;
+  capture: (page: Page, watch: NetworkWatch) => Promise<void>;
 };
 
-export const observeHooks: ObserveHooks = { arrivalNotes: null, capture: null };
+export function siteNotes(state: State, before: View | null, after: View): string | null {
+  const root = state.dataRoot;
+  if (!root || (before !== null && pageSite(before.url) === pageSite(after.url))) return null;
+  const lines = [noteHeader(root, after.url)[1], hint(state, after.url)];
+  return lines.filter((line) => line).join("\n") || null;
+}
+
+export const observeHooks: ObserveHooks = {
+  arrivalNotes: (state, before, after) => siteNotes(state, before, after),
+  capture: (page, watch) => capture(page, watch),
+};
 
 export class TimedOut extends Error {}
 
@@ -330,7 +345,7 @@ export async function observe<T>(ctx: Ctx, page: Page, run: () => Promise<T>, re
     const settling = clock();
     settledNow = await watch.settle(() => navigationBusy(page, navigations));
     spent("settle_ms", settling);
-    if (observeHooks.capture !== null) await observeHooks.capture(page, watch);
+    await observeHooks.capture(page, watch);
   } finally {
     await watch.stop();
   }
@@ -367,7 +382,7 @@ export async function settled<T>(page: Page, run: () => Promise<T>): Promise<T> 
     const settling = clock();
     await watch.settle(() => navigationBusy(page, navigations));
     spent("settle_ms", settling);
-    if (observeHooks.capture !== null) await observeHooks.capture(page, watch);
+    await observeHooks.capture(page, watch);
     return value;
   } finally {
     await watch.stop();
@@ -396,7 +411,7 @@ export async function arrival(ctx: Ctx, page: Page, cameFrom: string): Promise<R
 }
 
 function arrivalNotes(state: State, before: View | null, after: View): string | null {
-  return observeHooks.arrivalNotes === null ? null : observeHooks.arrivalNotes(state, before, after);
+  return observeHooks.arrivalNotes(state, before, after);
 }
 
 async function addText(ctx: Ctx, page: Page, nodes: Node[], report: Report, before: View | null): Promise<void> {

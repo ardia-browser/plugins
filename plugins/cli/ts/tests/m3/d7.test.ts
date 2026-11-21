@@ -506,6 +506,7 @@ describe("credentials never echoed", () => {
     saveRegistry(root, [{ name: "vault", package: "p", version: "1", spec: "p@1", command, capabilities: ["credential.read"] }]);
     const page = { mainFrame: "F", frames: new Map([["F", { origin: "https://x.example" }]]), refreshFrames: async () => new Map() };
     const state = { dataRoot: root, locate: async () => { throw new BrowseError(`nothing typed ${secret}`); } };
+    const realLogin = { ...loginHooks };
     loginHooks.actions = { typeInto: async () => {}, click: async () => {}, pressEnter: async () => {} };
     loginHooks.currentOrNew = async () => page as never;
     try {
@@ -513,8 +514,7 @@ describe("credentials never echoed", () => {
       expect(error).toBeInstanceOf(BrowseError);
       expect(JSON.stringify([error.text, error.data, error.code])).not.toContain(secret);
     } finally {
-      loginHooks.actions = null;
-      loginHooks.currentOrNew = null;
+      Object.assign(loginHooks, realLogin);
     }
   });
 
@@ -525,6 +525,5 @@ describe("credentials never echoed", () => {
       const error = (await cmdSet({ state, options: {} } as never, argv).catch((thrown: unknown) => thrown)) as BrowseError;
       expect(JSON.stringify([error.text, error.data])).not.toContain(secret);
     }
-    expect(setHooks.credentials).toBeNull();
   });
 });
