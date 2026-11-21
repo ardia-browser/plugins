@@ -1,3 +1,4 @@
+import { buildStamp } from "../version.ts";
 import { parseQsl, urlsplit } from "../pylib/urllib.ts";
 import { PyException } from "../pylib/str.ts";
 import { builtinCrash } from "./errors.ts";
@@ -165,7 +166,7 @@ export function endpointKey(endpoint: Endpoint, root: string): string {
 }
 
 export function sessionKey(namespace: string, endpointKey: string, session: string, forPlugin = false): string {
-  const raw = `${namespace}\0${endpointKey}\0${session}${forPlugin ? "\0plugin" : ""}`;
+  const raw = `${namespace}\0${endpointKey}\0${session}${forPlugin ? "\0plugin" : ""}\0build:${buildStamp()}`;
   return createHash("sha256").update(raw, "utf8").digest("hex").slice(0, 24);
 }
 

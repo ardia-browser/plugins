@@ -2706,7 +2706,13 @@
    "namespace": ""
   },
   "files": {
-   "data/Browse/30fde17e34758850f6bbdae3.sock": "x"
+   "data/Browse/{port_session_key:9333}.sock": "x"
+  },
+  "intentional": {
+   "why": "the TypeScript client's session key carries the build stamp (ARDIA_BROWSE_BUILD=parity here), so the refused socket has another name",
+   "stderr": {
+    "text": "✗ Refusing the session socket: 2b0ed6f57288b1dec2d0eec4.sock isn't a socket\n"
+   }
   }
  },
  {

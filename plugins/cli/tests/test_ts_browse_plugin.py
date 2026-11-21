@@ -233,10 +233,11 @@ class LongDataDirs(PluginCredentialProcesses):
             sys.path.insert(0, str(harness.CLI))
         from ardia_cli.browse import client, paths
 
-        key = paths.session_key("", client.endpoint_key(None, None, self.long)[0], "default")
+        key = harness.stamped_session_key("", client.endpoint_key(None, None, self.long)[0], "default", False, harness.PARITY_BUILD)
         daemon = RelativeDaemon(self.long / "Browse", key, {"exit": 0, "out": "Long dirs work\n", "err": ""})
         self.addCleanup(daemon.close)
         env = {key: value for key, value in self.env(9).items() if not key.startswith(("ARDIA_BROWSE", "ARDIA_PLUGIN"))}
+        env["ARDIA_BROWSE_BUILD"] = harness.PARITY_BUILD
         process = subprocess.Popen([str(self.install.root / "bin" / "ardia"), "browse", "get", "title"], env=env, cwd=self.box / "tmp",
                                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
         out, err = process.communicate(timeout=60)
@@ -248,14 +249,14 @@ class LongDataDirs(PluginCredentialProcesses):
 @unittest.skipUnless(programs(), "build plugins/cli/rust (the router) and plugins/cli/ts first")
 class JsonAndStdin(LongDataDirs):
     def plain_env(self) -> dict:
-        return {key: value for key, value in self.env(9).items() if not key.startswith(("ARDIA_BROWSE", "ARDIA_PLUGIN"))}
+        return {**{key: value for key, value in self.env(9).items() if not key.startswith(("ARDIA_BROWSE", "ARDIA_PLUGIN"))}, "ARDIA_BROWSE_BUILD": harness.PARITY_BUILD}
 
     def live_daemon(self, request_wait=None) -> RelativeDaemon:
         if str(harness.CLI) not in sys.path:
             sys.path.insert(0, str(harness.CLI))
         from ardia_cli.browse import client, paths
 
-        key = paths.session_key("", client.endpoint_key(None, None, self.long)[0], "default")
+        key = harness.stamped_session_key("", client.endpoint_key(None, None, self.long)[0], "default", False, harness.PARITY_BUILD)
         daemon = RelativeDaemon(self.long / "Browse", key, {"exit": 0, "out": "2\n", "err": ""}, request_wait)
         self.addCleanup(daemon.close)
         return daemon

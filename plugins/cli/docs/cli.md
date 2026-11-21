@@ -2121,6 +2121,12 @@ parity harness rather than stripped wholesale:
   client: the local ones (`auth`, `notes`, local `flow`, `plugin`, `read`, `session id`/`list`, `close --all`) as
   `cli.run_local` does, and `--out` as `outfile` does. Only the M3 harness's fleet client can start Python's daemon
   (`ARDIA_BROWSE_DAEMON=python`), for differential runs.
+- `ardia browse`: the session key carries the build: `sha256(namespace, endpoint, session[, plugin], build:<stamp>)`,
+  where the stamp is the version plus a hash of the TypeScript sources, baked in by `ts/scripts/build.sh`
+  (`ARDIA_BROWSE_BUILD` overrides it, for harnesses). A client only ever reaches a daemon of its own build: after an
+  update, the old build's daemon (or Python's, whose key has no stamp) is left alone under its old key until it idles
+  out or `close --all` stops it, and the client starts its own. The daemon's `<key>.json` also records `build`, which
+  `session list --json` shows.
 - `ardia browse batch`: an `eval` or `script` line keeps its code as typed (an intentional fix). Python shell-splits every
   batch line and eval joins the pieces with spaces, so `eval document.querySelectorAll("[title]").length` ran as
   `querySelectorAll([title])` (5 of 27 bench runs retried for it). The TypeScript daemon reads the code as the rest of

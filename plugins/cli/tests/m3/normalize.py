@@ -80,6 +80,7 @@ RULES = {
     "replay-order": "replay checks order in the tap: a request matches the recording within `lookahead` concurrency groups (tests/m3/elastic.json), so tasks that interleave by timing don't fail",
     "replay-repeats": "replay lets the read-only probes listed in tests/m3/elastic.json repeat or be skipped, since their count follows the daemon's sleeps",
     "unstable-steps": "live mode compares only exit and stderr of the steps a scenario lists in `unstable_steps`, and none of their requests, with the reason in the scenario",
+    "build": "a session's <key>.json is compared without `build`, the build stamp only the TypeScript daemon records",
     "metrics": "of an answer's `metrics` only the key set is compared, never values, and without the TS-only flags and counts (ts_only_metrics: the ones the daemon's metrics.ts registers and command_metrics doesn't)",
     "secrets": "credential-bearing request params (continueWithAuth's username and password, Authorization/Proxy-Authorization/Cookie header values, cookie values being set) become <REDACTED>; the tap writes them redacted too, and replay matches on the redacted form",
     "racy-steps": "every mode compares only the exit status of the steps a scenario lists in `racy_steps`, where Chromium decides which of two errors the same request gets (the reason is in the scenario)",
@@ -286,7 +287,10 @@ def files(found: dict, subs: Subs, ids: Ids, keys: dict) -> dict:
         clean = TABS_FILE.sub("tabs-<HASH>", KEY.sub(lambda hit: keys.get(hit.group(), "<KEY>"), name))
         item = {"mode": entry["mode"], "kind": entry["kind"]}
         if "json" in entry:
-            text = ids.in_text(subs.text(json.dumps(ids.walk(file_value(entry["json"])))))
+            value = entry["json"]
+            if KEY.fullmatch(name.removesuffix(".json")) and isinstance(value, dict):
+                value = {field: item for field, item in value.items() if field != "build"}
+            text = ids.in_text(subs.text(json.dumps(ids.walk(file_value(value)))))
             item["json"] = json.loads(KEY.sub(lambda hit: keys.get(hit.group(), "<KEY>"), text))
         shaped[clean] = item
     return dict(sorted(shaped.items()))

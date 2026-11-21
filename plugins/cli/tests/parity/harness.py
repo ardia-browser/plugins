@@ -551,8 +551,16 @@ class FakeArdia:
         self.stopped.set()
 
 
+PARITY_BUILD = "parity"
+
+
+def stamped_session_key(namespace: str, key_source: str, session: str, for_plugin: bool, build: str) -> str:
+    raw = f"{namespace}\0{key_source}\0{session}{chr(0) + 'plugin' if for_plugin else ''}\0build:{build}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
 class FakeDaemon:
-    def __init__(self, data: Path, spec: dict):
+    def __init__(self, data: Path, spec: dict, build: str | None = None):
         if str(CLI) not in sys.path:
             sys.path.insert(0, str(CLI))
         from ardia_cli.browse import client, paths
@@ -566,8 +574,11 @@ class FakeDaemon:
             key_source = "plugin:" + hashlib.sha256(endpoint["plugin"].encode()).hexdigest()[:32]
         else:
             key_source = client.endpoint_key(None, None, data)[0]
-        key = paths.session_key(spec.get("namespace", ""), key_source, spec.get("session", "default"),
-                                for_plugin=isinstance(endpoint, dict) and "plugin" in endpoint)
+        for_plugin = isinstance(endpoint, dict) and "plugin" in endpoint
+        if build is None:
+            key = paths.session_key(spec.get("namespace", ""), key_source, spec.get("session", "default"), for_plugin=for_plugin)
+        else:
+            key = stamped_session_key(spec.get("namespace", ""), key_source, spec.get("session", "default"), for_plugin, build)
         browse = data / paths.DIR_NAME
         browse.mkdir(mode=0o700, parents=True, exist_ok=True)
         browse.chmod(0o700)
@@ -921,7 +932,24 @@ def places_of(box: Path) -> dict:
             "harness_pid": str(os.getpid())}
 
 
-def materialize(box: Path, case: Case) -> dict:
+PORT_SESSION_KEY = re.compile(r"\{port_session_key:(\d{1,5})\}")
+
+
+def side_file_name(rel: str, build: str | None) -> str:
+    def key(match) -> str:
+        source = f"port:{match.group(1)}"
+        if build is not None:
+            return stamped_session_key("", source, "default", False, build)
+        if str(CLI) not in sys.path:
+            sys.path.insert(0, str(CLI))
+        from ardia_cli.browse import paths
+
+        return paths.session_key("", source, "default")
+
+    return PORT_SESSION_KEY.sub(key, rel)
+
+
+def materialize(box: Path, case: Case, build: str | None = None) -> dict:
     check_case_is_contained(case)
     box.mkdir(parents=True)
     for name in ROOTS:
@@ -936,7 +964,7 @@ def materialize(box: Path, case: Case) -> dict:
         (telemetry / "cli-queue.jsonl").write_text(json.dumps(QUEUED) + "\n")
     places = places_of(box)
     for rel, spec in case.files.items():
-        path = box / rel
+        path = box / side_file_name(rel, build)
         try:
             make_parents(box, path)
         except UnsafeCase as error:
@@ -1085,7 +1113,8 @@ def with_credential(command: list[str], spec: dict | None, box: Path) -> tuple[l
 
 
 def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[Observed, list]:
-    places = materialize(box, case)
+    build = None if side == "python" else PARITY_BUILD
+    places = materialize(box, case, build)
     control = case.control
     fake = None
     if control is not None:
@@ -1095,12 +1124,14 @@ def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[O
         if fake:
             fake.close()
         raise UnsafeCase(f"case {case.id}: a browse or notes case needs a daemon, or the client starts a real one")
-    daemon = FakeDaemon(box / "data", expand(case.daemon, places)) if case.daemon is not None else None
+    daemon = FakeDaemon(box / "data", expand(case.daemon, places), build) if case.daemon is not None else None
     before = tree(box)
     started = time.time()
     stdin = decode_blob(expand(case.stdin, places) if isinstance(case.stdin, str) else case.stdin)
     timed_out = False
     env = environment(box, places, case)
+    if build is not None:
+        env["ARDIA_BROWSE_BUILD"] = build
     argv = expand(list(case.argv), places)
     try:
         check_effective_paths(box, case, env, argv, places["cwd"])

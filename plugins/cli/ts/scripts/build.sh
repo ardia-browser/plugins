@@ -63,10 +63,13 @@ if [ -n "$headers" ]; then
   $compiler $warnings $platform -fsyntax-only -include "$headers/node_api.h" native/ardia-libc.c
 fi
 $compiler $warnings $platform -O2 $link -o "$addon" native/ardia-libc.c
+if command -v sha256sum >/dev/null 2>&1; then digest="sha256sum"; else digest="shasum -a 256"; fi
+sources=$(find src -type f | LC_ALL=C sort | xargs $digest | $digest | cut -c1-12)
 "$bun" build src/main.ts --compile --minify \
   --no-compile-autoload-dotenv --no-compile-autoload-bunfig \
   --no-compile-autoload-tsconfig --no-compile-autoload-package-json \
   --define "ARDIA_CLI_VERSION=\"$version\"" \
+  --define "ARDIA_CLI_BUILD=\"$version+$sources\"" \
   ${target:+--target=$target} --outfile "$out" >/dev/null
 perl -0777 -pi -e 'for my $name (qw(BUN_BE_BUN BUN_OPTIONS BUN_INSPECT BUN_INSPECT_CONNECT_TO BUN_INSPECT_NOTIFY BUN_INSPECT_PRELOAD)) {
   (my $unmatchable = $name) =~ s/^BUN_/BUN=/;

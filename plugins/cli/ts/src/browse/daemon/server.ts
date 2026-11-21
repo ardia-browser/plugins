@@ -29,7 +29,7 @@ import { dispatch, hooks } from "../commands/all.ts";
 import { Ctx } from "../commands/ctx.ts";
 import { State } from "../state/state.ts";
 import { reportException } from "../../telemetry.ts";
-import { cliVersion } from "../../version.ts";
+import { buildStamp, cliVersion } from "../../version.ts";
 
 export const CONNECTED_IDLE = 30.0;
 export const DEFAULT_DAEMON_IDLE = 3600.0;
@@ -237,6 +237,7 @@ export class Daemon {
         ["endpoint", this.config.endpointLabel],
         ["pid", BigInt(process.pid)],
         ["started", BigInt(Math.trunc(wallSeconds()))],
+        ["build", buildStamp()],
       ]),
     );
     const onSignal = () => this.beginStop();
