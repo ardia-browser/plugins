@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Row 12 · Closed shadow roots</title>
+<style>
+body{font:14px system-ui;margin:16px}
+#verdict{font:bold 20px system-ui}.pass{color:#080}.fail{color:#c00}
+</style>
+<div id="verdict">RUNNING row 12</div>
+<div id="host"></div>
+<pre id="measured"></pre>
+<script>
+const ROW = 12;
+function report(pass, measured) {
+  const result = {row: ROW, pass: !!pass, measured};
+  window.__humanResult = result;
+  document.documentElement.dataset.humanResult = JSON.stringify(result);
+  const verdict = document.getElementById('verdict');
+  verdict.textContent = (pass ? 'PASS' : 'FAIL') + ' row ' + ROW;
+  verdict.className = pass ? 'pass' : 'fail';
+  document.getElementById('measured').textContent = JSON.stringify(measured, null, 2);
+}
+function onFinish(run) {
+  let done = false;
+  const go = () => {
+    if (done || !document.documentElement.hasAttribute('data-finish')) return;
+    done = true;
+    Promise.resolve().then(run).catch(error => report(false, {error: String(error)}));
+  };
+  new MutationObserver(go).observe(document.documentElement, {attributes: true, attributeFilter: ['data-finish']});
+  go();
+}
+function driverRead() {
+  try { return JSON.parse(document.documentElement.dataset.read || 'null'); } catch { return null; }
+}
+</script>
+<script>
+const clicks = [];
+const host = document.getElementById('host');
+const outerRoot = host.attachShadow({mode: 'closed'});
+outerRoot.innerHTML = '<p>outer closed text</p><div id="inner"></div>';
+const innerRoot = outerRoot.getElementById('inner').attachShadow({mode: 'closed'});
+const secret = 'inner secret ' + Math.floor(1000 + Math.random() * 9000);
+innerRoot.innerHTML = '<p id="text"></p><button id="deep" style="width:160px;height:40px">deep button</button>';
+innerRoot.getElementById('text').textContent = secret;
+innerRoot.getElementById('deep').addEventListener('click', event => clicks.push({trusted: event.isTrusted, composedPathLength: event.composedPath().length}));
+onFinish(() => {
+  const read = driverRead() || {};
+  const measured = {clicks, driverRead: read.text ?? null, expected: secret, hostShadowRootVisible: host.shadowRoot !== null};
+  report(read.text === secret && clicks.length === 1 && clicks[0].trusted, measured);
+});
+</script>
+</html>

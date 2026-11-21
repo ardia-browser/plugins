@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Row 5 · Focus and IME</title>
+<style>
+body{font:14px system-ui;margin:16px}
+#verdict{font:bold 20px system-ui}.pass{color:#080}.fail{color:#c00}
+input{width:220px;height:28px;display:block;margin:6px 0}
+</style>
+<div id="verdict">RUNNING row 5</div>
+<input id="a" placeholder="first">
+<input id="b" placeholder="second">
+<pre id="measured"></pre>
+<script>
+const ROW = 5;
+function report(pass, measured) {
+  const result = {row: ROW, pass: !!pass, measured};
+  window.__humanResult = result;
+  document.documentElement.dataset.humanResult = JSON.stringify(result);
+  const verdict = document.getElementById('verdict');
+  verdict.textContent = (pass ? 'PASS' : 'FAIL') + ' row ' + ROW;
+  verdict.className = pass ? 'pass' : 'fail';
+  document.getElementById('measured').textContent = JSON.stringify(measured, null, 2);
+}
+function onFinish(run) {
+  let done = false;
+  const go = () => {
+    if (done || !document.documentElement.hasAttribute('data-finish')) return;
+    done = true;
+    Promise.resolve().then(run).catch(error => report(false, {error: String(error)}));
+  };
+  new MutationObserver(go).observe(document.documentElement, {attributes: true, attributeFilter: ['data-finish']});
+  go();
+}
+function driverRead() {
+  try { return JSON.parse(document.documentElement.dataset.read || 'null'); } catch { return null; }
+}
+</script>
+<script>
+const order = [];
+const composition = [];
+const inputTypes = [];
+const focusSamples = {atLoad: document.hasFocus(), visibilityAtLoad: document.visibilityState};
+for (const type of ['focus', 'blur', 'focusin', 'focusout']) {
+  document.addEventListener(type, event => {
+    if (event.target.id) order.push(type + ':' + event.target.id + (event.isTrusted ? '' : ':untrusted'));
+    if (type === 'focus' && event.target.id === 'b') focusSamples.inFocusOfB = document.hasFocus();
+  }, true);
+}
+const b = document.getElementById('b');
+for (const type of ['compositionstart', 'compositionupdate', 'compositionend']) {
+  b.addEventListener(type, event => composition.push({type, data: event.data, trusted: event.isTrusted}));
+}
+b.addEventListener('beforeinput', event => inputTypes.push(event.inputType + (event.isTrusted ? '' : ':untrusted')));
+onFinish(() => {
+  const read = driverRead() || {};
+  const measured = {order, composition, inputTypes, value: b.value, focusSamples, focusAtFinish: document.hasFocus(), visibility: document.visibilityState, driver: read};
+  const expectedOrder = ['focus:a', 'focusin:a', 'blur:a', 'focusout:a', 'focus:b', 'focusin:b'];
+  const orderOk = expectedOrder.every((entry, index) => order[index] === entry);
+  const end = composition.find(entry => entry.type === 'compositionend');
+  const compositionOk = composition[0]?.type === 'compositionstart' && composition.some(entry => entry.type === 'compositionupdate') && end?.data === '日本' && composition.filter(entry => entry.type !== 'compositionend').every(entry => entry.trusted);
+  measured.compositionendTrusted = end?.trusted ?? null;
+  const typesOk = ['insertCompositionText', 'deleteContentBackward', 'insertText'].every(type => inputTypes.includes(type));
+  measured.checks = {orderOk, compositionOk, typesOk, valueOk: b.value === '日x', hasFocus: !!focusSamples.inFocusOfB};
+  report(Object.values(measured.checks).every(Boolean), measured);
+});
+</script>
+</html>

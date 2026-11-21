@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Row 4 · Real pointer movement</title>
+<style>
+body{font:14px system-ui;margin:16px}
+#verdict{font:bold 20px system-ui}.pass{color:#080}.fail{color:#c00}
+#pad{width:420px;height:260px;background:#eee;position:relative}
+#hover{width:120px;height:60px;background:rgb(200,0,0);margin-top:8px}
+#hover:hover{background:rgb(0,128,0)}
+</style>
+<div id="verdict">RUNNING row 4</div>
+<div id="pad">move across</div>
+<div id="hover">hover me</div>
+<pre id="measured"></pre>
+<script>
+const ROW = 4;
+function report(pass, measured) {
+  const result = {row: ROW, pass: !!pass, measured};
+  window.__humanResult = result;
+  document.documentElement.dataset.humanResult = JSON.stringify(result);
+  const verdict = document.getElementById('verdict');
+  verdict.textContent = (pass ? 'PASS' : 'FAIL') + ' row ' + ROW;
+  verdict.className = pass ? 'pass' : 'fail';
+  document.getElementById('measured').textContent = JSON.stringify(measured, null, 2);
+}
+function onFinish(run) {
+  let done = false;
+  const go = () => {
+    if (done || !document.documentElement.hasAttribute('data-finish')) return;
+    done = true;
+    Promise.resolve().then(run).catch(error => report(false, {error: String(error)}));
+  };
+  new MutationObserver(go).observe(document.documentElement, {attributes: true, attributeFilter: ['data-finish']});
+  go();
+}
+function driverRead() {
+  try { return JSON.parse(document.documentElement.dataset.read || 'null'); } catch { return null; }
+}
+</script>
+<script>
+const pad = document.getElementById('pad');
+const hover = document.getElementById('hover');
+const stats = {moves: 0, trusted: 0, withMovement: 0, coalescedTotal: 0, coalescedMax: 0, predictedSupported: false, mouseMoves: 0};
+pad.addEventListener('pointermove', event => {
+  stats.moves++;
+  if (event.isTrusted) stats.trusted++;
+  if (event.movementX || event.movementY) stats.withMovement++;
+  const coalesced = event.getCoalescedEvents ? event.getCoalescedEvents().length : 0;
+  stats.coalescedTotal += coalesced;
+  stats.coalescedMax = Math.max(stats.coalescedMax, coalesced);
+  stats.predictedSupported ||= typeof event.getPredictedEvents === 'function';
+});
+pad.addEventListener('mousemove', () => stats.mouseMoves++);
+const hoverState = {enter: null, styleOnEnter: null};
+hover.addEventListener('pointerenter', event => {
+  hoverState.enter = event.isTrusted;
+  requestAnimationFrame(() => { hoverState.styleOnEnter = getComputedStyle(hover).backgroundColor; });
+});
+onFinish(() => {
+  const measured = {...stats, hover: {...hoverState, matchesHoverNow: hover.matches(':hover'), styleNow: getComputedStyle(hover).backgroundColor}};
+  const pass = stats.moves >= 20 && stats.trusted === stats.moves && stats.withMovement >= stats.moves * 0.8
+    && hoverState.enter === true && measured.hover.matchesHoverNow && measured.hover.styleNow === 'rgb(0, 128, 0)';
+  report(pass, measured);
+});
+</script>
+</html>

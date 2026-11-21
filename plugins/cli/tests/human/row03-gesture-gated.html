@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Row 3 · Gesture-gated APIs</title>
+<style>
+body{font:14px system-ui;margin:16px}
+#verdict{font:bold 20px system-ui}.pass{color:#080}.fail{color:#c00}
+button{width:200px;height:40px;margin:4px}
+</style>
+<div id="verdict">RUNNING row 3</div>
+<button id="popup">Open a popup</button>
+<button id="fullscreen">Go fullscreen</button>
+<button id="autoplay">Play with sound</button>
+<button id="payment">Pay</button>
+<button id="clip">Clipboard round trip</button>
+<button id="pick">Pick a file (input)</button>
+<button id="fsa">showOpenFilePicker</button>
+<button id="cred">Create a passkey</button>
+<input id="file" type="file" hidden>
+<pre id="measured"></pre>
+<script>
+const ROW = 3;
+function report(pass, measured) {
+  const result = {row: ROW, pass: !!pass, measured};
+  window.__humanResult = result;
+  document.documentElement.dataset.humanResult = JSON.stringify(result);
+  const verdict = document.getElementById('verdict');
+  verdict.textContent = (pass ? 'PASS' : 'FAIL') + ' row ' + ROW;
+  verdict.className = pass ? 'pass' : 'fail';
+  document.getElementById('measured').textContent = JSON.stringify(measured, null, 2);
+}
+function onFinish(run) {
+  let done = false;
+  const go = () => {
+    if (done || !document.documentElement.hasAttribute('data-finish')) return;
+    done = true;
+    Promise.resolve().then(run).catch(error => report(false, {error: String(error)}));
+  };
+  new MutationObserver(go).observe(document.documentElement, {attributes: true, attributeFilter: ['data-finish']});
+  go();
+}
+function driverRead() {
+  try { return JSON.parse(document.documentElement.dataset.read || 'null'); } catch { return null; }
+}
+</script>
+<script>
+const measured = {atLoad: {}, gated: {}, clipboard: [], fileInput: null, fsa: null, credential: null};
+const errorOf = error => error ? {name: error.name, message: String(error.message).slice(0, 160)} : null;
+const tone = (() => {
+  const rate = 8000, samples = rate / 2, data = new DataView(new ArrayBuffer(44 + samples * 2));
+  const text = (offset, value) => [...value].forEach((c, i) => data.setUint8(offset + i, c.charCodeAt(0)));
+  text(0, 'RIFF'); data.setUint32(4, 36 + samples * 2, true); text(8, 'WAVEfmt '); data.setUint32(16, 16, true);
+  data.setUint16(20, 1, true); data.setUint16(22, 1, true); data.setUint32(24, rate, true); data.setUint32(28, rate * 2, true);
+  data.setUint16(32, 2, true); data.setUint16(34, 16, true); text(36, 'data'); data.setUint32(40, samples * 2, true);
+  for (let i = 0; i < samples; i++) data.setInt16(44 + i * 2, Math.sin(i / 4) * 8000, true);
+  return URL.createObjectURL(new Blob([data], {type: 'audio/wav'}));
+})();
+const audio = new Audio(tone);
+audio.volume = 0.05;
+const payment = () => new PaymentRequest([{supportedMethods: 'https://127.0.0.1/pay'}], {total: {label: 'Test', amount: {currency: 'USD', value: '1.00'}}});
+(async () => {
+  const popup = window.open('about:blank', '_blank', 'popup,width=300,height=200');
+  measured.atLoad.popup = !!popup;
+  popup?.close();
+  measured.atLoad.autoplay = await audio.play().then(() => { audio.pause(); return true; }, errorOf);
+  measured.atLoad.fullscreen = await document.documentElement.requestFullscreen().then(() => document.exitFullscreen().then(() => true), errorOf);
+  measured.atLoad.payment = await payment().show().then(() => true, errorOf);
+})();
+const gesture = (id, run) => document.getElementById(id).addEventListener('click', async event => {
+  const result = {trusted: event.isTrusted, activeAtStart: navigator.userActivation.isActive};
+  result.outcome = await run();
+  measured.gated[id] = result;
+});
+gesture('popup', () => { const popup = window.open('about:blank', '_blank', 'popup,width=300,height=200'); popup?.close(); return !!popup; });
+gesture('fullscreen', () => document.documentElement.requestFullscreen().then(() => document.exitFullscreen().then(() => true), errorOf));
+gesture('autoplay', () => audio.play().then(() => { audio.pause(); return true; }, errorOf));
+gesture('payment', () => payment().show().then(() => true, errorOf));
+document.getElementById('clip').addEventListener('click', async event => {
+  const token = 'ardia-' + Math.random().toString(36).slice(2);
+  const entry = {trusted: event.isTrusted};
+  entry.write = await navigator.clipboard.writeText(token).then(() => true, errorOf);
+  entry.read = await Promise.race([
+    navigator.clipboard.readText().then(text => text === token, errorOf),
+    new Promise(resolve => setTimeout(() => resolve('pending after 3s (prompt shown or blocked)'), 3000)),
+  ]);
+  measured.clipboard.push(entry);
+});
+const fileInput = document.getElementById('file');
+fileInput.addEventListener('change', async () => {
+  const file = fileInput.files[0];
+  measured.fileInput = {...measured.fileInput, chosen: file ? {name: file.name, size: file.size, text: (await file.text()).slice(0, 40)} : null};
+});
+document.getElementById('pick').addEventListener('click', event => {
+  measured.fileInput = {trusted: event.isTrusted, active: navigator.userActivation.isActive};
+  fileInput.click();
+});
+document.getElementById('fsa').addEventListener('click', async event => {
+  measured.fsa = {trusted: event.isTrusted, exposed: typeof window.showOpenFilePicker === 'function'};
+  if (!measured.fsa.exposed) return;
+  measured.fsa.result = await Promise.race([
+    showOpenFilePicker().then(async ([handle]) => ({name: handle.name, size: (await handle.getFile()).size}), errorOf),
+    new Promise(resolve => setTimeout(() => resolve('pending after 4s'), 4000)),
+  ]);
+});
+document.getElementById('cred').addEventListener('click', async event => {
+  const challenge = crypto.getRandomValues(new Uint8Array(32));
+  const options = {publicKey: {challenge, rp: {name: 'Row 3'}, user: {id: new Uint8Array([1, 2, 3]), name: 'row3', displayName: 'Row 3'},
+    pubKeyCredParams: [{type: 'public-key', alg: -7}], timeout: 3000, authenticatorSelection: {userVerification: 'preferred'}}};
+  measured.credential = {trusted: event.isTrusted};
+  measured.credential.result = await Promise.race([
+    navigator.credentials.create(options).then(credential => ({created: !!credential, type: credential?.type}), errorOf),
+    new Promise(resolve => setTimeout(() => resolve('pending after 5s (native prompt)'), 5000)),
+  ]);
+});
+onFinish(() => {
+  const gated = Object.fromEntries(Object.entries(measured.gated).map(([id, entry]) => [id, entry.outcome]));
+  const clipboardGranted = measured.clipboard.find(entry => entry.read === true);
+  const items = {
+    popupBlockedWithoutGesture: measured.atLoad.popup === false,
+    popup: gated.popup === true,
+    fullscreen: gated.fullscreen === true,
+    autoplay: gated.autoplay === true,
+    paymentActivationAccepted: !!gated.payment && gated.payment.name !== 'SecurityError',
+    clipboardWithGrant: !!clipboardGranted && clipboardGranted.write === true,
+    fileChooser: measured.fileInput?.chosen?.name === 'row03-upload.txt',
+    credential: measured.credential?.result?.created === true,
+  };
+  measured.items = items;
+  report(Object.values(items).every(Boolean), measured);
+});
+</script>
+</html>

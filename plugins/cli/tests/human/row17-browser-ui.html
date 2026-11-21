@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Row 17 · The browser's own UI</title>
+<style>
+body{font:14px system-ui;margin:16px}
+#verdict{font:bold 20px system-ui}.pass{color:#080}.fail{color:#c00}
+</style>
+<div id="verdict">RUNNING row 17</div>
+<p>Sends browser shortcuts through DevTools input and records whether the page or the browser received them.</p>
+<input id="field" style="width:240px">
+<pre id="measured"></pre>
+<script>
+const ROW = 17;
+function report(pass, measured) {
+  const result = {row: ROW, pass: !!pass, measured};
+  window.__humanResult = result;
+  document.documentElement.dataset.humanResult = JSON.stringify(result);
+  const verdict = document.getElementById('verdict');
+  verdict.textContent = (pass ? 'PASS' : 'FAIL') + ' row ' + ROW;
+  verdict.className = pass ? 'pass' : 'fail';
+  document.getElementById('measured').textContent = JSON.stringify(measured, null, 2);
+}
+function onFinish(run) {
+  let done = false;
+  const go = () => {
+    if (done || !document.documentElement.hasAttribute('data-finish')) return;
+    done = true;
+    Promise.resolve().then(run).catch(error => report(false, {error: String(error)}));
+  };
+  new MutationObserver(go).observe(document.documentElement, {attributes: true, attributeFilter: ['data-finish']});
+  go();
+}
+function driverRead() {
+  try { return JSON.parse(document.documentElement.dataset.read || 'null'); } catch { return null; }
+}
+</script>
+<script>
+const keys = [];
+document.addEventListener('keydown', event => keys.push({key: event.key, meta: event.metaKey, ctrl: event.ctrlKey, trusted: event.isTrusted, prevented: event.defaultPrevented}));
+onFinish(() => {
+  const read = driverRead() || {};
+  const measured = {pageSawKeys: keys, driverRead: read};
+  const checks = {
+    newTabShortcutReachedBrowser: read.newTabFromShortcut === true,
+    omniboxShortcutReachedBrowser: read.omniboxFocused === true,
+    windowBounds: read.windowBoundsChanged === true,
+    menuReachable: read.menuReachable === true,
+  };
+  measured.checks = checks;
+  report(Object.values(checks).every(Boolean), measured);
+});
+</script>
+</html>

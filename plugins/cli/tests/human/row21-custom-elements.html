@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Row 21 · Custom elements</title>
+<style>
+body{font:14px system-ui;margin:16px}
+#verdict{font:bold 20px system-ui}.pass{color:#080}.fail{color:#c00}
+x-field,x-toggle{display:block;margin:6px 0}
+#submit{width:160px;height:32px}
+</style>
+<div id="verdict">RUNNING row 21</div>
+<form id="form"><x-field name="user"></x-field><x-toggle name="agree"></x-toggle><button id="submit">Submit</button></form>
+<pre id="measured"></pre>
+<script>
+const ROW = 21;
+function report(pass, measured) {
+  const result = {row: ROW, pass: !!pass, measured};
+  window.__humanResult = result;
+  document.documentElement.dataset.humanResult = JSON.stringify(result);
+  const verdict = document.getElementById('verdict');
+  verdict.textContent = (pass ? 'PASS' : 'FAIL') + ' row ' + ROW;
+  verdict.className = pass ? 'pass' : 'fail';
+  document.getElementById('measured').textContent = JSON.stringify(measured, null, 2);
+}
+function onFinish(run) {
+  let done = false;
+  const go = () => {
+    if (done || !document.documentElement.hasAttribute('data-finish')) return;
+    done = true;
+    Promise.resolve().then(run).catch(error => report(false, {error: String(error)}));
+  };
+  new MutationObserver(go).observe(document.documentElement, {attributes: true, attributeFilter: ['data-finish']});
+  go();
+}
+function driverRead() {
+  try { return JSON.parse(document.documentElement.dataset.read || 'null'); } catch { return null; }
+}
+</script>
+<script>
+const log = {fieldInput: [], toggleClicks: [], submits: []};
+customElements.define('x-field', class extends HTMLElement {
+  static formAssociated = true;
+  #internals = this.attachInternals();
+  constructor() {
+    super();
+    const root = this.attachShadow({mode: 'open'});
+    root.innerHTML = '<label>user <input part="input" style="width:200px;height:24px"></label>';
+    const input = root.querySelector('input');
+    this.#internals.setValidity({valueMissing: true}, 'required', input);
+    input.addEventListener('input', event => {
+      log.fieldInput.push(event.isTrusted);
+      this.#internals.setFormValue(input.value);
+      if (input.value) this.#internals.setValidity({}); else this.#internals.setValidity({valueMissing: true}, 'required', input);
+    });
+  }
+  get validity() { return this.#internals.validity; }
+});
+customElements.define('x-toggle', class extends HTMLElement {
+  static formAssociated = true;
+  #internals = this.attachInternals();
+  #on = false;
+  constructor() {
+    super();
+    const root = this.attachShadow({mode: 'closed'});
+    root.innerHTML = '<button type="button" style="width:120px;height:28px">agree: off</button>';
+    const button = root.querySelector('button');
+    button.addEventListener('click', event => {
+      log.toggleClicks.push(event.isTrusted);
+      this.#on = !this.#on;
+      button.textContent = 'agree: ' + (this.#on ? 'on' : 'off');
+      this.#internals.setFormValue(this.#on ? 'on' : null);
+      this.#internals.states.add?.('checked');
+    });
+  }
+});
+document.getElementById('form').addEventListener('submit', event => {
+  event.preventDefault();
+  log.submits.push({trusted: event.isTrusted, submitter: event.submitter?.id ?? null, data: Object.fromEntries(new FormData(event.target)), valid: event.target.checkValidity()});
+});
+onFinish(() => {
+  const submit = log.submits[log.submits.length - 1];
+  const checks = {
+    typedInOpenShadow: log.fieldInput.length > 0 && log.fieldInput.every(Boolean),
+    clickedInClosedShadow: log.toggleClicks.length === 1 && log.toggleClicks[0],
+    submitted: !!submit && submit.trusted && submit.submitter === 'submit',
+    formValues: submit?.data?.user === 'ardia-user' && submit?.data?.agree === 'on',
+    valid: submit?.valid === true,
+  };
+  report(Object.values(checks).every(Boolean), {...log, checks});
+});
+</script>
+</html>

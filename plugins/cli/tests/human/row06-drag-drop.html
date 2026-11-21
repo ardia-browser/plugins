@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Row 6 · Drag and drop</title>
+<style>
+body{font:14px system-ui;margin:16px}
+#verdict{font:bold 20px system-ui}.pass{color:#080}.fail{color:#c00}
+.box{width:180px;height:70px;border:2px dashed #888;display:inline-flex;align-items:center;justify-content:center;margin:6px}
+#src{background:#def;border-style:solid}
+#sort{list-style:none;padding:0;width:200px;user-select:none}
+#sort li{height:28px;line-height:28px;margin:2px 0;background:#eee;padding-left:8px;cursor:grab}
+</style>
+<div id="verdict">RUNNING row 6</div>
+<div id="src" class="box" draggable="true">drag me</div>
+<div id="dst" class="box">drop here</div>
+<div id="files" class="box">drop files here</div>
+<ul id="sort"><li data-id="1">one</li><li data-id="2">two</li><li data-id="3">three</li><li data-id="4">four</li><li data-id="5">five</li></ul>
+<pre id="measured"></pre>
+<script>
+const ROW = 6;
+function report(pass, measured) {
+  const result = {row: ROW, pass: !!pass, measured};
+  window.__humanResult = result;
+  document.documentElement.dataset.humanResult = JSON.stringify(result);
+  const verdict = document.getElementById('verdict');
+  verdict.textContent = (pass ? 'PASS' : 'FAIL') + ' row ' + ROW;
+  verdict.className = pass ? 'pass' : 'fail';
+  document.getElementById('measured').textContent = JSON.stringify(measured, null, 2);
+}
+function onFinish(run) {
+  let done = false;
+  const go = () => {
+    if (done || !document.documentElement.hasAttribute('data-finish')) return;
+    done = true;
+    Promise.resolve().then(run).catch(error => report(false, {error: String(error)}));
+  };
+  new MutationObserver(go).observe(document.documentElement, {attributes: true, attributeFilter: ['data-finish']});
+  go();
+}
+function driverRead() {
+  try { return JSON.parse(document.documentElement.dataset.read || 'null'); } catch { return null; }
+}
+</script>
+<script>
+const measured = {dragstart: null, drop: null, files: null, sort: null};
+const src = document.getElementById('src');
+src.addEventListener('dragstart', event => {
+  event.dataTransfer.setData('text/plain', 'payload-42');
+  measured.dragstart = {trusted: event.isTrusted};
+});
+for (const id of ['dst', 'files']) {
+  const zone = document.getElementById(id);
+  zone.addEventListener('dragover', event => event.preventDefault());
+  zone.addEventListener('dragenter', event => event.preventDefault());
+}
+document.getElementById('dst').addEventListener('drop', event => {
+  event.preventDefault();
+  measured.drop = {trusted: event.isTrusted, text: event.dataTransfer.getData('text/plain')};
+});
+document.getElementById('files').addEventListener('drop', async event => {
+  event.preventDefault();
+  const files = [...event.dataTransfer.files];
+  measured.files = {trusted: event.isTrusted, list: await Promise.all(files.map(async file => ({name: file.name, size: file.size, head: (await file.text()).slice(0, 24)})))};
+});
+const list = document.getElementById('sort');
+let dragging = null;
+list.addEventListener('mousedown', event => {
+  const item = event.target.closest('li');
+  if (!item) return;
+  dragging = {item, trusted: event.isTrusted, moves: 0};
+  event.preventDefault();
+});
+document.addEventListener('mousemove', event => {
+  if (!dragging) return;
+  dragging.moves++;
+  const siblings = [...list.children].filter(child => child !== dragging.item);
+  const after = siblings.find(child => event.clientY < child.getBoundingClientRect().top + child.offsetHeight / 2);
+  list.insertBefore(dragging.item, after || null);
+});
+document.addEventListener('mouseup', event => {
+  if (!dragging) return;
+  measured.sort = {trusted: dragging.trusted && event.isTrusted, moves: dragging.moves, order: [...list.children].map(child => child.dataset.id).join('')};
+  dragging = null;
+});
+onFinish(() => {
+  const checks = {
+    dragstartTrusted: measured.dragstart?.trusted === true,
+    dropTrusted: measured.drop?.trusted === true && measured.drop.text === 'payload-42',
+    realFiles: measured.files?.trusted === true && measured.files.list.length === 2 && measured.files.list.some(file => file.name === 'row06-a.txt' && file.head.startsWith('row06 file a')),
+    sortable: measured.sort?.trusted === true && measured.sort.order === '23415',
+  };
+  measured.checks = checks;
+  report(Object.values(checks).every(Boolean), measured);
+});
+</script>
+</html>
