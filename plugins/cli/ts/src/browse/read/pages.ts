@@ -7,7 +7,7 @@ import { codePoints } from "../../pystr.ts";
 import { redact } from "../../redact.ts";
 import { checkCancelled, currentSignal, sleep, withSignal } from "../cdp/cancel.ts";
 import { BrowseError, ConnectionLost, Gated, OutcomeUnknown, Usage } from "../daemon-errors.ts";
-import { OUTPUT_CAP, Result, spill } from "../daemon/render.ts";
+import { capNotice, OUTPUT_CAP, Result, spill } from "../daemon/render.ts";
 import { HTTPS_ONLY_NOTE, siteSilent, waitForLoad } from "../commands/core.ts";
 import type { Ctx } from "../commands/ctx.ts";
 import { normalizeUrl } from "../commands/parse.ts";
@@ -229,8 +229,8 @@ export function header(page: PageRecord, index: number, total: number): string {
 export function footer(limit: number, cutAny: boolean, hidden: number, wanted: number, saved = ""): string {
   const parts = cutAny ? [`pages cut to fit ${groupThousands(String(limit))} characters`] : [];
   if (hidden) parts.push(`+${hidden} page${hidden !== 1 ? "s" : ""} not shown`);
-  if (saved) parts.push(`all of it is in ${saved}`);
-  return `[${parts.join("; ")}. Narrow it instead: -s <css> (one region per page), a tighter --links pattern, or --limit <n>. Only if you need every line: --max-output ${wanted}]`;
+  const where = saved ? ` (full output: ${saved})` : "";
+  return `[${parts.join("; ")}. Narrow it: -s <css> (one region per page), a tighter --links pattern, or --limit <n>; or --max-output ${wanted} for every line${where}]`;
 }
 
 export function noteVirtualized(...texts: unknown[]): void {
@@ -513,7 +513,16 @@ export async function readHttp(urls: readonly string[], options: Options): Promi
 }
 
 export function resultFor(records: PageRecord[], options: Options, globalOptions: Options, extra = "", dataExtra: Record<string, unknown> = {}): Result {
-  const result = new Result({ pages: records, ...dataExtra }, render(records, globalOptions, extra), true);
+  const text = render(records, globalOptions, extra);
+  const result = new Result({ pages: records, ...dataExtra }, text, true);
+  if (text !== render(records, { ...globalOptions, full: true }, extra)) {
+    const notice = capNotice(text);
+    if (notice) {
+      result.notice = notice;
+      result.whole = true;
+      (result as { text: string | null }).text = text.slice(0, text.length - notice.length).replace(/\n$/u, "");
+    }
+  }
   result.outputCap = pagesCap(records.length);
   count("read_pages", records.length);
   noteVirtualized(...records.map((page) => page["text"]));

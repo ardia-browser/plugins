@@ -36,6 +36,7 @@ class Result:
     text: str | None = "✓ Done"
     page_content: bool = False
     whole: bool = False
+    notice: str | None = None
 
 
 @dataclass

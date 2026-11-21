@@ -52,10 +52,10 @@ describe("PagesCap", () => {
   test("test_too_many_pages_are_cut_and_the_footer_reaches_stderr", () => {
     const result = pages.resultFor(Array.from({ length: 10 }, (_, index) => record(index, 5000)), {}, {});
     expect((result.text as string).length).toBeLessThanOrEqual(pages.PAGES_CAP_CEILING);
-    expect(result.text).toContain("pages cut to fit 36,000 characters");
+    expect(result.notice).toContain("pages cut to fit 36,000 characters");
     const [, out, err] = renderAnswer({}, result, null, "read");
     expect(err.startsWith("[pages cut to fit 36,000 characters")).toBe(true);
-    expect(out.replace(/\n+$/u, "").endsWith(err.replace(/\n+$/u, ""))).toBe(true);
+    expect(out.includes("[pages cut to fit")).toBe(false);
   });
 
   test("test_max_output_still_wins_over_the_page_budget", () => {
@@ -229,7 +229,7 @@ describe("Rendering", () => {
     expect(text.length).toBeLessThanOrEqual(pages.pagesCap(10));
     for (let n = 0; n < 10; n += 1) expect(text).toContain(`=== [${n + 1}/10] P${n}\nhttp://s/p/${n}\n`);
     expect(text).toContain("short page");
-    expect(text).toContain("Narrow it instead: -s <css> (one region per page)");
+    expect(text).toContain("Narrow it: -s <css> (one region per page)");
     expect(text).not.toContain("--full");
     expect(text).toContain(" characters]\n\n=== [");
     const [, out] = renderAnswer({}, pages.resultFor(records, {}, {}), null, "");

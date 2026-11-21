@@ -104,7 +104,7 @@ Options:
   --init-script <path>    With open: register a page init script (repeatable)
   --annotate              Screenshot: draw numbered labels for the refs
   --screenshot-dir/-format/-quality   Screenshot defaults (AGENT_BROWSER_SCREENSHOT_*)
-  --max-output <chars>    Cap text output (default 6000, 0 for none; AGENT_BROWSER_MAX_OUTPUT)
+  --max-output <chars>    Cap text output (default 12000, 20000 for script, 0 for none; AGENT_BROWSER_MAX_OUTPUT)
   --full                  Don't cap text output
   --content-boundaries    Wrap page output in markers (AGENT_BROWSER_CONTENT_BOUNDARIES)
   --no-auto-dialog        Don't accept alert/beforeunload dialogs (AGENT_BROWSER_NO_AUTO_DIALOG)
@@ -288,8 +288,8 @@ COMMANDS = {
             "pattern (* matches anything), in page order; --list only prints those links. URLs can also come one per line\n"
             "on stdin (--stdin or -), and /paths resolve against the session's tab. Every URL you name is read (up to 100);\n"
             "--links finds at most 20 unless --limit (100). A PDF prints its text, page by page.\n"
-            "Pages share an output cap of 6,000 characters a page (12,000 to 36,000), and a cut read is saved whole to a file it\n"
-            "names; narrow it with -s or a tighter --links (--json and > file have all). --out <file> saves every page\n"
+            "Pages share an output cap of 6,000 characters a page (12,000 to 36,000), and a cut read says how to narrow it\n"
+            "(-s or a tighter --links) and names the file holding all of it last (--json and > file have all). --out <file> saves every page\n"
             "(JSON for a .json file, else text) and prints one line per page.\n"
             "--scroll reads a long or virtualized list on the session's tab (-s takes a selector or a ref): it scrolls the\n"
             "list's own scroll box until it stops growing and prints each row once, one per line, in list order, then puts\n"

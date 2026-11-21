@@ -333,10 +333,9 @@ def footer(limit: int, cut_any: bool, hidden: int, wanted: int, saved: str = "")
     parts = [f"pages cut to fit {limit:,} characters"] if cut_any else []
     if hidden:
         parts.append(f"+{hidden} page{'s' if hidden != 1 else ''} not shown")
-    if saved:
-        parts.append(f"all of it is in {saved}")
-    return (f"[{'; '.join(parts)}. Narrow it instead: -s <css> (one region per page), a tighter --links pattern, or --limit <n>. "
-            f"Only if you need every line: --max-output {wanted}]")
+    where = f" (full output: {saved})" if saved else ""
+    return (f"[{'; '.join(parts)}. Narrow it: -s <css> (one region per page), a tighter --links pattern, or --limit <n>; "
+            f"or --max-output {wanted} for every line{where}]")
 
 
 VIRTUALIZED_MARK = "rows rendered; the grid is virtualized"
@@ -715,7 +714,16 @@ def result_for(records: list[dict], options: dict, global_options: dict, extra: 
 
     from ardia_cli import command_metrics
 
-    result = Result({"pages": records, **(data_extra or {})}, render(records, global_options, extra), page_content=True)
+    text = render(records, global_options, extra)
+    result = Result({"pages": records, **(data_extra or {})}, text, page_content=True)
+    if text != render(records, {**global_options, "full": True}, extra):
+        from ardia_cli.browse.daemon import cap_notice
+
+        notice = cap_notice(text)
+        if notice:
+            result.notice = notice
+            result.whole = True
+            result.text = text[:len(text) - len(notice)].removesuffix("\n")
     result.output_cap = pages_cap(len(records))
     command_metrics.count("read_pages", len(records))
     note_virtualized(*(record.get("text") for record in records))

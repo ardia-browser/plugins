@@ -46,10 +46,10 @@ class PagesCap(unittest.TestCase):
         records = [record(index, 5000) for index in range(10)]
         result = readpages.result_for(records, {}, {})
         self.assertLessEqual(len(result.text), readpages.PAGES_CAP_CEILING)
-        self.assertIn("pages cut to fit 36,000 characters", result.text)
+        self.assertIn("pages cut to fit 36,000 characters", result.notice)
         _, out, err = daemon.render({}, result=result, name="read")
         self.assertTrue(err.startswith("[pages cut to fit 36,000 characters"))
-        self.assertTrue(out.rstrip("\n").endswith(err.rstrip("\n")))
+        self.assertNotIn("[pages cut to fit", out)
 
     def test_max_output_still_wins_over_the_page_budget(self):
         records = [record(index, 1000) for index in range(12)]
@@ -58,12 +58,13 @@ class PagesCap(unittest.TestCase):
 
 
 class CapNotice(unittest.TestCase):
-    def test_capped_output_repeats_its_notice_on_stderr(self):
+    def test_capped_output_prints_its_notice_once_on_stderr(self):
         text = "\n".join(f"- row {n}" for n in range(2000))
         _, out, err = daemon.render({}, result=commands.Result({}, text), name="snapshot")
-        notice = out.rstrip("\n").rpartition("\n")[2]
-        self.assertTrue(notice.startswith("[output capped at "))
-        self.assertEqual(err, notice + "\n")
+        self.assertTrue(err.startswith("[output capped at "))
+        self.assertEqual(err.count("\n"), 1)
+        self.assertNotIn("[output capped at ", out)
+        self.assertTrue(out.rstrip("\n").endswith("- row " + out.rstrip("\n").rpartition("- row ")[2]))
 
     def test_uncapped_output_has_nothing_on_stderr(self):
         self.assertEqual(daemon.render({}, result=commands.Result({}, "short"), name="snapshot")[2], "")
@@ -71,16 +72,16 @@ class CapNotice(unittest.TestCase):
 
     def test_script_gets_its_own_narrowing_hint(self):
         text = "\n".join(f"{{\"row\": {n}}}" for n in range(2000))
-        _, out, _ = daemon.render({}, result=commands.Result({}, text), name="script")
-        self.assertIn("Narrow it instead: return fewer fields or rows from the script.", out)
+        _, _, err = daemon.render({}, result=commands.Result({}, text), name="script")
+        self.assertIn("Narrow it: return fewer fields or rows from the script;", err)
 
     def test_read_fields_survive_the_telemetry_filter(self):
         values = {"read_rows": 200, "read_pages": 12, "read_scrolled": True, "read_matched": True, "read_virtualized_grid": True, "read_text": "x"}
         self.assertEqual(command_metrics.clean(values), {key: value for key, value in values.items() if key != "read_text"})
 
     def test_output_truncated_counts_read_footers(self):
-        self.assertTrue(any(marker in "x\n[pages cut to fit 6,000 characters. Narrow it instead: …" for marker in command_metrics.OUTPUT_MARKERS))
-        self.assertTrue(any(marker in "x\n[+3 pages not shown. Narrow it instead: …" for marker in command_metrics.OUTPUT_MARKERS))
+        self.assertTrue(any(marker in "x\n[pages cut to fit 6,000 characters. Narrow it: …" for marker in command_metrics.OUTPUT_MARKERS))
+        self.assertTrue(any(marker in "x\n[+3 pages not shown. Narrow it: …" for marker in command_metrics.OUTPUT_MARKERS))
 
 
 class ScrollRows(unittest.TestCase):

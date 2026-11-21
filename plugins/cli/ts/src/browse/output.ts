@@ -99,6 +99,17 @@ export class Printer {
     }
   }
 
+  errAfterClosed(text: unknown): void {
+    if (typeof text !== "string" || text === "" || this.crash !== undefined) return;
+    const closed = this.closed;
+    this.closed = false;
+    try {
+      this.err(text);
+    } finally {
+      this.closed = this.closed || closed;
+    }
+  }
+
   err(text: string): void {
     if (this.stopped || text === "") return;
     try {

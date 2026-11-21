@@ -99,8 +99,8 @@ world instead, which shares the DOM but leaves nothing the page can see. `consol
 
 ## Output cap
 
-Text output stops at about 12,000 characters (20,000 for `script`) with a last line naming the file that holds all of
-it and saying how to narrow it. Narrow with `-s <sel>`, `snapshot -i`, `read --links <pattern>`, or a script that
+Text output stops at about 12,000 characters (20,000 for `script`) with one line, on stderr, saying how to narrow it
+(for a snapshot, the `-s` of its biggest region). Narrow rather than reading the saved full output. Narrow with `-s <sel>`, `snapshot -i`, `read --links <pattern>`, or a script that
 returns only the fields you need. `--json` and output redirected to a file (`> out.json`) are never cut.
 
 ## Auth vault

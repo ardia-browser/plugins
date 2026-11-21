@@ -837,9 +837,10 @@ class RenderTest(unittest.TestCase):
     def test_page_output_limits(self):
         result = commands.Result({}, "x" * 50, page_content=True)
         with mock.patch.object(daemon, "spill", return_value=None):
-            _, out, _ = daemon.render({"max_output": "10"}, result=result)
-        self.assertTrue(out.startswith("x" * 10 + "\n[output capped at 10 of 50 characters. Narrow it instead:"))
-        self.assertIn("Only if you need every line: --max-output 50]", out)
+            _, out, err = daemon.render({"max_output": "10"}, result=result)
+        self.assertEqual(out, "x" * 10 + "\n")
+        self.assertTrue(err.startswith("[output capped at 10 of 50 characters. Narrow it:"))
+        self.assertIn("; or --max-output 50 for every line]", err)
         _, out, _ = daemon.render({"content_boundaries": True}, result=commands.Result({}, "hi", page_content=True))
         self.assertRegex(out, r"^<<<PAGE_CONTENT [0-9a-f]{8}>>>\nhi\n<<<END_PAGE_CONTENT [0-9a-f]{8}>>>\n$")
 

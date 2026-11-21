@@ -497,7 +497,7 @@ class BrowseEndToEnd(unittest.TestCase):
         self.browse("open", self.url("many.html"), "--show", session=session)
         capped = self.browse("snapshot", "-i", session=session).stdout
         self.assertLessEqual(len(capped), 12450)
-        self.assertIn("Narrow it instead: snapshot -i", capped.splitlines()[-1])
+        self.assertIn("Narrow it: snapshot -i", capped.splitlines()[-1])
         self.assertIn("--max-output", capped.splitlines()[-1])
         self.assertEqual(self.browse("snapshot", "-i", "--full", session=session).stdout.count("Button number"), 400)
         self.assertLessEqual(len(self.browse("snapshot", "-i", "--max-output", "500", session=session).stdout), 900)
@@ -542,7 +542,7 @@ class BrowseEndToEnd(unittest.TestCase):
         self.assertNotIn("run `snapshot -i`", arrived)
         capped = self.browse("snapshot", session=session).stdout.splitlines()[-1]
         self.assertTrue(capped.startswith("[output capped at "), capped)
-        self.assertIn("Narrow it instead: snapshot -i", capped)
+        self.assertIn("Narrow it: snapshot -i", capped)
         self.assertNotIn("--full", capped)
 
     def test_batch_lines_take_their_flags_and_a_last_close(self):
@@ -864,7 +864,7 @@ class BrowseEndToEnd(unittest.TestCase):
                             "snapshot", "-i"], stdout=out, stderr=subprocess.PIPE, timeout=120, env=dict(os.environ, PYTHONPATH=str(CLI)), check=True)
         self.assertEqual(target.read_text().count("Button number"), 400)
         last = self.browse("snapshot", "-i", session=session).stdout.splitlines()[-1]
-        saved = re.search(r"all of it is in (\S+?)\. Narrow", last)
+        saved = re.search(r"\(full output: (\S+?)\)\]$", last)
         self.assertIsNotNone(saved, last)
         self.assertEqual(Path(saved.group(1)).read_text().count("Button number"), 400)
 

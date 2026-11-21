@@ -959,7 +959,7 @@ class LargeResults(unittest.TestCase):
             self.assertNotIn(daemon.CAP_NOTICE, out)
             self.assertEqual(json.loads(out)["result"]["value"], "x" * 20000)
         code, out, err = daemon.render({}, result=commands.Result({}, "y" * 20000), name="get")
-        self.assertIn(daemon.CAP_NOTICE, out)
+        self.assertIn(daemon.CAP_NOTICE, err)
 
     def test_an_answer_over_the_daemon_limit_says_what_cdp_did(self):
         from unittest import mock

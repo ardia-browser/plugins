@@ -46,7 +46,7 @@ export const FLAGS = new Set([
 ]);
 export const MAIN_PHASE: Readonly<Record<string, string>> = { snapshot: "snapshot_build_ms", eval: "eval_ms" };
 export const FAILED_WITHOUT_CODE = "command_failed";
-export const OUTPUT_MARKERS = ["\n[output capped at ", "\n[truncated ", "\n[pages cut to fit ", " not shown. Narrow it instead: "];
+export const OUTPUT_MARKERS = ["\n[output capped at ", "\n[truncated ", "\n[pages cut to fit ", " not shown. Narrow it: "];
 
 const ALL_FLAGS = [FLAGS, READ_FLAGS, ACT_FLAGS, CHANGE_FLAGS, FLOW_FLAGS];
 const ALL_NUMBERS = [DURATIONS, COUNTS, ACT_COUNTS, CHANGE_COUNTS, FLOW_COUNTS];

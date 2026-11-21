@@ -133,7 +133,7 @@ class Rendering(unittest.TestCase):
         for n in range(10):
             self.assertIn(f"=== [{n + 1}/10] P{n}\nhttp://s/p/{n}\n", text)
         self.assertIn("short page", text)
-        self.assertIn("Narrow it instead: -s <css> (one region per page)", text)
+        self.assertIn("Narrow it: -s <css> (one region per page)", text)
         self.assertNotIn("--full", text)
         self.assertIn(" characters]\n\n=== [", text)
         _, out, _ = daemon.render({}, result=readpages.result_for(records, {}, {}))

@@ -700,12 +700,18 @@ POST http://127.0.0.1:8792/api/events → 200
 ### Output cap
 
 Text output of every command stops at 12,000 characters (20,000 for `script`, whose result the agent asked for), at a
-line break when there's one in the last fifth, and ends with one line that says where the whole output was saved,
-points at narrowing, tailored to the command, and names `--max-output` last: `[output capped at 6,000 of 15,920
-characters; all of it is in …/ardia-browse-output-501/output-k2x9.txt. Narrow it instead: snapshot -i (interactive only), snapshot -s <css> (one region), find
-role <role> <action> --name <text> (act without a snapshot). Only if you need every line: --max-output 15920]`. It
-used to suggest `--full`, and agents ran `snapshot --full` at up to 35K characters a time. The same line also goes to
-stderr (so does `read`'s own "pages cut to fit" line), so it survives `| head`, `| grep` and `> file`. `--max-output N` (or
+line break when there's one in the last fifth, and one line on stderr points at narrowing, tailored to the command,
+and names `--max-output` last: `[output capped at 6,000 of 15,920 characters. Narrow it: snapshot -i -s "[role=main]"
+(the main, 380 of 512 lines), find role <role> <action> --name <text> (act without a snapshot); or --max-output 15920
+for every line]`. For a snapshot it names the biggest landmark or list whose role appears once (`main`, `navigation`,
+`form`, `table`, `list`, `dialog`, …) as `-s "[role=…]"`, with its share of the lines; with none, the fixed hint. The
+whole output is still saved, and the line names that file last, after `--max-output`, as `(full output: <path>)`. It
+used to suggest `--full`, and agents ran `snapshot --full` at up to 35K characters a time. The line goes to stderr
+only (so does `read`'s own "pages cut to fit" line), so it survives `| head`, `| grep` and `> file` and stays outside
+`--content-boundaries` markers. In the TypeScript CLI and Python alike it used to end stdout as well, so an agent reading
+both streams saw it twice (22 of 28 cap hits in the bench), and it led with "all of it is in <file>", which agents then
+`cat` or `sed` into context (7 of 28); the file is now the last clause, never offered as the next step. `read`'s line
+also leads with narrowing and names its file last. `--max-output N` (or
 `AGENT_BROWSER_MAX_OUTPUT`) sets another limit (`0` for none), `--full` turns it off; JSON output is never cut, and
 neither is output redirected to a regular file (`> out.json`), which never reaches the agent's context. `script`, `eval`,
 `read`, `snapshot` and `get` take `--out <file>` (`snapshot` and `get` save their full text, uncapped, and print the

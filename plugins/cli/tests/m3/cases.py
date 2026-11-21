@@ -216,7 +216,7 @@ def gen_rendered(rng, count, corpus):
         data = rng.choice([None, [], "x", {}, {"snapshot": rng.choice(["", "a", "a\nb\n", "😀\ud800", 5])},
                            {"changes": rng.choice([{}, {"network": []}, {"network": [1, 2], "unsettled": rng.choice([0, 1, "", "x", None])}, [],
                                                    {"network": "x"}])}])
-        out = rng.choice(["", "x\n[output capped at 5", " not shown. Narrow it instead: ", "\n[truncated ", noise(rng)])
+        out = rng.choice(["", "x\n[output capped at 5", " not shown. Narrow it: ", "\n[truncated ", noise(rng)])
         return [rng.choice(["snapshot", "click", "read"]), data, rng.choice([None, [], [1, 2], "ab", {}]), rng.choice([False, None, "", "x"]), out]
     return many(rng, count, [], make)
 
