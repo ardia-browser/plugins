@@ -405,7 +405,11 @@ fn handle(root: Option<&Path>, raw: &[OsString], python: Option<&Path>) -> Handl
     if standard_fds::any_closed_at_start() || standard_fds::any_is_a_directory() || printable::stdout_unusable() || printable::stderr_unusable() {
         return Handled::Python;
     }
-    let side = if route.label().is_some() { table.side(&label) } else { Some(router::Side::Ts) };
+    let side = if route.label().is_some() {
+        table.side(&label)
+    } else {
+        Some(router::Side::Ts)
+    };
     match side {
         Some(router::Side::Rust) => run_rust(route, &argv, python),
         Some(router::Side::Ts) => match router::ts_program(root) {

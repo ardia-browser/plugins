@@ -61,7 +61,9 @@ impl Table {
     }
 
     pub fn serves_command_in_ts(&self, word: &str) -> bool {
-        self.0.iter().any(|(label, side)| *side == Side::Ts && (label == word || label.strip_prefix(word).is_some_and(|rest| rest.starts_with(':'))))
+        self.0
+            .iter()
+            .any(|(label, side)| *side == Side::Ts && (label == word || label.strip_prefix(word).is_some_and(|rest| rest.starts_with(':'))))
     }
 
     pub fn side(&self, label: &str) -> Option<Side> {
