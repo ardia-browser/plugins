@@ -174,7 +174,7 @@ class Call(CallBase):
     def test_params_that_arent_clean_json_never_reach_ardia(self):
         server = self.serve_methods()
         deep = '{"a": ' + "[" * 70 + "]" * 70 + "}"
-        very_deep = '{"a": ' + "[" * 100000 + "]" * 100000 + "}"
+        very_deep = '{"a": ' + "[" * 50000 + "]" * 50000 + "}"
         for raw, said in (('{"q": "\\ud800"}', "lone surrogate"), ('{"\\udfff": 1}', "lone surrogate"),
                           ('{"n": NaN}', "NaN"), ('{"n": -Infinity}', "-Infinity"), ('{"n": 1e400}', "too large"),
                           ('{"n": ' + "9" * 400 + "}", "too large"), ('{"a": 1, "a": 2}', 'key "a" twice'),

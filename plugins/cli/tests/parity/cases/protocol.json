@@ -929,7 +929,7 @@
   "intentional": {
    "why": "a reply nested deeper than the reader decodes fails the waiting call at once with that reason; Python's reader dies on the RecursionError and the call waits out its 30 s timeout",
    "stderr": {
-    "text": "ardia: Ardia isn't running, or Command Line isn't installed (Settings › Plugins). (Ardia sent a line nested too deeply to read)\n"
+    "text": "ardia: {not_reachable} (Ardia sent a line nested too deeply to read)\n"
    }
   }
  }

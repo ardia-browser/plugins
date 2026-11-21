@@ -1,5 +1,6 @@
 import base64
 import dataclasses
+import errno
 import fcntl
 import json
 import os
@@ -196,6 +197,35 @@ class HarnessRules(unittest.TestCase):
         self.case(argv=["windows", "--data-dir", "{box}/elsewhere"], env={"ARDIA_DATA_DIR": None, "COLUMNS": "80"})
         self.case(argv=["theme", "check", "../evil"])
         self.case(argv=["plugins", "call", "x", '{"who": "you/../me"}'])
+
+    def test_a_case_linux_cannot_exec_is_refused_when_loaded(self):
+        near_limit = harness.LINUX_MAX_ARG_STRLEN - harness.PLACEHOLDER_ROOM
+        for row in ({"argv": ["call", "history.search", "--params", "[" * near_limit]}, {"env": {"COLUMNS": "8" * near_limit}},
+                    {"argv": ["windows", *(["x" * 60000] * 20)]}):
+            with self.subTest(size=len(str(row))), self.assertRaisesRegex(harness.UnsafeCase, "Linux|exec limit"):
+                self.case(**row)
+        self.case(argv=["call", "history.search", "--params", "[" * (near_limit - 2)])
+        for case in harness.load_cases():
+            harness.check_case_fits_exec(case)
+
+    @harness.requires(harness.ts_binary(), ("ts",), "build plugins/cli/ts (bun run build) or set ARDIA_TS_CLI")
+    def test_a_case_whose_program_cannot_start_fails_alone(self):
+        refused = harness.Case.from_dict({"id": "t-refused", "command": "windows", "argv": ["windows", "--exec-refused"]}, "test")
+        fine = [case for case in harness.load_cases() if case.id == "version--version"]
+        self.assertTrue(fine)
+        real_popen = subprocess.Popen
+
+        def popen(command, *args, **kwargs):
+            if "--exec-refused" in command:
+                raise OSError(errno.E2BIG, os.strerror(errno.E2BIG), command[0])
+            return real_popen(command, *args, **kwargs)
+
+        with unittest.mock.patch.object(harness.subprocess, "Popen", popen):
+            outcomes, install = harness.run_all([refused, *fine], harness.ts_binary(), entry="ts")
+        install.close()
+        self.assertFalse(outcomes[0].passed)
+        self.assertRegex(" ".join(outcomes[0].problems), "side didn't start")
+        self.assertTrue(outcomes[1].passed, outcomes[1].report())
 
     def test_the_rust_entry_expects_what_its_installation_does_with_a_typescript_row(self):
         case = self.case()

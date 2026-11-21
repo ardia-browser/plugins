@@ -3234,7 +3234,13 @@
    "session": "plugin-ai",
    "namespace": ""
   },
-  "note": "§7 fail closed, status 77, nothing sent"
+  "normalize": [
+   [
+    "that descriptor isn't open|it isn't a pipe, socket or file",
+    "<the descriptor is unusable>"
+   ]
+  ],
+  "note": "§7 fail closed, status 77, nothing sent; on Linux Bun's runtime holds fd 8 itself, so TS finds it open but not a pipe, socket or file where Python finds it closed; both refuse"
  },
  {
   "id": "contract--7-fd-terminal",

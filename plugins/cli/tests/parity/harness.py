@@ -108,6 +108,15 @@ class UnsafeCase(ValueError):
     pass
 
 
+class SideDidNotStart(Exception):
+    pass
+
+
+LINUX_MAX_ARG_STRLEN = 128 * 1024
+PLACEHOLDER_ROOM = 4096
+CASE_EXEC_BUDGET = 1024 * 1024
+
+
 def binary() -> Path | None:
     named = os.environ.get("ARDIA_RUST_CLI")
     if named:
@@ -399,6 +408,7 @@ def check_case_is_contained(case: Case) -> None:
         pathlike = key in PATH_ENV or (value or "").startswith(("/", "~", ".", "{"))
         if value and pathlike and not contained_path(value, writable=True):
             raise UnsafeCase(f"{where}: ${key} must be a path inside the sandbox, not {value!r}")
+    check_case_fits_exec(case)
     for index, token in enumerate(case.argv):
         if token == "--data-dir" and index + 1 < len(case.argv) and not contained_path(str(case.argv[index + 1]), writable=True) \
                 or isinstance(token, str) and token.startswith("--data-dir=") and not contained_path(token.split("=", 1)[1], writable=True):
@@ -411,6 +421,19 @@ def check_case_is_contained(case: Case) -> None:
                 raise UnsafeCase(f"{where}: argv path {candidate!r} is outside the sandbox (use {{data}}, {{home}}, {{outside}} …)")
             if candidate.startswith("~"):
                 raise UnsafeCase(f"{where}: argv path {candidate!r} would expand outside the sandbox")
+
+
+def check_case_fits_exec(case: Case) -> None:
+    strings = [os.fsencode(token) for token in case.argv if isinstance(token, str)]
+    strings += [os.fsencode(f"{key}={value}") for key, value in case.env.items() if isinstance(value, str)]
+    longest = max((len(text) for text in strings), default=0)
+    if longest + 1 + PLACEHOLDER_ROOM > LINUX_MAX_ARG_STRLEN:
+        raise UnsafeCase(f"case {case.id!r}: an argument or environment entry of {longest} bytes is too close to Linux's {LINUX_MAX_ARG_STRLEN}-byte "
+                         "limit for one exec string (MAX_ARG_STRLEN), so it can't start there; make it shorter")
+    total = sum(len(text) + 1 for text in strings)
+    if total > CASE_EXEC_BUDGET:
+        raise UnsafeCase(f"case {case.id!r}: its arguments and environment come to {total} bytes, more than the {CASE_EXEC_BUDGET} a case may use "
+                         "of the exec limit (ARG_MAX)")
 
 
 def load_cases(root: Path = CASES) -> list[Case]:
@@ -694,12 +717,12 @@ class Observed:
     window: tuple | None = None
 
 
-def tree(root: Path) -> dict:
+def tree(root: Path, data_rel: str = "data") -> dict:
     found = {}
     if not root.exists():
         return found
     for path in sorted(root.rglob("*")):
-        rel = str(path.relative_to(root))
+        rel = as_data_telemetry(str(path.relative_to(root)), data_rel)
         if any(rel == own or rel.startswith(own + "/") for own in HARNESS_FILES):
             continue
         info = path.lstat()
@@ -1081,6 +1104,22 @@ def scrub_timestamp(record: dict, window: tuple[float, float]) -> None:
         record["timestamp"] = time_marker(moment, window)
 
 
+DEFAULT_DATA_DIRS = {"darwin": "home/Library/Application Support/Ardia", "linux": "home/.config/ardia"}
+
+
+def data_dir_of(case: Case) -> str:
+    if "ARDIA_DATA_DIR" in case.env and case.env["ARDIA_DATA_DIR"] is None and not case.env.get("XDG_CONFIG_HOME"):
+        return DEFAULT_DATA_DIRS.get(sys.platform, "data")
+    return "data"
+
+
+def as_data_telemetry(rel: str, data_rel: str) -> str:
+    prefix = f"{data_rel}/Telemetry"
+    if data_rel != "data" and (rel == prefix or rel.startswith(prefix + "/")):
+        return "data/Telemetry" + rel[len(prefix):]
+    return rel
+
+
 def read_telemetry(box: Path, data: Path, window: tuple[float, float]):
     local = data / "Telemetry" / "local"
     records = []
@@ -1140,7 +1179,7 @@ def with_credential(command: list[str], spec: dict | None, box: Path) -> tuple[l
     if not 3 <= target <= 9:
         raise UnsafeCase("a credential fd is 3 to 9")
     given, held, later = credential_fd(spec, box)
-    wrapper = ["/bin/sh", "-c", f'exec {target}<&{given} {given}<&-; exec "$@"', "sh"] if given != target else []
+    wrapper = ["/bin/bash", "-c", f'exec {target}<&{given} {given}<&-; exec "$@"', "bash"] if given != target else []
     return wrapper + command, (given,), held, later
 
 
@@ -1175,7 +1214,8 @@ def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[O
             fake.close()
         raise UnsafeCase(f"case {case.id}: a browse or notes case needs a daemon, or the client starts a real one")
     daemon = FakeDaemon(box / "data", expand(case.daemon, places), build) if case.daemon is not None else None
-    before = tree(box)
+    data_rel = data_dir_of(case)
+    before = tree(box, data_rel)
     started = time.time()
     stdin = decode_blob(expand(case.stdin, places) if isinstance(case.stdin, str) else case.stdin)
     timed_out = False
@@ -1196,6 +1236,10 @@ def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[O
         try:
             process = subprocess.Popen(install.confined(command, box), cwd=places["cwd"], env=env, stdin=subprocess.PIPE,
                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True, pass_fds=keep)
+        except OSError as error:
+            for fd in later:
+                os.close(fd)
+            raise SideDidNotStart(f"the {side} side didn't start: {error.strerror or error}") from None
         finally:
             for fd in held:
                 os.close(fd)
@@ -1223,11 +1267,11 @@ def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[O
         if daemon:
             daemon.close()
     window = (started, time.time())
-    after = scrub_stamps(tree(box), window)
-    records, queued, served, labels = read_telemetry(box, box / "data", window)
+    after = scrub_stamps(tree(box, data_rel), window)
+    records, queued, served, labels = read_telemetry(box, box / data_rel, window)
     usage_text = read_inside(box, box / "cli-home" / "Usage" / "usage.json")
     usage = scrub_times(json.loads(usage_text), window) if usage_text is not None else None
-    flush_text = read_inside(box, box / "data" / "Telemetry" / "cli-flush.json")
+    flush_text = read_inside(box, box / data_rel / "Telemetry" / "cli-flush.json")
     flush = scrub_times(json.loads(flush_text), window) if flush_text else flush_text
     log_text = read_inside(box, box / "helpers.log")
     helpers = log_text.splitlines() if log_text else []
@@ -1324,10 +1368,12 @@ def intended(python: "Observed", case: Case, places: dict | None = None) -> tupl
         return python, [f"intentional takes why and at least one of stdout, stderr, status, daemon_requests, usage, files, no_consent, telemetry, not {sorted(spec)}"]
     if "telemetry" in spec and spec.get("no_consent") is not True:
         return python, ["intentional telemetry is only for no_consent cases, where it lists the local, unsent records"]
+    from ardia_cli.endpoint import NOT_REACHABLE
+
     changes = {}
     for name in ("stdout", "stderr"):
         if name in spec:
-            changes[name] = file_bytes(spec[name], places or {})
+            changes[name] = file_bytes(spec[name], {**(places or {}), "not_reachable": NOT_REACHABLE})
     for name in ("status", "daemon_requests", "usage", "files"):
         if name in spec:
             changes[name] = spec[name]
@@ -1408,12 +1454,40 @@ class Outcome:
         return "\n".join(lines)
 
 
+@functools.lru_cache(maxsize=None)
+def installed_locales() -> frozenset:
+    listed = subprocess.run(["locale", "-a"], capture_output=True, text=True, errors="replace").stdout
+    return frozenset(locale_key(name) for name in listed.split())
+
+
+def locale_key(name: str) -> str:
+    return name.lower().replace("utf-8", "utf8")
+
+
+def missing_locale(case: Case) -> str | None:
+    if not sys.platform.startswith("linux"):
+        return None
+    for key in ("LC_ALL", "LC_CTYPE", "LANG"):
+        name = case.env.get(key)
+        if name and name not in ("C", "POSIX") and locale_key(name) not in installed_locales():
+            return name
+    return None
+
+
 def check_case(install: Installation, case: Case, served: dict[str, str], keep: bool = False) -> Outcome:
+    lacking = missing_locale(case)
+    if lacking:
+        return Outcome(case, [], "none", [], [f"the case runs under the {lacking} locale, which this system lacks (locale-gen {lacking})"], False,
+                       served_as(install.entry, served, case))
     box = install.box()
     observed = {}
     labels = []
     for side in SIDES:
-        observed[side], side_labels = run_side(install, side, case, box)
+        try:
+            observed[side], side_labels = run_side(install, side, case, box)
+        except SideDidNotStart as error:
+            shutil.rmtree(box, True)
+            return Outcome(case, [], "none", labels, [str(error)], False, served_as(install.entry, served, case))
         if side == "python":
             labels = side_labels
         if keep:
