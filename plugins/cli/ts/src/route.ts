@@ -1,7 +1,15 @@
+import type { Served } from "./argparse-cli.ts";
 import { emptyListing, type Kind, type Listing } from "./listing.ts";
 import { servedTable, type ServingSide } from "./served.ts";
 
-export type Route = { kind: "version" } | { kind: "help" } | { kind: "listing"; what: Kind; listing: Listing } | { kind: "python" };
+export type Route =
+  | { kind: "version" }
+  | { kind: "help" }
+  | { kind: "listing"; what: Kind; listing: Listing }
+  | { kind: "argparse"; served: Served }
+  | { kind: "python" };
+
+export const ARGPARSE_LABEL = "argparse";
 
 const U64_MAX = (1n << 64n) - 1n;
 const PY_INT_MAX_STR_DIGITS = 4300;
@@ -28,6 +36,7 @@ class Cursor {
 export function labelOf(route: Route): string | undefined {
   if (route.kind === "version") return "--version";
   if (route.kind === "help") return "--help";
+  if (route.kind === "argparse") return ARGPARSE_LABEL;
   return route.kind === "listing" ? route.what : undefined;
 }
 
@@ -35,6 +44,12 @@ export function route(argv: string[], table: Map<string, ServingSide> = servedTa
   const parsed = parseRoute(argv);
   const label = labelOf(parsed);
   return label !== undefined && !table.has(label) ? { kind: "python" } : parsed;
+}
+
+export async function withArgparse(chosen: Route, argv: string[], table: Map<string, ServingSide> = servedTable()): Promise<Route> {
+  if (chosen.kind !== "python" || !table.has(ARGPARSE_LABEL)) return chosen;
+  const outcome = (await import("./argparse-cli.ts")).frontEndOutcome(argv);
+  return outcome.kind === "served" ? { kind: "argparse", served: outcome.served } : chosen;
 }
 
 function same(argv: string[], words: string[]): boolean {

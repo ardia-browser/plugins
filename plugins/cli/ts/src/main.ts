@@ -16,8 +16,8 @@ function asksForVersion(argv: string[]): boolean {
 }
 
 async function serve(argv: string[], python: string | null): Promise<number | undefined> {
-  const [{ route }, paths] = await Promise.all([import("./route.ts"), import("./paths.ts")]);
-  const chosen = route(argv);
+  const [{ route, withArgparse }, paths] = await Promise.all([import("./route.ts"), import("./paths.ts")]);
+  const chosen = await withArgparse(route(argv), argv);
   if (chosen.kind === "python" || chosen.kind === "version") return undefined;
   const { consentUnreadable, dataDirArg, leadingTokens } = await import("./telemetry.ts");
   const named = [process.env.ARDIA_DATA_DIR, process.env.ARDIA_CLI_HOME, dataDirArg(leadingTokens(argv))];
@@ -26,6 +26,7 @@ async function serve(argv: string[], python: string | null): Promise<number | un
   const { serveHelp, serveListing } = await import("./serve.ts");
   try {
     if (chosen.kind === "help") return serveHelp(argv, python);
+    if (chosen.kind === "argparse") return (await import("./argparse-serve.ts")).serveArgparse(chosen.served, argv, python);
     return await serveListing(chosen.what, chosen.listing, argv, python);
   } catch (error) {
     if (error instanceof paths.NeedsPython) return undefined;

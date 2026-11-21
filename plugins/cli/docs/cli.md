@@ -1867,6 +1867,22 @@ table, checks that `served.txt` lists only proven commands, that both sides spea
 harness refuses unsafe cases and catches a binary that hands everything to Python, and keeps the process checks
 (Ctrl-C, leases, the flusher, paths that aren't UTF-8).
 
+#### Help, usage and argument errors
+
+The `argparse` row in `served.txt` covers what Python prints before a command runs, for every command but `browse`,
+`notes` and `computer`'s own driver commands: `-h`/`--help` at any level, a command group run without its subcommand,
+`ardia: --port needs a value`, `ardia: <command> doesn't take --flag`, an unknown or removed command, and every
+argparse error (unrecognized arguments, an ambiguous or abbreviated option, a missing value or argument, an invalid
+choice, int or float, `--timeout` out of range, two options of one exclusive group). `ts/src/argparse.ts` mirrors
+CPython 3.13's argparse, textwrap and terminal width rule, and `ts/src/argparse-cli.ts` mirrors `cli.run` up to the
+command's own code. The parsers aren't retyped: `python -m tests.argparse_specs` reads the live parser objects, on macOS
+and on Linux, into `ts/src/argparse-specs.json`, and `bun test` fails when that file is stale. The same test runs about
+twenty thousand generated argv per platform (options, typos, abbreviations, missing values, `--help` at every level,
+`COLUMNS` of 40, 80 and 200 and odd ones) through CPython's parsers and the TypeScript ones and requires identical stdout,
+stderr, exit status and parsed values. A command ported to TypeScript gets its values from `parseArgs(spec, argv)` or
+`frontEndOutcome(argv)` instead of parsing argv itself. The parity harness expects the TypeScript entry to serve a case
+whenever Python's own front end ends it before the command runs.
+
 #### Accepted differences from the Python implementation
 
 The native entries (the Rust router serving a row itself, and the TypeScript program behind it) match Python's exit
