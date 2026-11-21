@@ -2581,6 +2581,8 @@ scenarios:
   forever. The TypeScript side prints the events read before it, then `ardia: ... (Ardia sent a line nested too
   deeply to read)` and exits 2. Its events queue also drops the oldest events once the waiting ones take more than
   32 MB, counting each raw line and its parsed form, besides Python's cap of 1,000 events.
+- Any control call waiting when Ardia sends a line nested too deeply to read fails at once with that reason, and so
+  does any call made afterwards on the connection; Python's calls wait out their timeout.
 
 - `ardia browse plugin run` (TypeScript) goes through the credential-provider boundary: the plugin gets only `PATH`,
   `HOME`, `LANG`, `LC_*`, `TMPDIR`, `USER`, `LOGNAME` and `SHELL`, runs in its own process group that is killed on a
@@ -2660,10 +2662,19 @@ scenarios:
   `--kind`/`--target`/`--days`/`--limit`, positionals on both sides of an option) are printed by M2-F's argparse
   (`ts/src/argparse.ts`), which renders them as CPython 3.13's does from the parser specs in `argparse-specs.json`.
 - The TypeScript flusher uploads only the CLI's own events (`cli_command`, `$exception`) and, in each, only the known
-  fields with values of their kind (fixed names and codes, counts, timings, flags, the exception shapes); anything else
-  in a spooled record is dropped at upload, and a record that isn't one of those events is dropped whole. Python's
-  flusher sends what the spool holds. The TS flusher also notes the events the service took before it rewrites the
+  fields with values of their kind; anything else in a spooled record is dropped at upload, and a record that isn't
+  one of those events is dropped whole. Names are checked against closed sets, not shapes (`ts/src/telemetry-names.ts`):
+  a command or subcommand the CLI's own tables don't list (the argparse specs, served.txt, browse's commands, call's
+  method families, computer's driver commands) is sent as `other`, a flag they don't list is left out, an exception
+  type outside CPython's built-ins and the CLI's own is `other`, the source and mechanism are `cli_unhandled` or
+  `browse_daemon` (else `other`), an exception value is a fixed message, `[Errno N] ` with exactly that errno's text,
+  or a known type name (else `other`), and stack frames are sent empty. Python's flusher sends what the spool holds. The TS flusher also notes the events the service took before it rewrites the
   spool, so a crash in between doesn't send them twice.
+- Skill copies are replaced in one atomic swap (`renameatx_np`/`renameat2`); where the filesystem can't swap, the old
+  folder waits beside it as `.<name>.old`, which the next run restores or removes. `ardia scripts install` and
+  `uninstall` commit the script record before publishing the extension, so a crash between the two is completed by
+  the next repair (`ardia scripts list`) or install. Python moves the old skill folder aside under a random name and
+  publishes the extension first.
 - `ardia skills install --replace` over a folder ardia didn't install overwrites only the files the skill ships and
   keeps every other file in it (Python deleted the folder first); a linked folder is still replaced by a real one, its
   target untouched. Every install and refresh is built in a staging folder beside the destination and swapped in whole,
