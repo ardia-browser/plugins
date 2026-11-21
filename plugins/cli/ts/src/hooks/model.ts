@@ -2,10 +2,11 @@ import { createHash } from "node:crypto";
 import { ConfigError, readText } from "../configfiles.ts";
 import { checkEvents, DECIDE_EVENTS, EVENTS, EventNameError, isIdleEvent, NAMED_ONLY_EVENTS } from "../events.ts";
 import { dumps, Float, type JsonObject, type Value } from "../json.ts";
-import { NeedsPython } from "../paths.ts";
 import { didYouMean } from "../pylib/close.ts";
+import { reprText } from "../pylib/str.ts";
+import { decimalValue, isDigitCode } from "../pylib/unicode.ts";
 import { JsonDecodeError, JsonTooDeep, JsonValueError, parseConfigJson } from "../pylib/jsonloads.ts";
-import { isSpace, strip } from "../py.ts";
+import { isSpace, PythonError, strip } from "../py.ts";
 import { codePoints } from "../pystr.ts";
 import { formatG } from "../stream.ts";
 import { matches, parse as parsePattern, PatternError, type Spec, split } from "../urlmatch.ts";
@@ -226,15 +227,18 @@ export function formatDuration(seconds: number): string {
   return `${seconds}s`;
 }
 
-function asciiDigits(text: string): boolean {
-  return /^[0-9]+$/.test(text);
+function pyIsDigit(text: string): boolean {
+  return text !== "" && [...text].every((ch) => isDigitCode(ch.codePointAt(0) as number));
 }
 
-function pyIsDigit(text: string): boolean {
-  if (text === "") return false;
-  if (asciiDigits(text)) return true;
-  if ([...text].every((ch) => /\p{Nd}|\p{No}/u.test(ch))) throw new NeedsPython("non-ASCII digits in a duration or time");
-  return false;
+function pyInt(text: string): number {
+  let total = 0n;
+  for (const ch of text) {
+    const digit = decimalValue(ch.codePointAt(0) as number);
+    if (digit < 0) throw new HookValueError(`invalid literal for int() with base 10: ${reprText(text)}`);
+    total = total * 10n + BigInt(digit);
+  }
+  return Number(total);
 }
 
 export function parseDuration(value: Value | undefined): number | null {
@@ -246,9 +250,7 @@ export function parseDuration(value: Value | undefined): number | null {
   const digits = points.slice(0, -1).join("");
   if (!pyIsDigit(digits) || !"smhd".includes(unit) || unit.length !== 1) return null;
   const size = { s: 1, m: 60, h: 3600, d: 86400 }[unit as "s" | "m" | "h" | "d"];
-  const count = Number(digits);
-  if (!Number.isSafeInteger(count * size)) throw new NeedsPython("a duration too long for exact arithmetic");
-  return count * size;
+  return pyInt(digits) * size;
 }
 
 function numberOf(value: Value | undefined): number | undefined {
@@ -342,8 +344,8 @@ function checkTrigger(item: JsonObject): void {
       points[2] === ":" &&
       pyIsDigit(points.slice(0, 2).join("")) &&
       pyIsDigit(points.slice(3).join("")) &&
-      Number(points.slice(0, 2).join("")) <= 23 &&
-      Number(points.slice(3).join("")) <= 59;
+      pyInt(points.slice(0, 2).join("")) <= 23 &&
+      pyInt(points.slice(3).join("")) <= 59;
     if (!ok) throw new HookValueError('at must be a time like "09:00"');
   }
   if (item.has("days")) {
@@ -521,7 +523,7 @@ export function parseHooks(text: string): Hook[] {
   } catch (error) {
     if (error instanceof JsonDecodeError) throw new HooksError(`${HOOKS_FILE} doesn't parse: line ${error.lineno} column ${error.colno}: ${error.msg}`);
     if (error instanceof JsonValueError) throw new HooksError(`${HOOKS_FILE} doesn't parse: ${error.message}`);
-    if (error instanceof JsonTooDeep) throw new NeedsPython("hooks.json nests deeper than Python's recursion limit");
+    if (error instanceof JsonTooDeep) throw new PythonError("RecursionError", error.message);
     throw error;
   }
   const list = document instanceof Map ? document.get("hooks") : undefined;

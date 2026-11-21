@@ -1,6 +1,5 @@
 import { osCrash } from "./crash.ts";
 import { constants } from "node:os";
-import { NeedsPython } from "./paths.ts";
 import { exceptionLine, inert, Output, toStderr } from "./printable.ts";
 import { type Call, finish } from "./telemetry.ts";
 
@@ -22,10 +21,7 @@ function complaintFailed(call: Call, errno: number, python: string | null): numb
 export async function deliver(call: Call, said: Said, json: boolean, python: string | null): Promise<number> {
   const out = new Output(json);
   let status = said.status;
-  if (said.raw !== undefined) {
-    if (said.raw !== "" && !said.raw.endsWith("\n")) throw new NeedsPython("output that doesn't end a line");
-    if (said.raw !== "") out.say(said.raw.slice(0, -1));
-  }
+  if (said.raw !== undefined) out.write(said.raw);
   for (const line of said.out) {
     out.say(line);
     if (out.closed) break;

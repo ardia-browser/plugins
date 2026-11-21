@@ -5,7 +5,7 @@ import { type Args, type Io } from "./cli-command.ts";
 import * as files from "./config-files.ts";
 import { ConfigError, Exists, type Places } from "./config-files.ts";
 import { dumps, type JsonObject, type Value } from "./json.ts";
-import { env, join, LINUX, NeedsPython } from "./paths.ts";
+import { env, join, LINUX } from "./paths.ts";
 import { left, truthy } from "./py.ts";
 import { JsonDecodeError, JsonValueError } from "./pyjson.ts";
 import { exists, isFile, lexists, mkdirs, nameOf, osError, parentOf, PyOSError } from "./pyos.ts";
@@ -14,7 +14,9 @@ import { isDict, isStr } from "./pyvalue.ts";
 import { describe, didYouMean, pathKey, Problem, validate } from "./schema-check.ts";
 import { shortcutProblem } from "./shortcuts.ts";
 import { checkThemeFile, report } from "./theme-check.ts";
-import { split as shlexSplit } from "./shlex.ts";
+import { shlexSplit } from "./pylib/shlex.ts";
+import { PyException, pyStrip } from "./pylib/str.ts";
+import { PythonError } from "./py.ts";
 
 export type Handler = (args: Args, where: Places, io: Io) => number;
 
@@ -350,10 +352,19 @@ function which(program: string): string | undefined {
   return undefined;
 }
 
+function splitEditor(value: string): string[] {
+  try {
+    return shlexSplit(value);
+  } catch (error) {
+    if (error instanceof PyException) throw new PythonError(error.type, error.message);
+    throw error;
+  }
+}
+
 function editorCommand(): [string[], boolean] {
   for (const variable of ["VISUAL", "EDITOR"]) {
-    const value = (env(variable) ?? "").trim();
-    if (value) return [shlexSplit(value), true];
+    const value = pyStrip(env(variable) ?? "");
+    if (value) return [splitEditor(value), true];
   }
   if (LINUX && (env("DISPLAY") || env("WAYLAND_DISPLAY"))) {
     const opener = which("xdg-open");
@@ -363,12 +374,11 @@ function editorCommand(): [string[], boolean] {
 }
 
 function configEdit(args: Args, where: Places, io: Io): number {
-  const [command, waits] = editorCommand();
-  if (command.length === 0) throw new NeedsPython("an editor variable that splits to nothing");
   if (!lexists(where.config)) {
     mkdirs(where.folder, true, true);
     create(where.config, files.dump(files.newConfig()), io);
   }
+  const [command, waits] = editorCommand();
   const program = command[0] as string;
   const ran = spawnSync(program, [...command.slice(1), where.config], { stdio: "inherit", shell: false });
   if (ran.error !== undefined) {

@@ -1,5 +1,7 @@
 import { CommandIo, jsonRequested } from "./cmdio.ts";
+import { crashValue } from "./crash.ts";
 import { NeedsPython } from "./paths.ts";
+import { PythonError } from "./py.ts";
 import { toStderr } from "./printable.ts";
 import { pythonOsError } from "./printable.ts";
 import { errnoOf, strerror } from "./paths.ts";
@@ -13,7 +15,11 @@ async function settled(io: CommandIo, call: Call, run: () => Promise<number>, py
     status = await run();
   } catch (error) {
     if (error instanceof NeedsPython) return undefined;
-    throw error;
+    if (!(error instanceof PythonError)) throw error;
+    io.settle(1);
+    toStderr(`${error.message}\n`);
+    finish(call, 1, python, { kind: error.kind, value: crashValue(error.kind, error.text) });
+    return 1;
   }
   if (io.exec !== undefined) {
     const shown = io.settle(0);

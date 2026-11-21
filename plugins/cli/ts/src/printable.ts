@@ -156,7 +156,11 @@ export class Output {
   constructor(readonly json: boolean) {}
 
   say(text: string): void {
-    if (!this.closed) this.pending.push(`${this.json ? text : inert(text)}\n`);
+    this.write(`${text}\n`);
+  }
+
+  write(text: string): void {
+    if (!this.closed && text !== "") this.pending.push(this.json ? text : inert(text));
   }
 
   reportCrash(): number {

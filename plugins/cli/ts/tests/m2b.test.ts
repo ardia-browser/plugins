@@ -8,7 +8,7 @@ import type { Value } from "../src/json.ts";
 import { JsonDecodeError, loads } from "../src/pyjson.ts";
 import { search, translate } from "../src/pyregex.ts";
 import { validate } from "../src/schema-check.ts";
-import { split } from "../src/shlex.ts";
+import { shlexSplit as split } from "../src/pylib/shlex.ts";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const oracle = JSON.parse(fs.readFileSync(path.join(HERE, "fixtures", "m2b-oracle.json"), "utf8"));

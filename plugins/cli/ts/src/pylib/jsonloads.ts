@@ -2,7 +2,7 @@ import { Float, type JsonObject, type Value } from "../json.ts";
 
 const WHITESPACE = new Set([0x20, 0x09, 0x0a, 0x0d]);
 const INT_MAX_STR_DIGITS = 4300;
-const DEPTH_LIMIT = 900;
+const DEPTH_LIMIT = 9995;
 const ESCAPES: Record<string, string> = { '"': '"', "\\": "\\", "/": "/", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t" };
 
 export class JsonDecodeError extends Error {
@@ -18,7 +18,11 @@ export class JsonDecodeError extends Error {
 
 export class JsonValueError extends Error {}
 
-export class JsonTooDeep extends Error {}
+export class JsonTooDeep extends Error {
+  constructor(readonly kind: "array" | "object") {
+    super(`maximum recursion depth exceeded while decoding a JSON ${kind} from a unicode string`);
+  }
+}
 
 export type LoadOptions = { parseConstant?: (token: string) => Value; parseFloat?: (token: string) => Value };
 
@@ -90,8 +94,8 @@ class Scanner {
     const ch = this.cp[at];
     if (ch === undefined) throw new Stop(at);
     if (ch === '"') return this.string(at + 1);
-    if (ch === "{") return this.nested(() => this.object(at + 1));
-    if (ch === "[") return this.nested(() => this.array(at + 1));
+    if (ch === "{") return this.nested("object", () => this.object(at + 1));
+    if (ch === "[") return this.nested("array", () => this.array(at + 1));
     if (ch === "n" && this.matches(at, "null")) return [null, at + 4];
     if (ch === "t" && this.matches(at, "true")) return [true, at + 4];
     if (ch === "f" && this.matches(at, "false")) return [false, at + 5];
@@ -101,9 +105,9 @@ class Scanner {
     return this.number(at);
   }
 
-  nested(run: () => [Value, number]): [Value, number] {
+  nested(kind: "array" | "object", run: () => [Value, number]): [Value, number] {
     this.depth += 1;
-    if (this.depth > DEPTH_LIMIT) throw new JsonTooDeep();
+    if (this.depth > DEPTH_LIMIT) throw new JsonTooDeep(kind);
     try {
       return run();
     } finally {
