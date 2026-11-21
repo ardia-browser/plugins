@@ -59,13 +59,13 @@ DIVERGENCES = {
     },
     "eval-isolated": {
         "row": 9,
-        "commands": "eval (without --main-world)",
+        "commands": "eval --isolated, wait --fn --isolated and clipboard read (eval and wait --fn run in the main world by default, as Python does)",
         "python": 'Runtime.evaluate {"expression": <script>, "returnByValue": true, "awaitPromise": true, "userGesture": false} on the '
                   "page session, in the page's main world",
         "ts": 'Runtime.callFunctionOn {"functionDeclaration": "function (source) { return (0, eval)(source); }", "objectId": '
               '<the ardia-browse world>, "arguments": [{"value": <script>}], "returnByValue": true, "awaitPromise": true, "userGesture": false}',
         "why": "a main-world evaluation leaves globals and stack frames the page can see (ardia#2812 rows 8 and 9); the isolated world "
-               "shares the document but not its JavaScript. `eval --main-world` keeps the old way for code that needs the page's globals",
+               "shares the document but not its JavaScript. `--isolated` opts in; clipboard read always uses it",
     },
     "script-isolated": {
         "row": 9,
@@ -96,10 +96,10 @@ EDITING_COMMANDS = {
         "row": 20,
         "commands": "press, keydown and fill's select-all: a shortcut with Control, Meta or Alt",
         "python": 'Input.dispatchKeyEvent with "commands" for Control or Meta with a, z, y and Shift+z, on every platform',
-        "ts": 'Input.dispatchKeyEvent with "commands" for every macOS editing shortcut (Meta with a, c, x, v, z, Shift+z; Meta and Alt '
-              "with the arrows, Backspace and Delete), and none on Linux and Windows",
-        "why": "on macOS a native contenteditable ignores Meta+z, Meta+c and the rest without the editing command (ardia#2812 row 20); "
-               "Control+a is not select-all there",
+        "ts": 'Input.dispatchKeyEvent with Python\'s "commands" for Control or Meta with a, z, y and Shift+z on every platform, and on '
+              "macOS also the rest of its editing shortcuts (Meta with c, x, v; Meta and Alt with the arrows, Backspace and Delete)",
+        "why": "on macOS a native contenteditable ignores Meta+c, Meta+x and the rest without the editing command (ardia#2812 row 20); "
+               "0.4.0's Control/Meta select-all, undo and redo are kept everywhere for compatibility",
     },
 }
 DIVERGENCES.update(EDITING_COMMANDS)

@@ -38,8 +38,8 @@ export const FETCH_HINT =
   "→ tip: to read other pages, `ardia browse read <url> <url>…` (or `read --links <pattern>` for this page's links) reads " +
   "them in one call, through your logins and after their scripts run; `ardia browse script` loops over pages with clicks and fills";
 export const MAIN_WORLD_HINT =
-  "eval runs in an isolated world that shares the page's DOM but not its JavaScript, so the page's own globals ({name}) aren't there. " +
-  "`ardia browse eval --main-world …` runs it in the page's own world, where the page can see it";
+  "eval --isolated runs in an isolated world that shares the page's DOM but not its JavaScript, so the page's own globals ({name}) aren't there. " +
+  "Without --isolated, eval runs in the page's own world, where the page can see it";
 
 function plainValue(text: string): boolean {
   const points = codePoints(text);
@@ -135,19 +135,19 @@ export function originOf(page: Page): string {
 }
 
 export async function cmdEval(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, args] = parse(argv, { "--base64": "bool", "--stdin": "bool", "--timeout": "value", "--main-world": "bool" }, { "-b": "--base64" });
+  const [options, args] = parse(argv, { "--base64": "bool", "--stdin": "bool", "--timeout": "value", "--main-world": "bool", "--isolated": "bool" }, { "-b": "--base64" });
   const limit = options["timeout"] ? parseTimeout(options["timeout"] as string) : EVAL_TIMEOUT;
   let script: string;
   if (options["stdin"] || (args.length === 0 && ctx.stdin)) script = ctx.stdin || "";
   else {
-    need(args, 1, "eval <js> | -b <base64> | --stdin [--timeout 2m] [--main-world]");
+    need(args, 1, "eval <js> | -b <base64> | --stdin [--timeout 2m] [--isolated]");
     script = args.join(" ");
     if (options["base64"]) script = decodeBase64(script);
   }
   const page = await ctx.state.page();
   if (FETCHING.test(script)) hintOnce(ctx.state, "fetch", FETCH_HINT);
   const [fixed, quoted] = quoteSelectorLiterals(script);
-  const mainWorld = Boolean(options["main_world"]);
+  const mainWorld = !options["isolated"];
   if (mainWorld) flag("eval_main_world", true);
   let value: unknown;
   try {

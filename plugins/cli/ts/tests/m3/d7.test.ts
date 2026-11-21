@@ -11,7 +11,7 @@ import { BrowseError } from "../../src/browse/daemon-errors.ts";
 import { load, listing, remove, save, validate } from "../../src/browse/flows/flows.ts";
 import { browseDir, closeFd, takeLock } from "../../src/browse/paths.ts";
 import { Registry } from "../../src/browse/state/registry.ts";
-import { evaluateIsolated, ISOLATED_EVAL } from "../../src/browse/commands/pagejs.ts";
+import { cmdEval, evaluateIsolated, ISOLATED_EVAL } from "../../src/browse/commands/pagejs.ts";
 import { workerSource } from "../../src/browse/script/script.ts";
 import { scratch, type Scratch } from "./daemon-helpers.ts";
 import { spawnSync } from "node:child_process";
@@ -301,6 +301,28 @@ describe("script and eval sources", () => {
     const [code, offset] = workerSource("return 1");
     expect(code.split("\n")[offset]).toBe("return 1");
     expect(code.endsWith("//# sourceURL=ardia-script.js")).toBe(true);
+  });
+
+  test("eval runs in the page's main world by default and with --main-world; --isolated uses the world handle", async () => {
+    const sent: string[] = [];
+    const page = {
+      mainFrame: "F",
+      url: "https://example.com/",
+      frames: new Map([["F", { id: "F", loader: "L", origin: "https://example.com" }]]),
+      worlds: new Map(),
+      loader: () => "L",
+      worldOf: async () => ({ frame: "F", loader: "L", context: 7, handle: "H" }),
+      send: async (method: string) => {
+        sent.push(method);
+        return { result: { type: "number", value: 2 } };
+      },
+    };
+    const ctx = { state: { page: async () => page, hints: new Set() }, stdin: null, timeout: 25 };
+    for (const [argv, method] of [[["1+1"], "Runtime.evaluate"], [["--main-world", "1+1"], "Runtime.evaluate"], [["--isolated", "1+1"], "Runtime.callFunctionOn"]] as const) {
+      sent.length = 0;
+      const result = await cmdEval(ctx as never, [...argv]);
+      expect([sent, result.data]).toEqual([[method], { origin: "https://example.com/", result: 2 }]);
+    }
   });
 
   test("isolated eval runs on the world handle, never a numeric context", async () => {

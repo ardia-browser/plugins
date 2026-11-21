@@ -1,6 +1,7 @@
 import { reprStr } from "../../py.ts";
 import { dumps } from "../../json.ts";
 import { evaluateMain } from "../act/react.ts";
+import { evaluateIsolated } from "./pagejs.ts";
 import { pyTruthy } from "../cdp/pyvalue.ts";
 import { sleep } from "../cdp/cancel.ts";
 import { BrowseError, Usage } from "../daemon-errors.ts";
@@ -18,7 +19,7 @@ import { need, parse } from "./parse.ts";
 export async function cmdWait(ctx: Ctx, argv: string[]): Promise<Result> {
   const [options, args] = parse(
     argv,
-    { "--text": "value", "--url": "value", "--load": "value", "--fn": "value", "--state": "value", "--timeout": "value", "--download": "bool" },
+    { "--text": "value", "--url": "value", "--load": "value", "--fn": "value", "--state": "value", "--timeout": "value", "--download": "bool", "--isolated": "bool", "--main-world": "bool" },
     { "-t": "--text", "-u": "--url", "-l": "--load", "-f": "--fn" },
   );
   const timeout = options["timeout"] ? Number(options["timeout"]) / 1000 : ctx.timeout;
@@ -70,7 +71,7 @@ export async function cmdWait(ctx: Ctx, argv: string[]): Promise<Result> {
     const expression = options["fn"] as string;
     const found = (await waitUntil(
       async () => {
-        const value = await evaluateMain(page, expression);
+        const value = options["isolated"] ? await evaluateIsolated(page, expression) : await evaluateMain(page, expression);
         return pyTruthy(value) ? { value } : null;
       },
       timeout,

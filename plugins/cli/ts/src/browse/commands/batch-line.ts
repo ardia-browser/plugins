@@ -1,5 +1,5 @@
 const CODE_BOOL_FLAGS: Readonly<Record<string, readonly string[]>> = {
-  eval: ["--stdin", "--main-world"],
+  eval: ["--stdin", "--main-world", "--isolated"],
   script: [],
 };
 

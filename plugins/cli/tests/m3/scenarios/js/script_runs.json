@@ -1,8 +1,7 @@
 {
  "live_only": "designed divergence (script-isolated, eval-isolated): replay serves only requests Python sent, so this runs live until the TS side records its own transcripts (M3-DESIGN 2.6)",
  "divergences": [
-  "script-isolated",
-  "eval-isolated"
+  "script-isolated"
  ],
  "racy_steps": {
   "steps": [
