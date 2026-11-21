@@ -181,9 +181,10 @@ def served_table(path: Path = SERVED_TABLE) -> dict[str, str]:
         words = line.split()
         if not words:
             continue
-        if len(words) != 2 or words[1] not in SERVING_SIDES or words[0] in rows:
+        label = " ".join(words[:-1])
+        if len(words) < 2 or words[-1] not in SERVING_SIDES or label in rows:
             raise ValueError(f"{path.name}:{number}: each row is a command and who serves it ({' or '.join(SERVING_SIDES)}), once: {line!r}")
-        rows[words[0]] = words[1]
+        rows[label] = words[-1]
     return rows
 
 

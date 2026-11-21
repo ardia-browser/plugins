@@ -361,18 +361,47 @@ fn run_rust(route: Route, argv: &[String], python: Option<&Path>) -> Handled {
     served.map_or(Handled::Python, Handled::Status)
 }
 
+const SHARED_VALUE_FLAGS: [&str; 4] = ["--port", "--ws", "--data-dir", "--timeout"];
+
+fn skip_shared(argv: &[String], mut index: usize) -> Option<usize> {
+    while let Some(token) = argv.get(index) {
+        let name = token.split('=').next().unwrap_or_default();
+        if SHARED_VALUE_FLAGS.contains(&name) {
+            index += if token.contains('=') { 1 } else { 2 };
+            if index > argv.len() {
+                return None;
+            }
+        } else if token == "--json" {
+            index += 1;
+        } else {
+            break;
+        }
+    }
+    Some(index)
+}
+
+pub fn command_label(argv: &[String]) -> Option<String> {
+    let first = skip_shared(argv, 0)?;
+    let group = argv.get(first).filter(|word| !word.starts_with('-'))?;
+    let second = skip_shared(argv, first + 1)?;
+    match argv.get(second).filter(|word| !word.starts_with('-')) {
+        Some(verb) => Some(format!("{group} {verb}")),
+        None => Some(group.clone()),
+    }
+}
+
 fn handle(root: Option<&Path>, raw: &[OsString], python: Option<&Path>) -> Handled {
     let Some(argv) = raw.iter().map(|arg| arg.to_str().map(str::to_string)).collect::<Option<Vec<String>>>() else {
         return Handled::Python;
     };
     let route = parse_route(&argv);
-    let Some(label) = route.label() else {
+    let Some(label) = route.label().map(str::to_string).or_else(|| command_label(&argv)) else {
         return Handled::Python;
     };
     if standard_fds::any_closed_at_start() || standard_fds::any_is_a_directory() || printable::stdout_unusable() || printable::stderr_unusable() {
         return Handled::Python;
     }
-    match router::Table::load(root).side(label) {
+    match router::Table::load(root).side(&label) {
         Some(router::Side::Rust) => run_rust(route, &argv, python),
         Some(router::Side::Ts) => match router::ts_program(root) {
             Some(program) => run_ts(&program, raw),

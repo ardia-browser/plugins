@@ -33,18 +33,19 @@ impl Table {
             let words: Vec<&str> = line.split_whitespace().collect();
             match words[..] {
                 [] => continue,
-                [label, side] => {
+                [_] => return None,
+                [ref label @ .., side] => {
+                    let label = label.join(" ");
                     let side = match side {
                         "rust" => Side::Rust,
                         "ts" => Side::Ts,
                         _ => return None,
                     };
-                    if rows.iter().any(|(known, _)| known == label) {
+                    if rows.iter().any(|(known, _)| *known == label) {
                         return None;
                     }
-                    rows.push((label.to_string(), side));
+                    rows.push((label, side));
                 }
-                _ => return None,
             }
         }
         Some(Table(rows))

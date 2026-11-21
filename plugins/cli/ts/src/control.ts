@@ -26,6 +26,17 @@ export type Failure =
   | { kind: "interrupted" }
   | { kind: "unported" };
 
+export class Unsendable extends Error {}
+
+const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/u;
+
+function unsendable(value: Value): boolean {
+  if (typeof value === "string") return LONE_SURROGATE.test(value);
+  if (Array.isArray(value)) return value.some(unsendable);
+  if (value instanceof Map) return [...value].some(([key, item]) => LONE_SURROGATE.test(key) || unsendable(item));
+  return false;
+}
+
 export class ControlFailure extends Error {
   constructor(readonly failure: Failure) {
     super(failure.kind);
@@ -194,7 +205,7 @@ function peerOf(fd: number): number | undefined {
   }
 }
 
-export async function call(dataDir: string | undefined, method: string, params: Value | undefined): Promise<Value> {
+export async function call(dataDir: string | undefined, method: string, params: Value | undefined, timeout: number = CALL_TIMEOUT): Promise<Value> {
   const path = join(dataRoot(dataDir), SOCKET_FILE);
   checkSocket(path);
   const socket = await connectSocket(path, CONNECT_TIMEOUT);
@@ -210,7 +221,8 @@ export async function call(dataDir: string | undefined, method: string, params: 
       wakeAll = wake;
     });
     await hello(connection, name, routedCaller());
-    return await callOn(connection, method, params, CALL_TIMEOUT);
+    if (params !== undefined && unsendable(params)) throw new Unsendable();
+    return await callOn(connection, method, params, timeout);
   } finally {
     connection?.close();
     socket.destroy();
