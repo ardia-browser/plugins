@@ -7,7 +7,7 @@ export function servedTable(text: string = table): Map<string, ServingSide> {
   const rows = new Map<string, ServingSide>();
   for (const line of text.split("\n")) {
     const words = line.trim().split(/\s+/).filter(Boolean);
-    const side = words[words.length - 1];
+    const side = words.at(-1);
     const label = words.slice(0, -1).join(" ");
     if (words.length >= 2 && (side === "rust" || side === "ts") && !rows.has(label)) rows.set(label, side);
   }

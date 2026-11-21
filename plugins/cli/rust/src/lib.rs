@@ -66,38 +66,6 @@ fn value_of<'a>(argv: &'a [String], index: &mut usize, name: &str) -> Option<&'a
     Some(value)
 }
 
-const SHARED_VALUE_FLAGS: &[&str] = &["--port", "--ws", "--data-dir", "--timeout"];
-
-fn skip_shared(argv: &[String], mut index: usize) -> Option<usize> {
-    while let Some(token) = argv.get(index) {
-        let name = token.split('=').next().unwrap_or_default();
-        if SHARED_VALUE_FLAGS.contains(&name) {
-            index += if token.contains('=') { 1 } else { 2 };
-            if index > argv.len() {
-                return None;
-            }
-        } else if token == "--json" {
-            index += 1;
-        } else {
-            break;
-        }
-    }
-    Some(index)
-}
-
-pub fn command_labels(argv: &[String]) -> Vec<String> {
-    let Some(at) = skip_shared(argv, 0) else { return Vec::new() };
-    let Some(command) = argv.get(at).filter(|word| !word.starts_with('-')) else {
-        return Vec::new();
-    };
-    let mut labels = Vec::new();
-    if let Some(sub) = skip_shared(argv, at + 1).and_then(|next| argv.get(next)).filter(|word| !word.starts_with('-')) {
-        labels.push(format!("{command} {sub}"));
-    }
-    labels.push(command.clone());
-    labels
-}
-
 pub fn serves(label: &str) -> bool {
     router::Table::compiled().side(label) == Some(router::Side::Rust)
 }
@@ -401,7 +369,7 @@ fn handle(root: Option<&Path>, raw: &[OsString], python: Option<&Path>) -> Handl
     let table = router::Table::load(root);
     let label = match route.label() {
         Some(label) => label.to_string(),
-        None => match command_labels(&argv).into_iter().find(|label| table.side(label) == Some(router::Side::Ts)) {
+        None => match table.typescript_label(raw) {
             Some(label) => label,
             None => return Handled::Python,
         },
@@ -410,8 +378,7 @@ fn handle(root: Option<&Path>, raw: &[OsString], python: Option<&Path>) -> Handl
         return Handled::Python;
     }
     match table.side(&label) {
-        Some(router::Side::Rust) if route != Route::Python => run_rust(route, &argv, python),
-        Some(router::Side::Rust) => Handled::Python,
+        Some(router::Side::Rust) => run_rust(route, &argv, python),
         Some(router::Side::Ts) => match router::ts_program(root) {
             Some(program) => run_ts(&program, raw),
             None => Handled::Python,
@@ -445,20 +412,6 @@ mod tests {
 
     fn routed(words: &[&str]) -> Route {
         route(&words.iter().map(|word| word.to_string()).collect::<Vec<_>>())
-    }
-
-    #[test]
-    fn labels_a_command_and_its_subcommand_past_shared_flags() {
-        let labels = |words: &[&str]| command_labels(&words.iter().map(|word| word.to_string()).collect::<Vec<_>>());
-        assert_eq!(labels(&["scripts", "list", "--json"]), ["scripts list", "scripts"]);
-        assert_eq!(
-            labels(&["--data-dir", "/d", "--json", "scripts", "--data-dir=/e", "new", "x"]),
-            ["scripts new", "scripts"]
-        );
-        assert_eq!(labels(&["scripts", "--help"]), ["scripts"]);
-        assert_eq!(labels(&["--json"]), Vec::<String>::new());
-        assert_eq!(labels(&["--data-dir"]), Vec::<String>::new());
-        assert_eq!(labels(&["-h", "scripts"]), Vec::<String>::new());
     }
 
     #[test]
