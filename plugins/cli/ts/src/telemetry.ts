@@ -11,7 +11,7 @@ import { exceptionProperties } from "./crash.ts";
 import { cliVersion, isDevBuild } from "./version.ts";
 
 export const SERVED_BY = "ts";
-const LOGS_URL = "https://ardia.dev/otel/v1/logs";
+export const LOGS_URL = "https://ardia.dev/otel/v1/logs";
 const CONSENT_FILE = "telemetry.json";
 const MAX_CONSENT_BYTES = 64 * 1024;
 const LOCAL_ONLY_ID = "local";
@@ -29,6 +29,8 @@ export class Call {
   subcommand: string | undefined;
   allowedFlags: readonly string[] = [];
   errorCode: string | undefined;
+  readonly metrics = new Map<string, Value>();
+  task = false;
 
   constructor(readonly argv: string[]) {}
 
@@ -216,6 +218,7 @@ function wholeMs(value: number): bigint {
 function timings(call: Call, into: [string, Value][]): void {
   const elapsed = performance.now() - call.startedMs;
   const startup = (call.startedAt - performance.timeOrigin / 1000) * 1000;
+  for (const [key, value] of call.metrics) if (key !== "startup_ms" && key !== "total_ms") into.push([key, value]);
   if (startup >= 0 && startup <= MAX_MS) {
     into.push(["startup_ms", wholeMs(startup)], ["total_ms", wholeMs(startup + elapsed)]);
   } else into.push(["total_ms", wholeMs(elapsed)]);
@@ -286,5 +289,5 @@ function record(call: Call, status: number, python: string | null, crash: number
     return;
   }
   const spooled = appendToSpool(target.root, records);
-  if (spooled !== undefined) startFlush(spooled, target, python);
+  if (spooled !== undefined) startFlush(spooled, target);
 }

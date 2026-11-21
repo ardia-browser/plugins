@@ -1,6 +1,7 @@
 import { read, write, writeSync } from "node:fs";
 import { catchInterrupts } from "./control.ts";
 import { interruptsIgnored, LIBC_UNAVAILABLE, LibcUnavailable, loadLibc, watchLifeline, writeWhole } from "./libc.ts";
+import { FLUSH_ARGUMENT } from "./flush-argument.ts";
 import { bundledPython, installRoot } from "./install.ts";
 import { abandonedOutput, settleStderr } from "./printable.ts";
 import { HAND_BACK, takeMarker } from "./routed.ts";
@@ -45,7 +46,20 @@ function failWithoutAddon(message: string, lifeline: number): Promise<number> {
   return new Promise((resolve) => write(2, message, () => resolve(LIBC_UNAVAILABLE)));
 }
 
+async function runFlusher(): Promise<number> {
+  try {
+    loadLibc();
+  } catch {
+    return 0;
+  }
+  const { FLUSH_DEADLINE_MS, flushMain } = await import("./flush.ts");
+  setTimeout(() => process.exit(0), FLUSH_DEADLINE_MS).unref();
+  await flushMain();
+  process.exit(0);
+}
+
 async function main(words: string[]): Promise<number> {
+  if (words.length === 1 && words[0] === FLUSH_ARGUMENT) return runFlusher();
   const routed = takeMarker(words);
   if (routed === undefined) {
     try {
