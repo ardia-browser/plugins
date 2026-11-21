@@ -2104,7 +2104,9 @@ parity harness rather than stripped wholesale:
 - `ardia browse`: a value in an argument slot that takes user text is never read as a shared option: the user and
   password of `set credentials|auth`, the text of `fill` and `type`, `keyboard type|inserttext`'s text, and the values
   of `cookies set` and `storage <kind> set`. Python's parser takes a password like `--port=9222` there as `--port`
-  (and then reports it in its usage error). Options anywhere else still work as before.
+  (and then reports it in its usage error). Options anywhere else still work as before. The daemon's parser keeps the
+  same slots opaque, so `fill #pw --port=9222` types `--port=9222`, and its `Unknown flag:` error names the flag without
+  its `=value` (Python prints the whole token).
 - `ardia browse`: usage errors about a shared option's value (`--port`, `--max-output`, `--idle-timeout`) name the
   option but never repeat the value, which may be a secret typed in the wrong place; Python echoes it.
 - `ardia browse`: an answer that starts with a UTF-16 or UTF-32 byte order mark or a NUL byte is read as UTF-8, so a

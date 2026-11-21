@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { opaqueSlot } from "../opaque.ts";
 import os from "node:os";
 import path from "node:path";
 import { formatG, groupThousands } from "../../pylib/format.ts";
@@ -153,7 +154,7 @@ function samePair(a: unknown, b: unknown): boolean {
 }
 
 async function cmdFill(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, args] = parse(argv, { "--no-humanize": "bool" });
+  const [options, args] = parse(argv, { "--no-humanize": "bool" }, {}, (positionals) => opaqueSlot("fill", positionals));
   need(args, 2, "fill <selector> <text>");
   const selector = args[0] as string;
   const [page, element] = await resolve(ctx, selector);
@@ -200,7 +201,7 @@ async function cmdFill(ctx: Ctx, argv: string[]): Promise<Result> {
 }
 
 async function cmdType(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, args] = parse(argv, { "--no-humanize": "bool", "--delay": "value" });
+  const [options, args] = parse(argv, { "--no-humanize": "bool", "--delay": "value" }, {}, (positionals) => opaqueSlot("type", positionals));
   need(args, 2, "type <selector> <text>");
   const [page, element] = await resolve(ctx, args[0] as string);
   const [retargeted, report] = await observe(ctx, page, () => typeText(page, element, args.slice(1).join(" "), humanizing(ctx, options)), [element, null]);
@@ -254,7 +255,7 @@ async function cmdKeydown(ctx: Ctx, argv: string[]): Promise<Result> {
 }
 
 async function cmdKeyboard(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, args] = parse(argv, { "--no-humanize": "bool" });
+  const [options, args] = parse(argv, { "--no-humanize": "bool" }, {}, (positionals) => opaqueSlot("keyboard", positionals));
   need(args, 2, "keyboard type|inserttext <text>");
   const page = await ctx.state.page();
   const text = args.slice(1).join(" ");

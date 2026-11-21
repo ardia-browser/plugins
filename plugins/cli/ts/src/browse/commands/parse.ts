@@ -20,7 +20,12 @@ function digitsAsZero(text: string): string {
 }
 const SCHEME = /^([a-zA-Z][a-zA-Z0-9+.-]*):/u;
 
-export function parse(argv: readonly string[], flags: Flags = {}, aliases: Readonly<Record<string, string>> = {}): [Parsed, string[]] {
+export function parse(
+  argv: readonly string[],
+  flags: Flags = {},
+  aliases: Readonly<Record<string, string>> = {},
+  opaque: ((positionals: readonly string[]) => boolean) | null = null,
+): [Parsed, string[]] {
   const options: Parsed = {};
   const positionals: string[] = [];
   let index = 0;
@@ -30,6 +35,10 @@ export function parse(argv: readonly string[], flags: Flags = {}, aliases: Reado
     if (token === "--") {
       for (let rest = index; rest < argv.length; rest += 1) positionals.push(argv[rest] as string);
       break;
+    }
+    if (opaque !== null && opaque(positionals)) {
+      positionals.push(token);
+      continue;
     }
     const split = token.startsWith("--") && token.includes("=");
     let name = split ? token.slice(0, token.indexOf("=")) : token;
@@ -53,7 +62,7 @@ export function parse(argv: readonly string[], flags: Flags = {}, aliases: Reado
       }
       continue;
     }
-    if (token.startsWith("-") && token.length > 1 && !pyDigit([...token.slice(1, 3)][0])) throw new Usage(`Unknown flag: ${token}`);
+    if (token.startsWith("-") && token.length > 1 && !pyDigit([...token.slice(1, 3)][0])) throw new Usage(`Unknown flag: ${name}`);
     positionals.push(token);
   }
   return [options, positionals];

@@ -1,3 +1,4 @@
+import { opaqueSlot } from "./opaque.ts";
 import { decimalDigit } from "../pystr.ts";
 import { isNumberSpace, isSpace, strip } from "../py.ts";
 import { BOOL_FLAGS, COMMAND_FLAGS, COMMAND_NAME, COMMAND_OWNS, LAUNCH_HINTS, LAUNCH_ONLY, VALUE_FLAGS } from "./tables.ts";
@@ -44,28 +45,6 @@ export function truthy(value: string | undefined): boolean {
 
 function keyOf(name: string): string {
   return name.replace(/^-+/, "").replaceAll("-", "_");
-}
-
-const SECRET_SUBCOMMANDS = ["credentials", "auth"];
-const TYPED_TEXT = ["type", "inserttext"];
-
-export function opaqueSlot(command: string | undefined, positionals: readonly string[]): boolean {
-  const [first, second] = positionals;
-  switch (command) {
-    case "set":
-      return SECRET_SUBCOMMANDS.includes(first ?? "") && (positionals.length === 1 || positionals.length === 2);
-    case "fill":
-    case "type":
-      return positionals.length === 1;
-    case "keyboard":
-      return TYPED_TEXT.includes(first ?? "") && positionals.length === 1;
-    case "cookies":
-      return first === "set" && positionals.length === 2;
-    case "storage":
-      return second === "set" && positionals.length === 3;
-    default:
-      return false;
-  }
 }
 
 export function splitGlobals(argv: readonly string[]): { found: Found; rest: string[] } {

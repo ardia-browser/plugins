@@ -1,4 +1,5 @@
 import type { Value } from "../../json.ts";
+import { opaqueSlot } from "../opaque.ts";
 import { pyStrip } from "../../pylib/str.ts";
 import { BrowseError, Gated, Usage } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
@@ -22,7 +23,7 @@ function shownValue(value: unknown): string {
 }
 
 export async function cmdStorage(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [, args] = parse(argv);
+  const [, args] = parse(argv, {}, {}, (positionals) => opaqueSlot("storage", positionals));
   need(args, 1, "storage local|session [get [key] | set <key> <value> | clear | remove <key>]");
   const kind = args[0] as string;
   if (kind !== "local" && kind !== "session") throw new Usage("storage takes local or session");
@@ -94,7 +95,7 @@ export async function cmdCookies(ctx: Ctx, argv: string[]): Promise<Result> {
     "--sameSite": "value",
     "--expires": "value",
     "--curl": "value",
-  });
+  }, {}, (positionals) => opaqueSlot("cookies", positionals));
   const action = args[0] ?? "get";
   const page = await ctx.state.page();
   if (action !== "get") refuseOnBorrowed(ctx, page, `${action} cookies through`);

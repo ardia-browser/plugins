@@ -37,3 +37,14 @@ test("a usage error about an option's value never repeats the value", () => {
   const { found } = splitGlobals(["--max-output", secret, "get", "title"]);
   assert.throws(() => optionsFrom(found), (error: unknown) => error instanceof Usage && !error.message.includes(secret));
 });
+
+test("the daemon's parser keeps the same slots opaque and never repeats an inline value", async () => {
+  const { parse } = await import("../src/browse/commands/parse.ts");
+  const { opaqueSlot } = await import("../src/browse/opaque.ts");
+  const [, args] = parse(["#pw", "--port=9222", "--no-humanize"], { "--no-humanize": "bool" }, {}, (positionals) => opaqueSlot("fill", positionals));
+  assert.deepEqual(args, ["#pw", "--port=9222"]);
+  assert.throws(
+    () => parse(["#pw", "x", "--secret=hunter2"], { "--no-humanize": "bool" }, {}, (positionals) => opaqueSlot("fill", positionals)),
+    (error: unknown) => error instanceof Error && error.message === "Unknown flag: --secret",
+  );
+});
