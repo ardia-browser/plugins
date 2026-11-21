@@ -2,14 +2,14 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { peerUid } from "../../libc.ts";
-import { uid } from "../../paths.ts";
+import { LINUX, uid } from "../../paths.ts";
 
 export const ANNOUNCE_TIMEOUT = 1.0;
 export const SOCKET_FILE = "ArdiaControl.sock";
 export const PROTOCOL = 4;
 const MAX_NAME = 40;
 const MAX_APP_PATH = 1024;
-const SUN_PATH_MAX = 104;
+const SUN_PATH_MAX = LINUX ? 107 : 104;
 const MAX_LINE = 1024 * 1024;
 
 export type Caller = { readonly name: string; readonly app: string | null };
@@ -57,8 +57,9 @@ export function wire(caller: Caller): Record<string, string> {
   return caller.app ? { name: caller.name, app: caller.app } : { name: caller.name };
 }
 
-export function announcePath(controlFile: string): string {
-  return path.join(path.dirname(path.dirname(controlFile)), SOCKET_FILE);
+export function announcePath(controlFile: string, linux: boolean = LINUX): string {
+  const folder = path.dirname(controlFile);
+  return path.join(linux ? folder : path.dirname(folder), SOCKET_FILE);
 }
 
 function usableSocket(file: string): boolean {

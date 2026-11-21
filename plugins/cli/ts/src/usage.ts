@@ -1,7 +1,8 @@
-import { mkdirSync } from "node:fs";
+import { closeSync, existsSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { now } from "./clock.ts";
 import { dumps, Float, type JsonObject, parse, TELEMETRY_JSON_DEPTH, type Value } from "./json.ts";
-import { envSet, expandUser, home, join, purePath } from "./paths.ts";
+import { envSet, expandUser, home, join, LINUX, purePath, xdgDir } from "./paths.ts";
 import { close, closeDir, type Dir, openPrivate, readPrivate, takeLockRetrying, writePrivate } from "./privatefs.ts";
 import { isSpace, iterateOrEmpty, strip, truthy } from "./py.ts";
 import { type Call, dataDirArg, leadingTokens, namesTestEndpoint, TEST_ENDPOINT_ENV } from "./telemetry.ts";
@@ -54,8 +55,52 @@ function dueForPrompt(state: JsonObject): boolean {
   return !truthy(star.get("prompted_at")) && !truthy(star.get("done_at")) && numberIn(dictIn(state, "tasks").get("done")) >= TASKS_BEFORE_ASKING;
 }
 
-export function cliHome(): string {
-  const chosen = envSet("ARDIA_CLI_HOME") ?? join(home(), "Library", "Application Support", "Ardia", "CLI");
+const CARRIED_FORWARD = [["skills.json"], [FOLDER, STATE]];
+let carried = false;
+
+function carryForward(from: string, to: string): void {
+  if (carried) return;
+  carried = true;
+  for (const parts of CARRIED_FORWARD) {
+    const target = join(to, ...parts);
+    const source = join(from, ...parts);
+    const staged = `${target}.carried-${process.pid}`;
+    let created = false;
+    try {
+      if (existsSync(target)) continue;
+      const info = lstatSync(source);
+      if (!info.isFile() || info.uid !== process.getuid?.()) continue;
+      mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
+      const fd = openSync(staged, "wx", 0o600);
+      created = true;
+      try {
+        writeFileSync(fd, readFileSync(source));
+      } finally {
+        closeSync(fd);
+      }
+      linkSync(staged, target);
+    } catch {
+      continue;
+    } finally {
+      if (created) {
+        try {
+          rmSync(staged, { force: true });
+        } catch {}
+      }
+    }
+  }
+}
+
+export function defaultCliHome(linux: boolean = LINUX): string {
+  const mac = join(home(), "Library", "Application Support", "Ardia", "CLI");
+  if (!linux) return mac;
+  const xdg = join(xdgDir("XDG_DATA_HOME", ".local", "share"), "ardia", "cli");
+  carryForward(mac, xdg);
+  return xdg;
+}
+
+export function cliHome(linux: boolean = LINUX): string {
+  const chosen = envSet("ARDIA_CLI_HOME") ?? defaultCliHome(linux);
   return purePath(expandUser(chosen));
 }
 

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { peerUid } from "../../libc.ts";
-import { uid } from "../../paths.ts";
+import { LINUX, uid } from "../../paths.ts";
 import { Cancelled, currentSignal } from "../cdp/cancel.ts";
 import { BrowseError } from "../daemon-errors.ts";
 import { announcePath, type Caller, PROTOCOL, SOCKET_FILE, wire } from "../daemon/announce.ts";
@@ -11,7 +11,7 @@ import { record } from "./records.ts";
 
 export const APP_TAB = /^tab-[A-Za-z0-9_-]{1,80}$/u;
 export const WINDOWS_TIMEOUT = 3.0;
-const SUN_PATH_MAX = 104;
+const SUN_PATH_MAX = LINUX ? 107 : 104;
 const MAX_LINE = 4 * 1024 * 1024;
 
 export type AppTabState = {

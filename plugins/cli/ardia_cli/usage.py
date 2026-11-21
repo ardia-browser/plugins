@@ -28,7 +28,12 @@ STAR_PROMPT = (
 
 def cli_home(env=None) -> Path:
     env = os.environ if env is None else env
-    return Path(env.get("ARDIA_CLI_HOME") or Path.home() / "Library" / "Application Support" / "Ardia" / "CLI").expanduser()
+    if env.get("ARDIA_CLI_HOME"):
+        return Path(env["ARDIA_CLI_HOME"]).expanduser()
+    if sys.platform.startswith("linux"):
+        data = env.get("XDG_DATA_HOME", "")
+        return (Path(data) if data.startswith("/") else Path.home() / ".local" / "share") / "ardia" / "cli"
+    return Path.home() / "Library" / "Application Support" / "Ardia" / "CLI"
 
 
 def recording_home(env) -> Path | None:

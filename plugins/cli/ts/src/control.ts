@@ -18,6 +18,8 @@ export const CALL_TIMEOUT = 30;
 const ENOENT = 2;
 const ENOTDIR = 20;
 const ECONNREFUSED = LINUX ? 111 : 61;
+const EPERM = 1;
+const EACCES = 13;
 
 export type Failure =
   | { kind: "unreachable"; message: string; sent: boolean }
@@ -72,6 +74,27 @@ export function dataRoot(dataDir: string | undefined): string {
   return root === undefined ? installedDataDir() : purePath(expandUser(root));
 }
 
+export function missingSocketDetail(path: string): string {
+  const at = path.lastIndexOf("/");
+  const folder = at <= 0 ? "/" : path.slice(0, at);
+  const name = path.slice(at + 1);
+  let info;
+  try {
+    info = lstatSync(folder);
+  } catch (error) {
+    return `no ${name} in ${folder} (${strerror(errnoOf(error))})`;
+  }
+  if (!info.isDirectory()) return `${folder} isn't a real folder, so Ardia won't open ${name} there`;
+  if (info.uid !== uid()) return `${folder} belongs to another user, so Ardia won't open ${name} there`;
+  if ((info.mode & 0o022) !== 0) return `others can write to ${folder} (mode ${(info.mode & 0o7777).toString(8).padStart(4, "0")}), so Ardia won't open ${name} there; run chmod go-w on it`;
+  return `no ${name} in ${folder}`;
+}
+
+function socketRefusal(path: string, errno: number): string {
+  const reason = `${path}: ${strerror(errno)}`;
+  return errno === EPERM || errno === EACCES ? `${reason}; a sandbox or the folder's permissions may be blocking it` : reason;
+}
+
 function seconds(value: number): string {
   return String(value);
 }
@@ -92,8 +115,8 @@ export function checkSocket(path: string): void {
     info = lstatSync(path);
   } catch (error) {
     const errno = errnoOf(error);
-    if (errno === ENOENT || errno === ENOTDIR) throw unreachable();
-    throw unreachable(`${name}: ${strerror(errno)}`);
+    if (errno === ENOENT || errno === ENOTDIR) throw unreachable(missingSocketDetail(path));
+    throw unreachable(socketRefusal(path, errno));
   }
   if (!info.isSocket()) throw unreachable(`${name} isn't a socket`);
   if (info.uid !== uid()) throw unreachable(`${name} belongs to another user`);
@@ -116,7 +139,8 @@ function connectSocket(path: string, timeout: number): Promise<Socket> {
       clearTimeout(timer);
       const errno = errnoOf(error);
       socket.destroy();
-      reject(errno === ENOENT || errno === ECONNREFUSED ? unreachable() : unreachable(`${name}: ${strerror(errno)}`));
+      if (errno === ECONNREFUSED) reject(unreachable(`nothing accepts on ${path}`));
+      else reject(unreachable(errno === ENOENT ? missingSocketDetail(path) : socketRefusal(path, errno)));
     });
   });
 }

@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { dirname } from "node:path";
 import { installedDataDir } from "../control.ts";
 import { type JsonObject, type Value } from "../json.ts";
-import { abspath, envSet, home, join, LINUX, purePath, expandUser, env } from "../paths.ts";
+import { abspath, envSet, home, join, LINUX, xdgDir } from "../paths.ts";
 import { dumpsXml, type PlistValue } from "../plist.ts";
 import { reprStr } from "../py.ts";
 import { pySplitlines, pyStrip } from "../pystrings.ts";
@@ -26,19 +26,11 @@ export type AgentPaths = {
   ardiaConfigHome: string | null;
 };
 
-function xdgDir(variable: string, ...fallback: string[]): string {
-  const value = env(variable);
-  if (value && value.startsWith("/")) return purePath(value);
-  return join(home(), ...fallback);
-}
-
 export function agentPaths(linux: boolean = LINUX): AgentPaths {
   if (linux) {
-    const given = env("ARDIA_CLI_HOME");
-    const chosen = given ? given : join(xdgDir("XDG_DATA_HOME", ".local", "share"), "ardia", "cli");
     return {
       home: home(),
-      cliHome: purePath(expandUser(chosen)),
+      cliHome: cliHome(true),
       linux: true,
       configHome: xdgDir("XDG_CONFIG_HOME", ".config"),
       stateHome: xdgDir("XDG_STATE_HOME", ".local", "state"),

@@ -3,10 +3,11 @@ import http from "node:http";
 import { constants } from "node:os";
 import { dataRoot, NOT_REACHABLE } from "../control.ts";
 import { parse, parseText } from "../json.ts";
-import { LINUX } from "../paths.ts";
+import { codeOf, errnoOf, LINUX, uid } from "../paths.ts";
 import { addSecret, redact } from "../redact.ts";
 import { parseQsl, quote, urlsplit } from "../pylib/urllib.ts";
-import { strerror } from "../libc.ts";
+import { connectAt, peerPid, peerUid, socketInfoAt, strerror } from "../libc.ts";
+import { announcePath } from "./daemon/announce.ts";
 import { closeFd, readFdUpTo } from "./paths.ts";
 import { Cancelled, checkCancelled, currentSignal } from "./cdp/cancel.ts";
 import { isSpace, strip } from "../py.ts";
@@ -19,7 +20,14 @@ const BROWSER_PATH = /^\/devtools\/browser\/[0-9A-Za-z-]{1,128}\n?$/;
 const TOKEN = /^[\x21-\x7e]{16,1024}\n?$/;
 const MAX_CONTROL_FILE = 64 * 1024;
 const PORT_TIMEOUT_MS = 3000;
-const { O_RDONLY, O_NOFOLLOW, O_NONBLOCK } = fs.constants;
+const SOCKET_PROBE_MS = 500;
+const EPERM = 1;
+const ENOENT = 2;
+const EACCES = 13;
+const ECONNREFUSED = LINUX ? 111 : 61;
+const S_IFMT = 0o170000;
+const S_IFSOCK = 0o140000;
+const { O_RDONLY, O_NOFOLLOW, O_NONBLOCK, O_DIRECTORY } = fs.constants;
 
 export class EndpointError extends Error {
   override readonly name = "EndpointError";
@@ -153,12 +161,55 @@ export function portNumber(text: string): bigint {
   return value;
 }
 
-function alive(pid: number): boolean {
+export type PidState = "running" | "gone" | "unsignalable";
+
+export function pidState(pid: number, signal: (pid: number, sig: 0) => unknown = (target, sig) => process.kill(target, sig)): PidState {
   try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
+    signal(pid, 0);
+    return "running";
+  } catch (error) {
+    return codeOf(error) === "EPERM" ? "unsignalable" : "gone";
+  }
+}
+
+export type SocketProbe = (folder: string, name: string, pid: number) => void;
+
+export class SocketUntrusted extends Error {
+  override readonly name = "SocketUntrusted";
+}
+
+function verifiedSocket(folder: string, name: string, pid: number): void {
+  const dir = fs.openSync(folder, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+  try {
+    const info = socketInfoAt(dir, name);
+    if ((info.mode & S_IFMT) !== S_IFSOCK) throw new SocketUntrusted("isn't a socket");
+    if (info.uid !== uid()) throw new SocketUntrusted("belongs to another user");
+    const fd = connectAt(dir, name, SOCKET_PROBE_MS);
+    try {
+      if (peerUid(fd) !== uid()) throw new SocketUntrusted("isn't served by your user");
+      if (peerPid(fd) !== pid) throw new SocketUntrusted(`is served by another process than pid ${pid}, so the control file is stale`);
+    } finally {
+      closeFd(fd);
+    }
+  } finally {
+    closeFd(dir);
+  }
+}
+
+export function sandboxHint(pid: number, socketPath: string, probe: SocketProbe = verifiedSocket): string | undefined {
+  const at = socketPath.lastIndexOf("/");
+  const lead = `pid ${pid} can't be signalled`;
+  try {
+    probe(at <= 0 ? "/" : socketPath.slice(0, at), socketPath.slice(at + 1), pid);
+    return undefined;
+  } catch (error) {
+    if (error instanceof SocketUntrusted) return `${lead} and ${socketPath} ${error.message}`;
+    const errno = errnoOf(error);
+    if (errno === ENOENT) return `${lead} and there's no ${socketPath}`;
+    if (errno === ECONNREFUSED) return `${lead} and nothing accepts on ${socketPath}`;
+    const reason = errno > 0 ? strerror(errno) : "couldn't connect";
+    if (errno === EPERM || errno === EACCES) return `${lead} and ${socketPath} refused a connection (${reason}); a sandbox or the folder's permissions may be blocking it`;
+    return `${lead} and ${socketPath} couldn't be reached (${reason})`;
   }
 }
 
@@ -172,7 +223,7 @@ function pyIntText(value: unknown): string {
   return typeof value === "boolean" ? (value ? "True" : "False") : String(value);
 }
 
-export function fromControlFile(file: string): Endpoint {
+export function fromControlFile(file: string, signal: (pid: number, sig: 0) => unknown = (target, sig) => process.kill(target, sig)): Endpoint {
   const label = file.slice(file.lastIndexOf("/") + 1);
   let fd: number;
   try {
@@ -208,7 +259,11 @@ export function fromControlFile(file: string): Endpoint {
   if (!(typeof token === "string" && TOKEN.test(token))) throw new EndpointError(`${NOT_REACHABLE} (${label} has no valid token)`);
   addSecret(token);
   const pidNumber = pyInt(pid);
-  if (!(pidNumber !== undefined && pidNumber > 1n && pidNumber < 2n ** 31n && alive(Number(pidNumber)))) throw new EndpointError(NOT_REACHABLE);
+  if (!(pidNumber !== undefined && pidNumber > 1n && pidNumber < 2n ** 31n)) throw new EndpointError(NOT_REACHABLE);
+  const state = pidState(Number(pidNumber), signal);
+  if (state === "gone") throw new EndpointError(NOT_REACHABLE);
+  const problem = state === "unsignalable" ? sandboxHint(Number(pidNumber), announcePath(file)) : undefined;
+  if (problem !== undefined) throw new EndpointError(`${NOT_REACHABLE} (${problem})`);
   const query = `token=${quote(token, "")}`;
   return {
     ws: `ws://127.0.0.1:${pyIntText(port)}${browser}?${query}`,

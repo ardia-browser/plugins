@@ -9,6 +9,7 @@ export type Name = string | Buffer;
 
 type Native = {
   peerUid(fd: number): number;
+  peerPid(fd: number): number;
   interruptsIgnored(): boolean | number;
   openAt(dir: number, name: string, flags: number, mode: number): number;
   connectAt(dir: number, name: string, waitMs: number): number;
@@ -40,7 +41,7 @@ type Native = {
 };
 
 
-const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "connectAt", "socketInfoAt", "openFileAt", "mkdirAt", "renameAt", "renamePaths", "unlinkAt", "sizeAt", "statAt", "armWatchdog", "disarmWatchdog", "registerGroup", "unregisterGroup", "renameExclusiveAt", "removeDirAt", "swapAt", "nonBlocking", "listAt", "lock", "watchLifeline", "writeSome", "strerror", "execProgram", "zoneName", "processInfo", "accountHome"];
+const EXPORTS: readonly (keyof Native)[] = ["peerUid", "peerPid", "interruptsIgnored", "openAt", "connectAt", "socketInfoAt", "openFileAt", "mkdirAt", "renameAt", "renamePaths", "unlinkAt", "sizeAt", "statAt", "armWatchdog", "disarmWatchdog", "registerGroup", "unregisterGroup", "renameExclusiveAt", "removeDirAt", "swapAt", "nonBlocking", "listAt", "lock", "watchLifeline", "writeSome", "strerror", "execProgram", "zoneName", "processInfo", "accountHome"];
 const ERRNO_NAMES = new Map<number, string>(Object.entries(constants.errno).map(([name, value]) => [value, name]));
 const EWOULDBLOCK = constants.errno.EWOULDBLOCK ?? constants.errno.EAGAIN;
 
@@ -117,6 +118,10 @@ export function errnoError(errno: number, syscall: string, given?: Name): NodeJS
 function checked(result: number, syscall: string, name?: Name): number {
   if (result < 0) throw errnoError(-result, syscall, name);
   return result;
+}
+
+export function peerPid(socket: number): number {
+  return checked(native().peerPid(socket), "getsockopt");
 }
 
 export function peerUid(socket: number): number {

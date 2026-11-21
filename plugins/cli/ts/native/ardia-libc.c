@@ -182,6 +182,27 @@ static napi_value peer_uid(napi_env env, napi_callback_info info) {
 #endif
 }
 
+static napi_value peer_pid(napi_env env, napi_callback_info info) {
+  Call call;
+  int32_t fd;
+  if (!take_args(env, info, 1, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &fd)) return NULL;
+#if defined(__APPLE__)
+  pid_t pid = 0;
+  socklen_t size = sizeof(pid);
+  if (getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, &pid, &size) != 0) return status(env, failed());
+  if (size < sizeof(pid)) return status(env, -EPROTO);
+  return number(env, (double)pid);
+#else
+  struct ucred credentials;
+  socklen_t size = sizeof(credentials);
+  memset(&credentials, 0, sizeof(credentials));
+  if (getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &credentials, &size) != 0) return status(env, failed());
+  if (size < sizeof(credentials)) return status(env, -EPROTO);
+  return number(env, (double)credentials.pid);
+#endif
+}
+
 static napi_value interrupts_ignored(napi_env env, napi_callback_info info) {
   struct sigaction current;
   napi_value result = NULL;
@@ -244,16 +265,40 @@ static int connect_unix(int dir, const char *name, int64_t deadline) {
   strcpy(address.sun_path, name);
   int fd = socket(AF_UNIX, SOCK_STREAM, 0);
   if (fd < 0) return failed();
-  if (fcntl(fd, F_SETFD, FD_CLOEXEC) != 0 || pthread_fchdir_np(dir) != 0) {
+  int flags = fcntl(fd, F_GETFL);
+  if (fcntl(fd, F_SETFD, FD_CLOEXEC) != 0 || flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) != 0) {
     int error = failed();
     close(fd);
     return error;
   }
-  int connected = connect(fd, (struct sockaddr *)&address, (socklen_t)sizeof(address));
-  int saved = errno;
-  if (pthread_fchdir_np(-1) != 0) abort();
-  errno = saved;
-  int outcome = connected == 0 ? 0 : errno == EINTR ? settle_connect(fd, deadline) : failed();
+  int outcome;
+  for (;;) {
+    if (pthread_fchdir_np(dir) != 0) {
+      outcome = failed();
+      break;
+    }
+    int connected = connect(fd, (struct sockaddr *)&address, (socklen_t)sizeof(address));
+    int saved = errno;
+    if (pthread_fchdir_np(-1) != 0) abort();
+    errno = saved;
+    if (connected == 0) {
+      outcome = 0;
+      break;
+    }
+    if (errno == EINPROGRESS || errno == EINTR) {
+      outcome = settle_connect(fd, deadline);
+      break;
+    }
+    if (errno != EAGAIN) {
+      outcome = failed();
+      break;
+    }
+    if (now_ms() >= deadline) {
+      outcome = -ETIMEDOUT;
+      break;
+    }
+    poll(NULL, 0, 5);
+  }
 #else
   int written = snprintf(address.sun_path, sizeof(address.sun_path), "/proc/self/fd/%d/%s", dir, name);
   if (written < 0 || (size_t)written >= sizeof(address.sun_path)) return -ENAMETOOLONG;
@@ -1006,6 +1051,7 @@ static bool define(napi_env env, napi_value exports, const char *name, napi_call
 
 __attribute__((visibility("default"))) napi_value napi_register_module_v1(napi_env env, napi_value exports) {
   bool ok = define(env, exports, "peerUid", peer_uid)
+      && define(env, exports, "peerPid", peer_pid)
       && define(env, exports, "interruptsIgnored", interrupts_ignored)
       && define(env, exports, "openAt", open_at)
       && define(env, exports, "connectAt", connect_at)

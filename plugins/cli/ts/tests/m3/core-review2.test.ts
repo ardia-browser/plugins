@@ -14,6 +14,7 @@ import { BrowseError, CdpError, ConnectionLost, OutcomeUnknown, Usage } from "..
 import { begin } from "../../src/browse/metrics.ts";
 import { State } from "../../src/browse/state/state.ts";
 import { FakeBrowser, frameTree, MAIN, stateWith } from "./core-helpers.ts";
+import { controlFilePath } from "../../src/browse/endpoint.ts";
 
 const PYTHON = process.env["ARDIA_TEST_PYTHON"] ?? "python3";
 const CLI = new URL("../../..", import.meta.url).pathname;
@@ -209,7 +210,7 @@ describe("4: the caller counts as announced only after the handshake", () => {
     await new Promise<void>((resolve) => server.listen(path.join(dir, "ArdiaControl.sock"), () => resolve()));
     const state = stateWith(new FakeBrowser());
     state.caller = { name: "tester", app: null };
-    const endpoint = { ws: "ws://x/devtools/browser/y", source: path.join(dir, "Chromium", "ArdiaControl.json"), explicit: false, active: null, instance: "i" };
+    const endpoint = { ws: "ws://x/devtools/browser/y", source: controlFilePath(dir), explicit: false, active: null, instance: "i" };
     const stop = new AbortController();
     setTimeout(() => stop.abort(), 50);
     await withSignal(stop.signal, () => state.announceCaller(endpoint));

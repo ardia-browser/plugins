@@ -62,6 +62,12 @@ export function home(): string {
   return env("HOME") ?? accountHome() ?? "";
 }
 
+export function xdgDir(variable: string, ...fallback: string[]): string {
+  const value = env(variable);
+  if (value && value.startsWith("/")) return purePath(value);
+  return join(home(), ...fallback);
+}
+
 export function expandUser(text: string): string {
   if (!text.startsWith("~")) return text;
   const slash = text.indexOf("/");

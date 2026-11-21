@@ -1615,11 +1615,26 @@ with the token redacted like everywhere else, and falls back to the visibility c
 
 The app writes `ArdiaControl.json` when the setting is on:
 `{"port":P,"browser":"/devtools/browser/<guid>","token":"…","pid":…,"generation":N}`. The CLI opens it without
-following links and trusts it only when it's a regular file the user owns, mode 0600, and `pid` is alive. It connects
+following links and trusts it only when it's a regular file the user owns, mode 0600, and `pid` is alive. A `pid`
+that `kill(pid, 0)` answers with EPERM counts as alive, since an agent sandbox (Codex, Seatbelt) can forbid signals to
+Ardia: the CLI then checks `ArdiaControl.sock` (beside the control file on Linux, one folder up on macOS, the same
+place the app announces callers on) without following links, and goes ahead only when it is a socket the user owns
+and the process answering it runs as the user (peer credentials); otherwise it stops there, so a stale file with a
+recycled pid never sends its token anywhere, and the line says why: no socket, nothing accepting, a socket someone
+else owns or serves, or a refusal a sandbox or the folder's permissions may cause. It connects
 to `ws://127.0.0.1:P<browser>?token=<token>`; every CDP call goes over that one browser socket
 (flattened sessions), so it always carries the token. A missing, stale or unsafe file, or a refused connection, prints one line and exits 2:
 `Ardia isn't running, or Command Line isn't installed (Settings › Plugins).` (on Linux, where the switch stays:
-`Ardia isn't running, or "Let the ardia command control Ardia" is off in Settings.`). A command and an Ardia whose
+`Ardia isn't running, or "Let the ardia command control Ardia" is off in Settings.`), followed in parentheses by
+what the CLI found when there is something to say: the missing socket and its folder, or the checks the app makes
+before it opens its socket there, on both platforms: the folder is a real folder (not a link), the user's own, and not
+writable by others (`others can write to <folder>
+(mode 0775), so Ardia won't open ArdiaControl.sock there; run chmod go-w on it`). That was the Linux 0.2.47 release
+smoke failure (ardia#3241): the release VM's login umask 0002 made the smoke's profile folder 0775, and every
+`ardia windows` reported Ardia not running for 30 s, where CI's runners (umask 0022) passed. On Linux the CLI keeps its
+own files under `${XDG_DATA_HOME:-~/.local/share}/ardia/cli` and no longer creates `~/Library` (ardia#2929); the
+first run carries `skills.json` and `Usage/usage.json` over from `~/Library/Application Support/Ardia/CLI` when the new
+folder has none. A command and an Ardia whose
 control protocols don't fit say which one to update, in one line, from every command. There's no port scanning and no
 `/json` fallback on this path. The token never reaches the output: stdout and stderr are redacted as a stream (a token
 split across writes is held back until it's complete), and so are log records and everything a logging handler
