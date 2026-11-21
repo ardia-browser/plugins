@@ -30,7 +30,8 @@
     "eval",
     "document.getElementById('mail').scrollTop"
    ],
-   "session": "read"
+   "session": "read",
+   "main_world": true
   }
  ]
 }

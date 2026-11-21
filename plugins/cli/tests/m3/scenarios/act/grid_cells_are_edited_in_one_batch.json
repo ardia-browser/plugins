@@ -29,7 +29,8 @@
     "eval",
     "document.querySelector('#qtyin1').value"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   }
  ]
 }

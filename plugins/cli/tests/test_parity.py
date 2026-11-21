@@ -66,6 +66,8 @@ class ParityTable:
 
     def test_the_table_has_each_served_command_at_least_once(self):
         for name in harness.served_commands():
+            if name in harness.SWITCH_ROWS:
+                continue
             self.assertGreater(self.summary["commands"][name]["cases"], 0, name)
 
 

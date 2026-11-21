@@ -1,5 +1,6 @@
 {
  "live_only": "the TypeScript daemon answers the dialog past the busy probe on purpose (docs/cli.md); Python fails `dialog accept` with page_busy, so this runs ts against ts",
+ "designed": "the TypeScript daemon answers the dialog past the busy probe on purpose (docs/cli.md); Python fails `dialog accept` with page_busy, so this runs ts against ts",
  "steps": [
   {"argv": ["open", "{fixture}/dialogs.html?kind=prompt", "--no-changes"], "session": "busy"},
   {"argv": ["wait", "900"], "session": "busy"},

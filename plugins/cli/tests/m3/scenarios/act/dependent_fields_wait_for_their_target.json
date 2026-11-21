@@ -29,7 +29,8 @@
     "eval",
     "document.querySelector('#to').value"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   },
   {
    "argv": [

@@ -27,7 +27,8 @@
     "eval",
     "[...document.querySelectorAll('#mouse li')].map((n) => n.textContent).join(' ')"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   }
  ]
 }

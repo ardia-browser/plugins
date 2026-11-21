@@ -27,14 +27,16 @@
     "eval",
     "document.querySelector('#g-count').textContent"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   },
   {
    "argv": [
     "eval",
     "String(document.querySelectorAll('#grid .editor').length)"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   }
  ]
 }

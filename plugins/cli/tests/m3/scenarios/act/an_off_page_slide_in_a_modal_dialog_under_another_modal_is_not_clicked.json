@@ -27,7 +27,8 @@
     "eval",
     "document.getElementById('modal').showModal(), document.getElementById('confirm').showModal(), 'ok'"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   },
   {
    "argv": [
@@ -41,7 +42,8 @@
     "eval",
     "state.clicked.join()"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   }
  ]
 }

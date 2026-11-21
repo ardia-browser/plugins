@@ -47,6 +47,14 @@ def tap_call(port: int, path: str, body: dict | None = None) -> dict:
         return json.loads(response.read())
 
 
+def main_world(argv: list[str]) -> list[str]:
+    if argv[:1] == ["eval"]:
+        return ["eval", "--main-world", *argv[1:]]
+    if argv[:1] == ["batch"]:
+        return [f"eval --main-world {item[5:]}" if item.startswith("eval ") else item for item in argv]
+    return argv
+
+
 def recorded_fixture(replay: Path) -> int:
     expected = replay.with_name(replay.name.removesuffix(".jsonl.gz") + ".result.json.gz")
     try:
@@ -134,6 +142,8 @@ class Side:
 
     def client(self, step: dict) -> list[str]:
         argv = [substitute(arg, self.fixture, self.root / "home") for arg in step["argv"]]
+        if step.get("main_world") and browse_driver.daemon_of(self.impl) == "ts":
+            argv = main_world(argv)
         return [*browse_driver.client_argv(self.impl, seeded=True), "browse", "--port", str(self.tap_port), "--data-dir", str(self.root / "data"),
                 "--session", step.get("session", "harness"), *argv]
 

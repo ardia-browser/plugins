@@ -114,6 +114,10 @@ class Harness:
                 "bytes": target.stat().st_size}
 
     def live(self, scenario: dict, a: str = "python", b: str = "python") -> dict:
+        if scenario.get("designed"):
+            typescript = [side for side in (a, b) if divergences.daemon_of(side) == "ts"]
+            if typescript:
+                a = b = typescript[0]
         first, second = self.twin(scenario, a, b)
         unstable = (scenario.get("unstable_steps") or {}).get("steps")
         differences = compare.compared(shaped_of(first, scenario, unstable), shaped_of(second, scenario, unstable), compare.LIVE)

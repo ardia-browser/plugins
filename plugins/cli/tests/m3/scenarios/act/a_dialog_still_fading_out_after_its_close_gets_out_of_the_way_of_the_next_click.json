@@ -26,7 +26,8 @@
     "eval",
     "state.clicked.length = 0, reveal('fading')"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   },
   {
    "argv": [
@@ -41,14 +42,16 @@
     "eval",
     "state.clicked.join()"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   },
   {
    "argv": [
     "eval",
     "state.clicked.length = 0, reveal('fading')"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   },
   {
    "argv": [
@@ -69,14 +72,16 @@
     "eval",
     "state.clicked.join()"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   },
   {
    "argv": [
     "eval",
     "state.clicked.length = 0, reveal('fading')"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   },
   {
    "argv": [
@@ -91,14 +96,16 @@
     "eval",
     "state.clicked.join()"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   },
   {
    "argv": [
     "eval",
     "state.clicked.length = 0, reveal('fading')"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   },
   {
    "argv": [
@@ -119,7 +126,8 @@
     "eval",
     "state.clicked.join()"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   }
  ],
  "unstable_steps": {

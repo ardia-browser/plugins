@@ -27,14 +27,16 @@
     "eval",
     "reveal('headless'), document.getElementById('pay').focus(), 'ok'"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   },
   {
    "argv": [
     "eval",
     "String(document.getElementById('headless').getBoundingClientRect().height)"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   },
   {
    "argv": [
@@ -48,7 +50,8 @@
     "eval",
     "state.clicked.join()"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   }
  ]
 }

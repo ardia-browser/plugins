@@ -27,14 +27,16 @@
     "eval",
     "reveal('lower', 'upper', 'tip'), 'ok'"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   },
   {
    "argv": [
     "eval",
     "document.elementFromPoint(620, 400).id"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   },
   {
    "argv": [
@@ -48,7 +50,8 @@
     "eval",
     "state.clicked.join()"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   }
  ]
 }

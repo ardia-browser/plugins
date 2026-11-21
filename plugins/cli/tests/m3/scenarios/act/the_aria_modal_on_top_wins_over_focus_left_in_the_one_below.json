@@ -27,7 +27,8 @@
     "eval",
     "reveal('lower', 'upper'), document.getElementById('lower-button').focus(), 'ok'"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   },
   {
    "argv": [
@@ -41,7 +42,8 @@
     "eval",
     "state.clicked.join()"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   },
   {
    "argv": [
@@ -55,7 +57,8 @@
     "eval",
     "state.clicked.join()"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   }
  ]
 }

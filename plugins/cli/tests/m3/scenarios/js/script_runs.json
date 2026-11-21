@@ -106,5 +106,11 @@
    "session": "scr",
    "stdin": "syntax error here("
   }
- ]
+ ],
+ "unstable_steps": {
+  "steps": [
+   11
+  ],
+  "why": "step 11 calls page.title() without await and returns; whether that floating call is served before the script ends is timing, on either daemon"
+ }
 }

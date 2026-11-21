@@ -27,14 +27,16 @@
     "eval",
     "document.getElementById('modal').showModal(), document.getElementById('confirm').showModal(), document.activeElement.blur(), 'ok'"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   },
   {
    "argv": [
     "eval",
     "document.activeElement.tagName"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   },
   {
    "argv": [
@@ -48,14 +50,16 @@
     "eval",
     "state.clicked.join()"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   },
   {
    "argv": [
     "eval",
     "document.getElementById('confirm').close(), document.activeElement.blur(), 'ok'"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   },
   {
    "argv": [
@@ -69,7 +73,8 @@
     "eval",
     "state.clicked.join()"
    ],
-   "session": "act"
+   "session": "act",
+   "main_world": true
   }
  ]
 }

@@ -1,3 +1,4 @@
+import functools
 import gzip
 import hashlib
 import json
@@ -49,6 +50,17 @@ def redact_secrets(message: dict) -> dict:
 CONSOLE_DETECTABLE = ("(Runtime is on for this tab until the session ends)", "(Runtime is on for this tab until the session ends; the page can detect this)")
 REQUEST_ROW = re.compile(r"(?m)^\[\d+\.\d+\](?= [A-Z]+ \S+ \()")
 
+@functools.cache
+def ts_only_metrics() -> frozenset:
+    from ardia_cli import command_metrics
+    from tests.test_ts_browse_tables import daemon_metric_sets
+
+    python = (command_metrics.FLAGS | command_metrics.READ_FLAGS | command_metrics.ACT_FLAGS | command_metrics.CHANGE_FLAGS | command_metrics.FLOW_FLAGS
+              | command_metrics.COUNTS | command_metrics.ACT_COUNTS | command_metrics.CHANGE_COUNTS | command_metrics.FLOW_COUNTS | command_metrics.DURATIONS)
+    daemon = daemon_metric_sets("FLAGS", "READ_FLAGS", "ACT_FLAGS", "CHANGE_FLAGS", "FLOW_FLAGS", "COUNTS", "ACT_COUNTS", "CHANGE_COUNTS", "FLOW_COUNTS")
+    return frozenset(daemon - python)
+
+
 RULES = {
     "browser-ids": "values of the CDP ID fields in STRING_IDS and INT_IDS become <kind#n>, numbered by first appearance in the step's own requests (browser events cross step marks by timing)",
     "after-fault": "in a fault run, the faulted step's requests before the fault are left out; only the cleanup after it is compared",
@@ -67,8 +79,8 @@ RULES = {
     "ready-probe": "live mode ignores the `() => document.readyState` probe, which the daemon sends only when the load event hasn't arrived yet",
     "replay-order": "replay checks order in the tap: a request matches the recording within `lookahead` concurrency groups (tests/m3/elastic.json), so tasks that interleave by timing don't fail",
     "replay-repeats": "replay lets the read-only probes listed in tests/m3/elastic.json repeat or be skipped, since their count follows the daemon's sleeps",
-    "unstable-steps": "live mode compares only exit and stderr of the steps a scenario lists in `unstable_steps`, with the reason in the scenario",
-    "metrics": "of an answer's `metrics` only the key set is compared, never values",
+    "unstable-steps": "live mode compares only exit and stderr of the steps a scenario lists in `unstable_steps`, and none of their requests, with the reason in the scenario",
+    "metrics": "of an answer's `metrics` only the key set is compared, never values, and without the TS-only flags and counts (ts_only_metrics: the ones the daemon's metrics.ts registers and command_metrics doesn't)",
     "secrets": "credential-bearing request params (continueWithAuth's username and password, Authorization/Proxy-Authorization/Cookie header values, cookie values being set) become <REDACTED>; the tap writes them redacted too, and replay matches on the redacted form",
     "racy-steps": "every mode compares only the exit status of the steps a scenario lists in `racy_steps`, where Chromium decides which of two errors the same request gets (the reason is in the scenario)",
     "whole-floats": "a whole-number float in a request's params (91.0) is compared as the integer (91): Python's json writes 91.0 for a float, JavaScript has one number type, and Chromium reads both the same",
@@ -242,7 +254,7 @@ def answer(step: dict, subs: Subs, ids: Ids, keys: dict) -> dict:
     for item in step.get("answers") or []:
         got = item.get("answer") or {}
         fields.append({"code": got.get("code"), "busy_elsewhere": got.get("busy_elsewhere"), "exit": got.get("exit"),
-                       "metrics": sorted((got.get("metrics") or {}).keys()) if isinstance(got.get("metrics"), dict) else got.get("metrics") is not None})
+                       "metrics": sorted(set((got.get("metrics") or {}).keys()) - ts_only_metrics()) if isinstance(got.get("metrics"), dict) else got.get("metrics") is not None})
     shaped["answers"] = fields
     return shaped
 
@@ -288,6 +300,12 @@ def run(result, unstable: list[int] | None = None, racy: list[int] | None = None
     for index in unstable or []:
         if index < len(answers):
             answers[index] = {"exit": answers[index]["exit"], "err": answers[index]["err"], "out": "<unstable>", "answers": "<unstable>"}
+        for name in ("requests", "request_sets", "sources"):
+            held = requests.get(name)
+            if isinstance(held, dict) and (index in held or str(index) in held):
+                held[index if index in held else str(index)] = "<unstable>"
+            elif isinstance(held, list) and index < len(held):
+                held[index] = "<unstable>"
     for index in racy or []:
         if index < len(answers):
             answers[index] = {"exit": answers[index]["exit"], "err": "<racy>", "out": "<racy>", "answers": "<racy>"}
