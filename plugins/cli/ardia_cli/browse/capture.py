@@ -531,7 +531,7 @@ async def cmd_record(ctx, argv):
         try:
             await cast.start(ctx.state)
         except Gated as error:
-            raise error.during("record start") from None
+            raise error.during(f"record {action}") from None
 
     await activate(ctx, page, "record", enable)
     path = ctx.path(args[1])

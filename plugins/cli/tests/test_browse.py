@@ -845,7 +845,7 @@ class RenderTest(unittest.TestCase):
 
     def test_gate_message_names_the_method(self):
         error = Gated("Fetch.enable", "network route")
-        self.assertIn("`network route` needs Fetch.enable", error.message)
+        self.assertIn("`network route` isn't available yet (Fetch.enable isn't allowed", error.message)
         self.assertIn("isn't allowed for the ardia command", error.message)
         self.assertEqual(error.code, "policy_refused")
 

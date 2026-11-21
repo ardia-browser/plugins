@@ -61,12 +61,15 @@ line succeeded. On `stale_ref`, take a new snapshot (or use the ref the error na
 
 ## Refused commands
 
-Every command here works on a current Ardia: cookies, `state`, `set …`, `network route`, `upload`, `download` and
-`wait --download`, `highlight`, `clipboard`, `trace`, `profiler`, `record`, `stream`, and any DevTools method through
-`cdp`. An older Ardia's engine refuses some of them: they fail with exit 1, name the refused method
-(`code: "policy_refused"` in `--json`) and say "this Ardia's engine doesn't allow it yet … update Ardia". `set viewport <w> <h>` works
-on a tab this session opened and never showed: it goes off-screen, and `--show` or `set viewport reset` reloads it
-at its own size. Tell the user to update Ardia; meanwhile use `storage local|session`, `eval`, or ask them to do that step. A refusal that says
+Not available yet on any released Ardia: cookies, `state save` (and `state load` of a file with cookies),
+`set device|geo|offline|headers|credentials|media|permission`, `network route`, `upload`, `download` and
+`wait --download`, `highlight`, `clipboard`, `trace`, `profiler`, `record` and `stream enable`. A DevTools method
+through `cdp` off Ardia's list is refused too, though an older Ardia refuses some a current one allows, so there
+updating may help. Ardia keeps them from the ardia command on purpose:
+they fail with exit 1 and `code: "policy_refused"`, say it's a deliberate limit and what to do instead. Updating or
+retrying won't help: ask the user to attach the file or download it, use `screenshot` instead of `record`, and
+`storage local|session` or `eval` instead of cookies and `state`. `set viewport <w> <h>` works on a tab this session
+opened and never showed: it goes off-screen, and `--show` or `set viewport reset` reloads it at its own size. A refusal that says
 "which Ardia allows for the ardia command, but not …" is about the tab or address, not the command: it gives the
 reason (`data.reason`) and, for a tab, what Ardia has there. Pick another tab or `open` a web page. Not here at all: `connect`, `install`, `upgrade`, `doctor`, `dashboard`, `chat`, `mcp`, `profiles`,
 `confirm`/`deny`, iOS, cloud providers and launch flags (`--headed`, `--profile`, `--proxy`, …).

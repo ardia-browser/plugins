@@ -949,28 +949,36 @@ can't be saved (`flow_not_get`), and GraphQL over GET works only when its URL va
 - **`flow list [site]`, `flow show <name> [--site s]`, `flow rm <name> [--site s]`** run without the browser; a name
   saved for several sites needs `--site`.
 
-### Older engines
+### Not available yet: commands full control unlocks
 
-An engine from before full control (the ardia command's token policy, `ac_cli_token_policy_methods.cc`) refuses
-the methods below, so on such an Ardia these commands fail with exit 1, naming the method and the command
-(`code: "policy_refused"`, `data.method`, `data.reason` empty) and saying `this Ardia's engine doesn't allow it yet
-(…): update Ardia`. An engine with full control allows every method, so they work as they do against a plain `--port`
-DevTools server, and nothing in the command changes.
+No released Ardia has full control yet: the ardia command's token policy (`ac_cli_token_policy_methods.cc`) refuses
+the methods below, on purpose, so these commands fail with exit 1, naming the method and the command
+(`code: "policy_refused"`, `data.method`, `data.reason` empty, or `with those editing commands` for
+`clipboard copy|paste`). Both daemons say this is a deliberate
+safety limit and not a bug, that retrying or updating won't help today, that a later Ardia adds it behind its
+full-control setting, and what to do instead (ask the user to attach or download the file, `screenshot` for
+`record`, `storage` or `eval` for cookies, `set viewport` for `set device`, …; `NOT_YET` in `daemon-errors.ts` and
+`browse/errors.py`). A refusal of anything else, a method no command here is known to need, says only that this Ardia
+doesn't allow it and that updating may help, since an older Ardia also refuses methods a current one allows. An engine with full control
+allows every method, so they work as they do against a plain `--port` DevTools server, and nothing in the command
+changes. `set viewport` isn't one of them: the policy allows `Emulation.setDeviceMetricsOverride` with a width,
+height, scale and mobile on a tab the session opened and took off-screen.
 
 | Command | Needs |
 | --- | --- |
 | `cookies get\|set\|clear`, `cookies set --curl` | `Network.getCookies`, `Network.setCookie`, `Network.clearBrowserCookies` |
-| `state save\|load` | `Network.getAllCookies`, `Network.setCookies` |
+| `state save`, `state load` of a file with cookies | `Network.getAllCookies`, `Network.setCookies` |
 | `set device\|geo\|media` | `Emulation.setTouchEmulationEnabled`, `Emulation.setUserAgentOverride`, `Emulation.setGeolocationOverride`, `Emulation.setEmulatedMedia` |
 | `set offline`, `set headers` | `Network.emulateNetworkConditions`, `Network.setExtraHTTPHeaders` |
-| `set credentials`, `network route\|unroute` | `Fetch.enable` (and `Fetch.fulfillRequest`, `failRequest`, `continueRequest`) |
+| `set credentials`, `network route` | `Fetch.enable` (and `Fetch.fulfillRequest`, `failRequest`, `continueRequest`) |
 | `upload` | `DOM.setFileInputFiles` (the paths are resolved against the current directory and must be files) |
 | `download <sel> <path>`, `wait --download [path]` | `Browser.setDownloadBehavior` with `allowAndName` into the destination's folder and `eventsEnabled`, then `default` again (`wait --download` waits for the next download that starts after it; `download` clicks and saves) |
 | `highlight` | `Overlay.enable`, `Overlay.highlightNode` |
 | `clipboard copy\|paste` | `Input.dispatchKeyEvent` with the `copy`/`paste` editing commands |
-| `clipboard read\|write` | `Browser.grantPermissions` |
-| `trace start\|stop`, `profiler start\|stop` | `Tracing.start`, `Tracing.end` |
-| `record start\|stop\|restart` | `Page.startScreencast` (and ffmpeg on PATH for the WebM) |
+| `clipboard read\|write` | `Browser.grantPermissions` (Python), `Browser.setPermission` (TypeScript), so `data.method` differs |
+| `set permission` (TypeScript) | `Browser.setPermission` |
+| `trace start`, `profiler start` | `Tracing.start` (`Tracing.end` only ends a recording that started) |
+| `record start\|restart` | `Page.startScreencast` (and ffmpeg on PATH for the WebM) |
 | `stream enable` | `Page.startScreencast` |
 | `cdp <method>` | the method itself |
 

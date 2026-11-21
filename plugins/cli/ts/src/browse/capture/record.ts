@@ -108,7 +108,7 @@ export async function cmdRecord(ctx: Ctx, argv: string[]): Promise<Result> {
     try {
       await cast.start(ctx.state);
     } catch (error) {
-      if (error instanceof Gated) throw error.during("record start");
+      if (error instanceof Gated) throw error.during(`record ${action}`);
       throw error;
     }
   });

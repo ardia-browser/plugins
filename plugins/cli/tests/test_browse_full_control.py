@@ -22,7 +22,8 @@ from ardia_cli.browse.errors import Gated, Usage
 
 CLI = Path(__file__).resolve().parents[1]
 CHROMIUM = os.environ.get("ARDIA_BROWSE_CHROMIUM", "")
-UPDATE = "this Ardia's engine doesn't allow it yet"
+NOT_YET = "isn't available yet"
+LIMIT = "No released Ardia lets the ardia command do this: it's a deliberate safety limit, not a bug"
 PAGE = """<!doctype html><title>files</title>
 <input type=file id=f multiple><div id=out></div>
 <a id=dl href="data:text/plain;base64,aGVsbG8gZG93bmxvYWQ=" download="hello.txt">get</a>
@@ -188,13 +189,13 @@ class RawCdp(unittest.TestCase):
                 cdp(FakeState(), *argv)
             self.assertIn(said, caught.exception.message, argv)
 
-    def test_an_older_engines_refusal_says_to_update(self):
+    def test_a_refused_method_says_it_is_a_deliberate_limit(self):
         refused = failure("Storage.getCookies", SimpleNamespace(detail="ardia: Storage.getCookies isn't allowed for the ardia command", code=-32000))
         state = FakeState({"Storage.getCookies": refused})
         with self.assertRaises(Gated) as caught:
             cdp(state, "Storage.getCookies")
-        self.assertTrue(caught.exception.message.startswith("`cdp` needs Storage.getCookies, and " + UPDATE))
-        self.assertTrue(caught.exception.message.endswith(": update Ardia"))
+        self.assertEqual(caught.exception.message, "`cdp` isn't allowed on this Ardia (Storage.getCookies isn't allowed for the ardia command). "
+                                                   "Updating Ardia may help; if it doesn't, do this step another way, or ask the user to do it")
 
     def test_a_borrowed_tab_takes_raw_calls_only_when_named(self):
         from ardia_cli.browse.errors import BrowseError
@@ -1022,27 +1023,31 @@ class LargeResults(unittest.TestCase):
                 self.assertEqual(out.getvalue(), "")
                 self.assertIn("it did run", err.getvalue())
 
-class OlderEngine(unittest.TestCase):
-    def test_upload_and_download_say_update_ardia(self):
-        for method, command in (("DOM.setFileInputFiles", "upload"), ("Browser.setDownloadBehavior", "download"),
-                                ("Browser.setDownloadBehavior", "wait --download"), ("Network.getCookies", "cookies get")):
+class NotAvailableYet(unittest.TestCase):
+    def test_upload_and_download_say_it_is_a_deliberate_limit_and_what_to_do(self):
+        for method, command, instead in (("DOM.setFileInputFiles", "upload", "ask the user to choose the file"),
+                                         ("Browser.setDownloadBehavior", "download", "`read --links <part of the link's address> --list`"),
+                                         ("Browser.setDownloadBehavior", "wait --download", "ask the user to download the file"),
+                                         ("Network.getCookies", "cookies get", "`eval document.cookie`")):
             error = Gated(method, command)
-            self.assertEqual(error.message, f"`{command}` needs {method}, and {UPDATE} ({method} isn't allowed for the ardia command): update Ardia")
+            self.assertTrue(error.message.startswith(f"`{command}` {NOT_YET} ({method} isn't allowed for the ardia command). {LIMIT}"), error.message)
+            self.assertIn("A later Ardia adds it behind its full-control setting", error.message)
+            self.assertIn(f"Instead: {instead}", error.message)
             self.assertEqual((error.code, error.data), ("policy_refused", {"method": method, "reason": ""}))
-            for old in ("once the engine's token policy allows it", "--port", "on purpose"):
-                self.assertNotIn(old, error.message)
+            self.assertNotIn(": update Ardia", error.message)
 
     def test_the_engines_refusal_reaches_the_command(self):
         for method in ("DOM.setFileInputFiles", "Browser.setDownloadBehavior"):
             refused = failure(method, SimpleNamespace(detail=f"ardia: {method} isn't allowed for the ardia command", code=-32000))
             self.assertIsInstance(refused, Gated)
-            self.assertIn("update Ardia", refused.during("upload").message)
+            self.assertIn(LIMIT, refused.during("upload").message)
 
     def test_help_no_longer_calls_anything_gated(self):
         text = browse_help.OVERVIEW + "".join(browse_help.COMMANDS.values())
-        for old in ("(gated", "Gated by", "gated by", "doesn't allow yet", "not allowed by Ardia's policy"):
+        for old in ("(gated", "Gated by", "gated by", "doesn't allow yet", "not allowed by Ardia's policy", "Older Ardia"):
             self.assertNotIn(old, text)
-        self.assertIn("update Ardia", browse_help.OVERVIEW)
+        self.assertIn("Not available yet: cookies, state save", browse_help.OVERVIEW)
+        self.assertNotIn("update Ardia", browse_help.COMMANDS["network"])
         self.assertIn("DOM.setFileInputFiles", browse_help.COMMANDS["upload"])
         self.assertIn("wait --download", browse_help.COMMANDS["download"])
 
