@@ -907,7 +907,13 @@
    "session": "default",
    "namespace": ""
   },
-  "note": "--main-world is accepted and is the default; the client passes it to the daemon"
+  "note": "--main-world is accepted and is the default; the client passes it to the daemon",
+  "intentional": {
+   "why": "the TypeScript CLI's flag table includes its own --isolated, --main-world and --touch, so telemetry's flags names them; Python doesn't know them and records none",
+   "command_properties": {
+    "flags": "--main-world"
+   }
+  }
  },
  {
   "id": "browse--eval-isolated-flag",
@@ -930,7 +936,13 @@
    "session": "default",
    "namespace": ""
   },
-  "note": "--isolated opts into the ardia-browse isolated world; the client passes it to the daemon"
+  "note": "--isolated opts into the ardia-browse isolated world; the client passes it to the daemon",
+  "intentional": {
+   "why": "the TypeScript CLI's flag table includes its own --isolated, --main-world and --touch, so telemetry's flags names them; Python doesn't know them and records none",
+   "command_properties": {
+    "flags": "--isolated"
+   }
+  }
  },
  {
   "id": "browse--eval-isolated-json",
@@ -953,6 +965,12 @@
    "endpoint": "token",
    "session": "default",
    "namespace": ""
+  },
+  "intentional": {
+   "why": "the TypeScript CLI's flag table includes its own --isolated, --main-world and --touch, so telemetry's flags names them; Python doesn't know them and records none",
+   "command_properties": {
+    "flags": "--isolated,--json"
+   }
   }
  },
  {
@@ -976,6 +994,12 @@
    "endpoint": "token",
    "session": "default",
    "namespace": ""
+  },
+  "intentional": {
+   "why": "the TypeScript CLI's flag table includes its own --isolated, --main-world and --touch, so telemetry's flags names them; Python doesn't know them and records none",
+   "command_properties": {
+    "flags": "--fn,--isolated"
+   }
   }
  }
 ]

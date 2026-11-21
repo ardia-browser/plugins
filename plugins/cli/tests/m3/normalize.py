@@ -87,6 +87,7 @@ RULES = {
     "whole-floats": "a whole-number float in a request's params (91.0) is compared as the integer (91): Python's json writes 91.0 for a float, JavaScript has one number type, and Chromium reads both the same",
     "fixture-dir": "the checkout's own fixture folder (tests/fixtures/browse, recorded in subs) becomes {fixture_dir} in answers and requests, so a recording replays from any clone",
     "temp-tab-nonce": "a temporary tab's `Target.createTarget` URL `about:blank#ardia-temp-<nonce>` (the TS daemon marks the tabs it opens only to read, so a sweep can find one a crashed daemon left) becomes `about:blank`, Python's URL",
+    "uncoded-failure": "an answer's `code` `command_failed`, which the TypeScript daemon gives a failure that has no code of its own (a batch line, a `wait` or `is` that reported one) where Python's daemon sends none, compares as no code on an exit-1 answer only; so does the code of an exit-1 `batch` answer that names a `failed_step_command` other than `close`: the first failed line's code, which Python's daemon doesn't lift to the batch (a failed trailing close keeps its code, as Python's does)",
     "divergences": "designed TS differences from tests/m3/divergences.py (`world-handle` always, the rest when a scenario names them) rewrite only the request fields they name, on both sides, before IDs are numbered",
 }
 
@@ -245,6 +246,9 @@ def without_temp_nonce(message: dict) -> dict:
     return message
 
 
+UNCODED_FAILURE = "command_failed"
+
+
 def answer(step: dict, subs: Subs, ids: Ids, keys: dict) -> dict:
     def clean(text: str) -> str:
         text = REQUEST_ROW.sub("[<REQUEST>]", READ_STAMP.sub("<TIME>", ids.in_text(subs.text(text or "")))).replace(*CONSOLE_DETECTABLE)
@@ -254,7 +258,11 @@ def answer(step: dict, subs: Subs, ids: Ids, keys: dict) -> dict:
     fields = []
     for item in step.get("answers") or []:
         got = item.get("answer") or {}
-        fields.append({"code": got.get("code"), "busy_elsewhere": got.get("busy_elsewhere"), "exit": got.get("exit"),
+        code = got.get("code")
+        argv = (item.get("request") or {}).get("argv") or [""]
+        lifted = argv[0] == "batch" and got.get("failed_step_command") not in (None, "close")
+        typescript_only = got.get("exit") == 1 and (code == UNCODED_FAILURE or lifted)
+        fields.append({"code": None if typescript_only else code, "busy_elsewhere": got.get("busy_elsewhere"), "exit": got.get("exit"),
                        "metrics": sorted(set((got.get("metrics") or {}).keys()) - ts_only_metrics()) if isinstance(got.get("metrics"), dict) else got.get("metrics") is not None})
     shaped["answers"] = fields
     return shaped

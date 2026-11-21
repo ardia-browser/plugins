@@ -1,11 +1,11 @@
 import { type JsonObject, type Value } from "./json.ts";
-import { METRIC_COUNTS, METRIC_DURATIONS, METRIC_MAX_COUNT, METRIC_MAX_MS } from "./telemetry-tables.ts";
-import { isMetricFlag } from "./command-metrics.ts";
+import { METRIC_DURATIONS, METRIC_MAX_COUNT, METRIC_MAX_MS } from "./telemetry-tables.ts";
+import { isMetricCount, isMetricFlag } from "./command-metrics.ts";
 import { strerror } from "./paths.ts";
 import { CODES } from "./browse/codes.ts";
 import { cliVersion } from "./version.ts";
 import { SOCKET_ERROR_CODES } from "./error-codes.ts";
-import { EXCEPTION_SOURCES, EXCEPTION_TYPES, knownCommand, knownExceptionType, knownFlags, knownSubcommand, OTHER_NAME } from "./telemetry-names.ts";
+import { EXCEPTION_SOURCES, EXCEPTION_TYPES, knownBatchStep, knownCommand, knownExceptionType, knownFlags, knownSubcommand, OTHER_NAME } from "./telemetry-names.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})?$/;
@@ -34,12 +34,11 @@ export const FIXED_MESSAGES: ReadonlySet<string> = new Set([
   "'NoneType' object is not callable", "unhashable type: 'dict'", "unhashable type: 'list'",
 ]);
 const CLI_ERROR_CODES = [
-  "bad_params", "connection_dropped", "internal_error", "invalid_value", "methods_unsupported", "no_pid", "not_set", "plugin_refused",
-  "removed_command", "stdout_closed", "unhandled_exception", "unknown_setting", "unreachable", "unsupported_protocol",
+  "bad_params", "command_failed", "connection_dropped", "internal_error", "invalid_name", "invalid_value", "methods_unsupported", "no_pid", "not_set", "plugin_refused",
+  "removed_command", "stdout_closed", "unhandled_exception", "unknown_setting", "unreachable", "unsupported_protocol", "usage_error",
 ];
 export const TELEMETRY_ERROR_CODES: ReadonlySet<string> = new Set([...CODES, ...SOCKET_ERROR_CODES, ...CLI_ERROR_CODES]);
 const DURATIONS = new Set(METRIC_DURATIONS);
-const COUNTS = new Set(METRIC_COUNTS);
 
 type Check = (value: Value) => Value | undefined;
 
@@ -126,6 +125,7 @@ const SCHEMAS: Record<string, Map<string, Check>> = {
     ["exit_code", exitCode],
     ["flags", flagList],
     ["served_by", oneOf(SERVED_BY)],
+    ["failed_step_command", closed(knownBatchStep)],
     ...COMMON,
   ]),
   $exception: new Map([
@@ -141,7 +141,7 @@ const SCHEMAS: Record<string, Map<string, Check>> = {
 function metricCheck(key: string): Check | undefined {
   if (isMetricFlag(key)) return boolean;
   if (DURATIONS.has(key)) return wholeUpTo(METRIC_MAX_MS);
-  if (COUNTS.has(key)) return wholeUpTo(METRIC_MAX_COUNT);
+  if (isMetricCount(key)) return wholeUpTo(METRIC_MAX_COUNT);
   return undefined;
 }
 

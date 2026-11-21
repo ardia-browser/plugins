@@ -17,9 +17,11 @@ export const TS_ONLY_FLAGS: readonly string[] = [
   "tab_close_interrupted",
 ];
 
+export const TS_ONLY_COUNTS: readonly string[] = ["failed_step_index"];
+
 const FLAGS = new Set([...METRIC_FLAGS, ...TS_ONLY_FLAGS]);
 const DURATIONS = new Set(METRIC_DURATIONS);
-const COUNTS = new Set(METRIC_COUNTS);
+const COUNTS = new Set([...METRIC_COUNTS, ...TS_ONLY_COUNTS]);
 
 function roundHalfEven(value: number): bigint {
   const floor = Math.floor(value);
@@ -30,6 +32,10 @@ function roundHalfEven(value: number): bigint {
 
 export function isMetricFlag(key: string): boolean {
   return FLAGS.has(key);
+}
+
+export function isMetricCount(key: string): boolean {
+  return COUNTS.has(key);
 }
 
 export function cleanMetrics(values: Value | undefined): Map<string, Value> {

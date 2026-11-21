@@ -9,13 +9,15 @@ import { redact } from "../../redact.ts";
 import { BrowseError, ConnectionLost, OutcomeUnknown, Usage } from "../daemon-errors.ts";
 import { pyValue, Result } from "../daemon/render.ts";
 import { content } from "../outfile.ts";
-import { add, flag } from "../metrics.ts";
+import { add, failedStep, flag } from "../metrics.ts";
 import { wellFormed } from "../paths.ts";
 import { Ctx } from "./ctx.ts";
 import { ALIASES, dispatch, hooks, register } from "./index.ts";
 import { parse } from "./parse.ts";
 
 export const BATCH_DEFAULT_CAP = 6000;
+const NESTED_BATCH = "batch can't run inside batch";
+const CLOSE_INSIDE = "close ends this session, so in a batch it only runs as the last line; to close this session's tab and go on, use `tab close`";
 const TAKES_OUT = ["script", "eval", "read", "snapshot", "get"];
 const AS_TEXT = ["snapshot", "get"];
 const VALUE_FLAGS = ["--cdp", "--data-dir", "--enable", "--expect-loader", "--idle-timeout", "--init-script", "--max-output", "--namespace", "--port", "--screenshot-dir", "--screenshot-format", "--screenshot-quality", "--session", "--ws"];
@@ -276,25 +278,64 @@ function parsedLine(line: string): string[] {
   return item as string[];
 }
 
+export function stepName(command: unknown): string {
+  const words = Array.isArray(command) && command.every((word) => typeof word === "string") ? (command as string[]) : [];
+  try {
+    return batchLineOptions(words)[0][0] ?? "";
+  } catch (error) {
+    if (!(error instanceof Usage)) throw error;
+  }
+  for (let index = 0; index < words.length; index += 1) {
+    const word = words[index] as string;
+    const flagName = word.split("=")[0] as string;
+    if (word === "--") return words[index + 1] ?? "";
+    if (LAUNCH_ONLY.includes(flagName) || Object.hasOwn(LAUNCH_HINTS, flagName)) return "";
+    if (VALUE_FLAGS.includes(word)) index += 1;
+    else if (!word.startsWith("-")) return word;
+  }
+  return "";
+}
+
 async function cmdBatch(ctx: Ctx, argv: string[]): Promise<Result> {
   const [options, args] = parse(argv, { "--bail": "bool", "--out": "value" });
   const lines = args.length > 0 ? args : splitlines(ctx.stdin || "").filter((line) => strip(line, isSpace) && !strip(line, isSpace).startsWith("#"));
-  const runs = lines.map((line) => parsedLine(strip(line, isSpace)));
+  const runs = lines.map((line, index) => {
+    try {
+      return parsedLine(strip(line, isSpace));
+    } catch (error) {
+      failedStep(index, "", error instanceof BrowseError ? error.code : null);
+      throw error;
+    }
+  });
   const names = runs.map((item) => (item.length > 0 ? (ALIASES[item[0] as string] ?? (item[0] as string)) : ""));
   const closing = names.length > 0 && names.at(-1) === "close" && (runs.at(-1) as string[]).length === 1 && !names.slice(0, -1).includes("close");
   if (closing) runs.pop();
   const state = extras(ctx);
   state.closeAfterBatch = false;
   const outcomes: Outcome[] = [];
+  let noted = false;
+  const settle = (outcome: Outcome, index: number) => {
+    outcomes.push(outcome);
+    if (noted || outcome.success) return;
+    noted = true;
+    failedStep(index, stepName(outcome.command), outcome.code);
+  };
+  let running = -1;
+  try {
+    await runLines();
+  } catch (error) {
+    if (!noted && running >= 0) failedStep(running, stepName(runs[running]), error instanceof BrowseError ? error.code : null, true);
+    throw error;
+  }
+
+  async function runLines(): Promise<void> {
   for (let index = 0; index < runs.length; index += 1) {
+    running = index;
     let item = runs[index] as string[];
     const name = item.length > 0 ? (ALIASES[item[0] as string] ?? (item[0] as string)) : "";
     if (name === "batch" || name === "close") {
-      const why =
-        name === "batch"
-          ? "batch can't run inside batch"
-          : "close ends this session, so in a batch it only runs as the last line; to close this session's tab and go on, use `tab close`";
-      outcomes.push({ command: item, success: false, result: null, error: why });
+      const why = name === "batch" ? NESTED_BATCH : CLOSE_INSIDE;
+      settle({ command: item, success: false, result: null, error: why }, index);
       if (options["bail"]) break;
       continue;
     }
@@ -306,7 +347,14 @@ async function cmdBatch(ctx: Ctx, argv: string[]): Promise<Result> {
       [command, lineOptions] = batchLineOptions(item);
     } catch (error) {
       if (!(error instanceof Usage)) throw error;
-      outcomes.push({ command: item, success: false, result: null, error: error.message, code: error.code ?? null } as Outcome);
+      settle({ command: item, success: false, result: null, error: error.message, code: error.code ?? null } as Outcome, index);
+      if (options["bail"]) break;
+      continue;
+    }
+    const ran = command.length > 0 ? (ALIASES[command[0] as string] ?? (command[0] as string)) : "";
+    if (ran === "batch" || ran === "close") {
+      const why = ran === "batch" ? NESTED_BATCH : CLOSE_INSIDE;
+      settle({ command: item, success: false, result: null, error: why }, index);
       if (options["bail"]) break;
       continue;
     }
@@ -330,7 +378,7 @@ async function cmdBatch(ctx: Ctx, argv: string[]): Promise<Result> {
     };
     if (error !== null && error.code) outcome.code = error.code;
     if (saving && outcome.success && result) outcome.text = saveBatchLine(ctx, name, result, saving);
-    outcomes.push(outcome);
+    settle(outcome, index);
     if (error instanceof OutcomeUnknown || error instanceof ConnectionLost) {
       for (const rest of runs.slice(index + 1)) {
         outcomes.push({ command: rest, success: false, result: null, error: "not run: an earlier command's outcome is unknown", code: "not_run", text: null });
@@ -338,6 +386,7 @@ async function cmdBatch(ctx: Ctx, argv: string[]): Promise<Result> {
       break;
     }
     if (!outcome.success && options["bail"]) break;
+  }
   }
   if (closing) {
     if (outcomes.length === runs.length && outcomes.every((outcome) => outcome.success)) state.closeAfterBatch = true;

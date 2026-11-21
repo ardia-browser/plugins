@@ -73,6 +73,10 @@ export function knownFlags(list: string): string {
   return list.split(",").filter((flag) => known().flags.has(flag)).join(",");
 }
 
+export function knownBatchStep(value: string): string {
+  return KNOWN_COMMANDS.includes(value) ? value : OTHER_NAME;
+}
+
 export function knownExceptionType(value: string): string {
   return EXCEPTION_TYPES.has(value) ? value : OTHER_NAME;
 }

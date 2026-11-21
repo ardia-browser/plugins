@@ -10,7 +10,7 @@ import { Cancelled, currentSignal, withSignal } from "../cdp/cancel.ts";
 import { BrowseError, ConnectionLost, Unreachable } from "../daemon-errors.ts";
 import { type Endpoint, EndpointError, resolve } from "../endpoint.ts";
 import { BEHIND_SCRIPT_WAIT, commandLimit, QUEUE_WAIT, queueWait } from "../limits.ts";
-import { answerFields, begin, flag, type Metrics } from "../metrics.ts";
+import { active, answerFields, begin, failedStep, flag, type Metrics } from "../metrics.ts";
 import { browseDir, closeFd, listNames, openPrivateDirAt, PathError, sameSocket, type SocketId, socketIsOurs, takeLock, unlinkQuietly, writePrivateJson } from "../paths.ts";
 import * as temptabs from "../state/temptabs.ts";
 import { wallSeconds } from "../tokens.ts";
@@ -406,6 +406,7 @@ export class Daemon {
       const extra = answerFields(metrics);
       if (extra.metrics) fields.push(["metrics", new Map([...extra.metrics].map(([key, value]): [string, Value] => [key, typeof value === "number" ? BigInt(value) : value]))]);
       if (extra.code) fields.push(["code", extra.code]);
+      if (extra.failed_step_command) fields.push(["failed_step_command", extra.failed_step_command]);
       if (request["busy_elsewhere"]) fields.push(["busy_elsewhere", true]);
       fields.push(["daemon", `ts/${cliVersion()}`]);
       const argv0 = Array.isArray(request["argv"]) && request["argv"].length > 0 ? canonical(String(request["argv"][0])) : "";
@@ -469,7 +470,9 @@ export class Daemon {
       this.lock.release();
     }
     if (closeAfter) {
+      const steps = active()?.values.get("batch_steps");
       const [closedCode, closedOut, closedErr] = await this.close(ctx, null);
+      if (closedCode !== 0) failedStep(typeof steps === "number" ? steps : 0, "close", active()?.errorCode);
       return [Math.max(answer[0], closedCode), joinedBatch(answer[1], closedOut, options), answer[2] + closedErr];
     }
     return answer;

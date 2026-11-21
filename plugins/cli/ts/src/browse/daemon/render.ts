@@ -9,7 +9,7 @@ import { formatG, groupThousands } from "../../pylib/format.ts";
 import { inert, jsonSafe } from "../../printable.ts";
 import { redact } from "../../redact.ts";
 import { BrowseError, ConnectionLost } from "../daemon-errors.ts";
-import { flag, rendered } from "../metrics.ts";
+import { FAILED_WITHOUT_CODE, flag, rendered } from "../metrics.ts";
 import { closeFd, entryInfo, listNames, unlinkQuietly, wellFormed, writeAllFd } from "../paths.ts";
 import { tokenHex } from "../tokens.ts";
 import { MUTATING } from "./names.ts";
@@ -76,7 +76,7 @@ export function compactJson(value: unknown): string {
 
 export function render(options: Options, result: Result | null = null, error: BrowseError | null = null, name = ""): Answer {
   const [code, out, err] = renderPlain(options, result, error, name);
-  rendered(name, result as never, error === null ? null : { code: safeCode(error.code) }, out);
+  rendered(name, result as never, error === null ? null : { code: safeCode(error.code), exit: error.exitCode }, out);
   return [code, redact(out), redact(err)];
 }
 
@@ -292,7 +292,16 @@ export function encodeAnswer(
         )
       : new BrowseError(`The answer was too large (${data.length} bytes, the limit is ${limit}); narrow it (snapshot -s, -d, --max-output)`);
   const [exit, shownOut, shownErr] = renderPlain({ json: asJson }, null, error);
-  const daemon = fields.filter(([key]) => key === "daemon");
-  const fallback = new Map<string, Value>([["exit", BigInt(exit)], ["out", shownOut], ["err", shownErr], ...(error.code ? [["code", error.code] as [string, Value]] : []), ...daemon]);
-  return Buffer.from(`${dumps(fallback, "spaced", true)}\n`, "utf8");
+  const given = fields.find(([key]) => key === "code")?.[1];
+  const kept = fields.filter(([key]) => key === "daemon" || key === "failed_step_command" || key === "metrics");
+  const shownCode = error.code ?? (typeof given === "string" && given ? given : FAILED_WITHOUT_CODE);
+  const fallback = (extra: [string, Value][]) =>
+    Buffer.from(`${dumps(new Map<string, Value>([["exit", BigInt(exit)], ["out", shownOut], ["err", shownErr], ["code", shownCode], ...extra]), "spaced", true)}\n`, "utf8");
+  const whole = fallback(kept);
+  if (whole.length <= limit) return whole;
+  const metrics = kept.find(([key]) => key === "metrics")?.[1];
+  const index = metrics instanceof Map ? metrics.get("failed_step_index") : undefined;
+  const lean = kept.filter(([key]) => key !== "metrics");
+  const indexed = index === undefined ? null : fallback([...lean, ["metrics", new Map<string, Value>([["failed_step_index", index]])]]);
+  return indexed !== null && indexed.length <= limit ? indexed : fallback(lean);
 }

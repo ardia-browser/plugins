@@ -58,7 +58,7 @@ def ts_tables() -> str:
     from ardia_cli.browse.commands import ALIASES, MUTATING
 
     shared = browse_cli.VALUE_FLAGS | browse_cli.BOOL_FLAGS
-    local = {name: sorted(set(re.findall(r"(?<![\w-])(--?[a-z][a-z0-9-]*)", usage_text)) - shared)
+    local = {name: sorted(set(re.findall(r"(?<![\w-])(--?[a-z][a-z0-9-]*)", with_ts_additions(name, usage_text))) - shared)
              for name, usage_text in sorted(browse_help.COMMANDS.items())}
     owns = {name: sorted(flags) for name, flags in sorted(browse_cli.COMMAND_OWNS.items())}
     flags = (command_metrics.FLAGS | command_metrics.READ_FLAGS | command_metrics.ACT_FLAGS | command_metrics.CHANGE_FLAGS
@@ -112,7 +112,8 @@ TS_HELP_ADDITIONS = (
      "Modifiers: Control, Alt, Shift, Meta. Control or Meta with a selects all, with z undoes and with y or Shift+z redoes;\n"
      "on macOS Meta+c/x/v, Meta and Alt with the arrows, Backspace and Delete also edit as they do in a text field."),
     ("wait", "--fn evaluates in the page's main world, like eval. Timeouts default to 25 s.",
-     "--fn evaluates in the page's main world, like eval (--isolated: in an isolated world). Timeouts default to 25 s."),
+     "--fn evaluates in the page's main world, like eval (--main-world says so; --isolated: in an isolated world).\n"
+     "Timeouts default to 25 s."),
     ("eval", "| --stdin [--timeout 2m] [--out <file>]\n", "| --stdin [--timeout 2m] [--out <file>] [--isolated]\n"),
     ("eval", "Runs in the page's main world (the one place, with init scripts and the React hook, that does).",
      "Runs in the page's main world (the one place, with init scripts and the React hook, that does), where the\n"

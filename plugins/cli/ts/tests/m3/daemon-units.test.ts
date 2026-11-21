@@ -110,7 +110,7 @@ describe("render", () => {
     expect(MAX_RESPONSE).toBe(256 * 1024 * 1024);
     const small = encodeAnswer(0, "x".repeat(500), "", [["daemon", "ts/1.2.3"]], 200);
     const parsed = JSON.parse(small.toString("utf8"));
-    expect(parsed).toEqual({ exit: 1, out: "", err: expect.stringMatching(/^✗ The answer was too large \(5[0-9]{2} bytes, the limit is 200\); narrow it/u), daemon: "ts/1.2.3" });
+    expect(parsed).toEqual({ exit: 1, out: "", err: expect.stringMatching(/^✗ The answer was too large \(5[0-9]{2} bytes, the limit is 200\); narrow it/u), code: "command_failed", daemon: "ts/1.2.3" });
     expect(encodeAnswer(0, "é", "", [], 200).toString("utf8")).toBe('{"exit": 0, "out": "é", "err": ""}\n');
   });
 

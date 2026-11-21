@@ -1,6 +1,8 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { pyLen } from "../pylib/str.ts";
 import { roundHalfEven } from "../pylib/format.ts";
+import { ALIASES, KNOWN_COMMANDS } from "./tables.ts";
+import { safeCode } from "./codes.ts";
 
 export const MAX_MS = 3_600_000;
 export const MAX_COUNT = 100_000_000;
@@ -9,7 +11,7 @@ export const DURATIONS = new Set([
 ]);
 export const COUNTS = new Set([
   "cdp_calls", "read_data_blocks", "snapshot_nodes", "snapshot_chars", "output_chars", "network_writes_count", "batch_steps", "read_rows", "read_pages",
-  "batch_lines_compacted", "read_tabs_reopened", "skills_installed", "skills_skipped",
+  "batch_lines_compacted", "read_tabs_reopened", "skills_installed", "skills_skipped", "failed_step_index",
 ]);
 export const READ_FLAGS = new Set([
   "read_data", "read_data_shaped", "read_scrolled", "read_matched", "read_virtualized_grid", "read_pdf", "read_waited_for_content", "read_beside_busy",
@@ -43,6 +45,7 @@ export const FLAGS = new Set([
   "eval_main_world", "eval_isolated_reference_error", "permission_granted",
 ]);
 export const MAIN_PHASE: Readonly<Record<string, string>> = { snapshot: "snapshot_build_ms", eval: "eval_ms" };
+export const FAILED_WITHOUT_CODE = "command_failed";
 export const OUTPUT_MARKERS = ["\n[output capped at ", "\n[truncated ", "\n[pages cut to fit ", " not shown. Narrow it instead: "];
 
 const ALL_FLAGS = [FLAGS, READ_FLAGS, ACT_FLAGS, CHANGE_FLAGS, FLOW_FLAGS];
@@ -58,6 +61,8 @@ export class Metrics {
   readonly started = clock();
   readonly values: Map<string, MetricValue>;
   errorCode: string | null = null;
+  failedStepCommand: string | null = null;
+  failedStepCodeKept = false;
 
   constructor(
     readonly name: string,
@@ -117,7 +122,7 @@ export function cdpCall(started: number): void {
   metrics.addMs("cdp_ms_total", started);
 }
 
-export type RenderedResult = { data?: unknown; batch?: unknown } | null | undefined;
+export type RenderedResult = { data?: unknown; batch?: unknown; failed?: unknown } | null | undefined;
 
 function entry(data: unknown, key: string): unknown {
   if (data instanceof Map) return data.get(key);
@@ -127,6 +132,34 @@ function entry(data: unknown, key: string): unknown {
 
 function isDict(data: unknown): boolean {
   return data instanceof Map || (data !== null && typeof data === "object" && !Array.isArray(data));
+}
+
+export function stepCommand(name: string): string {
+  const canonical = ALIASES[name] ?? name;
+  return KNOWN_COMMANDS.includes(canonical) ? canonical : "other";
+}
+
+export function failedStep(index: number, name: string, code: string | null | undefined, provisional = false): void {
+  const metrics = current.getStore();
+  if (!metrics) return;
+  metrics.values.set("failed_step_index", index);
+  metrics.failedStepCommand = stepCommand(name);
+  metrics.errorCode = safeCode(code) ?? FAILED_WITHOUT_CODE;
+  metrics.failedStepCodeKept = !provisional;
+}
+
+export type RenderedError = { code?: string | null; exit?: number | null };
+
+export function recordFailure(metrics: Metrics, result: RenderedResult, error: RenderedError | null | undefined): void {
+  if (error && !metrics.failedStepCodeKept) metrics.errorCode = error.code || (error.exit === 1 ? FAILED_WITHOUT_CODE : null);
+  else if (metrics.errorCode === null && result?.failed) metrics.errorCode = FAILED_WITHOUT_CODE;
+}
+
+export function recordAnswer(metrics: Metrics, name: string, result: RenderedResult, error: RenderedError | null | undefined, out: string): void {
+  const kept = metrics.failedStepCodeKept ? metrics.errorCode : null;
+  recordRendered(metrics, name, result, error, out);
+  recordFailure(metrics, result, error);
+  if (kept !== null) metrics.errorCode = kept;
 }
 
 export function recordRendered(metrics: Metrics, name: string, result: RenderedResult, error: { code?: string | null } | null | undefined, out: string): void {
@@ -149,19 +182,22 @@ export function recordRendered(metrics: Metrics, name: string, result: RenderedR
   if (Array.isArray(result?.batch)) metrics.values.set("batch_steps", (result.batch as unknown[]).length);
 }
 
-export function rendered(name: string, result: RenderedResult, error: { code?: string | null } | null | undefined, out: string): void {
+export function rendered(name: string, result: RenderedResult, error: RenderedError | null | undefined, out: string): void {
   const metrics = current.getStore();
-  if (metrics) recordRendered(metrics, name, result, error, out);
+  if (metrics) recordAnswer(metrics, name, result, error, out);
 }
 
-export function answerFields(metrics: Metrics | undefined): { metrics?: Map<string, number | boolean>; code?: string } {
+export type AnswerFields = { metrics?: Map<string, number | boolean>; code?: string; failed_step_command?: string };
+
+export function answerFields(metrics: Metrics | undefined): AnswerFields {
   if (!metrics) return {};
   const total = (clock() - metrics.started) * 1000;
   let inner = 0;
   for (const key of ["connect_ms", "attach_ms", "settle_ms"]) inner += Number(metrics.values.get(key) ?? 0);
   metrics.values.set(MAIN_PHASE[metrics.name] ?? "action_ms", Math.max(0, total - inner));
-  const fields: { metrics?: Map<string, number | boolean>; code?: string } = { metrics: clean(metrics.values) };
+  const fields: AnswerFields = { metrics: clean(metrics.values) };
   if (metrics.errorCode) fields.code = metrics.errorCode;
+  if (metrics.failedStepCommand) fields.failed_step_command = metrics.failedStepCommand;
   return fields;
 }
 

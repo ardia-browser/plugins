@@ -1356,7 +1356,22 @@ def compare(new: Observed, python: Observed, fallback: bool = False, label: str 
     return mismatches
 
 
-INTENTIONAL_KEYS = frozenset({"why", "stdout", "stderr", "status", "daemon_requests", "usage", "files", "no_consent", "telemetry"})
+INTENTIONAL_KEYS = frozenset({"why", "stdout", "stderr", "status", "daemon_requests", "usage", "files", "no_consent", "telemetry", "command_properties"})
+
+
+def with_command_properties(records: list, properties: dict, label: str) -> tuple[list, int]:
+    import copy
+
+    command, _, subcommand = label.partition(" ")
+    changed = copy.deepcopy(records)
+    matched = 0
+    for record in changed:
+        found = record.get("properties") if record.get("event") == "cli_command" else None
+        if not isinstance(found, dict) or found.get("command") != command or found.get("subcommand") != (subcommand or None):
+            continue
+        matched += 1
+        found.update(properties)
+    return changed, matched
 
 
 def intended(python: "Observed", case: Case, places: dict | None = None) -> tuple["Observed", list[str]]:
@@ -1365,7 +1380,7 @@ def intended(python: "Observed", case: Case, places: dict | None = None) -> tupl
     spec = case.intentional or {}
     problems = []
     if set(spec) - INTENTIONAL_KEYS or not isinstance(spec.get("why"), str) or len(spec) < 2:
-        return python, [f"intentional takes why and at least one of stdout, stderr, status, daemon_requests, usage, files, no_consent, telemetry, not {sorted(spec)}"]
+        return python, [f"intentional takes why and at least one of stdout, stderr, status, daemon_requests, usage, files, no_consent, telemetry, command_properties, not {sorted(spec)}"]
     if "telemetry" in spec and spec.get("no_consent") is not True:
         return python, ["intentional telemetry is only for no_consent cases, where it lists the local, unsent records"]
     from ardia_cli.endpoint import NOT_REACHABLE
@@ -1377,6 +1392,15 @@ def intended(python: "Observed", case: Case, places: dict | None = None) -> tupl
     for name in ("status", "daemon_requests", "usage", "files"):
         if name in spec:
             changes[name] = spec[name]
+    if "command_properties" in spec and "telemetry" in spec:
+        problems.append("intentional command_properties and telemetry can't both describe the records; put the properties in telemetry")
+    elif isinstance(spec.get("command_properties"), dict):
+        changes["telemetry"], recorded = with_command_properties(python.telemetry, spec["command_properties"], case.command)
+        changes["queued"], queued = with_command_properties(python.queued, spec["command_properties"], case.command)
+        if recorded != 1 or queued > 1:
+            problems.append(f"intentional command_properties must change exactly one recorded `{case.command}` event and at most one queued, not {recorded} and {queued}")
+    elif "command_properties" in spec:
+        problems.append("intentional command_properties is an object of cli_command properties the TypeScript CLI records instead")
     if changes and all(getattr(python, name) == value for name, value in changes.items()):
         problems.append(f"intentional ({spec['why']}) expects what Python already does; drop it")
     return replace(python, **changes), problems
