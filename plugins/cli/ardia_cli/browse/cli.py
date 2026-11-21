@@ -336,6 +336,48 @@ def eval_code_given(args: list[str]) -> bool:
     return False
 
 
+MAX_CDP_STDIN = 1024 * 1024
+
+
+def cdp_params(raw: str | None, pairs: list[str], stdin: str | None) -> dict:
+    import io
+
+    from ardia_cli.call_cli import ParamsError, build_params
+
+    try:
+        params = build_params(raw, pairs, io.StringIO(stdin or "")) or {}
+    except ParamsError as error:
+        raise Usage(str(error).replace("-p ", "--param ")) from None
+    if len(json.dumps(params, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > MAX_CDP_STDIN:
+        raise Usage("--params is over 1 MB once encoded")
+    return params
+
+
+def read_cdp_stdin() -> str:
+    from ardia_cli.call_cli import ParamsError, read_params_stdin
+
+    try:
+        return read_params_stdin(sys.stdin)
+    except ParamsError as error:
+        raise Usage(str(error)) from None
+
+
+def check_cdp_flags(args: list[str]) -> dict:
+    from ardia_cli.browse.commands import CDP_FLAGS, cdp_target, parse
+    from ardia_cli.browse.script import parse_timeout
+
+    options, _ = parse(args, CDP_FLAGS)
+    cdp_target(options)
+    if options.get("timeout") is not None:
+        parse_timeout(options["timeout"])
+    return options
+
+
+def check_cdp(args: list[str], stdin: str | None) -> None:
+    options = check_cdp_flags(args)
+    cdp_params(options.get("params"), options.get("param") or [], stdin)
+
+
 def read_stdin_text() -> str:
     from ardia_cli import notes
 
@@ -506,13 +548,18 @@ def run(argv: list[str]) -> int:
             if result is not None:
                 return print_result(result, as_json, options)
         stdin = None
+        cdp_flags = check_cdp_flags(args) if command == "cdp" else {}
         if command == "notes" and "-" in args:
             stdin = read_stdin_text()
         elif (command in ("eval", "addinitscript") and "--stdin" in args) or (command == "eval" and not eval_code_given(args) and not sys.stdin.isatty()) \
                 or (command == "batch" and not [a for a in args if not a.startswith("--")] and not sys.stdin.isatty()):
             stdin = sys.stdin.read()
+        elif command == "cdp" and cdp_flags.get("params") == "-":
+            stdin = read_cdp_stdin()
         elif command == "read":
             stdin = read_stdin_urls(args)
+        if command == "cdp":
+            check_cdp(args, stdin)
         elif command == "script":
             stdin = script_source(args, os.getcwd())
         if command == "close" and "--all" in args:

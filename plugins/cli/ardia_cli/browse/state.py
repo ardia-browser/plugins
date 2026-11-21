@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from ardia_cli import command_metrics, control
 from ardia_cli.caller import Caller
+from ardia_cli.browse import rawcdp
 from ardia_cli.browse.connection import Browser
 from ardia_cli.browse.errors import BrowseError, ConnectionLost, StaleRef
 from ardia_cli.browse.page import Page
@@ -12,10 +13,13 @@ from ardia_cli.browse.tabs import Registry
 
 NTH_SUFFIX = re.compile(r">>\s*nth=-?\d+\s*$")
 
-PAGE_SCHEMES = ("http:", "https:", "about:", "data:", "blob:", "file:")
+PAGE_SCHEMES = ("http:", "https:", "about:", "data:", "blob:", "file:", "chrome:", "chrome-extension:", "chrome-untrusted:", "devtools:", "view-source:")
 ACTIVE_TIMEOUT = 3.0
 APPEAR_POLL = 0.15
 PROBE_TIMEOUT = 3.0
+PROBE_FANOUT = 8
+PROBE_PASSES = 3
+PROBE_BACKOFF = 0.25
 UNKNOWN = object()
 NO_PAGE = (
     "The user isn't on a web page right now (New Tab or another Ardia view). "
@@ -175,6 +179,7 @@ class State:
         return pages
 
     def forget_target(self, target_id: str):
+        rawcdp.forget_target(self, target_id)
         page = self.pages.pop(target_id, None)
         if page:
             page.detach()
@@ -243,6 +248,7 @@ class State:
             page = self.sessions.get(params.get("sessionId"))
             if page:
                 page.detach()
+            rawcdp.forget_session(self, params.get("sessionId"))
         for listener in list(self.listeners):
             listener(None, method, params)
 
@@ -370,18 +376,42 @@ class State:
     async def shown_target(self) -> str | None:
         await self.refresh_targets()
         candidates = [target_id for target_id, info in self.target_infos.items() if info.get("url") != "about:blank"]
-        probes = await asyncio.gather(*(self.probe(target_id) for target_id in candidates))
-        focused = [target_id for target_id, (visible, has_focus) in zip(candidates, probes) if visible and has_focus]
-        visible = [target_id for target_id, (shown, _) in zip(candidates, probes) if shown]
-        return (focused or visible or [None])[0]
+        gate = asyncio.Semaphore(PROBE_FANOUT)
 
-    async def probe(self, target_id: str) -> tuple[bool, bool]:
+        async def gated(target_id):
+            async with gate:
+                return await self.probe(target_id)
+
+        found: dict[str, tuple[bool, bool]] = {}
+        skipped = candidates
+        for attempt in range(PROBE_PASSES):
+            if attempt:
+                await asyncio.sleep(PROBE_BACKOFF * attempt)
+            probes = await asyncio.gather(*(gated(target_id) for target_id in skipped))
+            found.update((target_id, probed) for target_id, probed in zip(skipped, probes) if probed is not None)
+            skipped = [target_id for target_id, probed in zip(skipped, probes) if probed is None]
+            if not skipped or (True, True) in found.values():
+                break
+        focused = [target_id for target_id in candidates if found.get(target_id, (False, False)) == (True, True)]
+        visible = [target_id for target_id in candidates if found.get(target_id, (False, False))[0]]
+        if focused or visible:
+            return (focused or visible)[0]
+        if skipped:
+            raise BrowseError(
+                f"Couldn't check which tab is active: {len(skipped)} tabs weren't probed because DevTools attaches on this connection "
+                "haven't been answered. Try again once Ardia catches up, or `ardia browse close` this session to start its connection over",
+                code="attaches_unanswered",
+            )
+        return None
+
+    async def probe(self, target_id: str) -> tuple[bool, bool] | None:
+        from ardia_cli.browse.connection import claimed_attach
         from ardia_cli.browse.page import WORLD_NAME
 
         try:
-            attached = await self.browser.send("Target.attachToTarget", {"targetId": target_id, "flatten": True}, timeout=PROBE_TIMEOUT)
-        except BrowseError:
-            return False, False
+            attached = await claimed_attach(self.browser, "Target.attachToTarget", {"targetId": target_id, "flatten": True}, PROBE_TIMEOUT)
+        except BrowseError as error:
+            return None if error.code == "attaches_unanswered" else (False, False)
         session = attached["sessionId"]
         try:
             tree = await self.browser.send("Page.getFrameTree", None, session, PROBE_TIMEOUT)
