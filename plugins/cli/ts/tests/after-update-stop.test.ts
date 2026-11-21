@@ -240,7 +240,7 @@ for (const argv of [["skills", "install", "--auto"], ["skills", "refresh"]]) {
   }, 30_000);
 }
 
-test("skills install --auto started with SIGTERM blocked, as older Ardias start it, stops when Ardia goes away", async () => {
+test.skipIf(process.platform !== "darwin")("skills install --auto started with SIGTERM blocked, as older Ardias start it on macOS, stops when Ardia goes away", async () => {
   const b = box();
   const launched = await launch(b, ["skills", "install", "--auto"], BLOCKING_PARENT);
   await until(downloadInFlight(b), 10_000, "the cua-driver skill download");

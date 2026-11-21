@@ -1435,6 +1435,14 @@ class ProductionSigning(unittest.TestCase):
             install.close()
 
 
+def pinned_bun() -> bool:
+    bun = shutil.which("bun") or str(Path.home() / ".bun" / "bin" / "bun")
+    try:
+        return subprocess.run([bun, "--version"], capture_output=True, text=True, timeout=30).stdout.strip() == "1.3.14"
+    except OSError:
+        return False
+
+
 class BuildSmoke(unittest.TestCase):
     def test_the_packaging_smoke_runs_leave_no_history_or_telemetry_behind(self):
         script = (CLI / "scripts" / "build.sh").read_text().splitlines()
@@ -1464,7 +1472,8 @@ class BuildSmoke(unittest.TestCase):
                 self.assertLess(time.monotonic() - started, 5)
                 self.assertFalse((Path(scratch) / "out").exists() and any((Path(scratch) / "out").iterdir()))
 
-    @unittest.skipUnless((sys.platform, os.uname().machine) in (("darwin", "arm64"), ("linux", "x86_64")) and shutil.which("npm"), "packs on Apple silicon or Linux x86_64, with npm for plugins/cli/main")
+    @unittest.skipUnless((sys.platform, os.uname().machine) in (("darwin", "arm64"), ("linux", "x86_64")) and shutil.which("npm") and pinned_bun(),
+                         "packs on Apple silicon or Linux x86_64, with npm for plugins/cli/main and Bun 1.3.14")
     def test_ardia_sign_cmd_signs_the_folder_both_tarballs_are_packed_from(self):
         platform = "macos-arm64" if sys.platform == "darwin" else "linux-x64"
         names = (f"ardia-cli-7.7.7-{platform}.tar.gz", f"cli-plugin-7.7.7-{platform}.tar.gz")
