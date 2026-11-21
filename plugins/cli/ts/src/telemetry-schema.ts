@@ -160,7 +160,7 @@ export function cleanEvent(record: JsonObject): JsonObject | undefined {
     const clean = check(value);
     if (clean !== undefined) kept.set(key, clean);
   }
-  if (kept.has("cli_version")) {
+  if (properties.has("cli_version")) {
     if (VERSION.test(cliVersion())) kept.set("cli_version", cliVersion());
     else kept.delete("cli_version");
   }

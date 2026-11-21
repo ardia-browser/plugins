@@ -1262,7 +1262,7 @@ def compare(new: Observed, python: Observed, fallback: bool = False, label: str 
     return mismatches
 
 
-INTENTIONAL_KEYS = frozenset({"why", "stdout", "stderr", "status", "daemon_requests", "usage", "files", "no_consent"})
+INTENTIONAL_KEYS = frozenset({"why", "stdout", "stderr", "status", "daemon_requests", "usage", "files", "no_consent", "telemetry"})
 
 
 def intended(python: "Observed", case: Case, places: dict | None = None) -> tuple["Observed", list[str]]:
@@ -1271,7 +1271,7 @@ def intended(python: "Observed", case: Case, places: dict | None = None) -> tupl
     spec = case.intentional or {}
     problems = []
     if set(spec) - INTENTIONAL_KEYS or not isinstance(spec.get("why"), str) or len(spec) < 2:
-        return python, [f"intentional takes why and at least one of stdout, stderr, status, daemon_requests, usage, files, no_consent, not {sorted(spec)}"]
+        return python, [f"intentional takes why and at least one of stdout, stderr, status, daemon_requests, usage, files, no_consent, telemetry, not {sorted(spec)}"]
     changes = {}
     for name in ("stdout", "stderr"):
         if name in spec:
@@ -1284,18 +1284,29 @@ def intended(python: "Observed", case: Case, places: dict | None = None) -> tupl
     return replace(python, **changes), problems
 
 
-def without_consent(new: "Observed", python: "Observed") -> tuple["Observed", list[str]]:
+LOCAL_COPY = re.compile(r"data/Telemetry/local/cli-\d{4}-\d{2}-\d{2}\.jsonl")
+SHARING_ONLY_FILES = ("data/Telemetry/cli-flush-claim.lock", "data/Telemetry/cli-flush.json")
+NO_CONSENT_FILES = {
+    "data/Telemetry/cli-queue.jsonl": ("removed",),
+    "data/Telemetry/cli-queue.lock": ("written", "file", 0o600, b""),
+    "data/Telemetry/local": ("written", "dir", 0o700),
+    "data/Telemetry/local/cli-local.lock": ("written", "file", 0o600, b"<compared apart>"),
+}
+
+
+def without_consent(new: "Observed", python: "Observed", telemetry: list | None = None) -> tuple["Observed", list[str]]:
     from dataclasses import replace
 
     problems = []
-    if new.queued or not new.telemetry or any(record.get("distinct_id") != "local" or record.get("sent") is not False for record in new.telemetry):
-        problems.append("intentional no_consent expects only local, unsent telemetry and nothing queued")
-    if python.telemetry and all(record.get("distinct_id") == "local" for record in python.telemetry) and not python.queued:
+    if python.telemetry and all(record.get("distinct_id") == "local" and record.get("sent") is False for record in python.telemetry) and not python.queued:
         problems.append("intentional no_consent expects what Python already does; drop it")
-    cli = ("cli-home/Usage", "data/Telemetry")
-    files = {name: change for name, change in python.files.items() if not name.startswith(cli)}
-    files.update({name: change for name, change in new.files.items() if name.startswith(cli)})
-    return replace(python, telemetry=new.telemetry, queued=new.queued, files=files), problems
+    expected = telemetry if telemetry is not None else [{**record, "distinct_id": "local", "sent": False} for record in python.telemetry]
+    files = {name: change for name, change in python.files.items() if name not in SHARING_ONLY_FILES and not LOCAL_COPY.fullmatch(name)}
+    files.update(NO_CONSENT_FILES)
+    dated = [name for name in new.files if LOCAL_COPY.fullmatch(name)]
+    copy = dated[0] if len(dated) == 1 else f"data/Telemetry/local/cli-{time.strftime('%Y-%m-%d')}.jsonl"
+    files[copy] = ("written", "file", 0o600, b"<compared apart>")
+    return replace(python, telemetry=expected, queued=[], files=files), problems
 
 
 def without_cli_records(python: "Observed") -> "Observed":
@@ -1366,7 +1377,7 @@ def check_case(install: Installation, case: Case, served: dict[str, str], keep: 
         python, intent_problems = intended(python, case, places_of(box))
         problems += intent_problems
         if case.intentional.get("no_consent") is True:
-            python, consent_problems = without_consent(new, python)
+            python, consent_problems = without_consent(new, python, case.intentional.get("telemetry"))
             problems += consent_problems
         applied = True
     if case.env.get("ARDIA_BROWSE_FOR_PLUGIN") and expected == "ts":
