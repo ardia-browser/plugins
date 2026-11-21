@@ -22,3 +22,32 @@ export function invokesBrowse(argv: readonly string[]): boolean {
   }
   return false;
 }
+
+export type NotesArgv = { hoisted: string[]; rest: string[] };
+
+export function notesArgv(argv: readonly string[]): NotesArgv | undefined {
+  const hoisted: string[] = [];
+  let index = 0;
+  while (index < argv.length) {
+    const token = argv[index] as string;
+    const name = token.split("=")[0] as string;
+    if (SHARED_VALUE_FLAGS.includes(name)) {
+      if (token.includes("=")) {
+        hoisted.push(token);
+        index += 1;
+        continue;
+      }
+      if (index + 1 >= argv.length) return undefined;
+      hoisted.push(token, argv[index + 1] as string);
+      index += 2;
+      continue;
+    }
+    if (token === "--json") {
+      hoisted.push(token);
+      index += 1;
+      continue;
+    }
+    break;
+  }
+  return argv[index] === "notes" ? { hoisted, rest: argv.slice(index + 1) } : undefined;
+}

@@ -9,6 +9,8 @@ import { BrowseError, PythonCrash } from "./errors.ts";
 import { Interrupted } from "./exchange.ts";
 import { Printer } from "./output.ts";
 import { checkRequest, CODE, dropCredential, message, pluginMode, PluginRefusal, REFUSED, takeAccess, UNAVAILABLE, UNAVAILABLE_WHY } from "./plugin.ts";
+import type { NotesArgv } from "./route.ts";
+import { PathError } from "./paths.ts";
 import { dumps, object, type Value } from "../json.ts";
 import { Secrets } from "../redact.ts";
 import { renderError } from "./render.ts";
@@ -137,6 +139,7 @@ async function run(browse: string[], printer: Printer, call: Call, plugin: boole
     if (error instanceof BrowseError) return { status: printError(error, asJson, secrets, printer, call) };
     if (error instanceof Usage) return { status: printError(new BrowseError(error.message, 1, undefined, "usage_error"), asJson, secrets, printer, call) };
     if (error instanceof Refused) return { status: printError(new BrowseError(error.message, 1, undefined, "invalid_name"), asJson, secrets, printer, call) };
+    if (error instanceof PathError) return { status: printError(new BrowseError(error.message), asJson, secrets, printer, call) };
     throw error;
   }
 }
@@ -219,6 +222,17 @@ export async function serveBrowse(argv: string[], python: string | null): Promis
     const refused = await pluginAccess(browse, call, python);
     if (refused !== undefined) return refused;
   }
+  return serveHoisted(browse, call, plugin, python);
+}
+
+export async function serveNotes(argv: string[], notes: NotesArgv, python: string | null): Promise<number | undefined> {
+  const call = new Call(argv);
+  call.command = "notes";
+  call.allowedFlags = allowedFlags(commandName([...notes.hoisted, ...notes.rest]));
+  return serveHoisted(["notes", ...notes.hoisted, ...notes.rest], call, false, python);
+}
+
+async function serveHoisted(browse: string[], call: Call, plugin: boolean, python: string | null): Promise<number | undefined> {
   if (!environmentIsText()) return plugin ? refuse(jsonIntent(browse), "needs text environment variables", call, python) : undefined;
   const errors = pythonStdioErrors();
   if (errors === undefined) return plugin ? refuse(jsonIntent(browse), "needs a UTF-8 locale", call, python) : undefined;

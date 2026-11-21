@@ -153,6 +153,12 @@ function browsingEntry(command: "pinned" | "history", spec: CommandSpec): Entry 
 
 ENTRIES.push(browsingEntry("pinned", PINNED_SPEC), browsingEntry("history", HISTORY_SPEC));
 
+ENTRIES.push({
+  path: ["star"],
+  spec: { options: [{ name: "--data-dir", dest: "data_dir", kind: "value" }] },
+  run: async (parsed) => (await import("./star.ts")).runStar(text(parsed, "data_dir")),
+});
+
 function withSkillFlag(argv: readonly string[]): readonly string[] {
   let index = 0;
   while (index < argv.length) {

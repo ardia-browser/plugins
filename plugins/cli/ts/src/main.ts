@@ -1,5 +1,6 @@
 import { read, write, writeSync } from "node:fs";
 import { catchInterrupts } from "./control.ts";
+import type { NotesArgv } from "./browse/route.ts";
 import { interruptsIgnored, LIBC_UNAVAILABLE, LibcUnavailable, loadLibc, watchLifeline, writeWhole } from "./libc.ts";
 import { FLUSH_ARGUMENT, HISTORY_ARGUMENT } from "./flush-argument.ts";
 import { bundledPython, installRoot } from "./install.ts";
@@ -25,7 +26,7 @@ function asksForVersion(argv: string[]): boolean {
 
 let browseServed = false;
 
-async function serveBrowse(argv: string[], python: string | null): Promise<number | undefined> {
+async function serveBrowse(argv: string[], python: string | null, notes?: NotesArgv): Promise<number | undefined> {
   const [browse, paths, { consentUnreadable }, { pluginMode }] = await Promise.all([
     import("./browse/index.ts"),
     import("./paths.ts"),
@@ -34,7 +35,7 @@ async function serveBrowse(argv: string[], python: string | null): Promise<numbe
   ]);
   if (!paths.pathsAreText() || (!pluginMode() && consentUnreadable(argv))) return browse.refuseOrHandBack(argv, python);
   try {
-    return await browse.serveBrowse(argv, python);
+    return await (notes === undefined ? browse.serveBrowse(argv, python) : browse.serveNotes(argv, notes, python));
   } catch (error) {
     if (error instanceof paths.NeedsPython) return browse.refuseOrHandBack(argv, python);
     throw error;
@@ -57,10 +58,15 @@ async function serve(argv: string[], python: string | null): Promise<number | un
 }
 
 async function serveOnce(argv: string[], python: string | null): Promise<number | undefined> {
-  const { invokesBrowse, pluginMode } = await import("./browse/route.ts");
+  const { invokesBrowse, notesArgv, pluginMode } = await import("./browse/route.ts");
   if (pluginMode() || (invokesBrowse(argv) && servesNatively("browse"))) {
     browseServed = true;
     return serveBrowse(argv, python);
+  }
+  const notes = notesArgv(argv);
+  if (notes !== undefined && servesNatively("notes")) {
+    browseServed = true;
+    return serveBrowse(argv, python, notes);
   }
   const [{ route, withArgparse }, paths, { parseCommand }] = await Promise.all([import("./route.ts"), import("./paths.ts"), import("./commands.ts")]);
   const chosen = await withArgparse(route(argv, undefined, parseCommand), argv);
