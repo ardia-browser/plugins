@@ -1,4 +1,5 @@
 #include <dirent.h>
+#include <pwd.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -962,6 +963,41 @@ static napi_value process_info(napi_env env, napi_callback_info info) {
 #endif
 }
 
+static napi_value account_home(napi_env env, napi_callback_info info) {
+  Call call;
+  char name[1024];
+  napi_value result = NULL;
+  if (!take_args(env, info, 1, &call)) return status(env, -EINVAL);
+  int checked = name_arg(&call, 0, name, sizeof(name));
+  if (checked == -ENOENT || checked == -ENAMETOOLONG) {
+    napi_get_null(env, &result);
+    return result;
+  }
+  if (checked != 0) return status(env, checked);
+  long suggested = sysconf(_SC_GETPW_R_SIZE_MAX);
+  size_t size = suggested > 0 ? (size_t)suggested : 16384;
+  for (;;) {
+    char *scratch = malloc(size);
+    if (scratch == NULL) return status(env, -ENOMEM);
+    struct passwd entry;
+    struct passwd *found = NULL;
+    int failure = getpwnam_r(name, &entry, scratch, size, &found);
+    if (failure == ERANGE && size < (1u << 24)) {
+      free(scratch);
+      size *= 2;
+      continue;
+    }
+    if (failure == EINTR) {
+      free(scratch);
+      continue;
+    }
+    if (found == NULL || found->pw_dir == NULL) napi_get_null(env, &result);
+    else napi_create_buffer_copy(env, strlen(found->pw_dir), found->pw_dir, NULL, &result);
+    free(scratch);
+    return result;
+  }
+}
+
 static bool define(napi_env env, napi_value exports, const char *name, napi_callback callback) {
   napi_value function = NULL;
   return napi_create_function(env, name, NAPI_AUTO_LENGTH, callback, NULL, &function) == napi_ok
@@ -996,7 +1032,8 @@ __attribute__((visibility("default"))) napi_value napi_register_module_v1(napi_e
       && define(env, exports, "strerror", error_text)
       && define(env, exports, "execProgram", exec_program)
       && define(env, exports, "zoneName", zone_name)
-      && define(env, exports, "processInfo", process_info);
+      && define(env, exports, "processInfo", process_info)
+      && define(env, exports, "accountHome", account_home);
   return ok ? exports : NULL;
 }
 

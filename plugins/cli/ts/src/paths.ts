@@ -1,5 +1,7 @@
 import { readlinkSync } from "node:fs";
 import { userInfo } from "node:os";
+import { decodeSurrogateEscape } from "./argv-bytes.ts";
+import { accountHomeOf } from "./libc.ts";
 
 export const LINUX = process.platform === "linux";
 const LOSSY = "\ufffd";
@@ -56,10 +58,6 @@ export function pathsAreText(): boolean {
   return env("HOME") !== undefined || !(accountHome()?.includes(LOSSY) ?? false);
 }
 
-export function needsAccountLookup(text: string | undefined): boolean {
-  return text !== undefined && text.startsWith("~") && !text.startsWith("~/") && text !== "~";
-}
-
 export function home(): string {
   return env("HOME") ?? accountHome() ?? "";
 }
@@ -69,8 +67,9 @@ export function expandUser(text: string): string {
   const slash = text.indexOf("/");
   const user = slash < 0 ? text.slice(1) : text.slice(1, slash);
   const rest = slash < 0 ? "" : text.slice(slash);
-  if (user !== "") throw new NeedsPython("expanding another account's home folder");
-  const base = env("HOME") ?? accountHome();
+  const found = user === "" ? undefined : accountHomeOf(user);
+  if (found === null) return text;
+  const base = found === undefined ? (env("HOME") ?? accountHome()) : decodeSurrogateEscape(found);
   if (base === undefined) return text;
   const trimmed = base.length > 1 ? base.replace(/\/+$/, "") : base;
   const joined = trimmed + rest;

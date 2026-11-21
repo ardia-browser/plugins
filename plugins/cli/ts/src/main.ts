@@ -26,14 +26,13 @@ function asksForVersion(argv: string[]): boolean {
 let browseServed = false;
 
 async function serveBrowse(argv: string[], python: string | null): Promise<number | undefined> {
-  const [browse, paths, { consentUnreadable, dataDirArg, leadingTokens }, { pluginMode }] = await Promise.all([
+  const [browse, paths, { consentUnreadable }, { pluginMode }] = await Promise.all([
     import("./browse/index.ts"),
     import("./paths.ts"),
     import("./telemetry.ts"),
     import("./browse/route.ts"),
   ]);
-  const named = [process.env.ARDIA_DATA_DIR, process.env.ARDIA_CLI_HOME, dataDirArg(leadingTokens(argv))];
-  if (!paths.pathsAreText() || named.some(paths.needsAccountLookup) || (!pluginMode() && consentUnreadable(argv))) return browse.refuseOrHandBack(argv, python);
+  if (!paths.pathsAreText() || (!pluginMode() && consentUnreadable(argv))) return browse.refuseOrHandBack(argv, python);
   try {
     return await browse.serveBrowse(argv, python);
   } catch (error) {
@@ -66,13 +65,8 @@ async function serveOnce(argv: string[], python: string | null): Promise<number 
   const [{ route, withArgparse }, paths, { parseCommand }] = await Promise.all([import("./route.ts"), import("./paths.ts"), import("./commands.ts")]);
   const chosen = await withArgparse(route(argv, undefined, parseCommand), argv);
   if (chosen.kind === "python" || chosen.kind === "version") return undefined;
-  const { consentUnreadable, dataDirArg, leadingTokens } = await import("./telemetry.ts");
-  const named = [process.env.ARDIA_DATA_DIR, process.env.ARDIA_CLI_HOME, dataDirArg(leadingTokens(argv))];
-  if (chosen.kind === "listing") named.push(chosen.listing.dataDir);
-  if (chosen.kind === "command") named.push(chosen.route.dataDir);
-  if (chosen.kind === "config") named.push(chosen.command.args["data_dir"] as string | undefined);
-  if (chosen.kind === "scripts") named.push(chosen.args.dataDir);
-  if (!paths.pathsAreText() || named.some(paths.needsAccountLookup) || consentUnreadable(argv)) return undefined;
+  const { consentUnreadable } = await import("./telemetry.ts");
+  if (!paths.pathsAreText() || consentUnreadable(argv)) return undefined;
   try {
     if (chosen.kind === "computer" || chosen.kind === "hooks" || chosen.kind === "on") return await (await import("./serve-commands.ts")).serveCommand(chosen, argv, python);
     const { serveHelp, serveListing } = await import("./serve.ts");

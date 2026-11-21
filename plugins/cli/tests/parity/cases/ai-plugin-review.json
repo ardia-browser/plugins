@@ -2609,9 +2609,9 @@
   },
   "note": "round 2: a data dir naming another account's home",
   "intentional": {
-   "why": "under --json exactly one JSON line with a code goes to stdout, whatever fails (AI plugin contract §3); the client can't look up another account's home in plugin mode, so it refuses",
+   "why": "under --json exactly one JSON line with a code goes to stdout, whatever fails (AI plugin contract §3); ~nobody expands through getpwnam as Python's expanduser does, so the request reaches the plugin daemon check like any other data dir, and every plugin step answers plugin_daemon_unavailable until F1-early",
    "stdout": {
-    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) needs text paths it can read without looking up another account; nothing was sent\",\"code\":\"plugin_refused\"}\n"
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) has no plugin daemon yet: plugin steps will run on a TypeScript daemon that reads pages through DOM, accessibility and input only (M3 F1); nothing was sent\",\"code\":\"plugin_daemon_unavailable\"}\n"
    },
    "stderr": {
     "text": ""
@@ -2620,7 +2620,7 @@
    "daemon_requests": [],
    "usage": {
     "recent": [
-     "browse (exit 77)"
+     "browse get (exit 77)"
     ],
     "tasks": {}
    }
