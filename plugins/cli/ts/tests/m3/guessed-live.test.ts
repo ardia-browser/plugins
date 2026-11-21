@@ -10,7 +10,7 @@ setDefaultTimeout(60_000);
 
 const CHROME = process.env["ARDIA_M3_CHROME"];
 const PORT = Number(process.env["ARDIA_M3_PORT_BASE"] ?? "9400") + 15;
-const PAGE = `<!doctype html><title>guesses</title>
+const PAGE = `<!doctype html><meta charset="utf-8"><title>guesses</title>
 <p id="intro">Hello agents</p>
 <a id="lnk" href="https://example.com/a" data-kind="plain">A</a>
 <a href="https://example.com/docs/b">B</a>
@@ -18,7 +18,12 @@ const PAGE = `<!doctype html><title>guesses</title>
 <button id="go" onclick="document.getElementById('out').textContent='clicked'">Go</button>
 <p id="out"></p>
 <label><input type="checkbox" class="mid" aria-label="No middle name">one</label>
-<label><input type="checkbox" class="mid" aria-label="No middle name">two</label>`;
+<label><input type="checkbox" class="mid" aria-label="No middle name">two</label>
+<button id="archived" onclick="document.getElementById('out').textContent='archived'">Archived · 1</button>
+<nav><a href="https://example.com/nav-only">N</a></nav>
+<button class="twin">Twin · 2</button><button class="twin">Twin · 2</button>
+<button class="case">MIXED 4</button><button class="case">Mixed 4</button><button class="case">MIXED 4</button>
+<input id="password" type="password" aria-label="Password">`;
 
 let root = "";
 let chrome: ChildProcess | null = null;
@@ -106,4 +111,62 @@ describe.skipIf(!CHROME)("guessed commands and flags against headless Chrome", (
     expect(beyond.err).toContain("--nth 2 asks for match 3, and only 2 checkbox elements match (--nth counts from 0)");
     expect(browse("find", "text", "Go", "--nth", "0").err).toContain("--nth works with find role");
   });
+
+  test("a find role that matches nothing leads with the closest name and its ref", () => {
+    const missed = browse("find", "role", "button", "click", "--name", "Archived", "--exact");
+    expect(missed.status).toBe(1);
+    const found = /closest: button "Archived · 1" (@e\d+)/u.exec(missed.err);
+    expect(found).not.toBeNull();
+    expect(missed.err.indexOf("closest:")).toBeLessThan(missed.err.indexOf("the buttons here are"));
+    expect(browse("click", (found as RegExpExecArray)[1] as string).status).toBe(0);
+    expect(browse("get", "text", "#out").out.trim()).toBe("archived");
+    const json = JSON.parse(browse("--json", "find", "role", "button", "click", "--name", "Archived", "--exact").out);
+    expect(json.data.closest.name).toBe("Archived · 1");
+  });
+
+  test("fill takes literal text after a leading -s, links refuses what it can't honour, and empty selectors are usage errors", () => {
+    expect(browse("fill", "-s", "#name", "-s").status).toBe(0);
+    expect(browse("get", "value", "#name").out.trim()).toBe("-s");
+    expect(browse("fill", "--selector=#name", "--selector").status).toBe(0);
+    expect(browse("get", "value", "#name").out.trim()).toBe("--selector");
+    const scoped = browse("links", "-s", "nav");
+    expect(scoped.status).toBe(1);
+    expect(scoped.err).toContain("Unknown flag");
+    const limited = browse("links", "--limit", "1", "nav-only");
+    expect(limited.out).toContain("https://example.com/nav-only");
+    expect(limited.out).not.toContain("https://example.com/a\n");
+    expect(browse("fill", "-s", "--", "#name", "new").err).toContain("needs a selector");
+    expect(browse("click", "#intro", "-s", "#go").err).toContain("give the selector once");
+    expect(browse("screenshot", "-s", "#intro", path.join(root, "one.png"), path.join(root, "two.png")).err).toContain("takes one path");
+    expect(browse("get", "attr", "-s", "#lnk", "data-kind").out.trim()).toBe("plain");
+    expect(browse("get", "text", "-s", "#intro", "extra").err).toContain("give the selector once");
+    const empty = browse("screenshot", "--selector=", path.join(root, "empty.png"));
+    expect(empty.status).toBe(1);
+    expect(empty.err).toContain("needs a selector");
+  });
+
+  test("an ambiguous closest name gives no ref, --nth misses fall back to the hint, and a bad --nth is a usage error", () => {
+    const twins = browse("find", "role", "button", "click", "--name", "Twin", "--exact");
+    expect(twins.err).toContain("closest: button \"Twin · 2\", 2 of them (find role button <action> --name 'Twin · 2' --exact --nth <n>, from 0)");
+    expect(twins.err).not.toMatch(/closest: button "Twin · 2" @e/u);
+    const nthMiss = browse("find", "role", "button", "click", "--name", "Archived", "--exact", "--nth", "0");
+    expect(nthMiss.err).toContain('closest: button "Archived · 1" @e');
+    const bogus = browse("find", "role", "button", "click", "--name", "Go", "--nth", "bogus");
+    expect(bogus.status).toBe(1);
+    expect(bogus.err).toContain("--nth takes a number counting from 0, not bogus");
+  });
+
+  test("the closest hint's retry picks from the same set it counted, and flows mask a flagged fill", () => {
+    const cased = browse("find", "role", "button", "click", "--name", "MIXED", "--exact");
+    expect(cased.err).toContain("closest: button \"MIXED 4\", 2 of them (find role button <action> --name 'MIXED 4' --exact --nth <n>, from 0)");
+    expect(browse("find", "role", "button", "click", "--name", "MIXED 4", "--exact", "--nth", "1").status).toBe(0);
+    expect(browse("fill", "-s", "#password", "hunter2-secret-value").status).toBe(0);
+    const steps = browse("flow", "steps", "--all");
+    expect(steps.out).not.toContain("hunter2-secret-value");
+    const shot = browse("screenshot", "#intro", "-s", "#go");
+    expect(shot.status).toBe(1);
+    expect(shot.err).toContain("isn't a file path");
+    expect(browse("click", "-s", "--").err).toContain("needs a selector");
+  });
 });
+
