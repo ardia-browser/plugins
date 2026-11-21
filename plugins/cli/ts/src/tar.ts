@@ -54,6 +54,8 @@ function paxRecords(data: Buffer): Map<string, string> {
   return records;
 }
 
+export type TarEntry = { name: string; type: "file" | "dir" | "other"; data: Buffer; mode: number };
+
 export function readTarGz(archive: Buffer): Member[] {
   let data: Buffer;
   try {
@@ -61,6 +63,19 @@ export function readTarGz(archive: Buffer): Member[] {
   } catch {
     throw new TarError("not a gzip file");
   }
+  return readTarMembers(data);
+}
+
+export function readTar(archive: Buffer): TarEntry[] {
+  return readTarMembers(archive).map((member) => ({
+    name: member.name,
+    type: isDir(member) ? "dir" : isFile(member) ? "file" : "other",
+    data: member.data,
+    mode: member.mode,
+  }));
+}
+
+export function readTarMembers(data: Buffer): Member[] {
   const members: Member[] = [];
   let at = 0;
   let longName: string | undefined;
@@ -71,6 +86,7 @@ export function readTarGz(archive: Buffer): Member[] {
     const block = data.subarray(at, at + BLOCK);
     if (block.every((byte) => byte === 0)) break;
     if (!checksumOk(block)) throw new TarError(members.length === 0 ? "empty file" : "invalid header");
+    const oldRegular = (block[156] as number) === 0;
     const type = String.fromCharCode(block[156] as number || 0x30);
     const size = octal(block, 124, 12);
     const body = data.subarray(at + BLOCK, at + BLOCK + size);
@@ -102,7 +118,7 @@ export function readTarGz(archive: Buffer): Member[] {
     name = merged.get("path") ?? longName ?? name;
     const linkname = merged.get("linkpath") ?? longLink ?? text(block, 157, 100);
     const mtimeText = merged.get("mtime");
-    members.push({ name, type, mode: octal(block, 100, 8), mtime: mtimeText === undefined ? octal(block, 136, 12) : Math.floor(Number(mtimeText)), size, data: Buffer.from(body), linkname });
+    members.push({ name, type: oldRegular && name.endsWith("/") ? "5" : type, mode: octal(block, 100, 8), mtime: mtimeText === undefined ? octal(block, 136, 12) : Math.floor(Number(mtimeText)), size, data: Buffer.from(body), linkname });
     longName = undefined;
     longLink = undefined;
     pax = new Map();

@@ -1,6 +1,7 @@
 import type { CommandRoute } from "./commands.ts";
 import { type Command, parseCommand as parseConfigCommand } from "./cli-command.ts";
 import { emptyListing, type Kind, type Listing } from "./listing.ts";
+import { type CommandRoute as ToolsRoute, commandRoute } from "./commands-e.ts";
 import { servedTable, type ServingSide } from "./served.ts";
 import type { CommandRoute as FamilyRoute } from "./serve-commands.ts";
 import { label as computerLabel } from "./computer/label.ts";
@@ -14,6 +15,7 @@ export type Route =
   | { kind: "command"; route: CommandRoute }
   | { kind: "config"; command: Command }
   | { kind: "scripts"; args: ScriptsArgs }
+  | { kind: "tools"; command: ToolsRoute }
   | { kind: "python" }
   | FamilyRoute;
 
@@ -48,6 +50,7 @@ export function labelOf(route: Route): string | undefined {
   if (route.kind === "hooks") return route.verb === "" ? "hooks" : `hooks ${route.verb}`;
   if (route.kind === "on") return "on";
   if (route.kind === "scripts") return `scripts ${route.args.sub}`;
+  if (route.kind === "tools") return route.command.label;
   return route.kind === "listing" ? route.what : undefined;
 }
 
@@ -81,6 +84,8 @@ export function parseRoute(argv: string[]): Route {
   if (arranged !== undefined) return arranged.path[0] === "on" ? { kind: "on", argv } : { kind: "hooks", verb: arranged.path[1] ?? "", argv };
   const scripts = parseScripts(argv);
   if (scripts !== undefined) return { kind: "scripts", args: scripts };
+  const tools = commandRoute(argv);
+  if (tools !== undefined) return { kind: "tools", command: tools };
   const listing = emptyListing();
   const cursor = new Cursor(argv);
   let kind: Kind | undefined;

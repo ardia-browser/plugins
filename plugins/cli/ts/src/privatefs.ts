@@ -13,8 +13,8 @@ const LOCK_ATTEMPTS = 5;
 const LOCK_RETRY_MS = 2;
 
 export class PathError extends Error {
-  constructor() {
-    super("an unsafe path");
+  constructor(message = "an unsafe path") {
+    super(message);
   }
 }
 
@@ -35,14 +35,21 @@ export function closeDir(dir: Dir | undefined): void {
   close(dir?.fd);
 }
 
-function openDir(open: () => number): Dir {
+function openDir(open: () => number, label: string): Dir {
   try {
     return { fd: open() };
   } catch (error) {
     const errno = errnoOf(error);
-    if (errno === ELOOP || errno === ENOTDIR) throw new PathError();
+    if (errno === ELOOP || errno === ENOTDIR) throw new PathError(`${label} is a symbolic link or not a folder`);
     throw error;
   }
+}
+
+function checkPrivateDir(fd: number, label: string): void {
+  const info = fs.fstatSync(fd);
+  if (!info.isDirectory()) throw new PathError(`${label} isn't a folder`);
+  if (info.uid !== uid()) throw new PathError(`${label} belongs to another user`);
+  if ((info.mode & 0o077) !== 0) throw new PathError(`${label} must be private (mode 0700)`);
 }
 
 function mkdirQuietly(dir: Dir, name: string): void {
@@ -55,25 +62,24 @@ function mkdirQuietly(dir: Dir, name: string): void {
 
 function openChild(dir: Dir, name: string, create: boolean): Dir {
   if (create) mkdirQuietly(dir, name);
-  return openDir(() => openAt(dir.fd, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW, 0));
+  return openDir(() => openAt(dir.fd, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW, 0), name);
 }
 
 export function openPrivate(root: string, parts: string[], create: boolean): Dir {
   let dir: Dir;
   try {
-    dir = openDir(() => fs.openSync(root, O_RDONLY | O_DIRECTORY | O_NOFOLLOW));
+    dir = openDir(() => fs.openSync(root, O_RDONLY | O_DIRECTORY | O_NOFOLLOW), root);
   } catch (error) {
-    if (notFound(error)) throw new PathError();
+    if (notFound(error)) throw new PathError(`${root} doesn't exist`);
     throw error;
   }
   try {
-    if (fs.fstatSync(dir.fd).uid !== uid()) throw new PathError();
+    if (fs.fstatSync(dir.fd).uid !== uid()) throw new PathError(`${root} belongs to another user`);
     for (const part of parts) {
       const child = openChild(dir, part, create);
       closeDir(dir);
       dir = child;
-      const info = fs.fstatSync(dir.fd);
-      if (!info.isDirectory() || info.uid !== uid() || (info.mode & 0o077) !== 0) throw new PathError();
+      checkPrivateDir(dir.fd, part);
     }
     return dir;
   } catch (error) {
@@ -87,7 +93,7 @@ export function openChildDir(dir: Dir, name: string, checkMode: boolean): Dir {
   const info = fs.fstatSync(child.fd);
   if (!info.isDirectory() || info.uid !== uid() || (checkMode && (info.mode & 0o022) !== 0)) {
     closeDir(child);
-    throw new PathError();
+    throw new PathError(`${name} isn't a private folder of yours`);
   }
   return child;
 }
@@ -110,7 +116,7 @@ export function openPrivateFile(name: string, dir: Dir, flags: number): number {
   const fd = openRetrying(dir, name, flags);
   try {
     const info = fs.fstatSync(fd);
-    if (!info.isFile() || info.uid !== uid()) throw new PathError();
+    if (!info.isFile() || info.uid !== uid()) throw new PathError(`${name} isn't a regular file of yours`);
     if ((info.mode & 0o077) !== 0) fs.fchmodSync(fd, 0o600);
     return fd;
   } catch (error) {
@@ -243,7 +249,7 @@ export function readPrivate(name: string, dir: Dir, limit: number): Buffer | und
   }
   try {
     const raw = readFd(fd, limit + 1);
-    if (raw.length > limit) throw new PathError();
+    if (raw.length > limit) throw new PathError(`${name} is too large`);
     return raw;
   } finally {
     close(fd);

@@ -125,6 +125,19 @@ class ConsentTest(TelemetryCase):
     def test_sharing_on_gives_the_install_id(self):
         self.assertEqual(telemetry.consent(self.root), INSTALL_ID)
 
+    def test_an_expiry_that_cant_be_read_means_no_consent(self):
+        for until in ("next week", "", True, [1], {"at": 1}, float("nan"), float("inf"), 10 ** 400, "2020-01-01T00:00:00Z", 1):
+            with self.subTest(until=until):
+                self.assertIsNone(telemetry.sharing_id({"sharing": True, "installId": INSTALL_ID, "sharingUntil": until}))
+        self.assertEqual(telemetry.sharing_id({"sharing": True, "installId": INSTALL_ID, "sharingUntil": None}), INSTALL_ID)
+        self.assertEqual(telemetry.sharing_id({"sharing": True, "installId": INSTALL_ID, "sharingUntil": "2999-01-01T00:00:00Z"}), INSTALL_ID)
+
+    def test_the_flushers_consent_honours_the_opt_outs(self):
+        self.assertEqual(telemetry.consent(self.root), INSTALL_ID)
+        for name, value in (("DO_NOT_TRACK", "1"), ("ARDIA_TELEMETRY", "off")):
+            with self.subTest(name=name), mock.patch.dict(os.environ, {name: value}):
+                self.assertIsNone(telemetry.consent(self.root))
+
     def test_sharing_off_missing_or_odd_files_give_nothing(self):
         write_consent(self.root, sharing=False)
         self.assertIsNone(telemetry.consent(self.root))

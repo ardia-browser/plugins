@@ -29,12 +29,13 @@ import {
 } from "./privatefs.ts";
 import type { Target } from "./telemetry.ts";
 import { isDecimal, utf8 } from "./pystr.ts";
+import { FLUSH_ARGUMENT } from "./flush-argument.ts";
 
-const FOLDER = "Telemetry";
-const SPOOL = "cli-queue.jsonl";
-const SPOOL_LOCK = "cli-queue.lock";
+export const FOLDER = "Telemetry";
+export const SPOOL = "cli-queue.jsonl";
+export const SPOOL_LOCK = "cli-queue.lock";
 const FLUSH_CLAIM_LOCK = "cli-flush-claim.lock";
-const FLUSH_STATE = "cli-flush.json";
+export const FLUSH_STATE = "cli-flush.json";
 const LOCAL_FOLDER = "local";
 const LOCAL_PREFIX = "cli-";
 const LOCAL_LOCK = "cli-local.lock";
@@ -42,12 +43,12 @@ const LOCAL_DAYS = 7;
 const MAX_LOCAL_BYTES = 4 * 1024 * 1024;
 const MAX_SPOOL_BYTES = 256 * 1024;
 const COUNT_CHECK_BYTES = 64 * 1024;
-const MAX_EVENTS = 500;
+export const MAX_EVENTS = 500;
 const MAX_LINE_BYTES = 32 * 1024;
-const FLUSH_INTERVAL_S = 60;
+export const FLUSH_INTERVAL_S = 60;
 const NEWLINE = 0x0a;
 
-function openFolder(root: string, create: boolean): Dir {
+export function openFolder(root: string, create: boolean): Dir {
   return openPrivate(root, [FOLDER], create);
 }
 
@@ -154,7 +155,7 @@ function isAsciiSpace(byte: number): boolean {
   return byte === 0x20 || byte === 0x09 || byte === 0x0a || byte === 0x0c || byte === 0x0d;
 }
 
-function readLines(dir: Dir): Buffer[] {
+export function readLines(dir: Dir): Buffer[] {
   let fd: number;
   try {
     fd = openPrivateFile(SPOOL, dir, O_RDONLY);
@@ -180,7 +181,7 @@ function readLines(dir: Dir): Buffer[] {
   return lines;
 }
 
-function newest(lines: Buffer[]): Buffer[] {
+export function newest(lines: Buffer[]): Buffer[] {
   const kept: Buffer[] = [];
   let size = 0;
   for (let index = lines.length - 1; index >= 0; index -= 1) {
@@ -192,7 +193,7 @@ function newest(lines: Buffer[]): Buffer[] {
   return kept.reverse();
 }
 
-function writeLines(dir: Dir, lines: Buffer[]): void {
+export function writeLines(dir: Dir, lines: Buffer[]): void {
   if (lines.length === 0) unlinkQuietly(SPOOL, dir);
   else writePrivate(SPOOL, dir, Buffer.concat(lines));
 }
@@ -287,7 +288,7 @@ function pyInt(value: PyNumber): bigint | undefined {
   return Number.isFinite(value) ? BigInt(Math.trunc(value)) : undefined;
 }
 
-export function startFlush(dir: Dir, target: Target, python: string | null): void {
+export function startFlush(dir: Dir, target: Target, flusher: string = process.execPath): void {
   let claim: number | undefined;
   try {
     claim = takeLock(FLUSH_CLAIM_LOCK, dir);
@@ -322,21 +323,21 @@ export function startFlush(dir: Dir, target: Target, python: string | null): voi
     }
     close(claim);
     claim = undefined;
-    if (python !== null) spawnFlusher(python, target);
+    spawnFlusher(flusher, target);
   } finally {
     close(claim);
     closeDir(dir);
   }
 }
 
-function spawnFlusher(python: string, target: Target): void {
+function spawnFlusher(flusher: string, target: Target): void {
   const config = object([
     ["data_root", target.root],
     ["url", target.url],
     ["environment", target.environment],
   ]);
   try {
-    const child = spawn(python, ["-I", "-c", "from ardia_cli import telemetry; telemetry.flush_main()"], {
+    const child = spawn(flusher, [FLUSH_ARGUMENT], {
       stdio: ["pipe", "ignore", "ignore"],
       cwd: "/",
       detached: true,

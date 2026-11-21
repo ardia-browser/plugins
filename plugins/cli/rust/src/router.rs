@@ -102,6 +102,9 @@ fn command_words(raw: &[OsString]) -> Vec<String> {
     let Some(command) = raw.get(index).and_then(|token| token.to_str()) else {
         return words;
     };
+    if command == "--skill" {
+        return vec!["skills".to_string(), "get".to_string()];
+    }
     words.push(command.to_string());
     if let Some(verb) = raw.get(skip_shared(raw, index + 1)).and_then(|token| token.to_str()) {
         words.push(verb.to_string());
@@ -415,14 +418,30 @@ mod tests {
         let table = Table::parse("tabs rust\ntabs open ts\nskills install ts\ncall * ts\nrun ts\n").unwrap();
         let words = |words: &[&str]| words.iter().map(OsString::from).collect::<Vec<_>>();
         assert_eq!(table.typescript_label(&words(&["tabs", "open", "x"])), Some("tabs open".to_string()));
-        assert_eq!(table.typescript_label(&words(&["--json", "tabs", "--data-dir", "/d", "open"])), Some("tabs open".to_string()));
+        assert_eq!(
+            table.typescript_label(&words(&["--json", "tabs", "--data-dir", "/d", "open"])),
+            Some("tabs open".to_string())
+        );
         assert_eq!(table.typescript_label(&words(&["call", "history.search"])), Some("call *".to_string()));
         assert_eq!(table.typescript_label(&words(&["--timeout=5", "run", "newTab"])), Some("run".to_string()));
-        assert_eq!(table.typescript_label(&words(&["skills", "install", "--auto"])), Some("skills install".to_string()));
+        assert_eq!(
+            table.typescript_label(&words(&["skills", "install", "--auto"])),
+            Some("skills install".to_string())
+        );
         assert_eq!(table.typescript_label(&words(&["skills", "refresh"])), None);
         assert_eq!(table.typescript_label(&words(&["tabs", "close", "x"])), None);
         assert_eq!(table.typescript_label(&words(&["tabs"])), None);
         assert_eq!(table.typescript_label(&words(&["browse", "snapshot"])), None);
+    }
+
+    #[test]
+    fn the_skill_flag_is_skills_get() {
+        let table = Table::parse("skills get ts\n").unwrap();
+        let words = |words: &[&str]| words.iter().map(OsString::from).collect::<Vec<_>>();
+        assert_eq!(table.typescript_label(&words(&["--skill"])), Some("skills get".to_string()));
+        assert_eq!(table.typescript_label(&words(&["--data-dir", "/d", "--skill"])), Some("skills get".to_string()));
+        assert_eq!(table.typescript_label(&words(&["--json", "--skill"])), Some("skills get".to_string()));
+        assert_eq!(table.typescript_label(&words(&["tabs", "--skill"])), None);
     }
 
     #[test]

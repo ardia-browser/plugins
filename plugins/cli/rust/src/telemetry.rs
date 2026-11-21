@@ -210,16 +210,6 @@ fn unreadable_expiry(doc: &Map) -> bool {
         && matches!(doc.get("sharingUntil"), Some(Value::Str(text)) if !matches!(clock::parse_iso(text), clock::Iso::At(_)))
 }
 
-fn expiry_overflows(doc: &Map) -> bool {
-    let Some(Value::BigInt(text)) = doc.get("sharingUntil") else { return false };
-    let floored = if text.starts_with('-') {
-        text.as_str()
-    } else {
-        &text[..text.len().saturating_sub(3)]
-    };
-    doc.get("sharing") == Some(&Value::Bool(true)) && floored.parse::<f64>().is_ok_and(f64::is_infinite)
-}
-
 pub fn consent_unreadable(argv: &[String]) -> bool {
     cli_target(argv)
         .and_then(|target| read_consent(Path::new(&target.root)).ok().flatten())
@@ -232,10 +222,9 @@ pub fn sharing_id(doc: Option<&Map>) -> Option<String> {
         return None;
     }
     if let Some(until) = doc.get("sharingUntil").filter(|until| **until != Value::Null) {
-        if let Some(until) = epoch_seconds(until) {
-            if until <= clock::now() {
-                return None;
-            }
+        match epoch_seconds(until) {
+            Some(until) if until.is_finite() && until > clock::now() => {}
+            _ => return None,
         }
     }
     valid_id(doc.get("installId"))
@@ -285,7 +274,7 @@ fn finish_with(call: &Call, status: i64, crash: Option<i32>, python: Option<&Pat
     let Some(target) = cli_target(&call.argv) else { return };
     let root = PathBuf::from(&target.root);
     let Ok(doc) = read_consent(&root) else { return };
-    if doc.as_ref().is_some_and(|doc| unreadable_expiry(doc) || expiry_overflows(doc)) {
+    if doc.as_ref().is_some_and(unreadable_expiry) {
         return;
     }
     let install_id = sharing_id(doc.as_ref());

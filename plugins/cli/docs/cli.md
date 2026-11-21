@@ -1524,7 +1524,9 @@ two parts with an explicit flush between them gets through; that gap is accepted
 `ardia_cli/telemetry.py` records crash reports and usage only while the app's "Share anonymous crash reports and usage
 stats" is on for the data dir the command resolved (`--data-dir`, else `$ARDIA_DATA_DIR`, else the installed app's):
 `<data dir>/telemetry.json`, the app's own saved choice, must say `"sharing": true` with an `installId` (and, during a
-14-day watch, a `sharingUntil` still in the future). That id is the events' `distinct_id`, so the command's events join
+14-day watch, a `sharingUntil` still in the future: one that isn't a readable time, an epoch number or an ISO 8601
+date, means no consent; `null` or no field means no end). The background flusher checks all of this again itself,
+`DO_NOT_TRACK` and `ARDIA_TELEMETRY` included, before each batch. That id is the events' `distinct_id`, so the command's events join
 the install's. The CLI reads only the fields it needs and ignores the rest, at any `version`, so a newer app format never
 silently stops CLI telemetry. Nothing is sent when the file is missing, unreadable or says sharing is off, with `DO_NOT_TRACK` set (anything but empty, `0` or `false`) or
 `ARDIA_TELEMETRY=0` (or `false`, `off`, `no`), for a command pointed at a test endpoint (`--port`, `--ws`, `--cdp`,
@@ -2630,6 +2632,30 @@ scenarios:
   the 60 s timeout, where Python kills only esbuild itself on the timeout.
 - esbuild's diagnostics that aren't valid UTF-8: Python fails decoding them with a traceback; the native side shows
   them with U+FFFD in place of the bad bytes.
+
+- The telemetry flusher is the TypeScript program itself (started with `--ardia-telemetry-flush`), not the bundled
+  Python. It sends the same OTLP body except that each record's attributes leave out `python_version`, which no longer
+  describes the program; `cli_command` events already say `served_by`. A 3xx answer from the ingest service is a retry,
+  not a redirect to follow, so a spool is never posted anywhere but the configured URL.
+- `ardia feedback` leaves `python_version` out of the report's diagnostics for the same reason. A redirect from the
+  feedback service is reported as `the feedback service answered HTTP 3xx` instead of being followed, so a report and its
+  attachments only ever go to the configured URL. When the network fails, the reason in `Not sent: the network failed
+  (…)` is the runtime's wording (a refused connection still reads `[Errno 61] Connection refused`).
+- argv shapes that make argparse print usage or an error (`--help`, an unknown or abbreviated option, an invalid
+  `--kind`/`--target`/`--days`/`--limit`, positionals on both sides of an option) are handed back to Python, which
+  prints them; the served commands never print argparse's text themselves.
+- The TypeScript flusher uploads only the CLI's own events (`cli_command`, `$exception`) and, in each, only the known
+  fields with values of their kind (fixed names and codes, counts, timings, flags, the exception shapes); anything else
+  in a spooled record is dropped at upload, and a record that isn't one of those events is dropped whole. Python's
+  flusher sends what the spool holds. The TS flusher also notes the events the service took before it rewrites the
+  spool, so a crash in between doesn't send them twice.
+- `ardia skills install --replace` over a folder ardia didn't install overwrites only the files the skill ships and
+  keeps every other file in it (Python deleted the folder first); a linked folder is still replaced by a real one, its
+  target untouched. Every install and refresh is built in a staging folder beside the destination and swapped in whole,
+  marker last, so a failure leaves the old copy as it was, and nothing is done through a symbolic link below the home
+  or project folder (`.agents`, `skills`, …): such a destination is refused or skipped.
+- A cached cua-driver skill (`<CLI home>/cua-driver/<version>/skills`) is used only when its files match the pinned
+  release's hashes; otherwise it's downloaded again. The download is capped in size, expanded size and entries.
 
 ## Linux
 

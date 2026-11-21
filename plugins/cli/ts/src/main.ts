@@ -1,6 +1,7 @@
 import { read, write, writeSync } from "node:fs";
 import { catchInterrupts } from "./control.ts";
 import { interruptsIgnored, LIBC_UNAVAILABLE, LibcUnavailable, loadLibc, watchLifeline, writeWhole } from "./libc.ts";
+import { FLUSH_ARGUMENT, HISTORY_ARGUMENT } from "./flush-argument.ts";
 import { bundledPython, installRoot } from "./install.ts";
 import { abandonedOutput, settleStderr } from "./printable.ts";
 import { HAND_BACK, takeMarker } from "./routed.ts";
@@ -57,6 +58,7 @@ async function serve(argv: string[], python: string | null): Promise<number | un
     if (chosen.kind === "command") return await (await import("./runner.ts")).runCommand(chosen.route.command, argv, python);
     if (chosen.kind === "config") return await (await import("./config-commands.ts")).serve(chosen.command, python);
     if (chosen.kind === "scripts") return await (await import("./scripts/serve.ts")).serveScripts(chosen.args, argv, python);
+    if (chosen.kind === "tools") return await (await import("./serve-command.ts")).serveCommand(chosen.command, argv, python);
     return await serveListing(chosen.what, chosen.listing, argv, python);
   } catch (error) {
     if (error instanceof paths.NeedsPython) return undefined;
@@ -82,8 +84,22 @@ function failWithoutAddon(failure: { fd: number; text: string }, lifeline: numbe
   return new Promise((resolve) => write(failure.fd, failure.text, () => resolve(LIBC_UNAVAILABLE)));
 }
 
+async function runFlusher(): Promise<number> {
+  try {
+    loadLibc();
+  } catch {
+    return 0;
+  }
+  const { FLUSH_DEADLINE_MS, flushMain } = await import("./flush.ts");
+  setTimeout(() => process.exit(0), FLUSH_DEADLINE_MS).unref();
+  await flushMain();
+  process.exit(0);
+}
+
 async function main(words: string[]): Promise<number> {
   if (words[0] === "daemon") process.exit(await (await import("./browse/daemon/main.ts")).daemonMain(words.slice(1)));
+  if (words.length === 1 && words[0] === FLUSH_ARGUMENT) return runFlusher();
+  if (words.length === 1 && words[0] === HISTORY_ARGUMENT) return (await import("./browsing.ts")).historyChild();
   const routed = takeMarker(words);
   if (routed === undefined) {
     try {

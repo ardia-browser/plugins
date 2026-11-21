@@ -15,7 +15,7 @@ import { type Crash, exceptionProperties } from "./crash.ts";
 import { cliVersion, isDevBuild } from "./version.ts";
 
 export const SERVED_BY = "ts";
-const LOGS_URL = "https://ardia.dev/otel/v1/logs";
+export const LOGS_URL = "https://ardia.dev/otel/v1/logs";
 const CONSENT_FILE = "telemetry.json";
 const MAX_CONSENT_BYTES = 64 * 1024;
 const LOCAL_ONLY_ID = "local";
@@ -77,7 +77,7 @@ function logsUrl(): string | undefined {
   return isDevBuild() ? undefined : LOGS_URL;
 }
 
-function environmentFor(root: string): string {
+export function environmentFor(root: string): string {
   if (isDevBuild()) return "dev";
   return realpath(installedDataDir()) === realpath(root) ? "production" : "test";
 }
@@ -132,11 +132,9 @@ export function readConsent(root: string): JsonObject | undefined {
 const MS_EPOCH_FLOOR = 100_000_000_000n;
 
 function bigintSeconds(value: bigint): number {
-  return value > MS_EPOCH_FLOOR ? Number(value) / 1000 : Number(value);
-}
-
-function bigintOverflowsFloat(value: bigint): boolean {
-  return !Number.isFinite(value > MS_EPOCH_FLOOR ? Number(value / 1000n) : Number(value));
+  if (value <= MS_EPOCH_FLOOR) return Number(value);
+  const scaled = Number(value) / 1000;
+  return Number.isFinite(scaled) ? scaled : Number(value / 1000n);
 }
 
 function epochSeconds(value: Value | undefined): number | undefined {
@@ -161,11 +159,6 @@ function unreadableExpiry(doc: JsonObject): boolean {
   return doc.get("sharing") === true && typeof until === "string" && typeof parseIso(until) !== "object";
 }
 
-function expiryOverflows(doc: JsonObject): boolean {
-  const until = doc.get("sharingUntil");
-  return doc.get("sharing") === true && typeof until === "bigint" && bigintOverflowsFloat(until);
-}
-
 export function consentUnreadable(argv: string[]): boolean {
   const target = cliTarget(argv);
   try {
@@ -182,9 +175,14 @@ export function sharingId(doc: JsonObject | undefined): string | undefined {
   const until = doc.get("sharingUntil");
   if (until !== undefined && until !== null) {
     const seconds = epochSeconds(until);
-    if (seconds !== undefined && seconds <= now()) return undefined;
+    if (seconds === undefined || !Number.isFinite(seconds) || seconds <= now()) return undefined;
   }
   return validId(doc.get("installId"));
+}
+
+export function consentedInstall(root: string): string | undefined {
+  if (optedOut()) return undefined;
+  return sharingId(readConsent(root));
 }
 
 export function uuid7(): string {
@@ -196,7 +194,7 @@ export function uuid7(): string {
   return `${text.slice(0, 8)}-${text.slice(8, 12)}-${text.slice(12, 16)}-${text.slice(16, 20)}-${text.slice(20)}`;
 }
 
-function sessionId(doc: JsonObject | undefined): string {
+export function sessionId(doc: JsonObject | undefined): string {
   return (doc?.get("sessionOpen") === true ? validId(doc.get("sessionId")) : undefined) ?? uuid7();
 }
 
@@ -291,8 +289,7 @@ function record(call: Call, status: number | bigint, python: string | null, cras
   const target = cliTarget(call.argv);
   if (target === undefined) return;
   const doc = readConsent(target.root);
-  if (doc !== undefined && (unreadableExpiry(doc) || expiryOverflows(doc))) return;
-  const installId = sharingId(doc);
+  const installId = optedOut() ? undefined : sharingId(doc);
   const distinctId = installId ?? LOCAL_ONLY_ID;
   const session = sessionId(doc);
   const shaped: [string, [string, Value][]][] = [];
@@ -308,7 +305,7 @@ function record(call: Call, status: number | bigint, python: string | null, cras
     return;
   }
   const spooled = appendToSpool(target.root, records);
-  if (spooled !== undefined) startFlush(spooled, target, python);
+  if (spooled !== undefined) startFlush(spooled, target);
 }
 
 const EXCEPTION_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,60}$/;
