@@ -5,6 +5,7 @@ import { errnoOf, home, join, strerror } from "./paths.ts";
 import { reprStr } from "./py.ts";
 import { codePoints, utf8 } from "./pystr.ts";
 import { CUA_VERSION, Refused, skillPack } from "./cua-skill.ts";
+import { chainIsSafe, commitPack, replaceFile, safeParent, SkillError } from "./skill-commit.ts";
 import { SKILL_FILES, SKILL_HASHES } from "./skill-files.ts";
 import { cliHome } from "./usage.ts";
 import { cliVersion } from "./version.ts";
@@ -29,7 +30,6 @@ const AGENT_HOMES: [string, string][] = [
 
 export type Lines = { status: number; out: string[]; outputChars?: number; counts?: [string, number][] };
 
-class SkillError extends Error {}
 
 function osError(error: unknown): string {
   if (error instanceof SkillError || error instanceof Refused) return error.message;
@@ -196,8 +196,10 @@ function sameHashes(found: Map<string, string>, version: JsonObject): boolean {
   return true;
 }
 
+const SKILL_DIRS = Object.values(TARGETS).flat();
+
 function ownedFiles(folder: string, adopt = false): string[] | undefined {
-  if (isLink(folder) || !isDir(folder)) return undefined;
+  if (!chainIsSafe(folder, SKILL_DIRS) || isLink(folder) || !isDir(folder)) return undefined;
   const marked = markedFiles(folder);
   if (marked !== undefined || !adopt) return marked;
   const files = plainFiles(folder);
@@ -211,72 +213,28 @@ function ownedFiles(folder: string, adopt = false): string[] | undefined {
   return legacyVersions().some((version) => sameHashes(hashes, version)) ? [...files].sort() : undefined;
 }
 
-function realParent(folder: string, name: string): string {
-  let at = folder;
-  for (const part of name.split("/").slice(0, -1)) {
-    at = join(at, part);
-    if (isLink(at) || (exists(at) && !isDir(at))) throw new SkillError(`${at} isn't a plain folder; move it away first`);
-    if (!exists(at)) mkdirSync(at);
-  }
-  return at;
-}
-
-function writeFile(folder: string, name: string, data: Buffer): void {
-  const at = realParent(folder, name);
-  const staging = join(at, `.ardia-skill-${randomBytes(6).toString("base64url")}`);
-  const fd = openSync(staging, "wx", 0o600);
-  try {
-    try {
-      writeFileSync(fd, data);
-    } finally {
-      closeSync(fd);
-    }
-    chmodSync(staging, 0o644);
-    renameSync(staging, join(at, name.split("/").at(-1) as string));
-  } catch (error) {
-    try {
-      unlinkSync(staging);
-    } catch {}
-    throw error;
-  }
-}
-
-function removeFile(folder: string, name: string): void {
-  let at = folder;
-  for (const part of name.split("/").slice(0, -1)) {
-    at = join(at, part);
-    if (isLink(at) || !isDir(at)) return;
-  }
-  const path = join(at, name.split("/").at(-1) as string);
-  if (!isLink(path) && isFile(path)) unlinkSync(path);
-}
-
 function markerText(data: JsonObject): Buffer {
   return utf8(`${dumps(data, "indented", true)}\n`);
 }
 
 function writePack(folder: string, previous: string[], pack: Map<string, Buffer>, marker: JsonObject): void {
   const files = [...pack.keys()].sort();
-  for (const name of files) writeFile(folder, name, pack.get(name) as Buffer);
-  for (const name of [...new Set(previous)].filter((name) => !files.includes(name)).sort()) removeFile(folder, name);
   const written: JsonObject = new Map(marker);
   written.set("files", files);
-  writeFile(folder, MARKER, markerText(written));
+  commitPack(folder, SKILL_DIRS, previous, files.map((name) => [name, pack.get(name) as Buffer]), MARKER, markerText(written));
 }
 
 function installInto(folder: string, companions: Value | undefined, adopt = false, replace = false): void {
+  safeParent(folder, SKILL_DIRS, true);
   let previous: string[] = [];
   let chosen = companions;
   const owned = present(folder) ? ownedFiles(folder, adopt) : undefined;
   if (owned !== undefined) {
     previous = owned;
     if (chosen === undefined) chosen = readMarker(folder)?.get("companions");
-  } else if (present(folder)) {
-    if (!replace) throw new SkillError(`${folder} exists and isn't a copy ardia installed; move it away, or replace that folder with --replace`);
-    if (isLink(folder) || !isDir(folder)) unlinkSync(folder);
-    else rmSync(folder, { recursive: true, force: true });
-    mkdirSync(folder);
-  } else mkdirSync(folder, { recursive: true });
+  } else if (present(folder) && !replace) {
+    throw new SkillError(`${folder} exists and isn't a copy ardia installed; move it away, or replace that folder with --replace`);
+  }
   const marker: JsonObject = object([
     ["vendor", "ardia"],
     ["version", cliVersion()],
@@ -289,7 +247,7 @@ function noteCompanions(folder: string, names: string[]): void {
   const data = readMarker(folder);
   if (data === undefined) return;
   data.set("companions", names);
-  writeFile(folder, MARKER, markerText(data));
+  replaceFile(folder, SKILL_DIRS, MARKER, markerText(data));
 }
 
 function companionFolder(folder: string): string {
@@ -298,13 +256,13 @@ function companionFolder(folder: string): string {
 
 async function installCompanion(folder: string): Promise<string> {
   let previous: string[] = [];
+  safeParent(folder, SKILL_DIRS, true);
   if (present(folder)) {
     const owned = isLink(folder) || !isDir(folder) ? undefined : markedFiles(folder, CUA_SKILL);
     if (owned === undefined) return `kept ${folder}: a ${CUA_SKILL} skill is already there and ardia didn't install it (cua-driver's own installer?)`;
     previous = owned;
   }
   const pack = await skillPack();
-  if (!exists(folder)) mkdirSync(folder, { recursive: true });
   const marker = object([
     ["vendor", "ardia"],
     ["skill", CUA_SKILL],

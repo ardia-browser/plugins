@@ -14,6 +14,20 @@ const SKILLS_ASSET = `cua-driver-rs-v${CUA_VERSION}-skills.tar.gz`;
 const SKILLS_TOP = `cua-driver-rs-v${CUA_VERSION}-skills`;
 const OTHER_PLATFORM_DOCS = ["LINUX.md", "WINDOWS.md"];
 const DOWNLOAD_TIMEOUT_MS = 60_000;
+const MAX_ARCHIVE_BYTES = 4 * 1024 * 1024;
+const MAX_EXPANDED_BYTES = 16 * 1024 * 1024;
+const MAX_ENTRIES = 256;
+const CACHED_SHA256: Readonly<Record<string, string>> = {
+  "BROWSER.md": "b008c6bfef08beaf030304adee72a297ddc0df436af32ee8fa643c0dff77efbf",
+  "EMBEDDING.md": "c015a13bfbd6a5102a4984091824215e5e84a868c6f99e504fee794d0a5a3a17",
+  "MACOS.md": "a02c45ab38daeb72e39ba504db2a43f8243146bcde2b957e38139cb4a525d2d4",
+  "README.md": "7b561c189ec2f2c38eed3bc7981935ba45c0a3ae03db4788565e3528efc19e3b",
+  "RECORDING.md": "6d1d5f8ff192f37bd9c67efcda59154f3242b0fae72e86ba7e2ba5a4899fd248",
+  "RUNTIME.md": "b62dd42b3628792bc30e17b8052ece4b8442160d4e71893e927d0d3d996c6509",
+  "SKILL.md": "f771345ea9656ce7e2ace7a5940ef325e8eea3e4eada316cbeeea62747d540fd",
+  "VISUAL.md": "66aa0fadd643ee4cd0deda751af1f3ebc2cec0b77607eec61c9b2a4ee7d4a256",
+  "WORKFLOW.md": "1e3d2ed4751af6983ce0858d176db0acb977fe0cf02f3e38bcad5a3568b91be8",
+};
 const MAX_REDIRECTS = 10;
 
 export class Refused extends Error {}
@@ -49,7 +63,20 @@ async function download(url: string): Promise<Buffer> {
       await response.body?.cancel().catch(() => {});
       throw new Error(`HTTP Error ${response.status}: ${response.statusText}`);
     }
-    return Buffer.from(await response.arrayBuffer());
+    const chunks: Buffer[] = [];
+    let total = 0;
+    const reader = response.body?.getReader();
+    while (reader !== undefined) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.length;
+      if (total > MAX_ARCHIVE_BYTES) {
+        await reader.cancel().catch(() => {});
+        throw new Error(`the download is over ${MAX_ARCHIVE_BYTES} bytes`);
+      }
+      chunks.push(Buffer.from(value));
+    }
+    return Buffer.concat(chunks);
   }
 }
 
@@ -71,7 +98,8 @@ async function fetchVerified(asset: string, expected: string): Promise<Buffer> {
 function extract(archive: Buffer, name: string, top: string, dest: string, keep: (inner: string) => boolean): string[] {
   let entries;
   try {
-    entries = readTar(gunzipSync(archive));
+    entries = readTar(gunzipSync(archive, { maxOutputLength: MAX_EXPANDED_BYTES }));
+    if (entries.length > MAX_ENTRIES) throw new TarError(`more than ${MAX_ENTRIES} entries`);
   } catch (error) {
     if (error instanceof TarError || error instanceof Error) throw new Refused(`couldn't read ${name}: ${error.message}`);
     throw error;
@@ -115,10 +143,23 @@ function isFile(path: string): boolean {
   }
 }
 
+function cacheIsIntact(folder: string): boolean {
+  const kept = readdirSync(folder).filter((name) => keepsSkillFile(name));
+  if (kept.length !== Object.keys(CACHED_SHA256).length) return false;
+  return kept.every((name) => {
+    try {
+      const info = lstatSync(join(folder, name));
+      return info.isFile() && createHash("sha256").update(readFileSync(join(folder, name))).digest("hex") === CACHED_SHA256[name];
+    } catch {
+      return false;
+    }
+  });
+}
+
 export async function skillPack(): Promise<Map<string, Buffer>> {
   const home = versionHome();
   const folder = join(home, "skills");
-  if (!(isRealDir(folder) && isFile(join(folder, "SKILL.md")))) {
+  if (!(isRealDir(folder) && cacheIsIntact(folder))) {
     mkdirSync(home, { recursive: true });
     const work = mkdtempSync(join(home, ".skills-"));
     try {
@@ -127,6 +168,7 @@ export async function skillPack(): Promise<Map<string, Buffer>> {
       mkdirSync(staged);
       const names = extract(archive, SKILLS_ASSET, SKILLS_TOP, staged, keepsSkillFile);
       if (!names.includes("SKILL.md")) throw new Refused(`${SKILLS_ASSET} has no SKILL.md`);
+      if (!cacheIsIntact(staged)) throw new Refused(`${SKILLS_ASSET} doesn't hold the files this ardia pins`);
       let existing;
       try {
         existing = lstatSync(folder);

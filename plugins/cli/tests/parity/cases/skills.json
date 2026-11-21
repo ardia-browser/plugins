@@ -66,9 +66,39 @@
    "install"
   ],
   "files": {
-   "cli-home/cua-driver/0.38.0/skills/SKILL.md": "---\nname: cua-driver\n---\nDrive apps.\n",
-   "cli-home/cua-driver/0.38.0/skills/MACOS.md": "mac\n",
-   "cli-home/cua-driver/0.38.0/skills/LINUX.md": "linux\n"
+   "cli-home/cua-driver/0.38.0/skills/BROWSER.md": {
+    "blob": "b008c6bfef08beaf030304adee72a297ddc0df436af32ee8fa643c0dff77efbf"
+   },
+   "cli-home/cua-driver/0.38.0/skills/EMBEDDING.md": {
+    "blob": "c015a13bfbd6a5102a4984091824215e5e84a868c6f99e504fee794d0a5a3a17"
+   },
+   "cli-home/cua-driver/0.38.0/skills/LINUX.md": {
+    "blob": "286f3eae22b70c1dcba90ebb1d0c789546ab5f819baeb3f53c94b2b6588afa7b"
+   },
+   "cli-home/cua-driver/0.38.0/skills/MACOS.md": {
+    "blob": "a02c45ab38daeb72e39ba504db2a43f8243146bcde2b957e38139cb4a525d2d4"
+   },
+   "cli-home/cua-driver/0.38.0/skills/README.md": {
+    "blob": "7b561c189ec2f2c38eed3bc7981935ba45c0a3ae03db4788565e3528efc19e3b"
+   },
+   "cli-home/cua-driver/0.38.0/skills/RECORDING.md": {
+    "blob": "6d1d5f8ff192f37bd9c67efcda59154f3242b0fae72e86ba7e2ba5a4899fd248"
+   },
+   "cli-home/cua-driver/0.38.0/skills/RUNTIME.md": {
+    "blob": "b62dd42b3628792bc30e17b8052ece4b8442160d4e71893e927d0d3d996c6509"
+   },
+   "cli-home/cua-driver/0.38.0/skills/SKILL.md": {
+    "blob": "f771345ea9656ce7e2ace7a5940ef325e8eea3e4eada316cbeeea62747d540fd"
+   },
+   "cli-home/cua-driver/0.38.0/skills/VISUAL.md": {
+    "blob": "66aa0fadd643ee4cd0deda751af1f3ebc2cec0b77607eec61c9b2a4ee7d4a256"
+   },
+   "cli-home/cua-driver/0.38.0/skills/WINDOWS.md": {
+    "blob": "5f34a974d2463e371a1c78133dcae330fa59e27b31af3bf1896348cadcc2995b"
+   },
+   "cli-home/cua-driver/0.38.0/skills/WORKFLOW.md": {
+    "blob": "1e3d2ed4751af6983ce0858d176db0acb977fe0cf02f3e38bcad5a3568b91be8"
+   }
   }
  },
  {
@@ -158,10 +188,40 @@
    "install"
   ],
   "files": {
-   "cli-home/cua-driver/0.38.0/skills/SKILL.md": "---\nname: cua-driver\n---\nDrive apps.\n",
-   "cli-home/cua-driver/0.38.0/skills/MACOS.md": "mac\n",
-   "cli-home/cua-driver/0.38.0/skills/LINUX.md": "linux\n",
-   "home/.agents/skills/cua-driver/SKILL.md": "theirs\n"
+   "home/.agents/skills/cua-driver/SKILL.md": "theirs\n",
+   "cli-home/cua-driver/0.38.0/skills/BROWSER.md": {
+    "blob": "b008c6bfef08beaf030304adee72a297ddc0df436af32ee8fa643c0dff77efbf"
+   },
+   "cli-home/cua-driver/0.38.0/skills/EMBEDDING.md": {
+    "blob": "c015a13bfbd6a5102a4984091824215e5e84a868c6f99e504fee794d0a5a3a17"
+   },
+   "cli-home/cua-driver/0.38.0/skills/LINUX.md": {
+    "blob": "286f3eae22b70c1dcba90ebb1d0c789546ab5f819baeb3f53c94b2b6588afa7b"
+   },
+   "cli-home/cua-driver/0.38.0/skills/MACOS.md": {
+    "blob": "a02c45ab38daeb72e39ba504db2a43f8243146bcde2b957e38139cb4a525d2d4"
+   },
+   "cli-home/cua-driver/0.38.0/skills/README.md": {
+    "blob": "7b561c189ec2f2c38eed3bc7981935ba45c0a3ae03db4788565e3528efc19e3b"
+   },
+   "cli-home/cua-driver/0.38.0/skills/RECORDING.md": {
+    "blob": "6d1d5f8ff192f37bd9c67efcda59154f3242b0fae72e86ba7e2ba5a4899fd248"
+   },
+   "cli-home/cua-driver/0.38.0/skills/RUNTIME.md": {
+    "blob": "b62dd42b3628792bc30e17b8052ece4b8442160d4e71893e927d0d3d996c6509"
+   },
+   "cli-home/cua-driver/0.38.0/skills/SKILL.md": {
+    "blob": "f771345ea9656ce7e2ace7a5940ef325e8eea3e4eada316cbeeea62747d540fd"
+   },
+   "cli-home/cua-driver/0.38.0/skills/VISUAL.md": {
+    "blob": "66aa0fadd643ee4cd0deda751af1f3ebc2cec0b77607eec61c9b2a4ee7d4a256"
+   },
+   "cli-home/cua-driver/0.38.0/skills/WINDOWS.md": {
+    "blob": "5f34a974d2463e371a1c78133dcae330fa59e27b31af3bf1896348cadcc2995b"
+   },
+   "cli-home/cua-driver/0.38.0/skills/WORKFLOW.md": {
+    "blob": "1e3d2ed4751af6983ce0858d176db0acb977fe0cf02f3e38bcad5a3568b91be8"
+   }
   }
  },
  {
@@ -174,11 +234,41 @@
    "cursor"
   ],
   "files": {
-   "cli-home/cua-driver/0.38.0/skills/SKILL.md": "---\nname: cua-driver\n---\nDrive apps.\n",
-   "cli-home/cua-driver/0.38.0/skills/MACOS.md": "mac\n",
-   "cli-home/cua-driver/0.38.0/skills/LINUX.md": "linux\n",
    "home/.cursor/skills/cua-driver/.ardia-skill": "{\"vendor\": \"ardia\", \"skill\": \"cua-driver\", \"files\": [\"SKILL.md\", \"OLD.md\"]}",
-   "home/.cursor/skills/cua-driver/OLD.md": "old\n"
+   "home/.cursor/skills/cua-driver/OLD.md": "old\n",
+   "cli-home/cua-driver/0.38.0/skills/BROWSER.md": {
+    "blob": "b008c6bfef08beaf030304adee72a297ddc0df436af32ee8fa643c0dff77efbf"
+   },
+   "cli-home/cua-driver/0.38.0/skills/EMBEDDING.md": {
+    "blob": "c015a13bfbd6a5102a4984091824215e5e84a868c6f99e504fee794d0a5a3a17"
+   },
+   "cli-home/cua-driver/0.38.0/skills/LINUX.md": {
+    "blob": "286f3eae22b70c1dcba90ebb1d0c789546ab5f819baeb3f53c94b2b6588afa7b"
+   },
+   "cli-home/cua-driver/0.38.0/skills/MACOS.md": {
+    "blob": "a02c45ab38daeb72e39ba504db2a43f8243146bcde2b957e38139cb4a525d2d4"
+   },
+   "cli-home/cua-driver/0.38.0/skills/README.md": {
+    "blob": "7b561c189ec2f2c38eed3bc7981935ba45c0a3ae03db4788565e3528efc19e3b"
+   },
+   "cli-home/cua-driver/0.38.0/skills/RECORDING.md": {
+    "blob": "6d1d5f8ff192f37bd9c67efcda59154f3242b0fae72e86ba7e2ba5a4899fd248"
+   },
+   "cli-home/cua-driver/0.38.0/skills/RUNTIME.md": {
+    "blob": "b62dd42b3628792bc30e17b8052ece4b8442160d4e71893e927d0d3d996c6509"
+   },
+   "cli-home/cua-driver/0.38.0/skills/SKILL.md": {
+    "blob": "f771345ea9656ce7e2ace7a5940ef325e8eea3e4eada316cbeeea62747d540fd"
+   },
+   "cli-home/cua-driver/0.38.0/skills/VISUAL.md": {
+    "blob": "66aa0fadd643ee4cd0deda751af1f3ebc2cec0b77607eec61c9b2a4ee7d4a256"
+   },
+   "cli-home/cua-driver/0.38.0/skills/WINDOWS.md": {
+    "blob": "5f34a974d2463e371a1c78133dcae330fa59e27b31af3bf1896348cadcc2995b"
+   },
+   "cli-home/cua-driver/0.38.0/skills/WORKFLOW.md": {
+    "blob": "1e3d2ed4751af6983ce0858d176db0acb977fe0cf02f3e38bcad5a3568b91be8"
+   }
   }
  },
  {
@@ -200,16 +290,46 @@
    "--auto"
   ],
   "files": {
-   "cli-home/cua-driver/0.38.0/skills/SKILL.md": "---\nname: cua-driver\n---\nDrive apps.\n",
-   "cli-home/cua-driver/0.38.0/skills/MACOS.md": "mac\n",
-   "cli-home/cua-driver/0.38.0/skills/LINUX.md": "linux\n",
    "home/.claude": {
     "dir": true
    },
    "home/.cursor": {
     "dir": true
    },
-   "home/.cursor/skills/ardia/SKILL.md": "theirs\n"
+   "home/.cursor/skills/ardia/SKILL.md": "theirs\n",
+   "cli-home/cua-driver/0.38.0/skills/BROWSER.md": {
+    "blob": "b008c6bfef08beaf030304adee72a297ddc0df436af32ee8fa643c0dff77efbf"
+   },
+   "cli-home/cua-driver/0.38.0/skills/EMBEDDING.md": {
+    "blob": "c015a13bfbd6a5102a4984091824215e5e84a868c6f99e504fee794d0a5a3a17"
+   },
+   "cli-home/cua-driver/0.38.0/skills/LINUX.md": {
+    "blob": "286f3eae22b70c1dcba90ebb1d0c789546ab5f819baeb3f53c94b2b6588afa7b"
+   },
+   "cli-home/cua-driver/0.38.0/skills/MACOS.md": {
+    "blob": "a02c45ab38daeb72e39ba504db2a43f8243146bcde2b957e38139cb4a525d2d4"
+   },
+   "cli-home/cua-driver/0.38.0/skills/README.md": {
+    "blob": "7b561c189ec2f2c38eed3bc7981935ba45c0a3ae03db4788565e3528efc19e3b"
+   },
+   "cli-home/cua-driver/0.38.0/skills/RECORDING.md": {
+    "blob": "6d1d5f8ff192f37bd9c67efcda59154f3242b0fae72e86ba7e2ba5a4899fd248"
+   },
+   "cli-home/cua-driver/0.38.0/skills/RUNTIME.md": {
+    "blob": "b62dd42b3628792bc30e17b8052ece4b8442160d4e71893e927d0d3d996c6509"
+   },
+   "cli-home/cua-driver/0.38.0/skills/SKILL.md": {
+    "blob": "f771345ea9656ce7e2ace7a5940ef325e8eea3e4eada316cbeeea62747d540fd"
+   },
+   "cli-home/cua-driver/0.38.0/skills/VISUAL.md": {
+    "blob": "66aa0fadd643ee4cd0deda751af1f3ebc2cec0b77607eec61c9b2a4ee7d4a256"
+   },
+   "cli-home/cua-driver/0.38.0/skills/WINDOWS.md": {
+    "blob": "5f34a974d2463e371a1c78133dcae330fa59e27b31af3bf1896348cadcc2995b"
+   },
+   "cli-home/cua-driver/0.38.0/skills/WORKFLOW.md": {
+    "blob": "1e3d2ed4751af6983ce0858d176db0acb977fe0cf02f3e38bcad5a3568b91be8"
+   }
   }
  },
  {
@@ -246,9 +366,6 @@
    "refresh"
   ],
   "files": {
-   "cli-home/cua-driver/0.38.0/skills/SKILL.md": "---\nname: cua-driver\n---\nDrive apps.\n",
-   "cli-home/cua-driver/0.38.0/skills/MACOS.md": "mac\n",
-   "cli-home/cua-driver/0.38.0/skills/LINUX.md": "linux\n",
    "home/.claude/skills/ardia/.ardia-skill": "{\n  \"vendor\": \"ardia\",\n  \"version\": \"0.0.1\",\n  \"files\": [\n    \"SKILL.md\",\n    \"gone.md\"\n  ],\n  \"companions\": []\n}\n",
    "home/.claude/skills/ardia/gone.md": "x\n",
    "home/.cursor/skills/ardia/SKILL.md": "theirs\n",
@@ -256,7 +373,40 @@
    "cli-home/skills.json": {
     "text": "{\"folders\": [\"{outside}/proj/.claude/skills/ardia\", \"relative/x\", 5]}"
    },
-   "outside/proj/.claude/skills/ardia/.ardia-skill": "{\n  \"vendor\": \"ardia\",\n  \"version\": \"0.0.1\",\n  \"files\": [\n    \"SKILL.md\"\n  ],\n  \"companions\": [\n    \"cua-driver\"\n  ]\n}\n"
+   "outside/proj/.claude/skills/ardia/.ardia-skill": "{\n  \"vendor\": \"ardia\",\n  \"version\": \"0.0.1\",\n  \"files\": [\n    \"SKILL.md\"\n  ],\n  \"companions\": [\n    \"cua-driver\"\n  ]\n}\n",
+   "cli-home/cua-driver/0.38.0/skills/BROWSER.md": {
+    "blob": "b008c6bfef08beaf030304adee72a297ddc0df436af32ee8fa643c0dff77efbf"
+   },
+   "cli-home/cua-driver/0.38.0/skills/EMBEDDING.md": {
+    "blob": "c015a13bfbd6a5102a4984091824215e5e84a868c6f99e504fee794d0a5a3a17"
+   },
+   "cli-home/cua-driver/0.38.0/skills/LINUX.md": {
+    "blob": "286f3eae22b70c1dcba90ebb1d0c789546ab5f819baeb3f53c94b2b6588afa7b"
+   },
+   "cli-home/cua-driver/0.38.0/skills/MACOS.md": {
+    "blob": "a02c45ab38daeb72e39ba504db2a43f8243146bcde2b957e38139cb4a525d2d4"
+   },
+   "cli-home/cua-driver/0.38.0/skills/README.md": {
+    "blob": "7b561c189ec2f2c38eed3bc7981935ba45c0a3ae03db4788565e3528efc19e3b"
+   },
+   "cli-home/cua-driver/0.38.0/skills/RECORDING.md": {
+    "blob": "6d1d5f8ff192f37bd9c67efcda59154f3242b0fae72e86ba7e2ba5a4899fd248"
+   },
+   "cli-home/cua-driver/0.38.0/skills/RUNTIME.md": {
+    "blob": "b62dd42b3628792bc30e17b8052ece4b8442160d4e71893e927d0d3d996c6509"
+   },
+   "cli-home/cua-driver/0.38.0/skills/SKILL.md": {
+    "blob": "f771345ea9656ce7e2ace7a5940ef325e8eea3e4eada316cbeeea62747d540fd"
+   },
+   "cli-home/cua-driver/0.38.0/skills/VISUAL.md": {
+    "blob": "66aa0fadd643ee4cd0deda751af1f3ebc2cec0b77607eec61c9b2a4ee7d4a256"
+   },
+   "cli-home/cua-driver/0.38.0/skills/WINDOWS.md": {
+    "blob": "5f34a974d2463e371a1c78133dcae330fa59e27b31af3bf1896348cadcc2995b"
+   },
+   "cli-home/cua-driver/0.38.0/skills/WORKFLOW.md": {
+    "blob": "1e3d2ed4751af6983ce0858d176db0acb977fe0cf02f3e38bcad5a3568b91be8"
+   }
   }
  },
  {
