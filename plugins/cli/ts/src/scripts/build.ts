@@ -6,13 +6,15 @@ import { parseText, type Value } from "../json.ts";
 import { codeOf, envSet, errnoOf, expandUser, home, purePath, realpath, strerror } from "../paths.ts";
 import { pyStrip, splitlines } from "../pylib/str.ts";
 import { Interrupted } from "./output.ts";
-import { runCaptured, Timeout } from "./run.ts";
+import { run, RunTimedOut, SpawnFailed } from "../browse/auth/run.ts";
+import { Cancelled, withSignal } from "../browse/cdp/cancel.ts";
 import { displayPath, type RawSourceMap } from "./sourcemap.ts";
 import { type Meta, fileName, parseMeta, ScriptError } from "./userscript.ts";
 
 export const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".css"];
 const CHROME_TARGET = "chrome130";
 const ESBUILD_PACKAGE = process.platform === "linux" ? "linux-x64" : "darwin-arm64";
+const STOP_POLL_MS = 50;
 const ESBUILD_TIMEOUT_MS = 60_000;
 
 export type Build = { meta: Meta; source: string; path: string; js: string; sourcemap: RawSourceMap | null; warnings: string[] };
@@ -207,6 +209,19 @@ function inputNames(text: string): string[] {
   return inputs instanceof Map ? [...inputs.keys()] : [];
 }
 
+async function esbuildRun(command: string[], cwd: string, stopped: () => boolean): Promise<{ code: number; stderr: string }> {
+  const controller = new AbortController();
+  const watch = setInterval(() => {
+    if (stopped()) controller.abort();
+  }, STOP_POLL_MS);
+  try {
+    const ran = await withSignal(controller.signal, () => run(command, { cwd, timeout: ESBUILD_TIMEOUT_MS / 1000 }));
+    return { code: ran.code, stderr: ran.stderr.toString("utf8") };
+  } finally {
+    clearInterval(watch);
+  }
+}
+
 export async function build(given: string, sourcemap = false, dataDirs: readonly string[] = [], stopped: () => boolean = () => false): Promise<Build> {
   const path = purePath(given);
   const source = readSource(path);
@@ -224,17 +239,17 @@ export async function build(given: string, sourcemap = false, dataDirs: readonly
       "--log-level=warning", "--color=false", "--tsconfig-raw={}", `--metafile=${metafile}`, `--outfile=${out}`,
     ];
     if (sourcemap) command.push("--sourcemap=external");
-    let done: Awaited<ReturnType<typeof runCaptured>>;
+    let done: { code: number; stderr: string };
     try {
-      done = await runCaptured(command, { cwd: parentDir(entry), timeoutMs: ESBUILD_TIMEOUT_MS, stopped });
+      done = await esbuildRun(command, parentDir(entry), stopped);
     } catch (error) {
-      if (error instanceof Interrupted) throw error;
-      if (error instanceof Timeout) throw new ScriptError("esbuild took over 60 s");
-      const code = errnoOf(error);
-      throw new ScriptError(`can't run esbuild (${code ? strerror(code) : (codeOf(error) ?? String(error))})`);
+      if (error instanceof Cancelled) throw new Interrupted();
+      if (error instanceof RunTimedOut) throw new ScriptError("esbuild took over 60 s");
+      const reason = error instanceof SpawnFailed ? error.strerror : (codeOf(error) ?? String(error));
+      throw new ScriptError(`can't run esbuild (${reason})`);
     }
     const messages = pyStrip(done.stderr);
-    if (done.status !== 0) throw new ScriptError(messages ? `esbuild couldn't build ${path}:\n${messages}` : `esbuild couldn't build ${path}`);
+    if (done.code !== 0) throw new ScriptError(messages ? `esbuild couldn't build ${path}:\n${messages}` : `esbuild couldn't build ${path}`);
     let inputs: string[];
     try {
       inputs = inputNames(readText(metafile));

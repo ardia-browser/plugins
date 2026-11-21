@@ -2,7 +2,7 @@ import fs from "node:fs";
 import http from "node:http";
 import { constants } from "node:os";
 import { dataRoot, NOT_REACHABLE } from "../control.ts";
-import { parseText } from "../json.ts";
+import { parse, parseText } from "../json.ts";
 import { LINUX } from "../paths.ts";
 import { addSecret, redact } from "../redact.ts";
 import { parseQsl, quote, urlsplit } from "../pylib/urllib.ts";
@@ -15,8 +15,8 @@ import { reprText } from "../pylib/str.ts";
 import { decimalValue } from "../pylib/unicode.ts";
 
 export const CONTROL_FILE = "ArdiaControl.json";
-const BROWSER_PATH = /^\/devtools\/browser\/[0-9A-Za-z-]{1,128}$/;
-const TOKEN = /^[\x21-\x7e]{16,1024}$/;
+const BROWSER_PATH = /^\/devtools\/browser\/[0-9A-Za-z-]{1,128}\n?$/;
+const TOKEN = /^[\x21-\x7e]{16,1024}\n?$/;
 const MAX_CONTROL_FILE = 64 * 1024;
 const PORT_TIMEOUT_MS = 3000;
 const { O_RDONLY, O_NOFOLLOW, O_NONBLOCK } = fs.constants;
@@ -162,6 +162,16 @@ function alive(pid: number): boolean {
   }
 }
 
+function pyInt(value: unknown): bigint | undefined {
+  if (typeof value === "bigint") return value;
+  if (typeof value === "boolean") return value ? 1n : 0n;
+  return undefined;
+}
+
+function pyIntText(value: unknown): string {
+  return typeof value === "boolean" ? (value ? "True" : "False") : String(value);
+}
+
 export function fromControlFile(file: string): Endpoint {
   const label = file.slice(file.lastIndexOf("/") + 1);
   let fd: number;
@@ -184,12 +194,7 @@ export function fromControlFile(file: string): Endpoint {
   } finally {
     closeFd(fd);
   }
-  let control;
-  try {
-    control = parseText(new TextDecoder("utf-8", { fatal: true }).decode(raw));
-  } catch {
-    control = undefined;
-  }
+  const control = parse(raw, Number.POSITIVE_INFINITY);
   if (control === undefined) throw new EndpointError(`${NOT_REACHABLE} (${label} isn't valid JSON)`);
   if (!(control instanceof Map)) throw new EndpointError(`${NOT_REACHABLE} (${label} isn't valid)`);
   const port = control.get("port");
@@ -197,18 +202,20 @@ export function fromControlFile(file: string): Endpoint {
   const token = control.get("token");
   const pid = control.get("pid");
   const generation = control.get("generation");
-  if (!(typeof port === "bigint" && port > 0n && port < 65536n)) throw new EndpointError(`${NOT_REACHABLE} (${label} has no valid port)`);
+  const portNumber = pyInt(port);
+  if (!(portNumber !== undefined && portNumber > 0n && portNumber < 65536n)) throw new EndpointError(`${NOT_REACHABLE} (${label} has no valid port)`);
   if (!(typeof browser === "string" && BROWSER_PATH.test(browser))) throw new EndpointError(`${NOT_REACHABLE} (${label} has no valid browser path)`);
   if (!(typeof token === "string" && TOKEN.test(token))) throw new EndpointError(`${NOT_REACHABLE} (${label} has no valid token)`);
   addSecret(token);
-  if (!(typeof pid === "bigint" && pid > 1n && pid < 2n ** 31n && alive(Number(pid)))) throw new EndpointError(NOT_REACHABLE);
+  const pidNumber = pyInt(pid);
+  if (!(pidNumber !== undefined && pidNumber > 1n && pidNumber < 2n ** 31n && alive(Number(pidNumber)))) throw new EndpointError(NOT_REACHABLE);
   const query = `token=${quote(token, "")}`;
   return {
-    ws: `ws://127.0.0.1:${port}${browser}?${query}`,
+    ws: `ws://127.0.0.1:${pyIntText(port)}${browser}?${query}`,
     source: file,
     explicit: false,
-    active: `http://127.0.0.1:${port}/ardia/active?${query}`,
-    instance: `${pid}:${typeof generation === "bigint" ? generation : 0n}:${browser}`,
+    active: `http://127.0.0.1:${pyIntText(port)}/ardia/active?${query}`,
+    instance: `${pyIntText(pid)}:${pyInt(generation) === undefined ? "0" : pyIntText(generation)}:${browser}`,
   };
 }
 

@@ -60,7 +60,7 @@ export async function serveHooks(route: CommandRoute, argv: string[], call: Call
         leaf = whole.slice(1, cut);
       }
     }
-    const parsed = parseArgs(spec, leaf);
+    const parsed = parseArgs("ardia", [...path, ...leaf]);
     if (!parsed.ok) return io.exitWith(parsed);
     if (parsed.stderr) io.exitWith({ status: 0, stdout: "", stderr: parsed.stderr });
     const values = parsed.values;

@@ -7,7 +7,7 @@ import { isWordCode } from "../pylib/unicode.ts";
 import { utf8 } from "../pystr.ts";
 import type { ScriptsArgs } from "./args.ts";
 import { build, type Build } from "./build.ts";
-import { dataRoot, EndpointError, explicitDataRoot, requireControl } from "./control-file.ts";
+import { dataRoot, EndpointError, explicitDataRoot, requireControl } from "../control-file.ts";
 import { describe, profileLines, pyStr } from "./describe.ts";
 import { BrokenPipe, Interrupted, type Say } from "./output.ts";
 import { pyEqual } from "./pyvalue.ts";
