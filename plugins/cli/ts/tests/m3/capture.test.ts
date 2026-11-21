@@ -298,6 +298,9 @@ describe("record through a PATH stub (no real encode)", () => {
     const dir = stub(0, "", 30);
     const { ctx } = rig(visible);
     await cmdRecord(ctx, ["start", "out.webm"]);
+    const pidFile = path.join(dir, "pid");
+    const wroteBy = performance.now() + 10_000;
+    while (!fs.existsSync(pidFile) && performance.now() < wroteBy) await tick(20);
     const stop = new AbortController();
     const stopping = withSignal(stop.signal, () => cmdRecord(ctx, ["stop"]));
     await tick(300);
@@ -305,7 +308,7 @@ describe("record through a PATH stub (no real encode)", () => {
     stop.abort(new Cancelled());
     await expect(stopping).rejects.toBeInstanceOf(Cancelled);
     expect(performance.now() - started).toBeLessThan(2000);
-    const pid = Number(fs.readFileSync(path.join(dir, "pid"), "utf8"));
+    const pid = Number(fs.readFileSync(pidFile, "utf8"));
     await tick(200);
     expect(() => process.kill(pid, 0)).toThrow();
   });

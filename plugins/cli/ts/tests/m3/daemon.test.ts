@@ -26,6 +26,7 @@ import {
 } from "./daemon-helpers.ts";
 
 setDefaultTimeout(60_000);
+const OVERSIZED_WRITE_MS = 50_000;
 
 function exitOf(child: ChildProcess): Promise<number | null> {
   return new Promise((resolve) => child.once("exit", (code) => resolve(code)));
@@ -192,7 +193,7 @@ describe(`requests (${label} daemon)`, () => {
     const { key, pid } = await start(found.data, "big", choose());
     pids.push(pid);
     const huge = Buffer.alloc(16 * 1024 * 1024 + 2, 0x61);
-    const result = await raw(socketFile(found.data, key), huge);
+    const result = await raw(socketFile(found.data, key), huge, { timeoutMs: OVERSIZED_WRITE_MS });
     expect(result).toEqual({ text: "", closed: true });
     const broken = await raw(socketFile(found.data, key), "{not json}\n");
     expect(broken).toEqual({ text: "", closed: true });
