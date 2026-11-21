@@ -1,0 +1,13 @@
+diff --git a/apps/server/src/serverRuntimeStartup.ts b/apps/server/src/serverRuntimeStartup.ts
+index 0d84e99169..f468fa9cd9 100644
+--- a/apps/server/src/serverRuntimeStartup.ts
++++ b/apps/server/src/serverRuntimeStartup.ts
+@@ -623,7 +623,7 @@ const make = Effect.fn("serverRuntimeStartup.make")(function* (options?: Startup
+           }),
+           Effect.ignoreCause({ log: true }),
+         );
+-        if (serverConfig.startupPresentation === "headless") {
++        if (serverConfig.startupPresentation === "headless" && serverConfig.mode !== "desktop") {
+           yield* Effect.logDebug("startup phase: headless access info");
+           const accessInfo = yield* issueHeadlessServeAccessInfo();
+           yield* runStartupPhase(

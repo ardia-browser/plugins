@@ -1,0 +1,42 @@
+name: AI plugin
+
+on:
+  pull_request:
+    paths: ["plugins/ai/**", ".github/workflows/ai.yml"]
+  push:
+    branches: [main]
+    paths: ["plugins/ai/**", ".github/workflows/ai.yml"]
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node --no-warnings --test plugins/ai/tests/*.test.mjs
+
+  page:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26.13.1
+      - run: npm install -g pnpm@12
+      - name: T3 Code at the pinned commit, patched
+        run: |
+          repo=$(sed -n 's/^repo=//p' plugins/ai/runtime/UPSTREAM)
+          pin=$(sed -n 's/^commit=//p' plugins/ai/runtime/UPSTREAM)
+          git clone --filter=blob:none "$repo" "$RUNNER_TEMP/t3code"
+          git -C "$RUNNER_TEMP/t3code" -c advice.detachedHead=false checkout -q "$pin"
+          plugins/ai/runtime/apply.sh "$RUNNER_TEMP/t3code"
+          cd "$RUNNER_TEMP/t3code" && pnpm install --frozen-lockfile --prefer-offline
+      - run: npm ci --prefix plugins/ai --no-audit --no-fund
+      - run: node plugins/ai/page/build.mjs "$RUNNER_TEMP/t3code" "$RUNNER_TEMP/page"
+      - run: test -s "$RUNNER_TEMP/page/app.js" && test -s "$RUNNER_TEMP/page/tokens.css"
+      - run: test -s "$RUNNER_TEMP/page/katex/katex.min.css" && test -d "$RUNNER_TEMP/page/chunks"
+      - run: T3_TREE="$RUNNER_TEMP/t3code" node --no-warnings --test plugins/ai/tests/markdown.test.mjs

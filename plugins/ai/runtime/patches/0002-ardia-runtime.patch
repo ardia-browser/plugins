@@ -1,0 +1,406 @@
+diff --git a/apps/server/src/binMain.ts b/apps/server/src/binMain.ts
+index 0dabd73873..52ccf39172 100644
+--- a/apps/server/src/binMain.ts
++++ b/apps/server/src/binMain.ts
+@@ -25,6 +25,10 @@ export async function runCliCommand() {
+   } else if (command === "acp-mcp-bridge" || command === "acp-mcp-call") {
+     const { runAcpMcpCliFastPath } = await import("./mcp/AcpMcpStdioBridge.ts");
+     await runAcpMcpCliFastPath(command, process.argv.slice(3));
++  } else if (command === "ardia") {
++    enableCliCompileCache();
++    const { runArdia } = await import("./ardia/main.ts");
++    await runArdia(process.argv.slice(3));
+   } else if (command === "__speech-worker") {
+     const mode = process.argv[3];
+     if (mode !== "discover" && mode !== "model") throw new Error("Unknown speech worker mode.");
+diff --git a/apps/server/src/mcp/McpHttpServer.ts b/apps/server/src/mcp/McpHttpServer.ts
+index 59b34cd6c6..12859f3766 100644
+--- a/apps/server/src/mcp/McpHttpServer.ts
++++ b/apps/server/src/mcp/McpHttpServer.ts
+@@ -89,6 +89,7 @@ import {
+ } from "./toolkits/device/tools.ts";
+ import * as HtmlHandlers from "./toolkits/html/handlers.ts";
+ import { MessageToolkit } from "./toolkits/message/tools.ts";
++import * as ArdiaBrowserToolkit from "../ardia/browserToolkit.ts";
+ import * as MessageHandlers from "./toolkits/message/handlers.ts";
+ import { HtmlPreviewTool, HtmlPreviewToolkit, HtmlRenderToolkit } from "./toolkits/html/tools.ts";
+ import { MCP_HTTP_PATH } from "../httpCors.ts";
+@@ -1344,11 +1345,7 @@ export const layerMcpTransport = <RA, RE, RR>(registrations: Layer.Layer<RA, RE,
+ 
+ /** Every tool the T3 MCP server advertises. AgentContextBudget.test.ts measures this set. */
+ export const layerTools = Layer.mergeAll(
+-  layerOrchestratorToolkit,
+-  layerThreadToolkit,
+-  layerAttachmentToolkit,
+-  layerProjectRegistration,
+-  layerThemeToolkit,
++  toolkitRegistration(ArdiaBrowserToolkit.ArdiaBrowserToolkit, ArdiaBrowserToolkit.layer),
+   layerMessageToolkit,
+ );
+ 
+diff --git a/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts b/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts
+index 35db7f1691..bed2a5b134 100644
+--- a/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts
++++ b/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts
+@@ -247,6 +247,7 @@ import {
+   makeSubagentConversationArtifacts,
+   subagentThreadTitle,
+ } from "@t3tools/provider-core/server/subagentProjection";
++import { claudeToolsForArdia } from "../../ardia/policy.ts";
+ 
+ export const CLAUDE_PROVIDER = ProviderDriverKind.make("claudeAgent");
+ /** The query exited before the turn attached, so the prompt was never offered. */
+@@ -2225,7 +2226,7 @@ export function makeClaudeQueryOptions(input: {
+   const threadIdentity: ClaudeAgentSdkThreadIdentity = input.resume
+     ? { resume: input.nativeThreadId }
+     : { sessionId: input.nativeThreadId };
+-  const selectedTools = input.tools ?? CLAUDE_CODE_PRESET_TOOLS;
++  const selectedTools = claudeToolsForArdia() ?? input.tools ?? CLAUDE_CODE_PRESET_TOOLS;
+   const selectionSettings =
+     Object.keys(compiledSelection.settings).length === 0
+       ? undefined
+diff --git a/apps/server/src/server.ts b/apps/server/src/server.ts
+index e8569453fb..bf41fede5f 100644
+--- a/apps/server/src/server.ts
++++ b/apps/server/src/server.ts
+@@ -42,7 +42,6 @@ import * as IssueTrackerConnections from "./issue/IssueTrackerConnections.ts";
+ import * as SqlitePersistence from "./persistence/Sqlite.ts";
+ import * as PullRequestReviewGuideService from "./pullRequest/PullRequestReviewGuideService.ts";
+ import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
+-import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
+ import * as ProviderUsageAnalytics from "./telemetry/ProviderUsageAnalytics.ts";
+ import * as ModelManifest from "./provider/ModelManifest.ts";
+ import * as ResetCreditCoordinator from "./provider/resetCreditCoordinator.ts";
+@@ -69,9 +68,7 @@ import * as McpSessionRegistry from "./mcp/McpSessionRegistry.ts";
+ import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
+ import * as DeviceService from "./device/DeviceService.ts";
+ import * as PreviewManager from "./preview/Manager.ts";
+-import * as PortScanner from "./preview/PortScanner.ts";
+ import * as ServerBrowser from "./preview/ServerBrowser.ts";
+-import * as PreviewAgentActivity from "./preview/PreviewAgentActivity.ts";
+ import * as PreviewBrowser from "./preview/PreviewBrowser.ts";
+ import * as ProcessRunner from "./processRunner.ts";
+ import * as GitManager from "./git/GitManager.ts";
+@@ -103,14 +100,12 @@ import * as VcsDriverRegistry from "./vcs/VcsDriverRegistry.ts";
+ import * as VcsProjectConfig from "./vcs/VcsProjectConfig.ts";
+ import * as VcsProcess from "./vcs/VcsProcess.ts";
+ import * as VcsProvisioningService from "./vcs/VcsProvisioningService.ts";
+-import * as VcsStatusBroadcaster from "./vcs/VcsStatusBroadcaster.ts";
+ import * as ProjectCloneTracker from "./project/ProjectCloneTracker.ts";
+ import * as GitWorkflowService from "./git/GitWorkflowService.ts";
+ import * as ReviewService from "./review/ReviewService.ts";
+ import * as SourceControlProviderRegistry from "./sourceControl/SourceControlProviderRegistry.ts";
+ import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
+ import * as SourceControlSignIn from "./sourceControl/SourceControlSignIn.ts";
+-import * as WorktreeSetupTracker from "./project/WorktreeSetupTracker.ts";
+ import * as Observability from "./observability/Observability.ts";
+ import * as EventLoopMonitor from "./observability/EventLoopMonitor.ts";
+ import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
+@@ -121,6 +116,7 @@ import * as ReplayMarkers from "./auth/replayMarkers.ts";
+ import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
+ import * as CodexManagedTokenBroker from "./provider/CodexManagedTokenBroker.ts";
+ import * as WebhookRoute from "./scheduledTasks/webhookRoute.ts";
++import * as ArdiaRoutes from "./ardia/routes.ts";
+ import * as RelayDeliveryProof from "./scheduledTasks/RelayDeliveryProof.ts";
+ import * as McpOAuth from "./auth/McpOAuth.ts";
+ import * as McpOAuthHttp from "./auth/mcpOAuthHttp.ts";
+@@ -142,7 +138,6 @@ import * as DesktopTelemetryReceiver from "./resourceTelemetry/DesktopTelemetryR
+ import * as NativeTelemetryClient from "./resourceTelemetry/NativeTelemetryClient.ts";
+ import * as ResourceAttribution from "./resourceTelemetry/ResourceAttribution.ts";
+ import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
+-import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
+ import * as UsageService from "./usage/UsageService.ts";
+ import * as RuntimeLayer from "./orchestration-v2/runtimeLayer.ts";
+ import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
+@@ -161,8 +156,16 @@ import * as NetService from "@t3tools/shared/Net";
+ import * as RelayClient from "@t3tools/shared/relayClient";
+ import * as ServerActivation from "./serverActivation.ts";
+ import * as RelayTracing from "./cloud/relayTracing.ts";
+-import { quiet, removed } from "./stripped/removed.ts";
+-import * as AgentAwarenessRelay from "./relay/AgentAwarenessRelay.ts";
++import {
++  layerAgentAwarenessRelayDisabled,
++  layerAnalyticsDisabled,
++  layerBackgroundPolicyDisabled,
++  layerPortDiscoveryDisabled,
++  layerPreviewAgentActivityDisabled,
++  layerVcsStatusBroadcasterDisabled,
++  layerWorktreeSetupTrackerDisabled,
++} from "./stripped/disabled.ts";
++import { removed } from "./stripped/removed.ts";
+ import * as ConnectReachability from "./cloud/ConnectReachability.ts";
+ import * as TextGeneration from "./textGeneration/TextGeneration.ts";
+ import * as SourceControlBuiltInDrivers from "./sourceControl/builtInDrivers.ts";
+@@ -222,28 +225,22 @@ const layerRemovedTelemetry = Layer.mergeAll(
+     streamChanges: Stream.never,
+     refresh: Effect.void,
+   }),
+-  quiet(AnalyticsService.AnalyticsService),
++  layerAnalyticsDisabled,
+ );
+ 
+ const layerRemovedFeatures = Layer.mergeAll(
+-  quiet(BackgroundPolicy.BackgroundPolicy, {
+-    shouldRunScopeWork: () => Effect.succeed(true),
+-    shouldRunOpportunisticWork: Effect.succeed(true),
+-  }),
++  layerBackgroundPolicyDisabled,
+   removed(TerminalManager.TerminalManager, {
+     subscribeMetadata: () => Effect.succeed(() => undefined),
+   }),
+   removed(PreviewManager.PreviewManager),
+-  quiet(PortScanner.PortDiscovery, { trackAgent: () => () => undefined }),
++  layerPortDiscoveryDisabled,
+   removed(DeviceService.DeviceService, { sessionsForThread: () => Effect.succeed([]) }),
+   removed(ServerBrowser.ServerBrowser, {
+     profileReporter: Effect.succeed(() => Effect.void),
+   } as never),
+   removed(PreviewBrowser.PreviewBrowser),
+-  quiet(PreviewAgentActivity.PreviewAgentActivity, {
+-    begin: () => Effect.succeed(Effect.void),
+-    active: () => Effect.succeed(false),
+-  }),
++  layerPreviewAgentActivityDisabled,
+   removed(PreviewAutomationBroker.PreviewAutomationBroker),
+   removed(SpeechService.SpeechService),
+   removed(CloudSpeech.CloudSpeech),
+@@ -262,8 +259,8 @@ const layerRemovedFeatures = Layer.mergeAll(
+   removed(GitManager.GitManager),
+   removed(ReviewService.ReviewService),
+   removed(VcsProvisioningService.VcsProvisioningService),
+-  quiet(VcsStatusBroadcaster.VcsStatusBroadcaster),
+-  quiet(WorktreeSetupTracker.WorktreeSetupTracker),
++  layerVcsStatusBroadcasterDisabled,
++  layerWorktreeSetupTrackerDisabled,
+   removed(ProjectCloneTracker.ProjectCloneTracker, {
+     get: () => Effect.succeed(null),
+     stream: Stream.make([]),
+@@ -287,7 +284,7 @@ const layerRemovedFeatures = Layer.mergeAll(
+   removed(RemoteOpenTargets.RemoteOpenTargets, { resolveTargets: () => Effect.succeed([]) }),
+   removed(AntigravityInstallation.AntigravityInstallation),
+   removed(NativeAppIconResolver.NativeAppIconResolver),
+-  quiet(AgentAwarenessRelay.AgentAwarenessRelay),
++  layerAgentAwarenessRelayDisabled,
+   removed(ConnectReachability.ConnectReachability),
+   Layer.succeed(ScheduledTaskWebhookOrigin, Effect.succeed({ relayHookBaseUrl: null })),
+ );
+@@ -503,6 +500,8 @@ const layerMakeRoutes = Layer.mergeAll(
+     ),
+     ServerHttp.layerAssetRoute,
+     ServerHttp.layerAttachmentUploadRoute,
++    ArdiaRoutes.layer,
++    ServerHttp.layerStaticAndDevRoute,
+     Ws.layer,
+   ),
+   McpHttpServer.layer.pipe(
+@@ -512,6 +511,7 @@ const layerMakeRoutes = Layer.mergeAll(
+ ).pipe(
+   Layer.provide(layerServerSettings),
+   Layer.provide(layerCommandReadiness),
++  Layer.provide(ArdiaRoutes.layerGuard),
+   Layer.provide(ServerHttp.layerBrowserApiCors),
+   Layer.provide(ServerHttp.layerHttpCompression),
+ );
+diff --git a/apps/server/src/stripped/disabled.ts b/apps/server/src/stripped/disabled.ts
+new file mode 100644
+index 0000000000..b0269dd04c
+--- /dev/null
++++ b/apps/server/src/stripped/disabled.ts
+@@ -0,0 +1,156 @@
++// @effect-diagnostics effectFnOpportunity:off
++import {
++  PreviewStopLocalServerError,
++  type BackgroundPolicySnapshot,
++  type VcsBranchStatus,
++  type VcsStatusLocalResult,
++  type VcsStatusResult,
++  type VcsStatusStreamEvent,
++} from "@t3tools/contracts";
++import * as DateTime from "effect/DateTime";
++import * as Effect from "effect/Effect";
++import * as Layer from "effect/Layer";
++import * as PubSub from "effect/PubSub";
++import * as Stream from "effect/Stream";
++
++import * as BackgroundPolicy from "../background/BackgroundPolicy.ts";
++import * as PortScanner from "../preview/PortScanner.ts";
++import * as PreviewAgentActivity from "../preview/PreviewAgentActivity.ts";
++import * as WorktreeSetupTracker from "../project/WorktreeSetupTracker.ts";
++import * as AgentAwarenessRelay from "../relay/AgentAwarenessRelay.ts";
++import * as AnalyticsService from "../telemetry/AnalyticsService.ts";
++import * as VcsStatusBroadcaster from "../vcs/VcsStatusBroadcaster.ts";
++
++export const layerAnalyticsDisabled = Layer.succeed(
++  AnalyticsService.AnalyticsService,
++  AnalyticsService.AnalyticsService.of({
++    record: () => Effect.void,
++    flush: Effect.void,
++    recordOwners: () => Effect.void,
++  }),
++);
++
++const unrestrictedBackgroundSnapshot: Effect.Effect<BackgroundPolicySnapshot> = Effect.map(
++  DateTime.now,
++  (now) => ({
++    hostPower: {
++      source: "unknown",
++      idle: "unknown",
++      idleSeconds: null,
++      locked: "unknown",
++      suspended: false,
++      onBattery: "unknown",
++      lowPowerMode: "unknown",
++      thermalState: "unknown",
++      stale: true,
++      updatedAt: now,
++    },
++    leases: [],
++    activeForegroundLeaseCount: 0,
++    activeScopeKeys: [],
++    shouldRunOpportunisticWork: true,
++    updatedAt: now,
++  }),
++);
++
++export const layerBackgroundPolicyDisabled = Layer.succeed(
++  BackgroundPolicy.BackgroundPolicy,
++  BackgroundPolicy.BackgroundPolicy.of({
++    reportClientActivity: () => Effect.void,
++    removeRpcClient: () => Effect.void,
++    snapshot: unrestrictedBackgroundSnapshot,
++    shouldRunScopeWork: () => Effect.succeed(true),
++    shouldRunOpportunisticWork: Effect.succeed(true),
++  }),
++);
++
++export const layerPortDiscoveryDisabled = Layer.succeed(
++  PortScanner.PortDiscovery,
++  PortScanner.PortDiscovery.of({
++    scan: () => Effect.succeed([]),
++    subscribe: () => Effect.void,
++    retain: Effect.void,
++    registerTerminalProcesses: () => Effect.void,
++    unregisterTerminal: () => Effect.void,
++    trackAgent: () => () => undefined,
++    watchAgentCommandStops: () => Effect.void,
++    stopServer: () => Effect.fail(new PreviewStopLocalServerError({ reason: "unsupported" })),
++  }),
++);
++
++export const layerPreviewAgentActivityDisabled = Layer.effect(
++  PreviewAgentActivity.PreviewAgentActivity,
++  Effect.map(PubSub.unbounded<PreviewAgentActivity.PreviewAgentTurnChange>(), (silentChanges) =>
++    PreviewAgentActivity.PreviewAgentActivity.of({
++      begin: () => Effect.succeed(Effect.void),
++      active: () => Effect.succeed(false),
++      changes: PubSub.subscribe(silentChanges),
++    }),
++  ),
++);
++
++const notARepositoryLocalStatus: VcsStatusLocalResult = {
++  isRepo: false,
++  hasPrimaryRemote: false,
++  isDefaultRef: false,
++  refName: null,
++  hasWorkingTreeChanges: false,
++  workingTree: { files: [], insertions: 0, deletions: 0 },
++};
++
++const notARepositoryStatus: VcsStatusResult = {
++  ...notARepositoryLocalStatus,
++  hasUpstream: false,
++  aheadCount: 0,
++  behindCount: 0,
++  pr: null,
++};
++
++const notARepositoryBranchStatus: VcsBranchStatus = { refName: null, isRepo: false };
++
++const notARepositoryStatusSnapshot: VcsStatusStreamEvent = {
++  _tag: "snapshot",
++  local: notARepositoryLocalStatus,
++  remote: null,
++};
++
++export const layerVcsStatusBroadcasterDisabled = Layer.succeed(
++  VcsStatusBroadcaster.VcsStatusBroadcaster,
++  VcsStatusBroadcaster.VcsStatusBroadcaster.of({
++    streamBranchStatus: () => Stream.concat(Stream.make(notARepositoryBranchStatus), Stream.never),
++    refreshBranchStatus: () => Effect.succeed(notARepositoryBranchStatus),
++    streamBranchChanges: Stream.never,
++    getStatus: () => Effect.succeed(notARepositoryStatus),
++    refreshLocalStatus: () => Effect.succeed(notARepositoryLocalStatus),
++    refreshAfterCheckout: () => Effect.void,
++    refreshStatus: () => Effect.succeed(notARepositoryStatus),
++    refreshPullRequestStatus: () => Effect.succeed(null),
++    streamStatus: () => Stream.concat(Stream.make(notARepositoryStatusSnapshot), Stream.never),
++  }),
++);
++
++export const layerWorktreeSetupTrackerDisabled = Layer.succeed(
++  WorktreeSetupTracker.WorktreeSetupTracker,
++  WorktreeSetupTracker.WorktreeSetupTracker.of({
++    begin: () => Effect.void,
++    update: () => Effect.void,
++    stage: () => Effect.void,
++    stageStatus: () => Effect.void,
++    appendTail: () => Effect.void,
++    finish: () => Effect.succeed(null),
++    markUncancellable: () => Effect.void,
++    cancel: () => Effect.succeed(false),
++    get: () => Effect.succeed(null),
++    stream: () => Stream.concat(Stream.make(null), Stream.never),
++  }),
++);
++
++export const layerAgentAwarenessRelayDisabled = Layer.succeed(
++  AgentAwarenessRelay.AgentAwarenessRelay,
++  AgentAwarenessRelay.AgentAwarenessRelay.of({
++    publishThread: () => Effect.void,
++    drain: Effect.void,
++    requestCatchUp: () => Effect.void,
++    start: () => Effect.void,
++  }),
++);
+diff --git a/apps/server/src/stripped/removed.ts b/apps/server/src/stripped/removed.ts
+index 24219df5bd..c206fac4b0 100644
+--- a/apps/server/src/stripped/removed.ts
++++ b/apps/server/src/stripped/removed.ts
+@@ -15,8 +15,8 @@ export class FeatureRemovedError extends Schema.TaggedError<FeatureRemovedError>
+ export const removedCall = (service: string, member: string) =>
+   Effect.die(new FeatureRemovedError({ service, member }));
+ 
+-const removedMember = (service: string, member: string, quiet: boolean) => {
+-  const effect = quiet ? Effect.void : removedCall(service, member);
++const removedMember = (service: string, member: string) => {
++  const effect = removedCall(service, member);
+   const member_ = function () {
+     return effect;
+   };
+@@ -30,7 +30,6 @@ const removedMember = (service: string, member: string, quiet: boolean) => {
+ export const removedShape = <Shape>(
+   service: string,
+   kept: Partial<Shape> = {},
+-  quiet = false,
+ ): Shape => {
+   const members = new Map<string, unknown>();
+   return new Proxy(kept as object, {
+@@ -41,7 +40,7 @@ export const removedShape = <Shape>(
+       }
+       let member = members.get(property);
+       if (member === undefined) {
+-        member = removedMember(service, property, quiet);
++        member = removedMember(service, property);
+         members.set(property, member);
+       }
+       return member;
+@@ -53,8 +52,3 @@ export const removed = <Identifier, Shape>(
+   key: Context.Key<Identifier, Shape>,
+   kept: Partial<Shape> = {},
+ ): Layer.Layer<Identifier> => Layer.succeed(key, removedShape<Shape>(key.key, kept));
+-
+-export const quiet = <Identifier, Shape>(
+-  key: Context.Key<Identifier, Shape>,
+-  kept: Partial<Shape> = {},
+-): Layer.Layer<Identifier> => Layer.succeed(key, removedShape<Shape>(key.key, kept, true));

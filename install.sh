@@ -81,6 +81,12 @@ case "$1" in
   --remove) mode=remove; shift; [ $# -gt 0 ] || { usage; exit 1; } ;;
 esac
 name="$1"
+case " $PLUGINS " in
+  *" $name "*) ;;
+  *) [ -d "$(dirname "$0")/plugins/$name" ] && [ -f "$(dirname "$0")/plugins/$name/README.md" ] \
+       && fail "\"$name\" is a full plugin with its own program; see plugins/$name/README.md for how it's built and installed" \
+       || fail "no plugin named \"$name\" (try --list)" ;;
+esac
 
 ardia_bin=$(find_ardia)
 tmp=$(mktemp -d)
