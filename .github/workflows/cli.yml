@@ -48,7 +48,7 @@ jobs:
           echo "ardia-ts binary: $(wc -c < dist/ardia-ts) bytes" >> "$GITHUB_STEP_SUMMARY"
           echo "ardia-libc.so addon: $(wc -c < dist/ardia-libc.so) bytes" >> "$GITHUB_STEP_SUMMARY"
       - name: uv
-        run: curl -LsSf https://astral.sh/uv/0.12.15/install.sh | sh
+        run: curl -LsSf https://astral.sh/uv/0.13.0/install.sh | sh
       - name: Unit tests, some beside the Python CLI
         run: |
           ~/.local/bin/uv venv --python 3.13.16 "$RUNNER_TEMP/unit-venv"
@@ -110,7 +110,7 @@ jobs:
         with:
           node-version: 24
       - name: uv
-        run: curl -LsSf https://astral.sh/uv/0.12.15/install.sh | sh
+        run: curl -LsSf https://astral.sh/uv/0.13.0/install.sh | sh
       - name: Locked dependencies
         run: |
           ~/.local/bin/uv venv --python 3.13.16 "$RUNNER_TEMP/venv"
