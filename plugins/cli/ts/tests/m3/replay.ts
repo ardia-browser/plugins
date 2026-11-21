@@ -29,6 +29,26 @@ const STALL_MS = 10000;
 const HOIST_MS = 50;
 const HOIST_WINDOW = 400;
 const RESPONSE_ID = /^\{"id":(\d+),/;
+const TEMP_MARKER = "about:blank#ardia-temp-";
+const PIERCE_DOCUMENT = "() => document";
+const NO_DOCUMENT = { result: { type: "object", subtype: "null", value: null } };
+const EMPTY_DOCUMENT = { root: { nodeId: 1, backendNodeId: 1, nodeType: 9, nodeName: "#document", localName: "", nodeValue: "", childNodeCount: 0, children: [] } };
+
+type Message = NonNullable<ReturnType<typeof parse>>;
+
+function synthesize(message: Message): Record<string, unknown> | null {
+  if (message.method === "Target.setAutoAttach") return {};
+  const params = (message.params ?? {}) as Record<string, unknown>;
+  if (message.method === "DOM.getDocument" && params["pierce"] === true) return EMPTY_DOCUMENT;
+  if (message.method === "Runtime.callFunctionOn" && params["functionDeclaration"] === PIERCE_DOCUMENT) return NO_DOCUMENT;
+  return null;
+}
+
+function designed(message: Message): Message {
+  const params = (message.params ?? {}) as Record<string, unknown>;
+  if (message.method === "Target.createTarget" && String(params["url"] ?? "").startsWith(TEMP_MARKER)) return { ...message, params: { ...params, url: "about:blank" } };
+  return message;
+}
 const WORLD_HANDLE = "globalThis";
 const HANDLE_PREFIX = "ardia-world-handle:";
 
@@ -112,7 +132,13 @@ export class ReplayConn {
         return;
       }
     }
-    const form = requestForm(message);
+    const form = requestForm(designed(message));
+    const synthesized = synthesize(message);
+    if (synthesized !== null) {
+      this.hooks.note("synthesized", form);
+      this.hooks.batch(() => this.hooks.send(JSON.stringify({ id: message.id, result: synthesized, ...(message.sessionId ? { sessionId: message.sessionId } : {}) })));
+      return;
+    }
     const found = this.find(session, form);
     if (!found) {
       this.fail(session, form);

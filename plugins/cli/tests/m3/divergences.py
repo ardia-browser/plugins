@@ -1,4 +1,5 @@
 import json
+import sys
 
 from tests.m3 import normalize
 
@@ -22,9 +23,53 @@ DIVERGENCES = {
               "Page.createIsolatedWorld first when that world isn't known for the current document",
         "why": "a main-world evaluation is visible to the page (ardia#2812 row 8); the isolated world shares the document but not its JS",
     },
+    "oopif-auto-attach": {
+        "row": 13,
+        "always": True,
+        "commands": "every page session the TS daemon attaches",
+        "python": "nothing: Python never sees out-of-process iframes",
+        "ts": 'Target.setAutoAttach {"autoAttach": true, "waitForDebuggerOnStart": false, "flatten": true, "filter": iframes only} on the page '
+              "session after Page.setLifecycleEventsEnabled, and on each iframe session it attaches; replay answers it with an empty result",
+        "why": "reads and snapshots reach out-of-process iframes in their own sessions (ardia#2812 rows 13, 21)",
+    },
+    "temp-tab-marker": {
+        "row": None,
+        "always": True,
+        "decision": "D2 round 3 (plugins#20): temporary tabs open at about:blank#ardia-temp-<nonce> so a later sweep finds lost ones",
+        "commands": "read <url>... (temporary reader tabs)",
+        "python": 'Target.createTarget {"url": "about:blank", "background": true} for a reader tab',
+        "ts": 'Target.createTarget {"url": "about:blank#ardia-temp-<nonce>", "background": true}',
+        "why": "a temporary tab lost at shutdown is closed by the next sweep only if it is marked (docs/cli.md accepted differences)",
+    },
+    "shadow-pierce": {
+        "row": 12,
+        "always": True,
+        "commands": "a selector that matches nothing in the document (get, is, snapshot -s, read -s, get count)",
+        "python": "nothing: the command fails with not_found",
+        "ts": 'Runtime.callFunctionOn "() => document" in the isolated world, DOM.describeNode {"objectId": <it>, "depth": -1, "pierce": true}, '
+              "then each open or closed shadow root resolved into the isolated world and searched; replay answers the first with null",
+        "why": "selectors reach elements inside closed shadow roots (ardia#2812 row 12)",
+    },
 }
+TEMP_MARKER = "about:blank#ardia-temp-"
+PIERCE_DOCUMENT = "() => document"
+
+EDITING_COMMANDS = {
+    "editing-commands": {
+        "row": 20,
+        "commands": "press, keydown and fill's select-all: a shortcut with Control, Meta or Alt",
+        "python": 'Input.dispatchKeyEvent with "commands" for Control or Meta with a, z, y and Shift+z, on every platform',
+        "ts": 'Input.dispatchKeyEvent with "commands" for every macOS editing shortcut (Meta with a, c, x, v, z, Shift+z; Meta and Alt '
+              "with the arrows, Backspace and Delete), and none on Linux and Windows",
+        "why": "on macOS a native contenteditable ignores Meta+z, Meta+c and the rest without the editing command (ardia#2812 row 20); "
+               "Control+a is not select-all there",
+    },
+}
+DIVERGENCES.update(EDITING_COMMANDS)
 
 UNANSWERING_FAULTS = ("drop", "stop")
+MAC_SHORTCUT_KEYS = ("a", "c", "x", "v", "z")
+META = 4
 PAGE_SESSION_ENABLES = ("Runtime.enable", "Debugger.enable", "Console.enable")
 BUSY_PROBE = "1"
 WORLD_HANDLE = "globalThis"
@@ -84,6 +129,16 @@ class Rewriter:
                 kept = {name: value for name, value in params.items()
                         if name != "executionContextId" and not (name == "objectId" and value in self.handles)}
                 message = {**message, "params": kept}
+        if "oopif-auto-attach" in self.names and method == "Target.setAutoAttach":
+            return None
+        if "shadow-pierce" in self.names and method == "DOM.describeNode" and params.get("pierce") is True:
+            return None
+        if "shadow-pierce" in self.names and method == "Runtime.callFunctionOn" and params.get("functionDeclaration") == PIERCE_DOCUMENT:
+            return None
+        if "temp-tab-marker" in self.names and method == "Target.createTarget" and str(params.get("url", "")).startswith(TEMP_MARKER):
+            message = {**message, "params": {**params, "url": "about:blank"}}
+        if "editing-commands" in self.names and method == "Input.dispatchKeyEvent" and "commands" in params:
+            message = {**message, "params": {name: value for name, value in params.items() if name != "commands"}}
         if "busy-probe-isolated" in self.names and busy_probe(message):
             message = {**message, "params": {name: value for name, value in params.items() if name != "contextId"}}
         return message
@@ -96,6 +151,7 @@ def rewriter(names: list[str]) -> Rewriter:
 def checks(transcript_path) -> list[str]:
     found = []
     worlds = set()
+    touch_emulated = False
     binding = set()
     for entry in normalize.load(transcript_path):
         if entry.get("k") != "out":
@@ -121,4 +177,14 @@ def checks(transcript_path) -> list[str]:
             found.append("row 8: the busy probe ran in the page's main world though the page had an isolated world")
         if message.get("method") == "Runtime.callFunctionOn" and "executionContextId" in (message.get("params") or {}):
             found.append("a page call named a numeric execution context instead of its world handle")
+        params = message.get("params") or {}
+        if (sys.platform == "darwin" and message.get("method") == "Input.dispatchKeyEvent" and params.get("type") in ("keyDown", "rawKeyDown")
+                and (params.get("modifiers") or 0) & META and str(params.get("key", "")).lower() in MAC_SHORTCUT_KEYS and not params.get("commands")):
+            found.append(f"row 20: Meta+{params.get('key')} sent without its editing command")
+        if message.get("method") == "Input.dispatchTouchEvent" and not touch_emulated:
+            found.append("row 1: a touch event was sent without touch emulation")
+        if message.get("method") == "Emulation.setTouchEmulationEnabled":
+            touch_emulated = bool(params.get("enabled"))
+        if message.get("method") == "Runtime.callFunctionOn" and "navigator.maxTouchPoints" in str(params.get("functionDeclaration", "")):
+            touch_emulated = True
     return sorted(set(found))

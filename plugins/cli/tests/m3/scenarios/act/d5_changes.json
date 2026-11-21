@@ -1,0 +1,92 @@
+{
+ "source": "D5 hand-written: change reports after act commands and open's arrival report (needs D4's snapshot)",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-input.html",
+    "--show"
+   ],
+   "session": "d5c"
+  },
+  {
+   "argv": [
+    "click",
+    "#go"
+   ],
+   "session": "d5c"
+  },
+  {
+   "argv": [
+    "fill",
+    "#name",
+    "hello"
+   ],
+   "session": "d5c"
+  },
+  {
+   "argv": [
+    "check",
+    "#agree"
+   ],
+   "session": "d5c"
+  },
+  {
+   "argv": [
+    "select",
+    "#pick",
+    "Cherry"
+   ],
+   "session": "d5c"
+  },
+  {
+   "argv": [
+    "type",
+    "#area",
+    "x"
+   ],
+   "session": "d5c"
+  },
+  {
+   "argv": [
+    "press",
+    "Tab"
+   ],
+   "session": "d5c"
+  },
+  {
+   "argv": [
+    "hover",
+    "#hover"
+   ],
+   "session": "d5c"
+  },
+  {
+   "argv": [
+    "scroll",
+    "down",
+    "200"
+   ],
+   "session": "d5c"
+  },
+  {
+   "argv": [
+    "drag",
+    "#src",
+    "#dst"
+   ],
+   "session": "d5c"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/form.html"
+   ],
+   "session": "d5c"
+  }
+ ]
+}

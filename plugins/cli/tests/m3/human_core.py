@@ -17,7 +17,8 @@ from tests.m3 import divergences, infra
 
 CHROME_FLAGS = ["--headless=new", "--no-first-run", "--no-default-browser-check", "--disable-background-networking", "--disable-component-update",
                 "--disable-sync", "--mute-audio", "--hide-scrollbars", "--window-size=1200,900"]
-ROWS = (7, 8, 9, 10, 11)
+ROWS = (7, 8, 9, 10, 11, 12, 13)
+ROW13_ROLES = ("child", "grandchild", "sandboxed")
 WORLD = "ardia-human-tier"
 
 
@@ -45,6 +46,31 @@ class Tier:
         result = await self.browser.send("Runtime.evaluate", {"expression": expression, "contextId": self.context, "returnByValue": True,
                                                               "awaitPromise": True}, self.session)
         return (result.get("result") or {}).get("value")
+
+    async def click_pierced(self, host: str, selector: str):
+        root = (await self.browser.send("DOM.getDocument", {"depth": -1, "pierce": True}, self.session))["root"]
+        roots = []
+
+        def walk(node):
+            for shadow in node.get("shadowRoots") or []:
+                roots.append(shadow["nodeId"])
+                walk(shadow)
+            for child in node.get("children") or []:
+                walk(child)
+
+        walk(root)
+        node = 0
+        for shadow in roots:
+            node = (await self.browser.send("DOM.querySelector", {"nodeId": shadow, "selector": selector}, self.session)).get("nodeId") or 0
+            if node:
+                break
+        quad = (await self.browser.send("DOM.getContentQuads", {"nodeId": node}, self.session))["quads"][0]
+        x, y = sum(quad[0::2]) / 4, sum(quad[1::2]) / 4
+        for kind in ("mouseMoved", "mousePressed", "mouseReleased"):
+            params = {"type": kind, "x": x, "y": y}
+            if kind != "mouseMoved":
+                params.update({"button": "left", "clickCount": 1})
+            await self.browser.send("Input.dispatchMouseEvent", params, self.session)
 
     async def phase(self, name: str):
         await self.iso(f"document.documentElement.dataset.phase = {json.dumps(name)}")
@@ -116,7 +142,7 @@ class Run:
         done = subprocess.run([*browse_driver.client_argv(self.impl, seeded=True), "browse", "--port", str(self.tap_port), "--data-dir",
                                str(self.root / "data"), "--session", session, *argv], capture_output=True, text=True, env=env,
                               cwd=self.root / "home", timeout=150)
-        return {"argv": list(argv), "exit": done.returncode, "out": done.stdout.strip()[:300], "err": done.stderr.strip()[:300]}
+        return {"argv": list(argv), "exit": done.returncode, "out": done.stdout.strip()[:300], "err": done.stderr.strip()[:300], "full": done.stdout}
 
     def stop(self):
         try:
@@ -178,11 +204,35 @@ async def row(run: Run, number: int) -> dict:
             await tier.phase("acted")
             browse("wait", "800")
             read = {"headless": True, "reference": None, "flags": CHROME_FLAGS}
+        elif number == 12:
+            got = browse("get", "text", "#text")
+            shot = browse("snapshot")
+            read = {"text": got["out"]}
+            notes.append("text read by `get text #text` through the closed shadow roots; the snapshot shows it too"
+                         if got["out"] and got["out"] in shot["out"] else "the snapshot did not show the secret")
+            if not (got["out"] and got["out"] in shot["out"]):
+                read = {"text": None}
+            await tier.click_pierced("#host", "#deep")
+            notes.append("click by the tier through DOM.getDocument pierce (D5 owns click)")
+        elif number == 13:
+            browse("wait", "1500")
+            text = browse("read")["full"]
+            shot = browse("snapshot")["full"]
+            read = {}
+            for role in ROW13_ROLES:
+                found = re.search(rf"secret-{role}-[a-z0-9]+", text)
+                in_snapshot = re.search(rf"secret-{role}-[a-z0-9]+", shot)
+                read[role] = found.group() if found and in_snapshot and found.group() == in_snapshot.group() else None
+            notes.append("each frame's secret read by `read` and `snapshot` in its own session; clicks are D5's, so the page's clickOk "
+                         "stays false and this row passes on readOk")
         verdict = await tier.finish(read)
     finally:
         await tier.close()
     failed = [step for step in steps if step["exit"] != 0]
-    return {"row": number, "pass": bool(verdict.get("pass")) and not failed, "verdict": verdict.get("pass"), "failed_steps": failed,
+    passed = bool(verdict.get("pass"))
+    if number == 13:
+        passed = bool(((verdict.get("measured") or {}).get("checks") or {}).get("readOk"))
+    return {"row": number, "pass": passed and not failed, "verdict": verdict.get("pass"), "failed_steps": failed,
             "notes": notes, "measured": verdict.get("measured")}
 
 

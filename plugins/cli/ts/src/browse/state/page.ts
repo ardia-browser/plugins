@@ -5,6 +5,7 @@ import { BrowseError, CdpError, CdpTimeout, ConnectionLost, Gated, NotFocusable,
 import { LIBRARY, PAGE_FOCUS_INSIDE } from "../js/index.ts";
 import { flag } from "../metrics.ts";
 import { whereAppHas } from "./apptabs.ts";
+import * as oopif from "./oopif.ts";
 import { CONSOLE_LIMIT, consoleEntry, ERROR_LIMIT, errorEntry, type Json, NetworkLog, record, Ring } from "./records.ts";
 import type { State } from "./state.ts";
 import { monotonic, waitUntil } from "./wait.ts";
@@ -33,6 +34,8 @@ const BUSY_WHY = (probe: number) =>
   `the page's own scripts are keeping its tab busy, so it isn't answering. While it stays that way, commands on this tab give up after ${formatG(probe)} s instead of waiting; \`ardia browse reload\` it, or work from a lighter page (search results, the site's own API, or \`read --http <url>\`)`;
 const CRASH_SAFE = new Set(["Inspector.enable", "Page.reload", "Page.navigate"]);
 const OTHER_WORLD = "same JavaScript world";
+const NO_SESSION = "Session with given id not found";
+export const FRAME_GONE = "That frame is gone. Run `ardia browse frame main` or snapshot again";
 const STALE_CONTEXT = ["Cannot find context", "Execution context was destroyed", "Cannot find default execution context", "Inspected target navigated", "Could not find object with given id"];
 export const WORLD_HANDLE = "globalThis";
 
@@ -40,12 +43,13 @@ export type World = { frame: string; loader: string | null; context: number; han
 export type Frame = { id: string; url: string; loader: string | null; parent: string | null; name: string; origin: string };
 export type Lifecycle = { loader: string | null; names: Set<string> };
 export type Viewport = [number, number] | null;
-export type SendOptions = { timeout?: number; mutation?: boolean; inputEvent?: boolean; guard?: () => void };
+export type SendOptions = { timeout?: number; mutation?: boolean; inputEvent?: boolean; guard?: () => void; session?: string | null };
 export type CallOptions = { frame?: string | null; byValue?: boolean; awaitPromise?: boolean; timeout?: number; read?: boolean };
 
 export interface PageInput {
   readonly holding: boolean;
   bind(viewport: Viewport): void;
+  releaseAll?(): Promise<boolean>;
 }
 
 class Unbound implements PageInput {
@@ -62,7 +66,7 @@ export class Element {
     readonly frame: string,
     public objectId: string,
     readonly backendId: number,
-    readonly label: string,
+    public label: string,
   ) {}
 }
 
@@ -102,6 +106,8 @@ export class Page {
   frames = new Map<string, Frame>();
   mainFrame: string | null = null;
   readonly worlds = new Map<string, [string | null, number, string]>();
+  readonly frameSessions = new Map<string, string>();
+  readonly oopifs = new Map<string, oopif.Oopif>();
   readonly lifecycle = new Map<string, Lifecycle>();
   dialog: Json | null = null;
   readonly console = new Ring(CONSOLE_LIMIT);
@@ -139,6 +145,10 @@ export class Page {
     return this.sessionId ?? this.attaching;
   }
 
+  sessionFor(frame: string | null | undefined): string | null {
+    return (frame ? this.frameSessions.get(frame) : undefined) ?? this.session;
+  }
+
   async attach(browser: Browser): Promise<void> {
     if (this.sessionId !== null) this.state.sessions.delete(this.sessionId);
     if (this.attaching !== null) this.state.sessions.delete(this.attaching);
@@ -146,6 +156,7 @@ export class Page {
     this.attaching = null;
     this.browser = browser;
     this.worlds.clear();
+    oopif.forgetAll(this);
     let result: CdpResult;
     try {
       result = await browser.send("Target.attachToTarget", { targetId: this.targetId, flatten: true });
@@ -202,6 +213,7 @@ export class Page {
     this.needsEnable = true;
     await this.send("Page.enable");
     await this.send("Page.setLifecycleEventsEnabled", { enabled: true });
+    await oopif.autoAttach(this, this.session);
     await this.refreshFrames();
     if (pending !== null) this.publish(pending);
     if (this.runtimeOn) {
@@ -371,16 +383,19 @@ export class Page {
     this.sessionId = null;
     this.attaching = null;
     this.worlds.clear();
+    oopif.forgetAll(this);
     for (const call of this.calls) call.abort(new Cancelled());
   }
 
   async send(method: string, params: CdpResult | null = null, options: SendOptions = {}): Promise<CdpResult> {
-    const session = this.session;
-    if (session === null) throw new BrowseError(DETACHED, null, "tab_detached");
+    const top = this.session;
+    const session = options.session ?? top;
+    if (session === null || top === null) throw new BrowseError(DETACHED, null, "tab_detached");
     if (this.crashed && !CRASH_SAFE.has(method)) throw new BrowseError(CRASHED, null, "tab_crashed");
     if (this.unansweredAt && monotonic() - this.unansweredAt < BUSY_MEMORY) await this.stillBusy(method);
     options.guard?.();
-    if (this.session !== session) throw new BrowseError(DETACHED, null, "tab_detached");
+    if (this.session !== top) throw new BrowseError(DETACHED, null, "tab_detached");
+    if (session !== top && !this.oopifs.has(session)) throw new BrowseError(FRAME_GONE, null, "frame_gone");
     const timeout = options.timeout ?? 30;
     const dropped = new AbortController();
     this.calls.add(dropped);
@@ -394,6 +409,10 @@ export class Page {
         sending.then(resolve, reject);
       });
     } catch (error) {
+      if (session !== top && error instanceof CdpError && error.cdpMessage.includes(NO_SESSION)) {
+        oopif.detached(this, session);
+        throw new BrowseError(FRAME_GONE, null, "frame_gone");
+      }
       if (error instanceof Cancelled && dropped.signal.aborted && !outer?.aborted) {
         if (unknown) throw new OutcomeUnknown(`\`${method}\``, `Ardia detached the tab before it answered ${method}`);
         if (this.crashed) throw new BrowseError(CRASHED, null, "tab_crashed");
@@ -421,6 +440,7 @@ export class Page {
       for (const child of Array.isArray(children) ? children : []) walk(record(child), frame.id);
     };
     walk(tree, null);
+    if (this.oopifs.size > 0) await oopif.childFrames(this, frames, frameOf);
     this.frames = frames;
     this.mainFrame = String(record(tree["frame"])["id"]);
     this.url = frames.get(this.mainFrame)?.url ?? "";
@@ -468,17 +488,18 @@ export class Page {
   }
 
   private async createWorld(frame: string, loader: string | null): Promise<World> {
+    const session = this.sessionFor(frame);
     const fresh = () => this.frames.has(frame) && this.loader(frame) === loader;
     const guard = () => {
       if (!fresh()) throw new StaleWorld();
     };
     try {
-      const result = await this.send("Page.createIsolatedWorld", { frameId: frame, worldName: WORLD_NAME });
+      const result = await this.send("Page.createIsolatedWorld", { frameId: frame, worldName: WORLD_NAME }, { session });
       const context = Number(result["executionContextId"]);
       guard();
-      await this.send("Runtime.evaluate", { expression: LIBRARY, contextId: context, returnByValue: true }, { guard });
+      await this.send("Runtime.evaluate", { expression: LIBRARY, contextId: context, returnByValue: true }, { session, guard });
       guard();
-      const handle = record(record((await this.send("Runtime.evaluate", { expression: WORLD_HANDLE, contextId: context, returnByValue: false }, { guard }))["result"]))["objectId"];
+      const handle = record(record((await this.send("Runtime.evaluate", { expression: WORLD_HANDLE, contextId: context, returnByValue: false }, { session, guard }))["result"]))["objectId"];
       guard();
       if (typeof handle !== "string" || !handle) throw new StaleWorld();
       await this.refreshFrames();
@@ -512,6 +533,7 @@ export class Page {
         result = await this.send("Runtime.callFunctionOn", params, {
           timeout: options.timeout ?? 30,
           mutation: !read,
+          session: this.sessionFor(bound.frame),
           guard: () => {
             if (!this.stillCurrent(bound)) throw new StaleWorld();
           },
@@ -554,7 +576,7 @@ export class Page {
     for (const element of elements) {
       let result: CdpResult;
       try {
-        result = await this.send("DOM.resolveNode", { backendNodeId: element.backendId, executionContextId: context });
+        result = await this.send("DOM.resolveNode", { backendNodeId: element.backendId, executionContextId: context }, { session: this.sessionFor(element.frame) });
       } catch (error) {
         if (error instanceof CdpError) return false;
         throw error;
@@ -570,14 +592,15 @@ export class Page {
   async elementFrom(remote: unknown, frame: string, label: string): Promise<Element | null> {
     const found = record(remote);
     if (found["subtype"] === "null" || found["type"] === "undefined" || typeof found["objectId"] !== "string") return null;
-    const node = record((await this.send("DOM.describeNode", { objectId: found["objectId"] }))["node"]);
+    const node = record((await this.send("DOM.describeNode", { objectId: found["objectId"] }, { session: this.sessionFor(frame) }))["node"]);
     return new Element(frame, found["objectId"], Number(node["backendNodeId"]), label);
   }
 
   async elementsFrom(remote: unknown, frame: string, label: string, limit = 300): Promise<Element[]> {
     const found = record(remote);
     if (typeof found["objectId"] !== "string") return [];
-    const props = await this.send("Runtime.getProperties", { objectId: found["objectId"], ownProperties: true });
+    const session = this.sessionFor(frame);
+    const props = await this.send("Runtime.getProperties", { objectId: found["objectId"], ownProperties: true }, { session });
     const indexed: [number, string][] = [];
     for (const prop of Array.isArray(props["result"]) ? props["result"] : []) {
       const name = String(record(prop)["name"] ?? "");
@@ -586,7 +609,7 @@ export class Page {
     }
     indexed.sort((a, b) => a[0] - b[0]);
     const kept = indexed.slice(0, limit);
-    const described = await Promise.all(kept.map(([, objectId]) => this.send("DOM.describeNode", { objectId })));
+    const described = await Promise.all(kept.map(([, objectId]) => this.send("DOM.describeNode", { objectId }, { session })));
     return kept.map(([, objectId], index) => new Element(frame, objectId, Number(record(record(described[index])["node"])["backendNodeId"]), label));
   }
 
@@ -594,7 +617,7 @@ export class Page {
     const context = await this.world(frame);
     let result: CdpResult;
     try {
-      result = await this.send("DOM.resolveNode", { backendNodeId: backendId, executionContextId: context });
+      result = await this.send("DOM.resolveNode", { backendNodeId: backendId, executionContextId: context }, { session: this.sessionFor(frame) });
     } catch (error) {
       if (error instanceof CdpError) return null;
       throw error;
@@ -638,7 +661,7 @@ export class Page {
 
   async focusElement(element: Element): Promise<void> {
     try {
-      await this.send("DOM.focus", { backendNodeId: element.backendId });
+      await this.send("DOM.focus", { backendNodeId: element.backendId }, { session: this.sessionFor(element.frame) });
     } catch (error) {
       if (!(error instanceof CdpError) || !error.cdpMessage.includes("focusable")) throw error;
       let landed: unknown = false;
@@ -664,8 +687,14 @@ export class Page {
     this.networkOn = true;
   }
 
+  onChildEvent(session: string, method: string, params: Json): void {
+    oopif.childEvent(this, session, method, params);
+  }
+
   onEvent(method: string, params: Json): void {
-    if (method === "Page.lifecycleEvent") {
+    if (method === "Target.attachedToTarget" || method === "Target.detachedFromTarget") {
+      if (this.session !== null) oopif.childEvent(this, this.session, method, params);
+    } else if (method === "Page.lifecycleEvent") {
       const frame = String(params["frameId"]);
       const loader = typeof params["loaderId"] === "string" ? params["loaderId"] : null;
       const name = String(params["name"]);

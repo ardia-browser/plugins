@@ -22,7 +22,7 @@ import { canonical } from "./names.ts";
 import { type Answer, encodeAnswer, joinedBatch, MAX_REQUEST, type Options, render, Result, timedOut } from "./render.ts";
 import { redact } from "../../redact.ts";
 import { parseText } from "../../json.ts";
-import { dispatch } from "../commands/all.ts";
+import { dispatch, hooks } from "../commands/all.ts";
 import { Ctx } from "../commands/ctx.ts";
 import { State } from "../state/state.ts";
 import { reportException } from "../../telemetry.ts";
@@ -313,6 +313,10 @@ export class Daemon {
 
   private async cleanupInner(): Promise<void> {
     await temptabs.drain(this.state);
+    if (this.state.connected) {
+      for (const page of [...this.state.pages.values()]) if (page.sessionId && page.input.releaseAll) await page.input.releaseAll();
+    }
+    if (hooks.shutdown) await hooks.shutdown();
     await this.state.disconnect();
   }
 
@@ -445,10 +449,12 @@ export class Daemon {
       this.running = { name, since: monotonic() };
       const limit = commandLimit(name, words, ctx.timeout);
       answer = await this.withinLimit(limit, options, name, () => this.answer(ctx, name, words, options));
+      if (hooks.afterCommand) await hooks.afterCommand(this.state);
       const notice = this.state.notice;
       this.state.notice = null;
       answer = [answer[0], answer[1], (notice ? `${redact(notice)}\n` : "") + answer[2]];
-      closeAfter = this.closeAfterBatch && name === "batch" && answer[0] === 0;
+      const batchClose = hooks.closeAfterBatch ? hooks.closeAfterBatch(this.state) : false;
+      closeAfter = (this.closeAfterBatch || batchClose) && name === "batch" && answer[0] === 0;
       this.closeAfterBatch = false;
     } finally {
       this.running = null;

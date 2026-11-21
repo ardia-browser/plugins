@@ -21,7 +21,7 @@ describe("attach (row 8)", () => {
     const state = stateWith(browser);
     const page = await state.page("TARGET");
     expect(page.sessionId).toBe("SESSION-1");
-    expect(browser.methods("SESSION-1")).toEqual(["Inspector.enable", "Page.enable", "Page.setLifecycleEventsEnabled", "Page.getFrameTree", "Page.getLayoutMetrics"]);
+    expect(browser.methods("SESSION-1")).toEqual(["Inspector.enable", "Page.enable", "Page.setLifecycleEventsEnabled", "Target.setAutoAttach", "Page.getFrameTree", "Page.getLayoutMetrics"]);
     expect(page.mainFrame).toBe(MAIN);
     expect(page.needsEnable).toBe(false);
     expect(pageSessionEnables(browser)).toEqual([]);
@@ -383,7 +383,8 @@ describe("the command table", () => {
     expect(listed.status).toBe(0);
     expect(Object.keys(OWNERS).sort()).toEqual([...listed.stdout.trim().split("\n"), "auth"].sort());
     for (const name of ["open", "get", "wait", "session"]) expect(served(name)).toBe(true);
-    const failure = (await dispatch(ctx(), "click", ["@e1"]).catch((error: unknown) => error)) as BrowseError;
+    for (const name of ["click", "fill", "press", "drag", "batch", "react"]) expect(served(name)).toBe(true);
+    const failure = (await dispatch(ctx(), "eval", ["1"]).catch((error: unknown) => error)) as BrowseError;
     expect(failure.code).toBe("unsupported");
     expect(failure.text).toContain("isn't served by the TypeScript daemon yet");
   });
@@ -405,6 +406,7 @@ describe("the command table", () => {
 
   test("dispatch runs the hooks around a command, and skips the reaction hook for batch", async () => {
     const seen: string[] = [];
+    const kept = { ...hooks };
     hooks.before = async (_ctx, name) => void seen.push(`before ${name}`);
     hooks.begin = async (_ctx, name) => {
       seen.push(`begin ${name}`);
@@ -415,10 +417,10 @@ describe("the command table", () => {
       await dispatch(ctx(), "session", []);
       await dispatch(ctx(), "batch", []).catch(() => {});
     } finally {
-      delete hooks.before;
       delete hooks.begin;
       delete hooks.end;
+      Object.assign(hooks, kept);
     }
-    expect(seen).toEqual(["before session", "begin session", "end session ok"]);
+    expect(seen).toEqual(["before session", "begin session", "end session ok", "begin batch", "end batch ok"]);
   });
 });
