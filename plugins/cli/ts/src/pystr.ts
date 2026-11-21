@@ -49,6 +49,19 @@ export function codePoints(text: string): string[] {
   return out;
 }
 
+export function codePointCount(text: string): number {
+  let count = text.length;
+  for (let at = 0; at < text.length - 1; at += 1) {
+    if (!isHigh(text.charCodeAt(at))) continue;
+    const next = text.charCodeAt(at + 1);
+    if (next === SPLIT || isLow(next)) {
+      count -= 1;
+      at += 1;
+    }
+  }
+  return count;
+}
+
 export function plain(text: string): string {
   return text.includes(SPLIT_TEXT) ? text.replace(SPLIT_AFTER_HIGH, "$1") : text;
 }
@@ -68,4 +81,10 @@ const DECIMAL_RANGES: [number, number][] = decimals
 export function isDecimal(ch: string): boolean {
   const code = ch.codePointAt(0) ?? -1;
   return DECIMAL_RANGES.some(([start, end]) => code >= start && code <= end);
+}
+
+export function decimalDigit(ch: string): number | undefined {
+  const code = ch.codePointAt(0) ?? -1;
+  const range = DECIMAL_RANGES.find(([start, end]) => code >= start && code <= end);
+  return range === undefined ? undefined : (code - range[0]) % 10;
 }

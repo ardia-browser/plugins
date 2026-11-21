@@ -1303,10 +1303,43 @@ class ProductionSigning(unittest.TestCase):
 class BuildSmoke(unittest.TestCase):
     def test_the_packaging_smoke_runs_leave_no_history_or_telemetry_behind(self):
         script = (CLI / "scripts" / "build.sh").read_text().splitlines()
-        runs = [line for line in script if '"$root/bin/ardia"' in line and not line.startswith(("cp ", "chmod ")) and "--version" not in line]
+        runs = [line.lstrip() for line in script if '"$root/bin/ardia"' in line and not line.lstrip().startswith(("cp ", "chmod ")) and "--version" not in line]
         self.assertTrue(runs)
         for line in runs:
             self.assertRegex(line, r'^ARDIA_CLI_HOME="\$work/[^"]+" ARDIA_TELEMETRY=off "\$root/bin/ardia" ', line)
+
+    @unittest.skipUnless(sys.platform == "darwin" and os.uname().machine == "arm64", "the TypeScript ardia is packed on Apple silicon")
+    def test_a_missing_or_other_bun_stops_the_build_before_any_download(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            home = Path(scratch) / "home"
+            fake = Path(scratch) / "bin"
+            fake.mkdir()
+            home.mkdir()
+            env = {"HOME": str(home), "PATH": f"{fake}:/usr/bin:/bin", "LANG": "en_US.UTF-8"}
+            for version, words in ((None, "no bun on PATH"), ("1.2.0", "is 1.2.0")):
+                if version is not None:
+                    (fake / "bun").write_text(f"#!/bin/sh\necho {version}\n")
+                    (fake / "bun").chmod(0o755)
+                started = time.monotonic()
+                done = subprocess.run(["sh", str(CLI / "scripts" / "build.sh"), "9.9.9", str(Path(scratch) / "out")], env=env,
+                                      capture_output=True, text=True, timeout=60)
+                self.assertEqual(done.returncode, 1, done.stderr)
+                self.assertIn("builds with Bun 1.3.14", done.stderr)
+                self.assertIn(words, done.stderr)
+                self.assertLess(time.monotonic() - started, 5)
+                self.assertFalse((Path(scratch) / "out").exists() and any((Path(scratch) / "out").iterdir()))
+
+    def test_every_release_job_that_runs_build_sh_sets_up_the_pinned_bun(self):
+        workflows = CLI.parent.parent / ".github" / "workflows"
+        pinned = re.search(r"uses: (oven-sh/setup-bun@[0-9a-f]{40})\n\s+with:\n\s+bun-version: 1\.3\.14\n", (workflows / "cli.yml").read_text())
+        self.assertIsNotNone(pinned)
+        release = (workflows / "cli-release.yml").read_text()
+        jobs = re.split(r"\n  (?=[a-z][a-z-]*:\n)", release.split("\njobs:\n", 1)[1])
+        building = [job for job in jobs if "build.sh" in job]
+        self.assertTrue(building)
+        for job in building:
+            self.assertIn(f"uses: {pinned.group(1)}\n        with:\n          bun-version: 1.3.14\n", job, job.split(":", 1)[0])
+            self.assertLess(job.index(pinned.group(1)), job.index("build.sh"))
 
 
 class Collector(BaseHTTPRequestHandler):

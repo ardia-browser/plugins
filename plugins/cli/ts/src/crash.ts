@@ -5,9 +5,14 @@ import { cliVersion } from "./version.ts";
 
 const MECHANISM = "cli_unhandled";
 
-export function exceptionProperties(errno: number, environment: string): [string, Value][] {
-  const kind = pythonOsError(errno);
-  const value = `[Errno ${errno}] ${strerror(errno)}`;
+export type Crash = { kind: string; value: string };
+
+export function osCrash(errno: number): Crash {
+  return { kind: pythonOsError(errno), value: `[Errno ${errno}] ${strerror(errno)}` };
+}
+
+export function exceptionProperties(crash: Crash, environment: string): [string, Value][] {
+  const { kind, value } = crash;
   const entry: JsonObject = object([
     ["type", kind],
     ["value", value],

@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <math.h>
+#include <poll.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -20,9 +21,11 @@
 #if defined(__linux__)
 #include <sys/syscall.h>
 #endif
+#include <sys/un.h>
+#include <stdlib.h>
 #if defined(__APPLE__)
 #include <sys/ucred.h>
-#include <sys/un.h>
+int pthread_fchdir_np(int fd);
 #endif
 
 #ifndef SRC_JS_NATIVE_API_TYPES_H_
@@ -74,7 +77,7 @@ static bool take_args(napi_env env, napi_callback_info info, size_t wanted, Call
   call->env = env;
   call->argc = MAX_ARGS;
   if (napi_get_cb_info(env, info, &call->argc, call->argv, NULL, NULL) != napi_ok) return false;
-  return call->argc >= wanted;
+  return call->argc == wanted;
 }
 
 static bool int_arg(Call *call, size_t index, int32_t *out) {
@@ -168,7 +171,8 @@ static napi_value peer_uid(napi_env env, napi_callback_info info) {
 static napi_value interrupts_ignored(napi_env env, napi_callback_info info) {
   struct sigaction current;
   napi_value result = NULL;
-  (void)info;
+  Call call;
+  if (!take_args(env, info, 0, &call)) return status(env, -EINVAL);
   memset(&current, 0, sizeof(current));
   if (sigaction(SIGINT, NULL, &current) != 0) return status(env, failed());
   napi_get_boolean(env, current.sa_handler == SIG_IGN, &result);
@@ -188,6 +192,116 @@ static napi_value open_at(napi_env env, napi_callback_info info) {
     if (fd >= 0) return owned_fd(env, fd);
     if (errno != EINTR) return status(env, failed());
   }
+}
+
+static bool basename_only(const char *name) {
+  return name[0] != 0 && strchr(name, '/') == NULL && strcmp(name, ".") != 0 && strcmp(name, "..") != 0;
+}
+
+static int64_t now_ms(void) {
+  struct timespec clock;
+  clock_gettime(CLOCK_MONOTONIC, &clock);
+  return (int64_t)clock.tv_sec * 1000 + clock.tv_nsec / 1000000;
+}
+
+static int settle_connect(int fd, int64_t deadline) {
+  for (;;) {
+    int64_t left = deadline - now_ms();
+    if (left <= 0) return -ETIMEDOUT;
+    struct pollfd ready = {.fd = fd, .events = POLLOUT};
+    int got = poll(&ready, 1, left > INT32_MAX ? INT32_MAX : (int)left);
+    if (got < 0 && errno == EINTR) continue;
+    if (got < 0) return failed();
+    if (got == 0) return -ETIMEDOUT;
+    int error = 0;
+    socklen_t size = sizeof(error);
+    if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &size) != 0) return failed();
+    return error == 0 ? 0 : -error;
+  }
+}
+
+static int connect_unix(int dir, const char *name, int64_t deadline) {
+  struct sockaddr_un address;
+  memset(&address, 0, sizeof(address));
+  address.sun_family = AF_UNIX;
+  if (!basename_only(name)) return -EINVAL;
+#if defined(__APPLE__)
+  if (strlen(name) >= sizeof(address.sun_path)) return -ENAMETOOLONG;
+  strcpy(address.sun_path, name);
+  int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+  if (fd < 0) return failed();
+  if (fcntl(fd, F_SETFD, FD_CLOEXEC) != 0 || pthread_fchdir_np(dir) != 0) {
+    int error = failed();
+    close(fd);
+    return error;
+  }
+  int connected = connect(fd, (struct sockaddr *)&address, (socklen_t)sizeof(address));
+  int saved = errno;
+  if (pthread_fchdir_np(-1) != 0) abort();
+  errno = saved;
+  int outcome = connected == 0 ? 0 : errno == EINTR ? settle_connect(fd, deadline) : failed();
+#else
+  int written = snprintf(address.sun_path, sizeof(address.sun_path), "/proc/self/fd/%d/%s", dir, name);
+  if (written < 0 || (size_t)written >= sizeof(address.sun_path)) return -ENAMETOOLONG;
+  int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
+  if (fd < 0) return failed();
+  int outcome;
+  for (;;) {
+    if (connect(fd, (struct sockaddr *)&address, (socklen_t)sizeof(address)) == 0) {
+      outcome = 0;
+      break;
+    }
+    if (errno == EINPROGRESS || errno == EINTR) {
+      outcome = settle_connect(fd, deadline);
+      break;
+    }
+    if (errno != EAGAIN) {
+      outcome = failed();
+      break;
+    }
+    if (now_ms() >= deadline) {
+      outcome = -ETIMEDOUT;
+      break;
+    }
+    poll(NULL, 0, 5);
+  }
+#endif
+  if (outcome == 0) return fd;
+  close(fd);
+  return outcome;
+}
+
+static napi_value connect_at(napi_env env, napi_callback_info info) {
+  Call call;
+  int32_t dir, wait_ms;
+  char name[PATH_MAX];
+  if (!take_args(env, info, 3, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &dir) || !int_arg(&call, 2, &wait_ms)) return NULL;
+  if (dir < 0) return status(env, -EBADF);
+  int checked = name_arg(&call, 1, name, sizeof(name));
+  if (checked != 0) return status(env, checked);
+  int fd = connect_unix(dir, name, now_ms() + (wait_ms < 0 ? 0 : wait_ms));
+  return fd < 0 ? status(env, fd) : owned_fd(env, fd);
+}
+
+static napi_value socket_info_at(napi_env env, napi_callback_info info) {
+  Call call;
+  int32_t dir;
+  char name[PATH_MAX];
+  struct stat found;
+  napi_value result = NULL;
+  if (!take_args(env, info, 2, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &dir)) return NULL;
+  int checked = name_arg(&call, 1, name, sizeof(name));
+  if (checked != 0) return status(env, checked);
+  if (dir < 0) return status(env, -EBADF);
+  if (!basename_only(name)) return status(env, -EINVAL);
+  if (fstatat(dir, name, &found, AT_SYMLINK_NOFOLLOW) != 0) return status(env, failed());
+  if (napi_create_array(env, &result) != napi_ok || napi_set_element(env, result, 0, number(env, (double)found.st_mode)) != napi_ok
+      || napi_set_element(env, result, 1, number(env, (double)found.st_uid)) != napi_ok) {
+    return NULL;
+  }
+  return result;
 }
 
 static napi_value not_regular(napi_env env) {
@@ -665,6 +779,8 @@ __attribute__((visibility("default"))) napi_value napi_register_module_v1(napi_e
   bool ok = define(env, exports, "peerUid", peer_uid)
       && define(env, exports, "interruptsIgnored", interrupts_ignored)
       && define(env, exports, "openAt", open_at)
+      && define(env, exports, "connectAt", connect_at)
+      && define(env, exports, "socketInfoAt", socket_info_at)
       && define(env, exports, "openFileAt", open_file_at)
       && define(env, exports, "mkdirAt", mkdir_at)
       && define(env, exports, "renameAt", rename_at)

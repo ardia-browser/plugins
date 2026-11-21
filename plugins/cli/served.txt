@@ -4,3 +4,4 @@ tabs rust
 groups rust
 windows rust
 commands rust
+browse ts

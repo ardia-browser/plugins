@@ -35,7 +35,7 @@ def main() -> int:
         return 2
     cases = harness.load_cases()
     if args.command:
-        cases = [case for case in cases if case.command in args.command]
+        cases = [case for case in cases if case.command in args.command or harness.row_name(case.command) in args.command]
     if args.case:
         cases = [case for case in cases if case.id in args.case]
     if (args.command or args.case) and not cases:
@@ -52,7 +52,7 @@ def main() -> int:
         progress(outcome)
     served = harness.served_commands()
     if args.command or args.case:
-        served = [name for name in served if any(outcome.case.command == name for outcome in outcomes)]
+        served = [name for name in served if any(harness.row_name(outcome.case.command) == name for outcome in outcomes)]
     summary = harness.summarize(outcomes, served)
     if args.report:
         head = subprocess.run(["git", "-C", str(harness.CLI), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
@@ -64,7 +64,11 @@ def main() -> int:
             if not outcome.passed:
                 print(outcome.report())
         failed = sum(not outcome.passed for outcome in outcomes)
-        print(f"{len(outcomes) - failed}/{len(outcomes)} cases pass with the {args.entry} entry; it serves {', '.join(served)}")
+        print(f"{len(outcomes) - failed}/{len(outcomes)} cases pass with the {args.entry} entry ({summary['intentional']} of them intentional "
+              f"differences from Python, compared against the output each case records); it serves {', '.join(served)}")
+        if summary["cdp_rules_awaiting_fake_engine"]:
+            print(f"{len(summary['cdp_rules_awaiting_fake_engine'])} cases carry CDP rules the daemon must keep; nothing checks them until the "
+                  "harness has a fake engine (M3)")
         if summary["unproven_but_served"]:
             print(f"served.txt lists commands whose cases don't all pass: {', '.join(summary['unproven_but_served'])}")
         if args.keep:

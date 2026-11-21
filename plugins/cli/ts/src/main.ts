@@ -15,7 +15,31 @@ function asksForVersion(argv: string[]): boolean {
   return argv.length === 1 && argv[0] === "--version";
 }
 
+let browseServed = false;
+
+async function serveBrowse(argv: string[], python: string | null): Promise<number | undefined> {
+  const [browse, paths, { consentUnreadable, dataDirArg, leadingTokens }, { pluginMode }] = await Promise.all([
+    import("./browse/index.ts"),
+    import("./paths.ts"),
+    import("./telemetry.ts"),
+    import("./browse/route.ts"),
+  ]);
+  const named = [process.env.ARDIA_DATA_DIR, process.env.ARDIA_CLI_HOME, dataDirArg(leadingTokens(argv))];
+  if (!paths.pathsAreText() || named.some(paths.needsAccountLookup) || (!pluginMode() && consentUnreadable(argv))) return browse.refuseOrHandBack(argv, python);
+  try {
+    return await browse.serveBrowse(argv, python);
+  } catch (error) {
+    if (error instanceof paths.NeedsPython) return browse.refuseOrHandBack(argv, python);
+    throw error;
+  }
+}
+
 async function serve(argv: string[], python: string | null): Promise<number | undefined> {
+  const { invokesBrowse, pluginMode } = await import("./browse/route.ts");
+  if (pluginMode() || (invokesBrowse(argv) && servesNatively("browse"))) {
+    browseServed = true;
+    return serveBrowse(argv, python);
+  }
   const [{ route }, paths] = await Promise.all([import("./route.ts"), import("./paths.ts")]);
   const chosen = route(argv);
   if (chosen.kind === "python" || chosen.kind === "version") return undefined;
@@ -33,7 +57,13 @@ async function serve(argv: string[], python: string | null): Promise<number | un
   }
 }
 
-function failWithoutAddon(message: string, lifeline: number): Promise<number> {
+async function addonFailure(error: LibcUnavailable, argv: string[]): Promise<{ fd: number; text: string }> {
+  const [{ invokesBrowse }, { jsonIntentOfArgv }] = await Promise.all([import("./browse/route.ts"), import("./browse/args.ts")]);
+  if (!invokesBrowse(argv) || !jsonIntentOfArgv(argv)) return { fd: 2, text: `${error.message}\n` };
+  return { fd: 1, text: `${JSON.stringify({ success: false, data: null, error: error.message, code: "internal_error" })}\n` };
+}
+
+function failWithoutAddon(failure: { fd: number; text: string }, lifeline: number): Promise<number> {
   const sink = Buffer.alloc(64);
   const watch = () =>
     read(lifeline, sink, 0, sink.length, null, (error, count) => {
@@ -42,7 +72,7 @@ function failWithoutAddon(message: string, lifeline: number): Promise<number> {
       else setTimeout(watch, 50);
     });
   watch();
-  return new Promise((resolve) => write(2, message, () => resolve(LIBC_UNAVAILABLE)));
+  return new Promise((resolve) => write(failure.fd, failure.text, () => resolve(LIBC_UNAVAILABLE)));
 }
 
 async function main(words: string[]): Promise<number> {
@@ -58,13 +88,13 @@ async function main(words: string[]): Promise<number> {
     loadLibc();
   } catch (error) {
     if (!(error instanceof LibcUnavailable)) throw error;
-    process.exit(await failWithoutAddon(`${error.message}\n`, routed.lifeline));
+    process.exit(await failWithoutAddon(await addonFailure(error, routed.argv), routed.lifeline));
   }
   watchLifeline(routed.lifeline);
   if (!interruptsIgnored()) catchInterrupts();
   const argv = routed.argv;
   if (argv.some((word) => word.includes(LOSSY))) return HAND_BACK;
-  if (asksForVersion(argv) && servesNatively("--version")) {
+  if (asksForVersion(argv) && servesNatively("--version") && !process.env.ARDIA_BROWSE_FOR_PLUGIN) {
     try {
       writeWhole(1, Buffer.from(`ardia ${cliVersion()}\n`));
     } catch (error) {
@@ -78,3 +108,4 @@ async function main(words: string[]): Promise<number> {
 const status = settleStderr(await main(process.argv.slice(2)));
 process.exitCode = status;
 if (abandonedOutput()) setTimeout(() => process.exit(status), ABANDONED_WRITE_GRACE_MS).unref();
+else if (browseServed) process.exit(status);

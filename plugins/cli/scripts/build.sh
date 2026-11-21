@@ -1,6 +1,8 @@
 #!/bin/sh
-# Builds the ardia CLI tarball: the Rust ardia binary (plugins/cli/rust) as bin/ardia, and the relocatable CPython 3.13 with
-# ardia_cli, its pinned dependencies, esbuild and axe-core that it hands every command it doesn't serve itself.
+# Builds the ardia CLI tarball: the Rust ardia binary (plugins/cli/rust) as bin/ardia; on macOS the TypeScript ardia
+# (plugins/cli/ts, a Bun executable) as libexec/ardia-ts with its addon libexec/ardia-libc.so, which bin/ardia runs for
+# the commands served.txt gives TypeScript; and the relocatable CPython 3.13 with ardia_cli, its pinned dependencies,
+# esbuild and axe-core that it hands every command it doesn't serve itself.
 #
 #   plugins/cli/scripts/build.sh <version> <out dir> [--platform macos-arm64|linux-x64]
 #   plugins/cli/scripts/build.sh -h | --help
@@ -8,8 +10,8 @@
 # Writes <out dir>/ardia-cli-<version>-<platform>.tar.gz and its .sha256 (sha256sum format). The platform defaults to
 # the host's (macos-arm64 on Apple silicon, linux-x64 on Linux x86_64) and must be the host's: the bundled Python
 # installs the wheels and runs the checks. Needs the network (python-build-standalone from GitHub, wheels from PyPI,
-# esbuild and axe-core from npm, crates from crates.io), uv (~/.local/bin/uv or on PATH) and cargo (~/.cargo/bin/cargo
-# or on PATH; the crate's Cargo.lock pins its dependencies). The Python, esbuild and axe-core downloads are pinned by
+# esbuild and axe-core from npm, crates from crates.io), uv (~/.local/bin/uv or on PATH), cargo (~/.cargo/bin/cargo
+# or on PATH; the crate's Cargo.lock pins its dependencies) and, on macOS, Bun 1.3.14 (~/.bun/bin/bun or on PATH). The Python, esbuild and axe-core downloads are pinned by
 # sha256 (the npm ones also by npm's sha512 integrity) and cached in ~/Library/Caches/ardia-cli-build on macOS and
 # ${XDG_CACHE_HOME:-~/.cache}/ardia-cli-build on Linux. requirements.lock carries the hashes for both platforms.
 set -eu
@@ -58,6 +60,7 @@ case $platform in
     esbuild_platform=darwin-arm64
     esbuild_sha256=1980cde09749094452b20d36ff267585ccb3f72749c7bc97291cd9996ccf5a2a
     esbuild_sha512=n4KqkOQrraxHJcgjM1RvwbigfQKIKJVpM7xp+KsxiyUSrRdIXnt73VhrPAx0fV44hgfmIVKjxMN9J1t5jySVkw==
+    bun_target=bun-darwin-arm64
     ;;
   linux-x64)
     python_triple=x86_64-unknown-linux-gnu
@@ -65,10 +68,19 @@ case $platform in
     esbuild_platform=linux-x64
     esbuild_sha256=9573bb2233aab0f9ea7647d5cca9726113cc1768de61d66b17267f4db84488f6
     esbuild_sha512=4xTZr1FUmSoQW4XIWmit3tzQrUTZM+N3P0XV8xROKYF50XfI7xeO90+1bZvNwxIufQ9hDQVRJH5YhgPVF8A/HQ==
+    bun_target=
     ;;
   *) echo "build.sh: the platform is macos-arm64 or linux-x64, got $platform" >&2; exit 64 ;;
 esac
 [ "$platform" = "$host" ] || { echo "build.sh: build $platform on a $platform host (this one is $(uname -s) $(uname -m))" >&2; exit 64; }
+bun_version=1.3.14
+if [ -n "$bun_target" ]; then
+  bun=$(command -v bun 2>/dev/null || true)
+  [ -n "$bun" ] || bun=$HOME/.bun/bin/bun
+  [ -x "$bun" ] || { echo "build.sh: the TypeScript ardia builds with Bun $bun_version, and there's no bun on PATH or at ~/.bun/bin/bun (CI: oven-sh/setup-bun with bun-version: $bun_version)" >&2; exit 1; }
+  found_bun=$("$bun" --version 2>/dev/null || echo unknown)
+  [ "$found_bun" = "$bun_version" ] || { echo "build.sh: the TypeScript ardia builds with Bun $bun_version, and $bun is $found_bun" >&2; exit 1; }
+fi
 python_asset=cpython-$python_version+$python_release-$python_triple-install_only_stripped.tar.gz
 python_url=https://github.com/astral-sh/python-build-standalone/releases/download/$python_release/$(printf %s "$python_asset" | sed 's/+/%2B/')
 esbuild_asset=esbuild-$esbuild_platform-$esbuild_version.tgz
@@ -170,6 +182,18 @@ chmod 755 "$root/bin/ardia"
 mkdir "$root/.leases"
 [ "$("$root/bin/ardia" --version)" = "ardia $version" ] || { echo "build.sh: the Rust ardia doesn't run" >&2; exit 1; }
 ARDIA_CLI_HOME="$work/cli-home" ARDIA_TELEMETRY=off "$root/bin/ardia" skills list >/dev/null || { echo "build.sh: the Rust ardia can't hand a command to the bundled Python" >&2; exit 1; }
+if [ -n "$bun_target" ]; then
+  mkdir "$root/libexec"
+  PATH="$(dirname "$bun"):$PATH" sh "$cli_dir/ts/scripts/build.sh" --version "$version" --target "$bun_target" --out "$root/libexec/ardia-ts" >/dev/null
+  [ -x "$root/libexec/ardia-ts" ] && [ -f "$root/libexec/ardia-libc.so" ] || { echo "build.sh: the TypeScript ardia or its addon is missing" >&2; exit 1; }
+  ARDIA_BROWSE_FOR_PLUGIN=1
+  export ARDIA_BROWSE_FOR_PLUGIN
+  smoke=0
+  ARDIA_CLI_HOME="$work/cli-home" ARDIA_TELEMETRY=off "$root/bin/ardia" browse get title 2>"$work/ts-smoke" >/dev/null || smoke=$?
+  unset ARDIA_BROWSE_FOR_PLUGIN
+  [ "$smoke" = 77 ] && grep -q "needs ARDIA_PLUGIN_CREDENTIAL_FD, the descriptor" "$work/ts-smoke" \
+    || { echo "build.sh: bin/ardia doesn't run the TypeScript ardia ($smoke: $(cat "$work/ts-smoke"))" >&2; exit 1; }
+fi
 find "$root" -name __pycache__ -type d -prune -exec rm -rf {} +
 
 tarball=ardia-cli-$version-$platform.tar.gz

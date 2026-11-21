@@ -1,6 +1,7 @@
 import base64
 import difflib
 import functools
+import fcntl
 import hashlib
 import json
 import os
@@ -53,6 +54,8 @@ NATIVE_ATTEMPTS = 1
 READ_ONLY_METHODS = frozenset({"hello", "workspace", "windows", "commands"})
 PATH_ENV = frozenset({"ARDIA_DATA_DIR", "ARDIA_CONFIG_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME",
                       "XDG_RUNTIME_DIR"})
+GROUP_ROWS = ("browse",)
+TRACEBACK = re.compile(rb"Traceback \(most recent call last\):\n(?:  .*\n)*")
 TIME_KEYS = re.compile(r"(_at|At|_ms|time|Time)$")
 TIME_SLACK = 120
 NOW_SLACK = 2
@@ -197,10 +200,23 @@ def route_from(lines: list[str]) -> str:
     return "ts" if "ts" in lines else "rust"
 
 
+def row_of(command: str, served) -> str | None:
+    if command in served:
+        return command
+    group = command.split(" ", 1)[0]
+    return group if group != command and group in GROUP_ROWS and group in served else None
+
+
+def row_name(command: str) -> str:
+    group = command.split(" ", 1)[0]
+    return group if group in GROUP_ROWS else command
+
+
 def expected_route(entry: str, served: dict[str, str], case: "Case", ts_installed: bool) -> str:
-    if case.fallback or case.command not in served:
+    row = row_of(case.command, served)
+    if case.fallback or row is None:
         return "python"
-    side = "ts" if entry == "ts" else served[case.command]
+    side = "ts" if entry == "ts" else served[row]
     return "python" if side == "ts" and not ts_installed else side
 
 
@@ -247,6 +263,10 @@ class Case:
     stdin: object = None
     env: dict = field(default_factory=dict)
     control: dict | None = field(default_factory=dict)
+    daemon: dict | None = None
+    credential: dict | None = None
+    intentional: dict | None = None
+    cdp_rules: dict | None = None
     consent: dict = field(default_factory=dict)
     files: dict = field(default_factory=dict)
     helpers: dict = field(default_factory=dict)
@@ -268,7 +288,7 @@ class Case:
     def to_dict(self) -> dict:
         row = {"id": self.id, "command": self.command, "argv": self.argv}
         defaults = Case(id="", command="", argv=[])
-        for name in ("stdin", "env", "control", "consent", "files", "helpers", "fallback", "normalize", "note"):
+        for name in ("stdin", "env", "control", "daemon", "credential", "intentional", "cdp_rules", "consent", "files", "helpers", "fallback", "normalize", "note"):
             value = getattr(self, name)
             if value != getattr(defaults, name):
                 row[name] = value
@@ -296,7 +316,23 @@ def contained_path(text: str, writable: bool = False) -> bool:
     return resolved.startswith("/BOX/")
 
 
+CDP_RULE_KEYS = frozenset({"never_params", "only_values", "why"})
+
+
+def check_cdp_rules(case: Case) -> None:
+    where = f"case {case.id!r}"
+    for method, rule in (case.cdp_rules or {}).items():
+        if not re.fullmatch(r"[A-Z][A-Za-z]+\.[a-z][A-Za-z]+", method) or not isinstance(rule, dict) or set(rule) - CDP_RULE_KEYS or "why" not in rule:
+            raise UnsafeCase(f"{where}: cdp_rules maps a CDP method to never_params, only_values and why")
+        if not all(isinstance(name, str) for name in rule.get("never_params", [])):
+            raise UnsafeCase(f"{where}: never_params lists parameter names")
+        for name, values in rule.get("only_values", {}).items():
+            if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
+                raise UnsafeCase(f"{where}: only_values maps {name!r} to the values it may hold")
+
+
 def check_case_is_contained(case: Case) -> None:
+    check_cdp_rules(case)
     where = f"case {case.id!r}"
     for rel in case.files:
         parts = Path(rel).parts
@@ -475,6 +511,105 @@ class FakeArdia:
         self.stopped.set()
 
 
+class FakeDaemon:
+    def __init__(self, data: Path, spec: dict):
+        if str(CLI) not in sys.path:
+            sys.path.insert(0, str(CLI))
+        from ardia_cli.browse import client, paths
+
+        endpoint = spec.get("endpoint", "token")
+        if isinstance(endpoint, dict) and "port" in endpoint:
+            key_source = client.endpoint_key(None, int(endpoint["port"]), data)[0]
+        elif isinstance(endpoint, dict) and "ws" in endpoint:
+            key_source = client.endpoint_key(endpoint["ws"], None, data)[0]
+        elif isinstance(endpoint, dict) and "plugin" in endpoint:
+            key_source = "plugin:" + hashlib.sha256(endpoint["plugin"].encode()).hexdigest()[:32]
+        else:
+            key_source = client.endpoint_key(None, None, data)[0]
+        key = paths.session_key(spec.get("namespace", ""), key_source, spec.get("session", "default"),
+                                for_plugin=isinstance(endpoint, dict) and "plugin" in endpoint)
+        browse = data / paths.DIR_NAME
+        browse.mkdir(mode=0o700, parents=True, exist_ok=True)
+        browse.chmod(0o700)
+        self.path = browse / f"{key}.sock"
+        self.lock_fd = os.open(browse / f"{key}.lock", os.O_RDWR | os.O_CREAT, 0o600)
+        fcntl.flock(self.lock_fd, fcntl.LOCK_EX)
+        self.replies = list(spec.get("replies") or [{"out": "", "err": "", "exit": 0}])
+        self.requests = []
+        self.talkers = []
+        self.lock = threading.Lock()
+        self.server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.server.bind(str(self.path))
+        self.path.chmod(0o600)
+        self.server.listen(16)
+        self.server.settimeout(0.1)
+        self.stopped = threading.Event()
+        self.closing = threading.Event()
+        self.thread = threading.Thread(target=self.accept, daemon=True)
+        self.thread.start()
+
+    def accept(self):
+        while not self.closing.is_set():
+            try:
+                connection, _ = self.server.accept()
+            except socket.timeout:
+                continue
+            except OSError:
+                return
+            self.serve(connection)
+
+    def serve(self, connection):
+        talker = threading.Thread(target=self.talk, args=(connection,), daemon=True)
+        with self.lock:
+            self.talkers.append(talker)
+        talker.start()
+
+    def talk(self, connection):
+        try:
+            with connection, connection.makefile("rb") as lines:
+                line = lines.readline()
+                try:
+                    payload = json.loads(line)
+                except ValueError:
+                    payload = {"<not json>": line.decode("utf-8", "backslashreplace")}
+                with self.lock:
+                    self.requests.append(payload)
+                    reply = self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
+                if not line:
+                    return
+                if reply == "close":
+                    return
+                if isinstance(reply, dict) and "raw" in reply:
+                    connection.sendall(decode_blob(reply["raw"]))
+                    return
+                if isinstance(reply, dict) and "hang" in reply:
+                    self.stopped.wait(float(reply["hang"]))
+                    return
+                connection.sendall(json.dumps(reply, ensure_ascii=False).encode() + b"\n")
+        except OSError:
+            pass
+
+    def close(self):
+        self.closing.set()
+        self.thread.join(2)
+        self.server.setblocking(False)
+        while True:
+            try:
+                connection, _ = self.server.accept()
+            except (BlockingIOError, OSError):
+                break
+            connection.setblocking(True)
+            self.serve(connection)
+        self.server.close()
+        os.close(self.lock_fd)
+        deadline = time.monotonic() + DRAIN_TIMEOUT
+        with self.lock:
+            talkers = list(self.talkers)
+        for talker in talkers:
+            talker.join(max(0.0, deadline - time.monotonic()))
+        self.stopped.set()
+
+
 @dataclass
 class Observed:
     stdout: bytes
@@ -491,6 +626,7 @@ class Observed:
     route: str = "new"
     timed_out: bool = False
     transcript_complete: bool = True
+    daemon_requests: list = field(default_factory=list)
 
 
 def tree(root: Path) -> dict:
@@ -852,7 +988,51 @@ def read_telemetry(box: Path, data: Path, window: tuple[float, float]):
         scrub_timestamp(record, window)
         for key in VOLATILE_PROPERTIES:
             record.get("properties", {}).pop(key, None)
+        for exception in record.get("properties", {}).get("$exception_list") or []:
+            if isinstance(exception, dict) and isinstance(exception.get("stacktrace"), dict):
+                exception["stacktrace"].pop("frames", None)
     return records, queued, served, labels
+
+
+CREDENTIAL_KINDS = ("pipe", "file", "terminal", "write-end")
+
+
+def credential_fd(spec: dict, box: Path) -> tuple[int, list[int], list[int]]:
+    import pty
+
+    kind = spec.get("kind", "pipe")
+    if kind not in CREDENTIAL_KINDS:
+        raise UnsafeCase(f"a credential kind is one of {', '.join(CREDENTIAL_KINDS)}, not {kind!r}")
+    data = decode_blob(spec.get("bytes"))
+    if kind == "file":
+        path = box / "tmp" / "credential"
+        path.write_bytes(data)
+        fd = os.open(path, os.O_RDONLY)
+        return fd, [fd], []
+    if kind == "terminal":
+        leader, follower = pty.openpty()
+        return follower, [follower], [leader]
+    reader, writer = os.pipe()
+    if kind == "write-end":
+        os.close(reader)
+        return writer, [writer], []
+    if data:
+        os.write(writer, data)
+    if spec.get("keep_open"):
+        return reader, [reader], [writer]
+    os.close(writer)
+    return reader, [reader], []
+
+
+def with_credential(command: list[str], spec: dict | None, box: Path) -> tuple[list[str], tuple, list[int], list[int]]:
+    if spec is None:
+        return command, (), [], []
+    target = int(spec.get("fd", 4))
+    if not 3 <= target <= 9:
+        raise UnsafeCase("a credential fd is 3 to 9")
+    given, held, later = credential_fd(spec, box)
+    wrapper = ["/bin/sh", "-c", f'exec {target}<&{given} {given}<&-; exec "$@"', "sh"] if given != target else []
+    return wrapper + command, (given,), held, later
 
 
 def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[Observed, list]:
@@ -862,6 +1042,11 @@ def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[O
     if control is not None:
         fake = FakeArdia(box / "data" / "ArdiaControl.sock", expand(control.get("hello", DEFAULT_HELLO), places),
                          expand(control.get("replies", {}), places), expand(control.get("events", []), places))
+    if case.daemon is None and ("browse" in case.argv or "notes" in case.argv):
+        if fake:
+            fake.close()
+        raise UnsafeCase(f"case {case.id}: a browse or notes case needs a daemon, or the client starts a real one")
+    daemon = FakeDaemon(box / "data", expand(case.daemon, places)) if case.daemon is not None else None
     before = tree(box)
     started = time.time()
     stdin = decode_blob(expand(case.stdin, places) if isinstance(case.stdin, str) else case.stdin)
@@ -873,11 +1058,17 @@ def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[O
     except UnsafeCase:
         if fake:
             fake.close()
+        if daemon:
+            daemon.close()
         raise
     try:
-        process = subprocess.Popen(install.confined(install.command(side) + argv, box), cwd=places["cwd"],
-                                   env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE, start_new_session=True)
+        command, keep, held, later = with_credential(install.command(side) + argv, case.credential, box)
+        try:
+            process = subprocess.Popen(install.confined(command, box), cwd=places["cwd"], env=env, stdin=subprocess.PIPE,
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True, pass_fds=keep)
+        finally:
+            for fd in held:
+                os.close(fd)
         try:
             stdout, stderr = process.communicate(stdin, timeout=TIMEOUT)
         except subprocess.TimeoutExpired:
@@ -893,10 +1084,14 @@ def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[O
             os.killpg(process.pid, signal.SIGKILL)
         except (ProcessLookupError, PermissionError):
             pass
+        for fd in later:
+            os.close(fd)
     finally:
         reap(str(box))
         if fake:
             fake.close()
+        if daemon:
+            daemon.close()
     window = (started, time.time())
     after = tree(box)
     records, queued, served, labels = read_telemetry(box, box / "data", window)
@@ -907,8 +1102,9 @@ def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[O
     log_text = read_inside(box, box / "helpers.log")
     helpers = log_text.splitlines() if log_text else []
     route = route_from(install.route_of(process.pid))
-    observed = Observed(stdout, stderr, process.returncode, fake.transcript() if fake else [], records, queued, served, usage,
-                        file_changes(before, after), helpers, flush, route, timed_out, fake.complete if fake else True)
+    observed = Observed(stdout, TRACEBACK.sub(b"", stderr), process.returncode, fake.transcript() if fake else [], records, queued, served, usage,
+                        file_changes(before, after), helpers, flush, route, timed_out, fake.complete if fake else True,
+                        daemon.requests if daemon else [])
     return apply_normalizers(observed, case, places), labels
 
 
@@ -945,7 +1141,7 @@ def text_of(value) -> str:
     return json.dumps(value, indent=1, sort_keys=True, ensure_ascii=False, default=str)
 
 
-FIELDS = ("status", "stdout", "stderr", "requests", "telemetry", "queued", "usage", "flush", "files", "helpers", "timed_out")
+FIELDS = ("status", "stdout", "stderr", "requests", "daemon_requests", "telemetry", "queued", "usage", "flush", "files", "helpers", "timed_out")
 
 
 def read_only(connection: list) -> bool:
@@ -979,6 +1175,35 @@ def compare(new: Observed, python: Observed, fallback: bool = False, label: str 
     return mismatches
 
 
+INTENTIONAL_KEYS = frozenset({"why", "stdout", "stderr", "status", "daemon_requests", "usage", "files"})
+
+
+def intended(python: "Observed", case: Case, places: dict | None = None) -> tuple["Observed", list[str]]:
+    from dataclasses import replace
+
+    spec = case.intentional or {}
+    problems = []
+    if set(spec) - INTENTIONAL_KEYS or not isinstance(spec.get("why"), str) or len(spec) < 2:
+        return python, [f"intentional takes why and at least one of stdout, stderr, status, daemon_requests, usage, files, not {sorted(spec)}"]
+    changes = {}
+    for name in ("stdout", "stderr"):
+        if name in spec:
+            changes[name] = file_bytes(spec[name], places or {})
+    for name in ("status", "daemon_requests", "usage", "files"):
+        if name in spec:
+            changes[name] = spec[name]
+    if all(getattr(python, name) == value for name, value in changes.items()):
+        problems.append(f"intentional ({spec['why']}) expects what Python already does; drop it")
+    return replace(python, **changes), problems
+
+
+def without_cli_records(python: "Observed") -> "Observed":
+    from dataclasses import replace
+
+    files = {name: change for name, change in python.files.items() if not name.startswith(("cli-home/Usage", "data/Telemetry"))}
+    return replace(python, usage=None, telemetry=[], files=files)
+
+
 @dataclass
 class Outcome:
     case: Case
@@ -986,6 +1211,7 @@ class Outcome:
     route: str
     python_labels: list
     problems: list
+    intentional: bool = False
 
     @property
     def passed(self) -> bool:
@@ -1031,18 +1257,27 @@ def check_case(install: Installation, case: Case, served: dict[str, str], keep: 
         problems.append(f"telemetry says {new.served_by[-1]} served it, but {new.route} did")
     if python.timed_out:
         problems.append(f"Python didn't finish in {TIMEOUT} s")
+    applied = False
+    if case.intentional is not None and expected == "ts":
+        python, intent_problems = intended(python, case, places_of(box))
+        problems += intent_problems
+        applied = True
+    if case.env.get("ARDIA_BROWSE_FOR_PLUGIN") and expected == "ts":
+        python = without_cli_records(python)
     for side, seen in ((install.entry, new), ("python", python)):
         if not seen.transcript_complete:
             problems.append(f"the {side} side left a control connection open past the drain deadline, so its transcript may be cut short")
-    return Outcome(case, compare(new, python, case.fallback, install.entry), new.route, labels, problems)
+    return Outcome(case, compare(new, python, case.fallback, install.entry), new.route, labels, problems, applied)
 
 
 def summarize(outcomes: list[Outcome], served: list[str] | dict[str, str]) -> dict:
     served = list(served)
     commands = {}
     for outcome in outcomes:
-        row = commands.setdefault(outcome.case.command, {"cases": 0, "passed": 0, "native": 0, "failed": [], "served": outcome.case.command in served})
+        name = row_name(outcome.case.command)
+        row = commands.setdefault(name, {"cases": 0, "passed": 0, "native": 0, "intentional": 0, "failed": [], "served": name in served})
         row["cases"] += 1
+        row["intentional"] += outcome.intentional
         if outcome.passed:
             row["passed"] += 1
         else:
@@ -1050,9 +1285,10 @@ def summarize(outcomes: list[Outcome], served: list[str] | dict[str, str]) -> di
         if outcome.native:
             row["native"] += 1
     for name in served:
-        commands.setdefault(name, {"cases": 0, "passed": 0, "native": 0, "failed": [], "served": True})
+        commands.setdefault(name, {"cases": 0, "passed": 0, "native": 0, "intentional": 0, "failed": [], "served": True})
     proven = sorted(name for name, row in commands.items() if row["cases"] and row["passed"] == row["cases"] and row["native"])
-    return {"served": served, "proven": proven, "unproven_but_served": sorted(set(served) - set(proven)), "commands": dict(sorted(commands.items()))}
+    return {"served": served, "intentional": sum(outcome.intentional for outcome in outcomes),
+            "cdp_rules_awaiting_fake_engine": sorted(outcome.case.id for outcome in outcomes if outcome.case.cdp_rules), "proven": proven, "unproven_but_served": sorted(set(served) - set(proven)), "commands": dict(sorted(commands.items()))}
 
 
 def run_all(cases: list[Case], entry_program: Path, jobs: int = 6, keep: bool = False, progress=None, entry: str = "rust") -> tuple[list[Outcome], Installation]:

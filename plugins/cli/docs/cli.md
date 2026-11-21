@@ -1140,6 +1140,173 @@ agent-browser's `agent-browser.plugin.v1` protocol (one JSON request on stdin: `
 `request`; one reply on stdout: `protocol`, `success`, `data` or `error`), with `ARDIA_*` and `AGENT_BROWSER_*` removed
 from their environment and a 60 s limit.
 
+### Plugin mode
+
+The app's AI plugin runs `ardia browse --session plugin-<name> <step>` with `ARDIA_BROWSE_FOR_PLUGIN=1`. The contract
+it relies on is `tests/parity/cases/ai-plugin-contract.json` (one case per item); the credential handoff is ardia#2808's
+`docs/cli.md` › Plugin credentials.
+
+**Plugin mode never reaches the Python daemon.** ardia#2808 removes `Runtime` from plugin credentials (no `evaluate`,
+no `callFunctionOn`, no isolated worlds), and the Python daemon reads and acts on pages through page script, so plugin
+steps are served by a TypeScript plugin daemon (F1-early, on M3's D1 and D2) that uses DOM, AX and Input only. Until it
+lands, a plugin step that passes every check below answers status 77 and code `plugin_daemon_unavailable` ("has no
+plugin daemon yet…"), and nothing is sent anywhere: no daemon is started or contacted and the token server never hears
+from it. `browse` help and `browse --version` are still answered by the client; `ardia --version` and every other non-browse call answer 77 `plugin_refused`. The Python daemon has no plugin mode; the Python
+client's plugin mode (`plugin_access.py`) stays only as the parity reference for the refusals. The cases that expected
+a daemon's plugin answers are kept for F1-early in `tests/parity/pending/f1-early.json` (outside the parity table);
+their places in the table now expect `plugin_daemon_unavailable`.
+
+#### What the client checks today
+
+- The credential comes only on the inherited descriptor `ARDIA_PLUGIN_CREDENTIAL_FD` names (the app uses 4): read to EOF,
+  at most 256 bytes, exactly `p.` and 43 base64url characters, then closed before anything else happens. The token
+  server is `ARDIA_PLUGIN_ENDPOINT` (`ws://127.0.0.1:<port>/devtools/browser/<id>`; empty means control is off). The
+  credential is never in argv, the environment, a file or a log, and `ArdiaControl.json` is never read.
+- Refused with status 77 and one line (JSON with code `plugin_refused` under `--json`), before anything is sent:
+  `ARDIA_BROWSE_FOR_PLUGIN` other than `1`; a missing, non-numeric, closed, terminal or unreadable descriptor; anything
+  but a well-formed credential (a trailing newline included); no read within 2 s (Ctrl-C ends the wait with status
+  130 and `interrupted`); a missing or empty endpoint, or one whose host isn't exactly `127.0.0.1` or whose port isn't
+  1 to 65535 without a leading zero; `--ws`, `--port`, `--cdp`, `ARDIA_WS`, `ARDIA_PORT`, `ARDIA_CDP_URL` or
+  `AGENT_BROWSER_CDP`; a session flag after the command (`--session --namespace --data-dir --port --ws --cdp
+  --screenshot-* --idle-timeout --init-script --enable --headers --color-scheme --download-path --annotate
+  --no-auto-dialog --pin-tab --no-pin-tab --debug --capture-console --show --content-boundaries --out --stdin`); global
+  options the client can't read (a value flag with no value, a launch option); and `auth`, `notes`, `flow`, `plugin`,
+  `read`, `session`, `script`, `cdp`, `clipboard` and `close --all`. The router sends a plugin's browse call only to the
+  TypeScript client and refuses (77) rather than hand it to Python.
+- **Commands and flags are an allowlist**, exactly the AI plugin contract's §1 list minus what needs page script:
+  `snapshot` (`-i -c -d -s -u --diff`; the AI sends `snapshot -c`), `get` (`text html value attr title url count box`),
+  `click` (`--button --no-humanize`), `fill`, `press`/`key` (`--no-humanize`), `type` (`--delay --no-humanize`),
+  `scroll` (`-s --no-humanize`), `wait` (`-t -u -l --state --timeout`), `find` (`--name --exact --partial
+  --no-humanize`), `is`, and `tab` as the pick (`tab <id>`) or the list. `snapshot --cursor` and `get styles` read
+  computed styles, so they are refused. Nothing allowed names a local path. The guard reads each argv with the daemon's
+  own grammar (`plugin-grammar.ts`: the flags and aliases each command function in `commands.py` passes to `parse()`,
+  and a port of `parse()` itself, where a value flag takes the next token even when it is `--` and a negative number
+  is `-` and any Unicode decimal digit), and fails closed: an argv it can't read exactly is refused with 77.
+  `tests/plugin_grammar.py` reads that grammar from the real functions, and `plugin-grammar.test.ts` checks the table
+  and runs every case's argv through both parsers.
+- **Global options are an allowlist too:** `--session`, `--json`, `--expect-loader`, `--max-output`,
+  `--humanize`/`--no-humanize`, `--full`, `--no-changes` and `--no-text`, after `browse`; before it, only `--json`.
+  The plugin checks run before any ordinary parsing, so anything else, before `browse` or after it, unreadable or not
+  allowed, is refused with 77 `plugin_refused`, never a usage error. `--timeout` is not a browse option in either
+  place (Python says so too). The data folder comes only from the environment Ardia starts the plugin with.
+- **Plugin mode runs only `ardia browse`.** The router sends every call with `ARDIA_BROWSE_FOR_PLUGIN` set to the
+  TypeScript client, browse or not, and the client refuses (77) whatever isn't a readable browse call (`tabs`,
+  `--session x browse …`), so nothing in plugin mode reaches Python. A refusal before `browse` is named records no usage
+  entry, as Python's own error there doesn't.
+- **Every refusal keeps its JSON envelope.** Plugin mode reads `--json` with the option-aware parse when the options can
+  be read; when they can't (an option before `browse`, an unreadable one after it), any `--json` token before `--` counts
+  (the last one wins), so the refusal is one JSON line on stdout. A refusal prints once and writes nothing afterwards.
+- Commands that run other commands answer code `nested_commands_refused` (77): `batch` and `open`/`goto`/`navigate
+  --read`.
+- On Linux plugin mode reads the locale like macOS, except that it treats a UTF-8 locale name as installed: glibc keeps
+  locales in one archive the client can't check cheaply, and the app always sets an installed `en_US.UTF-8`.
+- **Plugin mode records no CLI telemetry and no usage at all**, whatever the environment or argv: it never reads the
+  consent file, never writes the spool or the usage history, never starts a flusher and touches no telemetry file, even
+  for a refused `--data-dir`. The AI app sets `ARDIA_TELEMETRY=0` and counts plugin activity in its own plugin telemetry.
+  `cli_command` has no `plugin_mode` field. The parity harness applies this to every plugin case: the TypeScript side
+  is expected to leave no usage entry or telemetry file where Python's plugin client does.
+
+#### What F1-early's daemon must do (the spec)
+
+- **The session:** the daemon gets `<endpoint>?token=<credential>` on its stdin config and connects with no `Origin`
+  header. Its session key ends in `\0plugin` and its endpoint part is `plugin:` and a SHA-256 prefix of the credential,
+  so a plugin never shares a daemon with the person's session of the same name, with an older CLI, or with another
+  activity.
+- **Exactly the commands and flags above**, served from plain data (the AI plugin thread's mapping):
+
+  | command | served from |
+  |---|---|
+  | `tab <id>`, the pick | Target, scoped to the credential; `tab --json` carries `data.loader` |
+  | `snapshot -c` | the AX tree; `--urls` from `DOM.getAttributes` |
+  | `get` | the AX name or value, or `DOM.getOuterHTML` parsed in the daemon |
+  | `click` | `DOM.scrollIntoViewIfNeeded`, `DOM.getContentQuads`, then a mouse event |
+  | `fill` | `DOM.focus`, the `selectAll` and `deleteBackward` key commands, then `Input.insertText` |
+  | `type`, `press` | Input |
+  | `scroll` | `mouseWheel` |
+  | `is` | `DOM.getBoxModel` and the AX tree |
+  | `wait` | AX polling, target info, lifecycle events and `DOM.getBoxModel` |
+  | `find` | an AX search |
+  | dialogs | `Page.handleJavaScriptDialog` |
+
+- **`find --name` and `wait --text` search the AX tree**, never the DOM: `DOM.performSearch` is off the engine's
+  allowlist.
+- **No input pipelining:** one `Input.dispatchMouseEvent`, `dispatchKeyEvent` or `insertText` at a time, each sent only
+  after the previous one answered, humanized typing and `fill` included, so an engine refusal stops the step after the
+  refused event with nothing queued behind it.
+- **Plugins can't drag:** no `drag` command, and no mouse-down/move/up sequence that crosses elements.
+- **Input the engine accepts from a plugin** (ardia#2808's plugin policy): `Input.dispatchKeyEvent` never carries
+  `nativeVirtualKeyCode` or `isSystemKey`; its `commands` hold only `selectAll`; `moveToBeginningOfLine`,
+  `moveToEndOfLine`, `moveToBeginningOfDocument`, `moveToEndOfDocument`, `moveLeft`, `moveRight`, `moveUp`,
+  `moveDown`, `moveWordLeft`, `moveWordRight`, each also with `AndModifySelection`; `deleteBackward`, `deleteForward`,
+  `deleteWordBackward`, `deleteWordForward`; `insertNewline`; `insertTab`; never `copy`, `cut`, `paste` or
+  `pasteAndMatchStyle`. `backendNodeId` stays usable; the engine accepts only ids from the session's own frame tree.
+  The contract cases record each rule as `cdp_rules`.
+- **The document check:** `--expect-loader <loaderId>` compares the main frame's loader before the step (mismatch:
+  `document_changed`, nothing ran) and after it (mismatch: `document_changed_after`, the step ran). A step whose picked
+  tab is gone answers `tab_gone`; there is no lost-tab recovery and no notes or saved-flow hints.
+- **Engine refusals keep their codes:** an engine error whose own message starts `ardia: tab_out_of_scope` answers
+  code `tab_out_of_scope`, and the act lease's `ardia: document_changed` answers `document_changed`; codes never come
+  from page text.
+- **A registry of its own:** a plugin session keeps its tab numbers in a registry keyed by its credential id and never
+  touches the shared `Browse/` tab registry, the temporary-tab sweep, the `using` state or `tab list`'s view of other
+  sessions. A credential's scoped target list can't tell another activity's tab from a closed one.
+- **No local writes:** no output spill file for an answer over the cap, and nothing written under the person's data
+  folder beyond the session's own socket, lock and log.
+- **Every rule on every step** it runs, if it ever runs nested steps.
+
+### Starting the TS daemon
+
+M1's client starts no daemon in plugin mode and hands any other missing daemon to Python. When the switch to M3's
+daemon happens, on top of D2 (plugins#20), the client starts daemons through D2's `browse/daemon/spawn.ts`, and these
+are the exact changes:
+
+- **Starting:** in the client's session open, after `openSession` answers `NoDaemon`, start one with
+  `awaitDaemon(dir.fd, key, spawnDaemon(dir.fd, key, config, choice), connect)`, where `choice` is
+  `chooseDaemon(python)` and `config` is the daemon's stdin config, which the client builds as Python's client does.
+  If `chooseDaemon` answers `null` (no bundled Python and no TS daemon), the client answers `daemon_unreachable`.
+  `connect` is `() => openSession(root, key, deadline).catch((error) => error instanceof NoDaemon ? null : Promise.reject(error))`:
+  `null` means "not listening yet", and any other error stops the wait.
+- **Failure:** `DaemonDidNotStart` maps to the unreachable error (`unreachable(error.message)`, exit 2, code
+  `daemon_unreachable`), with D2's own message ("exited before it listened: <log tail>" or "didn't start in 15 s").
+- **One stat call:** D2's `statAt` (mode, owner, device, inode and mtime, links not followed, one plain name) replaces
+  this PR's `socketInfoAt`. `checkSocket` reads `mode` and `uid` from it, and the addon drops the `socketInfoAt` export.
+  `stat_at` takes over `socket_info_at`'s refusal of a negative descriptor (`AT_FDCWD`, `-1`) with `EBADF`, and the
+  `native-arity` test moves to `statAt`.
+- **Plugin mode** still starts nothing until F1-early. Then `choice` is the TS plugin daemon, and the same
+  `awaitDaemon` call starts it, with no flusher and no other child.
+- Until then, the client hands a missing daemon to Python exactly as today.
+
+### JSON error codes
+
+Under `--json` the TypeScript client prints every browse error as one JSON line with a `code` (the AI plugin contract;
+text mode is unchanged). A code the daemon or Python gives is kept (`document_changed`, `tab_gone`, `tab_not_found`,
+`unknown_ref`, `connection_lost`, `outcome_unknown`, `timeout`, `tab_in_use`, `session_busy`, `policy_refused`, …). Where
+Python has none:
+
+| code | when |
+|---|---|
+| `usage_error` | an option or flag the client can't read (`--max-output lots`, a value flag with no value) |
+| `invalid_name` | a session name or namespace that isn't 1 to 64 letters, digits, `.`, `_` or `-` |
+| `unsafe_path` | the data dir or its `Browse` folder is missing, a link, another user's or not private |
+| `socket_refused` | the session socket isn't a socket of yours with mode 0600, or another user serves it |
+| `daemon_unreachable` | the daemon closed the connection, didn't take the command, or didn't start |
+| `daemon_timeout` | the daemon didn't answer a read in time (a mutating step answers `outcome_unknown`) |
+| `answer_too_large` | the daemon's answer was over 256 MB |
+| `unknown_command` | the daemon's `Unknown command: …` |
+| `command_failed` | any other daemon error line without a code |
+| `plugin_refused` | a plugin-mode refusal (status 77) |
+| `interrupted` | Ctrl-C while the client waited: on stdin, the credential, the connection or the answer (status 130) |
+| `internal_error` | the client crashed as Python's would, for instance on a reply that isn't JSON or isn't an object; `error` holds Python's crash line (status 1). If stdout itself failed, the crash line stays on stderr. Also a failing answer (nonzero exit) whose output isn't one JSON value: plain text (the text is the message), a `✗` line on stderr (its text, moved off stderr), nothing at all, or an error object whose `code` is null or not text. Any other JSON value (a number, a string, an object that isn't `success: false`) becomes one error object with its text as `error`. A list is kept only from `batch`, where each failed row without a code, the joined `close` row included, gets `code: "internal_error"`; any other command's list is wrapped like other JSON |
+| `tab_out_of_scope` | (F1-early's daemon) the engine's `ardia: tab_out_of_scope` refusal: the tab moved to another window or profile mid-step |
+| `plugin_daemon_unavailable` | plugin mode with a step that passed every check: its daemon (F1-early) isn't there yet, so nothing is sent (status 77) |
+| `nested_commands_refused` | plugin mode and a command that runs other commands (`batch`, `open --read`; status 77) |
+
+The Rust router's own plugin refusals (no TypeScript client, it didn't start, or it asked for Python) follow the same
+rule: one JSON line with `plugin_refused` on stdout under `--json` or `AGENT_BROWSER_JSON`, `✗ …` on stderr otherwise.
+
+Telemetry's `error_code` stays Python's. Each such case in the parity table is marked `intentional`, holds the output
+the TypeScript client must print instead of Python's, and is counted apart in the report.
+
 ### Testing it
 
 `python -m unittest discover -s plugins/cli/tests` runs the unit tests (`test_browse.py`). The end-to-end test needs a
@@ -1153,6 +1320,10 @@ ARDIA_BROWSE_E2E_APP=<build>/Ardia.app python -m unittest plugins/cli/tests/test
 plain DevTools server: a headless Chromium it starts on a throwaway profile, named by `ARDIA_BROWSE_CHROMIUM`
 (`ARDIA_BROWSE_CHROMIUM=/Applications/Helium.app/Contents/MacOS/Helium`, or any Chrome); without it that class is
 skipped.
+
+`ARDIA_TEST_STDIN_READY_FD=<n>` (tests only) makes the TypeScript client write one byte, `r`, to inherited descriptor
+`n` and close it once it has checked the session's daemon and is about to read stdin, so a process test can act at
+that moment instead of sleeping. Nothing else reads it.
 
 A Debug build takes its JavaScript from Metro, and the token instance has no DevTools port to find it by, so name it:
 `ARDIA_BROWSE_E2E_JS=localhost:8081`. Without it that instance never turns control on and `BrowseTokenPath` times out
@@ -1902,6 +2073,39 @@ parity harness rather than stripped wholesale:
   so that write blocks until a second Ctrl-C or until a reader drains the pipe, and only then does the listing end
   with `ardia <command>: interrupted` and status 130. CPython has exactly this window between its signal check and the
   blocking `write` in its buffered writer, so no code closes it.
+- `ardia browse`: a command that reads stdin (`eval`/`addinitscript --stdin`, `eval` with no code, `batch` with no
+  steps) reads it to EOF before connecting, as Python does, so a writer slower than the daemon's 30 s request wait
+  still works. Without a plugin it first checks that a daemon is live (its socket there and its lock held) and hands
+  the call to Python with stdin unread otherwise; if that daemon exits while stdin is read, the client answers
+  `daemon_unreachable` saying the input was used up and nothing ran, where Python, holding stdin, would start a new one.
+  Stdin is read only up to the daemon's 16 MiB request limit, and a request over it (stdin plus the envelope) is never
+  sent: the client answers what Python's client reports when the daemon drops it ("closed the connection before taking
+  the command", exit 2) without waiting for the writer to finish. Stdin is passed
+  as read: Python 3.13 reads it with `newline="\n"` on macOS, so CR and CRLF reach the daemon unchanged on both sides.
+- `ardia browse`'s `cli_command` event: its `subcommand` is a known browse command name (the daemon's commands, the
+  skipped ones, the help table's, their aliases, `auth`, `help`, `version`), `other` when the arguments don't parse, or
+  `unknown`; an unrecognized name is never recorded. Python writes the typed name into its local copy and spool and maps
+  it to `other` only when it sends. Tests: `subcommand.test.ts`; `KNOWN_COMMANDS` is generated from Python's own list
+  and checked by `test_ts_browse_tables`.
+- `ardia browse wait --state <state>`: the TypeScript client reads a `--state` after `wait` as `wait`'s own option, as
+  the daemon does; Python's global parser rejects it as agent-browser's `--state <file>` launch option, so
+  `wait --state` can't run on Python (plugins#18). Before the command, `--state` is still refused as a launch option on
+  both. The AI plugin sends `wait --state=`. Tests: `json-intent.test.ts`, the grammar test's one recorded split
+  difference, and the router's `json_requested` test.
+- `ardia browse`: stdin over the daemon's 16 MiB request limit, or a request line the envelope pushes over it, fails
+  before the client connects; Python's client connects, sends, and reports the daemon dropping it. Both answer "closed
+  the connection before taking the command" with exit 2, but only Python's leaves the daemon a dropped connection
+  (`test_ts_browse_plugin.JsonAndStdin.test_stdin_over_the_daemons_request_limit_stops_the_read_and_sends_nothing` and
+  `test_a_request_the_envelope_pushes_over_the_limit_is_refused_before_connecting`).
+- `ardia browse`: a daemon answer whose exit is 253 ends with status 1: 253 is the router's hand-back status, and
+  exiting with it would run the step a second time on Python. A real daemon never answers 253.
+- `ardia browse`: a daemon that asks a non-`read` command to run beside a busy session (`busy_elsewhere`) whose side
+  daemon isn't running gets an error (exit 2) where Python would start one; only `read`, which is handed to Python,
+  asks that.
+- `ardia browse`: an answer that starts with a UTF-16 or UTF-32 byte order mark or a NUL byte is read as UTF-8, so a
+  malformed one of those ends with a different exception line than Python's.
+- `ardia browse` under `--json`: errors carry a code where Python's have none (see "JSON error codes"); these are the
+  parity cases marked `intentional`.
 
 The TypeScript browse daemon's CDP link (M3, not served yet) differs from Python's in these ways, each covered by
 `ts/tests/m3/link.test.ts`, `browser.test.ts` or the link scenarios (`docs/m3-harness.md`):

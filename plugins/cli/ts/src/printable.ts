@@ -60,6 +60,10 @@ export function exceptionLine(errno: number): string {
 const INTERRUPT_POLL_MS = 50;
 let abandoned = false;
 
+export function abandonWork(): void {
+  abandoned = true;
+}
+
 export function abandonedOutput(): boolean {
   return abandoned;
 }

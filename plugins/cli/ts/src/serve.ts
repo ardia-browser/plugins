@@ -9,6 +9,7 @@ import { utf8 } from "./pystr.ts";
 import { Unsupported } from "./py.ts";
 import { render } from "./render.ts";
 import { Call, finish } from "./telemetry.ts";
+import { osCrash } from "./crash.ts";
 
 const TOP_FLAGS = ["-h", "--help", "--version", "--skill"];
 const LISTING_FLAGS = [...TOP_FLAGS, "--data-dir", "--json"];
@@ -29,7 +30,7 @@ export function serveHelp(argv: string[], python: string | null): number | undef
       return 141;
     }
     if (stop !== undefined) {
-      finish(call, 1, python, stop.errno);
+      finish(call, 1, python, osCrash(stop.errno));
       return reportCrash(stop.errno, stop.unwritten);
     }
     finish(call, 0, python);
@@ -117,7 +118,7 @@ export async function serveListing(kind: Kind, listing: Listing, argv: string[],
     status = 141;
   } else {
     if (out.failed !== undefined) {
-      finish(call, 1, python, out.failed.errno);
+      finish(call, 1, python, osCrash(out.failed.errno));
       return out.reportCrash();
     }
     const errno = shown.complaint === undefined ? undefined : out.complain(shown.complaint);
@@ -135,7 +136,7 @@ function complaintFailed(call: Call, errno: number, python: string | null): numb
     finish(call, 141, python);
     return 141;
   }
-  finish(call, 1, python, errno);
+  finish(call, 1, python, osCrash(errno));
   toStderr(exceptionLine(errno));
   return 1;
 }

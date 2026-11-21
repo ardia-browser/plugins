@@ -4,12 +4,14 @@ import { dataRoot, installedDataDir } from "./control.ts";
 import { Float, type JsonObject, object, parse, TELEMETRY_JSON_DEPTH, TooDeep, type Value } from "./json.ts";
 import { abspath, envSet, join, realpath, uid } from "./paths.ts";
 import { closeDir, O_NOFOLLOW, O_NONBLOCK, O_RDONLY, readFd } from "./privatefs.ts";
+import { pluginMode } from "./browse/route.ts";
+import { KNOWN_COMMANDS } from "./browse/tables.ts";
 import { isSpace, strip } from "./py.ts";
 import { appendToSpool, discardSpool, keepLocalCopy, startFlush } from "./spool.ts";
 import { reportingAllowed } from "./browse/metrics.ts";
 import { strerror } from "./libc.ts";
 import { recordUsage } from "./usage.ts";
-import { exceptionProperties } from "./crash.ts";
+import { type Crash, exceptionProperties } from "./crash.ts";
 import { cliVersion, isDevBuild } from "./version.ts";
 
 export const SERVED_BY = "ts";
@@ -21,7 +23,7 @@ const INSTALL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 const MAX_FLAGS = 20;
 const MAX_MS = 3_600_000;
 const TEST_ENDPOINT_FLAGS = ["--port", "--ws", "--cdp"];
-const TEST_ENDPOINT_ENV = ["ARDIA_WS", "ARDIA_PORT", "ARDIA_CDP_URL", "AGENT_BROWSER_CDP"];
+export const TEST_ENDPOINT_ENV = ["ARDIA_WS", "ARDIA_PORT", "ARDIA_CDP_URL", "AGENT_BROWSER_CDP"];
 const OFF_VALUES = ["0", "false", "off", "no"];
 
 export class Call {
@@ -31,6 +33,8 @@ export class Call {
   subcommand: string | undefined;
   allowedFlags: readonly string[] = [];
   errorCode: string | undefined;
+  readonly metrics = new Map<string, Value>();
+  task = false;
 
   constructor(readonly argv: string[]) {}
 
@@ -43,6 +47,10 @@ export type Target = { root: string; url: string; environment: string };
 
 function lowered(name: string): string {
   return strip(process.env[name] ?? "", isSpace).toLowerCase();
+}
+
+export function shareable(): boolean {
+  return !optedOut() && logsUrl() !== undefined && !TEST_ENDPOINT_ENV.some((name) => envSet(name) !== undefined);
 }
 
 export function optedOut(): boolean {
@@ -88,7 +96,7 @@ export function dataDirArg(tokens: string[]): string | undefined {
   return found === "" ? undefined : found;
 }
 
-function namesTestEndpoint(tokens: string[]): boolean {
+export function namesTestEndpoint(tokens: string[]): boolean {
   return tokens.some((token) => token.startsWith("--") && TEST_ENDPOINT_FLAGS.includes(token.split("=")[0] ?? ""));
 }
 
@@ -218,6 +226,7 @@ function wholeMs(value: number): bigint {
 function timings(call: Call, into: [string, Value][]): void {
   const elapsed = performance.now() - call.startedMs;
   const startup = (call.startedAt - performance.timeOrigin / 1000) * 1000;
+  for (const [key, value] of call.metrics) if (key !== "startup_ms" && key !== "total_ms") into.push([key, value]);
   if (startup >= 0 && startup <= MAX_MS) {
     into.push(["startup_ms", wholeMs(startup)], ["total_ms", wholeMs(startup + elapsed)]);
   } else into.push(["total_ms", wholeMs(elapsed)]);
@@ -243,12 +252,12 @@ function event(name: string, distinctId: string, properties: [string, Value][]):
   ]);
 }
 
-function commandRecord(call: Call, status: number, crashed: boolean, distinctId: string, environment: string): [string, Value][] {
+function commandRecord(call: Call, status: number | bigint, crashed: boolean, distinctId: string, environment: string): [string, Value][] {
   const given = crashed ? "unhandled_exception" : call.errorCode;
   const code = given !== undefined && errorCodeOk(given) ? given : null;
   const properties: [string, Value][] = [
     ["command", call.command],
-    ["subcommand", call.subcommand ?? null],
+    ["subcommand", telemetrySubcommand(call.command, call.subcommand)],
     ["exit_code", BigInt(status)],
     ["error_code", code],
     ["flags", flagNames(call.argv, call.allowedFlags)],
@@ -258,8 +267,18 @@ function commandRecord(call: Call, status: number, crashed: boolean, distinctId:
   return properties;
 }
 
-export function finish(call: Call, status: number, python: string | null, crash?: number): void {
-  recordUsage(call, status);
+const PARSE_FAILED = "other";
+const UNKNOWN = "unknown";
+
+export function telemetrySubcommand(command: string | undefined, name: string | undefined): string | null {
+  if (name === undefined) return null;
+  if (command !== "browse" || name === PARSE_FAILED || KNOWN_COMMANDS.includes(name)) return name;
+  return UNKNOWN;
+}
+
+export function finish(call: Call, status: number | bigint, python: string | null, crash?: Crash, withUsage = true): void {
+  if (pluginMode()) return;
+  if (withUsage) recordUsage(call, status);
   try {
     record(call, status, python, crash);
   } catch (error) {
@@ -267,7 +286,7 @@ export function finish(call: Call, status: number, python: string | null, crash?
   }
 }
 
-function record(call: Call, status: number, python: string | null, crash: number | undefined): void {
+function record(call: Call, status: number | bigint, python: string | null, crash: Crash | undefined): void {
   const target = cliTarget(call.argv);
   if (target === undefined) return;
   const doc = readConsent(target.root);
