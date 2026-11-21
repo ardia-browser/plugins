@@ -1,4 +1,4 @@
-import { getCloseMatches } from "./difflib.ts";
+import { getCloseMatches } from "./pylib/close.ts";
 import { Float, type JsonObject, type Value } from "./json.ts";
 import { NeedsPython } from "./paths.ts";
 import { search } from "./pyregex.ts";

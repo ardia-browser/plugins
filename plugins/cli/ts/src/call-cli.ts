@@ -1,5 +1,5 @@
 import type { Option, Parsed, Spec } from "./argv.ts";
-import { didYouMean } from "./closest.ts";
+import { didYouMean } from "./pylib/close.ts";
 import { CALL_TIMEOUT, type Failure, withSession } from "./control.ts";
 import { dumps, type JsonObject, type Value } from "./json.ts";
 import { shown } from "./printable.ts";

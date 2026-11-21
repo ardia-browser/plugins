@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { closeMatches } from "../src/closest.ts";
+import { getCloseMatches as closeMatches } from "../src/pylib/close.ts";
 import { dumps } from "../src/json.ts";
 import { formatG } from "../src/py.ts";
 import { DecodeError, loads, Refused } from "../src/pyjson.ts";

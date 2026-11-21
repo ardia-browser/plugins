@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import path from "node:path";
-import { getCloseMatches } from "../src/difflib.ts";
+import { getCloseMatches } from "../src/pylib/close.ts";
 import type { Value } from "../src/json.ts";
 import { JsonDecodeError, loads } from "../src/pyjson.ts";
 import { search, translate } from "../src/pyregex.ts";

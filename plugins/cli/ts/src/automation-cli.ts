@@ -1,5 +1,5 @@
 import type { Option, Parsed, Spec } from "./argv.ts";
-import { didYouMean } from "./closest.ts";
+import { didYouMean } from "./pylib/close.ts";
 import { withSession } from "./control.ts";
 import { dumps, type JsonObject, object, type Value } from "./json.ts";
 import { shown } from "./printable.ts";
