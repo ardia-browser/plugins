@@ -1312,7 +1312,7 @@ FIND_ACTIONS = ("click", "fill", "type", "press", "check", "uncheck", "select", 
 FIND_LOCATORS = ("role", "text", "label", "placeholder", "alt", "title", "testid", "first", "last", "nth")
 MAX_CANDIDATES = 8
 CLOSE_ENOUGH = 0.6
-BATCH_DEFAULT_CAP = 6000
+BATCH_DEFAULT_CAP = 12000
 SHOWN_HOLD = 0.3
 FIND_WAIT = 1.5
 

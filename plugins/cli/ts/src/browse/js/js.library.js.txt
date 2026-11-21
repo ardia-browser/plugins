@@ -12,7 +12,7 @@
   const CONTROLS = "input:not([type=hidden]), textarea, select, button[aria-haspopup], [aria-haspopup=listbox], [aria-haspopup=true], [role=combobox], [role=searchbox], [role=textbox], [contenteditable=true]";
   const IMPLICIT_ROLES = {
     main: "main", navigation: "nav", banner: "body > header", contentinfo: "body > footer", dialog: "dialog", form: "form",
-    table: "table", row: "tr", cell: "td", columnheader: "th", list: "ul, ol", listitem: "li", article: "article", search: "search",
+    table: "table", row: "tr", cell: "td", columnheader: "th", list: "ul, ol, menu", listitem: "li", article: "article", search: "search",
     button: "button, input[type=button], input[type=submit], input[type=reset], summary", link: "a[href], area[href]",
     heading: "h1, h2, h3, h4, h5, h6", checkbox: "input[type=checkbox]", radio: "input[type=radio]",
     combobox: "select:not([multiple]):not([size]), select[size='']:not([multiple]), select[size='0']:not([multiple]), select[size='1']:not([multiple]), input[list]:not([type]), input[list][type=text], input[list][type=search], input[list][type=email], input[list][type=tel], input[list][type=url]",

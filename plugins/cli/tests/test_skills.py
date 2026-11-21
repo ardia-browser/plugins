@@ -378,7 +378,7 @@ class Contents(unittest.TestCase):
         description = frontmatter[1].split(": ", 1)[1]
         self.assertLessEqual(len(description), 1024)
         self.assertNotIn(": ", description)
-        self.assertLess(len(text), 5950)
+        self.assertLess(len(text), 5985)
         for reference in re.findall(r"`(?:references/)?([a-z-]+\.md)`", text):
             self.assertTrue((source / "references" / reference).is_file(), reference)
 

@@ -662,8 +662,8 @@ class BatchFromStdin(unittest.TestCase):
     def test_a_line_max_output_only_widens_the_cap(self):
         ctx, _, _ = self.run_batch("get text main --max-output 100\n")
         self.assertEqual(ctx.options["max_output"], commands.BATCH_DEFAULT_CAP)
-        ctx, _, _ = self.run_batch("get text main --max-output 9000\n")
-        self.assertEqual(ctx.options["max_output"], 9000)
+        ctx, _, _ = self.run_batch("get text main --max-output 15000\n")
+        self.assertEqual(ctx.options["max_output"], 15000)
 
     def test_a_closing_batch_answer_includes_the_close(self):
         self.assertEqual(daemon.joined_batch("✓ Done\n", "✓ Session s closed (1 tab it opened)\n", {}), "✓ Done\n\n✓ Session s closed (1 tab it opened)\n")

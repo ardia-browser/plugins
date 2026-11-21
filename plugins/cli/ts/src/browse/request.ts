@@ -84,6 +84,7 @@ export function optionsFrom(found: Found): Options {
   ]);
   if (found.flag("pin_tab") || truthy(env("AGENT_BROWSER_PIN_TAB"))) entries.set("pin_tab", true);
   if (found.flag("no_pin_tab")) entries.set("pin_tab", false);
+  if (found.flag("out_only")) entries.set("out_only", true);
   return { entries, timeout };
 }
 

@@ -249,7 +249,14 @@ async function answerCall(ctx: Ctx, given: unknown, index: number): Promise<Answ
   const argv = splitCommandLine(given as string[]);
   const name = canonical(argv[0] as string);
   const sub = new Ctx(ctx.state, { ...ctx.options }, ctx.cwd, ctx.env, null, name);
-  const [result, error] = await runOne(sub, argv);
+  ctx.state.scriptsRunning += 1;
+  let ran: Awaited<ReturnType<typeof runOne>>;
+  try {
+    ran = await runOne(sub, argv);
+  } finally {
+    ctx.state.scriptsRunning -= 1;
+  }
+  const [result, error] = ran;
   if (error instanceof OutcomeUnknown || error instanceof ConnectionLost) throw error;
   if (error !== null) return { ok: false, error: error.text, code: error.code ?? null };
   const done = result as Result;

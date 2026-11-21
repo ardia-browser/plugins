@@ -17,6 +17,8 @@ export const TS_ONLY_FLAGS: readonly string[] = [
   "select_word_match",
   "selector_in_shadow_root",
   "setup_session_dropped",
+  "snapshot_diff",
+  "snapshot_diff_full",
   "snapshot_document_changed",
   "snapshot_oopif_frames",
   "stale_ref_after_open",

@@ -590,7 +590,7 @@ looking at: commands fail with `tab_gone` until `tab active`, `tab <id>` or `ope
 the user's: the session reads it, clicks and types in it, but `open` never navigates it: it opens its own background
 tab, as with no tab, and in the TypeScript CLI its answer's first line says so (`→ Opened in a new background tab [t2];
 the tab you picked with \`tab active\` [t1] is unchanged (\`open --here <url>\` navigates it, \`tab t1\` goes back)`,
-where it used to come after the page's title). To navigate the user's tab, `open --here <url>` (TypeScript; telemetry
+where it used to come after the page's title). To navigate the user's tab, `open --here <url>` (a command's boolean flag takes no value, or `=true`, `=1`, `=yes` or `=on`; `--here=false` or any other value is a usage error, so it never acts; TypeScript; telemetry
 `open_here`; it needs a URL, and once the session switched to another tab by id it has no picked tab, so it's a usage
 error; a failed navigation leaves the session on the tab it was on; it refuses `--enable` and `--init-script`, the global
 one too, since it never sets up a tab it didn't open, and `--show` on a tab Ardia keeps off-screen), or pick it by id with `tab <id>`. A ref from a page that a later
@@ -625,6 +625,31 @@ plain `--port`/`--ws` URL. After `frame <iframe>`, if that iframe goes away, com
 `frame main` or another `frame`, instead of falling back to the main document.
 
 ### Snapshots
+
+In the TypeScript CLI a repeated `snapshot -i` of the same document prints only what changed since the last one this
+session printed for that tab:
+
+```
+snapshot -i (changes since your snapshot 2 commands ago of "Task board"; 12 refs unchanged and still valid; `snapshot -i --full` lists everything)
++ button "Fresh task" [ref=e14]
+~ button "Item 3 done" [ref=e4] (was: button "Item 3")
+```
+
+`+` lines are new, `~` changed (with what they were), `-` gone; every ref not listed keeps its meaning, since a ref
+names one element in one document for as long as that document lives. It prints the full list instead when there's no
+earlier snapshot of that tab in this daemon (a first snapshot, or after the daemon restarted), when the tab navigated
+or its main document or the scoped frame changed, for another tab, frame, `-s`, `-d`, `-c`, `-u` or `--diff`, inside a
+`script`, with `--json` (whose output is unchanged), `--full` or `--max-output 0` (so `--out <file>` saves the whole
+list; a batch line's `--out` saves it too), when refs that stayed moved relative to each other, and when more than 40%
+of the refs changed: past that share the diff is about as long as the list and harder to read, and a diff that comes
+out no shorter than the list is dropped for the list too. Inside a `batch` only the batch's own `--full` or that
+line's turns the diff off, since an earlier line's `--full` widens the whole batch's cap. A snapshot whose output was
+cut by the cap (its own or its batch's) doesn't become the one the next diff compares with: a batch cut by its cap, or
+interrupted, leaves the one from before it, so the next snapshot still diffs against what you saw. A snapshot only saved to a file (`--out`, alone or on a
+batch line or the batch) or printed as `--json` doesn't count as shown, and one a `script` takes never does, inside a batch too. A control's `(near …)`
+label counts as part of it, so a changed label shows as a change. Telemetry: `snapshot_diff` and `snapshot_diff_full` (a repeat that fell back); watch
+`snapshot_chars` on `snapshot`, which it should lower. In the bench, snapshots inside batches were 39% of the bytes agents
+read, and 4.7% of the refs they listed were used in the next two commands.
 
 `snapshot` renders a native `date`, `time`, `datetime-local`, `month` or `week` input (accessibility roles `Date`,
 `InputTime`, `DateTime`) and a `color` input (`ColorWell`) as one `textbox` with its type, its `required` state and
@@ -732,7 +757,11 @@ line break when there's one in the last fifth, and one line on stderr points at 
 and names `--max-output` last: `[output capped at 6,000 of 15,920 characters. Narrow it: snapshot -i -s "[role=main]"
 (the main, 380 of 512 lines), find role <role> <action> --name <text> (act without a snapshot); or --max-output 15920
 for every line]`. For a snapshot it names the biggest landmark or list whose role appears once (`main`, `navigation`,
-`form`, `table`, `list`, `dialog`, …) as `-s "[role=…]"`, with its share of the lines; with none, the fixed hint. The
+`form`, `table`, `list`, `dialog`, …; not `banner` or `contentinfo`, whose implicit selectors match only a header or
+footer right under `<body>`) as `-s "[role=…]"`, with its share of the lines, and only when that share is at most 70%;
+otherwise the fixed hint. The notice travels apart from the page's text, so a page line that merely looks like one
+stays in stdout (inside `--content-boundaries` markers), and a capped `read` inside a `batch` still sends its footer
+to stderr; it's written to stderr even when stdout was closed early. The
 whole output is still saved, and the line names that file last, after `--max-output`, as `(full output: <path>)`. It
 used to suggest `--full`, and agents ran `snapshot --full` at up to 35K characters a time. The line goes to stderr
 only (so does `read`'s own "pages cut to fit" line), so it survives `| head`, `| grep` and `> file` and stays outside
@@ -2143,6 +2172,7 @@ parity harness rather than stripped wholesale:
   `find role … --nth`) are TypeScript-only; Python answers them with Unknown flag or Unknown command. A `find role`
   that matches nothing names the closest match with its ref only in TypeScript. `select` retyping a field that already
   holds the value, picking a single whole-word match, and listing refs when ambiguous are TypeScript-only.
+- A repeated `snapshot -i` prints only what changed (TypeScript); Python prints the whole list each time.
 - The TypeScript daemon answers every exit 1 with a code (`command_failed` when the failure has none of its own),
   a failed `batch` adds `failed_step_index` and `failed_step_command` to the event, and telemetry's `flags` keeps the
   TypeScript-only `--touch`, `--isolated` and `--main-world` (parity cases mark these `intentional` with a

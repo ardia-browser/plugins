@@ -388,7 +388,7 @@ def render(records: list[dict], options: dict, extra: str = "") -> str:
         out = fit(heads[:shown], texts[:shown], len(records) - shown, limit, extra, len(whole) + 300, saved)
         if out is not None:
             return out
-    return footer(limit, False, len(records), len(whole) + 300, saved)[:limit]
+    return footer(limit, False, len(records), len(whole) + 300, saved)
 
 
 def fit(heads: list[str], texts: list[str], hidden: int, limit: int, extra: str, wanted: int, saved: str = "") -> str | None:

@@ -163,6 +163,10 @@ export class State extends Refs implements temptabs.TempTabState {
   readonly claims = new ClaimSet();
   readonly offscreen = new Set<string>();
   readonly views = new Map<string, unknown>();
+  readonly snapshotsShown = new Map<string, unknown>();
+  pendingShown: Map<string, unknown | null> | null = null;
+  scriptsRunning = 0;
+  commandsRun = 0;
   readonly failedNavigations = new Map<string, number>();
   readonly initSources = new Map<string, string>();
   readonly listeners: Listener[] = [];
@@ -329,6 +333,8 @@ export class State extends Refs implements temptabs.TempTabState {
     this.frames.delete(targetId);
     this.targetInfos.delete(targetId);
     this.views.delete(targetId);
+    this.snapshotsShown.delete(targetId);
+    this.pendingShown?.delete(targetId);
     this.setOffscreen(targetId, false);
     for (const [label, owner] of [...this.labels]) if (owner === targetId) this.labels.delete(label);
     if (this.current === targetId && !this.pinTab) {

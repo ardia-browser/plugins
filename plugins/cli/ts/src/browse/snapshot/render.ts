@@ -169,8 +169,22 @@ function runSpan(nodes: readonly Node[]): string {
   return nodes.length > 1 ? `${spanLabel(nodes[0] as Node)} … ${spanLabel(nodes.at(-1) as Node)}` : spanLabel(nodes[0] as Node);
 }
 
+export type Listed = { text: string; ref: string | null; key: string };
+
 export function interactiveLines(rows: readonly Row[], urls: boolean, near: ReadonlyMap<Node, string> = new Map()): string[] {
-  const lines: string[] = [];
+  return interactiveListed(rows, urls, near).map((entry) => entry.text);
+}
+
+function listedNode(node: Node, level: number, urls: boolean, near: string | undefined): Listed {
+  return { text: line(node, level, urls, near), ref: node.ref ?? null, key: line({ ...node, ref: null }, 0, urls, near).slice(2) };
+}
+
+function listedSummary(text: string): Listed {
+  return { text, ref: null, key: text.trimStart().slice(2) };
+}
+
+export function interactiveListed(rows: readonly Row[], urls: boolean, near: ReadonlyMap<Node, string> = new Map()): Listed[] {
+  const lines: Listed[] = [];
   let index = 0;
   while (index < rows.length) {
     const [level, node] = rows[index] as Row;
@@ -186,7 +200,7 @@ export function interactiveLines(rows: readonly Row[], urls: boolean, near: Read
     const off = members.filter(disabled);
     const run = Object.hasOwn(DISABLED_RUN, node.role) ? (DISABLED_RUN[node.role] as number) : members.length + 1;
     if (members.length < run || off.length < MIN_DISABLED) {
-      lines.push(line(node, level, urls, near.get(node)));
+      lines.push(listedNode(node, level, urls, near.get(node)));
       index += 1;
       continue;
     }
@@ -199,26 +213,28 @@ export function interactiveLines(rows: readonly Row[], urls: boolean, near: Read
       if (hiding) {
         flag("snapshot_disabled_folded", true);
         if (!noted) {
-          lines.push(`${"  ".repeat(level)}- ${off.length} disabled ${row.role}${off.length > 1 ? "s" : ""} (${runSpan(off)})`);
+          lines.push(listedSummary(`${"  ".repeat(level)}- ${off.length} disabled ${row.role}${off.length > 1 ? "s" : ""} (${runSpan(off)})`));
           noted = true;
         }
         continue;
       }
-      lines.push(line(row, rowLevel, urls, near.get(row)));
+      lines.push(listedNode(row, rowLevel, urls, near.get(row)));
     }
     index = end;
   }
   return lines;
 }
 
+export function renderListed(nodes: readonly Node[], depth: number | null, urls: boolean): Listed[] {
+  const rows = interactiveRows(nodes).filter(([level]) => depth === null || level <= depth);
+  return interactiveListed(rows, urls, labelsForRepeats(nodes, rows));
+}
+
 export type RenderOptions = { interactive?: boolean; compact?: boolean; depth?: number | null; urls?: boolean };
 
 export function render(nodes: readonly Node[], options: RenderOptions = {}): string {
   const { interactive = false, compact = false, depth = null, urls = false } = options;
-  if (interactive) {
-    const rows = interactiveRows(nodes).filter(([level]) => depth === null || level <= depth);
-    return interactiveLines(rows, urls, labelsForRepeats(nodes, rows)).join("\n");
-  }
+  if (interactive) return renderListed(nodes, depth, urls).map((entry) => entry.text).join("\n");
   const lines: string[] = [];
   const kept = new Map<Node, boolean>();
   const keepCompact = (node: Node): boolean => {

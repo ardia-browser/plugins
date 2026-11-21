@@ -42,7 +42,7 @@ export const FLAGS = new Set([
   "script_queued_behind_busy", "navigation_dropped_hint", "navigation_https_only_hint", "eval_timed_out", "read_queued_beside",
   "script_state_kept_on_interrupt", "find_closest_names", "batch_saved", "read_empty_page", "network_reloaded", "fill_no_reaction_hint",
   "eval_selectors_quoted", "queued_behind_script", "followed_ref_after_reload", "clicked_visible_content", "element_rehomed",
-  "eval_main_world", "eval_isolated_reference_error", "permission_granted", "guessed_syntax", "find_closest_ref", "select_retyped", "select_word_match", "open_here", "stale_ref_after_open",
+  "eval_main_world", "eval_isolated_reference_error", "permission_granted", "guessed_syntax", "find_closest_ref", "select_retyped", "select_word_match", "open_here", "stale_ref_after_open", "snapshot_diff", "snapshot_diff_full",
 ]);
 export const MAIN_PHASE: Readonly<Record<string, string>> = { snapshot: "snapshot_build_ms", eval: "eval_ms" };
 export const FAILED_WITHOUT_CODE = "command_failed";
@@ -122,7 +122,7 @@ export function cdpCall(started: number): void {
   metrics.addMs("cdp_ms_total", started);
 }
 
-export type RenderedResult = { data?: unknown; batch?: unknown; failed?: unknown } | null | undefined;
+export type RenderedResult = { data?: unknown; batch?: unknown; failed?: unknown; text?: unknown } | null | undefined;
 
 function entry(data: unknown, key: string): unknown {
   if (data instanceof Map) return data.get(key);
@@ -160,6 +160,8 @@ export function recordAnswer(metrics: Metrics, name: string, result: RenderedRes
   recordRendered(metrics, name, result, error, out);
   recordFailure(metrics, result, error);
   if (kept !== null) metrics.errorCode = kept;
+  const diffed = name === "snapshot" && isDict(result?.data) && entry(result?.data, "diff") !== undefined;
+  if (diffed && typeof result?.text === "string") metrics.values.set("snapshot_chars", pyLen(result.text));
 }
 
 export function recordRendered(metrics: Metrics, name: string, result: RenderedResult, error: { code?: string | null } | null | undefined, out: string): void {

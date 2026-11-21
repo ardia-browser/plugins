@@ -141,6 +141,7 @@ async function run(browse: string[], printer: Printer, call: Call, plugin: boole
     if (outPath !== null) {
       const command = rest[0] as string;
       const again = splitGlobals(AS_TEXT.includes(command) ? [...stripped, "--max-output", "0"] : ["--json", ...stripped]);
+      again.found.flags.set("out_only", true);
       const answer = await roundTrip(again.found, again.rest, secrets, call, python);
       return saveAnswer(answer, secrets, printer, call, command, outPath);
     }

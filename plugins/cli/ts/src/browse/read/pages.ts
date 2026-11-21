@@ -74,10 +74,6 @@ export function len(text: string): number {
   return /[\ud800-\udfff]/u.test(text) ? codePoints(text).length : text.length;
 }
 
-function slice(text: string, start: number, end?: number): string {
-  return /[\ud800-\udfff]/u.test(text) ? codePoints(text).slice(start, end).join("") : text.slice(start, end);
-}
-
 export function readsStdin(options: Options, positional: readonly string[]): boolean {
   return Boolean(options["stdin"] || positional.includes("-"));
 }
@@ -291,7 +287,7 @@ export function render(records: readonly PageRecord[], options: Options, extra =
     const out = fit(heads.slice(0, shown), texts.slice(0, shown), records.length - shown, limit, tail, size + 300, saved);
     if (out !== null) return out;
   }
-  return slice(footer(limit, false, records.length, size + 300, saved), 0, limit);
+  return footer(limit, false, records.length, size + 300, saved);
 }
 
 export async function collectLinks(ctx: Ctx, pattern: string): Promise<[string, string[], string[]]> {

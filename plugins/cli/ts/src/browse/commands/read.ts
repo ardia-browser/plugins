@@ -1,24 +1,25 @@
 import { roundTo, formatG } from "../../pylib/format.ts";
 import { unifiedDiff } from "../../pylib/difflib.ts";
-import { splitlines } from "../../pylib/str.ts";
+import { pyLen, splitlines } from "../../pylib/str.ts";
 import { urlsplit } from "../../pylib/urllib.ts";
 import { asData, renderReport } from "../changes/text.ts";
 import { diff as diffViews, type View } from "../changes/report.ts";
 import { previous } from "../changes/views.ts";
 import { BrowseError, Usage } from "../daemon-errors.ts";
-import { Result } from "../daemon/render.ts";
+import { OUTPUT_CAP, Result } from "../daemon/render.ts";
 import { hydration } from "../act/react.ts";
 import { capturePng, comparison, diffScreenshot } from "../media/commands.ts";
+import { diffAgainst, DIFF_SCOPE, forgetShown, lastShown, placeOf, rememberShown, samePlace, scopeOf } from "../snapshot/since.ts";
 import { take } from "../snapshot/take.ts";
 import type { Element, Page } from "../state/page.ts";
 import { frameOffset } from "../state/offsets.ts";
 import * as pierce from "../state/pierce.ts";
 import { record } from "../state/records.ts";
+import { flag } from "../metrics.ts";
 import { navigate, pageTitle } from "./core.ts";
 import type { Ctx } from "./ctx.ts";
 import { register } from "./index.ts";
 import { need, normalizeUrl, parse, SELECTOR_ALIAS, SELECTOR_FLAG, withSelector } from "./parse.ts";
-import { flag } from "../metrics.ts";
 import { readTextPy } from "./pyfile.ts";
 import { currentOrNew, frameOrMain, originOf, pyIntArg, resolve } from "./shared.ts";
 import "../snapshot/collect.ts";
@@ -55,7 +56,13 @@ export async function cmdSnapshot(ctx: Ctx, argv: string[]): Promise<Result> {
   const page = await ctx.state.page();
   await page.refreshFrames();
   const before = options["diff"] ? previous(ctx.state, page) : null;
-  const [text] = await take(ctx.state, page, {
+  const scope = scopeOf(options, selector, depth);
+  const seen = ctx.state.topCommand !== "script" && ctx.state.scriptsRunning === 0;
+  const place = placeOf(ctx.state, page);
+  const fullListing = ctx.state.topCommand === "batch" ? Boolean(ctx.options["full_listing"]) : Boolean(ctx.options["full"]);
+  const uncapped = ctx.options["max_output"] !== undefined && ctx.options["max_output"] !== null && Number(ctx.options["max_output"]) === 0;
+  const shown = seen && scope === DIFF_SCOPE && !fullListing && !uncapped && !ctx.options["json"] ? lastShown(ctx.state, place) : null;
+  const [text, , listed] = await take(ctx.state, page, {
     interactive: Boolean(options["interactive"]),
     compact: Boolean(options["compact"]),
     depth,
@@ -65,6 +72,20 @@ export async function cmdSnapshot(ctx: Ctx, argv: string[]): Promise<Result> {
   const origin = originOf(page, page.mainFrame) || page.url;
   const data: Record<string, unknown> = { origin: origin.endsWith("/") ? origin : `${origin}/`, refs: ctx.state.refsJson(), snapshot: text };
   let body = text || "(empty page)";
+  const title = (ctx.state.views.get(page.targetId) as View | undefined)?.title ?? "";
+  const settled = placeOf(ctx.state, page);
+  const steady = samePlace(place, settled);
+  const since = shown !== null && steady && shown.scope === scope && listed !== null ? diffAgainst(shown, listed, body, ctx.state.commandsRun, page.url) : null;
+  if (shown !== null) flag(since === null ? "snapshot_diff_full" : "snapshot_diff", true);
+  if (since !== null) {
+    data["diff"] = since.data;
+    body = since.text;
+  }
+  const limit = ctx.options["full"] ? 0 : ctx.options["max_output"] === undefined || ctx.options["max_output"] === null ? OUTPUT_CAP : Number(ctx.options["max_output"]);
+  const fits = limit <= 0 || pyLen(body) <= limit;
+  const visible = !ctx.options["json"] && !ctx.options["out_only"];
+  if (visible && seen && steady && fits) rememberShown(ctx.state, { ...settled, scope, command: ctx.state.commandsRun, url: page.url, title, listed: listed ?? [] });
+  else if (visible && seen) forgetShown(ctx.state, page.targetId);
   if (options["diff"]) {
     if (before === null) {
       data["changes"] = null;

@@ -47,7 +47,8 @@ EOF
 ```
 
 - Each action answers with what changed: new refs, values, the URL, requests (`POST /api/contacts → 201`), the
-  new page after a navigation. Plan and verify from that; end a batch with `read` to get the page too.
+  new page after a navigation. Plan and verify from that; end a batch with `read` to get the page too;
+  a repeated `snapshot -i` lists only what changed.
 - Put every step you can name in one `batch`, repeated rounds and dependent fields (To after From) included: each
   line runs once the last took effect, and a ref lasts as long as its element. `find label "Title" fill "…"` and
   `find role button click --name Save` need no refs.
