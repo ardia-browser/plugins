@@ -16,6 +16,7 @@ type Native = {
   openFileAt(dir: number, name: string, flags: number, mode: number): number | null;
   mkdirAt(dir: number, name: string, mode: number): number;
   renameAt(dir: number, from: string, to: string): number;
+  renamePaths(from: string, to: string, swap: boolean): number;
   unlinkAt(dir: number, name: Name): number;
   sizeAt(dir: number, name: Name): number;
   statAt(dir: number, name: string): [number, number, bigint, bigint, number] | number;
@@ -33,7 +34,7 @@ type Native = {
   strerror(errno: number): string | number;
 };
 
-const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "connectAt", "socketInfoAt", "openFileAt", "mkdirAt", "renameAt", "unlinkAt", "sizeAt", "statAt", "armWatchdog", "disarmWatchdog", "registerGroup", "unregisterGroup", "renameExclusiveAt", "removeDirAt", "nonBlocking", "listAt", "lock", "watchLifeline", "writeSome", "strerror"];
+const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "connectAt", "socketInfoAt", "openFileAt", "mkdirAt", "renameAt", "renamePaths", "unlinkAt", "sizeAt", "statAt", "armWatchdog", "disarmWatchdog", "registerGroup", "unregisterGroup", "renameExclusiveAt", "removeDirAt", "nonBlocking", "listAt", "lock", "watchLifeline", "writeSome", "strerror"];
 const ERRNO_NAMES = new Map<number, string>(Object.entries(constants.errno).map(([name, value]) => [value, name]));
 const EWOULDBLOCK = constants.errno.EWOULDBLOCK ?? constants.errno.EAGAIN;
 
@@ -147,6 +148,11 @@ export function mkdirAt(dir: number, name: string, mode: number): void {
 
 export function renameAt(dir: number, from: string, to: string): void {
   checked(native().renameAt(dir, from, to), "renameat", from);
+}
+
+export function renamePaths(from: string, to: string, swap: boolean): number {
+  const result = native().renamePaths(from, to, swap);
+  return result < 0 ? -result : 0;
 }
 
 export function unlinkAt(dir: number, name: Name): void {

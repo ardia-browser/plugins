@@ -204,7 +204,7 @@ def validate(value, schema, path=(), root=True, noun=None) -> list[Problem]:
         problem = check_any_of(value, schema["anyOf"], path, name)
         if problem:
             return problem
-    problems = []
+    problems = check_conditional(value, schema, path, root, noun)
     if is_number(value):
         problems += check_bounds(value, schema, path, name)
     if isinstance(value, str) and isinstance(schema.get("pattern"), str):
@@ -215,6 +215,13 @@ def validate(value, schema, path=(), root=True, noun=None) -> list[Problem]:
     if isinstance(value, dict):
         problems += check_object(value, schema, path, name, root, noun)
     return problems
+
+
+def check_conditional(value, schema, path, root, noun) -> list[Problem]:
+    if "if" not in schema:
+        return []
+    branch = schema.get("then") if not validate(value, schema["if"], path, False) else schema.get("else")
+    return validate(value, branch, path, root, noun) if branch is not None else []
 
 
 def check_bounds(value, schema, path, name) -> list[Problem]:
@@ -260,6 +267,8 @@ def check_array(value, schema, path, name) -> list[Problem]:
         problems.append(Problem(path, f"{name} must have at least {schema['minItems']} item{'s' if schema['minItems'] != 1 else ''}"))
     if isinstance(schema.get("maxItems"), int) and len(value) > schema["maxItems"]:
         problems.append(Problem(path, f"{name} must have at most {schema['maxItems']} item{'s' if schema['maxItems'] != 1 else ''}"))
+    if schema.get("uniqueItems") is True:
+        problems += [Problem(path, f"{name} has {show(item)} twice") for item in repeated(value)]
     prefix = schema.get("prefixItems") if isinstance(schema.get("prefixItems"), list) else []
     for index, item in enumerate(value):
         if index < len(prefix):
@@ -272,6 +281,14 @@ def check_array(value, schema, path, name) -> list[Problem]:
                 break
             problems += validate(item, schema["items"], path + (index,), False)
     return problems
+
+
+def repeated(values: list) -> list:
+    twice = []
+    for index, item in enumerate(values):
+        if not any(json_equal(seen, item) for seen in twice) and any(json_equal(earlier, item) for earlier in values[:index]):
+            twice.append(item)
+    return twice
 
 
 def check_object(value, schema, path, name, root, noun) -> list[Problem]:

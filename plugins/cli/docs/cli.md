@@ -1970,7 +1970,9 @@ fail scans up to the hard `RLIMIT_NOFILE`, capped at 2^20; only that last fallba
 which uses `close_range` and, when that fails (kernels older than 5.9), falls back to a scan bounded by the soft limit
 that can miss a descriptor above a lowered limit. The flusher is detached but stays a child of the Rust entry, which never
 waits for it, so while that call is still running (blocked on its output, say) a flusher that already finished shows as
-a zombie until the call exits and it is reparented and reaped; it holds no descriptors meanwhile. A command whose row in `served.txt` says `rust` it serves itself; one that
+a zombie until the call exits and it is reparented and reaped; it holds no descriptors meanwhile. Each `served.txt` row is a
+command label, which may be several words (`config set`), then `rust` or `ts`; the label is the one Python records in
+telemetry, the first one or two words after any shared flags. A command whose row in `served.txt` says `rust` it serves itself; one that
 says `ts` it runs as a child, `<root>/libexec/ardia-ts`, whose first argument `--ardia-routed=2:<sigint>:<fd>:<hex caller>`
 carries whether SIGINT was ignored when ardia started, the lifeline descriptor and the caller's hello JSON, since Bun by
 itself can learn none of them. The lifeline is the read end of a pipe whose write end only the router holds: the child sees EOF on it
@@ -2561,6 +2563,34 @@ scenarios:
   forever. The TypeScript side prints the events read before it, then `ardia: ... (Ardia sent a line nested too
   deeply to read)` and exits 2. Its events queue also drops the oldest events once the waiting ones take more than
   32 MB, counting each raw line and its parsed form, besides Python's cap of 1,000 events.
+
+- `ardia browse plugin run` (TypeScript) goes through the credential-provider boundary: the plugin gets only `PATH`,
+  `HOME`, `LANG`, `LC_*`, `TMPDIR`, `USER`, `LOGNAME` and `SHELL`, runs in its own process group that is killed on a
+  timeout or Ctrl-C, and its reply must be an object of exactly `protocol`, `success`, `data` and `error` with `success`
+  `true` and exit status 0. A failure reads `Plugin NAME returned an error` or `Plugin NAME sent a malformed reply`
+  (error code `plugin_failed`). Python passes the plugin's own error and protocol text into its message and accepts
+  any truthy `success`, which lets a plugin put arbitrary text in front of the agent.
+- `config`, `theme` and `plugins` in TypeScript hand back to Python, before they print or write anything, for what
+  they don't model: `--help`, argparse errors (a missing or extra argument, an unknown or abbreviated option, a shared
+  flag the command doesn't take), a regular-expression construct with no exact JavaScript equivalent (named groups,
+  back references, Unicode `\b`), JSON nested deeper than 900 levels (Python's `RecursionError`), and text with a lone
+  surrogate that would have to be written to a file (Python's `UnicodeEncodeError`). These aren't differences in
+  output, only in which program prints it.
+- `plugins check` on a manifest 2 (TypeScript) runs Ardia's own manifest checker, vendored unchanged from ardia's
+  `apps/browser/src/lib` into `ts/src/app-manifest`, after the schema, plus the manifest-only app rules driven by the
+  schema's `x-ardia-rules` (approved settings, hooks that need tabs) and `contributes.settings.defaults` against
+  config.schema.json. Python checks a manifest 2 only against the schema and two rules (main or sidecar, not both;
+  activationEvents only go with a main), so it can call ok a manifest Ardia refuses. Neither side checks what depends on
+  the running app: built-in-only keys (`alwaysOn`, `official`, `autoInstall`, `afterUpdate`), the app version and the
+  app's current settings.
+- `plugins install` (TypeScript) copies a plugin folder by descriptor: each folder and file is opened without following
+  links, and a link, FIFO, socket or device met during the copy fails the install with the same message Python gives for
+  a link found beforehand (or `isn't a regular file or folder` for the others), with the size cap counted as it copies.
+  The finished copy is walked once more before it's published and refused if it holds a link, a special file or a
+  hard-linked file. Python checks for links in one pass and then copies with `copytree`, which recreates a link that
+  appeared in between, and it copies FIFOs and devices.
+- A schema `pattern` with `\w` or `\d` outside `re.ASCII` (the theme checks) is matched with the JavaScript engine's
+  Unicode tables, which may differ from CPython 3.13's on characters assigned in a newer Unicode version.
 
 ## Linux
 

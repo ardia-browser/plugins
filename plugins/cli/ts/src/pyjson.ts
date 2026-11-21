@@ -6,7 +6,27 @@ const JSON_SPACE = new Set([" ", "\t", "\n", "\r"]);
 const SIMPLE_ESCAPES: Record<string, string> = { '"': '"', "\\": "\\", "/": "/", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t" };
 export const PY_JSON_RECURSION_LIMIT = 9994;
 
-export class DecodeError extends Error {}
+export class DecodeError extends Error {
+  constructor(
+    message: string,
+    readonly msg: string = message,
+    readonly lineno: number = 1,
+    readonly colno: number = 1,
+    readonly pos: number = 0,
+  ) {
+    super(message);
+  }
+}
+
+export { DecodeError as JsonDecodeError };
+
+export class JsonValueError extends Error {}
+
+export type LoadOptions = { constants?: (token: string) => never; finite?: boolean };
+
+export function isLoneSurrogate(text: string): boolean {
+  return /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/u.test(text);
+}
 
 export class Refused extends Error {}
 
@@ -36,13 +56,14 @@ class Decoder {
     private readonly cp: string[],
     private readonly strict: Strictness,
     private readonly recursionLimit: number,
+    private readonly options: LoadOptions = {},
   ) {}
 
-  private fail(message: string, at: number): never {
+  fail(message: string, at: number): never {
     const before = this.cp.slice(0, at);
     const line = before.filter((ch) => ch === "\n").length + 1;
     const column = at - before.lastIndexOf("\n");
-    throw new DecodeError(`${message}: line ${line} column ${column} (char ${at})`);
+    throw new DecodeError(`${message}: line ${line} column ${column} (char ${at})`, message, line, column, at);
   }
 
   space(at: number): number {
@@ -60,6 +81,7 @@ class Decoder {
 
   private constant(name: string): Value {
     if (this.strict !== undefined) this.refuse(`has ${name}, which isn't JSON`);
+    if (this.options.constants !== undefined) this.options.constants(name);
     if (name === "NaN") return new Float(Number.NaN);
     return new Float(name === "Infinity" ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY);
   }
@@ -116,6 +138,7 @@ class Decoder {
   private floatOf(literal: string): Value {
     const value = Number(literal);
     if (this.strict !== undefined && !Number.isFinite(value)) this.refuse(`has the number ${literal.slice(0, 24)}, which is too large for JSON`);
+    if (this.options.finite && !Number.isFinite(value)) throw new JsonValueError(`${literal} is too large a number`);
     return new Float(value);
   }
 
@@ -240,12 +263,14 @@ class Decoder {
   }
 }
 
-export function loads(text: string, strict: Strictness = undefined, recursionLimit = PY_JSON_RECURSION_LIMIT): Value {
-  const decoder = new Decoder(codePoints(text), strict, recursionLimit);
+export function loads(text: string, strict: Strictness | LoadOptions = undefined, recursionLimit = PY_JSON_RECURSION_LIMIT): Value {
+  const strictness = strict !== undefined && "what" in strict ? strict : undefined;
+  const options = strict !== undefined && !("what" in strict) ? strict : {};
+  const decoder = new Decoder(codePoints(text), strictness, recursionLimit, options);
   try {
     return decoder.decode();
   } catch (error) {
-    if (error instanceof Stop) throw new DecodeError(`Expecting value: line 1 column ${error.at + 1} (char ${error.at})`);
+    if (error instanceof Stop) decoder.fail("Expecting value", error.at);
     if (error instanceof RangeError) throw new TooDeepToJudge();
     throw error;
   }

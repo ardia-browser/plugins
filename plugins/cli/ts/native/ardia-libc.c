@@ -16,6 +16,9 @@
 #include <sys/file.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#if defined(__linux__)
+#include <sys/syscall.h>
+#endif
 #include <sys/types.h>
 #include <unistd.h>
 #if defined(__linux__)
@@ -372,6 +375,25 @@ static napi_value rename_at(napi_env env, napi_callback_info info) {
   if (checked == 0) checked = name_arg(&call, 2, to, sizeof(to));
   if (checked != 0) return status(env, checked);
   return status(env, renameat(dir, from, dir, to) == 0 ? 0 : failed());
+}
+
+static napi_value rename_paths(napi_env env, napi_callback_info info) {
+  Call call;
+  bool swap;
+  char from[PATH_MAX], to[PATH_MAX];
+  if (!take_args(env, info, 3, &call)) return status(env, -EINVAL);
+  if (!bool_arg(&call, 2, &swap)) return NULL;
+  int checked = name_arg(&call, 0, from, sizeof(from));
+  if (checked == 0) checked = name_arg(&call, 1, to, sizeof(to));
+  if (checked != 0) return status(env, checked);
+#if defined(__APPLE__)
+  return status(env, renamex_np(from, to, swap ? RENAME_SWAP : RENAME_EXCL) == 0 ? 0 : failed());
+#elif defined(__linux__) && defined(SYS_renameat2)
+  return status(env, syscall(SYS_renameat2, AT_FDCWD, from, AT_FDCWD, to, swap ? 2u : 1u) == 0 ? 0 : failed());
+#else
+  (void)swap;
+  return status(env, -ENOSYS);
+#endif
 }
 
 static napi_value unlink_at(napi_env env, napi_callback_info info) {
@@ -784,6 +806,7 @@ __attribute__((visibility("default"))) napi_value napi_register_module_v1(napi_e
       && define(env, exports, "openFileAt", open_file_at)
       && define(env, exports, "mkdirAt", mkdir_at)
       && define(env, exports, "renameAt", rename_at)
+      && define(env, exports, "renamePaths", rename_paths)
       && define(env, exports, "unlinkAt", unlink_at)
       && define(env, exports, "sizeAt", size_at)
       && define(env, exports, "statAt", stat_at)

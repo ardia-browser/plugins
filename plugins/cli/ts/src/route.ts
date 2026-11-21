@@ -1,4 +1,5 @@
 import type { CommandRoute } from "./commands.ts";
+import { type Command, parseCommand as parseConfigCommand } from "./cli-command.ts";
 import { emptyListing, type Kind, type Listing } from "./listing.ts";
 import { servedTable, type ServingSide } from "./served.ts";
 
@@ -7,6 +8,7 @@ export type Route =
   | { kind: "help" }
   | { kind: "listing"; what: Kind; listing: Listing }
   | { kind: "command"; route: CommandRoute }
+  | { kind: "config"; command: Command }
   | { kind: "python" };
 
 const U64_MAX = (1n << 64n) - 1n;
@@ -35,6 +37,7 @@ export function labelOf(route: Route): string | undefined {
   if (route.kind === "version") return "--version";
   if (route.kind === "help") return "--help";
   if (route.kind === "command") return route.route.label;
+  if (route.kind === "config") return route.command.label;
   return route.kind === "listing" ? route.what : undefined;
 }
 
@@ -45,7 +48,13 @@ export function route(argv: string[], table: Map<string, ServingSide> = servedTa
     if (found !== undefined) parsed = { kind: "command", route: found };
   }
   const label = labelOf(parsed);
-  return label !== undefined && !table.has(label) ? { kind: "python" } : parsed;
+  return label !== undefined && !servedRow(label, table) ? { kind: "python" } : parsed;
+}
+
+export function servedRow(label: string, table: Map<string, ServingSide>): boolean {
+  if (table.has(label)) return true;
+  const space = label.indexOf(" ");
+  return space > 0 && table.get(`${label.slice(0, space)} *`) === "ts";
 }
 
 function same(argv: string[], words: string[]): boolean {
@@ -55,6 +64,8 @@ function same(argv: string[], words: string[]): boolean {
 export function parseRoute(argv: string[]): Route {
   if (same(argv, ["--version"])) return { kind: "version" };
   if (argv.length === 0 || same(argv, ["--help"]) || same(argv, ["-h"])) return { kind: "help" };
+  const config = parseConfigCommand(argv);
+  if (config !== undefined) return { kind: "config", command: config };
   const listing = emptyListing();
   const cursor = new Cursor(argv);
   let kind: Kind | undefined;

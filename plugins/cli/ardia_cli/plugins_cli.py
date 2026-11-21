@@ -83,6 +83,30 @@ def read_manifest(path: Path):
 SIDES = ("left", "right", "top", "bottom")
 
 
+LEGACY_MANIFEST = 1
+
+
+def manifest_ceiling(schema: dict) -> int:
+    found = []
+    for branch in (schema, schema.get("then"), schema.get("else")):
+        properties = branch.get("properties") if isinstance(branch, dict) else None
+        spec = properties.get("manifest") if isinstance(properties, dict) else None
+        for key in ("maximum", "const"):
+            value = spec.get(key) if isinstance(spec, dict) else None
+            if isinstance(value, int) and not isinstance(value, bool):
+                found.append(value)
+    return max(found, default=1)
+
+
+def v2_rule_problems(doc: dict) -> list[str]:
+    problems = []
+    if "main" in doc and "sidecar" in doc:
+        problems.append("a plugin can declare main or sidecar, not both")
+    if "activationEvents" in doc and "main" not in doc:
+        problems.append("activationEvents only go with a main")
+    return problems
+
+
 def current_manifest(manifest: dict, known: int):
     given = manifest.get("manifest")
     if "manifest" in manifest and (isinstance(given, bool) or not isinstance(given, int) or given < 0):
@@ -94,7 +118,7 @@ def current_manifest(manifest: dict, known: int):
     doc = {key: value for key, value in manifest.items() if key not in ("settings", "reset")}
     if "settings" in manifest:
         doc["settings"] = {"defaults": manifest["settings"]}
-    doc["manifest"] = known
+    doc["manifest"] = min(known, LEGACY_MANIFEST)
     return doc, []
 
 
@@ -241,13 +265,13 @@ def plugin_schema(where) -> dict:
 def manifest_problems(args, manifest: dict) -> list[str]:
     where = config_files.places(args.data_dir)
     schema = plugin_schema(where)
-    known = ((schema.get("properties") or {}).get("manifest") or {}).get("maximum", 1)
-    doc, problems = current_manifest(manifest, known)
+    doc, problems = current_manifest(manifest, manifest_ceiling(schema))
     if doc is None:
         return problems
     problems += schema_problems(where, doc, schema)
     if not problems:
-        problems += rule_problems(doc, schema.get("x-ardia-rules") or {})
+        legacy = doc.get("manifest", 0) <= LEGACY_MANIFEST
+        problems += rule_problems(doc, schema.get("x-ardia-rules") or {}) if legacy else v2_rule_problems(doc)
     name = doc.get("name")
     if not isinstance(name, str) or not NAME.match(name):
         problems.append("name must be 1 to 40 lowercase letters, digits and dashes, starting with a letter or digit")

@@ -27,6 +27,17 @@ export type Failure =
   | { kind: "interrupted" }
   | { kind: "unported"; code?: string; message?: string };
 
+export class Unsendable extends Error {}
+
+const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/u;
+
+function unsendable(value: Value): boolean {
+  if (typeof value === "string") return LONE_SURROGATE.test(value);
+  if (Array.isArray(value)) return value.some(unsendable);
+  if (value instanceof Map) return [...value].some(([key, item]) => LONE_SURROGATE.test(key) || unsendable(item));
+  return false;
+}
+
 export class ControlFailure extends Error {
   constructor(readonly failure: Failure) {
     super(failure.kind);
@@ -251,5 +262,8 @@ export async function withSession<T>(dataDir: string | undefined, work: (session
 }
 
 export function call(dataDir: string | undefined, method: string, params: Value | undefined, timeout: number = CALL_TIMEOUT, requireOutcome = false): Promise<Value> {
-  return withSession(dataDir, (session) => session.call(method, params, timeout, requireOutcome));
+  return withSession(dataDir, async (session) => {
+    if (params !== undefined && unsendable(params)) throw new Unsendable();
+    return session.call(method, params, timeout, requireOutcome);
+  });
 }
