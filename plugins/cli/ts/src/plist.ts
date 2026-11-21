@@ -231,29 +231,45 @@ function parseBinary(data: Buffer): PlistValue {
     offsets.push(offset);
   }
   const decoded = new Map<number, PlistValue>();
+  const heights = new Map<number, number>();
   const seen = new Set<number>();
+  let below = 0;
   const object = (ref: number): PlistValue => {
     if (ref >= count || seen.has(ref)) throw new Malformed();
     const known = decoded.get(ref);
-    if (known !== undefined) return known;
+    if (known !== undefined) {
+      const height = heights.get(ref) as number;
+      if (seen.size + height > MAX_DEPTH) throw new Malformed();
+      below = Math.max(below, height);
+      return known;
+    }
     if (seen.size >= MAX_DEPTH) throw new Malformed();
     seen.add(ref);
+    const outer = below;
+    below = 0;
     try {
       const value = decodeObject(offsets[ref] as number);
+      const height = below + 1;
       decoded.set(ref, value);
+      heights.set(ref, height);
+      below = Math.max(outer, height);
       return value;
     } finally {
       seen.delete(ref);
     }
   };
+  const within = (at: number, size: number): number => {
+    if (at + size > tableAt) throw new Malformed();
+    return at;
+  };
   const lengthAt = (at: number, info: number, unit = 1): [number, number] => {
     let length = info;
     let start = at + 1;
     if (info === 0x0f) {
-      const marker = data[at + 1] as number;
+      const marker = data[within(at + 1, 1)] as number;
       const size = 1 << (marker & 0x0f);
       if (marker >> 4 !== 0x1 || !INT_SIZES.includes(size)) throw new Malformed();
-      length = readInt(at + 2, size);
+      length = readInt(within(at + 2, size), size);
       start = at + 2 + size;
     }
     if (length > (tableAt - start) / unit) throw new Malformed();
@@ -269,11 +285,11 @@ function parseBinary(data: Buffer): PlistValue {
     if (marker === 0x09) return true;
     if (kind === 0x1) {
       const size = 1 << info;
-      if (size === 8) return data.readBigInt64BE(at + 1);
-      return BigInt(readInt(at + 1, size));
+      if (size === 8) return data.readBigInt64BE(within(at + 1, 8));
+      return BigInt(readInt(within(at + 1, size), size));
     }
-    if (kind === 0x2) return info === 2 ? data.readFloatBE(at + 1) : data.readDoubleBE(at + 1);
-    if (kind === 0x3) return new Date((Date.UTC(2001, 0, 1) / 1000 + data.readDoubleBE(at + 1)) * 1000);
+    if (kind === 0x2) return info === 2 ? data.readFloatBE(within(at + 1, 4)) : data.readDoubleBE(within(at + 1, 8));
+    if (kind === 0x3) return new Date((Date.UTC(2001, 0, 1) / 1000 + data.readDoubleBE(within(at + 1, 8))) * 1000);
     if (kind === 0x4) {
       const [length, start] = lengthAt(at, info);
       return Buffer.from(data.subarray(start, start + length));

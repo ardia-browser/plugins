@@ -2,6 +2,8 @@ import { type JsonObject, type Value } from "./json.ts";
 import { METRIC_COUNTS, METRIC_DURATIONS, METRIC_MAX_COUNT, METRIC_MAX_MS } from "./telemetry-tables.ts";
 import { isMetricFlag } from "./command-metrics.ts";
 import { strerror } from "./paths.ts";
+import { CODES } from "./browse/codes.ts";
+import { SOCKET_ERROR_CODES } from "./error-codes.ts";
 import { EXCEPTION_SOURCES, EXCEPTION_TYPES, knownCommand, knownExceptionType, knownFlags, knownSubcommand, OTHER_NAME } from "./telemetry-names.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -30,6 +32,11 @@ export const FIXED_MESSAGES: ReadonlySet<string> = new Set([
   "cannot unpack non-iterable NoneType object", "'NoneType' object is not subscriptable", "'NoneType' object is not iterable",
   "'NoneType' object is not callable", "unhashable type: 'dict'", "unhashable type: 'list'",
 ]);
+const CLI_ERROR_CODES = [
+  "bad_params", "connection_dropped", "internal_error", "invalid_value", "methods_unsupported", "no_pid", "not_set", "plugin_refused",
+  "removed_command", "stdout_closed", "unhandled_exception", "unknown_setting", "unreachable", "unsupported_protocol",
+];
+export const TELEMETRY_ERROR_CODES: ReadonlySet<string> = new Set([...CODES, ...SOCKET_ERROR_CODES, ...CLI_ERROR_CODES]);
 const DURATIONS = new Set(METRIC_DURATIONS);
 const COUNTS = new Set(METRIC_COUNTS);
 
@@ -39,6 +46,7 @@ const text = (pattern: RegExp): Check => (value) => (typeof value === "string" &
 const oneOf = (allowed: readonly string[]): Check => (value) => (typeof value === "string" && allowed.includes(value) ? value : undefined);
 const orNull = (check: Check): Check => (value) => (value === null ? null : check(value));
 const boolean: Check = (value) => (typeof value === "boolean" ? value : undefined);
+const errorCode: Check = (value) => (typeof value === "string" && ERROR_CODE.test(value) ? (TELEMETRY_ERROR_CODES.has(value) ? value : OTHER_NAME) : undefined);
 const exitCode: Check = (value) => (typeof value === "bigint" && value >= -1024n && value <= 1024n ? value : undefined);
 
 function wholeUpTo(ceiling: number): Check {
@@ -105,7 +113,7 @@ const EXCEPTION_ENTRY = shape([
 const COMMON: [string, Check][] = [
   ["$session_id", text(UUID)],
   ["watch_report", text(WATCH_REPORT)],
-  ["error_code", orNull(text(ERROR_CODE))],
+  ["error_code", orNull(errorCode)],
   ["cli_version", text(VERSION)],
   ["$environment", oneOf(ENVIRONMENTS)],
 ];

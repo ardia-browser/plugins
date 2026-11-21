@@ -62,7 +62,7 @@ export class Connection {
   private unsentBytes = 0;
   private writeFailure: string | undefined;
   private pumpTimer: ReturnType<typeof setTimeout> | undefined;
-  private wake: (() => void) | undefined;
+  private waiters = new Set<() => void>();
   private events: Queued[] = [];
   private eventBytes = 0;
   private dropped = 0;
@@ -80,14 +80,23 @@ export class Connection {
   }
 
   private notify(): void {
-    const wake = this.wake;
-    this.wake = undefined;
-    wake?.();
+    const waiters = [...this.waiters];
+    this.waiters.clear();
+    for (const wake of waiters) wake();
+  }
+
+  private failWriter(reason: string): void {
+    this.writeFailure ??= reason;
+    if (this.pumpTimer !== undefined) clearTimeout(this.pumpTimer);
+    this.pumpTimer = undefined;
+    this.unsent = [];
+    this.unsentBytes = 0;
   }
 
   private lose(reason: string): void {
     if (this.lost !== undefined || this.readerStopped) return;
     this.lost = reason;
+    this.failWriter(reason);
     for (const request of this.pending.values()) request.lost ??= reason;
     this.pending.clear();
     this.notify();
@@ -109,6 +118,7 @@ export class Connection {
         if (!(error instanceof TooDeep)) throw error;
         this.readerStopped = true;
         this.buffer = Buffer.alloc(0);
+        this.failWriter(UNREADABLE_LINE);
         for (const request of this.pending.values()) request.lost ??= UNREADABLE_LINE;
         this.pending.clear();
         this.notify();
@@ -218,16 +228,17 @@ export class Connection {
       if (this.interrupted()) throw new Stop("interrupted", "interrupted");
       const left = deadline === undefined ? POLL_MS : deadline - performance.now();
       if (left <= 0) return false;
+      let finish: () => void = () => {};
       await new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, Math.max(1, Math.min(left, POLL_MS)));
-        const finish = () => {
+        const timer = setTimeout(() => finish(), Math.max(1, Math.min(left, POLL_MS)));
+        finish = () => {
           clearTimeout(timer);
           resolve();
         };
-        this.wake = finish;
+        this.waiters.add(finish);
         this.onWake(finish);
       });
-      this.wake = undefined;
+      this.waiters.delete(finish);
       this.onWake(undefined);
     }
   }

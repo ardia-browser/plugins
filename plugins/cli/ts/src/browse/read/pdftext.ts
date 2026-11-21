@@ -14,7 +14,7 @@ import { record } from "../state/records.ts";
 export const MAX_BYTES = 40 * 1024 * 1024;
 export const EXTRACT_TIMEOUT = 120;
 export const NO_TEXT = "(this PDF has no text layer, so it is probably scanned pages; look at it with `ardia browse screenshot`)";
-export const tools = { osascript: "osascript" };
+export const tools = { osascript: process.platform === "darwin" ? "/usr/bin/osascript" : "osascript" };
 
 export function isPdfType(kind: unknown): boolean {
   return pyStrip(String(kind ?? "").split(";")[0] as string).toLowerCase() === "application/pdf";
@@ -33,13 +33,13 @@ function startsPdf(data: Uint8Array): boolean {
   return data[0] === 0x25 && data[1] === 0x50 && data[2] === 0x44 && data[3] === 0x46;
 }
 
-function run(file: string): { done: Promise<[string, number]>; kill: () => void } {
+function run(file: string): { done: Promise<[string, number]>; kill: () => Promise<void> } {
   const started = spawnGroup([tools.osascript, "-l", "JavaScript", "-e", PDFTEXT_JXA, file], { stdout: "pipe" });
   let group: GroupChild | null = null;
   let killed = false;
   const done = started.then((child) => {
     group = child;
-    if (killed) child.signal("SIGKILL");
+    if (killed) void child.terminate();
     const chunks: Buffer[] = [];
     child.child.stdout?.on("data", (chunk: Buffer) => chunks.push(chunk));
     return child.closed.then((code): [string, number] => {
@@ -49,9 +49,9 @@ function run(file: string): { done: Promise<[string, number]>; kill: () => void 
   });
   return {
     done,
-    kill: () => {
+    kill: async () => {
       killed = true;
-      (group as GroupChild | null)?.signal("SIGKILL");
+      await (group as GroupChild | null)?.terminate();
     },
   };
 }
@@ -73,12 +73,12 @@ export async function textFromBytes(data: Uint8Array): Promise<string> {
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill();
+      void child.kill();
     }, EXTRACT_TIMEOUT * 1000);
     try {
       [stdout, status] = await untilCancelled(child.done);
     } catch (error) {
-      child.kill();
+      await child.kill();
       throw error;
     } finally {
       clearTimeout(timer);

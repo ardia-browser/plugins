@@ -150,7 +150,7 @@ function finished(encoder: Encoder, seconds: number, signal: AbortSignal | null)
   });
 }
 
-async function closeEncoder(encoder: Encoder): Promise<void> {
+export async function closeEncoder(encoder: Encoder): Promise<void> {
   try {
     encoder.group.child.stdin?.end();
   } catch {}
@@ -158,11 +158,11 @@ async function closeEncoder(encoder: Encoder): Promise<void> {
   try {
     ended = await finished(encoder, ENCODER_WAIT, currentSignal());
   } catch (error) {
-    encoder.group.signal("SIGKILL");
+    await encoder.group.terminate();
     throw error;
   }
   if (!ended) {
-    encoder.group.signal("SIGTERM");
+    await encoder.group.terminate();
     throw new BrowseError(`ffmpeg didn't finish the WebM in ${ENCODER_WAIT} s`);
   }
   if ((await encoder.group.closed) !== 0) {

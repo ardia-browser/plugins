@@ -245,7 +245,7 @@ describe("script calls that don't parse or name no command", () => {
 });
 
 describe("the native group table", () => {
-  test("a group the full table refuses is still tracked in JavaScript and counted", async () => {
+  test("a group the full table refuses is killed, counted and fails the run", async () => {
     const { registerGroup, unregisterGroup } = await import("../../src/libc.ts");
     const fakes: number[] = [];
     for (let pid = 900_000; fakes.length < 300; pid += 1) {
@@ -253,9 +253,10 @@ describe("the native group table", () => {
       fakes.push(pid);
     }
     try {
-      const before = runModule.groupStats.unregistered;
-      await run(["/bin/sh", "-c", "exit 0"], { timeout: 5 });
-      expect(runModule.groupStats.unregistered).toBe(before + 1);
+      const before = runModule.groupStats.untracked;
+      await expect(run(["/bin/sh", "-c", "exit 0"], { timeout: 5 })).rejects.toBeInstanceOf(runModule.SpawnFailed);
+      expect(runModule.groupStats.untracked).toBe(before + 1);
+      expect(runModule.liveGroups()).toEqual([]);
     } finally {
       for (const pid of fakes) unregisterGroup(pid);
     }
