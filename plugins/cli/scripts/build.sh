@@ -79,8 +79,9 @@ fi
 cli_dir=$(cd "$(dirname "$0")/.." && pwd)
 bun=$(command -v bun 2>/dev/null || true)
 [ -n "$bun" ] || bun=$HOME/.bun/bin/bun
-[ -x "$bun" ] || { echo "build.sh: bun not found" >&2; exit 1; }
-[ "$("$bun" --version)" = "$bun_version" ] || { echo "build.sh: needs Bun $bun_version, found $("$bun" --version)" >&2; exit 1; }
+[ -x "$bun" ] || { echo "build.sh: the TypeScript ardia builds with Bun $bun_version, and there's no bun on PATH or at ~/.bun/bin/bun (CI: oven-sh/setup-bun with bun-version: $bun_version)" >&2; exit 1; }
+found_bun=$("$bun" --version 2>/dev/null || echo unknown)
+[ "$found_bun" = "$bun_version" ] || { echo "build.sh: the TypeScript ardia builds with Bun $bun_version, and $bun is $found_bun" >&2; exit 1; }
 
 mkdir -p "$cache" "$out"
 out=$(cd "$out" && pwd)
@@ -113,7 +114,10 @@ rm -rf "$work/esbuild"
 probe=$work/probe.js
 printf 'process.stdout.write("runtime-switch-open")\n' >"$probe"
 for switch in "BUN_BE_BUN=1" "BUN_OPTIONS=--preload=$probe"; do
-  if env "$switch" "$root/bin/ardia" "$probe" 2>&1 </dev/null | grep -q runtime-switch-open; then
+  export "${switch?}"
+  ARDIA_CLI_HOME="$work/cli-home" ARDIA_TELEMETRY=off "$root/bin/ardia" "$probe" >"$work/smoke" 2>&1 </dev/null || true
+  unset BUN_BE_BUN BUN_OPTIONS
+  if grep -q runtime-switch-open "$work/smoke"; then
     echo "build.sh: bin/ardia still runs other code with $switch" >&2
     exit 1
   fi
