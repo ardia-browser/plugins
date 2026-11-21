@@ -1916,6 +1916,13 @@ parity harness rather than stripped wholesale:
   back references, Unicode `\b`), JSON nested deeper than 900 levels (Python's `RecursionError`), and text with a lone
   surrogate that would have to be written to a file (Python's `UnicodeEncodeError`). These aren't differences in
   output, only in which program prints it.
+- `plugins check` on a manifest 2 (TypeScript) runs Ardia's own manifest checker, vendored unchanged from ardia's
+  `apps/browser/src/lib` into `ts/src/app-manifest`, after the schema, plus the manifest-only app rules driven by the
+  schema's `x-ardia-rules` (approved settings, hooks that need tabs) and `contributes.settings.defaults` against
+  config.schema.json. Python checks a manifest 2 only against the schema and two rules (main or sidecar, not both;
+  activationEvents only go with a main), so it can call ok a manifest Ardia refuses. Neither side checks what depends on
+  the running app: built-in-only keys (`alwaysOn`, `official`, `autoInstall`, `afterUpdate`), the app version and the
+  app's current settings.
 - A schema `pattern` with `\w` or `\d` outside `re.ASCII` (the theme checks) is matched with the JavaScript engine's
   Unicode tables, which may differ from CPython 3.13's on characters assigned in a newer Unicode version.
 

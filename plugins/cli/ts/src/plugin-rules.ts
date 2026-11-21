@@ -7,6 +7,7 @@ import { loads } from "./pyjson.ts";
 import { codePoints } from "./pystr.ts";
 import { isDict, isList, isNumber, isStr, less, pyEqual, pyStr } from "./pyvalue.ts";
 import { formatPath, validate } from "./schema-check.ts";
+import { v2Defaults, v2Problems } from "./plugin-v2.ts";
 import shippedSchema from "../../ardia_cli/schemas/plugin.schema.json" with { type: "text" };
 
 export const MANIFEST = "plugin.json";
@@ -177,12 +178,15 @@ function schemaProblems(where: files.Places, doc: JsonObject, schema: JsonObject
   const problems = validate(doc, schema).map((problem) => `${formatPath(problem.path) || "plugin.json"}: ${shownRule(problem.message)}`);
   const config = files.findSchema(where, "config.schema.json").document;
   const settingsSchema = dictOr(dictOr(config).get("properties")).get("settings");
+  const declared = doc.get("manifest");
+  const current = typeof declared === "bigint" && declared > LEGACY_MANIFEST;
   const settings = doc.get("settings");
-  const defaults = isDict(settings) ? settings.get("defaults") : undefined;
+  const defaults = current ? v2Defaults(doc) : isDict(settings) ? settings.get("defaults") : undefined;
+  const label = current ? "contributes.settings.defaults" : "settings.defaults";
   if (isDict(defaults) && defaults.size > 0 && !isDict(settingsSchema)) {
-    problems.push("settings.defaults can't be checked: Ardia hasn't written config.schema.json for this data folder yet (open Ardia once)");
+    problems.push(`${label} can't be checked: Ardia hasn't written config.schema.json for this data folder yet (open Ardia once)`);
   } else if (isDict(settingsSchema) && isDict(defaults)) {
-    for (const problem of validate(defaults, settingsSchema)) problems.push(`settings.defaults: ${problem.message}`);
+    for (const problem of validate(defaults, settingsSchema)) problems.push(`${label}: ${problem.message}`);
   }
   return problems;
 }
@@ -214,13 +218,6 @@ function manifestCeiling(schema: JsonObject): bigint {
   return found.length === 0 ? 1n : found.reduce((high, value) => (value > high ? value : high));
 }
 
-function v2RuleProblems(doc: JsonObject): string[] {
-  const problems: string[] = [];
-  if (doc.has("main") && doc.has("sidecar")) problems.push("a plugin can declare main or sidecar, not both");
-  if (doc.has("activationEvents") && !doc.has("main")) problems.push("activationEvents only go with a main");
-  return problems;
-}
-
 function currentManifest(manifest: JsonObject, known: bigint): [JsonObject | undefined, string[]] {
   const given = manifest.get("manifest");
   if (manifest.has("manifest") && (typeof given === "boolean" || typeof given !== "bigint" || given < 0n)) return [undefined, ["manifest must be a whole number, the manifest's version"]];
@@ -244,7 +241,7 @@ export function manifestProblems(args: Args, manifest: JsonObject): string[] {
   if (problems.length === 0) {
     const declared = doc.get("manifest");
     const legacy = declared === undefined || (typeof declared === "bigint" && declared <= LEGACY_MANIFEST);
-    problems.push(...(legacy ? ruleProblems(doc, dictOr(schema.get("x-ardia-rules"))) : v2RuleProblems(doc)));
+    problems.push(...(legacy ? ruleProblems(doc, dictOr(schema.get("x-ardia-rules"))) : v2Problems(doc, dictOr(schema.get("x-ardia-rules")))));
   }
   const name = doc.get("name");
   if (typeof name !== "string" || !NAME.test(name)) problems.push("name must be 1 to 40 lowercase letters, digits and dashes, starting with a letter or digit");
