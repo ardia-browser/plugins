@@ -5,6 +5,7 @@ import { servedTable, type ServingSide } from "./served.ts";
 import type { CommandRoute as FamilyRoute } from "./serve-commands.ts";
 import { label as computerLabel } from "./computer/label.ts";
 import { arrange } from "./hooks/route.ts";
+import { parseScripts, type ScriptsArgs } from "./scripts/args.ts";
 
 export type Route =
   | { kind: "version" }
@@ -12,6 +13,7 @@ export type Route =
   | { kind: "listing"; what: Kind; listing: Listing }
   | { kind: "command"; route: CommandRoute }
   | { kind: "config"; command: Command }
+  | { kind: "scripts"; args: ScriptsArgs }
   | { kind: "python" }
   | FamilyRoute;
 
@@ -45,6 +47,7 @@ export function labelOf(route: Route): string | undefined {
   if (route.kind === "computer") return `computer ${computerLabel(route.argv)}`;
   if (route.kind === "hooks") return route.verb === "" ? "hooks" : `hooks ${route.verb}`;
   if (route.kind === "on") return "on";
+  if (route.kind === "scripts") return `scripts ${route.args.sub}`;
   return route.kind === "listing" ? route.what : undefined;
 }
 
@@ -76,6 +79,8 @@ export function parseRoute(argv: string[]): Route {
   if (argv[0] === "computer") return { kind: "computer", argv: argv.slice(1) };
   const arranged = arrange(argv);
   if (arranged !== undefined) return arranged.path[0] === "on" ? { kind: "on", argv } : { kind: "hooks", verb: arranged.path[1] ?? "", argv };
+  const scripts = parseScripts(argv);
+  if (scripts !== undefined) return { kind: "scripts", args: scripts };
   const listing = emptyListing();
   const cursor = new Cursor(argv);
   let kind: Kind | undefined;

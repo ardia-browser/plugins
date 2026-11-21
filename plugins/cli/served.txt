@@ -57,3 +57,7 @@ computer * ts
 hooks install ts
 hooks uninstall ts
 on ts
+scripts new ts
+scripts install ts
+scripts uninstall ts
+scripts list ts

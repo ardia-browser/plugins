@@ -1988,7 +1988,11 @@ SIGHUP on unless they were ignored (a Ctrl-C to the whole group reaches the chil
 turns into one), holds the lease, and then ends by the child's signal or with its status. Status 253 means the
 TypeScript program couldn't serve the call exactly (it may only have asked read-only questions): the router then restores
 every disposition it changed and execs the bundled Python with the original argv and environment, byte for byte, as for any other
-command. Without `libexec/ardia-ts` everything goes where it would without the row. The router reads
+command. Without `libexec/ardia-ts` everything goes where it would without the row. A row's label is every word but the
+last, so a row can name a subcommand (`scripts list ts`). For an argv the router doesn't parse itself, it skips the
+leading shared options (`--port`, `--ws`, `--data-dir`, `--timeout` with their values, `--json`), takes the command and,
+past more shared options, the next word if it isn't an option, and starts the child when `<command> <word>` or else
+`<command>` is a `ts` row; the child hands back (253) any argv it wouldn't read exactly as Python's parser does. The router reads
 `<root>/served.txt` when it is a regular file (not a link) of at most 64 KiB and valid, else the table built into it.
 `--entry ts` installs the router, the TypeScript program behind a probe, and a `served.txt` naming `ts` for every row;
 `--entry rust` installs the shipped layout, the TypeScript program included when a built-in row says `ts` and it is
@@ -2613,6 +2617,19 @@ scenarios:
 - `--help` for `ardia computer setup`, `ardia computer mcp-config`, `ardia hooks <command>` and `ardia on` is served
   only at 80 columns, and an argument error only when its usage line fits the terminal; at other widths argparse
   wraps the text and Python serves the call.
+
+- `ardia scripts` with a hand-edited `meta.json` whose fields have the wrong types (a `matches` that isn't a list of
+  text, a `name` that isn't text, an `installed_at` that doesn't compare with the others'): Python fails with a
+  `TypeError` traceback, or, for a list field given as text, builds the manifest from its characters and then refuses
+  it. The native side stops before writing anything with `ardia scripts: <id>'s meta.json has a field of the wrong
+  type; reinstall it` and status 1. The CLI never writes such a record; only a hand edit makes one.
+- Ctrl-C during `ardia scripts install`, `uninstall` or `list`: Python raises `KeyboardInterrupt` wherever it is. The
+  native side notices it while it waits (for esbuild, the store's lock or Ardia's report) and between steps, so a
+  Ctrl-C during a store write lets that write finish. Both then end alike: `KeyboardInterrupt` on stderr, the call
+  recorded with status 130, and death by SIGINT. esbuild runs in a process group of its own, killed on Ctrl-C and on
+  the 60 s timeout, where Python kills only esbuild itself on the timeout.
+- esbuild's diagnostics that aren't valid UTF-8: Python fails decoding them with a traceback; the native side shows
+  them with U+FFFD in place of the bad bytes.
 
 ## Linux
 

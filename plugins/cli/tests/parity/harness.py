@@ -78,6 +78,7 @@ printf 'ts\\n' >>{routes}/$PPID
 exec "$(dirname "$0")/ardia-ts.bin" "$@"
 """
 TS_LIBC = "ardia-libc.so"
+ESBUILD_SHIM = "#!/bin/sh\nexec esbuild \"$@\"\n"
 TEST_ENTITLEMENTS = """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict><key>com.apple.security.cs.disable-library-validation</key><true/></dict></plist>
@@ -746,6 +747,8 @@ class Installation:
         sign_for_tests(libexec)
         (libexec / "ardia-ts").write_text(TS_PROBE.format(routes=shlex.quote(str(self.routes))))
         (libexec / "ardia-ts").chmod(0o755)
+        (libexec / "esbuild").write_text(ESBUILD_SHIM)
+        (libexec / "esbuild").chmod(0o755)
         self.ts_installed = True
         if every_row:
             (self.root / "served.txt").write_text("".join(f"{name} ts\n" for name in served_table()))
@@ -877,7 +880,8 @@ def read_inside(box: Path, path: Path) -> str | None:
 
 def places_of(box: Path) -> dict:
     return {"box": str(box), "home": str(box / "home"), "cli_home": str(box / "cli-home"), "data": str(box / "data"),
-            "cwd": str(box / "cwd"), "tmp": str(box / "tmp"), "outside": str(box / "outside"), "cli": str(box.parent / "src")}
+            "cwd": str(box / "cwd"), "tmp": str(box / "tmp"), "outside": str(box / "outside"), "cli": str(box.parent / "src"),
+            "harness_pid": str(os.getpid())}
 
 
 def materialize(box: Path, case: Case) -> dict:
@@ -1130,7 +1134,14 @@ def apply_normalizers(observed: Observed, case: Case, places: dict) -> Observed:
     observed.stdout = scrub(observed.stdout)
     observed.stderr = scrub(observed.stderr)
     observed.files = {rel: (change[:3] + (scrub(change[3]),) if change[:2] == ("written", "file") else change) for rel, change in observed.files.items()}
+    observed.helpers = [scrub_helper(line, scrub) for line in observed.helpers]
     return observed
+
+
+def scrub_helper(line: str, scrub) -> str:
+    name, *args = line.split(" =")
+    shown = [base64.b64encode(scrub(base64.b64decode(arg))).decode() for arg in args]
+    return " =".join([name, *shown])
 
 
 def text_of(value) -> str:

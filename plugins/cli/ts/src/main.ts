@@ -48,6 +48,7 @@ async function serve(argv: string[], python: string | null): Promise<number | un
   if (chosen.kind === "listing") named.push(chosen.listing.dataDir);
   if (chosen.kind === "command") named.push(chosen.route.dataDir);
   if (chosen.kind === "config") named.push(chosen.command.args["data_dir"] as string | undefined);
+  if (chosen.kind === "scripts") named.push(chosen.args.dataDir);
   if (!paths.pathsAreText() || named.some(paths.needsAccountLookup) || consentUnreadable(argv)) return undefined;
   try {
     if (chosen.kind === "computer" || chosen.kind === "hooks" || chosen.kind === "on") return await (await import("./serve-commands.ts")).serveCommand(chosen, argv, python);
@@ -55,6 +56,7 @@ async function serve(argv: string[], python: string | null): Promise<number | un
     if (chosen.kind === "help") return serveHelp(argv, python);
     if (chosen.kind === "command") return await (await import("./runner.ts")).runCommand(chosen.route.command, argv, python);
     if (chosen.kind === "config") return await (await import("./config-commands.ts")).serve(chosen.command, python);
+    if (chosen.kind === "scripts") return await (await import("./scripts/serve.ts")).serveScripts(chosen.args, argv, python);
     return await serveListing(chosen.what, chosen.listing, argv, python);
   } catch (error) {
     if (error instanceof paths.NeedsPython) return undefined;

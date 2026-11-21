@@ -32,6 +32,8 @@
 #if defined(__APPLE__)
 #include <sys/ucred.h>
 int pthread_fchdir_np(int fd);
+#else
+#include <sys/syscall.h>
 #endif
 
 #ifndef SRC_JS_NATIVE_API_TYPES_H_
@@ -64,6 +66,7 @@ napi_status napi_get_boolean(napi_env env, bool value, napi_value *result);
 napi_status napi_get_null(napi_env env, napi_value *result);
 napi_status napi_create_string_utf8(napi_env env, const char *str, size_t length, napi_value *result);
 napi_status napi_create_array(napi_env env, napi_value *result);
+napi_status napi_create_bigint_uint64(napi_env env, uint64_t value, napi_value *result);
 napi_status napi_is_buffer(napi_env env, napi_value value, bool *result);
 napi_status napi_get_buffer_info(napi_env env, napi_value value, void **data, size_t *length);
 napi_status napi_create_buffer_copy(napi_env env, size_t length, const void *data, void **result_data, napi_value *result);
@@ -458,6 +461,23 @@ static napi_value stat_at(napi_env env, napi_callback_info info) {
     if (fields[index] == NULL || napi_set_element(env, result, index, fields[index]) != napi_ok) return status(env, -ENOMEM);
   }
   return result;
+}
+
+static napi_value swap_at(napi_env env, napi_callback_info info) {
+  Call call;
+  int32_t dir;
+  char first[PATH_MAX], second[PATH_MAX];
+  if (!take_args(env, info, 3, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &dir)) return NULL;
+  int checked = name_arg(&call, 1, first, sizeof(first));
+  if (checked == 0) checked = name_arg(&call, 2, second, sizeof(second));
+  if (checked != 0) return status(env, checked);
+#if defined(__APPLE__)
+  int swapped = renameatx_np(dir, first, dir, second, RENAME_SWAP);
+#else
+  int swapped = (int)syscall(SYS_renameat2, dir, first, dir, second, 2u);
+#endif
+  return status(env, swapped == 0 ? 0 : failed());
 }
 
 static void finish_listing(DIR *stream) {
@@ -907,6 +927,7 @@ __attribute__((visibility("default"))) napi_value napi_register_module_v1(napi_e
       && define(env, exports, "removeDirAt", remove_dir_at)
       && define(env, exports, "nonBlocking", non_blocking)
       && define(env, exports, "listAt", list_at)
+      && define(env, exports, "swapAt", swap_at)
       && define(env, exports, "lock", lock)
       && define(env, exports, "watchLifeline", watch_lifeline)
       && define(env, exports, "writeSome", write_some)

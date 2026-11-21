@@ -19,15 +19,16 @@ type Native = {
   renamePaths(from: string, to: string, swap: boolean): number;
   unlinkAt(dir: number, name: Name): number;
   sizeAt(dir: number, name: Name): number;
-  statAt(dir: number, name: string): [number, number, bigint, bigint, number] | number;
   armWatchdog(dir: number, name: string, dev: bigint, ino: bigint, ms: number, code: number, fireDelay?: number): number;
   disarmWatchdog(): number;
   registerGroup(group: number): number;
   unregisterGroup(group: number): number;
   renameExclusiveAt(fromDir: number, from: string, toDir: number, to: string): number;
-  removeDirAt(dir: number, name: string): number;
   nonBlocking(fd: number): number;
   listAt(dir: number): Buffer[] | number;
+  statAt(dir: number, name: Name): [number, number, bigint, bigint, number] | number;
+  swapAt(dir: number, first: string, second: string): number;
+  removeDirAt(dir: number, name: Name): number;
   lock(fd: number, exclusive: boolean, wait: boolean): number;
   watchLifeline(fd: number): number;
   writeSome(fd: number, bytes: Uint8Array, offset: number): number;
@@ -36,7 +37,7 @@ type Native = {
   zoneName(seconds: number): string | number;
 };
 
-const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "connectAt", "socketInfoAt", "openFileAt", "mkdirAt", "renameAt", "renamePaths", "unlinkAt", "sizeAt", "statAt", "armWatchdog", "disarmWatchdog", "registerGroup", "unregisterGroup", "renameExclusiveAt", "removeDirAt", "nonBlocking", "listAt", "lock", "watchLifeline", "writeSome", "strerror", "execProgram", "zoneName"];
+const EXPORTS: readonly (keyof Native)[] = ["peerUid", "interruptsIgnored", "openAt", "connectAt", "socketInfoAt", "openFileAt", "mkdirAt", "renameAt", "renamePaths", "unlinkAt", "sizeAt", "statAt", "armWatchdog", "disarmWatchdog", "registerGroup", "unregisterGroup", "renameExclusiveAt", "removeDirAt", "swapAt", "nonBlocking", "listAt", "lock", "watchLifeline", "writeSome", "strerror", "execProgram", "zoneName"];
 const ERRNO_NAMES = new Map<number, string>(Object.entries(constants.errno).map(([name, value]) => [value, name]));
 const EWOULDBLOCK = constants.errno.EWOULDBLOCK ?? constants.errno.EAGAIN;
 
@@ -165,15 +166,6 @@ export function sizeAt(dir: number, name: Name): number {
   return checked(native().sizeAt(dir, name), "fstatat", name);
 }
 
-export type EntryInfo = { mode: number; uid: number; dev: bigint; ino: bigint; mtime: number };
-
-export function statAt(dir: number, name: string): EntryInfo {
-  const info = native().statAt(dir, name);
-  if (typeof info === "number") throw errnoError(-info, "fstatat", name);
-  const [mode, owner, dev, ino, mtime] = info;
-  return { mode, uid: owner, dev, ino, mtime };
-}
-
 export function armWatchdog(dir: number, name: string, dev: bigint, ino: bigint, ms: number, code: number): number {
   return native().armWatchdog(dir, name, dev, ino, Math.max(1, Math.min(86_400_000, Math.round(ms))), code);
 }
@@ -194,10 +186,6 @@ export function renameExclusiveAt(fromDir: number, from: string, toDir: number, 
   checked(native().renameExclusiveAt(fromDir, from, toDir, to), "renameatx_np", to);
 }
 
-export function removeDirAt(dir: number, name: string): void {
-  checked(native().removeDirAt(dir, name), "unlinkat", name);
-}
-
 export function nonBlocking(fd: number): void {
   checked(native().nonBlocking(fd), "fcntl");
 }
@@ -206,6 +194,30 @@ export function listAt(dir: number): Buffer[] {
   const names = native().listAt(dir);
   if (typeof names === "number") throw errnoError(-names, "openat");
   return names;
+}
+
+export type EntryInfo = { mode: number; uid: number; dev: bigint; ino: bigint; mtime: number };
+
+function entryInfo(info: [number, number, bigint, bigint, number] | number, name: Name): EntryInfo {
+  if (typeof info === "number") throw errnoError(-info, "fstatat", name);
+  const [mode, owner, dev, ino, mtime] = info;
+  return { mode, uid: owner, dev, ino, mtime };
+}
+
+export function statAt(dir: number, name: string): EntryInfo {
+  return entryInfo(native().statAt(dir, name), name);
+}
+
+export function statBytesAt(dir: number, name: Name): EntryInfo {
+  return entryInfo(native().statAt(dir, name), name);
+}
+
+export function swapAt(dir: number, first: string, second: string): void {
+  checked(native().swapAt(dir, first, second), "renameatx_np", second);
+}
+
+export function removeDirAt(dir: number, name: Name): void {
+  checked(native().removeDirAt(dir, name), "unlinkat", name);
 }
 
 export function flock(fd: number, exclusive: boolean, wait: boolean): boolean {
