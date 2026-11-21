@@ -3632,5 +3632,97 @@
   "files": {
    "outside/p/plugin.json": "{\"$schema\": \"../../plugin.schema.json\", \"manifest\": 1, \"name\": \"example\", \"title\": \"Example\", \"description\": \"Uses every contribution: settings, commands, a page, a helper, a command-line program, hooks and tools.\", \"version\": \"1.0.0\", \"permissions\": [\"tabs\", \"commands\"], \"settings\": {\"defaults\": {\"commandBarStart\": {\"openTabs\": {\"limit\": 5}}}, \"rows\": [{\"key\": \"greeting\", \"title\": \"Greeting\", \"description\": \"What Say Hello answers with.\", \"type\": \"text\", \"default\": \"Hello\"}, {\"key\": \"loud\", \"title\": \"Shout\", \"type\": \"toggle\", \"default\": false}, {\"key\": \"mood\", \"title\": \"Mood\", \"type\": \"choice\", \"default\": \"calm\", \"choices\": [{\"value\": \"calm\", \"title\": \"Calm\"}, {\"value\": \"busy\", \"title\": \"Busy\"}]}, {\"key\": \"side\", \"title\": \"Open beside the page on the\", \"type\": \"choice\", \"default\": \"right\", \"choices\": [{\"value\": \"right\", \"title\": \"Right\"}, {\"value\": \"left\", \"title\": \"Left\"}]}]}, \"commands\": [{\"name\": \"say-hello\", \"title\": \"Say Hello\", \"icon\": \"hand.wave\", \"keywords\": [\"greet\"], \"tool\": \"hello\"}, {\"name\": \"new-tab\", \"title\": \"Open a Tab from the Example\", \"icon\": \"plus.square\", \"tool\": \"new-tab\"}, {\"name\": \"beside\", \"title\": \"Open Example Beside This Tab\", \"icon\": \"rectangle.split.2x1\", \"keywords\": [\"split\"], \"open\": \"split\", \"context\": true, \"side\": \"right\", \"sideSetting\": \"side\"}], \"page\": {\"title\": \"Example\", \"icon\": \"sparkles\", \"file\": \"page/index.html\"}, \"process\": {\"run\": [\"/usr/bin/python3\", \"helper.py\"], \"memoryMB\": 256}, \"programs\": [{\"name\": \"ardia-example\", \"path\": \"bin/ardia-example\"}], \"hooks\": [\"tab.activated\", \"tab.opened\"], \"tools\": [{\"name\": \"hello\", \"title\": \"Say hello\", \"description\": \"Answers with the Greeting row's value.\", \"timeout\": 5}, {\"name\": \"new-tab\", \"title\": \"Open a tab\", \"description\": \"Runs Ardia's newTab command.\", \"timeout\": 5}, {\"name\": \"seen\", \"title\": \"Events seen\", \"description\": \"The hook events the helper received.\", \"timeout\": 5}, {\"name\": \"ask\", \"title\": \"Ask another plugin\", \"description\": \"Calls a tool through tools.call.\", \"timeout\": 10}, {\"name\": \"probe\", \"title\": \"Probe the sandbox\", \"description\": \"Tries to read paths, connect to a Unix socket and reach a host, and says what worked.\", \"timeout\": 10}]}"
   }
+ },
+ {
+  "id": "m2b--plugins-check--v2-valid-command-line",
+  "command": "plugins check",
+  "argv": [
+   "plugins",
+   "check",
+   "{outside}/cli/"
+  ],
+  "control": null,
+  "files": {
+   "data/config-schema/config.schema.json": "{\"type\": \"object\", \"properties\": {\"settings\": {\"type\": \"object\", \"properties\": {\"commandBarStart\": {\"type\": \"object\"}}, \"additionalProperties\": false}}}",
+   "data/config-schema/plugin.schema.json": {
+    "blob": "e4905b5b172fb1e9fda39a10ba769b5530cab186ba3b413ba21aa2e1dfbd63ac"
+   },
+   "outside/cli/plugin.json": "{\n  \"$schema\": \"https://raw.githubusercontent.com/ardia-browser/ardia/main/docs/plugin.schema.json\",\n  \"manifest\": 2,\n  \"name\": \"cli\",\n  \"title\": \"Command Line\",\n  \"description\": \"Drive Ardia from your terminal or an agent.\",\n  \"version\": \"0.4.0\",\n  \"requires\": \"0.2.48-nightly.1\",\n  \"icon\": \"terminal.fill\",\n  \"keywords\": [\n    \"command line\",\n    \"terminal\",\n    \"shell\",\n    \"agent\",\n    \"automation\",\n    \"cli\",\n    \"scripting\",\n    \"PATH\",\n    \"ardia command\",\n    \"coding agent\"\n  ],\n  \"alwaysOn\": true,\n  \"official\": true,\n  \"main\": \"dist/main.js\",\n  \"permissions\": {\n    \"control\": true\n  },\n  \"contributes\": {\n    \"commands\": [\n      {\n        \"name\": \"show-status\",\n        \"title\": \"Command Line: Show Status\",\n        \"icon\": \"terminal\",\n        \"view\": \"status\",\n        \"keywords\": [\n          \"ardia\",\n          \"PATH\",\n          \"terminal\",\n          \"link\",\n          \"install\"\n        ]\n      }\n    ],\n    \"programs\": [\n      {\n        \"name\": \"ardia\",\n        \"path\": \"bin/ardia\",\n        \"claim\": true,\n        \"example\": \"ardia tabs\",\n        \"afterUpdate\": [\n          [\n            \"skills\",\n            \"install\",\n            \"--auto\"\n          ],\n          [\n            \"skills\",\n            \"refresh\"\n          ],\n          [\n            \"computer\",\n            \"refresh\"\n          ]\n        ]\n      }\n    ]\n  },\n  \"telemetry\": {\n    \"title\": \"The ardia command\",\n    \"items\": [\n      \"Each command's name (like history or browse snapshot), its exit and error codes, and the names of the options it was given, never their values\",\n      \"How long it took, step by step (starting up, starting its helper, connecting to Ardia, finding the tab, the command itself, waiting for the page to settle), plus counts and sizes: browser calls, steps in a batch, how many coding agents the install gave the agent skill to or skipped, the length of a page snapshot and of the output, how many requests an action sent, how many reading tabs it had to open again, and whether the output was cut short, the input humanized, it gave up waiting for its helper, it set a viewport size, it reloaded a crashed page or Ardia refused it a tab. Times, counts and yes or no only\",\n      \"Its version, macOS version, chip and Python version, with this Mac's install ID\",\n      \"After a crash: the error's type (with its message only when it's one of Python's fixed ones, like “division by zero”), and the module, function and line number of each step in the stack trace\",\n      \"Nothing from commands pointed at a test browser (--port, --ws), and nothing at all with DO_NOT_TRACK=1 or ARDIA_TELEMETRY=0 set\"\n    ]\n  }\n}\n"
+  }
+ },
+ {
+  "id": "m2b--plugins-check--v2-invalid",
+  "command": "plugins check",
+  "argv": [
+   "plugins",
+   "check",
+   "{outside}/cli/",
+   "--json"
+  ],
+  "control": null,
+  "files": {
+   "data/config-schema/config.schema.json": "{\"type\": \"object\", \"properties\": {\"settings\": {\"type\": \"object\", \"properties\": {\"commandBarStart\": {\"type\": \"object\"}}, \"additionalProperties\": false}}}",
+   "data/config-schema/plugin.schema.json": {
+    "blob": "e4905b5b172fb1e9fda39a10ba769b5530cab186ba3b413ba21aa2e1dfbd63ac"
+   },
+   "outside/cli/plugin.json": "{\"$schema\": \"https://raw.githubusercontent.com/ardia-browser/ardia/main/docs/plugin.schema.json\", \"manifest\": 2, \"name\": \"cli\", \"title\": \"Command Line\", \"description\": \"Drive Ardia from your terminal or an agent.\", \"version\": \"0.4.0\", \"requires\": \"0.2.48-nightly.1\", \"icon\": \"terminal.fill\", \"keywords\": [\"command line\", \"terminal\", \"shell\", \"agent\", \"automation\", \"cli\", \"scripting\", \"PATH\", \"ardia command\", \"coding agent\"], \"alwaysOn\": true, \"official\": true, \"main\": \"dist/main.js\", \"permissions\": {\"control\": true}, \"contributes\": {\"commands\": [{\"name\": \"show-status\", \"title\": \"Command Line: Show Status\", \"icon\": \"terminal\", \"view\": \"status\", \"keywords\": [\"ardia\", \"PATH\", \"terminal\", \"link\", \"install\"]}], \"programs\": [{\"name\": \"ardia\", \"path\": \"bin/ardia\", \"claim\": true, \"example\": \"ardia tabs\", \"afterUpdate\": [[\"skills\", \"install\", \"--auto\"], [\"skills\", \"refresh\"], [\"computer\", \"refresh\"]]}], \"bogus\": 1}, \"telemetry\": {\"title\": \"The ardia command\", \"items\": [\"Each command's name (like history or browse snapshot), its exit and error codes, and the names of the options it was given, never their values\", \"How long it took, step by step (starting up, starting its helper, connecting to Ardia, finding the tab, the command itself, waiting for the page to settle), plus counts and sizes: browser calls, steps in a batch, how many coding agents the install gave the agent skill to or skipped, the length of a page snapshot and of the output, how many requests an action sent, how many reading tabs it had to open again, and whether the output was cut short, the input humanized, it gave up waiting for its helper, it set a viewport size, it reloaded a crashed page or Ardia refused it a tab. Times, counts and yes or no only\", \"Its version, macOS version, chip and Python version, with this Mac's install ID\", \"After a crash: the error's type (with its message only when it's one of Python's fixed ones, like \\u201cdivision by zero\\u201d), and the module, function and line number of each step in the stack trace\", \"Nothing from commands pointed at a test browser (--port, --ws), and nothing at all with DO_NOT_TRACK=1 or ARDIA_TELEMETRY=0 set\"]}, \"sidecar\": {\"run\": [\"/bin/x\"]}}"
+  }
+ },
+ {
+  "id": "m2b--plugins-check--v2-main-and-sidecar",
+  "command": "plugins check",
+  "argv": [
+   "plugins",
+   "check",
+   "{outside}/cli/"
+  ],
+  "control": null,
+  "files": {
+   "data/config-schema/config.schema.json": "{\"type\": \"object\", \"properties\": {\"settings\": {\"type\": \"object\", \"properties\": {\"commandBarStart\": {\"type\": \"object\"}}, \"additionalProperties\": false}}}",
+   "data/config-schema/plugin.schema.json": {
+    "blob": "e4905b5b172fb1e9fda39a10ba769b5530cab186ba3b413ba21aa2e1dfbd63ac"
+   },
+   "outside/cli/plugin.json": "{\"$schema\": \"https://raw.githubusercontent.com/ardia-browser/ardia/main/docs/plugin.schema.json\", \"manifest\": 2, \"name\": \"cli\", \"title\": \"Command Line\", \"description\": \"Drive Ardia from your terminal or an agent.\", \"version\": \"0.4.0\", \"requires\": \"0.2.48-nightly.1\", \"icon\": \"terminal.fill\", \"keywords\": [\"command line\", \"terminal\", \"shell\", \"agent\", \"automation\", \"cli\", \"scripting\", \"PATH\", \"ardia command\", \"coding agent\"], \"alwaysOn\": true, \"official\": true, \"main\": \"dist/main.js\", \"permissions\": {\"control\": true}, \"contributes\": {\"commands\": [{\"name\": \"show-status\", \"title\": \"Command Line: Show Status\", \"icon\": \"terminal\", \"view\": \"status\", \"keywords\": [\"ardia\", \"PATH\", \"terminal\", \"link\", \"install\"]}], \"programs\": [{\"name\": \"ardia\", \"path\": \"bin/ardia\", \"claim\": true, \"example\": \"ardia tabs\", \"afterUpdate\": [[\"skills\", \"install\", \"--auto\"], [\"skills\", \"refresh\"], [\"computer\", \"refresh\"]]}]}, \"telemetry\": {\"title\": \"The ardia command\", \"items\": [\"Each command's name (like history or browse snapshot), its exit and error codes, and the names of the options it was given, never their values\", \"How long it took, step by step (starting up, starting its helper, connecting to Ardia, finding the tab, the command itself, waiting for the page to settle), plus counts and sizes: browser calls, steps in a batch, how many coding agents the install gave the agent skill to or skipped, the length of a page snapshot and of the output, how many requests an action sent, how many reading tabs it had to open again, and whether the output was cut short, the input humanized, it gave up waiting for its helper, it set a viewport size, it reloaded a crashed page or Ardia refused it a tab. Times, counts and yes or no only\", \"Its version, macOS version, chip and Python version, with this Mac's install ID\", \"After a crash: the error's type (with its message only when it's one of Python's fixed ones, like \\u201cdivision by zero\\u201d), and the module, function and line number of each step in the stack trace\", \"Nothing from commands pointed at a test browser (--port, --ws), and nothing at all with DO_NOT_TRACK=1 or ARDIA_TELEMETRY=0 set\"]}, \"sidecar\": {\"run\": [\"/bin/x\"]}}"
+  }
+ },
+ {
+  "id": "m2b--plugins-check--manifest-3-shipped-schema",
+  "command": "plugins check",
+  "argv": [
+   "plugins",
+   "check",
+   "{outside}/p/"
+  ],
+  "control": null,
+  "files": {
+   "outside/p/plugin.json": "{\"manifest\": 3, \"name\": \"x\", \"title\": \"X\"}"
+  }
+ },
+ {
+  "id": "m2b--plugins-check--v1-example-shipped-v2-schema",
+  "command": "plugins check",
+  "argv": [
+   "plugins",
+   "check",
+   "{outside}/p/"
+  ],
+  "control": null,
+  "files": {
+   "data/config-schema/config.schema.json": "{\"type\": \"object\", \"properties\": {\"settings\": {\"type\": \"object\", \"properties\": {\"commandBarStart\": {\"type\": \"object\"}}, \"additionalProperties\": false}}}",
+   "outside/p/plugin.json": "{\"$schema\": \"../../plugin.schema.json\", \"manifest\": 1, \"name\": \"example\", \"title\": \"Example\", \"description\": \"Uses every contribution: settings, commands, a page, a helper, a command-line program, hooks and tools.\", \"version\": \"1.0.0\", \"permissions\": [\"tabs\", \"commands\"], \"settings\": {\"defaults\": {\"commandBarStart\": {\"openTabs\": {\"limit\": 5}}}, \"rows\": [{\"key\": \"greeting\", \"title\": \"Greeting\", \"description\": \"What Say Hello answers with.\", \"type\": \"text\", \"default\": \"Hello\"}, {\"key\": \"loud\", \"title\": \"Shout\", \"type\": \"toggle\", \"default\": false}, {\"key\": \"mood\", \"title\": \"Mood\", \"type\": \"choice\", \"default\": \"calm\", \"choices\": [{\"value\": \"calm\", \"title\": \"Calm\"}, {\"value\": \"busy\", \"title\": \"Busy\"}]}, {\"key\": \"side\", \"title\": \"Open beside the page on the\", \"type\": \"choice\", \"default\": \"right\", \"choices\": [{\"value\": \"right\", \"title\": \"Right\"}, {\"value\": \"left\", \"title\": \"Left\"}]}]}, \"commands\": [{\"name\": \"say-hello\", \"title\": \"Say Hello\", \"icon\": \"hand.wave\", \"keywords\": [\"greet\"], \"tool\": \"hello\"}, {\"name\": \"new-tab\", \"title\": \"Open a Tab from the Example\", \"icon\": \"plus.square\", \"tool\": \"new-tab\"}, {\"name\": \"beside\", \"title\": \"Open Example Beside This Tab\", \"icon\": \"rectangle.split.2x1\", \"keywords\": [\"split\"], \"open\": \"split\", \"context\": true, \"side\": \"right\", \"sideSetting\": \"side\"}], \"page\": {\"title\": \"Example\", \"icon\": \"sparkles\", \"file\": \"page/index.html\"}, \"process\": {\"run\": [\"/usr/bin/python3\", \"helper.py\"], \"memoryMB\": 256}, \"programs\": [{\"name\": \"ardia-example\", \"path\": \"bin/ardia-example\"}], \"hooks\": [\"tab.activated\", \"tab.opened\"], \"tools\": [{\"name\": \"hello\", \"title\": \"Say hello\", \"description\": \"Answers with the Greeting row's value.\", \"timeout\": 5}, {\"name\": \"new-tab\", \"title\": \"Open a tab\", \"description\": \"Runs Ardia's newTab command.\", \"timeout\": 5}, {\"name\": \"seen\", \"title\": \"Events seen\", \"description\": \"The hook events the helper received.\", \"timeout\": 5}, {\"name\": \"ask\", \"title\": \"Ask another plugin\", \"description\": \"Calls a tool through tools.call.\", \"timeout\": 10}, {\"name\": \"probe\", \"title\": \"Probe the sandbox\", \"description\": \"Tries to read paths, connect to a Unix socket and reach a host, and says what worked.\", \"timeout\": 10}]}"
+  }
+ },
+ {
+  "id": "m2b--plugins-check--v2-invalid-shipped-schema",
+  "command": "plugins check",
+  "argv": [
+   "plugins",
+   "check",
+   "{outside}/p/"
+  ],
+  "control": null,
+  "files": {
+   "outside/p/plugin.json": "{\"manifest\": 2, \"name\": \"x\", \"title\": \"X\", \"main\": \"/abs.js\", \"contributes\": {\"bogus\": 1}}"
+  }
  }
 ]

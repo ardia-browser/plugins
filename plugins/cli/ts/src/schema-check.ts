@@ -178,13 +178,19 @@ export function validate(value: Value, schema: Value | undefined, path: Path = [
     const problem = checkAnyOf(value, schema.get("anyOf") as Value, path, name);
     if (problem.length > 0) return problem;
   }
-  const problems: Problem[] = [];
+  const problems: Problem[] = checkConditional(value, schema, path, root, noun);
   if (isNumber(value)) problems.push(...checkBounds(value, schema, path, name));
   const pattern = schema.get("pattern");
   if (typeof value === "string" && typeof pattern === "string" && !search(pattern, true, value)) problems.push(new Problem(path, `${name} must match ${pattern}`));
   if (isList(value)) problems.push(...checkArray(value, schema, path, name));
   if (isDict(value)) problems.push(...checkObject(value, schema, path, name, root, noun));
   return problems;
+}
+
+function checkConditional(value: Value, schema: JsonObject, path: Path, root: boolean, noun: string | undefined): Problem[] {
+  if (!schema.has("if")) return [];
+  const branch = validate(value, schema.get("if"), path, false).length === 0 ? schema.get("then") : schema.get("else");
+  return branch === undefined || branch === null ? [] : validate(value, branch, path, root, noun);
 }
 
 function checkBounds(value: Value, schema: JsonObject, path: Path, name: string): Problem[] {

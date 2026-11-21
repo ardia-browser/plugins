@@ -204,7 +204,7 @@ def validate(value, schema, path=(), root=True, noun=None) -> list[Problem]:
         problem = check_any_of(value, schema["anyOf"], path, name)
         if problem:
             return problem
-    problems = []
+    problems = check_conditional(value, schema, path, root, noun)
     if is_number(value):
         problems += check_bounds(value, schema, path, name)
     if isinstance(value, str) and isinstance(schema.get("pattern"), str):
@@ -215,6 +215,13 @@ def validate(value, schema, path=(), root=True, noun=None) -> list[Problem]:
     if isinstance(value, dict):
         problems += check_object(value, schema, path, name, root, noun)
     return problems
+
+
+def check_conditional(value, schema, path, root, noun) -> list[Problem]:
+    if "if" not in schema:
+        return []
+    branch = schema.get("then") if not validate(value, schema["if"], path, False) else schema.get("else")
+    return validate(value, branch, path, root, noun) if branch is not None else []
 
 
 def check_bounds(value, schema, path, name) -> list[Problem]:

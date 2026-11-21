@@ -199,7 +199,29 @@ function numberText(value: Value): string {
   return pyStr(value);
 }
 
-function currentManifest(manifest: JsonObject, known: Value): [JsonObject | undefined, string[]] {
+const LEGACY_MANIFEST = 1n;
+
+function manifestCeiling(schema: JsonObject): bigint {
+  const found: bigint[] = [];
+  for (const branch of [schema, schema.get("then"), schema.get("else")]) {
+    const properties = isDict(branch) ? branch.get("properties") : undefined;
+    const spec = isDict(properties) ? properties.get("manifest") : undefined;
+    for (const key of ["maximum", "const"]) {
+      const value = isDict(spec) ? spec.get(key) : undefined;
+      if (typeof value === "bigint") found.push(value);
+    }
+  }
+  return found.length === 0 ? 1n : found.reduce((high, value) => (value > high ? value : high));
+}
+
+function v2RuleProblems(doc: JsonObject): string[] {
+  const problems: string[] = [];
+  if (doc.has("main") && doc.has("sidecar")) problems.push("a plugin can declare main or sidecar, not both");
+  if (doc.has("activationEvents") && !doc.has("main")) problems.push("activationEvents only go with a main");
+  return problems;
+}
+
+function currentManifest(manifest: JsonObject, known: bigint): [JsonObject | undefined, string[]] {
   const given = manifest.get("manifest");
   if (manifest.has("manifest") && (typeof given === "boolean" || typeof given !== "bigint" || given < 0n)) return [undefined, ["manifest must be a whole number, the manifest's version"]];
   if (given !== undefined && given !== null) {
@@ -209,19 +231,21 @@ function currentManifest(manifest: JsonObject, known: Value): [JsonObject | unde
   if (typeof given === "bigint" && given !== 0n) return [manifest, []];
   const doc: JsonObject = new Map([...manifest].filter(([key]) => key !== "settings" && key !== "reset"));
   if (manifest.has("settings")) doc.set("settings", new Map<string, Value>([["defaults", manifest.get("settings") as Value]]));
-  doc.set("manifest", known);
+  doc.set("manifest", known < LEGACY_MANIFEST ? known : LEGACY_MANIFEST);
   return [doc, []];
 }
 
 export function manifestProblems(args: Args, manifest: JsonObject): string[] {
   const where = files.places(args["data_dir"] as string | undefined);
   const schema = pluginSchema(where);
-  const manifestSpec = dictOr(dictOr(schema.get("properties")).get("manifest"));
-  const known = manifestSpec.has("maximum") ? (manifestSpec.get("maximum") as Value) : 1n;
-  const [doc, early] = currentManifest(manifest, known);
+  const [doc, early] = currentManifest(manifest, manifestCeiling(schema));
   if (doc === undefined) return early;
   const problems = [...early, ...schemaProblems(where, doc, schema)];
-  if (problems.length === 0) problems.push(...ruleProblems(doc, dictOr(schema.get("x-ardia-rules"))));
+  if (problems.length === 0) {
+    const declared = doc.get("manifest");
+    const legacy = declared === undefined || (typeof declared === "bigint" && declared <= LEGACY_MANIFEST);
+    problems.push(...(legacy ? ruleProblems(doc, dictOr(schema.get("x-ardia-rules"))) : v2RuleProblems(doc)));
+  }
   const name = doc.get("name");
   if (typeof name !== "string" || !NAME.test(name)) problems.push("name must be 1 to 40 lowercase letters, digits and dashes, starting with a letter or digit");
   return [...new Set(problems)];
