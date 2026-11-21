@@ -27,6 +27,7 @@ async function serve(argv: string[], python: string | null): Promise<number | un
   const { serveHelp, serveListing } = await import("./serve.ts");
   try {
     if (chosen.kind === "help") return serveHelp(argv, python);
+    if (chosen.kind === "command") return await (await import("./serve-command.ts")).serveCommand(chosen.command, argv, python);
     return await serveListing(chosen.what, chosen.listing, argv, python);
   } catch (error) {
     if (error instanceof paths.NeedsPython) return undefined;

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,16 +20,18 @@ const OTHER_ID = "11111111-2222-4333-8444-555555555555";
 type Seen = { body: unknown; headers: Record<string, string> };
 const seen: Seen[] = [];
 let status = 200;
-const server = Bun.serve({
-  hostname: "127.0.0.1",
-  port: 0,
-  async fetch(request) {
-    seen.push({ body: JSON.parse(await request.text()), headers: Object.fromEntries(request.headers) });
-    return new Response(null, { status });
-  },
+const server = createServer((request, response) => {
+  const chunks: Buffer[] = [];
+  request.on("data", (chunk: Buffer) => chunks.push(chunk));
+  request.on("end", () => {
+    seen.push({ body: JSON.parse(Buffer.concat(chunks).toString("utf8")), headers: request.headers as Record<string, string> });
+    response.writeHead(status, { "Content-Length": "0" });
+    response.end();
+  });
 });
-const URL = `http://127.0.0.1:${server.port}/v1/logs`;
-after(() => server.stop(true));
+await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+const URL = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1/logs`;
+after(() => server.close());
 
 function record(uuid: string, properties: Record<string, unknown>, extra: Record<string, unknown> = {}): string {
   return JSON.stringify({ uuid, event: "cli_command", distinct_id: INSTALL_ID, timestamp: "2026-11-20T10:11:12.345Z", properties, ...extra });

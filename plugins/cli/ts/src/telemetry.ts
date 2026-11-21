@@ -69,7 +69,7 @@ function logsUrl(): string | undefined {
   return isDevBuild() ? undefined : LOGS_URL;
 }
 
-function environmentFor(root: string): string {
+export function environmentFor(root: string): string {
   if (isDevBuild()) return "dev";
   return realpath(installedDataDir()) === realpath(root) ? "production" : "test";
 }
@@ -188,7 +188,7 @@ export function uuid7(): string {
   return `${text.slice(0, 8)}-${text.slice(8, 12)}-${text.slice(12, 16)}-${text.slice(16, 20)}-${text.slice(20)}`;
 }
 
-function sessionId(doc: JsonObject | undefined): string {
+export function sessionId(doc: JsonObject | undefined): string {
   return (doc?.get("sessionOpen") === true ? validId(doc.get("sessionId")) : undefined) ?? uuid7();
 }
 
