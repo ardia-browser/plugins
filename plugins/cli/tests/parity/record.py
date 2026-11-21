@@ -524,7 +524,7 @@ def main() -> int:
         if differing:
             return key, test, label, row, first, second, labels, f"replay doesn't reproduce the test's {differing}"
         command = harness.command_of(row["argv"], labels[-1] if labels else None) or label
-        if command in served:
+        if harness.served_row(command, served) is not None:
             box = root.box()
             rust_side, _ = harness.run_side(root, "new", case, box)
             shutil.rmtree(box, True)
