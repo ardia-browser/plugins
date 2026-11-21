@@ -254,6 +254,7 @@ export async function placeApp(source: string): Promise<string> {
     stopPoint();
     if (ours) {
       await runDriverQuietly(join(dest, APP_BINARY), "stop");
+      stopPoint();
       renameSync(dest, retired());
     }
     renameSync(staging(), dest);

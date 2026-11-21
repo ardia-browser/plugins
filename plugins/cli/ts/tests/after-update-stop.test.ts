@@ -81,6 +81,16 @@ async function until(check: () => boolean, ms: number, what: string): Promise<vo
   }
 }
 
+const LEAVING_PARENT = `
+const { spawn } = require("node:child_process");
+const fs = require("node:fs");
+const [program, pidFile, logFile, ...argv] = process.argv.slice(1);
+const log = fs.openSync(logFile, "w");
+const child = spawn(program, argv, { stdio: ["ignore", log, log], detached: true });
+fs.writeFileSync(pidFile, String(child.pid));
+process.exit(0);
+`;
+
 const PARENT = `
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
@@ -93,10 +103,10 @@ setInterval(() => {}, 1000);
 
 type Launched = { parent: ChildProcess; child: number; log: string };
 
-async function launch(b: Box, argv: string[]): Promise<Launched> {
+async function launch(b: Box, argv: string[], script = PARENT): Promise<Launched> {
   const pidFile = path.join(b.home, "tmp", "child.pid");
   const log = path.join(b.home, "tmp", "child.log");
-  const parent = spawn(process.execPath, ["-e", PARENT, PROGRAM, pidFile, log, ...argv], { env: b.env, detached: true, stdio: "ignore" });
+  const parent = spawn(process.execPath, ["-e", script, PROGRAM, pidFile, log, ...argv], { env: b.env, detached: true, stdio: "ignore" });
   started.push(parent.pid as number);
   await until(() => fs.existsSync(pidFile) && fs.readFileSync(pidFile, "utf8") !== "", 10_000, "the child's pid");
   const child = Number(fs.readFileSync(pidFile, "utf8"));
@@ -119,8 +129,8 @@ function snapshot(root: string): Map<string, string> {
   return seen;
 }
 
-function leftovers(root: string): string[] {
-  return [...snapshot(root).keys()].filter((full) => /^\.((skills|driver)-|ardia-skill-)|\.stage-|\.old$|\.ardia-new$/.test(path.basename(full)));
+function leftovers(root: string, seen = snapshot(root)): string[] {
+  return [...seen.keys()].filter((full) => /^\.((skills|driver)-|ardia-skill-)|\.stage-|\.old$|\.ardia-new$/.test(path.basename(full)));
 }
 
 function assertSkillConsistent(folder: string): void {
@@ -136,7 +146,7 @@ async function stopAndCheck(b: Box, launched: Launched, how: Stop): Promise<numb
   const before = snapshot(b.home);
   const sent = performance.now();
   if (how === "parent dies") process.kill(launched.parent.pid as number, "SIGKILL");
-  else process.kill(-(launched.parent.pid as number), how);
+  else process.kill(launched.child, how);
   await until(() => !alive(launched.child), 5_000, "the command to exit").catch(() => {});
   const took = performance.now() - sent;
   const stillRunning = alive(launched.child);
@@ -147,6 +157,8 @@ async function stopAndCheck(b: Box, launched: Launched, how: Stop): Promise<numb
   assert.ok(took < EXIT_BOUND_MS, `the command took ${Math.round(took)} ms to stop after ${how}`);
   assert.deepEqual(later, atExit, "something wrote into the data folder after the command was gone");
   for (const [full, facts] of atExit) assert.equal(before.get(full), facts, `${full} was written after ${how}`);
+  const rolledBack = new Set(leftovers(b.home, before));
+  for (const full of before.keys()) assert.ok(atExit.has(full) || [...rolledBack].some((left) => full === left || full.startsWith(`${left}/`)), `${full} was removed after ${how}`);
   console.log(`${how}: stopped in ${Math.round(took)} ms`);
   assert.deepEqual(leftovers(b.home), [], "a staging folder was left behind instead of rolled back");
   assertSkillConsistent(path.join(b.home, ".claude", "skills", "ardia"));
@@ -203,5 +215,16 @@ for (const how of STOPS) {
     } finally {
       fs.closeSync(lock);
     }
+  }, 30_000);
+}
+
+for (const argv of [["skills", "install", "--auto"], ["skills", "refresh"]]) {
+  test(`${argv.join(" ")} started by a parent that is already gone stops before it writes`, async () => {
+    const b = box();
+    const before = snapshot(b.home);
+    const launched = await launch(b, argv, LEAVING_PARENT);
+    await until(() => !alive(launched.child), 5_000, "the orphaned command to exit").catch(() => {});
+    assert.equal(alive(launched.child), false, fs.readFileSync(launched.log, "utf8"));
+    assert.deepEqual(snapshot(b.home), before);
   }, 30_000);
 }

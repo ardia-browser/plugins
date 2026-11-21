@@ -57,6 +57,7 @@ export function chainIsSafe(folder: string, dirs: string[]): boolean {
 
 function carry(from: string, into: string, skip: Set<string>, relative = ""): void {
   for (const name of readdirSync(from).sort()) {
+    stopPoint();
     const inner = relative === "" ? name : `${relative}/${name}`;
     const source = join(from, name);
     const target = join(into, name);

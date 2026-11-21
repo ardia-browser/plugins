@@ -109,6 +109,7 @@ if [ -n "$from" ]; then
   cp -pR "$from/bin" "$from/libexec" "$root/"
   mkdir "$root/.leases"
   [ "$("$root/bin/ardia" --version)" = "ardia $version" ] || { echo "build.sh: the ardia in $from doesn't say $version" >&2; exit 1; }
+  [ "$("$root/libexec/esbuild" --version)" = "$esbuild_version" ] || { echo "build.sh: the esbuild in $from doesn't run" >&2; exit 1; }
   pack
   exit 0
 fi

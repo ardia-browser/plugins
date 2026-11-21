@@ -40,16 +40,19 @@ mv "$work/ardia-cli-$version" "$dest"
 rmdir "$dest/.leases"
 sed "s/^\( *\"version\": *\)\"[^\"]*\"/\1\"$version\"/" "$here/plugin.json" | grep -v '"\$schema"' >"$dest/plugin.json"
 build_manifest_v2_main "$dest"
+packed="cli-plugin-$version-$platform.tar.gz"
+if [ -n "${ARDIA_SIGN_CMD:-}" ]; then
+  rm -f "$tarball" "$tarball.sha256" "$out/$packed" "$out/$packed.sha256"
+fi
 links=$(find "$dest" -type l | head -n 5)
 [ -z "$links" ] || { echo "build.sh: Ardia copies a plugin's programs without links, and these are links: $links" >&2; exit 1; }
 if [ -n "${ARDIA_SIGN_CMD:-}" ]; then
-  sh -c "$ARDIA_SIGN_CMD" ardia-sign "$dest" || { rm -f "$tarball" "$tarball.sha256"; echo "build.sh: ARDIA_SIGN_CMD failed on $dest" >&2; exit 1; }
+  sh -c "$ARDIA_SIGN_CMD" ardia-sign "$dest" || { echo "build.sh: ARDIA_SIGN_CMD failed on $dest" >&2; exit 1; }
   links=$(find "$dest" -type l | head -n 5)
   [ -z "$links" ] || { echo "build.sh: after ARDIA_SIGN_CMD, the plugin folder has links, which Ardia refuses: $links" >&2; exit 1; }
 fi
 [ "$("$dest/bin/ardia" --version)" = "ardia $version" ] || { echo "build.sh: the built ardia doesn't say $version" >&2; exit 1; }
 [ -z "${ARDIA_SIGN_CMD:-}" ] || "$here/scripts/build.sh" "$version" "$out" --from "$dest" >/dev/null
-packed="cli-plugin-$version-$platform.tar.gz"
 case $(uname -s) in
   Darwin) (cd "$out" && COPYFILE_DISABLE=1 tar --no-mac-metadata -czf "$packed" cli) ;;
   *) (cd "$out" && tar --sort=name --owner=0 --group=0 --numeric-owner -czf "$packed" cli) ;;

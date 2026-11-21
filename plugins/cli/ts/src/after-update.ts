@@ -13,17 +13,17 @@ let stopping: StopSignal | undefined;
 const rollbacks = new Set<() => void>();
 
 function parentGone(): boolean {
-  return startedBy !== undefined && startedBy > 1 && process.ppid !== startedBy;
+  return startedBy !== undefined && (startedBy === 1 || process.ppid !== startedBy);
 }
 
 function die(signal: StopSignal): never {
+  killLiveGroups();
   for (const rollback of [...rollbacks]) {
     try {
       rollback();
     } catch {}
   }
   rollbacks.clear();
-  killLiveGroups();
   for (const name of STOP_SIGNALS) process.removeAllListeners(name);
   process.kill(process.pid, signal);
   process.exit(128 + ({ SIGHUP: 1, SIGINT: 2, SIGTERM: 15 } as const)[signal]);
