@@ -59,7 +59,7 @@ function checkIdle(found: Found): void {
   const idle = found.value("idle_timeout") || process.env.AGENT_BROWSER_IDLE_TIMEOUT_MS;
   if (!idle) return;
   const parsed = parseDuration(idle);
-  if ("invalid" in parsed) throw new Usage(`--idle-timeout takes 10s, 3m, 1h or milliseconds, not ${idle}`);
+  if ("invalid" in parsed) throw new Usage("--idle-timeout takes 10s, 3m, 1h or milliseconds");
   if ("infinite" in parsed) throw builtinCrash("OverflowError", "cannot convert float infinity to integer");
 }
 

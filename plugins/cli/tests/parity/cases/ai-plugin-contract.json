@@ -2816,9 +2816,9 @@
    "namespace": ""
   },
   "intentional": {
-   "why": "json errors always carry a code (AI plugin contract)",
+   "why": "json errors always carry a code (AI plugin contract), and a usage error never repeats an option's value",
    "stdout": {
-    "text": "{\"success\":false,\"data\":null,\"error\":\"--max-output takes a number of characters, not lots\",\"code\":\"usage_error\"}\n"
+    "text": "{\"success\":false,\"data\":null,\"error\":\"--max-output takes a number of characters\",\"code\":\"usage_error\"}\n"
    },
    "stderr": {
     "text": ""

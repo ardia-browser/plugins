@@ -51,7 +51,7 @@ export function optionsFrom(found: Found): Options {
   let maxOutput: Value = null;
   if (given !== undefined) {
     const parsed = pythonInt(given);
-    if ("invalid" in parsed) throw new Usage(`--max-output takes a number of characters, not ${given}`);
+    if ("invalid" in parsed) throw new Usage("--max-output takes a number of characters");
     maxOutput = parsed.value;
   } else if (stdoutIsFile()) maxOutput = 0n;
   const either2 = (key: string, variable: string) => found.flag(key) || truthy(env(variable));
@@ -115,7 +115,7 @@ export function endpointChoice(found: Found): Endpoint {
   let number: bigint | undefined;
   if (port !== undefined) {
     const parsed = pythonInt(port);
-    if ("invalid" in parsed) throw new Usage(`--port takes a number, not ${port}`);
+    if ("invalid" in parsed) throw new Usage("--port takes a number");
     number = parsed.value;
   }
   return { ws, port: number, dataDir: found.value("data_dir") };

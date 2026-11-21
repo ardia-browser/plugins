@@ -46,9 +46,32 @@ function keyOf(name: string): string {
   return name.replace(/^-+/, "").replaceAll("-", "_");
 }
 
+const SECRET_SUBCOMMANDS = ["credentials", "auth"];
+const TYPED_TEXT = ["type", "inserttext"];
+
+export function opaqueSlot(command: string | undefined, positionals: readonly string[]): boolean {
+  const [first, second] = positionals;
+  switch (command) {
+    case "set":
+      return SECRET_SUBCOMMANDS.includes(first ?? "") && (positionals.length === 1 || positionals.length === 2);
+    case "fill":
+    case "type":
+      return positionals.length === 1;
+    case "keyboard":
+      return TYPED_TEXT.includes(first ?? "") && positionals.length === 1;
+    case "cookies":
+      return first === "set" && positionals.length === 2;
+    case "storage":
+      return second === "set" && positionals.length === 3;
+    default:
+      return false;
+  }
+}
+
 export function splitGlobals(argv: readonly string[]): { found: Found; rest: string[] } {
   const found = new Found();
   const rest: string[] = [];
+  const positionals: string[] = [];
   let command: string | undefined;
   let index = 0;
   while (index < argv.length) {
@@ -57,6 +80,11 @@ export function splitGlobals(argv: readonly string[]): { found: Found; rest: str
     if (token === "--") {
       rest.push(...argv.slice(index - 1));
       break;
+    }
+    if (command !== undefined && opaqueSlot(command, positionals)) {
+      positionals.push(token);
+      rest.push(token);
+      continue;
     }
     const split = token.startsWith("--") && token.includes("=");
     const name = split ? token.slice(0, token.indexOf("=")) : token;
@@ -87,6 +115,7 @@ export function splitGlobals(argv: readonly string[]): { found: Found; rest: str
       throw new Usage(`${name} doesn't apply to Ardia: ardia browse drives the browser you're running, so launch options have no effect`, found);
     }
     if (command === undefined && !token.startsWith("-")) command = token;
+    else if (command !== undefined && !token.startsWith("-")) positionals.push(token);
     rest.push(token);
   }
   return { found, rest };
