@@ -1985,37 +1985,18 @@ fail scans up to the hard `RLIMIT_NOFILE`, capped at 2^20; only that last fallba
 which uses `close_range` and, when that fails (kernels older than 5.9), falls back to a scan bounded by the soft limit
 that can miss a descriptor above a lowered limit. The flusher is detached but stays a child of the Rust entry, which never
 waits for it, so while that call is still running (blocked on its output, say) a flusher that already finished shows as
-a zombie until the call exits and it is reparented and reaped; it holds no descriptors meanwhile. Each `served.txt` row is a
-command label, which may be several words (`config set`), then `rust` or `ts`; the label is the one Python records in
-telemetry, the first one or two words after any shared flags. A command whose row in `served.txt` says `rust` it serves itself; one that
-says `ts` it runs as a child, `<root>/libexec/ardia-ts`, whose first argument `--ardia-routed=2:<sigint>:<fd>:<hex caller>`
-carries whether SIGINT was ignored when ardia started, the lifeline descriptor and the caller's hello JSON, since Bun by
-itself can learn none of them. The lifeline is the read end of a pipe whose write end only the router holds: the child sees EOF on it
-only if the router dies, and then kills itself with SIGKILL from a thread of the addon's (`watchLifeline`), so it ends
-even while its JavaScript is blocked in a system call (opening a FIFO, say), and a killed ardia never leaves its child writing to the caller's output
-or talking to Ardia. The child starts with ardia's own signal mask and SIGINT disposition, SIGCHLD at its default (the
-router has to reap it), ardia's environment minus every variable named `BUN_*`, `JSC_*`, `NODE_*`, `UV_*` or `MIMALLOC_*`,
-the last in any case (Bun, its JavaScriptCore, its Node layer, libuv and mimalloc read those at startup, mimalloc
-matching names without regard to case, and `BUN_BE_BUN` or `BUN_OPTIONS` alone
-would turn the program into the Bun CLI or change what it runs; the Python flusher it may start reads none of them), and
-the same descriptors plus the lifeline; while it runs the router passes SIGINT, SIGTERM and
-SIGHUP on unless they were ignored (a Ctrl-C to the whole group reaches the child twice, which its sticky interrupt flag
-turns into one), holds the lease, and then ends by the child's signal or with its status. Status 253 means the
-TypeScript program couldn't serve the call exactly (it may only have asked read-only questions): the router then restores
-every disposition it changed and execs the bundled Python with the original argv and environment, byte for byte, as for any other
-command. Without `libexec/ardia-ts` everything goes where it would without the row. A row's label is every word but the
-last, so a row can name a subcommand (`scripts list ts`). For an argv the router doesn't parse itself, it skips the
-leading shared options (`--port`, `--ws`, `--data-dir`, `--timeout` with their values, `--json`), takes the command and,
-past more shared options, the next word if it isn't an option, and starts the child when `<command> <word>` or else
-`<command>` is a `ts` row; the child hands back (253) any argv it wouldn't read exactly as Python's parser does. The router reads
-`<root>/served.txt` when it is a regular file (not a link) of at most 64 KiB and valid, else the table built into it.
-`--entry ts` installs the router, the TypeScript program behind a probe, and a `served.txt` naming `ts` for every row;
-`--entry rust` installs the shipped layout, the TypeScript program included when a built-in row says `ts` and it is
-built. Which side served a call comes from markers keyed by session id, so a Python started as anyone's child still
-counts as Python.
+a zombie until the call exits and it is reparented and reaped; it holds no descriptors meanwhile. Every command is TypeScript. `served.txt` lists each command label (the one Python records in telemetry: the
+first one or two words after any shared flags, or a family such as `call *`) with `ts`; `scripts/build.sh` refuses a
+row that says anything else, and `tests/test_parity.py` checks the table and, on the routerless install, that no parity
+case is answered by Python. There is no router, no hand-back status and no Python in the package: an argv shape the
+TypeScript side doesn't model prints `ardia: this command still runs on Python, which this build of ardia doesn't
+include` and exits 1, and the parity table has no such case. What can still reach that line is listed under accepted
+differences. The parity harness's routerless install puts a probe at `bin/ardia` that records the route and execs
+`bin/ardia.bin`, the program, beside `bin/ardia-libc.so`, and still runs every case against the source tree's Python
+for the expected output.
 
 The TypeScript program does the few libc calls Bun lacks in-process, through a Node-API addon built from one C file
-(`ts/native/ardia-libc.c`) that ships as `<root>/libexec/ardia-libc.so` beside `libexec/ardia-ts`. `ts/scripts/build.sh`
+(`ts/native/ardia-libc.c`) that ships as `bin/ardia-libc.so` beside `bin/ardia`. `ts/scripts/build.sh`
 builds both for one architecture (`--target bun-darwin-arm64` or `bun-darwin-x64`; a separate addon per architecture,
 `-O2 -bundle -undefined dynamic_lookup -arch …` with clang on macOS, `-D_GNU_SOURCE -pthread -shared -fPIC` on Linux) and, given
 `--node-headers`, checks the addon's own Node-API declarations against Node's official headers with the same per-platform flags. The `.so` name puts it
@@ -2038,6 +2019,7 @@ its mode; the hardened runtime's library validation then loads it only into a pr
 | `strerror` | `strerror_r` (GNU form on glibc, XSI elsewhere) | Node's messages are libuv's, not libc's | `paths.ts`, `libc.ts`: every OS error text, as Python's `os.strerror` gives it on that platform |
 | `writeSome` | one `write` (retried on `EINTR`), returning the bytes written or the error, with SIGINT at its default disposition for the duration unless it was ignored; `EAGAIN` comes back at once, so a non-blocking descriptor is never waited on | a synchronous `writeSync` blocked on a full pipe or a paused terminal can't be ended by Ctrl-C while Bun's own SIGINT handler is installed, and the caller needs to know how much was written to keep the unwritten tail as Python's buffer does | `libc.ts` (`writeWhole`), `printable.ts`, `main.ts`: help, `--version` and every line on stderr |
 | `watchLifeline` | `fcntl(FD_CLOEXEC)`, a detached `pthread` blocking in `read`, `kill(getpid(), SIGKILL)` at EOF or error | a JS watcher can't run while the JS thread is blocked in a synchronous call | `main.ts`: end at once when the router dies |
+| `accountHome` | `getpwnam_r`, growing its buffer on `ERANGE`; the home folder as raw bytes, or `null` for an unknown name | `os.userInfo` knows only the current user | `paths.ts`: `~name/…` in `--data-dir`, `ARDIA_DATA_DIR` or `ARDIA_CLI_HOME`, as `os.path.expanduser` reads `pwd` |
 
 Every integer argument must be a number that is exactly a 32-bit integer, and a boolean a boolean; anything else throws
 a `TypeError` or `RangeError` rather than being truncated or wrapped, and an export that opened a descriptor closes it if it
@@ -2132,12 +2114,13 @@ parity harness rather than stripped wholesale:
   the connection before taking the command" with exit 2, but only Python's leaves the daemon a dropped connection
   (`test_ts_browse_plugin.JsonAndStdin.test_stdin_over_the_daemons_request_limit_stops_the_read_and_sends_nothing` and
   `test_a_request_the_envelope_pushes_over_the_limit_is_refused_before_connecting`).
-- `ardia browse`: a daemon answer whose exit is 253 ends with status 1: 253 is the router's hand-back status, and
-  exiting with it would run the step a second time on Python. A real daemon never answers 253.
-- `ardia browse`: the client starts the session's daemon itself when none answers (the TypeScript daemon, `ardia-ts
-  daemon`, while served.txt has `browse-daemon ts`; `ARDIA_BROWSE_DAEMON=python` picks Python's for differential runs),
-  and a side daemon for `busy_elsewhere` the same way. A command handed to the Python client starts the same daemon:
-  `client.spawn` reads the installed served.txt.
+- `ardia browse`: a daemon answer whose exit is 253 ends with status 1, as it did while 253 was the router's hand-back
+  status. A real daemon never answers 253.
+- `ardia browse`: the client starts the session's daemon itself when none answers, always the TypeScript daemon
+  (`bin/ardia daemon`), and a side daemon for `busy_elsewhere` the same way. Every subcommand runs in the TypeScript
+  client: the local ones (`auth`, `notes`, local `flow`, `plugin`, `read`, `session id`/`list`, `close --all`) as
+  `cli.run_local` does, and `--out` as `outfile` does. Only the M3 harness's fleet client can start Python's daemon
+  (`ARDIA_BROWSE_DAEMON=python`), for differential runs.
 - `ardia browse batch`: an `eval` or `script` line keeps its code as typed (an intentional fix). Python shell-splits every
   batch line and eval joins the pieces with spaces, so `eval document.querySelectorAll("[title]").length` ran as
   `querySelectorAll([title])` (5 of 27 bench runs retried for it). The TypeScript daemon reads the code as the rest of
@@ -2191,7 +2174,7 @@ The TypeScript CDP link (M3), which the browse daemon and `ardia scripts test` b
   that isn't UTF-8 closes with 1003 (Python 1007), and both end in `connection_lost`.
 - Cancellation is explicit: an abandoned command stops at its next CDP call or `sleep`, not at any `await`.
 
-The TypeScript browse daemon itself (`libexec/ardia-ts daemon`, slice D2 of M3, not served yet) keeps Python's files,
+The TypeScript browse daemon itself (`bin/ardia daemon`, slice D2 of M3) keeps Python's files,
 protocol and answers (`docs/browse-daemon-protocol.md`), except for these, each covered by `ts/tests/m3/daemon*.test.ts`
 or the `daemon/*` harness scenarios:
 
@@ -2605,12 +2588,15 @@ scenarios:
   `true` and exit status 0. A failure reads `Plugin NAME returned an error` or `Plugin NAME sent a malformed reply`
   (error code `plugin_failed`). Python passes the plugin's own error and protocol text into its message and accepts
   any truthy `success`, which lets a plugin put arbitrary text in front of the agent.
-- `config`, `theme` and `plugins` in TypeScript hand back to Python, before they print or write anything, for what
-  they don't model: `--help`, argparse errors (a missing or extra argument, an unknown or abbreviated option, a shared
-  flag the command doesn't take), a regular-expression construct with no exact JavaScript equivalent (named groups,
-  back references, Unicode `\b`), JSON nested deeper than 900 levels (Python's `RecursionError`), and text with a lone
-  surrogate that would have to be written to a file (Python's `UnicodeEncodeError`). These aren't differences in
-  output, only in which program prints it.
+- What the TypeScript side still doesn't model ends in `ardia: this command still runs on Python, which this build
+  of ardia doesn't include` (exit 1) instead of Python's output. Every case is input that only Ardia or a shipped file
+  produces, or a test-only variable: a `methods` or `plugins` reply whose rows aren't the shapes Ardia sends (a method
+  name that isn't a string, a plugin row without a name, contributions or problems that aren't lists), a control call
+  that ends in a reply the port can't read, a shipped schema or manifest maximum of the wrong type, a regular
+  expression in a shipped schema with no exact JavaScript equivalent, a plist value with control characters for the
+  LaunchAgent, an `ARDIA_FEEDBACK_URL` with a line break, and an environment path or working directory that isn't valid
+  UTF-8 (Python reads those with surrogateescape). Under `ARDIA_BROWSE_FOR_PLUGIN` the same shapes are refused with
+  `plugin_refused`.
 - `plugins check` on a manifest 2 (TypeScript) runs Ardia's own manifest checker, vendored unchanged from ardia's
   `apps/browser/src/lib` into `ts/src/app-manifest`, after the schema, plus the manifest-only app rules driven by the
   schema's `x-ardia-rules` (approved settings, hooks that need tabs) and `contributes.settings.defaults` against
@@ -2671,8 +2657,8 @@ scenarios:
   attachments only ever go to the configured URL. When the network fails, the reason in `Not sent: the network failed
   (…)` is the runtime's wording (a refused connection still reads `[Errno 61] Connection refused`).
 - argv shapes that make argparse print usage or an error (`--help`, an unknown or abbreviated option, an invalid
-  `--kind`/`--target`/`--days`/`--limit`, positionals on both sides of an option) are handed back to Python, which
-  prints them; the served commands never print argparse's text themselves.
+  `--kind`/`--target`/`--days`/`--limit`, positionals on both sides of an option) are printed by M2-F's argparse
+  (`ts/src/argparse.ts`), which renders them as CPython 3.13's does from the parser specs in `argparse-specs.json`.
 - The TypeScript flusher uploads only the CLI's own events (`cli_command`, `$exception`) and, in each, only the known
   fields with values of their kind (fixed names and codes, counts, timings, flags, the exception shapes); anything else
   in a spooled record is dropped at upload, and a record that isn't one of those events is dropped whole. Python's
