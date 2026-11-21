@@ -205,6 +205,9 @@ function parseXml(xml: string): PlistValue {
   return result;
 }
 
+const INT_SIZES = [1, 2, 4, 8];
+const MAX_DEPTH = 512;
+
 function parseBinary(data: Buffer): PlistValue {
   if (data.length < 40) throw new Malformed();
   const trailer = data.subarray(data.length - 32);
@@ -218,23 +221,43 @@ function parseBinary(data: Buffer): PlistValue {
     for (let index = 0; index < size; index += 1) value = value * 256 + (data[at + index] as number);
     return value;
   };
+  const end = data.length - 32;
+  if (!INT_SIZES.includes(offsetSize) || !INT_SIZES.includes(refSize)) throw new Malformed();
+  if (count < 1 || top >= count || tableAt < 8 || tableAt > end || count > (end - tableAt) / offsetSize) throw new Malformed();
   const offsets: number[] = [];
-  for (let index = 0; index < count; index += 1) offsets.push(readInt(tableAt + index * offsetSize, offsetSize));
+  for (let index = 0; index < count; index += 1) {
+    const offset = readInt(tableAt + index * offsetSize, offsetSize);
+    if (offset < 8 || offset >= tableAt) throw new Malformed();
+    offsets.push(offset);
+  }
+  const decoded = new Map<number, PlistValue>();
   const seen = new Set<number>();
   const object = (ref: number): PlistValue => {
-    if (seen.has(ref) || ref >= count) throw new Malformed();
+    if (ref >= count || seen.has(ref)) throw new Malformed();
+    const known = decoded.get(ref);
+    if (known !== undefined) return known;
+    if (seen.size >= MAX_DEPTH) throw new Malformed();
     seen.add(ref);
     try {
-      return decodeObject(offsets[ref] as number);
+      const value = decodeObject(offsets[ref] as number);
+      decoded.set(ref, value);
+      return value;
     } finally {
       seen.delete(ref);
     }
   };
-  const lengthAt = (at: number, info: number): [number, number] => {
-    if (info !== 0x0f) return [info, at + 1];
-    const marker = data[at + 1] as number;
-    const size = 1 << (marker & 0x0f);
-    return [readInt(at + 2, size), at + 2 + size];
+  const lengthAt = (at: number, info: number, unit = 1): [number, number] => {
+    let length = info;
+    let start = at + 1;
+    if (info === 0x0f) {
+      const marker = data[at + 1] as number;
+      const size = 1 << (marker & 0x0f);
+      if (marker >> 4 !== 0x1 || !INT_SIZES.includes(size)) throw new Malformed();
+      length = readInt(at + 2, size);
+      start = at + 2 + size;
+    }
+    if (length > (tableAt - start) / unit) throw new Malformed();
+    return [length, start];
   };
   const decodeObject = (at: number): PlistValue => {
     const marker = data[at];
@@ -260,20 +283,20 @@ function parseBinary(data: Buffer): PlistValue {
       return data.subarray(start, start + length).toString("latin1");
     }
     if (kind === 0x6) {
-      const [length, start] = lengthAt(at, info);
+      const [length, start] = lengthAt(at, info, 2);
       const units = data.subarray(start, start + length * 2);
       const swapped = Buffer.from(units);
       swapped.swap16();
       return swapped.toString("utf16le");
     }
     if (kind === 0xa) {
-      const [length, start] = lengthAt(at, info);
+      const [length, start] = lengthAt(at, info, refSize);
       const items: PlistValue[] = [];
       for (let index = 0; index < length; index += 1) items.push(object(readInt(start + index * refSize, refSize)));
       return items;
     }
     if (kind === 0xd) {
-      const [length, start] = lengthAt(at, info);
+      const [length, start] = lengthAt(at, info, refSize * 2);
       const map = new Map<string, PlistValue>();
       for (let index = 0; index < length; index += 1) {
         const key = object(readInt(start + index * refSize, refSize));

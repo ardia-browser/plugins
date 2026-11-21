@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { agentOf, ancestry, bundleName, cleanName, FALLBACK, fromChain, outerBundle, procArgs, type Process } from "../src/caller.ts";
 import { libcBeside, loadLibc } from "../src/libc.ts";
-import { topLevelString } from "../src/plist.ts";
+import { loadPlist, topLevelString } from "../src/plist.ts";
 
 function process(path: string, argv: string[]): Process {
   return { pid: 10, ppid: 1, path, argv };
@@ -113,4 +113,41 @@ test("walks its own ancestry", { skip: globalThis.process.platform !== "darwin" 
   assert.equal(chain[0]!.pid, globalThis.process.pid);
   assert.notEqual(chain[0]!.path, "");
   assert.equal(chain[0]!.ppid, globalThis.process.ppid);
+});
+
+function bplist(objects: number[][], top: number, countOverride?: bigint): Buffer {
+  const parts: number[] = [...Buffer.from("bplist00")];
+  const offsets: number[] = [];
+  for (const object of objects) {
+    offsets.push(parts.length);
+    parts.push(...object);
+  }
+  const tableAt = parts.length;
+  for (const offset of offsets) parts.push(offset >> 8, offset & 0xff);
+  const trailer = Buffer.alloc(32);
+  trailer[6] = 2;
+  trailer[7] = 1;
+  trailer.writeBigUInt64BE(countOverride ?? BigInt(objects.length), 8);
+  trailer.writeBigUInt64BE(BigInt(top), 16);
+  trailer.writeBigUInt64BE(BigInt(tableAt), 24);
+  return Buffer.concat([Buffer.from(parts), trailer]);
+}
+
+test("a binary plist's trailer and shared references can't make it read past the buffer or decode without end", () => {
+  const keyed = [[0xd1, 1, 2], [0x5c, ...Buffer.from("CFBundleName")], [0x51, 0x78]];
+  assert.equal(topLevelString(bplist(keyed, 0), "CFBundleName"), "x");
+  const started = performance.now();
+  assert.equal(topLevelString(bplist(keyed, 0, 1n << 40n), "CFBundleName"), undefined);
+  assert.equal(topLevelString(bplist(keyed, 0, 4n), "CFBundleName"), undefined);
+  const shared: number[][] = [[0xd1, 1, 2], [0x5c, ...Buffer.from("CFBundleName")]];
+  const depth = 40;
+  for (let level = 0; level < depth; level += 1) shared.push([0xa2, 3 + level, 3 + level]);
+  shared.push([0x51, 0x78]);
+  const value = loadPlist(bplist(shared, 0));
+  let node = (value as Map<string, unknown>).get("CFBundleName");
+  for (let level = 0; level < depth; level += 1) node = (node as unknown[])[1];
+  assert.equal(node, "x");
+  const cycle = [[0xd1, 1, 2], [0x5c, ...Buffer.from("CFBundleName")], [0xa1, 2]];
+  assert.throws(() => loadPlist(bplist(cycle, 0)));
+  assert.ok(performance.now() - started < 2000);
 });
