@@ -553,7 +553,7 @@ class FilteredRefresh(unittest.TestCase):
         registry.note_temporary("I", "WORKER")
         registry.numbers("I", ["SETTINGS", "WORKER"])
         time.sleep(0.01)
-        infos = [{"targetId": "SETTINGS", "type": "page", "url": "chrome://settings/"},
+        infos = [{"targetId": "SETTINGS", "type": "other", "url": "chrome://settings/"},
                  {"targetId": "WORKER", "type": "service_worker", "url": "https://s/sw.js"},
                  {"targetId": "PAGE", "type": "page", "url": "https://s/"}]
 
