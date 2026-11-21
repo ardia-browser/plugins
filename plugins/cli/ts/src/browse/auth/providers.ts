@@ -233,13 +233,17 @@ export async function call(root: string, name: string, capability: string, reque
 
 const RUN_REPLY_KEYS = ["protocol", "success", "data", "error"];
 
-export async function runPlugin(root: string, name: string, capability: string, request: unknown, timeout = RUN_TIMEOUT): Promise<unknown> {
+export async function runPlugin(root: string, name: string, capability: string, request: unknown, timeout = RUN_TIMEOUT): Promise<Value> {
   const reply = await ask(root, name, capability, request, timeout);
   const shaped = reply.keys !== undefined && reply.keys.every((key) => RUN_REPLY_KEYS.includes(key));
   if (shaped && reply.kind === "failed" && reply.success === false) throw new BrowseError(`Plugin ${name} returned an error`, null, "plugin_failed");
   if (shaped && reply.kind === "ok" && reply.exit !== 0) throw new BrowseError(`Plugin ${name} returned an error`, null, "plugin_failed");
   if (!shaped || reply.kind !== "ok" || reply.success !== true) throw new BrowseError(`Plugin ${name} sent a malformed reply`, null, "plugin_failed");
-  return plainParams(reply.data);
+  return reply.data;
+}
+
+export function pluginRunResult(data: Value): { data: Value; text: string } {
+  return { data: data instanceof Map ? data : new Map<string, Value>([["result", data]]), text: dumps(data, "indented") };
 }
 
 function malformed(name: string): BrowseError {

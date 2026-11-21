@@ -3,7 +3,8 @@ import { describe, expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { runPlugin, saveRegistry } from "../../src/browse/auth/providers.ts";
+import { pluginRunResult, runPlugin, saveRegistry } from "../../src/browse/auth/providers.ts";
+import { dumps } from "../../src/json.ts";
 import { BrowseError } from "../../src/browse/daemon-errors.ts";
 import { browseDir, closeFd } from "../../src/browse/paths.ts";
 
@@ -35,7 +36,16 @@ const FAILED = "Plugin tool returned an error";
 
 describe("plugin run boundary", () => {
   test("a well-formed reply gives its data", async () => {
-    expect(await runPlugin(plugin(reply('"success": true, "data": {"n": 1}')), "tool", "command.run", {})).toEqual({ n: 1 });
+    const data = await runPlugin(plugin(reply('"success": true, "data": {"n": 1}')), "tool", "command.run", {});
+    expect(dumps(data, "compact")).toBe('{"n":1}');
+  });
+
+  test("integers past 2^53 and floats come back exactly as Python prints them", async () => {
+    const data = await runPlugin(plugin(reply('"success": true, "data": {"big": 9007199254740993, "neg": -123456789012345678901234567890, "f": 1.0, "e": 1e400}')), "tool", "command.run", {});
+    const shown = pluginRunResult(data);
+    expect(shown.text).toBe('{\n  "big": 9007199254740993,\n  "neg": -123456789012345678901234567890,\n  "f": 1.0,\n  "e": Infinity\n}');
+    expect(dumps(shown.data, "compact")).toBe('{"big":9007199254740993,"neg":-123456789012345678901234567890,"f":1.0,"e":Infinity}');
+    expect(dumps(pluginRunResult(9007199254740993n).data, "compact")).toBe('{"result":9007199254740993}');
   });
 
   test("the plugin's error text never reaches the message", async () => {
