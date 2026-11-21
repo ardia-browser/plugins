@@ -13,6 +13,12 @@ import { parseTimeout } from "./script/timeout.ts";
 
 export const MAX_CDP_STDIN = 1024 * 1024;
 
+const CLIENT_SIDE = new WeakSet<JsonObject>();
+
+export function answeredHere(answer: JsonObject): boolean {
+  return CLIENT_SIDE.has(answer);
+}
+
 export function answerOf(options: Record<string, unknown>, result: Result | null, error: BrowseError | null): JsonObject {
   const [code, out, err] = renderPlain(options, result, error);
   const answer: JsonObject = new Map<string, Value>([
@@ -21,6 +27,7 @@ export function answerOf(options: Record<string, unknown>, result: Result | null
     ["err", redact(err)],
   ]);
   if (error !== null && error.code) answer.set("code", error.code);
+  CLIENT_SIDE.add(answer);
   return answer;
 }
 

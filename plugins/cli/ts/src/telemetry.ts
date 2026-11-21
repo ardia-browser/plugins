@@ -37,6 +37,7 @@ export class Call {
   readonly startedAt = now();
   command = "none";
   subcommand: string | undefined;
+  usageWord: string | undefined;
   allowedFlags: readonly string[] = [];
   errorCode: string | undefined;
   readonly metrics = new Map<string, Value>();

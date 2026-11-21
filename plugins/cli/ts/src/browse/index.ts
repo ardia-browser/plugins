@@ -10,6 +10,7 @@ import { Interrupted } from "./exchange.ts";
 import { Printer } from "./output.ts";
 import { checkRequest, CODE, dropCredential, message, pluginMode, PluginRefusal, REFUSED, takeAccess, UNAVAILABLE, UNAVAILABLE_WHY } from "./plugin.ts";
 import type { NotesArgv } from "./route.ts";
+import { answeredHere } from "./local-answer.ts";
 import { PathError } from "./paths.ts";
 import { dumps, object, type Value } from "../json.ts";
 import { Secrets } from "../redact.ts";
@@ -73,8 +74,10 @@ function printAnswer(answer: Map<string, Value>, secrets: Secrets, printer: Prin
   if (asJson) codeJsonAnswer(answer, command);
   const code = answer.get("code");
   if (typeof code === "string") call.noteErrorCode(code);
-  for (const [key, value] of cleanMetrics(answer.get("metrics"))) call.metrics.set(key, value);
-  call.metrics.set("output_chars", chars);
+  if (!answeredHere(answer)) {
+    for (const [key, value] of cleanMetrics(answer.get("metrics"))) call.metrics.set(key, value);
+    call.metrics.set("output_chars", chars);
+  }
   for (const [key, stream] of [["out", 1], ["err", 2]] as const) {
     const text = textOf(answer.get(key), secrets.known());
     if (text instanceof PythonCrash) return { status: 1, crash: text };
@@ -228,7 +231,8 @@ export async function serveBrowse(argv: string[], python: string | null): Promis
 export async function serveNotes(argv: string[], notes: NotesArgv, python: string | null): Promise<number | undefined> {
   const call = new Call(argv);
   call.command = "notes";
-  call.allowedFlags = allowedFlags(commandName([...notes.hoisted, ...notes.rest]));
+  call.usageWord = commandName([...notes.hoisted, ...notes.rest]);
+  call.allowedFlags = allowedFlags(call.usageWord);
   return serveHoisted(["notes", ...notes.hoisted, ...notes.rest], call, false, python);
 }
 

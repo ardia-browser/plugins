@@ -111,7 +111,7 @@ export function note(state: JsonObject, name: string, status: number | bigint, a
 export function recordUsage(call: Call, status: number | bigint): void {
   const where = recordingHome();
   if (where === undefined || NOT_RECORDED.includes(call.command)) return;
-  const name = [call.command, call.subcommand].filter((part): part is string => part !== undefined && part !== "").join(" ");
+  const name = call.usageWord !== undefined ? `${call.command} ${call.usageWord}` : [call.command, call.subcommand].filter((part): part is string => part !== undefined && part !== "").join(" ");
   try {
     mkdirSync(where, { recursive: true });
   } catch {
