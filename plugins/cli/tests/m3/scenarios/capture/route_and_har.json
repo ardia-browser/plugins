@@ -1,0 +1,18 @@
+{
+ "steps": [
+  {"argv": ["open", "{fixture}/loadsdata.html", "--no-changes"]},
+  {"argv": ["network", "route", "**/loadsdata.json", "--body", "[{\"name\": \"Routed office\"}]"]},
+  {"argv": ["open", "{fixture}/loadsdata.html", "--no-changes"]},
+  {"argv": ["wait", "--text", "Routed office"]},
+  {"argv": ["network", "har", "stop"]},
+  {"argv": ["network", "har", "start", "--content", "all"]},
+  {"argv": ["network", "har", "start", "--content", "some"]},
+  {"argv": ["open", "{fixture}/loadsdata.html", "--no-changes"]},
+  {"argv": ["wait", "--text", "Routed office"]},
+  {"argv": ["network", "har", "stop", "capture.har"]},
+  {"argv": ["network", "unroute", "**/loadsdata.json"]},
+  {"argv": ["network", "route", "**/loadsdata.json", "--abort"]},
+  {"argv": ["network", "unroute"]},
+  {"argv": ["session"]}
+ ]
+}

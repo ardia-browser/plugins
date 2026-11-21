@@ -46,6 +46,9 @@ def redact_secrets(message: dict) -> dict:
     return {**message, "params": kept} if kept != params else message
 
 
+CONSOLE_DETECTABLE = ("(Runtime is on for this tab until the session ends)", "(Runtime is on for this tab until the session ends; the page can detect this)")
+REQUEST_ROW = re.compile(r"(?m)^\[\d+\.\d+\](?= [A-Z]+ \S+ \()")
+
 RULES = {
     "browser-ids": "values of the CDP ID fields in STRING_IDS and INT_IDS become <kind#n>, numbered by first appearance in the step's own requests (browser events cross step marks by timing)",
     "after-fault": "in a fault run, the faulted step's requests before the fault are left out; only the cleanup after it is compared",
@@ -58,6 +61,8 @@ RULES = {
     "tabs-file": "the tab registry's file name hash becomes tabs-<HASH>",
     "file-times": "`pid`, `started`, `at` and any float over 1e9 (epoch seconds) inside the session folder's JSON files become <PID> and <TIME>",
     "read-stamp": "the wall-clock time in `read`'s `[read YYYY-MM-DD HH:MM:SS UTC]` line, and in a page header's `(HTTP 200, read YYYY-MM-DD HH:MM:SS UTC)`, becomes <TIME>",
+    "console-detectable": "the `console` capture notice Python ends with `until the session ends)` reads `until the session ends; the page can detect this)`, the TypeScript wording (designed divergence `console-detectable`, row 8)",
+    "request-rows": "the `[<renderer pid>.<n>]` request id at the start of a `network requests` row becomes `[<REQUEST>]`; Chromium numbers subresource requests by its renderer's process id, which differs between any two browsers",
     "live-sets": "live mode compares each step's requests as a set of distinct forms; order, counts and concurrency are replay's job, because Chromium's load timing decides how often the daemon polls",
     "ready-probe": "live mode ignores the `() => document.readyState` probe, which the daemon sends only when the load event hasn't arrived yet",
     "replay-order": "replay checks order in the tap: a request matches the recording within `lookahead` concurrency groups (tests/m3/elastic.json), so tasks that interleave by timing don't fail",
@@ -213,7 +218,7 @@ def transcript(entries: list[dict], subs: Subs, rewrite=None) -> tuple[dict, Ids
 
 def answer(step: dict, subs: Subs, ids: Ids, keys: dict) -> dict:
     def clean(text: str) -> str:
-        text = READ_STAMP.sub("<TIME>", ids.in_text(subs.text(text or "")))
+        text = REQUEST_ROW.sub("[<REQUEST>]", READ_STAMP.sub("<TIME>", ids.in_text(subs.text(text or "")))).replace(*CONSOLE_DETECTABLE)
         return KEY.sub(lambda found: keys.get(found.group(), "<KEY>"), text)
 
     shaped = {"exit": step.get("exit"), "out": clean(step.get("out", "")), "err": clean(step.get("err", ""))}

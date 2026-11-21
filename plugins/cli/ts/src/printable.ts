@@ -1,3 +1,4 @@
+import { sleepSync } from "bun";
 import { fstatSync, write } from "node:fs";
 import { interrupted as interruptRequested } from "./control.ts";
 import { writeSome, writeWhole, writtenBefore } from "./libc.ts";
@@ -27,7 +28,7 @@ export function jsonSafe(text: string): string {
 }
 
 export function sleepMs(ms: number): void {
-  Bun.sleepSync(ms);
+  sleepSync(ms);
 }
 
 export function writeAll(fd: number, text: string | Uint8Array): void {

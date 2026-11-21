@@ -17,8 +17,9 @@ from tests.m3 import divergences, infra
 
 CHROME_FLAGS = ["--headless=new", "--no-first-run", "--no-default-browser-check", "--disable-background-networking", "--disable-component-update",
                 "--disable-sync", "--mute-audio", "--hide-scrollbars", "--window-size=1200,900"]
-ROWS = (7, 8, 9, 10, 11, 12, 13)
+ROWS = (7, 8, 9, 10, 11, 12, 13, 16)
 ROW13_ROLES = ("child", "grandchild", "sandboxed")
+PARTIAL = {16: {"needed": ("printToPdf", "pdfPages"), "blocked": {"savePage": "no `ardia browse` command saves MHTML (Python has none; needs a decision)", "printDialogAnswered": "print preview is F3d (chrome://print on Ardia)"}}}
 WORLD = "ardia-human-tier"
 
 
@@ -225,6 +226,13 @@ async def row(run: Run, number: int) -> dict:
                 read[role] = found.group() if found and in_snapshot and found.group() == in_snapshot.group() else None
             notes.append("each frame's secret read by `read` and `snapshot` in its own session; clicks are D5's, so the page's clickOk "
                          "stays false and this row passes on readOk")
+        elif number == 16:
+            target = run.root / "row16.pdf"
+            browse("pdf", str(target))
+            data = target.read_bytes() if target.exists() else b""
+            read = {"pdfHeader": data[:5].decode("latin-1"), "pdfBytes": len(data), "pdfPages": len(re.findall(rb"/Type\s*/Page\b", data)),
+                    "mhtmlHasMarker": None, "printDialogAnswered": False}
+            notes.extend(f"{name} blocked: {why}" for name, why in PARTIAL[16]["blocked"].items())
         verdict = await tier.finish(read)
     finally:
         await tier.close()
@@ -232,6 +240,9 @@ async def row(run: Run, number: int) -> dict:
     passed = bool(verdict.get("pass"))
     if number == 13:
         passed = bool(((verdict.get("measured") or {}).get("checks") or {}).get("readOk"))
+    elif number in PARTIAL:
+        checks = (verdict.get("measured") or {}).get("checks") or {}
+        passed = all(checks.get(name) for name in PARTIAL[number]["needed"])
     return {"row": number, "pass": passed and not failed, "verdict": verdict.get("pass"), "failed_steps": failed,
             "notes": notes, "measured": verdict.get("measured")}
 

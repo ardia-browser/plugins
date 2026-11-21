@@ -397,7 +397,7 @@ export async function cmdOpen(ctx: Ctx, argv: string[]): Promise<Result> {
   return result;
 }
 
-function globMatch(pattern: string, url: string): boolean {
+export function globMatch(pattern: string, url: string): boolean {
   if (pattern === url || (url.includes(pattern) && !pattern.includes("*"))) return true;
   let regex = "";
   for (let index = 0; index < pattern.length; ) {

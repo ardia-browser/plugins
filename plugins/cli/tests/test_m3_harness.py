@@ -71,9 +71,39 @@ class Normalizer(unittest.TestCase):
         self.assertIn("<REDACTED>", text)
         self.assertIn("kept", text)
 
+    def test_request_rows_mask_only_the_row_id(self):
+        out = "[82589.4] GET http://x/a.json (Fetch) 200\n[1.2] is not a row\nsee [82589.4] GET\n"
+        shaped = normalize.answer({"exit": 0, "out": out, "err": ""}, normalize.Subs({}), normalize.Ids(), {})
+        self.assertEqual(shaped["out"], "[<REQUEST>] GET http://x/a.json (Fetch) 200\n[1.2] is not a row\nsee [82589.4] GET\n")
+
+    def test_console_capture_is_the_only_runtime_enable_allowed(self):
+        import gzip
+        import tempfile
+
+        lines = [{"k": "out", "m": json.dumps({"id": 1, "method": method, "sessionId": "S"})} for method in ("Runtime.enable", "Debugger.enable")]
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "t.jsonl"
+            path.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
+            self.assertEqual(divergences.checks(path), ["row 8: Debugger.enable sent on a page session", "row 8: Runtime.enable sent on a page session"])
+            self.assertEqual(divergences.checks(path, True), ["row 8: Debugger.enable sent on a page session"])
+        self.assertTrue(divergences.captures_console([{"argv": ["open", "x", "--capture-console"]}]))
+        self.assertTrue(divergences.captures_console([{"argv": ["errors"]}]))
+        self.assertFalse(divergences.captures_console([{"argv": ["network", "requests"]}]))
+
+    def test_replay_maps_the_fixture_port_each_recording_stored(self):
+        import gzip
+
+        from tests.m3 import side
+
+        with tempfile.TemporaryDirectory() as folder:
+            replay = Path(folder) / "x.jsonl.gz"
+            self.assertEqual(side.recorded_fixture(replay), infra.RECORDED_FIXTURE)
+            (Path(folder) / "x.result.json.gz").write_bytes(gzip.compress(json.dumps({"subs": {"fixture": 9499}}).encode()))
+            self.assertEqual(side.recorded_fixture(replay), 9499)
+
     def test_every_rule_is_named(self):
         for rule in ("browser-ids", "message-id", "concurrency", "scratch", "ports", "ids-in-answers", "session-key", "tabs-file", "file-times",
-                     "read-stamp", "metrics", "racy-steps", "divergences", "secrets"):
+                     "read-stamp", "metrics", "racy-steps", "request-rows", "divergences", "secrets"):
             self.assertIn(rule, normalize.RULES)
 
     def test_racy_steps_keep_only_the_exit_status(self):

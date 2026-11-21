@@ -16,6 +16,8 @@ import { wallSeconds } from "../tokens.ts";
 import { release as releaseClaims } from "./claims.ts";
 import { type DaemonConfig } from "./config.ts";
 import { FifoLock } from "./lock.ts";
+import { bindCommandLock } from "../capture/store.ts";
+import { closeCaptures } from "../capture/close.ts";
 import { type Caller, parseCaller } from "./announce.ts";
 import { log } from "./log.ts";
 import { canonical } from "./names.ts";
@@ -107,6 +109,7 @@ export class Daemon {
       { session: config.session, key: config.key, browseFd: this.dirFd, noAutoDialog: config.noAutoDialog, pinTab: config.pinTab, dataDir: config.dataDir },
       () => this.resolveEndpoint(),
     );
+    bindCommandLock(this.state, this.lock);
     this.idleLimit = (config.idleTimeoutMs || DEFAULT_DAEMON_IDLE * 1000) / 1000;
     this.stopped = new Promise((resolve) => {
       this.stopNow = resolve;
@@ -315,6 +318,7 @@ export class Daemon {
     await temptabs.drain(this.state);
     if (this.state.connected) {
       for (const page of [...this.state.pages.values()]) if (page.sessionId && page.input.releaseAll) await page.input.releaseAll();
+      await closeCaptures(this.state);
     }
     if (hooks.shutdown) await hooks.shutdown();
     await this.state.disconnect();

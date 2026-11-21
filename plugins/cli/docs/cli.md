@@ -2070,6 +2070,42 @@ Its page core (slice D3: `browse/state/page.ts`, `state.ts`, `refs.ts`, `apptabs
 - The caller counts as announced to Ardia's control socket only after the handshake finished, so a cancelled one is
   tried again by the next command; Python records it before. A cancelled active-tab lookup (`tab active`) ends its HTTP
   request at once.
+- Capture and media (D6). Console and error capture is the one path that sends `Runtime.enable` on a page session
+  (Chromium reports console calls only through it); `console` and `errors` start it (and `open --capture-console` once `open`'s page setup is served), the page
+  can detect it, and it lasts until the session ends, as in Python. Its first notice says so: Python's
+  "(Runtime is on for this tab until the session ends)" reads "(Runtime is on for this tab until the session ends; the
+  page can detect this)" (design section 8; the harness's `console-detectable` rule). The transcript check allows
+  `Runtime.enable` only in a scenario that asks for console capture. The rest:
+  - A deliberate fix: when a cancel or timeout lands while `network route`'s or `set credentials`' `Fetch.enable` is
+    unanswered, on a tab that had no route claim before, the daemon sends `Fetch.disable` (shielded, bounded at 2 s) and
+    counts `route_enable_undone`. Python leaves interception possibly on with no handler, so the page's requests hang.
+    The route handler is also registered before `Fetch.enable` is sent and stays registered after an unknown outcome
+    (it's removed only after a definite refusal), so a request paused by interception that slipped past the
+    `Fetch.disable` is continued rather than left hanging. Fault runs show the extra `Fetch.disable` and a page that
+    keeps loading on the TypeScript side.
+  - A lost connection is never swallowed: `network request` and HAR bodies, `network unroute`'s `Fetch.disable` and the
+    screencast stop pass `connection_lost` on where Python's catch-all ignores it. `record stop` still closes ffmpeg's
+    input and waits for it when that happens.
+  - Numbers Chromium sends as whole floats (`1.0`) are written as integers in HAR and trace files and in stream frame
+    metadata, because the CDP reply is parsed into JavaScript numbers. Values computed as floats by the command itself
+    (a HAR entry's `time`, a selector screenshot's clip origin, `diffPercent`) keep Python's float spelling.
+  - The stream viewer runs on `Bun.serve`: its Host, Origin, token, four-viewer and 64 KiB message checks and their
+    status codes and texts are Python's; a plain HTTP request without a WebSocket upgrade gets 426 with our own text
+    where the `websockets` package answers 400 or 426 with its own; a port already in use reports Python's `OSError`
+    line. Frames a slow viewer can't take yet are skipped to the newest, as Python's single-slot waiter does. A
+    message over 64 KiB ends the connection without a close frame (1006 at the viewer) where Python's `websockets`
+    sends 1009. Python stops reading a viewer that sends input faster than it's applied (TCP backpressure); Bun can't
+    pause one socket, so a viewer gets at most one input waiting for the command lock plus 32 queued: mouse moves past
+    that are dropped, any other input closes it with 1008. `stream disable` and a viewer's disconnect cancel that
+    viewer's queued input instead of waiting for it, so a command holding the lock never waits on its own stream.
+  - A Ctrl-C during `record stop`'s wait for ffmpeg (up to 60 s) kills ffmpeg and ends the command; Python keeps
+    waiting until ffmpeg exits or the 60 s pass.
+  - A background route, auth or screencast-ack task that fails for a reason other than a CDP error ends quietly;
+    Python's event loop logs "Task exception was never retrieved".
+  - `a11y` uses axe-core embedded in the program (`ts/vendor/axe.min.js`, 4.10.3, the version and checksums
+    `scripts/build.sh` pins for Python, recorded in `ts/vendor/axe.json` and checked by a test); it never looks on disk.
+  - Live input from a stream viewer (`stream enable --input`) is tracked and released by the act slice's input model
+    (D5); until it lands the daemon still sends the events, under the command lock, but can't release held keys.
 
 Its read side (slice D4: `browse/snapshot/collect.ts`, `take.ts`, `browse/read/`, and `get`, `is`, `find`, `read`,
 `diff`, `vitals`, `storage`, `cookies` and `state` in `browse/commands/`) follows `snapshot.py`, `readpages.py`,

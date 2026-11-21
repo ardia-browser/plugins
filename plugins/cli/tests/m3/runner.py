@@ -62,10 +62,11 @@ def shaped_of(result: Run, scenario: dict, unstable: list[int] | None = None, fa
     return normalize.run(result, unstable, racy_of(scenario), divergences.rewriter(divergences.names_for(scenario, fault)))
 
 
-def checked_rows(result: Run, impl: str, label: str) -> list[str]:
+def checked_rows(result: Run, impl: str, label: str, scenario: dict | None = None) -> list[str]:
     if divergences.daemon_of(impl) != "ts":
         return []
-    return [f"transcript {label}: {line}" for line in divergences.checks(result.transcript)]
+    console = divergences.captures_console((scenario or {}).get("steps"))
+    return [f"transcript {label}: {line}" for line in divergences.checks(result.transcript, console)]
 
 
 class Harness:
@@ -78,6 +79,7 @@ class Harness:
 
     def __enter__(self):
         self.scratch.mkdir(parents=True, exist_ok=True)
+        infra.vendor_axe_for_python()
         self.fixtures = infra.FixtureServer(self.ports.fixture).__enter__()
         return self
 
@@ -116,7 +118,7 @@ class Harness:
         unstable = (scenario.get("unstable_steps") or {}).get("steps")
         differences = compare.compared(shaped_of(first, scenario, unstable), shaped_of(second, scenario, unstable), compare.LIVE)
         differences += checked_protocol(first, "A") + checked_protocol(second, "B")
-        differences += checked_rows(first, a, "A") + checked_rows(second, b, "B")
+        differences += checked_rows(first, a, "A", scenario) + checked_rows(second, b, "B", scenario)
         return {"name": scenario["name"], "mode": f"live {a}/{b}", "ok": not differences, "differences": differences}
 
     def replay(self, scenario: dict, impl: str = "python") -> dict:
@@ -132,7 +134,7 @@ class Harness:
             differences.append(f"tap: {result.tap['remaining']} recorded request(s) never sent, first: {result.tap.get('remainingForms', [])[:2]}")
         differences += compare.compared(expected, shaped_of(result, scenario), compare.LIVE)
         differences += checked_protocol(result, impl)
-        differences += checked_rows(result, impl, impl)
+        differences += checked_rows(result, impl, impl, scenario)
         return {"name": name, "mode": f"replay {impl}", "ok": not differences, "differences": differences}
 
     def request_points(self, scenario: dict) -> dict[int, list[tuple[str, int]]]:
@@ -163,7 +165,7 @@ class Harness:
                 found[part].pop(str(fault.step), None)
         differences = compare.compared(shaped[0], shaped[1], compare.LIVE)
         differences += checked_protocol(first, "A") + checked_protocol(second, "B")
-        differences += checked_rows(first, a, "A") + checked_rows(second, b, "B")
+        differences += checked_rows(first, a, "A", scenario) + checked_rows(second, b, "B", scenario)
         return {"name": scenario["name"], "mode": mode, "ok": not differences, "differences": differences}
 
     def cancel(self, scenario: dict, a: str = "python", b: str = "python", kind: str = "interrupt", steps: list[int] | None = None) -> list[dict]:

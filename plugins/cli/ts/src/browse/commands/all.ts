@@ -7,6 +7,7 @@ import "./act.ts";
 import "./batch.ts";
 import "../act/react.ts";
 import "../act/install.ts";
+import "../capture/install.ts";
 import { findAct } from "../act/find-act.ts";
 import { findActions } from "./find.ts";
 

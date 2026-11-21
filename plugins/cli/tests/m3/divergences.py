@@ -50,6 +50,13 @@ DIVERGENCES = {
               "then each open or closed shadow root resolved into the isolated world and searched; replay answers the first with null",
         "why": "selectors reach elements inside closed shadow roots (ardia#2812 row 12)",
     },
+    "console-detectable": {
+        "row": 8,
+        "commands": "console, the first time it starts capture on a tab",
+        "python": "answer text: ... (Runtime is on for this tab until the session ends)",
+        "ts": "answer text: ... (Runtime is on for this tab until the session ends; the page can detect this)",
+        "why": "console capture is the one Runtime.enable on a page session and a page can detect it; the notice says so (normalize rule `console-detectable`)",
+    },
 }
 TEMP_MARKER = "about:blank#ardia-temp-"
 PIERCE_DOCUMENT = "() => document"
@@ -71,6 +78,7 @@ UNANSWERING_FAULTS = ("drop", "stop")
 MAC_SHORTCUT_KEYS = ("a", "c", "x", "v", "z")
 META = 4
 PAGE_SESSION_ENABLES = ("Runtime.enable", "Debugger.enable", "Console.enable")
+CONSOLE_CAPTURE = ("console", "errors")
 BUSY_PROBE = "1"
 WORLD_HANDLE = "globalThis"
 
@@ -148,7 +156,15 @@ def rewriter(names: list[str]) -> Rewriter:
     return Rewriter(names)
 
 
-def checks(transcript_path) -> list[str]:
+def captures_console(steps) -> bool:
+    for step in steps or []:
+        argv = [str(arg) for arg in step.get("argv") or []]
+        if (argv and argv[0] in CONSOLE_CAPTURE) or "--capture-console" in argv:
+            return True
+    return False
+
+
+def checks(transcript_path, console_capture: bool = False) -> list[str]:
     found = []
     worlds = set()
     touch_emulated = False
@@ -162,7 +178,7 @@ def checks(transcript_path) -> list[str]:
             continue
         if not message.get("sessionId"):
             continue
-        if message.get("method") in PAGE_SESSION_ENABLES:
+        if message.get("method") in PAGE_SESSION_ENABLES and not (console_capture and message["method"] == "Runtime.enable"):
             found.append(f"row 8: {message['method']} sent on a page session")
         if message.get("method") == "Page.createIsolatedWorld":
             worlds.add(message["sessionId"])
