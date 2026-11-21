@@ -1,8 +1,9 @@
 import { constants } from "node:os";
+import { NeedsPython } from "./paths.ts";
 import { exceptionLine, inert, Output, toStderr } from "./printable.ts";
 import { type Call, finish } from "./telemetry.ts";
 
-export type Said = { status: number; out: string[]; err: string[] };
+export type Said = { status: number; out: string[]; err: string[]; raw?: string };
 
 const BROKEN_PIPE = new Set(["EPIPE", "ESHUTDOWN"].map((name) => (constants.errno as Record<string, number>)[name]));
 
@@ -20,6 +21,10 @@ function complaintFailed(call: Call, errno: number, python: string | null): numb
 export async function deliver(call: Call, said: Said, json: boolean, python: string | null): Promise<number> {
   const out = new Output(json);
   let status = said.status;
+  if (said.raw !== undefined) {
+    if (said.raw !== "" && !said.raw.endsWith("\n")) throw new NeedsPython("output that doesn't end a line");
+    if (said.raw !== "") out.say(said.raw.slice(0, -1));
+  }
   for (const line of said.out) {
     out.say(line);
     if (out.closed) break;

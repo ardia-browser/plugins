@@ -1,4 +1,6 @@
-import { arrange, type CommandSpec, optionNames, type Parsed, parseStrict } from "./cmdline.ts";
+import { arrange, type CommandSpec, optionNames, type Parsed, parseStrict, SHARED_VALUE_FLAGS } from "./cmdline.ts";
+import { cleanNumber } from "./command-metrics.ts";
+import type { Lines } from "./skills.ts";
 import type { Said } from "./deliver.ts";
 import type { Call } from "./telemetry.ts";
 
@@ -62,17 +64,79 @@ const ENTRIES: Entry[] = [
   },
 ];
 
+function skillsSaid(lines: Lines, call: Call): Said {
+  if (lines.outputChars !== undefined) for (const [key, value] of cleanNumber("output_chars", lines.outputChars)) call.metrics.set(key, value);
+  for (const [name, count] of lines.counts ?? []) for (const [key, value] of cleanNumber(name, count)) call.metrics.set(key, value);
+  return { status: lines.status, out: lines.out, err: [] };
+}
+
+export const SKILLS_INSTALL_SPEC: CommandSpec = {
+  options: [
+    { name: "--target", dest: "target", kind: "append", choices: ["claude-code", "codex", "cursor", "general", "opencode"] },
+    { name: "--project", dest: "project", kind: "flag" },
+    { name: "--no-cua", dest: "no_cua", kind: "flag" },
+    { name: "--replace", dest: "replace", kind: "flag" },
+    { name: "--auto", dest: "auto", kind: "flag" },
+  ],
+};
+
+ENTRIES.push(
+  {
+    path: ["skills", "install"],
+    spec: SKILLS_INSTALL_SPEC,
+    run: async (parsed, call) => {
+      const skills = await import("./skills.ts");
+      const computerUse = parsed.get("no_cua") !== true;
+      if (parsed.get("auto") === true) return skillsSaid(await skills.installDetected(computerUse), call);
+      const targets = list(parsed, "target");
+      return skillsSaid(await skills.install(targets.length > 0 ? targets : ["general"], parsed.get("project") === true, computerUse, parsed.get("replace") === true), call);
+    },
+  },
+  {
+    path: ["skills", "refresh"],
+    spec: { options: [] },
+    run: async (_parsed, call) => skillsSaid(await (await import("./skills.ts")).refresh(), call),
+  },
+  {
+    path: ["skills", "get"],
+    spec: { options: [{ name: "--full", dest: "full", kind: "flag" }] },
+    run: async (parsed, call) => {
+      const printed = (await import("./skills.ts")).printSkill(parsed.get("full") === true);
+      return { ...skillsSaid(printed, call), raw: printed.raw };
+    },
+  },
+  {
+    path: ["skills", "list"],
+    spec: { options: [] },
+    run: async (_parsed, call) => skillsSaid((await import("./skills.ts")).listSkills(), call),
+  },
+);
+
+function withSkillFlag(argv: readonly string[]): readonly string[] {
+  let index = 0;
+  while (index < argv.length) {
+    const token = argv[index] as string;
+    const name = token.split("=")[0] as string;
+    if (SHARED_VALUE_FLAGS.includes(name)) index += token.includes("=") ? 1 : 2;
+    else if (token === "--json") index += 1;
+    else break;
+  }
+  if (argv[index] !== "--skill") return argv;
+  return [...argv.slice(0, index), "skills", "get", ...argv.slice(index + 1)];
+}
+
 export function registerEntries(more: Entry[]): void {
   ENTRIES.push(...more);
 }
 
-export function commandRoute(argv: readonly string[]): CommandRoute | undefined {
+export function commandRoute(given: readonly string[]): CommandRoute | undefined {
+  const argv = withSkillFlag(given);
   for (const entry of ENTRIES) {
     const allowedFlags = optionNames(entry.spec);
     const arranged = arrange(argv, entry.path, allowedFlags);
     if (arranged === undefined) continue;
     const [command, subcommand] = entry.path as [string, string | undefined];
-    const base = { label: entry.path.join(" "), command, allowedFlags, json: jsonRequested(argv) };
+    const base = { label: entry.path.join(" "), command, allowedFlags, json: jsonRequested(given) };
     const named = subcommand === undefined ? base : { ...base, subcommand };
     if (arranged.kind === "usage") {
       if (arranged.message.endsWith("needs a value")) return undefined;
