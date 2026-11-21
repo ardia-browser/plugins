@@ -526,6 +526,23 @@ export function limitNote(found: number, limit: number, flagName: string): strin
   return `[read the first ${limit} of ${found} pages; ${flagName} ${Math.min(found, MAX_LIMIT)} for more]`;
 }
 
+export async function readLocal(options: Options, positional: string[], stdin: string | null, globalOptions: Options): Promise<Result> {
+  const urls = wantedUrls(options, positional, stdin);
+  if (urls.length === 0) throw new Usage("Usage: ardia browse read <url>... [--stdin] [--links <pattern>] [-s <selector>] [--http]");
+  const limit = pagesLimit(options, urls.length);
+  pageTimeout(options);
+  if (options["selector"]) throw new Usage("-s needs the browser's DOM; drop --http to read the pages in Ardia");
+  const extra = limitNote(urls.length, limit, "--limit");
+  return resultFor(await readHttp(urls.slice(0, limit), options), options, globalOptions, extra);
+}
+
+export function runsLocally(options: Options, positional: readonly string[]): boolean {
+  const wants = positional.length > 0 || Boolean(options["stdin"]) || options["links"] !== undefined;
+  return wants && options["links"] === undefined && fetchOnly(options) && !positional.some(relative);
+}
+
+export const MAX_STDIN = 1024 * 1024;
+
 export async function run(ctx: Ctx, options: Options, positional: string[]): Promise<Result> {
   let limit = parseLimit(options["limit"]);
   const timeout = pageTimeout(options);

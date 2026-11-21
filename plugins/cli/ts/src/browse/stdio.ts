@@ -25,7 +25,7 @@ function utf8Codeset(name: string): boolean {
 
 export function stdioErrorsFor(platform: string, name: string, plugin: boolean, installed: (name: string) => boolean): Errors | undefined {
   const linux = platform === "linux";
-  if (linux && !plugin) return undefined;
+  void plugin;
   if (["", "C", "POSIX", "C.UTF-8", "C.utf8", "UTF-8"].includes(name)) return "surrogateescape";
   if (name.includes("/") || name.includes("..")) return undefined;
   if (!linux && !installed(name)) return "surrogateescape";
@@ -140,4 +140,20 @@ export function decodeStdin(bytes: Uint8Array, errors: Errors): string | PythonC
     start = at;
   }
   return out + Buffer.from(bytes.subarray(start)).toString("utf8");
+}
+
+export function decodeLocale(bytes: Uint8Array): string | PythonCrash {
+  const name = localeName();
+  const codeset = (name.split(".")[1] ?? "").split("@")[0] ?? "";
+  let decoder: TextDecoder;
+  try {
+    decoder = new TextDecoder((codeset || "utf-8") as ConstructorParameters<typeof TextDecoder>[0], { fatal: true });
+  } catch {
+    return builtinCrash("LookupError", `unknown encoding: ${codeset}`);
+  }
+  try {
+    return decoder.decode(bytes);
+  } catch {
+    return builtinCrash("UnicodeDecodeError", `'${codeset.toLowerCase()}' codec can't decode the input: invalid data`);
+  }
 }

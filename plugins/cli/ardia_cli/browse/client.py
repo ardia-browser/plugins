@@ -46,33 +46,13 @@ def connect(dir_fd: int, name: str) -> socket.socket | None:
     return sock
 
 
-DAEMON_ROW = "browse-daemon"
-DAEMON_CHOICE = "ARDIA_BROWSE_DAEMON"
-
-
-def typescript_daemon() -> str | None:
-    root = Path(os.path.realpath(sys.executable)).parent.parent.parent
-    program = root / "libexec" / "ardia-ts"
-    asked = os.environ.get(DAEMON_CHOICE)
-    if asked == "python" or not program.is_file():
-        return None
-    if asked == "ts":
-        return str(program)
-    try:
-        rows = (root / "served.txt").read_text(encoding="utf-8").splitlines()
-    except (OSError, UnicodeDecodeError):
-        return None
-    return str(program) if any(row.split() == [DAEMON_ROW, "ts"] for row in rows) else None
-
-
 def spawn(dir_fd: int, key: str, config: dict) -> subprocess.Popen:
     package_parent = str(Path(__file__).resolve().parent.parent.parent)
     log_fd = paths.open_private_file(f"{key}.log", dir_fd, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
     code = f"import sys; sys.path.insert(0, {package_parent!r}); from ardia_cli.browse import daemon; daemon.main()"
-    typescript = typescript_daemon()
     try:
         process = subprocess.Popen(
-            [typescript, "daemon"] if typescript else [sys.executable, "-I", "-c", code],
+            [sys.executable, "-I", "-c", code],
             stdin=subprocess.PIPE, stdout=log_fd, stderr=log_fd, start_new_session=True, close_fds=True, cwd="/",
         )
     finally:

@@ -1,5 +1,5 @@
 import { NeedsPython } from "../paths.ts";
-import { abandonWork } from "../printable.ts";
+import { abandonWork, toStderr } from "../printable.ts";
 import { Call, finish } from "../telemetry.ts";
 import { cliVersion } from "../version.ts";
 import { cleanMetrics, exitOf, outputChars, processStatus, textOf } from "./answer.ts";
@@ -13,7 +13,10 @@ import { dumps, object, type Value } from "../json.ts";
 import { Secrets } from "../redact.ts";
 import { renderError } from "./render.ts";
 import { environmentIsText, Refused, Unported } from "./request.ts";
-import { handedBack, HandBack, roundTrip } from "./serve.ts";
+import { HandBack, roundTrip } from "./serve.ts";
+import { saveAnswer } from "./save-answer.ts";
+import { AS_TEXT, takeOut } from "./outfile.ts";
+import { Usage as DaemonUsage } from "./daemon-errors.ts";
 import { NoDaemon } from "./session.ts";
 import { pythonStdioErrors } from "./stdio.ts";
 
@@ -103,10 +106,24 @@ async function run(browse: string[], printer: Printer, call: Call, plugin: boole
     printer.out(`ardia browse ${cliVersion()}\n`);
     return { status: printer.closed ? CLOSED : 0, crash: printer.crash };
   }
-  if (handedBack(rest, browse) !== undefined) return undefined;
+  let taken: [string[], string | null];
+  try {
+    taken = takeOut(browse, rest[0]);
+  } catch (error) {
+    if (!(error instanceof DaemonUsage)) throw error;
+    printer.err(`✗ ${error.message}\n`);
+    return { status: 1 };
+  }
+  const [stripped, outPath] = taken;
   const secrets = new Secrets();
   if (plugin) return { status: printError(new BrowseError(message(UNAVAILABLE_WHY), REFUSED, UNAVAILABLE), asJson, secrets, printer, call) };
   try {
+    if (outPath !== null) {
+      const command = rest[0] as string;
+      const again = splitGlobals(AS_TEXT.includes(command) ? [...stripped, "--max-output", "0"] : ["--json", ...stripped]);
+      const answer = await roundTrip(again.found, again.rest, secrets, call, python);
+      return saveAnswer(answer, secrets, printer, call, command, outPath);
+    }
     const answer = await roundTrip(found, rest, secrets, call, python);
     return printAnswer(answer, secrets, printer, call, asJson, outputChars(answer), rest[0] as string);
   } catch (error) {
@@ -186,7 +203,14 @@ export async function serveBrowse(argv: string[], python: string | null): Promis
   const plugin = pluginMode();
   const browse = hoist(argv);
   if (browse === undefined) {
-    if (!plugin) return undefined;
+    if (!plugin) {
+      const failure = hoistFailure(argv);
+      const call = new Call(argv);
+      call.command = "none";
+      toStderr(failure.text);
+      finish(call, failure.status, python);
+      return failure.status;
+    }
     dropCredential();
     return unreadableBeforeBrowse(argv, python);
   }

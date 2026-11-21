@@ -7,7 +7,8 @@ import { shlexSplit } from "../../pylib/shlex.ts";
 import { codeLine } from "./batch-line.ts";
 import { redact } from "../../redact.ts";
 import { BrowseError, ConnectionLost, OutcomeUnknown, Usage } from "../daemon-errors.ts";
-import { Result } from "../daemon/render.ts";
+import { pyValue, Result } from "../daemon/render.ts";
+import { content } from "../outfile.ts";
 import { add, flag } from "../metrics.ts";
 import { wellFormed } from "../paths.ts";
 import { Ctx } from "./ctx.ts";
@@ -168,8 +169,12 @@ function writeFailure(error: unknown): string {
 }
 
 function saveBatchLine(ctx: Ctx, name: string, result: Result, target: string): string {
-  if (!AS_TEXT.includes(name)) return `✗ \`${name} --out\` inside a batch isn't served by the TypeScript daemon yet (it arrives with a later slice of the port)\n${result.text ?? ""}`;
-  const text = result.text ?? "";
+  let text = result.text ?? "";
+  let summary = "its text";
+  if (!AS_TEXT.includes(name)) {
+    const data = pyValue(result.data ?? {});
+    [text, summary] = content(name, data instanceof Map ? data : new Map(), target);
+  }
   if (!strip(text, isSpace)) return `✗ ${name} returned nothing to save, so ${target} wasn't written`;
   let saved: string;
   try {
@@ -180,7 +185,7 @@ function saveBatchLine(ctx: Ctx, name: string, result: Result, target: string): 
   }
   flag("saved_to_file", true);
   flag("batch_line_saved", true);
-  return `✓ Saved to ${saved} (${groupThousands(String(pyLen(text)))} characters): its text`;
+  return `✓ Saved to ${saved} (${groupThousands(String(pyLen(text)))} characters): ${summary}`;
 }
 
 type Outcome = { command: unknown; success: boolean; result: unknown; error: string | null; code?: string | null; text?: string | null };

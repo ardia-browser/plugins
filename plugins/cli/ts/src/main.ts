@@ -141,7 +141,11 @@ async function main(words: string[]): Promise<number> {
   if (routed !== undefined) watchLifeline(routed.lifeline);
   if (!interruptsIgnored()) catchInterrupts();
   const handBack = routed === undefined ? notInThisBuild : () => HAND_BACK;
-  if (argv.some((word) => word.includes(LOSSY))) return handBack();
+  if (argv.some((word) => word.includes(LOSSY))) {
+    const recovered = (await import("./argv-bytes.ts")).rawArguments(argv.length);
+    if (recovered === undefined) return handBack();
+    argv.splice(0, argv.length, ...recovered);
+  }
   if (asksForVersion(argv) && servesNatively("--version") && !process.env.ARDIA_BROWSE_FOR_PLUGIN) {
     try {
       writeWhole(1, Buffer.from(`ardia ${cliVersion()}\n`));

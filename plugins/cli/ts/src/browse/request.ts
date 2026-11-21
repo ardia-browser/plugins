@@ -1,3 +1,6 @@
+import { parseQsl, urlsplit } from "../pylib/urllib.ts";
+import { PyException } from "../pylib/str.ts";
+import { builtinCrash } from "./errors.ts";
 import { createHash } from "node:crypto";
 import { fstatSync } from "node:fs";
 import { dataRoot } from "../control.ts";
@@ -99,9 +102,11 @@ export function namespaceName(found: Found): string {
 
 export type Endpoint = { ws: string | undefined; port: bigint | undefined; dataDir: string | undefined };
 
+const DIGIT_LIKE = /^[\p{Nd}\u00b2\u00b3\u00b9\u2070\u2074-\u2079\u2080-\u2089\u2460-\u2468\u2474-\u247c\u2488-\u2490\u24f5-\u24fd\u24ea\u24ff\u2776-\u277e\u2780-\u2788\u278a-\u2792\u1369-\u1371\u19da]$/u;
+
 function pyIsDigit(text: string): boolean {
-  if (!/^[\x00-\x7f]*$/.test(text)) throw new Unported("a non-ASCII --cdp");
-  return /^[0-9]+$/.test(text);
+  const points = [...text];
+  return points.length > 0 && points.every((point) => DIGIT_LIKE.test(point));
 }
 
 export function endpointChoice(found: Found): Endpoint {
@@ -123,58 +128,17 @@ export function endpointChoice(found: Found): Endpoint {
 
 type Split = { scheme: string; netloc: string; path: string; query: string };
 
-function plainUrl(url: string): boolean {
-  for (let at = 0; at < url.length; at += 1) {
-    const code = url.charCodeAt(at);
-    if (code < 0x21 || code > 0x7e || code === 0x5b || code === 0x5d) return false;
-  }
-  return true;
-}
-
 export function splitUrl(url: string): Split {
-  if (!plainUrl(url)) throw new Unported("a URL urlsplit reads in ways not ported");
-  let scheme = "";
-  let rest = url;
-  const colon = url.indexOf(":");
-  if (colon > 0 && /^[A-Za-z][A-Za-z0-9+.-]*$/.test(url.slice(0, colon))) {
-    scheme = url.slice(0, colon).toLowerCase();
-    rest = url.slice(colon + 1);
+  try {
+    return urlsplit(url);
+  } catch (error) {
+    if (error instanceof PyException) throw builtinCrash(error.type, error.message);
+    throw error;
   }
-  let netloc = "";
-  if (rest.startsWith("//")) {
-    const after = rest.slice(2);
-    const end = after.search(/[/?#]/);
-    netloc = end < 0 ? after : after.slice(0, end);
-    rest = end < 0 ? "" : after.slice(end);
-  }
-  const hash = rest.indexOf("#");
-  if (hash >= 0) rest = rest.slice(0, hash);
-  const question = rest.indexOf("?");
-  return { scheme, netloc, path: question < 0 ? rest : rest.slice(0, question), query: question < 0 ? "" : rest.slice(question + 1) };
-}
-
-function unquote(text: string): string {
-  if (!text.includes("%")) return text;
-  const bytes: number[] = [];
-  for (let at = 0; at < text.length; at += 1) {
-    const pair = text.slice(at + 1, at + 3);
-    if (text[at] === "%" && /^[0-9A-Fa-f]{2}$/.test(pair)) {
-      bytes.push(Number.parseInt(pair, 16));
-      at += 2;
-    } else bytes.push(text.charCodeAt(at));
-  }
-  return Buffer.from(bytes).toString("utf8");
 }
 
 function queryValues(query: string): string[] {
-  const values: string[] = [];
-  for (const pair of query.split("&")) {
-    const equals = pair.indexOf("=");
-    if (pair === "" || equals < 0) continue;
-    const value = pair.slice(equals + 1);
-    if (value !== "") values.push(unquote(value.replaceAll("+", " ")));
-  }
-  return values;
+  return parseQsl(query).map(([, value]) => value);
 }
 
 export function urlsWithSecrets(ws: string | undefined): string[] {

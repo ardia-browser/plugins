@@ -3,7 +3,7 @@ import { type ChildProcess, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { browseDir, closeFd } from "../../src/browse/paths.ts";
-import { awaitDaemon, chooseDaemon, DaemonDidNotStart, daemonKind, spawnDaemon } from "../../src/browse/daemon/spawn.ts";
+import { awaitDaemon, DaemonDidNotStart, spawnDaemon } from "../../src/browse/daemon/spawn.ts";
 import { servedTable } from "../../src/served.ts";
 import {
   alive,
@@ -45,16 +45,6 @@ afterEach(() => {
 });
 
 describe("spawn from the TS client", () => {
-  test("the served row or ARDIA_BROWSE_DAEMON picks the daemon", () => {
-    expect(daemonKind({}, servedTable("--version rust\n"))).toBe("python");
-    expect(daemonKind({}, servedTable("browse-daemon ts\n"))).toBe("ts");
-    expect(daemonKind({ ARDIA_BROWSE_DAEMON: "ts" }, servedTable(""))).toBe("ts");
-    expect(daemonKind({ ARDIA_BROWSE_DAEMON: "python" }, servedTable("browse-daemon ts\n"))).toBe("python");
-    expect(chooseDaemon(null, {}, servedTable(""))).toBeNull();
-    expect(chooseDaemon("/x/python3", {}, servedTable(""))).toEqual({ kind: "python", python: "/x/python3", code: "from ardia_cli.browse import daemon; daemon.main()" });
-    expect(chooseDaemon(null, { ARDIA_BROWSE_DAEMON: "ts" }, servedTable(""))).toEqual({ kind: "ts", program: process.execPath });
-  });
-
   test("starts the TS daemon detached with its config on stdin, and it answers with its version", async () => {
     const found = fresh();
     const { key, pid } = await start(found.data, "spawned");

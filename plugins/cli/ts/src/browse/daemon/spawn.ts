@@ -2,14 +2,10 @@ import { type ChildProcess, spawn } from "node:child_process";
 import fs from "node:fs";
 import { dumps, type JsonObject } from "../../json.ts";
 import { utf8 } from "../../pystr.ts";
-import { servedTable, type ServingSide } from "../../served.ts";
 import { EndpointError, envEndpoint } from "../endpoint.ts";
 import { closeFd, lockHeld, O_CREAT, O_RDONLY, O_TRUNC, O_WRONLY, openPrivateFile } from "../paths.ts";
 
 export const START_TIMEOUT_MS = 15_000;
-export const SERVED_ROW = "browse-daemon";
-export const CHOICE_ENV = "ARDIA_BROWSE_DAEMON";
-export const PYTHON_DAEMON = "from ardia_cli.browse import daemon; daemon.main()";
 const LOG_TAIL = 2000;
 const EAGER_POLL_MS = 5;
 const EAGER_FOR_MS = 1000;
@@ -44,17 +40,6 @@ export function daemonEnvironment(config: JsonObject, env: NodeJS.ProcessEnv = p
 
 export class DaemonDidNotStart extends Error {
   override readonly name = "DaemonDidNotStart";
-}
-
-export function daemonKind(env: NodeJS.ProcessEnv = process.env, served: Map<string, ServingSide> = servedTable()): "ts" | "python" {
-  const asked = env[CHOICE_ENV];
-  if (asked === "ts" || asked === "python") return asked;
-  return served.get(SERVED_ROW) === "ts" ? "ts" : "python";
-}
-
-export function chooseDaemon(python: string | null, env: NodeJS.ProcessEnv = process.env, served: Map<string, ServingSide> = servedTable()): DaemonChoice | null {
-  if (daemonKind(env, served) === "ts") return { kind: "ts", program: process.execPath };
-  return python === null ? null : { kind: "python", python, code: PYTHON_DAEMON };
 }
 
 export type Spawned = {

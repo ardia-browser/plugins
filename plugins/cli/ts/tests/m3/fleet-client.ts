@@ -5,7 +5,7 @@ import path from "node:path";
 import { dumps, type JsonObject, type Value } from "../../src/json.ts";
 import { loadLibc } from "../../src/libc.ts";
 import { browseDir, closeFd, listNames, lockHeld, readPrivateJson, sessionKey, socketIsOurs } from "../../src/browse/paths.ts";
-import { awaitDaemon, type DaemonChoice, daemonKind, spawnDaemon } from "../../src/browse/daemon/spawn.ts";
+import { awaitDaemon, type DaemonChoice, spawnDaemon } from "../../src/browse/daemon/spawn.ts";
 import { BUILT_LIBC } from "../libc-loaded.ts";
 
 const CLI = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..", "..");
@@ -87,7 +87,7 @@ function record(request: JsonObject, answer: Record<string, unknown>): void {
 }
 
 function choice(): DaemonChoice {
-  if (daemonKind() === "ts") return { kind: "ts", program: process.env["ARDIA_M3_TS_PROGRAM"] as string };
+  if (process.env["ARDIA_BROWSE_DAEMON"] !== "python") return { kind: "ts", program: process.env["ARDIA_M3_TS_PROGRAM"] as string };
   return { kind: "python", python: process.env["ARDIA_TEST_PYTHON"] ?? "python3", code: BOOT };
 }
 

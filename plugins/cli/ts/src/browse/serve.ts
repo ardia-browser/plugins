@@ -7,7 +7,7 @@ import { type Call, shareable } from "../telemetry.ts";
 import { noGet } from "./answer.ts";
 import { type Found, parseDuration, Usage } from "./args.ts";
 import { answerDeadline } from "./deadline.ts";
-import { type BrowseError, builtinCrash, PythonCrash, unreachable } from "./errors.ts";
+import { BrowseError, builtinCrash, PythonCrash, unreachable } from "./errors.ts";
 import { Absent, CONNECT_WAIT_MS, connect, exchange, type Link, Stalled } from "./exchange.ts";
 import { encodeError } from "./output.ts";
 import { loadAnswer } from "./pyjson.ts";
@@ -15,14 +15,16 @@ import type { Secrets } from "../redact.ts";
 import { agentEnv, endpointChoice, endpointKey, namespaceName, optionsFrom, rootOf, sessionKey, sessionName, splitUrl, urlsWithSecrets } from "./request.ts";
 import { closeDir } from "../privatefs.ts";
 import { checkSocket, NoDaemon, openBrowseDir, osFailure } from "./session.ts";
-import { awaitDaemon, chooseDaemon, DaemonDidNotStart, spawnDaemon } from "./daemon/spawn.ts";
-import { decodeStdin, pythonStdioErrors, readStdin, stdinState } from "./stdio.ts";
+import { awaitDaemon, type DaemonChoice, DaemonDidNotStart, spawnDaemon } from "./daemon/spawn.ts";
+import { decodeLocale, decodeStdin, pythonStdioErrors, readStdin, stdinState } from "./stdio.ts";
 import { TAKES_OUT } from "./tables.ts";
+import { liveSessions, readStdinNote, readStdinUrls, runLocal, scriptSource, servesHere } from "./local.ts";
+import { answerOf, checkCdpFlags, checkCdpParams, daemonErrors, expandScriptPath, localAnswer, readCdpStdin, readsNamedUrls } from "./local-answer.ts";
+import { Result } from "./daemon/render.ts";
 
 export const ANSWER_JSON_DEPTH = 9995;
 const MAX_REQUEST = 16 * 1024 * 1024;
 const SURROGATES = /[\ud800-\udfff]/;
-const HAND_BACK_COMMANDS = ["auth", "notes", "flow", "plugin", "read", "session", "script"];
 const BESIDE_PREFIX = 59;
 
 export class HandBack extends Error {}
@@ -44,14 +46,12 @@ function wantsStdin(command: string, args: readonly string[]): boolean {
   const wants = command === "eval" ? !evalCodeGiven(args) : command === "batch" && args.every((arg) => arg.startsWith("--"));
   if (!wants) return false;
   const state = stdinState();
-  if (state === "closed") throw new HandBack("stdin is closed");
+  if (state === "closed") throw builtinCrash("AttributeError", `'NoneType' object has no attribute '${args.includes("--stdin") && command !== "batch" ? "read" : "isatty"}'`);
   return state !== "tty";
 }
 
 export function handedBack(rest: readonly string[], browse: readonly string[]): string | undefined {
   const command = rest[0] as string;
-  if (HAND_BACK_COMMANDS.includes(command)) return `${command} runs on Python`;
-  if (command === "close" && rest.slice(1).includes("--all")) return "close --all runs on Python";
   if (TAKES_OUT.includes(command) && browse.some((token) => token === "--out" || token.startsWith("--out="))) return "--out runs on Python";
   return undefined;
 }
@@ -91,8 +91,7 @@ type Start = { root: string; key: string; config: JsonObject; python: string | n
 async function ensureSession(start: Start): Promise<Link> {
   const live = await openIfLive(start.root, start.key);
   if (live !== null) return live;
-  const choice = chooseDaemon(start.python);
-  if (choice === null) throw new NoDaemon("no daemon program to start");
+  const choice: DaemonChoice = { kind: "ts", program: process.execPath };
   const dir = openBrowseDir(start.root);
   try {
     const started = performance.now();
@@ -200,6 +199,26 @@ async function readBeside(payload: JsonObject, rest: string[], beside: Beside, c
   return answer;
 }
 
+async function closeAll(root: string, options: Record<string, unknown>, timeout: Value, call: Call): Promise<JsonObject> {
+  const closed: string[] = [];
+  for (const row of liveSessions(root)) {
+    let socket: Link;
+    try {
+      socket = await openSession(root, row.key);
+    } catch (error) {
+      if (error instanceof NoDaemon) continue;
+      throw error;
+    }
+    try {
+      await ask(socket, object([["argv", ["close"]], ["options", new Map()], ["cwd", process.cwd()], ["env", new Map()], ["stdin", null]]), ["close"], timeout, call);
+      closed.push(row.session);
+    } catch (error) {
+      if (!(error instanceof BrowseError)) throw error;
+    }
+  }
+  return answerOf(options, new Result({ closed }, `✓ Closed ${closed.length} session${closed.length !== 1 ? "s" : ""}`), null);
+}
+
 export async function roundTrip(found: Found, rest: string[], secrets: Secrets, call: Call, python: string | null): Promise<JsonObject> {
   const { entries: options, timeout } = optionsFrom(found);
   const session = sessionName(found);
@@ -213,16 +232,35 @@ export async function roundTrip(found: Found, rest: string[], secrets: Secrets, 
   const command = rest[0] as string;
   const stdinWanted = wantsStdin(command, rest.slice(1));
   const errors = stdinWanted ? pythonStdioErrors() : "strict";
-  if (errors === undefined) throw new HandBack("stdin's encoding isn't UTF-8");
   checkIdle(found);
   const key = sessionKey(namespace, keySource, session, process.env.ARDIA_BROWSE_FOR_PLUGIN === "1");
+  const args = rest.slice(1);
+  const plainOptions = Object.fromEntries(options) as Record<string, unknown>;
+  if (servesHere(command, args)) {
+    const local = await localAnswer(() => runLocal(command, args, root, plainOptions, process.cwd()), plainOptions);
+    if (local !== undefined) return local;
+  }
   let stdin: Value = null;
+  const cdpFlags = command === "cdp" ? await daemonErrors(() => checkCdpFlags(args), plainOptions) : {};
+  if (cdpFlags instanceof Map) return cdpFlags;
+  if (command === "notes" && args.includes("-")) stdin = await daemonErrors(() => readStdinNote(), plainOptions);
+  else if (command === "cdp" && cdpFlags["params"] === "-") stdin = await daemonErrors(() => readCdpStdin(), plainOptions);
+  else if (command === "read") stdin = await daemonErrors(() => readStdinUrls(args), plainOptions);
+  if (stdin instanceof Map) return stdin;
+  if (command === "cdp") {
+    const refused = await daemonErrors(() => checkCdpParams(cdpFlags, stdin as string | null), plainOptions);
+    if (refused instanceof Map) return refused;
+  } else if (command === "script") {
+    stdin = await daemonErrors(() => scriptSource(args, process.cwd(), expandScriptPath), plainOptions);
+    if (stdin instanceof Map) return stdin;
+  }
+  if (command === "close" && args.includes("--all")) return closeAll(root, plainOptions, timeout, call);
   if (stdinWanted) {
     sayReadingStdin();
     const raw = await readStdin(MAX_REQUEST);
     if (!(raw instanceof Buffer)) throw osFailure(raw);
     if (raw.length > MAX_REQUEST) throw oversizedRequest();
-    const text = decodeStdin(raw, errors);
+    const text = errors === undefined ? decodeLocale(raw) : decodeStdin(raw, errors);
     if (text instanceof PythonCrash) throw text;
     stdin = text;
   }
@@ -235,6 +273,7 @@ export async function roundTrip(found: Found, rest: string[], secrets: Secrets, 
     ["telemetry", shareable()],
     ["caller", routedCaller()],
   ]);
+  if (command === "read" && readsNamedUrls(args)) payload.set("beside_if_busy", true);
   const line = requestLine(payload);
   const idle = found.value("idle_timeout") || process.env.AGENT_BROWSER_IDLE_TIMEOUT_MS;
   const idleMs = idle ? parseDuration(idle) : null;
