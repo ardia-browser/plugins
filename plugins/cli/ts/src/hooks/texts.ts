@@ -76,3 +76,44 @@ options:
                     user.active, like 30m
   --full-urls       keep each URL's query and fragment
 `;
+
+export const LINUX_LIST_HELP = `${LIST_USAGE}
+List the hooks in hooks.json, check them, and show whether the systemd user
+service is active. Exit 1 if hooks.json is invalid.
+
+options:
+  -h, --help      show this help message and exit
+${DATA_DIR_OPTION}
+  --json          print JSON
+`;
+
+export const LINUX_INSTALL_HELP = `${INSTALL_USAGE}
+Write \${XDG_CONFIG_HOME:-~/.config}/systemd/user/dev.ardia.hooks.service, which runs the installed ardia's hooks run
+at login and restarts it when it fails, then enable and start it (systemctl --user). Refused with --data-dir or
+$ARDIA_DATA_DIR.
+
+options:
+  -h, --help      show this help message and exit
+${DATA_DIR_OPTION}
+`;
+
+export const LINUX_UNINSTALL_HELP = `${UNINSTALL_USAGE}
+Stop, disable and remove the dev.ardia.hooks.service systemd user service.
+Refused with --data-dir or $ARDIA_DATA_DIR.
+
+options:
+  -h, --help      show this help message and exit
+${DATA_DIR_OPTION}
+`;
+
+export const LINUX_RUN_HELP = `${RUN_USAGE}
+Run every hook in hooks.json until interrupted, reloading the file when it
+changes.
+
+options:
+  -h, --help      show this help message and exit
+${DATA_DIR_OPTION}
+  --log PATH      where output goes (default
+                  \${XDG_STATE_HOME:-~/.local/state}/ardia/hooks.log; - for the
+                  terminal)
+`;

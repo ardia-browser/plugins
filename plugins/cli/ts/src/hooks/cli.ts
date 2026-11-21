@@ -20,10 +20,10 @@ const VERB_OPTIONS: Record<Verb, OptionSpec[]> = {
   run: [HELP, DATA_DIR, { long: "--log", kind: "value" }],
 };
 const VERB_TEXTS: Record<Verb, [string, string]> = {
-  list: [texts.LIST_USAGE, texts.LIST_HELP],
-  install: [texts.INSTALL_USAGE, texts.INSTALL_HELP],
-  uninstall: [texts.UNINSTALL_USAGE, texts.UNINSTALL_HELP],
-  run: [texts.RUN_USAGE, texts.RUN_HELP],
+  list: [texts.LIST_USAGE, LINUX ? texts.LINUX_LIST_HELP : texts.LIST_HELP],
+  install: [texts.INSTALL_USAGE, LINUX ? texts.LINUX_INSTALL_HELP : texts.INSTALL_HELP],
+  uninstall: [texts.UNINSTALL_USAGE, LINUX ? texts.LINUX_UNINSTALL_HELP : texts.UNINSTALL_HELP],
+  run: [texts.RUN_USAGE, LINUX ? texts.LINUX_RUN_HELP : texts.RUN_HELP],
 };
 const ON_OPTIONS: OptionSpec[] = [
   HELP,
@@ -41,7 +41,6 @@ function flagNames(flags: readonly string[]): string[] {
 export type Settle = (run: () => Promise<number>) => Promise<number | undefined>;
 
 export async function serveHooks(route: CommandRoute, argv: string[], call: Call, io: CommandIo, _python: string | null, settle: Settle): Promise<number | undefined> {
-  if (LINUX) return undefined;
   const arranged = arrange(argv);
   if (arranged === undefined) return undefined;
   const { path, hoisted, rest } = arranged;

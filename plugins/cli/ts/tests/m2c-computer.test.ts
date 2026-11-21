@@ -10,6 +10,7 @@ import { readRecord, saveRecord } from "../src/computer/apps.ts";
 import { computerMain, mcpConfig } from "../src/computer/cli.ts";
 import { loadPlist } from "../src/plist.ts";
 
+const macOnly = process.platform === "darwin" ? test : test.skip;
 const scratch = fs.realpathSync(fs.mkdtempSync(path.join("/tmp", "m2c-computer-")));
 process.on("exit", () => fs.rmSync(scratch, { recursive: true, force: true }));
 let counter = 0;
@@ -80,7 +81,7 @@ async function run(box: Sandbox, argv: string[]): Promise<number> {
   return status;
 }
 
-test("refresh does nothing when CuaDriver.app is missing, current, or not ardia's", async () => {
+macOnly("refresh does nothing when CuaDriver.app is missing, current, or not ardia's", async () => {
   const box = sandbox();
   assert.equal(await run(box, ["refresh"]), 0);
   assert.ok(fs.existsSync(path.join(cuaHome(), ".applications.lock")));
@@ -89,7 +90,7 @@ test("refresh does nothing when CuaDriver.app is missing, current, or not ardia'
   assert.deepEqual([box.out, box.err], [[], []]);
 });
 
-test("refresh updates an old CuaDriver.app ardia put there, from the cached driver", async () => {
+macOnly("refresh updates an old CuaDriver.app ardia put there, from the cached driver", async () => {
   const box = sandbox();
   const dest = path.join(box.applications, APP_NAME);
   makeApp(dest, "0.30.0");
@@ -106,7 +107,7 @@ test("refresh updates an old CuaDriver.app ardia put there, from the cached driv
   assert.match(fs.readFileSync(path.join(cuaHome(), "applications.json"), "utf8"), /^\{\n  "path": /);
 });
 
-test("setup installs, links a cua-driver command, turns telemetry off and stops before the grant", async () => {
+macOnly("setup installs, links a cua-driver command, turns telemetry off and stops before the grant", async () => {
   const box = sandbox();
   fs.mkdirSync(path.join(box.cliHome, "current", "bin"), { recursive: true });
   fs.writeFileSync(path.join(box.cliHome, "current", "bin", "ardia"), "#!/bin/sh\n");
@@ -126,7 +127,7 @@ test("setup installs, links a cua-driver command, turns telemetry off and stops 
   assert.deepEqual(box.out, [`current ${dest} (${VERSION})\ncurrent ${link}\ncua-driver telemetry off (cua-driver telemetry enable turns it back on)\nnext: ardia computer permissions grant\n`]);
 });
 
-test("setup keeps a CuaDriver.app someone else installed and a cua-driver link that isn't ardia's", async () => {
+macOnly("setup keeps a CuaDriver.app someone else installed and a cua-driver link that isn't ardia's", async () => {
   const box = sandbox();
   fs.mkdirSync(path.join(box.cliHome, "current", "bin"), { recursive: true });
   fs.writeFileSync(path.join(box.cliHome, "current", "bin", "ardia"), "#!/bin/sh\n");
@@ -139,7 +140,7 @@ test("setup keeps a CuaDriver.app someone else installed and a cua-driver link t
   assert.equal(box.out[0]?.split("\n")[1], `kept ${path.join(box.root, "bin", "cua-driver")}: it isn't ardia's; run ardia computer instead of cua-driver`);
 });
 
-test("a pending install is finished or rolled back on the next run", async () => {
+macOnly("a pending install is finished or rolled back on the next run", async () => {
   const box = sandbox();
   const dest = path.join(box.applications, APP_NAME);
   makeApp(dest);
@@ -153,7 +154,7 @@ test("a pending install is finished or rolled back on the next run", async () =>
   assert.ok(!fs.existsSync(path.join(cuaHome(), "applications.json")));
 });
 
-test("the driver runs only once verified, and a tampered one is refused", async () => {
+macOnly("the driver runs only once verified, and a tampered one is refused", async () => {
   const box = sandbox();
   const dest = path.join(box.applications, APP_NAME);
   makeApp(dest);
@@ -169,7 +170,7 @@ test("the driver runs only once verified, and a tampered one is refused", async 
   assert.equal(box.io.exec, undefined);
 });
 
-test("daemon commands need setup, others download the pinned driver over https only", async () => {
+macOnly("daemon commands need setup, others download the pinned driver over https only", async () => {
   const box = sandbox();
   assert.equal(await run(box, ["mcp"]), 1);
   assert.match(box.err[0] ?? "", /^ardia computer: Cua Driver isn't set up yet\. Run ardia computer setup: it puts CuaDriver\.app in /);
@@ -213,7 +214,7 @@ test("only the driver's files come out of its archive, and links or escapes are 
   assert.throws(() => extract(archive, top, path.join(box.root, "out3"), keepsDriverFile), (error: unknown) => error instanceof Refused && error.message.includes("has an entry outside"));
 });
 
-test("Info.plist reads in XML and binary form", () => {
+macOnly("Info.plist reads in XML and binary form", () => {
   const box = sandbox();
   const file = path.join(box.root, "Info.plist");
   fs.writeFileSync(file, infoPlist("com.trycua.driver", "0.38.0"));
@@ -225,4 +226,12 @@ test("Info.plist reads in XML and binary form", () => {
     assert.equal(parsed.get("CFBundleIdentifier"), "com.trycua.driver");
     assert.equal(parsed.get("CFBundleShortVersionString"), "0.38.0");
   }
+});
+
+test("off macOS computer refresh does nothing and setup says it needs macOS", { skip: process.platform === "darwin" }, async () => {
+  const box = sandbox();
+  assert.equal(await run(box, ["refresh"]), 0);
+  assert.ok(!fs.existsSync(cuaHome()));
+  assert.equal(await run(box, ["setup"]), 1);
+  assert.deepEqual(box.err, ["ardia computer: computer use through cua-driver needs macOS here\n"]);
 });
