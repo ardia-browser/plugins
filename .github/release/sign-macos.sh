@@ -23,7 +23,7 @@ expect_mach_os=(bin/ardia bin/ardia-libc.so libexec/esbuild)
 need() {
   local missing=() name
   for name in "$@"; do [ -n "${!name:-}" ] || missing+=("$name"); done
-  [ "${#missing[@]}" = 0 ] || die "missing ${missing[*]}: the macOS command can't be signed and checked, so nothing is released"
+  [ "${#missing[@]}" = 0 ] || die "missing ${missing[*]}: the macOS command can't be signed and checked, so this build stops and the release ships the unsigned macOS build instead"
   [[ "$APPLE_TEAM_ID" =~ ^[A-Z0-9]{10}$ ]] || die "APPLE_TEAM_ID isn't a team ID"
   [ "$(uname -s)" = Darwin ] || die "this needs macOS"
 }
