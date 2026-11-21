@@ -9,7 +9,14 @@ import { cliVersion } from "./version.ts";
 
 const LOSSY = "\ufffd";
 const ABANDONED_WRITE_GRACE_MS = 200;
-const NOT_ROUTED = "ardia-ts: this program runs only as part of ardia; run ardia instead\n";
+const NOT_IN_THIS_BUILD = "ardia: this command still runs on Python, which this build of ardia doesn't include\n";
+
+function notInThisBuild(): number {
+  try {
+    writeSync(2, NOT_IN_THIS_BUILD);
+  } catch {}
+  return 1;
+}
 
 function asksForVersion(argv: string[]): boolean {
   return argv.length === 1 && argv[0] === "--version";
@@ -78,22 +85,24 @@ function failWithoutAddon(failure: { fd: number; text: string }, lifeline: numbe
 async function main(words: string[]): Promise<number> {
   if (words[0] === "daemon") process.exit(await (await import("./browse/daemon/main.ts")).daemonMain(words.slice(1)));
   const routed = takeMarker(words);
-  if (routed === undefined) {
-    try {
-      writeSync(2, NOT_ROUTED);
-    } catch {}
-    return 2;
-  }
+  const argv = routed?.argv ?? words;
   try {
     loadLibc();
   } catch (error) {
     if (!(error instanceof LibcUnavailable)) throw error;
-    process.exit(await failWithoutAddon(await addonFailure(error, routed.argv), routed.lifeline));
+    const failure = await addonFailure(error, argv);
+    if (routed === undefined) {
+      try {
+        writeSync(failure.fd, failure.text);
+      } catch {}
+      return LIBC_UNAVAILABLE;
+    }
+    process.exit(await failWithoutAddon(failure, routed.lifeline));
   }
-  watchLifeline(routed.lifeline);
+  if (routed !== undefined) watchLifeline(routed.lifeline);
   if (!interruptsIgnored()) catchInterrupts();
-  const argv = routed.argv;
-  if (argv.some((word) => word.includes(LOSSY))) return HAND_BACK;
+  const handBack = routed === undefined ? notInThisBuild : () => HAND_BACK;
+  if (argv.some((word) => word.includes(LOSSY))) return handBack();
   if (asksForVersion(argv) && servesNatively("--version") && !process.env.ARDIA_BROWSE_FOR_PLUGIN) {
     try {
       writeWhole(1, Buffer.from(`ardia ${cliVersion()}\n`));
@@ -102,7 +111,7 @@ async function main(words: string[]): Promise<number> {
     }
     return 0;
   }
-  return (await serve(argv, bundledPython(installRoot()))) ?? HAND_BACK;
+  return (await serve(argv, bundledPython(installRoot()))) ?? handBack();
 }
 
 const status = settleStderr(await main(process.argv.slice(2)));

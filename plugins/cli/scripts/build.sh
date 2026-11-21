@@ -119,6 +119,20 @@ for switch in "BUN_BE_BUN=1" "BUN_OPTIONS=--preload=$probe"; do
   fi
 done
 rm "$probe"
+ARDIA_DATA_DIR=$work/no-ardia
+export ARDIA_DATA_DIR
+smoke=0
+ARDIA_CLI_HOME="$work/cli-home" ARDIA_TELEMETRY=off "$root/bin/ardia" tabs 2>"$work/smoke" >/dev/null || smoke=$?
+[ "$smoke" = 2 ] && grep -q "Ardia isn't running" "$work/smoke" \
+  || { echo "build.sh: bin/ardia tabs doesn't run by itself ($smoke: $(cat "$work/smoke"))" >&2; exit 1; }
+ARDIA_BROWSE_FOR_PLUGIN=1
+export ARDIA_BROWSE_FOR_PLUGIN
+smoke=0
+ARDIA_CLI_HOME="$work/cli-home" ARDIA_TELEMETRY=off "$root/bin/ardia" browse get title 2>"$work/smoke" >/dev/null || smoke=$?
+unset ARDIA_BROWSE_FOR_PLUGIN ARDIA_DATA_DIR
+[ "$smoke" = 77 ] && grep -q "needs ARDIA_PLUGIN_CREDENTIAL_FD, the descriptor" "$work/smoke" \
+  || { echo "build.sh: bin/ardia browse doesn't run by itself ($smoke: $(cat "$work/smoke"))" >&2; exit 1; }
+rm -rf "$work/cli-home" "$work/no-ardia" "$work/smoke"
 mkdir "$root/.leases"
 [ "$("$root/bin/ardia" --version)" = "ardia $version" ] || { echo "build.sh: the built ardia doesn't say $version" >&2; exit 1; }
 links=$(find "$root" -type l | head -n 5)
