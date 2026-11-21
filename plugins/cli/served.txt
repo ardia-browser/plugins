@@ -7,3 +7,7 @@ commands rust
 feedback ts
 pinned ts
 history ts
+skills get ts
+skills list ts
+skills install ts
+skills refresh ts
