@@ -6,7 +6,7 @@ export type Kind = "bool" | "value" | "multi";
 export type Flags = Readonly<Record<string, Kind>>;
 export type Parsed = Record<string, unknown>;
 
-export const KNOWN_SCHEMES = ["http", "https", "about", "data", "file", "blob", "chrome", "view-source"];
+export const KNOWN_SCHEMES = ["http", "https", "about", "data", "file", "blob", "chrome", "chrome-extension", "chrome-untrusted", "devtools", "view-source"];
 const LOOPBACK = /^(localhost|127\.[0-9]+\.[0-9]+\.[0-9]+|\[::1\])(:[0-9]+)?(\/|$)/u;
 
 function pyDigit(point: string | undefined): boolean {

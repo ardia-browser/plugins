@@ -8,6 +8,9 @@ export const LIMIT_MARGIN = 30.0;
 export const SCRIPT_DEFAULT = 90.0;
 export const DEFAULT_TIMEOUT_MS = 25000;
 export const LONG_COMMANDS: Readonly<Record<string, number>> = { batch: 600.0, read: 600.0, record: 600.0 };
+export const MAX_GIVEN = 24 * 3600.0;
+export const MAX_DEADLINE = 9.2e9;
+export const MAX_COMMAND_LIMIT = MAX_DEADLINE - 2 * MAX_GIVEN;
 const UNITS: Readonly<Record<string, number>> = { ms: 0.001, s: 1, m: 60 };
 
 function plainDecimal(text: string): string | undefined {
@@ -17,6 +20,11 @@ function plainDecimal(text: string): string | undefined {
   if (point < 0) return whole;
   const fraction = decimalDigits(text.slice(point + 1));
   return fraction === undefined || fraction === "" ? undefined : `${whole}.${fraction}`;
+}
+
+export function plainNumber(text: string): number | undefined {
+  const digits = plainDecimal(text);
+  return digits === undefined ? undefined : Number(digits);
 }
 
 export function isPlainNumber(text: string): boolean {
@@ -37,7 +45,8 @@ export function secondsOf(text: string | null | undefined): number | undefined {
   }
   const digits = plainDecimal(number);
   if (digits === undefined) return undefined;
-  return Number(digits) * (UNITS[unit] as number);
+  const seconds = Number(digits) * (UNITS[unit] as number);
+  return Number.isFinite(seconds) ? Math.min(seconds, MAX_GIVEN) : MAX_GIVEN;
 }
 
 function or(...values: (number | undefined)[]): number | undefined {
@@ -61,6 +70,10 @@ export function givenTimeout(argv: readonly string[]): number | undefined {
 }
 
 export function commandLimit(name: string, argv: readonly string[], timeout: number): number {
+  return Math.min(unboundedCommandLimit(name, argv, timeout), MAX_COMMAND_LIMIT);
+}
+
+function unboundedCommandLimit(name: string, argv: readonly string[], timeout: number): number {
   const given = givenTimeout(argv);
   if (name === "wait") {
     const found = argv.find(isPlainNumber);

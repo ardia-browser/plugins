@@ -83,10 +83,7 @@ export class Gated extends BrowseError {
       const hint = Object.hasOwn(REFUSAL_HINTS, why) ? REFUSAL_HINTS[why] : undefined;
       message = `${what}, which Ardia allows for the ardia command, but not ${why} (${refusal})` + (hint ? `: ${hint}` : "");
     } else {
-      message =
-        `${what}, which Ardia's ardia-command policy refuses (${refusal}). ` +
-        "It works once the engine's token policy allows it; until then only a plain DevTools test " +
-        "server (--port) accepts it";
+      message = `${what}, and this Ardia's engine doesn't allow it yet (${refusal}): update Ardia`;
     }
     super(message + (detail ? ` (${detail})` : ""), { method, reason: why }, "policy_refused");
     this.reason = why;

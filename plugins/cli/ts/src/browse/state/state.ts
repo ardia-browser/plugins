@@ -19,7 +19,7 @@ import { monotonic } from "./wait.ts";
 
 export { parseRef, type Ref } from "./refs.ts";
 
-export const PAGE_SCHEMES = ["http:", "https:", "about:", "data:", "blob:", "file:"];
+export const PAGE_SCHEMES = ["http:", "https:", "about:", "data:", "blob:", "file:", "chrome:", "chrome-extension:", "chrome-untrusted:", "devtools:", "view-source:"];
 export const ACTIVE_TIMEOUT = 3.0;
 export const APPEAR_POLL = 0.15;
 export const PROBE_TIMEOUT = 3.0;
