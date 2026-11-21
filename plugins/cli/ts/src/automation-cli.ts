@@ -3,7 +3,10 @@ import { didYouMean } from "./closest.ts";
 import { withSession } from "./control.ts";
 import { dumps, type JsonObject, object, type Value } from "./json.ts";
 import { shown } from "./printable.ts";
-import { isNumber, iterateOrEmpty, number, strip, isSpace, strOf, truthy, Unsupported } from "./py.ts";
+import { isNumber, iterateOrEmpty, number, PythonError, strOf, truthy, Unsupported } from "./py.ts";
+import { HookValueError, parseDurationExact } from "./hooks/model.ts";
+import { intOfDigits, isDigits, PyException } from "./pylib/str.ts";
+import { codePoints } from "./pystr.ts";
 import { type Context, failureOf, HandBack, noteUnreachable } from "./runner.ts";
 
 export const EVENTS = [
@@ -41,8 +44,6 @@ export const EVENTS = [
   "page.error",
 ];
 const MIN_IDLE = 60;
-const UNITS: Record<string, bigint> = { s: 1n, m: 60n, h: 3600n, d: 86400n };
-const PY_INT_MAX_STR_DIGITS = 4300;
 
 const DATA_DIR: Option = { names: ["--data-dir"], dest: "data_dir", kind: "value" };
 const JSON_FLAG: Option = { names: ["--json"], dest: "json", kind: "flag" };
@@ -66,11 +67,13 @@ export const EVENTS_SPEC: Spec = {
 };
 
 function parseId(text: string): Value {
-  if (!/^[0-9]*$/.test(text)) {
-    if ([...text].some((ch) => ch.codePointAt(0) as number > 0x7f)) throw new HandBack();
-    return text;
+  if (!isDigits(text) || codePoints(text).length >= 16) return text;
+  try {
+    return intOfDigits(text);
+  } catch (error) {
+    if (error instanceof PyException) throw new PythonError(error.type, error.message);
+    throw error;
   }
-  return text !== "" && text.length < 16 ? BigInt(text) : text;
 }
 
 function commandIds(catalog: Value): Value[] {
@@ -150,18 +153,6 @@ export async function runRun(context: Context, parsed: Parsed): Promise<number> 
   return 0;
 }
 
-export function parseDuration(text: string): bigint | undefined {
-  const trimmed = strip(text, isSpace);
-  const chars = [...trimmed];
-  const unit = chars.at(-1) ?? "";
-  const digits = chars.slice(0, -1).join("");
-  if (chars.length < 2 || !/^[0-9]+$/.test(digits) || !(unit in UNITS)) {
-    if (chars.length >= 2 && unit in UNITS && /[^\x00-\x7f]/.test(digits)) throw new HandBack();
-    return undefined;
-  }
-  if (digits.length > PY_INT_MAX_STR_DIGITS) throw new HandBack();
-  return BigInt(digits) * (UNITS[unit] as bigint);
-}
 
 class EventsRefused extends Error {}
 
@@ -176,8 +167,14 @@ function checkEvents(names: string[]): string[] {
 
 function idleSeconds(text: string | undefined): bigint | undefined {
   if (text === undefined) return undefined;
-  const seconds = parseDuration(text);
-  if (seconds === undefined || seconds < BigInt(MIN_IDLE)) throw new EventsRefused(`--idle ${text}: give a duration like 30m, at least 1m`);
+  let seconds: bigint | null;
+  try {
+    seconds = parseDurationExact(text);
+  } catch (error) {
+    if (error instanceof HookValueError) throw new EventsRefused(error.message);
+    throw error;
+  }
+  if (seconds === null || seconds < BigInt(MIN_IDLE)) throw new EventsRefused(`--idle ${text}: give a duration like 30m, at least 1m`);
   return seconds;
 }
 

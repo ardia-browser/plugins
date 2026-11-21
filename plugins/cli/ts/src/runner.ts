@@ -1,4 +1,5 @@
-import { osCrash } from "./crash.ts";
+import { crashValue, osCrash } from "./crash.ts";
+import { PythonError } from "./py.ts";
 import { read } from "node:fs";
 import { constants } from "node:os";
 import { ControlFailure, errorCode, type Failure, interrupted } from "./control.ts";
@@ -148,6 +149,10 @@ export async function runCommand(command: Command, argv: string[], python: strin
       return context.reportCrash();
     } else if (error instanceof ComplaintFailed) {
       return complaintFailed(call, error.errno, python);
+    } else if (error instanceof PythonError) {
+      toStderr(`${error.message}\n`);
+      finish(call, 1, python, { kind: error.kind, value: crashValue(error.kind, error.text) });
+      return 1;
     } else throw error;
   }
   finish(call, status, python);

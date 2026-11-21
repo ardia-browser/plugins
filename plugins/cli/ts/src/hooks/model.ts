@@ -3,8 +3,7 @@ import { ConfigError, readText } from "../configfiles.ts";
 import { checkEvents, DECIDE_EVENTS, EVENTS, EventNameError, isIdleEvent, NAMED_ONLY_EVENTS } from "../events.ts";
 import { dumps, Float, type JsonObject, type Value } from "../json.ts";
 import { didYouMean } from "../pylib/close.ts";
-import { reprText } from "../pylib/str.ts";
-import { decimalValue, isDigitCode } from "../pylib/unicode.ts";
+import { intOfDigits, isDigits, PyException } from "../pylib/str.ts";
 import { JsonDecodeError, JsonTooDeep, JsonValueError, parseConfigJson } from "../pylib/jsonloads.ts";
 import { isSpace, PythonError, strip } from "../py.ts";
 import { codePoints } from "../pystr.ts";
@@ -227,30 +226,30 @@ export function formatDuration(seconds: number): string {
   return `${seconds}s`;
 }
 
-function pyIsDigit(text: string): boolean {
-  return text !== "" && [...text].every((ch) => isDigitCode(ch.codePointAt(0) as number));
-}
-
-function pyInt(text: string): number {
-  let total = 0n;
-  for (const ch of text) {
-    const digit = decimalValue(ch.codePointAt(0) as number);
-    if (digit < 0) throw new HookValueError(`invalid literal for int() with base 10: ${reprText(text)}`);
-    total = total * 10n + BigInt(digit);
+function pyInt(text: string): bigint {
+  try {
+    return intOfDigits(text);
+  } catch (error) {
+    if (error instanceof PyException) throw new HookValueError(error.message);
+    throw error;
   }
-  return Number(total);
 }
 
-export function parseDuration(value: Value | undefined): number | null {
+export function parseDurationExact(value: Value | undefined): bigint | null {
   if (typeof value !== "string") return null;
   const text = strip(value, isSpace);
   const points = codePoints(text);
   if (points.length < 2) return null;
   const unit = points[points.length - 1] as string;
   const digits = points.slice(0, -1).join("");
-  if (!pyIsDigit(digits) || !"smhd".includes(unit) || unit.length !== 1) return null;
-  const size = { s: 1, m: 60, h: 3600, d: 86400 }[unit as "s" | "m" | "h" | "d"];
+  if (!isDigits(digits) || !"smhd".includes(unit) || unit.length !== 1) return null;
+  const size = { s: 1n, m: 60n, h: 3600n, d: 86400n }[unit as "s" | "m" | "h" | "d"];
   return pyInt(digits) * size;
+}
+
+export function parseDuration(value: Value | undefined): number | null {
+  const exact = parseDurationExact(value);
+  return exact === null ? null : Number(exact);
 }
 
 function numberOf(value: Value | undefined): number | undefined {
@@ -342,10 +341,10 @@ function checkTrigger(item: JsonObject): void {
       typeof at === "string" &&
       points.length === 5 &&
       points[2] === ":" &&
-      pyIsDigit(points.slice(0, 2).join("")) &&
-      pyIsDigit(points.slice(3).join("")) &&
-      pyInt(points.slice(0, 2).join("")) <= 23 &&
-      pyInt(points.slice(3).join("")) <= 59;
+      isDigits(points.slice(0, 2).join("")) &&
+      isDigits(points.slice(3).join("")) &&
+      pyInt(points.slice(0, 2).join("")) <= 23n &&
+      pyInt(points.slice(3).join("")) <= 59n;
     if (!ok) throw new HookValueError('at must be a time like "09:00"');
   }
   if (item.has("days")) {

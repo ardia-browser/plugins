@@ -1,6 +1,6 @@
 import { isWhitespace, strip } from "../py.ts";
 import { codePoints } from "../pystr.ts";
-import { decimalValue, isPrintableCode } from "./unicode.ts";
+import { decimalValue, isDigitCode, isPrintableCode } from "./unicode.ts";
 
 export class PyException extends Error {
   constructor(
@@ -208,4 +208,27 @@ export function splitlines(text: string, keepends = false): string[] {
   }
   if (start < text.length) out.push(text.slice(start));
   return out;
+}
+
+export const INT_MAX_STR_DIGITS = 4300;
+
+export function isDigits(text: string): boolean {
+  if (text === "") return false;
+  for (const ch of text) if (!isDigitCode(ch.codePointAt(0) as number)) return false;
+  return true;
+}
+
+export function intOfDigits(text: string): bigint {
+  let total = 0n;
+  let count = 0;
+  for (const ch of text) {
+    const digit = decimalValue(ch.codePointAt(0) as number);
+    if (digit < 0) throw new PyException("ValueError", `invalid literal for int() with base 10: ${reprText(text)}`);
+    total = total * 10n + BigInt(digit);
+    count += 1;
+  }
+  if (count > INT_MAX_STR_DIGITS) {
+    throw new PyException("ValueError", `Exceeds the limit (${INT_MAX_STR_DIGITS} digits) for integer string conversion: value has ${count} digits; use sys.set_int_max_str_digits() to increase the limit`);
+  }
+  return total;
 }
