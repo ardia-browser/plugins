@@ -1,5 +1,5 @@
 import { closeSync, writeSync } from "node:fs";
-import { dumps, type JsonObject, object, type Value } from "../json.ts";
+import { dumps, Float, type JsonObject, object, type Value } from "../json.ts";
 import { truthy as pyTruthy } from "../py.ts";
 import { codePoints, joinCodePoints } from "../pystr.ts";
 import { routedCaller } from "../routed.ts";
@@ -12,9 +12,10 @@ import { Absent, CONNECT_WAIT_MS, connect, exchange, type Link, Stalled } from "
 import { encodeError } from "./output.ts";
 import { loadAnswer } from "./pyjson.ts";
 import type { Secrets } from "../redact.ts";
-import { agentEnv, endpointChoice, endpointKey, namespaceName, optionsFrom, rootOf, sessionKey, sessionName, urlsWithSecrets } from "./request.ts";
+import { agentEnv, endpointChoice, endpointKey, namespaceName, optionsFrom, rootOf, sessionKey, sessionName, splitUrl, urlsWithSecrets } from "./request.ts";
 import { closeDir } from "../privatefs.ts";
-import { checkSocket, lockHeld, NoDaemon, openBrowseDir, osFailure } from "./session.ts";
+import { checkSocket, NoDaemon, openBrowseDir, osFailure } from "./session.ts";
+import { awaitDaemon, chooseDaemon, DaemonDidNotStart, spawnDaemon } from "./daemon/spawn.ts";
 import { decodeStdin, pythonStdioErrors, readStdin, stdinState } from "./stdio.ts";
 import { TAKES_OUT } from "./tables.ts";
 
@@ -76,23 +77,44 @@ async function openSession(root: string, key: string, deadline = performance.now
   }
 }
 
-function checkLive(root: string, key: string): void {
-  const dir = openBrowseDir(root);
+async function openIfLive(root: string, key: string): Promise<Link | null> {
   try {
-    checkSocket(dir, `${key}.sock`);
-    if (!lockHeld(dir, key)) throw new NoDaemon("no daemon holds the session's lock");
+    return await openSession(root, key);
+  } catch (error) {
+    if (error instanceof NoDaemon) return null;
+    throw error;
+  }
+}
+
+type Start = { root: string; key: string; config: JsonObject; python: string | null; call: Call };
+
+async function ensureSession(start: Start): Promise<Link> {
+  const live = await openIfLive(start.root, start.key);
+  if (live !== null) return live;
+  const choice = chooseDaemon(start.python);
+  if (choice === null) throw new NoDaemon("no daemon program to start");
+  const dir = openBrowseDir(start.root);
+  try {
+    const started = performance.now();
+    const link = await awaitDaemon(dir.fd, start.key, spawnDaemon(dir.fd, start.key, start.config, choice), () => openIfLive(start.root, start.key));
+    start.call.metrics.set("daemon_spawned", true);
+    start.call.metrics.set("daemon_start_ms", new Float(performance.now() - started));
+    return link;
+  } catch (error) {
+    if (error instanceof DaemonDidNotStart) throw unreachable(error.message);
+    throw error;
   } finally {
     closeDir(dir);
   }
 }
 
-async function openAfterStdin(root: string, key: string, stdinRead: boolean): Promise<Link> {
-  try {
-    return await openSession(root, key);
-  } catch (error) {
-    if (stdinRead && error instanceof NoDaemon) throw unreachable("the ardia browse daemon exited while stdin was being read, and that input was used up, so nothing ran; run the command again with its input");
-    throw error;
+function endpointLabel(ws: string | undefined, port: bigint | undefined): string {
+  const url = ws ? ws : port !== undefined ? undefined : process.env.ARDIA_CDP_URL;
+  if (url) {
+    const parts = splitUrl(url);
+    return `${parts.netloc}${parts.path}`;
   }
+  return port !== undefined ? `--port ${port}` : "Ardia";
 }
 
 const STDIN_READY_FD = "ARDIA_TEST_STDIN_READY_FD";
@@ -149,13 +171,17 @@ async function ask(socket: Link, payload: JsonObject, rest: string[], timeout: V
   return answer;
 }
 
-type Beside = { root: string; namespace: string; keySource: string; session: string; timeout: Value };
+type Beside = { root: string; namespace: string; keySource: string; session: string; timeout: Value; config: JsonObject; python: string | null };
 
 async function readBeside(payload: JsonObject, rest: string[], beside: Beside, call: Call): Promise<JsonObject> {
   const name = `${joinCodePoints(codePoints(beside.session).slice(0, BESIDE_PREFIX))}-side`;
+  const key = sessionKey(beside.namespace, beside.keySource, name);
+  const config = new Map(beside.config);
+  config.set("session", name);
+  config.set("key", key);
   let socket: Link;
   try {
-    socket = await openSession(beside.root, sessionKey(beside.namespace, beside.keySource, name));
+    socket = await ensureSession({ root: beside.root, key, config, python: beside.python, call });
   } catch (error) {
     if (!(error instanceof NoDaemon)) throw error;
     throw unreachable("the ardia browse daemon asked to run this beside a busy session, and that session's side daemon isn't running");
@@ -191,7 +217,6 @@ export async function roundTrip(found: Found, rest: string[], secrets: Secrets, 
   checkIdle(found);
   const key = sessionKey(namespace, keySource, session, process.env.ARDIA_BROWSE_FOR_PLUGIN === "1");
   let stdin: Value = null;
-  if (stdinWanted) checkLive(root, key);
   if (stdinWanted) {
     sayReadingStdin();
     const raw = await readStdin(MAX_REQUEST);
@@ -211,8 +236,25 @@ export async function roundTrip(found: Found, rest: string[], secrets: Secrets, 
     ["caller", routedCaller()],
   ]);
   const line = requestLine(payload);
-  const socket = await openAfterStdin(root, key, stdinWanted);
+  const idle = found.value("idle_timeout") || process.env.AGENT_BROWSER_IDLE_TIMEOUT_MS;
+  const idleMs = idle ? parseDuration(idle) : null;
+  const config = object([
+    ["session", session],
+    ["namespace", namespace],
+    ["key", key],
+    ["data_root", root],
+    ["ws", endpoint.ws ?? null],
+    ["port", endpoint.port ?? null],
+    ["data_dir", endpoint.dataDir ?? null],
+    ["endpoint_label", endpointLabel(endpoint.ws, endpoint.port)],
+    ["idle_timeout_ms", idleMs !== null && "ms" in idleMs ? idleMs.ms : null],
+    ["debug", Boolean(found.flag("debug"))],
+    ["no_auto_dialog", options.get("no_auto_dialog") ?? false],
+    ["pin_tab", options.get("pin_tab") ?? null],
+    ["for_plugin", process.env.ARDIA_BROWSE_FOR_PLUGIN === "1"],
+  ]);
+  const socket = await ensureSession({ root, key, config, python, call });
   let answer = await ask(socket, payload, rest, timeout, call, false, line);
-  if (pyTruthy(answer.get("busy_elsewhere"))) answer = await readBeside(payload, rest, { root, namespace, keySource, session, timeout }, call);
+  if (pyTruthy(answer.get("busy_elsewhere"))) answer = await readBeside(payload, rest, { root, namespace, keySource, session, timeout, config, python }, call);
   return answer;
 }

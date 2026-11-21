@@ -5,3 +5,4 @@ groups rust
 windows rust
 commands rust
 browse ts
+browse-daemon ts

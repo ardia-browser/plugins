@@ -55,6 +55,7 @@ READ_ONLY_METHODS = frozenset({"hello", "workspace", "windows", "commands"})
 PATH_ENV = frozenset({"ARDIA_DATA_DIR", "ARDIA_CONFIG_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME",
                       "XDG_RUNTIME_DIR"})
 GROUP_ROWS = ("browse",)
+SWITCH_ROWS = ("browse-daemon",)
 TRACEBACK = re.compile(rb"Traceback \(most recent call last\):\n(?:  .*\n)*")
 TIME_KEYS = re.compile(r"(_at|At|_ms|time|Time)$")
 TIME_SLACK = 120
@@ -1271,7 +1272,7 @@ def check_case(install: Installation, case: Case, served: dict[str, str], keep: 
 
 
 def summarize(outcomes: list[Outcome], served: list[str] | dict[str, str]) -> dict:
-    served = list(served)
+    served = [name for name in served if name not in SWITCH_ROWS]
     commands = {}
     for outcome in outcomes:
         name = row_name(outcome.case.command)

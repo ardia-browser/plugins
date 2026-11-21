@@ -72,6 +72,13 @@ class TokenServer:
         self.server.close()
 
 
+def stop_quietly(pid: int) -> None:
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+
+
 @unittest.skipUnless(programs(), "build plugins/cli/rust (the router) and plugins/cli/ts first")
 class PluginCredentialProcesses(unittest.TestCase):
     @classmethod
@@ -307,7 +314,7 @@ class JsonAndStdin(LongDataDirs):
         self.assertEqual(err, OVERSIZED)
 
     @unittest.skipUnless(sys.platform == "darwin", "non-plugin browse hands back to Python on Linux by design")
-    def test_a_daemon_gone_while_stdin_was_read_says_the_input_was_used(self):
+    def test_a_daemon_gone_while_stdin_was_read_is_started_again_and_takes_that_input(self):
         daemon = self.live_daemon()
         reader, writer = os.pipe()
         ready, signal_end = os.pipe()
@@ -322,10 +329,12 @@ class JsonAndStdin(LongDataDirs):
         os.write(writer, b"1+1")
         os.close(writer)
         out, err = process.communicate(timeout=60)
-        self.assertEqual((process.returncode, out), (2, b""))
-        self.assertEqual(err, "✗ the ardia browse daemon exited while stdin was being read, and that input was used up, so nothing ran; "
-                              "run the command again with its input\n".encode())
+        started = self.daemon_pids()
+        for pid in started:
+            self.addCleanup(stop_quietly, pid)
         self.assertEqual(daemon.requests, [])
+        self.assertTrue(started, "no daemon was started for the input")
+        self.assertEqual((process.returncode, out, err), (2, b"", "✗ Ardia isn't running, or Command Line isn't installed (Settings › Plugins).\n".encode()))
 
     @unittest.skipUnless(sys.platform == "darwin", "non-plugin browse hands back to Python on Linux by design")
     def test_ctrl_c_while_stdin_is_read_answers_one_json_line(self):

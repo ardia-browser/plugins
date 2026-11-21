@@ -2075,9 +2075,7 @@ parity harness rather than stripped wholesale:
   blocking `write` in its buffered writer, so no code closes it.
 - `ardia browse`: a command that reads stdin (`eval`/`addinitscript --stdin`, `eval` with no code, `batch` with no
   steps) reads it to EOF before connecting, as Python does, so a writer slower than the daemon's 30 s request wait
-  still works. Without a plugin it first checks that a daemon is live (its socket there and its lock held) and hands
-  the call to Python with stdin unread otherwise; if that daemon exits while stdin is read, the client answers
-  `daemon_unreachable` saying the input was used up and nothing ran, where Python, holding stdin, would start a new one.
+  still works, and starts the session's daemon after it if none is running, as Python does.
   Stdin is read only up to the daemon's 16 MiB request limit, and a request over it (stdin plus the envelope) is never
   sent: the client answers what Python's client reports when the daemon drops it ("closed the connection before taking
   the command", exit 2) without waiting for the writer to finish. Stdin is passed
@@ -2099,9 +2097,16 @@ parity harness rather than stripped wholesale:
   `test_a_request_the_envelope_pushes_over_the_limit_is_refused_before_connecting`).
 - `ardia browse`: a daemon answer whose exit is 253 ends with status 1: 253 is the router's hand-back status, and
   exiting with it would run the step a second time on Python. A real daemon never answers 253.
-- `ardia browse`: a daemon that asks a non-`read` command to run beside a busy session (`busy_elsewhere`) whose side
-  daemon isn't running gets an error (exit 2) where Python would start one; only `read`, which is handed to Python,
-  asks that.
+- `ardia browse`: the client starts the session's daemon itself when none answers (the TypeScript daemon, `ardia-ts
+  daemon`, while served.txt has `browse-daemon ts`; `ARDIA_BROWSE_DAEMON=python` picks Python's for differential runs),
+  and a side daemon for `busy_elsewhere` the same way. A command handed to the Python client starts the same daemon:
+  `client.spawn` reads the installed served.txt.
+- `ardia browse`: a value in an argument slot that takes user text is never read as a shared option: the user and
+  password of `set credentials|auth`, the text of `fill` and `type`, `keyboard type|inserttext`'s text, and the values
+  of `cookies set` and `storage <kind> set`. Python's parser takes a password like `--port=9222` there as `--port`
+  (and then reports it in its usage error). Options anywhere else still work as before.
+- `ardia browse`: usage errors about a shared option's value (`--port`, `--max-output`, `--idle-timeout`) name the
+  option but never repeat the value, which may be a secret typed in the wrong place; Python echoes it.
 - `ardia browse`: an answer that starts with a UTF-16 or UTF-32 byte order mark or a NUL byte is read as UTF-8, so a
   malformed one of those ends with a different exception line than Python's.
 - `ardia browse` under `--json`: errors carry a code where Python's have none (see "JSON error codes"); these are the
