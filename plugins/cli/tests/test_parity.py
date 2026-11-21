@@ -1,4 +1,5 @@
 import base64
+import dataclasses
 import fcntl
 import json
 import os
@@ -396,6 +397,10 @@ class HarnessRules(unittest.TestCase):
             shutil.rmtree(box, True)
 
 
+NOV_21_NOON = (1795262400.0, 1795262401.0)
+ACROSS_MIDNIGHT = (1795305599.0, 1795305601.0)
+
+
 class NoConsentIntent(unittest.TestCase):
     def no_consent_sides(self):
         event = {"event": "cli_command", "timestamp": "<now float s>", "properties": {"command": "windows", "exit_code": 0, "cli_version": "0.0.0.dev0"}}
@@ -406,7 +411,8 @@ class NoConsentIntent(unittest.TestCase):
                      "data/Telemetry/local/cli-2026-11-21.jsonl": ("written", "file", 0o600, b"<compared apart>"), "data/Telemetry/local/cli-local.lock": ("written", "file", 0o600, b"<compared apart>")}
 
         def observed(telemetry, queued, files):
-            return harness.Observed(stdout=b"", stderr=b"", status=0, requests=[], telemetry=telemetry, queued=queued, served_by=[], usage=None, files=files, helpers=[])
+            return harness.Observed(stdout=b"", stderr=b"", status=0, requests=[], telemetry=telemetry, queued=queued, served_by=[], usage=None, files=files, helpers=[],
+                                    window=NOV_21_NOON)
 
         python = observed([{**event, "distinct_id": INSTALL_ID, "sent": True}], [{"event": "cli_command"}], python_files)
         new = observed([{**event, "distinct_id": "local", "sent": False}], [], new_files)
@@ -423,6 +429,39 @@ class NoConsentIntent(unittest.TestCase):
         new.telemetry[0]["properties"] = {**new.telemetry[0]["properties"], "command": "tabs"}
         expected, _ = harness.without_consent(new, python)
         self.assertIn("telemetry", [name for name, _ in harness.compare(new, expected)])
+
+    def test_no_consent_refuses_a_local_copy_dated_outside_the_run(self):
+        python, new = self.no_consent_sides()
+        stamp = new.files.pop("data/Telemetry/local/cli-2026-11-21.jsonl")
+        new.files["data/Telemetry/local/cli-2026-99-99.jsonl"] = stamp
+        expected, _ = harness.without_consent(new, python)
+        self.assertIn("files", [name for name, _ in harness.compare(new, expected)])
+
+    def test_no_consent_accepts_either_day_of_a_run_that_crosses_midnight(self):
+        for day in ("2026-11-21", "2026-11-22"):
+            with self.subTest(day=day):
+                python, new = self.no_consent_sides()
+                new = dataclasses.replace(new, window=ACROSS_MIDNIGHT)
+                stamp = new.files.pop("data/Telemetry/local/cli-2026-11-21.jsonl")
+                new.files[f"data/Telemetry/local/cli-{day}.jsonl"] = stamp
+                expected, problems = harness.without_consent(new, python)
+                self.assertEqual((problems, harness.compare(new, expected)), ([], []))
+
+    def test_a_telemetry_override_must_be_local_and_unsent(self):
+        python, new = self.no_consent_sides()
+        sent = [{**new.telemetry[0], "sent": True}]
+        _, problems = harness.without_consent(new, python, sent)
+        self.assertIn("intentional telemetry under no_consent must list only local, unsent records", problems)
+        shared = [{**new.telemetry[0], "distinct_id": INSTALL_ID}]
+        _, problems = harness.without_consent(new, python, shared)
+        self.assertTrue(problems)
+
+    def test_a_telemetry_override_needs_no_consent(self):
+        python, _ = self.no_consent_sides()
+        case = harness.Case.from_dict({"id": "x", "command": "windows", "argv": ["windows"],
+                                       "intentional": {"why": "test", "telemetry": [{"distinct_id": "local", "sent": False}]}}, "test")
+        _, problems = harness.intended(python, case)
+        self.assertEqual(problems, ["intentional telemetry is only for no_consent cases, where it lists the local, unsent records"])
 
     def test_no_consent_still_catches_an_unrelated_deleted_file(self):
         python, new = self.no_consent_sides()

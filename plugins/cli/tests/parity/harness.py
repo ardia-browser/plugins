@@ -691,6 +691,7 @@ class Observed:
     timed_out: bool = False
     transcript_complete: bool = True
     daemon_requests: list = field(default_factory=list)
+    window: tuple | None = None
 
 
 def tree(root: Path) -> dict:
@@ -1233,7 +1234,7 @@ def run_side(install: Installation, side: str, case: Case, box: Path) -> tuple[O
     route = route_from(install.route_of(process.pid))
     observed = Observed(stdout, TRACEBACK.sub(b"", stderr), process.returncode, fake.transcript() if fake else [], records, queued, served, usage,
                         file_changes(before, after), helpers, flush, route, timed_out, fake.complete if fake else True,
-                        daemon.requests if daemon else [])
+                        daemon.requests if daemon else [], window)
     return apply_normalizers(observed, case, places), labels
 
 
@@ -1321,6 +1322,8 @@ def intended(python: "Observed", case: Case, places: dict | None = None) -> tupl
     problems = []
     if set(spec) - INTENTIONAL_KEYS or not isinstance(spec.get("why"), str) or len(spec) < 2:
         return python, [f"intentional takes why and at least one of stdout, stderr, status, daemon_requests, usage, files, no_consent, telemetry, not {sorted(spec)}"]
+    if "telemetry" in spec and spec.get("no_consent") is not True:
+        return python, ["intentional telemetry is only for no_consent cases, where it lists the local, unsent records"]
     changes = {}
     for name in ("stdout", "stderr"):
         if name in spec:
@@ -1343,17 +1346,29 @@ NO_CONSENT_FILES = {
 }
 
 
-def without_consent(new: "Observed", python: "Observed", telemetry: list | None = None) -> tuple["Observed", list[str]]:
+def local_copy_names(window: tuple[float, float]) -> set[str]:
+    return {f"data/Telemetry/local/cli-{time.strftime('%Y-%m-%d', time.gmtime(moment))}.jsonl" for moment in window}
+
+
+def local_only(records) -> bool:
+    return isinstance(records, list) and bool(records) and all(
+        isinstance(record, dict) and record.get("distinct_id") == "local" and record.get("sent") is False for record in records)
+
+
+def without_consent(new: "Observed", python: "Observed", telemetry: list | None = None, window: tuple[float, float] | None = None) -> tuple["Observed", list[str]]:
     from dataclasses import replace
 
     problems = []
-    if python.telemetry and all(record.get("distinct_id") == "local" and record.get("sent") is False for record in python.telemetry) and not python.queued:
+    if python.telemetry and local_only(python.telemetry) and not python.queued:
         problems.append("intentional no_consent expects what Python already does; drop it")
+    if telemetry is not None and not local_only(telemetry):
+        problems.append("intentional telemetry under no_consent must list only local, unsent records")
     expected = telemetry if telemetry is not None else [{**record, "distinct_id": "local", "sent": False} for record in python.telemetry]
     files = {name: change for name, change in python.files.items() if name not in SHARING_ONLY_FILES and not LOCAL_COPY.fullmatch(name)}
     files.update(NO_CONSENT_FILES)
-    dated = [name for name in new.files if LOCAL_COPY.fullmatch(name)]
-    copy = dated[0] if len(dated) == 1 else f"data/Telemetry/local/cli-{time.strftime('%Y-%m-%d')}.jsonl"
+    allowed = local_copy_names(window or new.window or (time.time(), time.time()))
+    dated = [name for name in new.files if LOCAL_COPY.fullmatch(name) and name in allowed]
+    copy = dated[0] if len(dated) == 1 else sorted(allowed)[-1]
     files[copy] = ("written", "file", 0o600, b"<compared apart>")
     return replace(python, telemetry=expected, queued=[], files=files), problems
 
