@@ -56,6 +56,8 @@ plugins path ts
 computer * ts
 hooks install ts
 hooks uninstall ts
+hooks list ts
+hooks run ts
 on ts
 scripts new ts
 scripts install ts

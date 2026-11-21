@@ -26,6 +26,12 @@ const TEST_ENDPOINT_FLAGS = ["--port", "--ws", "--cdp"];
 export const TEST_ENDPOINT_ENV = ["ARDIA_WS", "ARDIA_PORT", "ARDIA_CDP_URL", "AGENT_BROWSER_CDP"];
 const OFF_VALUES = ["0", "false", "off", "no"];
 
+let typedArgv: string[] | undefined;
+
+export function recordFlagsAsTyped(argv: string[]): void {
+  typedArgv = argv;
+}
+
 export class Call {
   readonly startedMs = performance.now();
   readonly startedAt = now();
@@ -258,7 +264,7 @@ function commandRecord(call: Call, status: number | bigint, crashed: boolean, di
     ["subcommand", telemetrySubcommand(call.command, call.subcommand)],
     ["exit_code", BigInt(status)],
     ["error_code", code],
-    ["flags", flagNames(call.argv, call.allowedFlags)],
+    ["flags", flagNames(typedArgv ?? call.argv, call.allowedFlags)],
     ...call.metrics,
   ];
   timings(call, properties);

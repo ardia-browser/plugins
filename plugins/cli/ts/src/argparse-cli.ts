@@ -201,3 +201,31 @@ export function frontEnd(argv: readonly string[], overrides: Overrides = {}): { 
   if (outcome.kind === "parsed" || outcome.kind === "computer") return { outcome, result: { status: null, stdout: "", stderr: "", values: namespaceJson(outcome.values) } };
   return { outcome, result: { status: null, stdout: "", stderr: "" } };
 }
+
+export function canonicalArgv(given: readonly string[], overrides: Overrides = {}): string[] | undefined {
+  const env = environment(overrides);
+  let arranged: { path: string[]; hoisted: string[]; rest: string[] };
+  try {
+    arranged = arrange(env, [...given]);
+  } catch {
+    return undefined;
+  }
+  if (arranged.path.length === 0) return undefined;
+  const takes = optionStrings(leaf(env, arranged.path).at(-1) as ParserSpec).filter((name) => name.startsWith("--"));
+  let changed = false;
+  let ended = false;
+  const argv = given.map((token) => {
+    if (ended || !token.startsWith("--") || token === "--") {
+      if (token === "--") ended = true;
+      return token;
+    }
+    const equals = token.indexOf("=");
+    const name = equals < 0 ? token : token.slice(0, equals);
+    if (takes.includes(name)) return token;
+    const matches = takes.filter((option) => option.startsWith(name));
+    if (matches.length !== 1) return token;
+    changed = true;
+    return `${matches[0]}${equals < 0 ? "" : token.slice(equals)}`;
+  });
+  return changed ? argv : undefined;
+}

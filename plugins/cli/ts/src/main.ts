@@ -43,6 +43,21 @@ async function serveBrowse(argv: string[], python: string | null): Promise<numbe
 }
 
 async function serve(argv: string[], python: string | null): Promise<number | undefined> {
+  const first = await serveOnce(argv, python);
+  if (first !== undefined || browseServed) return first;
+  const { canonicalArgv, frontEndOutcome } = await import("./argparse-cli.ts");
+  const expanded = canonicalArgv(argv);
+  if (expanded !== undefined) {
+    (await import("./telemetry.ts")).recordFlagsAsTyped(argv);
+    const again = await serveOnce(expanded, python);
+    if (again !== undefined) return again;
+  }
+  const outcome = frontEndOutcome(argv);
+  if (outcome.kind === "served") return (await import("./argparse-serve.ts")).serveArgparse(outcome.served, argv, python);
+  return undefined;
+}
+
+async function serveOnce(argv: string[], python: string | null): Promise<number | undefined> {
   const { invokesBrowse, pluginMode } = await import("./browse/route.ts");
   if (pluginMode() || (invokesBrowse(argv) && servesNatively("browse"))) {
     browseServed = true;
