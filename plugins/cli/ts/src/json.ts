@@ -58,13 +58,17 @@ export class TooDeep extends Error {}
 
 export const TELEMETRY_JSON_DEPTH = 9995;
 
-export function parse(bytes: Uint8Array, depthLimit: number): Value | undefined {
+export function parse(bytes: Uint8Array, depthLimit: number, strict = false): Value | undefined {
   const text = decodeJsonBytes(bytes);
-  return text === undefined ? undefined : parseText(text, depthLimit);
+  return text === undefined ? undefined : parseText(text, depthLimit, strict);
 }
 
-export function parseText(text: string, depthLimit = Number.POSITIVE_INFINITY): Value | undefined {
-  const parser = new Parser(text, depthLimit);
+export function parseStrict(bytes: Uint8Array, depthLimit: number): Value | undefined {
+  return parse(bytes, depthLimit, true);
+}
+
+export function parseText(text: string, depthLimit = Number.POSITIVE_INFINITY, strict = false): Value | undefined {
+  const parser = new Parser(text, depthLimit, strict);
   parser.space();
   const value = parser.value();
   if (value === undefined) return undefined;
@@ -101,6 +105,7 @@ class Parser {
   constructor(
     readonly text: string,
     readonly depthLimit: number,
+    readonly strict = false,
   ) {}
 
   enter(): void {
@@ -134,6 +139,7 @@ class Parser {
     if (next === "n" && this.word("null")) return null;
     if (next === "t" && this.word("true")) return true;
     if (next === "f" && this.word("false")) return false;
+    if (this.strict) return next !== undefined && (next === "-" || (next >= "0" && next <= "9")) ? this.number() : undefined;
     if (next === "N" && this.word("NaN")) return new Float(Number.NaN);
     if (next === "I" && this.word("Infinity")) return new Float(Number.POSITIVE_INFINITY);
     if (next === "-" && this.word("-Infinity")) return new Float(Number.NEGATIVE_INFINITY);

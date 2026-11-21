@@ -1,6 +1,6 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import os from "node:os";
-import { registerGroup, unregisterGroup } from "../libc.ts";
+import { registerGroup, strerror, unregisterGroup } from "../libc.ts";
 
 export type Ran = { code: number; stdout: Buffer; stderr: Buffer };
 export type Stdio = "pipe" | "ignore" | "inherit";
@@ -16,7 +16,30 @@ export class SpawnFailed extends Error {
   ) {
     super(code);
   }
+
+  get strerror(): string {
+    try {
+      return strerror(this.errno);
+    } catch {
+      return this.code;
+    }
+  }
 }
+
+export const UNTRACKED_HELPER = "too many helper processes are running for ardia to track another, so it stopped it";
+
+export class HelperUntracked extends SpawnFailed {
+  constructor() {
+    super("EAGAIN", (os.constants.errno as Record<string, number | undefined>)["EAGAIN"] ?? 35);
+    this.message = UNTRACKED_HELPER;
+  }
+
+  override get strerror(): string {
+    return UNTRACKED_HELPER;
+  }
+}
+
+export const groupStats = { untracked: 0 };
 
 export class RunTimedOut extends Error {}
 export class RunCancelled extends Error {}
@@ -68,17 +91,32 @@ export function killLiveGroups(): void {
 
 process.on("exit", killLiveGroups);
 
+function tracked(pid: number): boolean {
+  try {
+    const registered = registerGroup(pid);
+    return registered === null || registered === 0;
+  } catch {
+    return false;
+  }
+}
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const STOP_POLL_MS = 20;
+
 export class GroupChild {
   readonly closed: Promise<number>;
   private reaped = false;
   private live = true;
+  private stopping: Promise<void> | undefined;
 
   constructor(
     readonly child: ChildProcess,
     readonly pid: number,
   ) {
     GROUPS.add(pid);
-    registerGroup(pid);
     child.on("exit", () => {
       this.reaped = true;
     });
@@ -87,6 +125,10 @@ export class GroupChild {
 
   get exited(): boolean {
     return this.reaped;
+  }
+
+  get terminating(): boolean {
+    return this.stopping !== undefined;
   }
 
   signal(signal: NodeJS.Signals): void {
@@ -99,10 +141,46 @@ export class GroupChild {
   }
 
   forget(): void {
+    if (this.stopping === undefined) this.unregister();
+  }
+
+  private unregister(): void {
     if (!this.live) return;
     this.live = false;
     GROUPS.delete(this.pid);
     unregisterGroup(this.pid);
+  }
+
+  release(): void {
+    this.child.stdin?.destroy();
+    this.child.stdout?.destroy();
+    this.child.stderr?.destroy();
+  }
+
+  terminate(grace: number = KILL_GRACE, drain = 0): Promise<void> {
+    this.stopping ??= this.stop(grace, drain);
+    return this.stopping;
+  }
+
+  private async stop(grace: number, drain: number): Promise<void> {
+    if (this.live) {
+      this.signal("SIGTERM");
+      const ends = performance.now() + grace * 1000;
+      for (let left = ends - performance.now(); left > 0 && this.groupAlive(); left = ends - performance.now()) await sleepMs(Math.min(STOP_POLL_MS, left));
+      if (this.groupAlive()) this.signal("SIGKILL");
+      this.unregister();
+    }
+    if (drain > 0) await Promise.race([this.closed, sleepMs(drain * 1000)]);
+    this.release();
+  }
+
+  untracked(): void {
+    groupStats.untracked += 1;
+    this.stopping = Promise.resolve();
+    this.signal("SIGKILL");
+    this.live = false;
+    GROUPS.delete(this.pid);
+    this.release();
   }
 }
 
@@ -126,7 +204,13 @@ export function spawnGroup(argv: readonly string[], options: SpawnOptions = {}):
       return;
     }
     child.on("error", () => {});
-    resolve(new GroupChild(child, child.pid));
+    const group = new GroupChild(child, child.pid);
+    if (!tracked(child.pid)) {
+      group.untracked();
+      reject(new HelperUntracked());
+      return;
+    }
+    resolve(group);
   });
 }
 
@@ -163,7 +247,6 @@ function collect(group: GroupChild, options: RunOptions, limit: number, grace: n
     const out = sink(limit);
     const err = sink(limit);
     let settled = false;
-    let stopping = false;
     const settle = (finish: () => void) => {
       if (settled) return;
       settled = true;
@@ -171,27 +254,16 @@ function collect(group: GroupChild, options: RunOptions, limit: number, grace: n
       signal?.removeEventListener("abort", cancel);
       finish();
     };
-    const release = () => {
-      child.stdout?.destroy();
-      child.stderr?.destroy();
-      child.stdin?.destroy();
-    };
     const stop = (why: "timeout" | "cancelled") => {
-      if (settled || stopping) return;
-      stopping = true;
+      if (settled || group.terminating) return;
       settle(() => reject(why === "cancelled" ? new RunCancelled() : new RunTimedOut()));
-      group.signal("SIGTERM");
-      setTimeout(() => {
-        if (group.groupAlive()) group.signal("SIGKILL");
-        group.forget();
-        release();
-      }, grace);
+      void group.terminate(grace / 1000);
     };
     const deadline = setTimeout(() => stop("timeout"), options.timeout * 1000);
     const cancel = () => stop("cancelled");
     signal?.addEventListener("abort", cancel, { once: true });
     void group.closed.then((code) => {
-      if (!stopping) group.forget();
+      group.forget();
       settle(() => resolve({ code, stdout: out.take(), stderr: err.take() }));
     });
     child.stdout?.on("data", (chunk: Buffer) => out.push(chunk));

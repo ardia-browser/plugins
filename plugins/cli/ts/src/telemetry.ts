@@ -1,7 +1,7 @@
 import { closeSync, fstatSync, openSync } from "node:fs";
 import { iso, now, parseIso } from "./clock.ts";
 import { dataRoot, installedDataDir } from "./control.ts";
-import { Float, type JsonObject, object, parse, TELEMETRY_JSON_DEPTH, TooDeep, type Value } from "./json.ts";
+import { Float, type JsonObject, object, parseStrict, TELEMETRY_JSON_DEPTH, TooDeep, type Value } from "./json.ts";
 import { abspath, envSet, join, realpath, uid } from "./paths.ts";
 import { closeDir, O_NOFOLLOW, O_NONBLOCK, O_RDONLY, readFd } from "./privatefs.ts";
 import { pluginMode } from "./browse/route.ts";
@@ -126,7 +126,7 @@ export function readConsent(root: string): JsonObject | undefined {
   try {
     const info = fstatSync(fd);
     if (!info.isFile() || info.uid !== uid() || info.size > MAX_CONSENT_BYTES) return undefined;
-    const doc = parse(readFd(fd, MAX_CONSENT_BYTES + 1), TELEMETRY_JSON_DEPTH);
+    const doc = parseStrict(readFd(fd, MAX_CONSENT_BYTES + 1), TELEMETRY_JSON_DEPTH);
     return doc instanceof Map ? doc : undefined;
   } catch (error) {
     if (error instanceof TooDeep) throw error;

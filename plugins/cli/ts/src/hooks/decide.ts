@@ -139,7 +139,7 @@ export class Decider {
       return;
     }
     if (controller.cancelled) {
-      this.kill(child);
+      await this.kill(child);
       return;
     }
     const outcome = await new Promise<{ kind: "output"; output: Buffer } | { kind: "timeout" } | { kind: "cancelled" }>((resolve) => {
@@ -154,7 +154,7 @@ export class Decider {
       });
     });
     if (outcome.kind !== "output") {
-      this.kill(child);
+      await this.kill(child);
       if (outcome.kind === "timeout") this.log.write(`hook ${hook.name}: no answer in ${roundedMs(seconds)} ms; Ardia used its default`);
       return;
     }
@@ -185,7 +185,7 @@ export class Decider {
         size += chunk.length;
         if (size > OUTPUT_LIMIT) {
           over = true;
-          this.kill(child);
+          void this.kill(child);
           resolve(Buffer.alloc(0));
         }
       });
@@ -198,9 +198,8 @@ export class Decider {
     });
   }
 
-  private kill(child: GroupChild): void {
-    child.signal("SIGKILL");
-    child.forget();
+  private kill(child: GroupChild): Promise<void> {
+    return child.terminate();
   }
 
   async stop(): Promise<void> {

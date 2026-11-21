@@ -102,12 +102,14 @@ export function readStdinNote(): string {
   return text;
 }
 
+const GIT = process.platform === "darwin" ? "/usr/bin/git" : "git";
+
 export function sessionId(args: string[], cwd: string): string {
   const [options] = parse(args, { "--scope": "value", "--prefix": "value" });
   const scope = (options["scope"] as string | undefined) || "cwd";
   let base = cwd;
   if (scope === "worktree") {
-    const done = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd, encoding: "utf8", timeout: 10_000 });
+    const done = spawnSync(GIT, ["rev-parse", "--show-toplevel"], { cwd, encoding: "utf8", timeout: 10_000 });
     base = (done.error === undefined && typeof done.stdout === "string" ? done.stdout.trim() : "") || cwd;
   } else if (scope !== "cwd") throw new Usage("--scope takes cwd or worktree");
   let real = base;
