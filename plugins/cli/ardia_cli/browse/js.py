@@ -778,12 +778,14 @@ LIBRARY = r"""
     },
     optionSignature(el) {
       const parts = [];
+      const nodeIds = api.optionNodeIds || (api.optionNodeIds = new WeakMap());
       for (const root of api.popupsOf(el)) {
         if (!api.visible(root)) continue;
         for (const node of root.matches("[role=option]") ? [root] : root.querySelectorAll("[role=option]")) {
           if (!api.visible(node)) continue;
           const facts = api.optionFacts(node);
-          parts.push([node.id || "", facts.text, ...facts.exact].join("\u0001"));
+          if (!nodeIds.has(node)) nodeIds.set(node, (api.optionNodeCount = (api.optionNodeCount || 0) + 1));
+          parts.push([nodeIds.get(node), node.id || "", facts.text, ...facts.exact].join("\u0001"));
         }
       }
       return parts.join("\u0002");

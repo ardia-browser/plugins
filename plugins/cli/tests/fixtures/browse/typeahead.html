@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Guests</title>
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 24px; }
+  .combo { position: relative; width: 420px; }
+  .combo input { width: 100%; box-sizing: border-box; padding: 8px; }
+  .options { position: absolute; left: 0; right: 0; top: 40px; z-index: 5; list-style: none; margin: 0; padding: 6px 0; background: #fff; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.2); max-height: 300px; overflow-y: auto; }
+  .options li { display: flex; align-items: center; gap: 10px; padding: 6px 12px; cursor: pointer; }
+  .options li[aria-selected=true], .options li:hover { background: #eef; }
+  .options .o-name { font-weight: 600; }
+  .options .o-sub { color: #666; font-size: 12px; }
+  .options .empty { color: #666; cursor: default; }
+  .dot { width: 30px; height: 30px; flex: none; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 12px; font-weight: 700; background: #9aa0a6; }
+</style>
+</head>
+<body>
+<label for="guest-input">Guests</label>
+<p class="hint" id="guest-hint">Search people at Northwind, or type an email address to invite someone outside the company.</p>
+<div class="combo">
+  <input id="guest-input" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="guest-options" aria-describedby="guest-hint" autocomplete="off" placeholder="Add guests">
+  <ul id="guest-options" class="options" role="listbox" aria-label="Suggestions" hidden></ul>
+</div>
+<ul id="guests" class="guests" aria-label="Guests"></ul>
+<script>
+(() => {
+  const PEOPLE = [
+    { name: "Alex Morgan", email: "alex.morgan@northwind.dev", title: "Software Engineer", team: "Platform", photo_hue: 210 },
+    { name: "Priya Raman", email: "priya.raman@northwind.dev", title: "Engineering Manager", team: "Platform", photo_hue: 20 },
+    { name: "Marcus Chen", email: "marcus.chen@northwind.dev", title: "Sales Lead", team: "Sales", photo_hue: 120 },
+    { name: "Marcus Cheng", email: "marcus.cheng@northwind.dev", title: "Product Designer", team: "Design", photo_hue: 280 },
+    { name: "Sam Ortiz", email: "sam.ortiz@northwind.dev", title: "Recruiter", team: "People", photo_hue: 330 },
+    { name: "Sam Patel", email: "sam.patel@northwind.dev", title: "Data Analyst", team: "Finance", photo_hue: 60 },
+  ];
+  const $ = (id) => document.getElementById(id);
+  const guestInput = $("guest-input");
+  const options = $("guest-options");
+  const guestList = $("guests");
+  const state = { guests: [], suggestions: [], active: -1, searchSeq: 0 };
+  window.state = state;
+
+  function el(tag, props, ...children) {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(props || {})) {
+      if (key === "text") node.textContent = value;
+      else if (key === "class") node.className = value;
+      else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
+      else node.setAttribute(key, value);
+    }
+    node.append(...children.filter(Boolean));
+    return node;
+  }
+
+  function dot(name, hue) {
+    const d = el("span", { class: "dot", "aria-hidden": "true", text: name.split(/[\s.@]+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase() });
+    if (hue !== undefined) d.style.background = `hsl(${hue} 45% 45%)`;
+    return d;
+  }
+
+  function matches(p, q) {
+    const hay = `${p.name} ${p.email} ${p.title} ${p.team}`.toLowerCase();
+    return q.toLowerCase().split(/\s+/).filter(Boolean).every((t) => hay.includes(t));
+  }
+
+  function renderGuests() {
+    guestList.replaceChildren(...state.guests.map((g) => el("li", { text: g.name })));
+  }
+
+  function closeOptions() {
+    options.hidden = true;
+    guestInput.setAttribute("aria-expanded", "false");
+    guestInput.removeAttribute("aria-activedescendant");
+  }
+
+  function renderOptions() {
+    if (!state.suggestions.length) {
+      options.replaceChildren(el("li", { class: "empty", role: "presentation", text: "No one at Northwind matches." }));
+    } else {
+      options.replaceChildren(...state.suggestions.map((s, i) => el("li", { id: `opt-${i}`, role: "option", "aria-selected": i === state.active ? "true" : "false",
+        onmousedown: (e) => { e.preventDefault(); addGuest(s); } },
+        dot(s.name, s.photo_hue),
+        el("div", {}, el("div", { class: "o-name", text: s.name }), el("div", { class: "o-sub", text: `${s.email} · ${s.title}` })))));
+    }
+    options.hidden = false;
+    guestInput.setAttribute("aria-expanded", "true");
+    if (state.active >= 0) guestInput.setAttribute("aria-activedescendant", `opt-${state.active}`);
+    else guestInput.removeAttribute("aria-activedescendant");
+  }
+
+  function searchGuests() {
+    const q = guestInput.value.trim();
+    const seq = ++state.searchSeq;
+    if (!q) {
+      closeOptions();
+      return;
+    }
+    setTimeout(() => {
+      if (seq !== state.searchSeq) return;
+      const taken = new Set(state.guests.map((g) => g.email));
+      state.suggestions = PEOPLE.filter((p) => matches(p, q) && !taken.has(p.email)).sort((a, b) => a.name.localeCompare(b.name)).slice(0, 8);
+      state.active = state.suggestions.length ? 0 : -1;
+      renderOptions();
+    }, 80);
+  }
+
+  function addGuest(s) {
+    if (!state.guests.some((g) => g.email === s.email)) state.guests.push(s);
+    guestInput.value = "";
+    state.suggestions = [];
+    closeOptions();
+    renderGuests();
+    guestInput.focus();
+  }
+
+  let guestTimer = 0;
+  guestInput.addEventListener("input", () => {
+    clearTimeout(guestTimer);
+    guestTimer = setTimeout(searchGuests, 150);
+  });
+  guestInput.addEventListener("blur", () => setTimeout(closeOptions, 100));
+})();
+</script>
+</body>
+</html>

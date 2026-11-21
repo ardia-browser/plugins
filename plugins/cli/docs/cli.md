@@ -455,6 +455,26 @@ needs the options to have changed after the last keystroke; without that, after 
 showing, since the list may be for an earlier query. Two matches or none fail and list the suggestions. `fill` on a typeahead types only, then says how many suggestions show
 and the `select` command to pick one.
 
+In the TypeScript CLI, three more cases work the way agents use `select` (the bench's `multitab` task lost 1–3
+commands each run to them):
+
+- A suggestion list the page drew again after the last keystroke counts as fresh even when its rows read the same
+  (the watch notices new option elements, not only new text), so `select` after a `fill` of the same text works where
+  it used to refuse with `no_fresh_suggestions`; a page that leaves the very same elements in place still needs an
+  exact match (telemetry `select_retyped` marks a field that already held the value).
+- On a typeahead, a suggestion that holds the value as whole words, like `PR Priya Raman priya@… · Engineering
+  Manager` for `Priya Raman`, ranks above one that merely contains it (`Marcus Cheng` for `Marcus Chen`); the containment
+  and whole-word checks compare after Unicode NFC (an exact match compares the text as given), a combining mark counts as part of its word, and `.`,
+  `@`, `_`, `+`, an apostrophe or a dash between two letters joins them into one word, so an email or a name like
+  `O'Brien` or `Jean-Luc` must match whole. Only fresh
+  suggestions are picked this way: from a list that didn't change after typing, only an exact match is, since that
+  list may answer an earlier query. The answer says which it picked (`✓ Picked "…" for "…"`, telemetry
+  `select_word_match`). Only `select` on a typeahead ranks this way: button comboboxes, grid editors, `fill` on a
+  `<select>` and datalists keep the old ranking.
+- The pointer moves onto the chosen suggestion and the CLI checks it still reads the same before pressing: a row the
+  list redrew into someone else as the pointer arrived fails with `target_replaced` and isn't clicked.
+- Two or more equal matches fail with `ambiguous` and name each candidate's full text, which `select` takes to pick it.
+
 Every input command confirms the page got it. Capture listeners in the isolated world count trusted `mousedown`,
 `mouseup`, `mousemove`, `keydown`, `keyup` and `wheel` events in the target's frame; after the gesture the command
 waits up to 1.5 s for the counts it needs (a click's `mousedown` and `mouseup`, one `keydown` and `keyup` per typed
@@ -2113,7 +2133,8 @@ parity harness rather than stripped wholesale:
 
 - The forms agents guess (`get attribute`, `-s`/`--selector` on `screenshot`, `get`, `click` and `fill`, `links`,
   `find role … --nth`) are TypeScript-only; Python answers them with Unknown flag or Unknown command. A `find role`
-  that matches nothing names the closest match with its ref only in TypeScript.
+  that matches nothing names the closest match with its ref only in TypeScript. `select` retyping a field that already
+  holds the value, picking a single whole-word match, and listing refs when ambiguous are TypeScript-only.
 - The TypeScript daemon answers every exit 1 with a code (`command_failed` when the failure has none of its own),
   a failed `batch` adds `failed_step_index` and `failed_step_command` to the event, and telemetry's `flags` keeps the
   TypeScript-only `--touch`, `--isolated` and `--main-world` (parity cases mark these `intentional` with a

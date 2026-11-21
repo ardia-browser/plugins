@@ -26,7 +26,9 @@ import { click, scrollIntoView, targetPoint, waitEnabled } from "./pointer.ts";
 export const SUGGESTION_TIMEOUT = 4.0;
 export const SUGGESTION_HINT_WAIT = 1.2;
 export const SUGGESTION_SETTLE = 0.35;
-export const EXACT = 3;
+export const EXACT = 4;
+export const PIECE = 3;
+export const WORDS = 2;
 export const MAX_SUGGESTIONS = 8;
 export const EDITOR_WAIT = 1.0;
 export const COMMIT_WAIT = 0.5;
@@ -209,7 +211,7 @@ async function setEditor(page: Page, editor: Element, text: string, humanize: bo
   if (kind === "select") await pickOption(page, editor, text);
   else if (kind === "datalist") {
     const known = ((await page.call("(el) => ardiaBrowse.datalistValues(el)", [editor], { frame: editor.frame, read: true })) as string[] | null) ?? [];
-    const levels = known.map((item) => matchLevel(text, { text: item, pieces: [] }));
+    const levels = known.map((item) => matchLevel(text, { text: item, pieces: [] }, false));
     const best = Math.max(0, ...levels);
     await fill(page, editor, best && levels.filter((level) => level === best).length === 1 ? (known[levels.indexOf(best)] as string) : text, humanize);
   } else if (kind === "typeahead" || kind === "button") await choose(page, editor, [text], humanize, editor.label);
@@ -317,14 +319,28 @@ export function plain(text: unknown): string {
   return casefold(joinedWords(text === null || text === undefined || text === "" ? "" : String(text)));
 }
 
-export function matchLevel(value: string, item: Item): number {
+export function matchLevel(value: string, item: Item, words = true): number {
   const wanted = plain(value);
   if (!wanted) return 0;
   const exact = [item.text, ...(item.exact ?? [])];
   const emails = exact.flatMap((each) => String(each).match(EMAIL) ?? []);
   if ([...exact, ...emails].some((each) => plain(each) === wanted)) return EXACT;
-  if ((item.pieces ?? []).some((piece) => plain(piece) === wanted)) return 2;
-  return plain(item.text).includes(wanted) ? 1 : 0;
+  if ((item.pieces ?? []).some((piece) => plain(piece) === wanted)) return PIECE;
+  const shown = plain(item.text);
+  if (!words) return shown.includes(wanted) ? 1 : 0;
+  const composed = wanted.normalize("NFC");
+  const composedShown = shown.normalize("NFC");
+  if (!composedShown.includes(composed)) return 0;
+  return wholeWords(composed, composedShown) ? WORDS : 1;
+}
+
+export function wholeWords(wanted: string, shown: string): boolean {
+  const target = wanted.normalize("NFC");
+  const escaped = target.replace(/[\\^$.*+?()[\]{}|/]/g, "\\$&");
+  const joiner = "[.@_+'\u2019\\p{Pd}]";
+  const before = `(?<![\\p{L}\\p{N}\\p{M}])(?<![\\p{L}\\p{N}\\p{M}]${joiner})`;
+  const after = `(?![\\p{L}\\p{N}\\p{M}])(?!${joiner}[\\p{L}\\p{N}\\p{M}])`;
+  return new RegExp(`${before}${escaped}${after}`, "u").test(shown.normalize("NFC"));
 }
 
 export function exactPick(value: string, items: readonly Item[]): number | null {
@@ -332,8 +348,10 @@ export function exactPick(value: string, items: readonly Item[]): number | null 
   return exact.length === 1 ? (exact[0] as number) : null;
 }
 
-export function pickSuggestion(value: string, items: readonly Item[], where: string): number {
-  const levels = items.map((item) => matchLevel(value, item));
+
+
+export function pickSuggestion(value: string, items: readonly Item[], where: string, words = false): number {
+  const levels = items.map((item) => matchLevel(value, item, words));
   const best = Math.max(0, ...levels);
   const listed =
     items
@@ -392,6 +410,17 @@ async function unlinkedNote(page: Page, element: Element): Promise<string> {
   );
 }
 
+export const SUGGESTION_MOVED = "the suggestion \"{was}\" moved out from under the pointer as it arrived, so nothing was clicked; run select again";
+export const SUGGESTION_CHANGED = "the suggestion \"{was}\" became \"{now}\" as the pointer reached it, so it wasn't clicked; run select again";
+
+async function sameSuggestion(page: Page, option: Element, chosen: string): Promise<void> {
+  const now = await page.call("(el) => el.isConnected ? [ardiaBrowse.optionFacts(el).text, el.matches(':hover')] : null", [option], { frame: option.frame, read: true });
+  const [text, hovered] = Array.isArray(now) ? now : [null, false];
+  if (text === chosen && hovered === true) return;
+  if (text === chosen) throw new BrowseError(SUGGESTION_MOVED.replace("{was}", chosen), null, "target_replaced");
+  throw new BrowseError(SUGGESTION_CHANGED.replace("{was}", chosen).replace("{now}", typeof text === "string" ? text : "gone"), null, "target_replaced");
+}
+
 export async function watchSuggestions(page: Page, element: Element): Promise<void> {
   await page.call("(el) => ardiaBrowse.watchSuggestions(el)", [element], { frame: element.frame });
 }
@@ -428,6 +457,11 @@ export async function settledSuggestions(page: Page, element: Element, timeout: 
   }
 }
 
+async function holdsText(page: Page, element: Element, value: string): Promise<boolean> {
+  const wanted = plain(value);
+  return wanted !== "" && plain((await info(page, element))["value"]) === wanted;
+}
+
 async function staleRefusal(page: Page, element: Element, value: string, items: readonly Item[], where: string, timeout: number): Promise<BrowseError> {
   const unlinked = await unlinkedNote(page, element);
   if (unlinked) return new BrowseError(`Nothing was picked in ${where}: ${unlinked}`, null, "no_fresh_suggestions");
@@ -447,7 +481,15 @@ async function staleRefusal(page: Page, element: Element, value: string, items: 
 
 export type Picked = { value: string; picked: string };
 
-export async function choose(page: Page, element: Element, values: readonly string[], humanize: boolean, where: string, timeout = SUGGESTION_TIMEOUT): Promise<Picked[]> {
+export async function choose(
+  page: Page,
+  element: Element,
+  values: readonly string[],
+  humanize: boolean,
+  where: string,
+  timeout = SUGGESTION_TIMEOUT,
+  words = false,
+): Promise<Picked[]> {
   const kind = await comboKind(page, element);
   if (kind !== null) await waitEnabled(page, element);
   if (kind === null) throw new BrowseError(`${element.label} isn't a <select> or a combobox, so there's nothing to pick from; use fill or click`, null, "not_selectable");
@@ -468,8 +510,10 @@ export async function choose(page: Page, element: Element, values: readonly stri
     let options: Element[];
     let items: Item[];
     let fresh: boolean;
+    let index: number;
     try {
       if (kind === "typeahead") {
+        if (await holdsText(page, element, value)) flag("select_retyped", true);
         await fill(page, element, value, humanize);
         [options, items, fresh] = await settledSuggestions(page, element, timeout, value);
       } else {
@@ -482,15 +526,18 @@ export async function choose(page: Page, element: Element, values: readonly stri
           fresh = true;
         }
       }
-      if (!fresh && exactPick(value, items) === null) throw await staleRefusal(page, element, value, items, where, timeout);
+      const found = fresh ? pickSuggestion(value, items, where, words && kind === "typeahead") : exactPick(value, items);
+      if (found === null) throw await staleRefusal(page, element, value, items, where, timeout);
+      index = found;
       if (items.length > 0 && (await page.call("(el) => ardiaBrowse.usedOpenedList(el)", [element], { frame: element.frame, read: true }))) flag("select_opened_list", true);
     } finally {
       await unwatchSuggestions(page, element);
     }
-    const index = (fresh ? pickSuggestion(value, items, where) : exactPick(value, items)) as number;
+    if (matchLevel(value, items[index] as Item) === WORDS) flag("select_word_match", true);
     const option = options[index] as Element;
-    const labelled = new Element(option.frame, option.objectId, option.backendId, `the suggestion "${(items[index] as Item).text}"`);
-    await click(page, labelled, humanize);
+    const chosen = (items[index] as Item).text;
+    const labelled = new Element(option.frame, option.objectId, option.backendId, `the suggestion "${chosen}"`);
+    await click(page, labelled, humanize, 1, "left", () => sameSuggestion(page, option, chosen));
     picked.push({ value, picked: (items[index] as Item).text });
   }
   return picked;

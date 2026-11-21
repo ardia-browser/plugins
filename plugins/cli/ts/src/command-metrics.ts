@@ -12,6 +12,8 @@ export const TS_ONLY_FLAGS: readonly string[] = [
   "permission_granted",
   "read_oopif_frames",
   "route_enable_undone",
+  "select_retyped",
+  "select_word_match",
   "selector_in_shadow_root",
   "setup_session_dropped",
   "snapshot_document_changed",

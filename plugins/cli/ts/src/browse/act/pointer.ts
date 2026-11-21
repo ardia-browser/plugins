@@ -456,7 +456,7 @@ export async function domClick(page: Page, element: Element, error: BrowseError)
       : `${element.label} sits outside the page, so it got a DOM click instead of a pointer click`;
 }
 
-export async function click(page: Page, element: Element, humanize: boolean, count = 1, button = "left"): Promise<void> {
+export async function click(page: Page, element: Element, humanize: boolean, count = 1, button = "left", beforePress: (() => Promise<void>) | null = null): Promise<void> {
   await waitEnabled(page, element, false);
   let x: number;
   let y: number;
@@ -487,6 +487,13 @@ export async function click(page: Page, element: Element, humanize: boolean, cou
   const mouse = input.pointer;
   const which = mouseButton(button);
   const press = async () => {
+    if (beforePress !== null) {
+      await mouse.move(x, y, humanize);
+      await beforePress();
+      await mouse.down(which);
+      await mouse.up(which);
+      return;
+    }
     if (humanize || count === 1) {
       await mouse.click(x, y, which, count, humanize);
       return;

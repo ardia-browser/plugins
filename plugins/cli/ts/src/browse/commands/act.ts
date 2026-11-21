@@ -312,7 +312,7 @@ export async function selectIn(ctx: Ctx, page: Page, element: Element, selector:
     return attach(new Result({ selected: values }), report);
   }
   const where = await fieldName(page, element, selector);
-  const [picked, report] = await observe(ctx, page, () => choose(page, element, values, humanize, where));
+  const [picked, report] = await observe(ctx, page, () => choose(page, element, values, humanize, where, undefined, true));
   const text = picked.map((item) => `✓ Picked "${item.picked}"` + (plain(item.picked) !== plain(item.value) ? ` for "${item.value}"` : "")).join("\n");
   return attach(new Result({ selected: values, picked: picked.map((item) => item.picked) }, text), report);
 }
