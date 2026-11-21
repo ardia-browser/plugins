@@ -396,6 +396,45 @@ class HarnessRules(unittest.TestCase):
             shutil.rmtree(box, True)
 
 
+class NoConsentIntent(unittest.TestCase):
+    def no_consent_sides(self):
+        event = {"event": "cli_command", "timestamp": "<now float s>", "properties": {"command": "windows", "exit_code": 0, "cli_version": "0.0.0.dev0"}}
+        common = {"cli-home/Usage": ("written", "dir", 0o700), "cli-home/Usage/usage.json": ("written", "file", 0o600, b"<compared apart>"), "cli-home/Usage-old/kept": ("written", "file", 0o600, b"x")}
+        python_files = {**common, "data/Telemetry/cli-flush-claim.lock": ("written", "file", 0o600, b""), "data/Telemetry/cli-flush.json": ("written", "file", 0o600, b"<compared apart>"),
+                        "data/Telemetry/cli-queue.jsonl": ("written", "file", 0o600, b"<compared apart>"), "data/Telemetry/cli-queue.lock": ("written", "file", 0o600, b"")}
+        new_files = {**common, "data/Telemetry/cli-queue.jsonl": ("removed",), "data/Telemetry/cli-queue.lock": ("written", "file", 0o600, b""), "data/Telemetry/local": ("written", "dir", 0o700),
+                     "data/Telemetry/local/cli-2026-11-21.jsonl": ("written", "file", 0o600, b"<compared apart>"), "data/Telemetry/local/cli-local.lock": ("written", "file", 0o600, b"<compared apart>")}
+
+        def observed(telemetry, queued, files):
+            return harness.Observed(stdout=b"", stderr=b"", status=0, requests=[], telemetry=telemetry, queued=queued, served_by=[], usage=None, files=files, helpers=[])
+
+        python = observed([{**event, "distinct_id": INSTALL_ID, "sent": True}], [{"event": "cli_command"}], python_files)
+        new = observed([{**event, "distinct_id": "local", "sent": False}], [], new_files)
+        return python, new
+
+    def test_no_consent_passes_only_the_local_only_shape(self):
+        python, new = self.no_consent_sides()
+        expected, problems = harness.without_consent(new, python)
+        self.assertEqual(problems, [])
+        self.assertEqual(harness.compare(new, expected), [])
+
+    def test_no_consent_still_catches_a_wrong_event(self):
+        python, new = self.no_consent_sides()
+        new.telemetry[0]["properties"] = {**new.telemetry[0]["properties"], "command": "tabs"}
+        expected, _ = harness.without_consent(new, python)
+        self.assertIn("telemetry", [name for name, _ in harness.compare(new, expected)])
+
+    def test_no_consent_still_catches_an_unrelated_deleted_file(self):
+        python, new = self.no_consent_sides()
+        new.files["cli-home/Usage-old/kept"] = ("removed",)
+        expected, _ = harness.without_consent(new, python)
+        self.assertIn("files", [name for name, _ in harness.compare(new, expected)])
+        python, new = self.no_consent_sides()
+        new.files["data/Telemetry/other.json"] = ("removed",)
+        expected, _ = harness.without_consent(new, python)
+        self.assertIn("files", [name for name, _ in harness.compare(new, expected)])
+
+
 @harness.requires(binary(), ("rust",), "build plugins/cli/rust first (cargo build) or set ARDIA_RUST_CLI")
 class HarnessCatches(unittest.TestCase):
     def test_the_seeder_refuses_a_secret_inside_a_binary_fixture(self):

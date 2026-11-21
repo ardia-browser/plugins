@@ -121,3 +121,42 @@ export function decodeJsonBytes(bytes: Uint8Array): string | undefined {
   if (encoding === "utf-16-be" || encoding === "utf-16-le") return utf16(bytes, encoding === "utf-16-be");
   return utf32(bytes, encoding === "utf-32-be");
 }
+
+const wellFormedUtf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+
+function wellFormedUtf16(bytes: Uint8Array, bigEndian: boolean): boolean {
+  if (bytes.length % 2 !== 0) return false;
+  let wantLow = false;
+  for (let at = 0; at < bytes.length; at += 2) {
+    const unit = bigEndian ? ((bytes[at] as number) << 8) | (bytes[at + 1] as number) : ((bytes[at + 1] as number) << 8) | (bytes[at] as number);
+    const high = unit >= 0xd800 && unit < 0xdc00;
+    const low = unit >= 0xdc00 && unit < 0xe000;
+    if (wantLow !== low) return false;
+    wantLow = high;
+  }
+  return !wantLow;
+}
+
+function wellFormedUtf32(bytes: Uint8Array, bigEndian: boolean): boolean {
+  if (bytes.length % 4 !== 0) return false;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  for (let at = 0; at < bytes.length; at += 4) {
+    const code = view.getUint32(at, !bigEndian);
+    if (code > 0x10ffff || (code >= 0xd800 && code < 0xe000)) return false;
+  }
+  return true;
+}
+
+export function strictJsonText(bytes: Uint8Array): string | undefined {
+  const encoding = detectEncoding(bytes);
+  if (encoding === "utf-8") {
+    try {
+      return wellFormedUtf8.decode(bytes);
+    } catch {
+      return undefined;
+    }
+  }
+  if (encoding === "utf-16-be" || encoding === "utf-16-le") return wellFormedUtf16(bytes, encoding === "utf-16-be") ? decodeJsonBytes(bytes) : undefined;
+  if (encoding === "utf-32-be" || encoding === "utf-32-le") return wellFormedUtf32(bytes, encoding === "utf-32-be") ? decodeJsonBytes(bytes) : undefined;
+  return undefined;
+}

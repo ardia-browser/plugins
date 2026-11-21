@@ -1,4 +1,4 @@
-import { decodeJsonBytes } from "./json-bytes.ts";
+import { decodeJsonBytes, strictJsonText } from "./json-bytes.ts";
 import { codePoints, isHigh, SPLIT_TEXT, splitsAfterHigh } from "./pystr.ts";
 
 export class Float {
@@ -63,11 +63,8 @@ export function parse(bytes: Uint8Array, depthLimit: number, strict = false): Va
   return text === undefined ? undefined : parseText(text, depthLimit, strict);
 }
 
-const BYTE_ORDER_MARKS = [[0xef, 0xbb, 0xbf], [0xfe, 0xff], [0xff, 0xfe], [0x00, 0x00, 0xfe, 0xff]];
-
 export function parseStrict(bytes: Uint8Array, depthLimit: number): Value | undefined {
-  if (BYTE_ORDER_MARKS.some((mark) => mark.every((byte, index) => bytes[index] === byte))) return undefined;
-  const text = decodeJsonBytes(bytes);
+  const text = strictJsonText(bytes);
   return text === undefined ? undefined : parseText(text, depthLimit, true);
 }
 

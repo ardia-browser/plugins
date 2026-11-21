@@ -128,9 +128,25 @@ export function interrupted(): boolean {
   return interruptedFlag;
 }
 
+const interruptWakers = new Set<() => void>();
+
+export function wakeInterruptWaiters(): void {
+  wakeAll?.();
+  for (const wake of [...interruptWakers]) wake();
+}
+
+export function interruptSubscription(): (wake: (() => void) | undefined) => void {
+  let current: (() => void) | undefined;
+  return (wake) => {
+    if (current !== undefined) interruptWakers.delete(current);
+    current = wake;
+    if (wake !== undefined) interruptWakers.add(wake);
+  };
+}
+
 function onInterrupt(): void {
   interruptedFlag = true;
-  wakeAll?.();
+  wakeInterruptWaiters();
 }
 
 export function wakeOnInterrupt(wake: (() => void) | undefined): void {
@@ -243,6 +259,7 @@ export async function withSession<T>(dataDir: string | undefined, work: (session
   checkSocket(path);
   const socket = await connectSocket(path, CONNECT_TIMEOUT);
   const name = baseName(path);
+  const subscription = interruptSubscription();
   let connection: Connection | undefined;
   try {
     const fd = (socket as unknown as { _handle?: { fd?: number } })._handle?.fd;
@@ -250,12 +267,11 @@ export async function withSession<T>(dataDir: string | undefined, work: (session
     if (interrupted()) throw new ControlFailure({ kind: "interrupted" });
     if (peer === undefined || typeof fd !== "number") throw unreachable(`${name} couldn't check who serves it`);
     if (peer !== uid()) throw unreachable(`${name} is served by another user`);
-    connection = new Connection(socket, fd, interrupted, (wake) => {
-      wakeAll = wake;
-    });
+    connection = new Connection(socket, fd, interrupted, subscription);
     await hello(connection, name, routedCaller());
     return await work(new Session(connection));
   } finally {
+    subscription(undefined);
     connection?.close();
     socket.destroy();
   }

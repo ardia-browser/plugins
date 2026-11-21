@@ -560,7 +560,11 @@
     "base64": "eyJzaGFyaW5nIjogdHJ1ZSwgImluc3RhbGxJZCI6ICIwMTkwYTFiMi1jM2Q0LTdlNWYtOGE5Yi0wYzFkMmUzZjRhNWIiLCAibm90ZSI6ICLtoIAifQ=="
    }
   },
-  "note": "json.loads on the consent bytes detects UTF-8/16/32 and BOMs"
+  "note": "json.loads on the consent bytes detects UTF-8/16/32 and BOMs",
+  "intentional": {
+   "why": "the TypeScript CLI reads telemetry.json only as well-formed UTF-8, UTF-16 or UTF-32: surrogate code points encoded in its bytes mean no consent, so the command is recorded locally and nothing is sent or queued; Python's json decodes them with surrogatepass",
+   "no_consent": true
+  }
  },
  {
   "id": "windows--install-id-newline",
@@ -693,7 +697,24 @@
   "note": "json.loads raises RecursionError past 9995 nested containers there, and finish() swallows it: nothing is recorded",
   "intentional": {
    "why": "the TypeScript CLI treats a telemetry.json too deep to parse as no consent and still records the command locally; Python's RecursionError skips recording altogether",
-   "no_consent": true
+   "no_consent": true,
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "local",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": false
+    }
+   ]
   }
  }
 ]
