@@ -181,6 +181,7 @@ export function pluginEnv(): Record<string, string> {
 
 type Reply = ({ kind: "ok"; data: Value; success: Value } | { kind: "invalid" } | { kind: "protocol"; said: Value } | { kind: "failed"; error: Value; success: Value }) & {
   exit: number;
+  keys?: string[];
 };
 
 async function ask(root: string, name: string, capability: string, request: unknown, timeout: number): Promise<Reply> {
@@ -214,8 +215,9 @@ async function ask(root: string, name: string, capability: string, request: unkn
   }
   if (!(reply instanceof Map) || reply.get("protocol") !== PROTOCOL) return { kind: "protocol", said: reply instanceof Map ? (reply.get("protocol") ?? "") : "", exit: ran.code };
   const success = reply.get("success") ?? null;
-  if (!success || success === 0n) return { kind: "failed", error: reply.get("error") ?? null, success, exit: ran.code };
-  return { kind: "ok", data: reply.get("data") ?? null, success, exit: ran.code };
+  const keys = [...reply.keys()];
+  if (!success || success === 0n) return { kind: "failed", error: reply.get("error") ?? null, success, exit: ran.code, keys };
+  return { kind: "ok", data: reply.get("data") ?? null, success, exit: ran.code, keys };
 }
 
 export async function call(root: string, name: string, capability: string, request: unknown, timeout = RUN_TIMEOUT): Promise<unknown> {
@@ -226,6 +228,17 @@ export async function call(root: string, name: string, capability: string, reque
     const error = reply.error;
     throw new BrowseError(`Plugin '${name}' failed: ${error && typeof error === "string" ? error : error ? dumps(error, "spaced") : "no detail"}`);
   }
+  return plainParams(reply.data);
+}
+
+const RUN_REPLY_KEYS = ["protocol", "success", "data", "error"];
+
+export async function runPlugin(root: string, name: string, capability: string, request: unknown, timeout = RUN_TIMEOUT): Promise<unknown> {
+  const reply = await ask(root, name, capability, request, timeout);
+  const shaped = reply.keys !== undefined && reply.keys.every((key) => RUN_REPLY_KEYS.includes(key));
+  if (shaped && reply.kind === "failed" && reply.success === false) throw new BrowseError(`Plugin ${name} returned an error`, null, "plugin_failed");
+  if (shaped && reply.kind === "ok" && reply.exit !== 0) throw new BrowseError(`Plugin ${name} returned an error`, null, "plugin_failed");
+  if (!shaped || reply.kind !== "ok" || reply.success !== true) throw new BrowseError(`Plugin ${name} sent a malformed reply`, null, "plugin_failed");
   return plainParams(reply.data);
 }
 
