@@ -96,7 +96,7 @@ export function supervise(binary: string, argv: readonly string[], env: Record<s
       resolve(result);
     };
     const settleIfDone = () => {
-      if (closed && (pending === 0 || stopped)) finish(outcome());
+      if (closed && pending === 0) finish(outcome());
     };
     const outcome = (): Supervised => {
       const signal = exited?.signal ?? undefined;
@@ -161,6 +161,7 @@ export function supervise(binary: string, argv: readonly string[], env: Record<s
     child.on("close", (code, signal) => {
       exited ??= { code, signal };
       closed = true;
+      scheduleDrain();
       settleIfDone();
     });
   });

@@ -1993,11 +1993,13 @@ rest) are refused.
 own Accessibility and Screen Recording grants, not the terminal's. When nothing listens on its socket
 (`~/Library/Caches/cua-driver/cua-driver.sock`, a connect taking well under a millisecond), `call` first runs the same
 command against a socket that doesn't exist, with stdin closed, so cua-driver checks the arguments and can't reach any
-service; a malformed JSON argument (exit 2) fails right there, never opening the app. JSON piped on stdin isn't
+service; a malformed JSON argument (exit 2) fails right there, never opening the app, and a call the driver answers on
+its own (`call --version`, exit 0) prints that answer and ends there too. JSON piped on stdin isn't
 checked there: cua-driver doesn't reject it as an argument error (a malformed one runs the tool with no arguments:
 `get_screen_size` answers, a tool that needs fields fails with `tool_failed`), and stdin stays untouched for the real
 call. Ctrl-C (exit 130) or SIGTERM (143) during this check, the start or the wait stops it there with `interrupted`,
-and before `open` runs, nothing is opened. Then it starts the service the
+and before `open` runs, nothing is opened; the same goes for printing a fix or reading the grants after a failed call.
+ardia's own lines there are written asynchronously, so a stderr nobody reads can't hold the signal back. Then it starts the service the
 way cua-driver's own `mcp` does, through LaunchServices (`open -g -a /Applications/CuaDriver.app --args serve`), waits up
 to 15 s for the socket (`ts/src/computer/daemon.ts`), then reads `permissions status --json` once. A missing grant
 stops the call before it reaches the driver. Before, the first call of a session failed with cua-driver's `Start it

@@ -10,7 +10,7 @@ import { computerMain } from "../src/computer/cli.ts";
 import { classifyDriverExit, COMPUTER_ERROR_CODES, driverExitCode, EXACT_EXITS, grantsOf, missingGrantsIn, permissionCode } from "../src/computer/codes.ts";
 import { daemonTiming, explicitSocket } from "../src/computer/daemon.ts";
 import { driverOutput } from "../src/computer/supervise.ts";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { cleanEvent, TELEMETRY_ERROR_CODES } from "../src/telemetry-schema.ts";
 import { object, type Value } from "../src/json.ts";
 
@@ -19,7 +19,7 @@ const macOnly = (name: string, body: () => Promise<void> | void) => (process.pla
 const scratch = fs.realpathSync(fs.mkdtempSync(path.join("/tmp", "cerr-")));
 process.on("exit", () => fs.rmSync(scratch, { recursive: true, force: true }));
 let counter = 0;
-const STUB_ENV = ["STUB_EXIT", "STUB_STDERR", "STUB_STDOUT", "STUB_SIGNAL", "STUB_GRANTS", "STUB_GRANTS_EXIT", "STUB_CHECK_SLEEP", "STUB_CHECK_FLOOD"];
+const STUB_ENV = ["STUB_EXIT", "STUB_STDERR", "STUB_STDOUT", "STUB_SIGNAL", "STUB_GRANTS", "STUB_GRANTS_EXIT", "STUB_CHECK_SLEEP", "STUB_CHECK_FLOOD", "STUB_CHECK_STDOUT", "STUB_CHECK_KILL"];
 const servers: net.Server[] = [];
 const timers: ReturnType<typeof setInterval>[] = [];
 
@@ -49,6 +49,9 @@ if [ "$1" = "call" ]; then
   done
   if [ -n "$socket" ] && [ -n "\${STUB_CHECK_SLEEP:-}" ]; then sleep "$STUB_CHECK_SLEEP"; fi
   if [ -n "$socket" ] && [ -n "\${STUB_CHECK_FLOOD:-}" ]; then head -c 184320 /dev/zero | tr '\\0' e >&2; exit 2; fi
+  if [ -n "$socket" ] && [ -n "\${STUB_CHECK_STDOUT:-}" ]; then printf '%s\\n' "$STUB_CHECK_STDOUT"; exit 2; fi
+  if [ -n "$socket" ] && [ -n "\${STUB_CHECK_KILL:-}" ]; then kill -TERM $$; fi
+  for word in "$@"; do if [ "$word" = "--version" ]; then echo "cua-driver 0.38.0"; exit 0; fi; done
   if [ -n "$socket" ] && ! [ -S "$socket" ]; then
     printf 'Cua Driver daemon is not running on %s.\\nStart it first with: cua-driver serve --socket %s\\n' "$socket" "$socket" >&2
     exit 1
@@ -137,6 +140,11 @@ function listenOnceOpened(b: Box): void {
   timers.push(timer);
 }
 
+function fifoReader(fifo: string): ReturnType<typeof spawn> {
+  execFileSync("/usr/bin/mkfifo", [fifo]);
+  return spawn("/bin/sh", ["-c", `exec sleep 30 < ${quoted(fifo)}`], { stdio: "ignore" });
+}
+
 async function run(b: Box, argv: string[], closedStdout = false, stuckStderr?: () => void): Promise<number> {
   const write = driverOutput.write;
   driverOutput.write = (fd, bytes, done) => {
@@ -148,7 +156,8 @@ async function run(b: Box, argv: string[], closedStdout = false, stuckStderr?: (
       done(Object.assign(new Error("EPIPE"), { code: "EPIPE", errno: -32 }));
       return;
     }
-    b.driver.push(`${fd}:${Buffer.from(bytes).toString("utf8")}`);
+    if (fd === 2) b.err.push(Buffer.from(bytes).toString("utf8"));
+    else b.driver.push(`${fd}:${Buffer.from(bytes).toString("utf8")}`);
     done();
   };
   try {
@@ -279,8 +288,8 @@ macOnly("a malformed call with no service running fails at once as bad_arguments
   assert.ok(performance.now() - started < 15_000);
   assert.equal(b.io.errorCode, "bad_arguments");
   assert.ok(!fs.existsSync(path.join(b.root, "opened")));
-  assert.deepEqual(b.driver, ["2:error: positional JSON arg to 'cua-driver call' did not parse: EOF while parsing an object at line 1 column 1\n       received: {\n"]);
-  assert.equal(errText(b), "");
+  assert.deepEqual(b.driver, []);
+  assert.equal(errText(b), "error: positional JSON arg to 'cua-driver call' did not parse: EOF while parsing an object at line 1 column 1\n       received: {\n");
   assert.deepEqual(b.log(), ["call get_screen_size { --socket <check>"]);
 });
 
@@ -409,7 +418,7 @@ macOnly("an explicit --socket is never auto-started, and a down daemon there say
   assert.equal(await run(b, ["call", "list_apps", "--socket", "/tmp/other.sock"]), 1);
   assert.equal(b.io.errorCode, "daemon_not_running");
   assert.ok(!fs.existsSync(path.join(b.root, "opened")));
-  assert.ok(errText(b).startsWith("ardia computer: Cua Driver's background service isn't running on that socket"));
+  assert.ok(errText(b).startsWith("Cua Driver daemon is not running on /tmp/other.sock.\nStart it first with: cua-driver serve --socket /tmp/other.sock\nardia computer: Cua Driver's background service isn't running on that socket"), errText(b));
   assert.deepEqual(b.log(), ["call list_apps --socket /tmp/other.sock"]);
 });
 
@@ -625,4 +634,101 @@ macOnly("Ctrl-C while a long argument error is still being written stops at once
   assert.ok(stuckBytes);
   assert.equal(b.io.errorCode, "interrupted");
   assert.ok(!fs.existsSync(path.join(b.root, "opened")));
+});
+
+macOnly("a signal with stdout blocked still reports the closed reader as stdout_closed", async () => {
+  const files = probeFiles("head -c 65536 /dev/zero\ntouch READY\nexec sleep 30\n");
+  const fifo = path.join(files.root, "out.fifo");
+  const reader = fifoReader(fifo);
+  const out = fs.openSync(fifo, "w");
+  const wrapper = spawn(process.execPath, [PROBE, files.file, files.result], { stdio: ["ignore", out, "inherit"] });
+  fs.closeSync(out);
+  const exited = new Promise<void>((resolve) => wrapper.on("exit", () => resolve()));
+  const deadline = performance.now() + 20_000;
+  while (!fs.existsSync(files.ready)) {
+    assert.ok(performance.now() < deadline, "the child never got ready");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  process.kill(wrapper.pid as number, "SIGTERM");
+  await new Promise((resolve) => setTimeout(resolve, 90));
+  reader.kill("SIGKILL");
+  await exited;
+  assert.deepEqual(JSON.parse(fs.readFileSync(files.result, "utf8")), { status: 143, signal: "SIGTERM", stdoutClosed: true });
+});
+
+macOnly("guidance into a stderr nobody drains still stops on a signal", async () => {
+  const startFailed = box({ open: "fails" });
+  let stuck = false;
+  const failed = run(startFailed, ["call", "list_apps"], false, () => {
+    stuck = true;
+    setTimeout(() => process.emit("SIGTERM"), 50);
+  });
+  assert.equal(await failed, 143);
+  assert.ok(stuck);
+  assert.equal(startFailed.io.errorCode, "interrupted");
+
+  const missing = box();
+  listenOnceOpened(missing);
+  process.env.STUB_GRANTS = '{"accessibility":false,"screen_recording":true}';
+  stuck = false;
+  const refused = run(missing, ["call", "list_apps"], false, () => {
+    stuck = true;
+    setTimeout(() => process.emit("SIGINT"), 50);
+  });
+  assert.equal(await refused, 130);
+  assert.ok(stuck);
+  assert.equal(missing.io.errorCode, "interrupted");
+  assert.ok(!missing.log().includes("call list_apps"));
+
+  const after = box();
+  await listen(after.socket);
+  process.env.STUB_EXIT = "1";
+  process.env.STUB_GRANTS = '{"accessibility":true,"screen_recording":false}';
+  stuck = false;
+  const late = run(after, ["call", "screenshot"], false, () => {
+    stuck = true;
+    setTimeout(() => process.emit("SIGINT"), 50);
+  });
+  assert.equal(await late, 130);
+  assert.ok(stuck);
+  assert.equal(after.io.errorCode, "interrupted");
+});
+
+macOnly("a closed stdout during the argument check is stdout_closed, not bad_arguments", async () => {
+  const b = box();
+  process.env.STUB_CHECK_STDOUT = "usage: cua-driver call <tool> [json]";
+  assert.equal(await run(b, ["call", "list_apps"], true), 141);
+  assert.equal(b.io.errorCode, "stdout_closed");
+  assert.ok(!fs.existsSync(path.join(b.root, "opened")));
+});
+
+macOnly("a call the driver answers without a service, like --version, never starts one", async () => {
+  const b = box();
+  assert.equal(await run(b, ["call", "--version"]), 0);
+  assert.deepEqual(b.driver, ["1:cua-driver 0.38.0\n"]);
+  assert.equal(b.io.errorCode, undefined);
+  assert.ok(!fs.existsSync(path.join(b.root, "opened")));
+  assert.deepEqual(b.log(), ["call --version --socket <check>"]);
+});
+
+macOnly("an argument check killed by a signal is driver_signal with 128 + the signal", async () => {
+  const b = box();
+  process.env.STUB_CHECK_KILL = "1";
+  assert.equal(await run(b, ["call", "list_apps"]), 143);
+  assert.equal(b.io.errorCode, "driver_signal");
+  assert.ok(!fs.existsSync(path.join(b.root, "opened")));
+});
+
+macOnly("Ctrl-C while ardia looks for a running service is never lost", async () => {
+  const b = box();
+  const server = net.createServer((connection) => {
+    process.emit("SIGINT");
+    connection.end();
+  });
+  servers.push(server);
+  await new Promise<void>((resolve) => server.listen(b.socket, resolve));
+  assert.equal(await run(b, ["call", "list_apps"]), 130);
+  assert.equal(b.io.errorCode, "interrupted");
+  assert.deepEqual(b.log(), []);
 });

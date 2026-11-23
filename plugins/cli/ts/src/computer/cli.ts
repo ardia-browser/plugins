@@ -17,8 +17,8 @@ import { DaemonFailure, daemonListening, explicitSocket, readGrants, startDaemon
 import { interrupted } from "../control.ts";
 import { RunCancelled } from "../proc/group.ts";
 import { daemonDownLines, daemonLines, notInstalledLine, permissionLines } from "./guidance.ts";
-import { forward, supervise } from "./supervise.ts";
-import { tmpdir } from "node:os";
+import { forward, supervise, type Supervised } from "./supervise.ts";
+import { constants as osConstants, tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
 import { join } from "../paths.ts";
 
@@ -195,9 +195,9 @@ async function resolveBinary(io: CommandIo, argv: readonly string[]): Promise<{ 
 
 const ARGUMENT_CHECK_TIMEOUT_S = 30;
 
-type Preflight = { signal: AbortSignal; status: () => number; release: () => void };
+type Stoppable = { signal: AbortSignal; status: () => number; release: () => void };
 
-function preflight(): Preflight {
+function stoppable(): Stoppable {
   const controller = new AbortController();
   let status = 130;
   const onInterrupt = () => {
@@ -221,6 +221,24 @@ function preflight(): Preflight {
   };
 }
 
+class OutputClosed extends Error {}
+
+async function tell(io: CommandIo, lines: readonly string[], signal: AbortSignal): Promise<void> {
+  io.flush();
+  const text = lines.map((line) => `${inert(line)}\n`).join("");
+  if ((await forward(2, text, signal)) === "stopped") throw new Stopped();
+}
+
+async function failSaying(io: CommandIo, code: string, lines: readonly string[], status: number, signal: AbortSignal): Promise<number> {
+  io.errorCode = code;
+  await tell(io, lines, signal);
+  return status;
+}
+
+function signalName(number: number): string | undefined {
+  return Object.entries(osConstants.signals).find(([, value]) => value === number)?.[0];
+}
+
 async function argumentsRefused(io: CommandIo, binary: string, argv: readonly string[], signal: AbortSignal): Promise<number | undefined> {
   const nowhere = join(tmpdir(), `ardia-cua-check-${process.pid}-${randomBytes(6).toString("hex")}.sock`);
   let checked;
@@ -230,11 +248,17 @@ async function argumentsRefused(io: CommandIo, binary: string, argv: readonly st
     if (error instanceof RunCancelled) throw new Stopped();
     return undefined;
   }
-  if (checked.code === 0 || (checked.code === 1 && daemonDownIn(checked.stderr))) return undefined;
+  if (checked.code === 1 && daemonDownIn(checked.stderr)) return undefined;
   io.flush();
-  if ((await forward(1, checked.stdout, signal)) === "stopped" || (await forward(2, checked.stderr, signal)) === "stopped") throw new Stopped();
-  io.errorCode = classifyDriverExit(argv[0] ?? "", checked.code, checked.stderr);
-  return checked.code;
+  const shown = await forward(1, checked.stdout, signal);
+  if (shown === "stopped") throw new Stopped();
+  if (shown === "failed") throw new OutputClosed();
+  if ((await forward(2, checked.stderr, signal)) === "stopped") throw new Stopped();
+  if (checked.code === 0) return 0;
+  const killedBy = checked.code < 0 ? (signalName(-checked.code) ?? `signal ${-checked.code}`) : undefined;
+  const status = checked.code < 0 ? 128 + -checked.code : checked.code;
+  io.errorCode = classifyDriverExit(argv[0] ?? "", status, checked.stderr, killedBy);
+  return status;
 }
 
 async function ensureDaemon(io: CommandIo, binary: string, argv: readonly string[], signal: AbortSignal): Promise<number | undefined> {
@@ -246,20 +270,59 @@ async function ensureDaemon(io: CommandIo, binary: string, argv: readonly string
     await startDaemon(installedApp(), signal);
   } catch (error) {
     if (!(error instanceof DaemonFailure)) throw error;
-    return fail(io, error.code, daemonLines(error.message, error.code));
+    return failSaying(io, error.code, daemonLines(error.message, error.code), 1, signal);
   }
   const report = await readGrants(binary, signal);
   const code = report?.running ? permissionCode(report.grants) : undefined;
-  if (report?.running && code !== undefined) return fail(io, code, permissionLines(installedApp(), report.grants));
+  if (report?.running && code !== undefined) return failSaying(io, code, permissionLines(installedApp(), report.grants), 1, signal);
   return undefined;
 }
 
-async function grantsAfterFailure(binary: string): Promise<{ code: string; grants?: Grants } | undefined> {
-  const report = await readGrants(binary);
+async function grantsAfterFailure(binary: string, signal: AbortSignal): Promise<{ code: string; grants?: Grants } | undefined> {
+  const report = await readGrants(binary, signal);
   if (report === undefined) return undefined;
   if (!report.running) return { code: "daemon_not_running" };
   const code = permissionCode(report.grants);
   return code === undefined ? undefined : { code, grants: report.grants };
+}
+
+async function stoppably(io: CommandIo, work: (signal: AbortSignal) => Promise<number | undefined>): Promise<number | undefined> {
+  const stop = stoppable();
+  try {
+    const status = await work(stop.signal);
+    if (stop.signal.aborted) throw new Stopped();
+    return status;
+  } catch (error) {
+    if (error instanceof OutputClosed) return fail(io, "stdout_closed", [], 141);
+    if (!(error instanceof Stopped)) throw error;
+    return fail(io, "interrupted", [], stop.status());
+  } finally {
+    stop.release();
+  }
+}
+
+async function guidance(io: CommandIo, binary: string, argv: readonly string[], ran: Supervised, ownSocket: boolean, signal: AbortSignal): Promise<number> {
+  const command = argv[0] ?? "";
+  if (ran.status === 0 && ran.signal === undefined) {
+    if (permissionsStatus(argv)) {
+      const report = await readGrants(binary, signal);
+      if (report?.running && permissionCode(report.grants) !== undefined) await tell(io, permissionLines(installedApp(), report.grants), signal);
+    }
+    return 0;
+  }
+  let code = classifyDriverExit(command, ran.status, ran.stderr, ran.signal);
+  let grants = ran.signal === undefined && code !== "bad_arguments" ? missingGrantsIn(ran.stderr) : undefined;
+  if (!ownSocket && grants === undefined && code !== "bad_arguments" && code !== "driver_signal") {
+    const found = await grantsAfterFailure(binary, signal);
+    if (found !== undefined) {
+      code = found.code;
+      grants = found.grants;
+    }
+  }
+  if (grants !== undefined) return failSaying(io, code, permissionLines(installedApp(), grants), ran.status, signal);
+  if (code === "daemon_not_running") return failSaying(io, code, daemonDownLines(ownSocket), ran.status, signal);
+  io.errorCode = code;
+  return ran.status;
 }
 
 async function runSupervised(io: CommandIo, binary: string, installed: boolean, argv: readonly string[]): Promise<number> {
@@ -267,41 +330,19 @@ async function runSupervised(io: CommandIo, binary: string, installed: boolean, 
   const guided = installed && (command === "call" || command === "permissions");
   const ownSocket = explicitSocket(argv);
   if (installed && command === "call" && !ownSocket && !argv.some((word) => word === "-h" || word === "--help")) {
-    const stop = preflight();
-    try {
-      const refused = await ensureDaemon(io, binary, argv, stop.signal);
-      if (refused !== undefined) return refused;
-    } catch (error) {
-      if (!(error instanceof Stopped)) throw error;
-      return fail(io, "interrupted", [], stop.status());
-    } finally {
-      stop.release();
-    }
+    const settled = await stoppably(io, (signal) => ensureDaemon(io, binary, argv, signal));
+    if (settled !== undefined) return settled;
   }
   io.flush();
   const ran = await supervise(binary, [binary, ...argv], driverEnv());
   if (ran.spawnErrno !== undefined) return fail(io, "driver_spawn_failed", [`${pythonOsError(ran.spawnErrno)}: [Errno ${ran.spawnErrno}] ${strerror(ran.spawnErrno)}: '${binary}'`]);
   if (ran.stdoutClosed) return fail(io, "stdout_closed", [], 141);
-  if (ran.status === 0 && ran.signal === undefined) {
-    if (guided && permissionsStatus(argv)) {
-      const report = await readGrants(binary);
-      if (report?.running && permissionCode(report.grants) !== undefined) for (const line of permissionLines(installedApp(), report.grants)) io.err(line);
-    }
-    return 0;
+  if (!guided) {
+    if (ran.status === 0 && ran.signal === undefined) return 0;
+    io.errorCode = classifyDriverExit(command, ran.status, ran.stderr, ran.signal);
+    return ran.status;
   }
-  let code = classifyDriverExit(command, ran.status, ran.stderr, ran.signal);
-  let grants = ran.signal === undefined && code !== "bad_arguments" ? missingGrantsIn(ran.stderr) : undefined;
-  if (guided && !ownSocket && grants === undefined && code !== "bad_arguments" && code !== "driver_signal") {
-    const found = await grantsAfterFailure(binary);
-    if (found !== undefined) {
-      code = found.code;
-      grants = found.grants;
-    }
-  }
-  if (guided && grants !== undefined) return fail(io, code, permissionLines(installedApp(), grants), ran.status);
-  if (guided && code === "daemon_not_running") return fail(io, code, daemonDownLines(ownSocket), ran.status);
-  io.errorCode = code;
-  return ran.status;
+  return (await stoppably(io, (signal) => guidance(io, binary, argv, ran, ownSocket, signal))) as number;
 }
 
 async function runDriver(io: CommandIo, argv: readonly string[]): Promise<number> {
