@@ -30156,7 +30156,7 @@
       "command": "computer",
       "subcommand": "setup",
       "exit_code": 2,
-      "error_code": null,
+      "error_code": "usage_error",
       "flags": "",
       "cli_version": "0.0.0.dev0",
       "$environment": "dev"
@@ -30181,7 +30181,7 @@
       "command": "computer",
       "subcommand": "setup",
       "exit_code": 2,
-      "error_code": null,
+      "error_code": "usage_error",
       "flags": "",
       "cli_version": "0.0.0.dev0",
       "$environment": "dev"
@@ -30461,7 +30461,7 @@
       "command": "computer",
       "subcommand": "mcp-config",
       "exit_code": 2,
-      "error_code": null,
+      "error_code": "usage_error",
       "flags": "",
       "cli_version": "0.0.0.dev0",
       "$environment": "dev"
@@ -30486,7 +30486,7 @@
       "command": "computer",
       "subcommand": "mcp-config",
       "exit_code": 2,
-      "error_code": null,
+      "error_code": "usage_error",
       "flags": "",
       "cli_version": "0.0.0.dev0",
       "$environment": "dev"

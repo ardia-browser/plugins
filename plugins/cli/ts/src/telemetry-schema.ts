@@ -5,6 +5,7 @@ import { strerror } from "./paths.ts";
 import { CODES } from "./browse/codes.ts";
 import { cliVersion } from "./version.ts";
 import { SOCKET_ERROR_CODES } from "./error-codes.ts";
+import { COMPUTER_ERROR_CODES } from "./computer/codes.ts";
 import { EXCEPTION_SOURCES, EXCEPTION_TYPES, knownBatchStep, knownCommand, knownExceptionType, knownFlags, knownSubcommand, OTHER_NAME } from "./telemetry-names.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -37,7 +38,7 @@ const CLI_ERROR_CODES = [
   "bad_params", "command_failed", "connection_dropped", "internal_error", "invalid_name", "invalid_value", "methods_unsupported", "no_pid", "not_set", "plugin_refused",
   "removed_command", "stdout_closed", "unhandled_exception", "unknown_setting", "unreachable", "unsupported_protocol", "usage_error",
 ];
-export const TELEMETRY_ERROR_CODES: ReadonlySet<string> = new Set([...CODES, ...SOCKET_ERROR_CODES, ...CLI_ERROR_CODES]);
+export const TELEMETRY_ERROR_CODES: ReadonlySet<string> = new Set([...CODES, ...SOCKET_ERROR_CODES, ...CLI_ERROR_CODES, ...COMPUTER_ERROR_CODES]);
 const DURATIONS = new Set(METRIC_DURATIONS);
 
 type Check = (value: Value) => Value | undefined;

@@ -30,16 +30,38 @@ const DOWNLOAD_TIMEOUT_S = 60;
 const MAX_REDIRECTS = 10;
 export const QUIET_ENV: Record<string, string> = { CUA_DRIVER_RS_TELEMETRY_ENABLED: "0", CUA_DRIVER_RS_UPDATE_CHECK: "0" };
 
-export const tools = {
+export const tools: {
+  codesign: string;
+  ditto: string;
+  open: string;
+  lsregister: string;
+  applications: string;
+  releaseUrl: string;
+  socket: string | undefined;
+} = {
   codesign: "/usr/bin/codesign",
   ditto: "/usr/bin/ditto",
+  open: "/usr/bin/open",
   lsregister: "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister",
   applications: "/Applications",
   releaseUrl: RELEASE_URL,
+  socket: undefined,
 };
 
-export class Refused extends Error {}
-export class Inconclusive extends Refused {}
+export class Refused extends Error {
+  constructor(
+    message: string,
+    readonly code: string = "driver_install_failed",
+  ) {
+    super(message);
+  }
+}
+
+export class Inconclusive extends Refused {
+  constructor(message: string) {
+    super(message, "driver_check_failed");
+  }
+}
 
 export function say(line: string, sink: (text: string) => void): void {
   sink(line);
@@ -106,7 +128,7 @@ export function driverEnv(): Record<string, string> {
 class DownloadFailed extends Error {}
 
 async function download(url: string, dest: string): Promise<void> {
-  if (!url.startsWith("https://")) throw new Refused(`refused a download that isn't https: ${url}`);
+  if (!url.startsWith("https://")) throw new Refused(`refused a download that isn't https: ${url}`, "download_failed");
   let current = url;
   let response: Response | undefined;
   const controller = new AbortController();
@@ -173,14 +195,14 @@ async function fetchVerified(asset: string, expected: string, work: string, spea
   } catch (error) {
     if (error instanceof Refused) throw error;
     const detail = error instanceof DownloadFailed ? error.message : osErrorText(error);
-    throw new Refused(`couldn't download ${asset}: ${detail}`);
+    throw new Refused(`couldn't download ${asset}: ${detail}`, "download_failed");
   }
   const actual = sha256Of(path);
   if (actual !== expected) {
     try {
       unlinkSync(path);
     } catch {}
-    throw new Refused(`checksum mismatch for ${asset}: expected ${expected}, got ${actual}; nothing was installed`);
+    throw new Refused(`checksum mismatch for ${asset}: expected ${expected}, got ${actual}; nothing was installed`, "driver_unverified");
   }
   speak(`step verify ${asset} sha256 ${actual}`);
   return path;
@@ -273,13 +295,13 @@ export async function verifyApp(app: string): Promise<void> {
   }
   if (result.code !== 0) {
     const detail = pySplitlines(pyStrip(result.stderr || result.stdout));
-    throw new Refused(`${app} isn't Cua AI's signed ${APP_NAME} (${detail.length > 0 ? detail[0] : `codesign exit ${result.code}`})`);
+    throw new Refused(`${app} isn't Cua AI's signed ${APP_NAME} (${detail.length > 0 ? detail[0] : `codesign exit ${result.code}`})`, "driver_unverified");
   }
 }
 
 export async function checkApp(app: string): Promise<void> {
-  if (appBundleId(app) !== BUNDLE_ID) throw new Refused(`${app} has bundle id ${pyStr(appBundleId(app))}, not ${BUNDLE_ID}`);
-  if (appVersion(app) !== VERSION) throw new Refused(`${app} is version ${pyStr(appVersion(app))}, not the pinned ${VERSION}`);
+  if (appBundleId(app) !== BUNDLE_ID) throw new Refused(`${app} has bundle id ${pyStr(appBundleId(app))}, not ${BUNDLE_ID}`, "driver_unverified");
+  if (appVersion(app) !== VERSION) throw new Refused(`${app} is version ${pyStr(appVersion(app))}, not the pinned ${VERSION}`, "driver_unverified");
   await verifyApp(app);
 }
 

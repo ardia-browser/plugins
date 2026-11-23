@@ -8,6 +8,7 @@ import { CommandIo } from "../src/cmdio.ts";
 import { APP_BINARY, APP_NAME, bundledApp, BUNDLE_ID, cuaHome, extract, keepsDriverFile, Refused, tools, VERSION, versionHome } from "../src/computer/driver.ts";
 import { readRecord, saveRecord } from "../src/computer/apps.ts";
 import { computerMain, mcpConfig } from "../src/computer/cli.ts";
+import { driverOutput } from "../src/computer/supervise.ts";
 import { loadPlist } from "../src/plist.ts";
 
 const macOnly = process.platform === "darwin" ? test : test.skip;
@@ -158,15 +159,24 @@ macOnly("the driver runs only once verified, and a tampered one is refused", asy
   const box = sandbox();
   const dest = path.join(box.applications, APP_NAME);
   makeApp(dest);
-  assert.equal(await run(box, ["list-tools"]), 0);
-  assert.deepEqual(box.io.exec, { binary: path.join(dest, APP_BINARY), argv: [path.join(dest, APP_BINARY), "list-tools"] });
+  assert.equal(await run(box, ["mcp"]), 0);
+  assert.deepEqual(box.io.exec, { binary: path.join(dest, APP_BINARY), argv: [path.join(dest, APP_BINARY), "mcp"] });
   box.io.exec = undefined;
-  assert.equal(await run(box, ["help", "x"]), 0);
-  assert.deepEqual((box.io.exec as { argv: string[] } | undefined)?.argv.slice(1), ["--help", "x"]);
-  box.io.exec = undefined;
+  const driverOut: string[] = [];
+  const write = driverOutput.write;
+  driverOutput.write = (fd, bytes) => void driverOut.push(`${fd}:${Buffer.from(bytes).toString("utf8")}`);
+  try {
+    assert.equal(await run(box, ["list-tools"]), 0);
+    assert.equal(await run(box, ["help", "x"]), 0);
+  } finally {
+    driverOutput.write = write;
+  }
+  assert.equal(box.io.exec, undefined);
+  assert.equal(fs.readFileSync(path.join(box.applications, "driver.log"), "utf8"), `${VERSION} list-tools\n${VERSION} --help x\n`);
   fs.writeFileSync(path.join(dest, "Contents", "TAMPERED"), "");
   assert.equal(await run(box, ["list-tools"]), 1);
   assert.deepEqual(box.err, [`ardia computer: ${dest} isn't Cua AI's signed ${APP_NAME} (${dest}: a sealed resource is missing or invalid). ardia won't run it: move it away and run ardia computer setup\n`]);
+  assert.equal(box.io.errorCode, "driver_unverified");
   assert.equal(box.io.exec, undefined);
 });
 
@@ -174,9 +184,11 @@ macOnly("daemon commands need setup, others download the pinned driver over http
   const box = sandbox();
   assert.equal(await run(box, ["mcp"]), 1);
   assert.match(box.err[0] ?? "", /^ardia computer: Cua Driver isn't set up yet\. Run ardia computer setup: it puts CuaDriver\.app in /);
+  assert.equal(box.io.errorCode, "driver_not_installed");
   box.err.length = 0;
   assert.equal(await run(box, ["doctor"]), 1);
   assert.deepEqual(box.err, [`step download http://127.0.0.1:9/nothing/cua-driver-rs-${VERSION}-darwin-arm64.tar.gz\n`, `ardia computer: refused a download that isn't https: http://127.0.0.1:9/nothing/cua-driver-rs-${VERSION}-darwin-arm64.tar.gz\n`]);
+  assert.equal(box.io.errorCode, "download_failed");
   assert.ok(!fs.readdirSync(versionHome()).some((name) => name.startsWith(".driver-")));
 });
 

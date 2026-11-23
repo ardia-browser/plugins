@@ -107,7 +107,7 @@ export async function withApplicationsLock<T>(work: () => Promise<T>): Promise<T
   try {
     const deadline = performance.now() + LOCK_TIMEOUT_S * 1000;
     while (!flock(fd, true, false)) {
-      if (performance.now() >= deadline) throw new Refused(`another ardia computer setup or refresh is still running (waited ${LOCK_TIMEOUT_S} s)`);
+      if (performance.now() >= deadline) throw new Refused(`another ardia computer setup or refresh is still running (waited ${LOCK_TIMEOUT_S} s)`, "setup_busy");
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     return await work();
@@ -223,7 +223,7 @@ export async function placeApp(source: string): Promise<string> {
   try {
     accessSync(tools.applications, constants.W_OK);
   } catch {
-    throw new Refused(`can't write to ${tools.applications}; run ardia computer setup from an admin account`);
+    throw new Refused(`can't write to ${tools.applications}; run ardia computer setup from an admin account`, "applications_not_writable");
   }
   const previous: Value = ours ? readRecord() : null;
   let newHash: string | null;
@@ -315,6 +315,7 @@ export function ardiaCommand(): string {
   if (launcher === null) {
     throw new Refused(
       "can't find the installed ardia launcher ($ARDIA_CLI_HOME/current/bin/ardia), and won't take whatever ardia is first on PATH; Ardia puts the ardia command on your PATH, so open Ardia and run this again",
+      "launcher_missing",
     );
   }
   return launcher;
