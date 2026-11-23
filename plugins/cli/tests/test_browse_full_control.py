@@ -22,8 +22,8 @@ from ardia_cli.browse.errors import Gated, Usage
 
 CLI = Path(__file__).resolve().parents[1]
 CHROMIUM = os.environ.get("ARDIA_BROWSE_CHROMIUM", "")
-NOT_YET = "isn't available yet"
-LIMIT = "No released Ardia lets the ardia command do this: it's a deliberate safety limit, not a bug"
+NOT_YET = "needs Ardia 0.2.49 or later"
+LIMIT = "This Ardia's engine keeps the ardia command to a short list of DevTools methods; 0.2.49 lets it use them all, so update Ardia and run it again"
 PAGE = """<!doctype html><title>files</title>
 <input type=file id=f multiple><div id=out></div>
 <a id=dl href="data:text/plain;base64,aGVsbG8gZG93bmxvYWQ=" download="hello.txt">get</a>
@@ -189,13 +189,14 @@ class RawCdp(unittest.TestCase):
                 cdp(FakeState(), *argv)
             self.assertIn(said, caught.exception.message, argv)
 
-    def test_a_refused_method_says_it_is_a_deliberate_limit(self):
+    def test_a_refused_method_says_which_ardia_allows_it(self):
         refused = failure("Storage.getCookies", SimpleNamespace(detail="ardia: Storage.getCookies isn't allowed for the ardia command", code=-32000))
         state = FakeState({"Storage.getCookies": refused})
         with self.assertRaises(Gated) as caught:
             cdp(state, "Storage.getCookies")
         self.assertEqual(caught.exception.message, "`cdp` isn't allowed on this Ardia (Storage.getCookies isn't allowed for the ardia command). "
-                                                   "Updating Ardia may help; if it doesn't, do this step another way, or ask the user to do it")
+                                                   "Its engine keeps the ardia command to a short list of DevTools methods, and Ardia 0.2.49 or "
+                                                   "later allows them all: update Ardia, or do this step another way, or ask the user to do it")
 
     def test_a_borrowed_tab_takes_raw_calls_only_when_named(self):
         from ardia_cli.browse.errors import BrowseError
@@ -1031,8 +1032,7 @@ class NotAvailableYet(unittest.TestCase):
                                          ("Network.getCookies", "cookies get", "`eval document.cookie`")):
             error = Gated(method, command)
             self.assertTrue(error.message.startswith(f"`{command}` {NOT_YET} ({method} isn't allowed for the ardia command). {LIMIT}"), error.message)
-            self.assertIn("A later Ardia adds it behind its full-control setting", error.message)
-            self.assertIn(f"Instead: {instead}", error.message)
+            self.assertIn(f"Until then: {instead}", error.message)
             self.assertEqual((error.code, error.data), ("policy_refused", {"method": method, "reason": ""}))
             self.assertNotIn(": update Ardia", error.message)
 
@@ -1046,8 +1046,9 @@ class NotAvailableYet(unittest.TestCase):
         text = browse_help.OVERVIEW + "".join(browse_help.COMMANDS.values())
         for old in ("(gated", "Gated by", "gated by", "doesn't allow yet", "not allowed by Ardia's policy", "Older Ardia"):
             self.assertNotIn(old, text)
-        self.assertIn("Not available yet: cookies, state save", browse_help.OVERVIEW)
-        self.assertNotIn("update Ardia", browse_help.COMMANDS["network"])
+        self.assertIn("Need Ardia 0.2.49 or later: cookies, state save", browse_help.OVERVIEW)
+        self.assertNotIn("Not available yet", text)
+        self.assertIn("Ardia 0.2.49 or later", browse_help.COMMANDS["network"])
         self.assertIn("DOM.setFileInputFiles", browse_help.COMMANDS["upload"])
         self.assertIn("wait --download", browse_help.COMMANDS["download"])
 

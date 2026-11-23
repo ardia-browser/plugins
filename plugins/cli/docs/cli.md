@@ -1049,18 +1049,20 @@ can't be saved (`flow_not_get`), and GraphQL over GET works only when its URL va
 - **`flow list [site]`, `flow show <name> [--site s]`, `flow rm <name> [--site s]`** run without the browser; a name
   saved for several sites needs `--site`.
 
-### Not available yet: commands full control unlocks
+### Commands that need Ardia 0.2.49 or later
 
-No released Ardia has full control yet: the ardia command's token policy (`ac_cli_token_policy_methods.cc`) refuses
-the methods below, on purpose, so these commands fail with exit 1, naming the method and the command
-(`code: "policy_refused"`, `data.method`, `data.reason` empty, or `with those editing commands` for
-`clipboard copy|paste`). Both daemons say this is a deliberate
-safety limit and not a bug, that retrying or updating won't help today, that a later Ardia adds it behind its
-full-control setting, and what to do instead (ask the user to attach or download the file, `screenshot` for
-`record`, `storage` or `eval` for cookies, `set viewport` for `set device`, …; `NOT_YET` in `daemon-errors.ts` and
-`browse/errors.py`). A refusal of anything else, a method no command here is known to need, says only that this Ardia
-doesn't allow it and that updating may help, since an older Ardia also refuses methods a current one allows. An engine with full control
-allows every method, so they work as they do against a plain `--port` DevTools server, and nothing in the command
+From Ardia 0.2.49 the engine's token connection is a full DevTools client of the browser (ardia-browser/ardia #3674),
+so the commands below work as they do against a plain `--port` DevTools server. An older Ardia's token policy
+(`ac_cli_token_policy_methods.cc`) refuses the methods they need, so there they fail with exit 1, naming the method and
+the command (`code: "policy_refused"`, `data.method`, `data.reason` empty, or `with those editing commands` for
+`clipboard copy|paste`). Both daemons say the command needs Ardia 0.2.49 or later, to update Ardia and run it again,
+and what to do until then (ask the user to attach or download the file, `screenshot` for `record`, `storage` or `eval`
+for cookies, `set viewport` for `set device`, …; `NOT_YET` and `FULL_CONTROL_ARDIA` in `daemon-errors.ts` and
+`browse/errors.py`). The refusal itself is the capability test: the command always tries the method, and only an
+engine that refuses it gets the message, so nothing depends on the version string. A refusal of anything else, a
+method no command here is known to need, says this Ardia doesn't allow it and that 0.2.49 or later allows every
+method. A refusal with a reason (a tab the command didn't open, a URL, a target) also comes only from an older engine,
+and says 0.2.49 or later has no such limit. Nothing in the command
 changes. `set viewport` isn't one of them: the policy allows `Emulation.setDeviceMetricsOverride` with a width,
 height, scale and mobile on a tab the session opened and took off-screen.
 

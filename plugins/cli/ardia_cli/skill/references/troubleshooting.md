@@ -61,17 +61,18 @@ line succeeded. On `stale_ref`, take a new snapshot (or use the ref the error na
 
 ## Refused commands
 
-Not available yet on any released Ardia: cookies, `state save` (and `state load` of a file with cookies),
+These need Ardia 0.2.49 or later: cookies, `state save` (and `state load` of a file with cookies),
 `set device|geo|offline|headers|credentials|media|permission`, `network route`, `upload`, `download` and
-`wait --download`, `highlight`, `clipboard`, `trace`, `profiler`, `record` and `stream enable`. A DevTools method
-through `cdp` off Ardia's list is refused too, though an older Ardia refuses some a current one allows, so there
-updating may help. Ardia keeps them from the ardia command on purpose:
-they fail with exit 1 and `code: "policy_refused"`, say it's a deliberate limit and what to do instead. Updating or
-retrying won't help: ask the user to attach the file or download it, use `screenshot` instead of `record`, and
-`storage local|session` or `eval` instead of cookies and `state`. `set viewport <w> <h>` works on a tab this session
+`wait --download`, `highlight`, `clipboard`, `trace`, `profiler`, `record` and `stream enable`. From 0.2.49 the
+ardia command is a full DevTools client of Ardia, so they work, and so does any method through `cdp`. An older
+Ardia keeps the command to a short list of methods: there they fail with exit 1 and `code: "policy_refused"`, name
+the method, say to update Ardia and what to do until then (ask the user to attach the file or download it,
+`screenshot` instead of `record`, `storage local|session` or `eval` instead of cookies and `state`). Ask the user to
+update Ardia rather than retrying. `set viewport <w> <h>` works on a tab this session
 opened and never showed: it goes off-screen, and `--show` or `set viewport reset` reloads it at its own size. A refusal that says
-"which Ardia allows for the ardia command, but not …" is about the tab or address, not the command: it gives the
-reason (`data.reason`) and, for a tab, what Ardia has there. Pick another tab or `open` a web page. Not here at all: `connect`, `install`, `upgrade`, `doctor`, `dashboard`, `chat`, `mcp`, `profiles`,
+"which this Ardia allows for the ardia command, but not …" comes from an older Ardia and is about the tab or address,
+not the command: it gives the reason (`data.reason`) and, for a tab, what Ardia has there; 0.2.49 or later has no
+such limit. Pick another tab or `open` a web page. Not here at all: `connect`, `install`, `upgrade`, `doctor`, `dashboard`, `chat`, `mcp`, `profiles`,
 `confirm`/`deny`, iOS, cloud providers and launch flags (`--headed`, `--profile`, `--proxy`, …).
 
 ## Tabs and sessions
