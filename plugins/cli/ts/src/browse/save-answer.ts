@@ -5,7 +5,7 @@ import type { Secrets } from "../redact.ts";
 import type { Call } from "../telemetry.ts";
 import { cleanMetrics, exitOf, outputChars, textOf } from "./answer.ts";
 import { PythonCrash } from "./errors.ts";
-import { AS_TEXT, content, save, savedBody, savedBodyLine, savedLine, savedSummary, savesAsCsv, writeFailure } from "./outfile.ts";
+import { AS_TEXT, BodyDamaged, content, save, savedBody, savedBodyLine, savedLine, savedSummary, savesAsCsv, writeFailure } from "./outfile.ts";
 import type { Printer } from "./output.ts";
 
 type Outcome = { status: number | bigint; crash?: PythonCrash | undefined };
@@ -63,7 +63,14 @@ export function saveAnswer(answer: JsonObject, secrets: Secrets, printer: Printe
   }
   const given = payload.get("data");
   const data: JsonObject = given instanceof Map ? given : new Map();
-  const body = savedBody(command, data);
+  let body: Uint8Array | null;
+  try {
+    body = savedBody(command, answer, data);
+  } catch (error) {
+    if (!(error instanceof BodyDamaged)) throw error;
+    printer.err(`✗ The response body didn't arrive whole, so ${path} wasn't written; run the command again\n`);
+    return { status: 1 };
+  }
   if (body !== null) {
     let target: string;
     try {

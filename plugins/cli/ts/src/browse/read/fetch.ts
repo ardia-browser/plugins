@@ -22,8 +22,16 @@ const TEXT_TYPES = new Set([
   "application/yaml", "application/x-yaml", "application/toml", "application/x-sh", "application/sql", "image/svg+xml",
 ]);
 const SNIFFED = 8192;
+const BINARY_FAMILIES = ["image/", "audio/", "video/", "font/", "model/"];
+const BINARY_TYPES = new Set([
+  "application/zip", "application/gzip", "application/x-gzip", "application/x-tar", "application/x-7z-compressed", "application/x-rar-compressed",
+  "application/vnd.rar", "application/x-bzip2", "application/x-xz", "application/zstd", "application/wasm", "application/x-sqlite3",
+  "application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint", "application/x-msdownload", "application/java-archive",
+]);
+const UNICODE_CHARSETS = /^utf-?(16|32)(le|be)?$/iu;
 
 export type Fetched = [number, string, string, string, Uint8Array?];
+export type BinaryMode = "refuse" | "keep" | "skip";
 export type ReadOptions = Record<string, unknown>;
 
 let extraRoots: string[] | null | undefined;
@@ -80,8 +88,15 @@ export function textualType(kind: string): boolean {
   return kind.startsWith("text/") || TEXT_TYPES.has(kind) || kind.endsWith("+json") || kind.endsWith("+xml");
 }
 
+export function binaryType(kind: string): boolean {
+  if (textualType(kind)) return false;
+  return BINARY_TYPES.has(kind) || BINARY_FAMILIES.some((family) => kind.startsWith(family)) || kind.startsWith("application/vnd.openxmlformats-") || kind.startsWith("application/vnd.oasis.opendocument.");
+}
+
 export function binaryBody(kind: string, charset: string | null, body: Uint8Array): boolean {
   if (textualType(kind)) return false;
+  if (binaryType(kind)) return true;
+  if (charset !== null && UNICODE_CHARSETS.test(charset)) return false;
   const head = body.subarray(0, SNIFFED);
   if (head.includes(0)) return true;
   if (charset !== null && !/^utf-?8$/iu.test(charset)) return false;
@@ -93,12 +108,19 @@ export function binaryBody(kind: string, charset: string | null, body: Uint8Arra
   }
 }
 
+function sequenceLength(lead: number): number {
+  if (lead >= 0xc2 && lead <= 0xdf) return 2;
+  if (lead >= 0xe0 && lead <= 0xef) return 3;
+  if (lead >= 0xf0 && lead <= 0xf4) return 4;
+  return 0;
+}
+
 function trimmedToChar(head: Uint8Array): Uint8Array {
-  let end = head.length;
+  const end = head.length;
   for (let back = 1; back <= 3 && end - back >= 0; back += 1) {
     const unit = head[end - back] as number;
-    if ((unit & 0xc0) === 0xc0) return head.subarray(0, end - back);
-    if ((unit & 0x80) === 0) break;
+    if ((unit & 0xc0) === 0x80) continue;
+    return sequenceLength(unit) > back ? head.subarray(0, end - back) : head;
   }
   return head;
 }
@@ -111,7 +133,7 @@ export function requestUrl(url: string): string {
   }
 }
 
-export async function fetchUrl(url: string, timeout: number, accept = ACCEPT, keepBinary = false): Promise<Fetched> {
+export async function fetchUrl(url: string, timeout: number, accept = ACCEPT, binary: BinaryMode = "refuse"): Promise<Fetched> {
   const parts = urlsplit(url);
   if (parts.scheme !== "http" && parts.scheme !== "https") throw new BrowseError(`read fetches http(s) URLs only, not ${url}`);
   const requested = requestUrl(url);
@@ -143,8 +165,14 @@ export async function fetchUrl(url: string, timeout: number, accept = ACCEPT, ke
         );
         const location = response.headers.get("location");
         if (![301, 302, 303, 307, 308].includes(response.status) || !location || hop >= REDIRECTS) break;
-        const next = requestUrl(urljoin(target, location));
-        if (!WEB_SCHEMES.has(urlsplit(next).scheme.toLowerCase())) break;
+        const joined = urljoin(target, location);
+        if (!WEB_SCHEMES.has(urlsplit(joined).scheme.toLowerCase())) break;
+        let next: string;
+        try {
+          next = requestUrl(joined);
+        } catch {
+          break;
+        }
         response.body?.cancel().catch(() => {});
         target = next;
         landed = next;
@@ -173,7 +201,8 @@ export async function fetchUrl(url: string, timeout: number, accept = ACCEPT, ke
     const declared = charset ? (charset[1] as string) : null;
     if (binaryBody(kind, declared, body)) {
       const size = body.length > MAX_BODY ? `over ${groupThousands(String(MAX_BODY))}` : groupThousands(String(body.length));
-      if (!keepBinary) throw new BrowseError(`${url} sent a binary file (${kind || "no content type"}, ${size} bytes), not text; save it with read --http ${url} --out <file>`, null, "binary_body");
+      if (binary === "skip") return [response.status, kind || "application/octet-stream", "", final, new Uint8Array()];
+      if (binary === "refuse") throw new BrowseError(`${url} sent a binary file (${kind || "no content type"}, ${size} bytes), not text; save it with read --http ${url} --out <file>`, null, "binary_body");
       if (body.length > MAX_BODY) throw new BrowseError(`${url} sent a binary file over ${groupThousands(String(MAX_BODY))} bytes; read --http --out saves files up to that size`, null, "result_too_large");
       return [response.status, kind || "application/octet-stream", "", final, body];
     }
@@ -187,7 +216,7 @@ export async function fetchUrl(url: string, timeout: number, accept = ACCEPT, ke
 
 export async function nearestLlms(url: string, timeout: number, name = "llms.txt"): Promise<[string | null, string | null]> {
   for (const candidate of llmsCandidates(url, name)) {
-    const [status, , text, final] = await fetchUrl(candidate, timeout, "text/plain, text/markdown", true);
+    const [status, , text, final] = await fetchUrl(candidate, timeout, "text/plain, text/markdown", "skip");
     if (status === 200 && text && !text.slice(0, 500).toLowerCase().includes("<html")) return [final, text];
   }
   return [null, null];
@@ -210,16 +239,18 @@ export async function run(given: string, options: ReadOptions, globalOptions: Re
     return new Result({ content, source, contentType: "text/plain", url }, content, true);
   }
   const saving = Boolean(globalOptions["out_only"]);
-  let [status, kind, text, final, binary] = await fetchUrl(url, timeout, ACCEPT, saving);
+  let [status, kind, text, final, binary] = await fetchUrl(url, timeout, ACCEPT, saving ? "keep" : "refuse");
   if (status >= 400) throw new BrowseError(`${url} answered HTTP ${status}`);
   if (binary !== undefined) {
-    const summary = `a ${kind} file of ${groupThousands(String(binary.length))} bytes`;
-    return new Result({ url, finalUrl: final, contentType: kind, source: "response", bytes: binary.length, bodyBase64: Buffer.from(binary).toString("base64") }, summary, true);
+    if (options["require_md"]) throw new BrowseError(`${url} didn't answer with text/markdown (got ${kind})`);
+    const result = new Result({ url, finalUrl: final, contentType: kind, source: "response", bytes: binary.length }, `a ${kind} file of ${groupThousands(String(binary.length))} bytes`, true);
+    result.body = binary;
+    return result;
   }
   let source = "response";
   if (!MARKDOWN_TYPES.includes(kind) && !options["raw"]) {
     if (!urlsplit(final).path.endsWith(".md")) {
-      const [mdStatus, mdKind, mdText, mdFinal] = await fetchUrl(`${rstripSlash(final)}.md`, timeout, ACCEPT, true);
+      const [mdStatus, mdKind, mdText, mdFinal] = await fetchUrl(`${rstripSlash(final)}.md`, timeout, ACCEPT, "skip");
       if (mdStatus === 200 && (MARKDOWN_TYPES.includes(mdKind) || (mdKind === "text/plain" && mdText && !mdText.slice(0, 300).toLowerCase().includes("<html")))) {
         [status, kind, text, final, source] = [mdStatus, "text/markdown", mdText, mdFinal, "md-suffix"];
       }
@@ -230,7 +261,7 @@ export async function run(given: string, options: ReadOptions, globalOptions: Re
         for (const href of llmsHrefs(llmsText)) {
           const target = urljoin(llmsSource, href);
           if (sameDocument(target, final)) {
-            const [mdStatus, , mdText, mdFinal, mdBinary] = await fetchUrl(target, timeout, ACCEPT, true);
+            const [mdStatus, , mdText, mdFinal, mdBinary] = await fetchUrl(target, timeout, ACCEPT, "skip");
             if (mdStatus === 200 && mdBinary === undefined) [status, kind, text, final, source] = [mdStatus, "text/markdown", mdText, mdFinal, "llms.txt"];
             break;
           }

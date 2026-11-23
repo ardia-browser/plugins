@@ -1,4 +1,4 @@
-import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, renameSync, rmSync, statSync, writeSync } from "node:fs";
+import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, renameSync, rmSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { dumps, Float, type JsonObject, type Value } from "../json.ts";
 import { expandUser } from "../paths.ts";
@@ -8,7 +8,7 @@ import { groupThousands } from "../pylib/format.ts";
 import { joinedWords, splitlines } from "../pylib/str.ts";
 import { redact } from "../redact.ts";
 import { Usage } from "./daemon-errors.ts";
-import { wellFormed } from "./paths.ts";
+import { wellFormed, writeAllFd } from "./paths.ts";
 
 export const TAKES_OUT = ["script", "eval", "read", "snapshot", "get"];
 export const AS_TEXT = ["snapshot", "get"];
@@ -218,10 +218,16 @@ function currentUmask(): number {
   return mask;
 }
 
-export function savedBody(command: string, data: JsonObject): Uint8Array | null {
-  const encoded = command === "read" ? data.get("bodyBase64") : undefined;
-  return typeof encoded === "string" ? Buffer.from(encoded, "base64") : null;
+export function savedBody(command: string, answer: JsonObject, data: JsonObject): Uint8Array | null {
+  const encoded = command === "read" ? answer.get("body") : undefined;
+  if (typeof encoded !== "string") return null;
+  const body = Buffer.from(encoded, "base64");
+  const size = data.get("bytes");
+  if (body.toString("base64") !== encoded || typeof size !== "bigint" || BigInt(body.length) !== size) throw new BodyDamaged();
+  return body;
 }
+
+export class BodyDamaged extends Error {}
 
 export function savedBodyLine(target: string, body: Uint8Array, data: JsonObject): string {
   const kind = data.get("contentType");
@@ -242,8 +248,7 @@ export function save(path: string, text: string | Uint8Array): string {
   try {
     const fd = openSync(temporary, "wx", 0o600);
     try {
-      if (typeof text === "string") writeSync(fd, wellFormed(redact(text)));
-      else writeSync(fd, text);
+      writeAllFd(fd, typeof text === "string" ? Buffer.from(wellFormed(redact(text)), "utf8") : text);
     } finally {
       closeSync(fd);
     }

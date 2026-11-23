@@ -9,9 +9,9 @@ import { redact } from "../../redact.ts";
 import { BrowseError, ConnectionLost, OutcomeUnknown, Usage } from "../daemon-errors.ts";
 import type { JsonObject } from "../../json.ts";
 import { OUTPUT_CAP, pyValue, Result } from "../daemon/render.ts";
-import { content, savedBody, savedBodyLine } from "../outfile.ts";
+import { content, savedBodyLine } from "../outfile.ts";
 import { add, failedStep, flag } from "../metrics.ts";
-import { wellFormed } from "../paths.ts";
+import { wellFormed, writeAllFd } from "../paths.ts";
 import { Ctx } from "./ctx.ts";
 import { ALIASES, dispatch, hooks, register } from "./index.ts";
 import { parse } from "./parse.ts";
@@ -145,7 +145,12 @@ export function saveText(given: string, text: string | Uint8Array): string {
   fs.mkdirSync(path.dirname(target), { recursive: true });
   const temporary = path.join(path.dirname(target), `.${path.basename(target)}.${process.pid}.${Date.now()}.part`);
   try {
-    fs.writeFileSync(temporary, typeof text === "string" ? wellFormed(redact(text)) : text, { encoding: "utf8", flag: "wx", mode: 0o666 });
+    const fd = fs.openSync(temporary, "wx", 0o666);
+    try {
+      writeAllFd(fd, typeof text === "string" ? Buffer.from(wellFormed(redact(text)), "utf8") : text);
+    } finally {
+      fs.closeSync(fd);
+    }
     try {
       fs.chmodSync(temporary, fs.statSync(target).mode & 0o777);
     } catch {}
@@ -172,7 +177,7 @@ function writeFailure(error: unknown): string {
   return (code && reasons[code]) || (error instanceof Error ? error.message : String(error));
 }
 
-function saveBatchBody(ctx: Ctx, result: Result, target: string, body: Uint8Array, data: JsonObject): [string, boolean] {
+function saveBatchBody(ctx: Ctx, target: string, body: Uint8Array, data: JsonObject): [string, boolean] {
   let saved: string;
   try {
     saved = saveText(ctx.path(target), body);
@@ -180,7 +185,6 @@ function saveBatchBody(ctx: Ctx, result: Result, target: string, body: Uint8Arra
     if (!(error instanceof Usage) && !(error instanceof Error && "code" in error)) throw error;
     return [`✗ Couldn't write ${target}: ${writeFailure(error)}`, false];
   }
-  if (result.data !== null && typeof result.data === "object") delete (result.data as Record<string, unknown>)["bodyBase64"];
   flag("saved_to_file", true);
   flag("batch_line_saved", true);
   flag("read_binary_saved", true);
@@ -188,10 +192,9 @@ function saveBatchBody(ctx: Ctx, result: Result, target: string, body: Uint8Arra
 }
 
 function saveBatchLine(ctx: Ctx, name: string, result: Result, target: string): [string, boolean] {
-  if (name === "read") {
+  if (name === "read" && result.body) {
     const data = pyValue(result.data ?? {});
-    const body = data instanceof Map ? savedBody(name, data) : null;
-    if (body !== null && data instanceof Map) return saveBatchBody(ctx, result, target, body, data);
+    return saveBatchBody(ctx, target, result.body, data instanceof Map ? data : new Map());
   }
   let text = result.text ?? "";
   let summary = "its text";

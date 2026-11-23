@@ -5,8 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { codeJsonAnswer } from "../../src/browse/answer-codes.ts";
 import { BrowseError } from "../../src/browse/daemon-errors.ts";
-import { save, savedBody } from "../../src/browse/outfile.ts";
+import { answerOf } from "../../src/browse/local-answer.ts";
+import { BodyDamaged, save, savedBody } from "../../src/browse/outfile.ts";
 import { binaryBody, fetchUrl, requestUrl, run as fetchRun } from "../../src/browse/read/fetch.ts";
+import { addSecret, clearSecrets } from "../../src/redact.ts";
 import { readHttp } from "../../src/browse/read/pages.ts";
 import type { Value } from "../../src/json.ts";
 import { loads } from "../../src/pyjson.ts";
@@ -30,6 +32,11 @@ beforeAll(() => {
       if (url.pathname === "/untyped") return new Response(ZIP);
       if (url.pathname === "/plain-octets") return new Response("just text, mislabeled", { headers: { "content-type": "application/octet-stream" } });
       if (url.pathname === "/caf%C3%A9") return new Response("<html><title>Café</title><body><main>Un café, s'il vous plaît.</main></body></html>", { headers: { "content-type": "text/html; charset=utf-8" } });
+      if (url.pathname === "/utf16") return new Response(Buffer.from("Hello", "utf16le"), { headers: { "content-type": "application/octet-stream; charset=utf-16le" } });
+      if (url.pathname === "/pixmap") return new Response(Uint8Array.from([0x50, 0x36, 0x0a, 0x31, 0x20, 0x31, 0x0a, 0x32, 0x35, 0x35, 0x0a, 0x01, 0x02, 0x03]), { headers: { "content-type": "image/x-portable-pixmap" } });
+      if (url.pathname === "/readable") return new Response("<html><title>Readable</title><body><main>A readable page with enough words in it.</main></body></html>", { headers: { "content-type": "text/html" } });
+      if (url.pathname === "/readable.md") return new Response(new Uint8Array(8 * 1024 * 1024 + 1).fill(0), { headers: { "content-type": "application/octet-stream" } });
+      if (url.pathname === "/to-file") return new Response(null, { status: 302, headers: { location: "file://localhost:123/something" } });
       if (url.pathname === "/moved") return new Response(null, { status: 302, headers: { location: "/café" } });
       return new Response("nope", { status: 404 });
     },
@@ -55,21 +62,46 @@ describe("read --http keeps binary bodies whole (plugins#73, FB-8EJR)", () => {
     const long = new Uint8Array(9000).fill(0x61);
     long.set([0xc3, 0xa9], 8191);
     expect(binaryBody("application/octet-stream", null, long)).toBe(false);
+    const badEdge = new Uint8Array(9000).fill(0x61);
+    badEdge[8191] = 0xff;
+    expect(binaryBody("application/octet-stream", null, badEdge)).toBe(true);
+    expect(binaryBody("application/octet-stream", "utf-16le", Buffer.from("Hello", "utf16le"))).toBe(false);
+    expect(binaryBody("image/x-portable-pixmap", null, new TextEncoder().encode("P6\n1 1\n255\n"))).toBe(true);
+    expect(binaryBody("application/vnd.openxmlformats-officedocument.presentationml.presentation", null, new TextEncoder().encode("PK"))).toBe(true);
   });
 
-  test("with --out the body comes back byte for byte and saves raw", async () => {
+  test("with --out the body travels outside the redacted text and saves byte for byte", async () => {
     const result = await fetchRun(`${base}/deck.pptx`, {}, { out_only: true });
     const data = result.data as Record<string, unknown>;
     expect(data["contentType"]).toBe("application/zip");
     expect(data["bytes"]).toBe(ZIP.length);
-    const body = savedBody("read", new Map(Object.entries(data)) as Map<string, Value>);
-    expect(body).not.toBeNull();
-    const target = save(join(folder, "deck.pptx"), body as Uint8Array);
-    expect(Buffer.compare(readFileSync(target), Buffer.from(ZIP))).toBe(0);
+    expect(Object.keys(data)).not.toContain("bodyBase64");
+    expect(Buffer.compare(Buffer.from(result.body as Uint8Array), Buffer.from(ZIP))).toBe(0);
+    clearSecrets();
+    try {
+      const encoded = Buffer.from(ZIP).toString("base64");
+      addSecret(encoded.slice(4, 8));
+      const answer = answerOf({ json: true }, result, null);
+      expect(answer.get("body")).toBe(encoded);
+      const payload = loads(answer.get("out") as string) as Map<string, Value>;
+      const body = savedBody("read", answer, payload.get("data") as Map<string, Value>);
+      const target = save(join(folder, "deck.pptx"), body as Uint8Array);
+      expect(Buffer.compare(readFileSync(target), Buffer.from(ZIP))).toBe(0);
+    } finally {
+      clearSecrets();
+    }
+  });
+
+  test("a body that arrives altered or short is refused, never saved", () => {
+    const data = new Map<string, Value>([["bytes", BigInt(ZIP.length)]]);
+    const encoded = Buffer.from(ZIP).toString("base64");
+    expect(() => savedBody("read", new Map([["body", encoded.slice(0, 8)]]), data)).toThrow(BodyDamaged);
+    expect(() => savedBody("read", new Map([["body", `${encoded.slice(0, 4)}***${encoded.slice(7)}`]]), data)).toThrow(BodyDamaged);
+    expect(savedBody("read", new Map([["body", encoded]]), data)?.length).toBe(ZIP.length);
   });
 
   test("an untyped binary body is sniffed and kept raw too", async () => {
-    const [, kind, text, , body] = await fetchUrl(`${base}/untyped`, 5, undefined, true);
+    const [, kind, text, , body] = await fetchUrl(`${base}/untyped`, 5, undefined, "keep");
     expect(kind).toBe("application/octet-stream");
     expect(text).toBe("");
     expect(Buffer.compare(Buffer.from(body as Uint8Array), Buffer.from(ZIP))).toBe(0);
@@ -93,8 +125,23 @@ describe("read --http keeps binary bodies whole (plugins#73, FB-8EJR)", () => {
   });
 
   test("text --out saves are unchanged", () => {
-    expect(savedBody("read", new Map([["content", "hello"]]))).toBeNull();
-    expect(savedBody("script", new Map([["bodyBase64", "aGk="]]))).toBeNull();
+    expect(savedBody("read", new Map(), new Map([["content", "hello"]]))).toBeNull();
+    expect(savedBody("script", new Map([["body", "aGk="]]), new Map([["bytes", 2n]]))).toBeNull();
+  });
+
+  test("a UTF-16 body served as octets reads as text, a pixmap saves raw", async () => {
+    expect((await fetchRun(`${base}/utf16`, { raw: true }, {})).data).toMatchObject({ content: "Hello" });
+    const pixmap = await fetchRun(`${base}/pixmap`, {}, { out_only: true });
+    expect(pixmap.body?.length).toBe(14);
+  });
+
+  test("an optional .md probe that answers binary never breaks a readable page", async () => {
+    const result = await fetchRun(`${base}/readable`, {}, {});
+    expect(String((result.data as Record<string, unknown>)["content"])).toContain("A readable page");
+  });
+
+  test("--require-md refuses a binary body even with --out", async () => {
+    await expect(fetchRun(`${base}/deck.pptx`, { require_md: true }, { out_only: true })).rejects.toBeInstanceOf(BrowseError);
   });
 });
 
@@ -113,6 +160,12 @@ describe("read --http fetches URLs written with Unicode (plugins#73, FB-A2CU, FB
     expect(seen).toContain("/caf%C3%A9");
   });
 
+  test("a redirect to a non-web scheme still stops at the redirect", async () => {
+    const [status, , text] = await fetchUrl(`${base}/to-file`, 5);
+    expect(status).toBe(302);
+    expect(text).toBe("");
+  });
+
   test("a redirect to a Unicode Location is followed", async () => {
     const [status, , text] = await fetchUrl(`${base}/moved`, 5);
     expect(status).toBe(200);
@@ -129,6 +182,16 @@ describe("read --http fetches URLs written with Unicode (plugins#73, FB-A2CU, FB
 });
 
 describe("a read with a failed page keeps its JSON payload (plugins#73)", () => {
+  test("only a read's page results pass through; other success:true answers with exit 1 are still coded", () => {
+    const out = `${JSON.stringify({ success: true, data: null, error: null })}\n`;
+    const answer = new Map<string, Value>([["exit", 1n], ["out", out], ["err", ""]]);
+    codeJsonAnswer(answer, "get");
+    expect(JSON.parse(answer.get("out") as string).code).toBe("internal_error");
+    const read = new Map<string, Value>([["exit", 1n], ["out", out], ["err", ""]]);
+    codeJsonAnswer(read, "read");
+    expect(JSON.parse(read.get("out") as string).code).toBe("internal_error");
+  });
+
   test("success:true with exit 1 is passed through, not wrapped as an internal_error string", () => {
     const out = `${JSON.stringify({ success: true, data: { pages: [{ url: "a", text: "x" }, { url: "b", error: "HTTP 404" }] }, error: null })}\n`;
     const answer = new Map<string, Value>([["exit", 1n], ["out", out], ["err", ""]]);

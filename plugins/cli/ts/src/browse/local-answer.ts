@@ -27,6 +27,7 @@ export function answerOf(options: Record<string, unknown>, result: Result | null
     ["err", redact(err)],
   ]);
   if (error !== null && error.code) answer.set("code", error.code);
+  if (result?.body) answer.set("body", Buffer.from(result.body).toString("base64"));
   CLIENT_SIDE.add(answer);
   return answer;
 }

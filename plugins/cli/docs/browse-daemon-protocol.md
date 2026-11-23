@@ -102,6 +102,7 @@ One line of JSON (UTF-8, `\n`), at most 256 MiB. An answer over that is replaced
 | `code` | `[a-z][a-z0-9_]{0,40}`, optional | the error code (`session_busy`, `command_timeout`, `connection_lost`, `tab_gone`, `unsupported`, …) |
 | `metrics` | object of numbers and booleans, optional | the command's telemetry counts, timings and flags |
 | `busy_elsewhere` | true, optional | the session was busy and the request had `beside_if_busy` |
+| `body` | base64 string, optional | `read --http … --out` of a binary response: its bytes as sent, outside `out` so redaction never touches them; the client checks the length against `data.bytes` and writes them raw |
 | `daemon` | `ts/<version>`, optional | sent only by the TypeScript daemon; its absence means Python's |
 
 Planned: `loader` (plugin mode, F1).

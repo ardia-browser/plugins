@@ -2565,10 +2565,12 @@ Its read side (slice D4: `browse/snapshot/collect.ts`, `take.ts`, `browse/read/`
   `URL`), redirects included, and reports it as given; Python's urllib raised `UnicodeEncodeError`, which ended a
   whole multi-URL read (FB-A2CU, FB-5QSW). A body that isn't text (a non-text content type with a NUL byte or invalid
   UTF-8 in its first 8 KB; `text/*`, JSON, XML, JavaScript and `+json`/`+xml` types always read as text) is never
-  decoded: with `--out` (alone or on a `batch` line) the bytes are saved as sent, up to 8 MB (`read_binary_saved`),
+  decoded: with `--out` (alone or on a `batch` line) the bytes are saved as sent, up to 8 MB (`read_binary_saved`); they travel in the answer's `body` field, outside the redacted text, and the client checks their length before writing,
   where Python wrote the decoded text with U+FFFD in place of every invalid byte (FB-8EJR). Without `--out` the page
   fails with `binary_body` and says to save it. A `--json` read where some pages failed prints its `success: true`
-  payload with exit status 1, where the client used to wrap the whole payload as an `internal_error` string.
+  payload with exit status 1, where the client used to wrap the whole payload as an `internal_error` string (other
+  commands' `success: true` answers with a non-zero exit are still coded). A single `read --http /path` resolves
+  against the session's tab, where it used to fetch `https:///path`.
 - `read`'s reader tabs are D2's marked temporary tabs (`about:blank#ardia-temp-<nonce>`). The harness compares them
   through the `temp-tab-marker` divergence.
 
