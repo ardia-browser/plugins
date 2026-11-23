@@ -46,13 +46,29 @@ function stampedSessionKey(keySource: string, session: string): string {
   return createHash("sha256").update(`\0${keySource}\0${session}\0build:${TEST_BUILD}`, "utf8").digest("hex").slice(0, 24);
 }
 
+function holdersFromProc(files: string[]): number[] {
+  const wanted = new Set(files.map((file) => fs.realpathSync(file)));
+  const found: number[] = [];
+  for (const entry of fs.readdirSync("/proc")) {
+    if (!/^\d+$/.test(entry)) continue;
+    try {
+      const fds = path.join("/proc", entry, "fd");
+      if (fs.readdirSync(fds).some((fd) => wanted.has(fs.readlinkSync(path.join(fds, fd))))) found.push(Number(entry));
+    } catch {}
+  }
+  return found;
+}
+
 function lockHolders(files: string[]): number[] {
   if (files.length === 0) return [];
   const listed = spawnSync("lsof", ["-t", ...files], { encoding: "utf8", timeout: 20_000 });
-  const pids = (listed.stdout ?? "")
-    .split(/\s+/)
-    .filter((word) => word !== "")
-    .map(Number);
+  const pids =
+    listed.error !== undefined
+      ? holdersFromProc(files)
+      : (listed.stdout ?? "")
+          .split(/\s+/)
+          .filter((word) => word !== "")
+          .map(Number);
   return [...new Set(pids)].filter((pid) => pid !== process.pid).sort((a, b) => a - b);
 }
 
