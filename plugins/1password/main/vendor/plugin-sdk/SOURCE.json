@@ -1,7 +1,7 @@
 {
   "repository": "https://github.com/ardia-browser/ardia",
   "path": "packages/plugin-sdk/src",
-  "commit": "7046c5e8431f9f0013a3cd6932b7a62d3dd7a2ba",
+  "commit": "dc45e8a0da0eb6dd6acc71c24132cba8fa8a9d1f",
   "sha256": {
     "api.ts": "8178d054adec1dd75a60f06800d6b6260167ff746afeb3f5780f866019a22f8e",
     "componentProps.ts": "aceaf3b68a6e950a959bb4758c4cb4cb87fdf5053a6f2b0f3762d1f8cbd66604",
