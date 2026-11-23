@@ -80,7 +80,7 @@ export async function typeInto(page: Page, element: Element, text: string, human
 }
 
 export async function clearField(page: Page, element: Element, humanize: boolean): Promise<void> {
-  if (!(await editableText(page, element))["text"]) return;
+  if (!(await info(page, element))["value"]) return;
   const input = inputOf(page);
   await expectInput(page, element.frame, () => input.gesture("clear", () => input.pressCombo("Meta+a", humanize)), { keydown: 2 }, "Select all", element);
   await expectInput(page, element.frame, () => input.gesture("clear", () => input.pressCombo("Backspace", humanize)), { keydown: 1 }, "Backspace", element);

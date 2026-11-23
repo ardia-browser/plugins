@@ -1,0 +1,88 @@
+{
+ "source": "tests/test_browse_act.py ActInChrome.test_fill_still_clears_fields_and_editors_the_chrome_rule_must_not_skip",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/rich-editor.html"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "fill",
+    "#num",
+    "7"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.querySelector('#num').value"
+   ],
+   "session": "act",
+   "main_world": true
+  },
+  {
+   "argv": [
+    "fill",
+    "#contents",
+    "New words"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.querySelector('#contents').textContent"
+   ],
+   "session": "act",
+   "main_world": true
+  },
+  {
+   "argv": [
+    "fill",
+    "#spaces",
+    "New words"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.querySelector('#spaces').textContent"
+   ],
+   "session": "act",
+   "main_world": true
+  },
+  {
+   "argv": [
+    "fill",
+    "#mention",
+    "New words"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.querySelector('#mention').textContent"
+   ],
+   "session": "act",
+   "main_world": true
+  }
+ ]
+}

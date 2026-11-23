@@ -7,12 +7,17 @@
   body { font: 14px sans-serif; margin: 20px; }
   .editor { border: 1px solid #333; min-height: 60px; width: 420px; padding: 6px; margin-bottom: 12px; }
   .chrome { color: #666; font-size: 12px; user-select: none; }
+  .plain { border: 1px solid #333; min-height: 24px; width: 420px; padding: 4px; margin-bottom: 8px; }
   .chip { background: #def; border-radius: 4px; padding: 0 3px; }
 </style>
 </head>
 <body>
 <div id="tts" class="editor" contenteditable="true" role="textbox" aria-label="Text to speech"><div class="chrome" contenteditable="false"><button type="button">Voice: Rachel</button> <span>12 / 5000</span></div><p>Hello <span class="chip" contenteditable="false">@Rachel</span> world</p></div>
 <div id="blank" class="editor" contenteditable="true" role="textbox" aria-label="Notes"><div class="chrome" contenteditable="false"><span>Drag a voice here</span></div><p><br></p></div>
+<div id="host" class="plain" contenteditable="true">Count <input id="num" type="number" value="0" aria-label="Count"></div>
+<div id="contents" class="plain" contenteditable="true" role="textbox" aria-label="Contents"><span style="display: contents">Old words</span></div>
+<div id="spaces" class="plain" contenteditable="true" role="textbox" aria-label="Spaces" style="white-space: pre-wrap">   </div>
+<div id="mention" class="plain" contenteditable="true" role="textbox" aria-label="Mention"><p><span class="chip" contenteditable="false">@Rachel</span></p></div>
 <script>
   const paragraphs = (editor) => [...editor.children].filter((node) => node.tagName === "P");
   const selectContent = (editor) => {

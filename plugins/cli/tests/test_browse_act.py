@@ -258,6 +258,14 @@ class ActInChrome(unittest.TestCase):
         self.browse("fill", "#blank", "Notes here")
         self.assertEqual(self.value("[...document.querySelectorAll('#blank > p')].map((p) => p.textContent).join('|')"), "Notes here")
 
+    def test_fill_still_clears_fields_and_editors_the_chrome_rule_must_not_skip(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/rich-editor.html")
+        self.browse("fill", "#num", "7")
+        self.assertEqual(self.value("document.querySelector('#num').value"), "7")
+        for field in ("#contents", "#spaces", "#mention"):
+            self.browse("fill", field, "New words")
+            self.assertEqual(self.value(f"document.querySelector('{field}').textContent"), "New words", field)
+
     def test_dependent_fields_wait_for_their_target(self):
         out = self.browse("batch", "fill #from Beta", "select #to Yankee", "click #later", "get text #out").stdout
         self.assertIn("later clicked", out)

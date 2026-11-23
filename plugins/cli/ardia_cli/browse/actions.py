@@ -724,18 +724,19 @@ VISIBLE_CONTENT = """(el) => {
   return null;
 }"""
 HOLDS_TEXT = r"""(el) => {
-  if (!el.isContentEditable) return { text: "value" in el && Boolean(el.value), chrome: false };
+  if (/^(INPUT|TEXTAREA)$/.test(el.tagName) || !el.isContentEditable) return { text: "value" in el && Boolean(el.value), chrome: false };
   const chrome = Boolean(el.querySelector('[contenteditable="false"]'));
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
-      if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
-      return node.isContentEditable && !/^(STYLE|SCRIPT|TEMPLATE)$/.test(node.tagName) ? NodeFilter.FILTER_SKIP : NodeFilter.FILTER_REJECT;
+      if (node.nodeType === Node.TEXT_NODE) return node.parentElement && node.parentElement.isContentEditable ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+      return /^(STYLE|SCRIPT|TEMPLATE|INPUT|TEXTAREA)$/.test(node.tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
     },
   });
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     if (!/[^\s​-‍⁠﻿]/.test(node.data)) continue;
-    const parent = node.parentElement;
-    if (!parent || !parent.checkVisibility || parent.checkVisibility({ checkVisibilityCSS: true })) return { text: true, chrome };
+    let box = node.parentElement;
+    while (box && box !== el && getComputedStyle(box).display === "contents") box = box.parentElement;
+    if (!box || !box.checkVisibility || box.checkVisibility({ checkVisibilityCSS: true })) return { text: true, chrome };
   }
   return { text: false, chrome };
 }"""
@@ -862,8 +863,8 @@ async def type_into(page, element, text: str, humanize: bool, guard=None):
 
 
 async def clear_field(page, element, humanize: bool):
-    held = await page.call(HOLDS_TEXT, element, frame=element.frame)
-    if not held.get("text"):
+    info = await page.call("(el) => ardiaBrowse.info(el)", element, frame=element.frame)
+    if not info.get("value"):
         return
     await expect_input(page, element.frame, lambda: page.input.gesture("clear", lambda: page.input.press_combo("Meta+a", humanize)),
                        {"keydown": 2}, "Select all", element)
