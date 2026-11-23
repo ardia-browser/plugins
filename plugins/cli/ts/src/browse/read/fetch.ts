@@ -30,6 +30,7 @@ const BINARY_TYPES = new Set([
   "application/cbor", "application/bson", "application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint", "application/x-msdownload", "application/java-archive",
 ]);
 const QUOTED_CHARSET = /charset\s*=\s*"([^"]+)"/iu;
+const NAMED_CHARSET = /charset\s*=\s*([^;"\s]+)/iu;
 const TEXT_CONTROLS = new Set([0x09, 0x0a, 0x0c, 0x0d, 0x1b]);
 
 function holdsControlBytes(body: Uint8Array): boolean {
@@ -220,7 +221,7 @@ export async function fetchUrl(url: string, timeout: number, accept = ACCEPT, bi
       if (body.length > MAX_BODY) throw new BrowseError(`${url} is a PDF over ${MAX_BODY} bytes; read it in a tab instead (drop --http)`);
       return [response.status, "application/pdf", await textFromBytes(body), final];
     }
-    const charset = CHARSET.exec(contentType) ?? QUOTED_CHARSET.exec(contentType);
+    const charset = CHARSET.exec(contentType) ?? QUOTED_CHARSET.exec(contentType) ?? NAMED_CHARSET.exec(contentType);
     const declared = charset ? (charset[1] as string) : null;
     if (binaryBody(kind, declared, body)) {
       const size = body.length > MAX_BODY ? `over ${groupThousands(String(MAX_BODY))}` : groupThousands(String(body.length));
@@ -230,6 +231,7 @@ export async function fetchUrl(url: string, timeout: number, accept = ACCEPT, bi
       return [response.status, kind || "application/octet-stream", "", final, body];
     }
     if (binary === "keep" && body.length > MAX_BODY) throw new BrowseError(`${url} sent over ${groupThousands(String(MAX_BODY))} bytes; read --http --out saves responses up to that size`, null, "result_too_large");
+    if (binary === "skip" && body.length > MAX_BODY) return [response.status, kind, "", final];
     const text = decode(body.subarray(0, MAX_BODY), declared ?? "utf-8");
     return [response.status, kind, text, final];
   } finally {
@@ -275,7 +277,7 @@ export async function run(given: string, options: ReadOptions, globalOptions: Re
   if (!MARKDOWN_TYPES.includes(kind) && !options["raw"]) {
     if (!urlsplit(final).path.endsWith(".md")) {
       const [mdStatus, mdKind, mdText, mdFinal] = await fetchUrl(`${rstripSlash(final)}.md`, timeout, ACCEPT, "skip");
-      if (mdStatus === 200 && (MARKDOWN_TYPES.includes(mdKind) || (mdKind === "text/plain" && mdText && !mdText.slice(0, 300).toLowerCase().includes("<html")))) {
+      if (mdStatus === 200 && mdText && (MARKDOWN_TYPES.includes(mdKind) || (mdKind === "text/plain" && mdText && !mdText.slice(0, 300).toLowerCase().includes("<html")))) {
         [status, kind, text, final, source] = [mdStatus, "text/markdown", mdText, mdFinal, "md-suffix"];
       }
     }
@@ -286,7 +288,7 @@ export async function run(given: string, options: ReadOptions, globalOptions: Re
           const target = urljoin(llmsSource, href);
           if (sameDocument(target, final)) {
             const [mdStatus, , mdText, mdFinal, mdBinary] = await fetchUrl(target, timeout, ACCEPT, "skip");
-            if (mdStatus === 200 && mdBinary === undefined) [status, kind, text, final, source] = [mdStatus, "text/markdown", mdText, mdFinal, "llms.txt"];
+            if (mdStatus === 200 && mdBinary === undefined && mdText) [status, kind, text, final, source] = [mdStatus, "text/markdown", mdText, mdFinal, "llms.txt"];
             break;
           }
         }
