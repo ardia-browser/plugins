@@ -10,12 +10,13 @@ test("a blocked or aborted navigation names the call that trusts the site, word 
 });
 
 test("a URL parsers could read two ways, or an odd host, gets no copyable site", () => {
-  for (const [url, host] of [
+  const cases: [string, string][] = [
     ["https://blocked.example.com\\@other.example.org/", "other.example.org"],
     ["https://user@blocked.example.com/", "blocked.example.com"],
     ["https://[::1]/", "::1"],
     ["https://localhost/", "localhost"],
-  ]) {
+  ];
+  for (const [url, host] of cases) {
     const note = adBlockerNote(url, host);
     assert.ok(note.includes("site=<the site's host>"), url);
     assert.ok(!note.includes(`site=${host}\``), url);
