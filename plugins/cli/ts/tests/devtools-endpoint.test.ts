@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { closeSync, mkdirSync, mkdtempSync, openSync, rmSync, writeSync } from "node:fs";
+import { closeSync, mkdirSync, mkdtempSync, openSync, rmSync, writeFileSync, writeSync } from "node:fs";
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -223,6 +223,19 @@ test("the idle check accepts an unsignalable pid without touching the socket", a
     };
     assert.equal(readControlFile(file, eperm, false).pid, BigInt(process.pid));
     assert.throws(() => readControlFile(file, eperm), /can't be signalled/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a control socket path that isn't a socket is unsafe and never falls back", async () => {
+  const root = scratch();
+  try {
+    const file = writeControl(root, { token: FILE_TOKEN });
+    const fake = announcePath(file);
+    writeFileSync(fake, "not a socket");
+    await assert.rejects(controlCall(fake, null, DEVTOOLS_ENDPOINT_METHOD, null, 5, null), (error: Error) => error instanceof ControlRefused && error.code === "unsafe");
+    await assert.rejects(fromControl(file, null), (error: Error) => error instanceof EndpointError && !error.message.includes(FILE_TOKEN));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

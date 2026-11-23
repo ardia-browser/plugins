@@ -173,6 +173,37 @@ class DevtoolsEndpoint(unittest.TestCase):
         self.assertTrue(saw_eof.wait(5))
         self.assertLess(time.monotonic() - started, 10)
 
+    def test_a_path_that_isnt_a_socket_is_unsafe_and_never_falls_back(self):
+        path = write_control(self.root, token=FILE_TOKEN)
+        from ardia_cli import control
+
+        fake = control.announce_path(str(path))
+        fake.write_text("not a socket")
+        with self.assertRaises(SocketRefused) as caught:
+            endpoint.ask_socket(fake, timeout=5)
+        self.assertEqual(caught.exception.code, "unsafe")
+        with self.assertRaises(EndpointError):
+            endpoint.from_control(path)
+
+    def test_a_cancel_before_connecting_never_opens_a_connection(self):
+        path = self.root / "ArdiaControl.sock"
+        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        server.bind(str(path))
+        server.listen(1)
+        server.settimeout(1)
+        self.addCleanup(server.close)
+        sink = endpoint.SocketSink()
+        sink.cancel()
+        mark = endpoint.OPEN_SOCKETS.set(sink)
+        try:
+            with self.assertRaises(SocketRefused) as caught:
+                endpoint.ask_socket(path, timeout=5)
+        finally:
+            endpoint.OPEN_SOCKETS.reset(mark)
+        self.assertEqual(caught.exception.code, "cancelled")
+        with self.assertRaises(socket.timeout):
+            server.accept()
+
     def test_a_different_port_is_another_server(self):
         path = write_control(self.root)
         with self.assertRaisesRegex(EndpointError, "restarted its DevTools connection"):

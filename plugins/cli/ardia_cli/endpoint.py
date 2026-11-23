@@ -210,7 +210,38 @@ def from_control_file(path: Path) -> Endpoint:
 
 import contextvars
 
-OPEN_SOCKETS: contextvars.ContextVar[list | None] = contextvars.ContextVar("ardia_open_sockets", default=None)
+class SocketSink:
+    def __init__(self):
+        import threading
+
+        self.lock = threading.Lock()
+        self.cancelled = False
+        self.sockets = []
+
+    def add(self, sock) -> bool:
+        with self.lock:
+            if self.cancelled:
+                return False
+            self.sockets.append(sock)
+            return True
+
+    def live(self) -> bool:
+        with self.lock:
+            return not self.cancelled
+
+    def cancel(self) -> None:
+        import socket as sockets
+
+        with self.lock:
+            self.cancelled = True
+            for sock in self.sockets:
+                try:
+                    sock.shutdown(sockets.SHUT_RDWR)
+                except OSError:
+                    pass
+
+
+OPEN_SOCKETS: contextvars.ContextVar["SocketSink | None"] = contextvars.ContextVar("ardia_open_sockets", default=None)
 DEVTOOLS_ENDPOINT_METHOD = "control.devtoolsEndpoint"
 DEVTOOLS_ENDPOINT_TIMEOUT = 70.0
 
@@ -229,20 +260,29 @@ def ask_socket(sock_path: Path, timeout: float = DEVTOOLS_ENDPOINT_TIMEOUT):
     from ardia_cli import control
 
     try:
+        os.lstat(sock_path)
+    except (FileNotFoundError, NotADirectoryError, PermissionError) as error:
+        raise SocketRefused("not_connected", error.strerror or "the control socket isn't there") from None
+    except OSError:
+        pass
+    try:
         control.check_socket(sock_path)
     except control.Unreachable as error:
-        raise SocketRefused("not_connected", str(error)) from None
+        raise SocketRefused("unsafe", str(error)) from None
     deadline = time.monotonic() + timeout
     sock = sockets.socket(sockets.AF_UNIX, sockets.SOCK_STREAM)
     sock.settimeout(timeout)
     sink = OPEN_SOCKETS.get()
-    if sink is not None:
-        sink.append(sock)
+    cancelled = SocketRefused("cancelled", "the command was cancelled")
     try:
+        if sink is not None and not sink.add(sock):
+            raise cancelled
         try:
             sock.connect(str(sock_path))
         except OSError as error:
             raise SocketRefused("not_connected", error.strerror or str(error)) from None
+        if sink is not None and not sink.live():
+            raise cancelled
         if control.peer_uid(sock) != os.getuid():
             raise SocketRefused("unreachable", "the control socket is served by another user")
         sock.sendall(control.request_line(1, "hello", {"protocol": control.PROTOCOL}))

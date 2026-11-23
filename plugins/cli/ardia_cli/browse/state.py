@@ -112,20 +112,14 @@ class State:
         return self.browser is not None and self.browser.alive
 
     async def resolve_off_loop(self):
-        import socket as sockets
-
         from ardia_cli import endpoint as endpoints
 
-        opened: list = []
-        mark = endpoints.OPEN_SOCKETS.set(opened)
+        sink = endpoints.SocketSink()
+        mark = endpoints.OPEN_SOCKETS.set(sink)
         try:
             return await asyncio.to_thread(self.resolve_endpoint)
         except asyncio.CancelledError:
-            for sock in opened:
-                try:
-                    sock.shutdown(sockets.SHUT_RDWR)
-                except OSError:
-                    pass
+            sink.cancel()
             raise
         finally:
             endpoints.OPEN_SOCKETS.reset(mark)

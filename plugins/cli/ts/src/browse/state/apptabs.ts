@@ -54,13 +54,14 @@ export function controlSocket(state: AppTabState): string | null {
   return path.join(root, SOCKET_FILE);
 }
 
-function usable(file: string): boolean {
-  if (Buffer.byteLength(file) > SUN_PATH_MAX) return false;
+function socketProblem(file: string): "missing" | "unsafe" | null {
+  if (Buffer.byteLength(file) > SUN_PATH_MAX) return "unsafe";
   try {
     const info = fs.lstatSync(file);
-    return info.isSocket() && info.uid === uid();
-  } catch {
-    return false;
+    return info.isSocket() && info.uid === uid() ? null : "unsafe";
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return code === "ENOENT" || code === "ENOTDIR" || code === "EACCES" || code === "EPERM" ? "missing" : "unsafe";
   }
 }
 
@@ -73,7 +74,9 @@ export function controlCall(
   signal: AbortSignal | null = currentSignal(),
 ): Promise<unknown> {
   if (signal?.aborted) return Promise.reject(new Cancelled());
-  if (!usable(file)) return Promise.reject(new ControlRefused("not_connected", "the control socket isn't there"));
+  const problem = socketProblem(file);
+  if (problem === "missing") return Promise.reject(new ControlRefused("not_connected", "the control socket isn't there"));
+  if (problem === "unsafe") return Promise.reject(new ControlRefused("unsafe", "the control socket isn't a socket the user owns"));
   return new Promise<unknown>((resolve, reject) => {
     const socket = net.connect(file);
     let buffer = Buffer.alloc(0);
