@@ -16,15 +16,20 @@ ARDIA_M3_PORT_BASE (a block of 20, default 9600).
 `;
 
 function report(results: Outcome[], asJson: boolean): number {
-  const failed = results.filter((result) => !result.ok);
+  const ran = results.filter((result) => !result.skipped);
+  const failed = ran.filter((result) => !result.ok);
   if (asJson) process.stdout.write(`${JSON.stringify(results, null, 1)}\n`);
   else {
     for (const result of results) {
-      const extra = result.skipped ? ` (skipped: ${result.skipped})` : "";
-      process.stdout.write(`${result.ok ? "ok  " : "FAIL"} ${result.mode}: ${result.name}${extra}\n`);
+      const status = result.skipped ? "skip" : result.ok ? "ok  " : "FAIL";
+      process.stdout.write(`${status} ${result.mode}: ${result.name}${result.skipped ? ` (${result.skipped})` : ""}\n`);
       for (const line of (result.differences ?? []).slice(0, 20)) process.stdout.write(`       ${line}\n`);
     }
-    process.stdout.write(`${results.length - failed.length} of ${results.length} passed\n`);
+    process.stdout.write(`${ran.length - failed.length} of ${ran.length} replayed passed, ${results.length - ran.length} skipped\n`);
+  }
+  if (ran.length === 0) {
+    process.stderr.write("nothing was replayed: every selected scenario is live-only\n");
+    return 2;
   }
   return failed.length > 0 ? 1 : 0;
 }

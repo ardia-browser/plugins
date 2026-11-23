@@ -145,7 +145,7 @@ Replay fails on an unmatched request, a recorded request the daemon never sent, 
 answers and the recording waits for a request that never comes).
 
 A scenario whose logic runs on the daemon's clock (waiting out a fading dialog, waiting for a field to enable,
-`read --scroll`'s lazy-load waits) is `live_only` and isn't replayed: 47 of the 102 scenarios today. Of the other 55,
+`read --scroll`'s lazy-load waits) is `live_only` and isn't replayed: 50 of the 105 scenarios today. Of the other 55,
 26 are on `PENDING` (below), so the corpus test replays 29.
 
 A scenario with more than one session ends with an explicit `close` step for each, in a fixed order: teardown's
