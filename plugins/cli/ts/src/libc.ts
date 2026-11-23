@@ -239,15 +239,16 @@ export function watchLifeline(fd: number): void {
   checked(native().watchLifeline(fd), "pthread_create");
 }
 
-let interruptKillsWrites = true;
+let interruptedWrite: (() => never) | undefined;
 
-export function leaveInterruptsToHandlers(): void {
-  interruptKillsWrites = false;
+export function stopWritesOnInterrupt(stop: () => never): void {
+  interruptedWrite = stop;
 }
 
 export function writeSome(fd: number, bytes: Uint8Array, offset = 0): number {
   const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const written = native().writeSome(fd, buffer, offset, interruptKillsWrites);
+  const written = native().writeSome(fd, buffer, offset, interruptedWrite === undefined);
+  if (written === -constants.errno.EINTR && interruptedWrite !== undefined) interruptedWrite();
   if (written < 0) throw errnoError(-written, "write");
   if (written === 0 && offset < buffer.length) throw errnoError(constants.errno.EIO, "write");
   return written;

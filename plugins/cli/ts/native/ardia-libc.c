@@ -611,6 +611,79 @@ static ssize_t write_once(int fd, const char *bytes, size_t length) {
   }
 }
 
+static int interrupt_pipe[2] = {-1, -1};
+
+static void note_interrupt(int signal) {
+  int saved = errno;
+  (void)signal;
+  ssize_t ignored = write(interrupt_pipe[1], "i", 1);
+  (void)ignored;
+  errno = saved;
+}
+
+static bool open_interrupt_pipe(void) {
+  if (interrupt_pipe[0] >= 0) return true;
+  int ends[2];
+  if (pipe(ends) != 0) return false;
+  for (int i = 0; i < 2; i++) {
+    if (fcntl(ends[i], F_SETFD, FD_CLOEXEC) != 0 || fcntl(ends[i], F_SETFL, fcntl(ends[i], F_GETFL) | O_NONBLOCK) != 0) {
+      close(ends[0]);
+      close(ends[1]);
+      return false;
+    }
+  }
+  interrupt_pipe[0] = ends[0];
+  interrupt_pipe[1] = ends[1];
+  return true;
+}
+
+static bool take_interrupts(void) {
+  char sink[16];
+  bool taken = false;
+  while (read(interrupt_pipe[0], sink, sizeof(sink)) > 0) taken = true;
+  return taken;
+}
+
+static ssize_t write_interruptibly(int fd, const char *bytes, size_t length) {
+  if (!open_interrupt_pipe()) return failed();
+  struct stat info;
+  size_t chunk = length;
+  if (fstat(fd, &info) == 0 && !S_ISREG(info.st_mode) && chunk > PIPE_BUF) chunk = PIPE_BUF;
+  struct sigaction kept, noting;
+  memset(&kept, 0, sizeof(kept));
+  memset(&noting, 0, sizeof(noting));
+  noting.sa_handler = note_interrupt;
+  sigemptyset(&noting.sa_mask);
+  take_interrupts();
+  if (sigaction(SIGINT, &noting, &kept) != 0) return failed();
+  ssize_t result;
+  for (;;) {
+    struct pollfd watched[2] = {{.fd = fd, .events = POLLOUT, .revents = 0}, {.fd = interrupt_pipe[0], .events = POLLIN, .revents = 0}};
+    if (poll(watched, 2, -1) < 0) {
+      if (errno == EINTR) continue;
+      result = failed();
+      break;
+    }
+    if (watched[1].revents & POLLIN) {
+      result = -EINTR;
+      break;
+    }
+    ssize_t wrote = write(fd, bytes, chunk);
+    if (wrote >= 0) {
+      result = wrote;
+      break;
+    }
+    if (errno == EINTR || errno == EAGAIN) continue;
+    result = failed();
+    break;
+  }
+  sigaction(SIGINT, &kept, NULL);
+  bool interrupted = take_interrupts();
+  if (result == -EINTR) return result;
+  if (interrupted) raise(SIGINT);
+  return result;
+}
+
 static napi_value write_some(napi_env env, napi_callback_info info) {
   Call call;
   int32_t fd, offset;
@@ -634,8 +707,12 @@ static napi_value write_some(napi_env env, napi_callback_info info) {
   plain.sa_handler = SIG_DFL;
   sigemptyset(&plain.sa_mask);
   if (sigaction(SIGINT, NULL, &kept) != 0) return status(env, failed());
-  bool swapped = interrupt_kills && kept.sa_handler != SIG_IGN && sigaction(SIGINT, &plain, NULL) == 0;
-  ssize_t result = write_once(fd, (const char *)data + offset, length - (size_t)offset);
+  const char *bytes = (const char *)data + offset;
+  size_t left = length - (size_t)offset;
+  if (kept.sa_handler == SIG_IGN) return number(env, (double)write_once(fd, bytes, left));
+  if (!interrupt_kills) return number(env, (double)write_interruptibly(fd, bytes, left));
+  bool swapped = sigaction(SIGINT, &plain, NULL) == 0;
+  ssize_t result = write_once(fd, bytes, left);
   if (swapped) sigaction(SIGINT, &kept, NULL);
   return number(env, (double)result);
 }

@@ -264,7 +264,7 @@ writeWhole(2, Buffer.alloc(4096, 120));
 setInterval(() => {}, 1000);
 `;
 
-test("a SIGINT that lands while a write is blocked still rolls back what was staged", async () => {
+test("a SIGINT that lands while a write is blocked stops the command at once and rolls back what was staged", async () => {
   const b = box();
   const fifo = path.join(b.home, "tmp", "stderr.fifo");
   execFileSync("/usr/bin/mkfifo", [fifo]);
@@ -289,18 +289,8 @@ test("a SIGINT that lands while a write is blocked still rolls back what was sta
     await until(() => fs.existsSync(ready), 10_000, "the writer to stage its folder");
     await new Promise((resolve) => setTimeout(resolve, 300));
     process.kill(child.pid as number, "SIGINT");
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    const drain = Buffer.alloc(65536);
-    for (;;) {
-      try {
-        if (fs.readSync(holder, drain) === 0) break;
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "EAGAIN") break;
-        throw error;
-      }
-    }
     const outcome = await Promise.race([exited, new Promise((resolve) => setTimeout(() => resolve("still running"), 5_000))]);
-    assert.equal(outcome, "SIGINT");
+    assert.equal(outcome, "SIGINT", "the command didn't stop on SIGINT while its write was blocked");
     assert.equal(fs.existsSync(staged), false, "the staged folder outlived the SIGINT");
   } finally {
     fs.closeSync(writer);
