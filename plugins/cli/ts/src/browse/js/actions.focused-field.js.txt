@@ -12,27 +12,58 @@
   let host = node;
   while (host && host.isContentEditable && host.parentElement && host.parentElement.isContentEditable) host = host.parentElement;
   const editable = !field && !!host && host.isContentEditable;
-  const contents = () => (field ? node.value : host.textContent || "");
+  const BLOCK = /^(P|DIV|LI|UL|OL|H[1-6]|BLOCKQUOTE|PRE|TR|TD|TH|TABLE|SECTION|ARTICLE|HEADER|FOOTER)$/;
+  const flat = (parent) => {
+    let out = "";
+    for (const child of parent.childNodes) {
+      if (child.nodeType === Node.TEXT_NODE) out += child.data;
+      else if (child.nodeType !== Node.ELEMENT_NODE || /^(STYLE|SCRIPT|TEMPLATE)$/.test(child.tagName)) continue;
+      else if (child.tagName === "BR") out += "\n";
+      else out += (BLOCK.test(child.tagName) ? "\n" : "") + flat(child);
+    }
+    return out;
+  };
+  const contents = () => (field ? node.value : flat(host));
+  const digest = (value) => {
+    let a = 0xdeadbeef ^ value.length;
+    let b = 0x41c6ce57 ^ value.length;
+    for (let i = 0; i < value.length; i++) {
+      const code = value.charCodeAt(i);
+      a = Math.imul(a ^ code, 2654435761);
+      b = Math.imul(b ^ code, 1597334677);
+    }
+    a = Math.imul(a ^ (a >>> 16), 2246822507) ^ Math.imul(b ^ (b >>> 13), 3266489909);
+    b = Math.imul(b ^ (b >>> 16), 2246822507) ^ Math.imul(a ^ (a >>> 13), 3266489909);
+    return (b >>> 0).toString(16) + ":" + (a >>> 0).toString(16);
+  };
+  if (!globalThis.ardiaBrowseInsertWatch) Object.defineProperty(globalThis, "ardiaBrowseInsertWatch", { value: { expected: null, timer: 0 }, enumerable: false });
+  const watch = globalThis.ardiaBrowseInsertWatch;
   if (after) {
-    const before = globalThis.ardiaBrowseInsertBefore;
-    if (!before || !before.node.deref || before.node.deref() !== (field ? node : host)) return false;
-    return contents() === before.contents.slice(0, before.caret) + text + before.contents.slice(before.caret);
+    const expected = watch.expected;
+    watch.expected = null;
+    if (!expected || expected.node.deref() !== (field ? node : host)) return false;
+    return digest(contents()) === expected.digest;
   }
-  Object.defineProperty(globalThis, "ardiaBrowseInsertBefore", { value: null, writable: true, configurable: true, enumerable: false });
+  watch.expected = null;
+  clearTimeout(watch.timer);
   if (!field && !editable) return false;
+  if (field && node.type === "password") return false;
   let caret = null;
   if (field) {
     try { if (node.selectionStart === node.selectionEnd) caret = node.selectionStart; } catch (error) { caret = null; }
   } else {
-    const picked = host.ownerDocument.getSelection();
+    const root = host.getRootNode();
+    const picked = root.getSelection ? root.getSelection() : host.ownerDocument.getSelection();
     if (picked && picked.rangeCount > 0 && picked.isCollapsed && host.contains(picked.anchorNode)) {
       const range = host.ownerDocument.createRange();
       range.setStart(host, 0);
       range.setEnd(picked.anchorNode, picked.anchorOffset);
-      caret = range.toString().length;
+      caret = flat(range.cloneContents()).length;
     }
   }
   if (caret === null) return false;
-  globalThis.ardiaBrowseInsertBefore = { node: new WeakRef(field ? node : host), contents: contents(), caret };
+  const before = contents();
+  watch.expected = { node: new WeakRef(field ? node : host), digest: digest(before.slice(0, caret) + text + before.slice(caret)) };
+  watch.timer = setTimeout(() => { watch.expected = null; }, 10000);
   return true;
 }

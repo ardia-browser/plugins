@@ -54,11 +54,11 @@
     slides.textContent += event.data;
   }, true);
   const echo = document.getElementById("echo");
-  echo.addEventListener("focus", () => setTimeout(() => { echo.value += "abc"; }, 300));
   addEventListener("beforeinput", (event) => {
     if (event.target !== echo) return;
     event.stopImmediatePropagation();
     event.preventDefault();
+    setTimeout(() => { echo.value += "abc"; }, 100);
   }, true);
   if (location.search.includes("churn")) {
     const other = document.getElementById("other");
