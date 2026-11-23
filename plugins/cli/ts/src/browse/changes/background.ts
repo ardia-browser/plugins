@@ -52,6 +52,10 @@ export function backgroundHost(url: string): boolean {
   return false;
 }
 
+export function knownCollector(url: string, method = "GET"): boolean {
+  return backgroundHost(url) || backgroundPath(url, method.toUpperCase());
+}
+
 export function background(type: string, url: string, method = "GET"): boolean {
   return BACKGROUND_TYPES.has(type) || backgroundHost(url) || backgroundPath(url, method.toUpperCase());
 }

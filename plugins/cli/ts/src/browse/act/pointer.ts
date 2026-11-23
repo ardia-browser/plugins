@@ -286,10 +286,14 @@ export const PREPARE_ACTION = `(el, fx, fy, scroll, watch) => {
         break;
       }
       for (let node = owner; node && top; node = node.parentElement) {
-        const transform = getComputedStyle(node).transform;
-        if (!transform || transform === "none") continue;
-        const matrix = new DOMMatrixReadOnly(transform);
-        if (Math.abs(matrix.b) > 0.000001 || Math.abs(matrix.c) > 0.000001) top = null;
+        const style = getComputedStyle(node);
+        if ((style.rotate && style.rotate !== "none") || (style.scale && style.scale !== "none")) {
+          top = null;
+          break;
+        }
+        if (!style.transform || style.transform === "none") continue;
+        const matrix = new DOMMatrixReadOnly(style.transform);
+        if (!matrix.is2D || Math.abs(matrix.b) > 0.000001 || Math.abs(matrix.c) > 0.000001 || matrix.a <= 0 || matrix.d <= 0) top = null;
       }
       if (!top) break;
       const box = owner.getBoundingClientRect();

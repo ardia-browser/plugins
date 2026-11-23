@@ -477,8 +477,9 @@ export class Page {
       };
       walk(tree, null);
       if (this.oopifs.size > 0) await oopif.childFrames(this, frames, frameOf);
-      if (events === this.frameEvents) break;
+      if (events === this.frameEvents && session === this.session) break;
     }
+    if ((events !== this.frameEvents || session !== this.session) && this.mainFrame !== null) return this.frames;
     this.frames = frames;
     this.mainFrame = String(record(tree["frame"])["id"]);
     this.url = frames.get(this.mainFrame)?.url ?? "";

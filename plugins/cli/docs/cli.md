@@ -743,13 +743,15 @@ POST http://127.0.0.1:8792/api/events → 200
   requests the action started to be answered (headers in; a response body the page never reads doesn't hold it up), for
   a quiet 50 ms with none (120 ms after the last network event when there were some), and for `DOMContentLoaded` if
   the action navigated, at most 1.5 s; past that it says the page was still busy. Background requests neither hold it
-  up nor restart the quiet window, and aren't listed: pings and beacons, CSP reports, images, media, fonts, prefetches,
+  up nor restart the quiet window: pings and beacons, CSP reports, images, media, fonts, prefetches,
   manifests, event streams and WebSockets, requests to known analytics, tag-manager, ad and video-QoS hosts
   (`browse/changes/background.ts`), favicon `GET`s, and Google Analytics' and Cloudflare's collector paths on any host
   (`/g/collect`, `/j/collect`, `/r/collect`, `/cdn-cgi/rum`); a redirect is judged again by where it goes, and a
   redirect of a request that began before the action isn't the action's. Documents, scripts, stylesheets, fetches and
   XHRs to anything else are still waited for (`settle_ignored_background` marks a settle that passed some by), and
-  when only background requests came, the quiet window is still the longer 120 ms. Then it removes its listener, also when the action fails or is cancelled; it takes no
+  when only background requests came, the quiet window is still the longer 120 ms. Only writes to those known hosts
+  and collector paths are left out of the list below; a first-party beacon is listed, and so is a write that
+  redirects to a collector. Then it removes its listener, also when the action fails or is cancelled; it takes no
   capture lease or tab claim, so the idle disconnect works as before. It reports requests that aren't `GET`, `HEAD`
   or `OPTIONS` (fetch, XHR, form posts), in order: method, URL without user info, fragment or query values (`?token=…&id=…`; a query key that isn't plain
   letters, digits and `_.-[]` becomes `…` too, and so does a path segment with a `:` or one of 20 or more characters
@@ -895,7 +897,8 @@ failure, and a command whose outcome is unknown stops the rest (`not_run`). A li
 the page as the line just before it left it (that line's view after, when it was on the same tab and document), so the
 page is read once between two lines, not twice. A run of `fill`, `type`, `select`, `check` and `uncheck` lines whose
 next target is already known (a CSS selector, or a ref the session has) reads the page once before the run and once
-after its last line, and settles once: the lines before the last print `✓ fill #name "Ana Ruiz"`, and the last prints
+after its last line, and settles once (each held line still waits for requests it started itself, without the quiet
+window, so a flow keeps their answers): the lines before the last print `✓ fill #name "Ana Ruiz"`, and the last prints
 the run's whole change report (`batch_lines_held` counts the held lines). If a line in the run fails, it gets its own
 error and the report so far goes on the line before it. Lines with `--no-changes`, `--full`, `--max-output` or
 `--out` aren't held. `batch` can't run inside a batch. `close`
@@ -2576,7 +2579,8 @@ Its read side (slice D4: `browse/snapshot/collect.ts`, `take.ts`, `browse/read/`
 - A snapshot names clickable elements (`ardiaBrowse.clickables()`) with one page call per frame: the frame's isolated
   world keeps each element's backend node id it has been told in a `WeakMap`, so only elements it hasn't seen yet are
   described (`DOM.describeNode` each, or one `DOMSnapshot.captureSnapshot` for 16 or more where the engine allows it,
-  matched by element order, tag and id, falling back when anything doesn't match), and the same call returns the main
+  matched by element order, tag, id and count, and kept only when no element was added, removed or moved while the
+  snapshot was taken, else falling back), and the same call returns the main
   frame's title. The change report's `text:` marks are resolved the same way. Before this, every snapshot and every
   action's two views described every clickable element again (77 calls for one Wikipedia article).
 - A change report reuses the frame tree it read in the last 0.75 s unless a frame navigated, detached or attached since
@@ -2615,7 +2619,8 @@ harness scenarios or the human tier (`tests/m3/human_act.py`):
   same-origin iframe of a zoomed or transformed page was refused as covered by the text above it). The click goes to
   that same point: in the main frame as measured, and inside same-origin frames carried up through each frame owner's
   box in the page (`DOM.getContentQuads` leaves out an ancestor's CSS zoom). `DOM.getContentQuads` is used instead
-  when the page is pinch-zoomed, inside a cross-origin frame, under a rotated or skewed frame owner, and to wait for a
+  when the page is pinch-zoomed, inside a cross-origin frame, under a frame owner with any transform other than a
+  plain positive scale and move (a rotation, skew, mirror, 3D transform or `rotate`/`scale` property), and to wait for a
   moving box: that 50 ms wait, with its second `DOM.getContentQuads` and a fresh page call, runs only when the element
   was scrolled or is animating (`waited_for_box_to_settle`). The same call takes the frame's input counts that the click's delivery check starts
   from, and its `document.visibilityState`, which the visible-tab check reuses for 0.25 s.

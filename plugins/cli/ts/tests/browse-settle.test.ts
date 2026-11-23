@@ -55,7 +55,7 @@ describe("settling waits only for requests the action caused", () => {
     const started = performance.now();
     expect(await watch.settle()).toBe(true);
     expect(performance.now() - started).toBeLessThan(400);
-    expect(watch.writes()).toEqual([]);
+    expect(watch.writes().map((write) => write.url)).toEqual(["https://shop.example/beacon"]);
     await watch.stop();
   });
 
@@ -69,7 +69,7 @@ describe("settling waits only for requests the action caused", () => {
     const started = performance.now();
     expect(await watch.settle()).toBe(true);
     expect(performance.now() - started).toBeGreaterThan(190);
-    expect(watch.writes().map((write) => write.url)).toEqual(["https://shop.example/api/save"]);
+    expect(watch.writes().map((write) => write.url)).toEqual(["https://shop.example/beacon", "https://shop.example/api/save"]);
     await watch.stop();
   });
 
@@ -105,6 +105,40 @@ describe("review round 1: what settling must still wait for", () => {
     sent(watch, page, "1", "Fetch", "https://www.google-analytics.com/g/collect", "POST");
     watch.listener(page, "Network.requestWillBeSent", { requestId: "1", type: "Fetch", request: { url: "https://shop.example/api/save", method: "POST" }, redirectResponse: { status: 307 } });
     expect(watch.busy()).toBe(true);
+    await watch.stop();
+  });
+
+  test("an app write that redirects to a collector stays listed", async () => {
+    const [watch, page] = watched();
+    await watch.start();
+    sent(watch, page, "1", "Fetch", "https://shop.example/api/save", "POST");
+    watch.listener(page, "Network.requestWillBeSent", { requestId: "1", type: "Fetch", request: { url: "https://www.google-analytics.com/g/collect", method: "GET" }, redirectResponse: { status: 303 } });
+    expect(watch.busy()).toBe(false);
+    expect(watch.writes().map((write) => write.url)).toEqual(["https://shop.example/api/save"]);
+    await watch.stop();
+  });
+
+  test("a first-party beacon doesn't hold the settle but is listed; one to a known collector isn't", async () => {
+    const [watch, page] = watched();
+    await watch.start();
+    sent(watch, page, "1", "Ping", "https://shop.example/api/save", "POST");
+    sent(watch, page, "2", "Ping", "https://www.google-analytics.com/g/collect", "POST");
+    expect(watch.busy()).toBe(false);
+    expect(watch.writes().map((write) => write.url)).toEqual(["https://shop.example/api/save"]);
+    await watch.stop();
+  });
+
+  test("a held line waits for its own requests only", async () => {
+    const [watch, page] = watched();
+    await watch.start();
+    sent(watch, page, "early", "Fetch", "https://shop.example/api/slow");
+    const from = watch.order.length;
+    sent(watch, page, "mine", "Fetch", "https://shop.example/api/options");
+    setTimeout(() => watch.listener(page, "Network.loadingFinished", { requestId: "mine" }), 60);
+    const started = performance.now();
+    expect(await watch.settleLine(from)).toBe(true);
+    expect(performance.now() - started).toBeGreaterThan(50);
+    expect(performance.now() - started).toBeLessThan(400);
     await watch.stop();
   });
 

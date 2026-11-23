@@ -11,11 +11,20 @@ export const FRESH_KEYS = `(limit) => {
   const order = new Map();
   let index = 0;
   for (const el of all) order.set(el, index++);
+  if (globalThis.ardiaBrowseOrderWatch) globalThis.ardiaBrowseOrderWatch.disconnect();
+  globalThis.ardiaBrowseOrderWatch = new MutationObserver(() => {});
+  globalThis.ardiaBrowseOrderWatch.observe(document, { childList: true, subtree: true });
   return { count: all.length, keys: fresh.map((el) => [el && order.has(el) ? order.get(el) : -1, el ? el.nodeName : "", el && el.id ? el.id : ""]) };
 }`;
 
 export const KEEP_BY_INDEX = `(ids, indexes, count) => {
   const fresh = globalThis.ardiaBrowseFresh || [];
+  const watch = globalThis.ardiaBrowseOrderWatch;
+  globalThis.ardiaBrowseOrderWatch = null;
+  if (!watch) return false;
+  const moved = watch.takeRecords().length > 0;
+  watch.disconnect();
+  if (moved) return false;
   const all = document.getElementsByTagName("*");
   if (all.length !== count || ids.length > fresh.length) return false;
   const order = new Map();

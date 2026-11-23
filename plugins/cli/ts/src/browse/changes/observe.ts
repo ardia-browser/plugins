@@ -19,7 +19,7 @@ import { capture, type WatchLike } from "../flows/flowlog.ts";
 import { hint } from "../flows/flows.ts";
 import { noteHeader } from "../../notes-files.ts";
 import { pageSite } from "../../notes.ts";
-import { background } from "./background.ts";
+import { background, knownCollector } from "./background.ts";
 import { cleanUrl } from "./urls.ts";
 import { diff, freshRows, moved, NAVIGATED_TEXT, OPENED_TEXT, type Report, type TextBlock, type View, type Write } from "./report.ts";
 import { addsText, asData, openedAnchors, renderReport } from "./text.ts";
@@ -91,6 +91,7 @@ type RequestRecord = {
   mime?: string;
   failed?: string;
   background: boolean;
+  listed: boolean;
 };
 
 function dict(value: unknown): Json {
@@ -129,7 +130,10 @@ export class NetworkWatch {
       }
       if (entry !== undefined && params["redirectResponse"]) {
         const wasBackground = entry.background;
-        entry.background = background(String(params["type"] || entry.type), String(request["url"] || ""), String(request["method"] || entry.method));
+        const hop = String(request["url"] || "");
+        const hopMethod = String(request["method"] || entry.method);
+        entry.background = background(String(params["type"] || entry.type), hop, hopMethod);
+        entry.listed = entry.listed || !knownCollector(hop, hopMethod);
         if (wasBackground && !entry.background) this.ignored -= 1;
         else if (!wasBackground && entry.background) this.ignored += 1;
       }
@@ -145,6 +149,7 @@ export class NetworkWatch {
           statuses: [],
           done: false,
           background: background(type, raw, String(request["method"] || "GET")),
+          listed: !knownCollector(raw, String(request["method"] || "GET")),
         };
         this.records.set(requestId, entry);
         this.order.push(requestId);
@@ -203,6 +208,19 @@ export class NetworkWatch {
     return [...this.records.values()].some((entry) => !entry.background);
   }
 
+  async settleLine(from: number): Promise<boolean> {
+    const deadline = monotonic() + SETTLE_LIMIT;
+    const mine = () => this.order.slice(from).some((id) => {
+      const entry = this.records.get(id);
+      return entry !== undefined && !entry.done && !entry.answered && !entry.background && !LONG_LIVED.has(entry.type);
+    });
+    while (mine()) {
+      if (monotonic() >= deadline) return false;
+      await sleep(POLL);
+    }
+    return true;
+  }
+
   async settle(pageBusy: (() => Promise<boolean>) | null = null): Promise<boolean> {
     const started = monotonic();
     const deadline = started + SETTLE_LIMIT;
@@ -250,7 +268,7 @@ export class NetworkWatch {
     const rows: Write[] = [];
     for (const requestId of this.order) {
       const entry = this.records.get(requestId) as RequestRecord;
-      if (READ_METHODS.has(entry.method) || entry.background) continue;
+      if (READ_METHODS.has(entry.method) || !entry.listed) continue;
       const row: Write = { method: entry.method, url: entry.url, type: entry.type, statuses: [...entry.statuses] };
       row["status"] = entry.statuses.length > 0 ? entry.statuses.at(-1) : null;
       if (entry.failed) row["failed"] = entry.failed;
@@ -406,18 +424,19 @@ export async function flushBatch(ctx: Ctx, batch: BatchObserve): Promise<Report 
   const group = batch.pending;
   batch.pending = null;
   if (group === null) return null;
-  if (group.session !== group.page.session) {
+  const unknown = async (why: string) => {
     await group.watch.stop();
     const report = diff(null, errorView(group.page), group.watch.writes());
     report.document = "unknown";
-    report.error = "Ardia detached the tab during these lines, so their changes couldn't be followed";
+    report.error = why;
     return report;
-  }
+  };
+  if (group.session !== group.page.session) return unknown("Ardia detached the tab during these lines, so their changes couldn't be followed");
   try {
     return await finish(ctx, group.page, group.before, group.watch, group.navigations, batch, null);
   } catch (error) {
     if (!(error instanceof BrowseError)) throw error;
-    return null;
+    return unknown(error.message);
   }
 }
 
@@ -501,6 +520,7 @@ export async function observe<T>(ctx: Ctx, page: Page, run: () => Promise<T>, re
   }
   if (holding) {
     batch.pending = { page, session, before, watch, navigations };
+    await watch.settleLine(lineStart);
     await observeHooks.capture(page, lineOf(watch, lineStart));
     return [value, null];
   }
