@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { Result } from "../../src/browse/daemon/render.ts";
 import { render } from "../../src/browse/daemon/render.ts";
-import { addSecret, clearSecrets, redact, Secrets } from "../../src/redact.ts";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { addSecret, clearSecrets, redact, RedactingStream, Secrets } from "../../src/redact.ts";
 
 const PYTHON = process.env["ARDIA_TEST_PYTHON"] ?? "python3";
 const FIXED_PATTERN = String.raw`(token=)[^&\s'"<>\\]+`;
@@ -381,4 +383,40 @@ describe("review threads on #79", () => {
     const array = JSON.parse(held.redact(JSON.stringify({ s: JSON.stringify(["secret", 2]) }))) as { s: string };
     expect(JSON.parse(array.s)).toEqual(["***", 2]);
   });
+});
+
+describe("bare scalars mask as redact.py does (plugins#104)", () => {
+  function streamed(secrets: string[], chunks: string[]): (string | null)[] {
+    clearSecrets();
+    try {
+      for (const secret of secrets) addSecret(secret);
+      const written: (string | null)[] = [];
+      const stream = new RedactingStream({ write: (part) => written.push(part), flush: () => written.push(null) });
+      for (const chunk of chunks) stream.write(chunk);
+      stream.drain();
+      return written;
+    } finally {
+      clearSecrets();
+    }
+  }
+
+  test("the seeded oracle cases that diverged on main now write *** like Python", () => {
+    expect(streamed(["9"], ["\ud83d\ude00\u01c5\n", "9"])).toEqual(["\ud83d\ude00\u01c5\n", "***", null]);
+    expect(streamed(["b%b-==", "9", "--_9-bZ&\ud83d\ude00+"], ["<", "9", ".--_9", "-", "bZ"])).toEqual(["<", "***", ".--_***", "-bZ", null]);
+    clearSecrets();
+    try {
+      addSecret("9");
+      expect(redact("9")).toBe("***");
+    } finally {
+      clearSecrets();
+    }
+  });
+
+  test("redact and redact.stream agree with redact.py on 2,000 generated cases at fixed seeds", () => {
+    const cli = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+    for (const [name, seed] of [["redact.stream", "1"], ["redact.stream", "5"], ["redact.redact", "4"]] as const) {
+      const done = spawnSync(PYTHON, ["-m", "tests.m3.pure", name, "--generated", "2000", "--seed", seed], { cwd: cli, encoding: "utf8", timeout: 240_000 });
+      expect(`${done.stdout}${done.stderr}`).toContain(`${name}: 2000 of 2000 cases agree`);
+    }
+  }, 300_000);
 });

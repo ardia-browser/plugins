@@ -1,4 +1,4 @@
-import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, renameSync, rmSync, statSync, writeSync } from "node:fs";
+import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, renameSync, rmSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { dumps, Float, type JsonObject, type Value } from "../json.ts";
 import { expandUser } from "../paths.ts";
@@ -8,7 +8,7 @@ import { groupThousands } from "../pylib/format.ts";
 import { joinedWords, splitlines } from "../pylib/str.ts";
 import { redact } from "../redact.ts";
 import { Usage } from "./daemon-errors.ts";
-import { wellFormed } from "./paths.ts";
+import { wellFormed, writeAllFd } from "./paths.ts";
 
 export const TAKES_OUT = ["script", "eval", "read", "snapshot", "get"];
 export const AS_TEXT = ["snapshot", "get"];
@@ -138,6 +138,11 @@ function get(data: JsonObject, key: string): Value | undefined {
   return data.get(key);
 }
 
+function listingFailureLines(value: Value | undefined): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((failure) => (failure instanceof Map ? [`[couldn't list the links on ${pyStr(failure.get("url"))}: ${pyStr(failure.get("error"))}]`] : []));
+}
+
 export function content(command: string, data: JsonObject, path: string): [string, string] {
   const ext = suffix(path);
   if (command === "read" && (data.has("blocks") || data.has("block"))) {
@@ -168,6 +173,8 @@ export function content(command: string, data: JsonObject, path: string): [strin
       if (page.get("note")) lines.push(`  (${pyStr(page.get("note"))})`);
     }
     if (pages.length > EXCERPT_PAGES) lines.push(`- and ${pages.length - EXCERPT_PAGES} more pages in the file`);
+    const listingFailures = listingFailureLines(get(data, "failedListings"));
+    lines.push(...listingFailures);
     const summary = lines.join("\n");
     if (ext === ".json") return [indented(pages), summary];
     const blocks = pages.map((page) => {
@@ -176,7 +183,7 @@ export function content(command: string, data: JsonObject, path: string): [strin
       const body = page.get("text") ? pyStr(page.get("text")) : page.get("error") ? pyStr(page.get("error")) : "";
       return `=== ${title}\n${where}\n\n${body}`;
     });
-    return [`${blocks.join("\n")}\n`, summary];
+    return [`${[...blocks, ...listingFailures].join("\n")}\n`, summary];
   }
   const value = (command === "script" ? get(data, "value") : get(data, "result")) ?? null;
   if (typeof value === "string") return [value, `text starting ${line(head(value, PREVIEW))}`];
@@ -218,7 +225,22 @@ function currentUmask(): number {
   return mask;
 }
 
-export function save(path: string, text: string): string {
+export function savedBody(command: string, answer: JsonObject): Uint8Array | null {
+  const encoded = command === "read" ? answer.get("body") : undefined;
+  if (typeof encoded !== "string") return null;
+  const body = Buffer.from(encoded, "base64");
+  if (body.toString("base64") !== encoded || answer.get("body_bytes") !== BigInt(body.length)) throw new BodyDamaged();
+  return body;
+}
+
+export class BodyDamaged extends Error {}
+
+export function savedBodyLine(target: string, body: Uint8Array, data: JsonObject): string {
+  const kind = data.get("contentType");
+  return `✓ Saved to ${target} (${groupThousands(String(body.length))} bytes${typeof kind === "string" && kind ? `, ${kind}` : ""}), the response body byte for byte (after any HTTP content decoding)\n`;
+}
+
+export function save(path: string, text: string | Uint8Array): string {
   const target = expandUser(path);
   let folder = false;
   try {
@@ -232,7 +254,7 @@ export function save(path: string, text: string): string {
   try {
     const fd = openSync(temporary, "wx", 0o600);
     try {
-      writeSync(fd, wellFormed(redact(text)));
+      writeAllFd(fd, typeof text === "string" ? Buffer.from(wellFormed(redact(text)), "utf8") : text);
     } finally {
       closeSync(fd);
     }
