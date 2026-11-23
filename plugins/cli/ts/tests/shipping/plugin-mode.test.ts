@@ -5,6 +5,7 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { BUILT_LIBC } from "../libc-loaded.ts";
+import { NOT_REACHABLE } from "../../src/control.ts";
 import { flock, nonBlocking } from "../../src/libc.ts";
 import { systemPipe } from "../system-libc.ts";
 
@@ -404,7 +405,7 @@ describe.skipIf(!BUILT)("ardia browse for a plugin", () => {
     }, 120_000);
   });
 
-  describe.skipIf(process.platform !== "darwin")("a running daemon under a long data dir", () => {
+  describe("a running daemon under a long data dir", () => {
     test("normal browse reaches it", async () => {
       useLongDataDir();
       const key = stampedSessionKey(`token:${dataDir}`, "default");
@@ -476,7 +477,7 @@ describe.skipIf(!BUILT)("ardia browse for a plugin", () => {
       const started = daemonPids();
       expect(daemon.requests).toEqual([]);
       expect(started.length).toBeGreaterThan(0);
-      expect([done.status, done.stdout.toString(), done.stderr.toString()]).toEqual([2, "", "✗ Ardia isn't running, or Command Line isn't installed (Settings › Plugins).\n"]);
+      expect([done.status, done.stdout.toString(), done.stderr.toString()]).toEqual([2, "", `✗ ${NOT_REACHABLE}\n`]);
     }, 120_000);
 
     test("Ctrl-C while stdin is read answers one JSON line", async () => {
