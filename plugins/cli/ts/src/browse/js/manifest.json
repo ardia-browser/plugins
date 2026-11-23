@@ -77,7 +77,7 @@
   },
   "actions.focused-field.js.txt": {
     "python": "ardia_cli.browse.actions.FOCUSED_FIELD",
-    "sha256": "69c902cdd8769054f5a9a5db1429e9f2d618ecd50c6741edb162429d7690df03"
+    "sha256": "6aa59f3598be6190856c39c97210d9e7ec0610b490e1f720110f5c4983039ae3"
   },
   "actions.scroll-lock.js.txt": {
     "python": "ardia_cli.browse.actions.SCROLL_LOCK",

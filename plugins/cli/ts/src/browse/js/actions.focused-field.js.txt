@@ -13,17 +13,33 @@
   while (host && host.isContentEditable && host.parentElement && host.parentElement.isContentEditable) host = host.parentElement;
   const editable = !field && !!host && host.isContentEditable;
   const BLOCK = /^(P|DIV|LI|UL|OL|H[1-6]|BLOCKQUOTE|PRE|TR|TD|TH|TABLE|SECTION|ARTICLE|HEADER|FOOTER)$/;
-  const flat = (parent) => {
-    let out = "";
-    for (const child of parent.childNodes) {
-      if (child.nodeType === Node.TEXT_NODE) out += child.data;
-      else if (child.nodeType !== Node.ELEMENT_NODE || /^(STYLE|SCRIPT|TEMPLATE)$/.test(child.tagName)) continue;
-      else if (child.tagName === "BR") out += "\n";
-      else out += (BLOCK.test(child.tagName) ? "\n" : "") + flat(child);
+  let flattened = "";
+  const walk = (parent, mark) => {
+    const children = parent.childNodes;
+    for (let i = 0; i <= children.length; i++) {
+      if (mark && parent === mark.node && i === mark.offset) mark.at = flattened.length;
+      if (i === children.length) break;
+      const child = children[i];
+      if (child.nodeType === Node.TEXT_NODE) {
+        if (mark && child === mark.node) mark.at = flattened.length + mark.offset;
+        flattened += child.data;
+      } else if (child.nodeType === Node.ELEMENT_NODE && !/^(STYLE|SCRIPT|TEMPLATE)$/.test(child.tagName)) {
+        if (child.tagName === "BR") flattened += "\n";
+        else {
+          const block = BLOCK.test(child.tagName);
+          if (block) flattened += "\n";
+          walk(child, mark);
+          if (block) flattened += "\n";
+        }
+      }
     }
-    return out;
   };
-  const contents = () => (field ? node.value : flat(host));
+  const serialize = (mark) => {
+    flattened = "";
+    walk(host, mark);
+    return flattened;
+  };
+  const contents = () => (field ? node.value : serialize(null));
   const digest = (value) => {
     let a = 0xdeadbeef ^ value.length;
     let b = 0x41c6ce57 ^ value.length;
@@ -55,15 +71,14 @@
     const root = host.getRootNode();
     const picked = root.getSelection ? root.getSelection() : host.ownerDocument.getSelection();
     if (picked && picked.rangeCount > 0 && picked.isCollapsed && host.contains(picked.anchorNode)) {
-      const range = host.ownerDocument.createRange();
-      range.setStart(host, 0);
-      range.setEnd(picked.anchorNode, picked.anchorOffset);
-      caret = flat(range.cloneContents()).length;
+      const mark = { node: picked.anchorNode, offset: picked.anchorOffset, at: null };
+      serialize(mark);
+      caret = mark.at;
     }
   }
   if (caret === null) return false;
   const before = contents();
   watch.expected = { node: new WeakRef(field ? node : host), digest: digest(before.slice(0, caret) + text + before.slice(caret)) };
-  watch.timer = setTimeout(() => { watch.expected = null; }, 10000);
+  watch.timer = setTimeout(Reflect.set, 10000, watch, "expected", null);
   return true;
 }
