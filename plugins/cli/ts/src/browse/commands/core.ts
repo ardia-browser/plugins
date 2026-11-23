@@ -70,17 +70,10 @@ async function showsContent(page: Page, loader: string): Promise<boolean> {
   return page.loader(page.mainFrame) === loader && Array.isArray(ready) && ["interactive", "complete"].includes(ready[0]) && Number(ready[1]) > 0;
 }
 
-const PLAIN_HOST = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/;
-
-export function adBlockerNote(url: string, host: string): string {
-  const plain = !url.includes("\\") && !url.includes("@") && PLAIN_HOST.test(host);
-  const site = plain ? host : "<the site's host>";
-  return (
-    'If Ardia\'s ad blocker stopped it (the tab shows uBlock Origin\'s "Page blocked" page), ' +
-    `\`ardia call sites.allowAds -p site=${site}\` trusts the site, where Ardia offers that method (\`ardia methods\` lists it); ` +
-    "then open the page again"
-  );
-}
+export const AD_BLOCKER_NOTE =
+  'If Ardia\'s ad blocker stopped it (the tab shows uBlock Origin\'s "Page blocked" page, which names the blocked ' +
+  "host), `ardia call sites.allowAds -p site=<that host>` trusts the site, where Ardia offers that method " +
+  "(`ardia methods` lists it); then open the page again";
 
 function failedNavigation(state: State, url: string, errorText: string): BrowseError {
   const host = hostnameOf(urlsplit(url).netloc) || url;
@@ -103,7 +96,7 @@ function failedNavigation(state: State, url: string, errorText: string): BrowseE
     flag("navigation_https_only_hint", true);
     message += `. ${HTTPS_ONLY_NOTE}`;
   } else if (errorText.includes("ERR_BLOCKED_BY_CLIENT") || errorText.includes("ERR_ABORTED")) {
-    message += `. ${adBlockerNote(url, host)}`;
+    message += `. ${AD_BLOCKER_NOTE}`;
   }
   return new BrowseError(message, null, "navigation_failed");
 }

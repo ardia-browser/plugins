@@ -193,19 +193,13 @@ def failed_navigation(ctx: Ctx, url: str, error_text: str) -> BrowseError:
     elif https_only_block(url, error_text):
         message += f". {HTTPS_ONLY_NOTE}"
     elif "ERR_BLOCKED_BY_CLIENT" in error_text or "ERR_ABORTED" in error_text:
-        message += f". {ad_blocker_note(url, host)}"
+        message += f". {AD_BLOCKER_NOTE}"
     return BrowseError(message, code="navigation_failed")
 
 
-PLAIN_HOST = re.compile(r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$")
-
-
-def ad_blocker_note(url: str, host: str) -> str:
-    plain = "\\" not in url and "@" not in url and PLAIN_HOST.match(host) is not None
-    site = host if plain else "<the site's host>"
-    return ("If Ardia's ad blocker stopped it (the tab shows uBlock Origin's \"Page blocked\" page), "
-            f"`ardia call sites.allowAds -p site={site}` trusts the site, where Ardia offers that method (`ardia methods` lists it); "
-            "then open the page again")
+AD_BLOCKER_NOTE = ("If Ardia's ad blocker stopped it (the tab shows uBlock Origin's \"Page blocked\" page, which names the blocked "
+                   "host), `ardia call sites.allowAds -p site=<that host>` trusts the site, where Ardia offers that method "
+                   "(`ardia methods` lists it); then open the page again")
 
 
 HTTPS_ONLY_NOTE = ("Ardia loads http:// addresses over https and blocks the page when the site has no working https, which is what this "
