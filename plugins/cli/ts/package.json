@@ -6,7 +6,8 @@
     "typecheck": "tsrs --noEmit -p .",
     "build": "sh scripts/build.sh",
     "typecheck:harness": "tsrs --noEmit -p tests/m3",
-    "test": "bun test --parallel ./tests"
+    "test": "bun test --parallel --path-ignore-patterns='tests/parity/**' ./tests",
+    "test:parity": "bun test --parallel ./tests/parity"
   },
   "devDependencies": {
     "@types/bun": "1.3.14",
