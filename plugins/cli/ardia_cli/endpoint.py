@@ -219,40 +219,32 @@ class SocketSink:
         self.sockets = []
 
     def connect(self, sock, path: str, timeout: float) -> bool:
-        import socket as sockets
-
         with self.lock:
             if self.cancelled:
                 return False
-            sock.settimeout(timeout)
             self.sockets.append(sock)
-            sock.connect(path)
+        sock.settimeout(timeout)
+        sock.connect(path)
+        with self.lock:
             if self.cancelled:
-                try:
-                    sock.shutdown(sockets.SHUT_RDWR)
-                except OSError:
-                    pass
+                self.shut(sock)
                 return False
             return True
 
-    def live(self) -> bool:
-        with self.lock:
-            return not self.cancelled
-
     def cancel(self) -> None:
+        with self.lock:
+            self.cancelled = True
+            for sock in self.sockets:
+                self.shut(sock)
+
+    @staticmethod
+    def shut(sock) -> None:
         import socket as sockets
 
-        self.cancelled = True
-        if not self.lock.acquire(blocking=False):
-            return
         try:
-            for sock in self.sockets:
-                try:
-                    sock.shutdown(sockets.SHUT_RDWR)
-                except OSError:
-                    pass
-        finally:
-            self.lock.release()
+            sock.shutdown(sockets.SHUT_RDWR)
+        except OSError:
+            pass
 
 
 OPEN_SOCKETS: contextvars.ContextVar["SocketSink | None"] = contextvars.ContextVar("ardia_open_sockets", default=None)

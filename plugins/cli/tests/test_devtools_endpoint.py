@@ -4,6 +4,7 @@ import socket
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -244,6 +245,55 @@ class DevtoolsEndpoint(unittest.TestCase):
             while connection.recv(65536):
                 pass
             connection.close()
+
+    def test_a_cancel_landing_as_connect_releases_its_lock_still_closes_the_socket(self):
+        path = self.root / "ArdiaControl.sock"
+        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        server.bind(str(path))
+        server.listen(1)
+        self.addCleanup(server.close)
+        sink = endpoint.SocketSink()
+
+        class CancelAsConnectReleases:
+            def __init__(self):
+                self.inner = threading.Lock()
+                self.fired = False
+
+            def acquire(self, blocking=True, timeout=-1):
+                return self.inner.acquire(blocking, timeout)
+
+            def release(self):
+                if not self.fired and sink.sockets and connected(sink.sockets[0]):
+                    self.fired = True
+                    canceller = threading.Thread(target=sink.cancel)
+                    canceller.start()
+                    canceller.join(0.5)
+                self.inner.release()
+
+            def __enter__(self):
+                self.acquire()
+                return self
+
+            def __exit__(self, *_):
+                self.release()
+
+        def connected(sock):
+            try:
+                sock.getpeername()
+                return True
+            except OSError:
+                return False
+
+        sink.lock = CancelAsConnectReleases()
+        mark = endpoint.OPEN_SOCKETS.set(sink)
+        started = time.monotonic()
+        try:
+            with self.assertRaises(SocketRefused):
+                endpoint.ask_socket(path, timeout=10)
+        finally:
+            endpoint.OPEN_SOCKETS.reset(mark)
+        self.assertTrue(sink.lock.fired)
+        self.assertLess(time.monotonic() - started, 3, "a cancel that lands as connect finishes must still close the socket")
 
     def test_a_peer_that_closes_after_hello_is_unreachable_not_a_raw_error(self):
         path = self.root / "ArdiaControl.sock"
