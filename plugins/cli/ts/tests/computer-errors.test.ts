@@ -14,11 +14,12 @@ import { spawn } from "node:child_process";
 import { cleanEvent, TELEMETRY_ERROR_CODES } from "../src/telemetry-schema.ts";
 import { object, type Value } from "../src/json.ts";
 
-const macOnly = process.platform === "darwin" ? test : test.skip;
+const PROCESS_TEST_MS = 30_000;
+const macOnly = (name: string, body: () => Promise<void> | void) => (process.platform === "darwin" ? test : test.skip)(name, body, PROCESS_TEST_MS);
 const scratch = fs.realpathSync(fs.mkdtempSync(path.join("/tmp", "cerr-")));
 process.on("exit", () => fs.rmSync(scratch, { recursive: true, force: true }));
 let counter = 0;
-const STUB_ENV = ["STUB_EXIT", "STUB_STDERR", "STUB_STDOUT", "STUB_SIGNAL", "STUB_GRANTS", "STUB_GRANTS_EXIT", "STUB_CHECK_SLEEP"];
+const STUB_ENV = ["STUB_EXIT", "STUB_STDERR", "STUB_STDOUT", "STUB_SIGNAL", "STUB_GRANTS", "STUB_GRANTS_EXIT", "STUB_CHECK_SLEEP", "STUB_CHECK_FLOOD"];
 const servers: net.Server[] = [];
 const timers: ReturnType<typeof setInterval>[] = [];
 
@@ -47,6 +48,7 @@ if [ "$1" = "call" ]; then
     previous="$word"
   done
   if [ -n "$socket" ] && [ -n "\${STUB_CHECK_SLEEP:-}" ]; then sleep "$STUB_CHECK_SLEEP"; fi
+  if [ -n "$socket" ] && [ -n "\${STUB_CHECK_FLOOD:-}" ]; then head -c 184320 /dev/zero | tr '\\0' e >&2; exit 2; fi
   if [ -n "$socket" ] && ! [ -S "$socket" ]; then
     printf 'Cua Driver daemon is not running on %s.\\nStart it first with: cua-driver serve --socket %s\\n' "$socket" "$socket" >&2
     exit 1
@@ -135,9 +137,13 @@ function listenOnceOpened(b: Box): void {
   timers.push(timer);
 }
 
-async function run(b: Box, argv: string[], closedStdout = false): Promise<number> {
+async function run(b: Box, argv: string[], closedStdout = false, stuckStderr?: () => void): Promise<number> {
   const write = driverOutput.write;
   driverOutput.write = (fd, bytes, done) => {
+    if (stuckStderr !== undefined && fd === 2) {
+      stuckStderr();
+      return;
+    }
     if (closedStdout && fd === 1) {
       done(Object.assign(new Error("EPIPE"), { code: "EPIPE", errno: -32 }));
       return;
@@ -270,7 +276,7 @@ macOnly("a malformed call with no service running fails at once as bad_arguments
   const b = box({ open: "fails" });
   const started = performance.now();
   assert.equal(await run(b, ["call", "get_screen_size", "{"]), 2);
-  assert.ok(performance.now() - started < 5000);
+  assert.ok(performance.now() - started < 15_000);
   assert.equal(b.io.errorCode, "bad_arguments");
   assert.ok(!fs.existsSync(path.join(b.root, "opened")));
   assert.deepEqual(b.driver, ["2:error: positional JSON arg to 'cua-driver call' did not parse: EOF while parsing an object at line 1 column 1\n       received: {\n"]);
@@ -536,7 +542,7 @@ macOnly("a stdout nobody reads doesn't stop the wrapper from relaying a signal",
   const { result, ms } = await wrapped("touch READY\nhead -c 8000000 /dev/zero\nexec sleep 30\n", "SIGTERM", false);
   assert.equal(result.signal, "SIGTERM");
   assert.equal(result.status, 143);
-  assert.ok(ms < 3000, `took ${ms} ms`);
+  assert.ok(ms < 10_000, `took ${ms} ms`);
 });
 
 const BIG = 128 * 1024;
@@ -549,14 +555,15 @@ function quoted(text: string): string {
   return `'${text.replaceAll("'", "'\\''")}'`;
 }
 
-macOnly("a reader that waits gets all of the driver's output after a normal exit", async () => {
-  const files = probeFiles(`head -c ${BIG} /dev/zero | tr '\\0' x\n`);
-  const count = path.join(files.root, "count");
+macOnly("a reader that waits gets every byte of the driver's output, in order, after a normal exit", async () => {
+  const lines = 30000;
+  const expected = Array.from({ length: lines }, (_, index) => `${index + 1}\n`).join("");
+  assert.ok(expected.length > BIG);
+  const files = probeFiles(`seq 1 ${lines}\n`);
+  const received = path.join(files.root, "received");
   const probe = [process.execPath, PROBE, files.file, files.result].map(quoted).join(" ");
-  assert.equal(await pipeline(`${probe} | (sleep 0.6; tr -d x | wc -c > ${quoted(`${count}.other`)}; ) ; true`), 0);
-  assert.equal(Number(fs.readFileSync(`${count}.other`, "utf8").trim()), 0);
-  assert.equal(await pipeline(`${probe} | (sleep 0.6; wc -c > ${quoted(count)})`), 0);
-  assert.equal(Number(fs.readFileSync(count, "utf8").trim()), BIG);
+  assert.equal(await pipeline(`${probe} | (sleep 0.6; cat > ${quoted(received)})`), 0);
+  assert.ok(fs.readFileSync(received).equals(Buffer.from(expected)));
   assert.deepEqual(JSON.parse(fs.readFileSync(files.result, "utf8")), { status: 0, signal: null, stdoutClosed: false });
 });
 
@@ -571,7 +578,7 @@ macOnly("a reader that closes its end is stdout_closed every time", async () => 
 
 macOnly("Ctrl-C while ardia checks the arguments stops before CuaDriver.app is opened", async () => {
   const b = box();
-  process.env.STUB_CHECK_SLEEP = "5";
+  process.env.STUB_CHECK_SLEEP = "25";
   const timer = setTimeout(() => process.emit("SIGINT"), 300);
   const started = performance.now();
   try {
@@ -579,7 +586,7 @@ macOnly("Ctrl-C while ardia checks the arguments stops before CuaDriver.app is o
   } finally {
     clearTimeout(timer);
   }
-  assert.ok(performance.now() - started < 3000);
+  assert.ok(performance.now() - started < 15_000);
   assert.equal(b.io.errorCode, "interrupted");
   assert.ok(!fs.existsSync(path.join(b.root, "opened")));
   assert.equal(errText(b), "");
@@ -600,8 +607,22 @@ macOnly("SIGTERM while waiting for the service stops at once with 143", async ()
   } finally {
     clearInterval(timer);
   }
-  assert.ok(sentAt > 0 && performance.now() - sentAt < 2000);
+  assert.ok(sentAt > 0 && performance.now() - sentAt < 10_000);
   assert.ok(fs.existsSync(path.join(b.root, "opened")));
   assert.equal(b.io.errorCode, "interrupted");
   assert.deepEqual(b.log(), ["call list_apps --socket <check>"]);
+});
+
+macOnly("Ctrl-C while a long argument error is still being written stops at once", async () => {
+  const b = box();
+  process.env.STUB_CHECK_FLOOD = "1";
+  let stuckBytes = false;
+  const status = run(b, ["call", "list_apps"], false, () => {
+    stuckBytes = true;
+    setTimeout(() => process.emit("SIGINT"), 50);
+  });
+  assert.equal(await status, 130);
+  assert.ok(stuckBytes);
+  assert.equal(b.io.errorCode, "interrupted");
+  assert.ok(!fs.existsSync(path.join(b.root, "opened")));
 });

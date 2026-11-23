@@ -26,9 +26,25 @@ export const driverOutput = {
   },
 };
 
-export function forward(fd: 1 | 2, text: string): Promise<boolean> {
-  if (text === "") return Promise.resolve(true);
-  return new Promise((resolve) => driverOutput.write(fd, Buffer.from(text, "utf8"), (error) => resolve(error === undefined)));
+export function forward(fd: 1 | 2, text: string, signal?: AbortSignal): Promise<"written" | "failed" | "stopped"> {
+  if (signal?.aborted) return Promise.resolve("stopped");
+  if (text === "") return Promise.resolve("written");
+  return new Promise((resolve) => {
+    let done = false;
+    const stop = () => {
+      if (done) return;
+      done = true;
+      abandonWork();
+      resolve("stopped");
+    };
+    signal?.addEventListener("abort", stop, { once: true });
+    driverOutput.write(fd, Buffer.from(text, "utf8"), (error) => {
+      signal?.removeEventListener("abort", stop);
+      if (done) return;
+      done = true;
+      resolve(error === undefined ? "written" : "failed");
+    });
+  });
 }
 
 class Tail {
@@ -98,23 +114,38 @@ export function supervise(binary: string, argv: readonly string[], env: Record<s
     const pipe = (stream: NodeJS.ReadableStream | null, fd: 1 | 2) => {
       if (stream === null) return;
       let forwarding = true;
-      stream.on("data", (chunk: Buffer) => {
-        if (fd === 2) stderrTail.add(chunk);
-        if (!forwarding) return;
-        pending += 1;
-        stream.pause();
+      let writing = false;
+      const queue: Buffer[] = [];
+      const next = () => {
+        const chunk = queue.shift();
+        if (chunk === undefined || !forwarding) {
+          queue.length = 0;
+          writing = false;
+          if (forwarding || fd === 2) stream.resume();
+          settleIfDone();
+          return;
+        }
+        writing = true;
         driverOutput.write(fd, chunk, (error) => {
           pending -= 1;
           if (error !== undefined) {
             forwarding = false;
+            pending -= queue.length;
             if (fd === 1) {
               stdoutClosed = true;
               child.stdout?.destroy();
             }
           }
-          if (fd === 2 || error === undefined) stream.resume();
-          settleIfDone();
+          next();
         });
+      };
+      stream.on("data", (chunk: Buffer) => {
+        if (fd === 2) stderrTail.add(chunk);
+        if (!forwarding) return;
+        pending += 1;
+        queue.push(chunk);
+        stream.pause();
+        if (!writing) next();
       });
     };
     pipe(child.stdout, 1);

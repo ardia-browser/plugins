@@ -232,8 +232,7 @@ async function argumentsRefused(io: CommandIo, binary: string, argv: readonly st
   }
   if (checked.code === 0 || (checked.code === 1 && daemonDownIn(checked.stderr))) return undefined;
   io.flush();
-  await forward(1, checked.stdout);
-  await forward(2, checked.stderr);
+  if ((await forward(1, checked.stdout, signal)) === "stopped" || (await forward(2, checked.stderr, signal)) === "stopped") throw new Stopped();
   io.errorCode = classifyDriverExit(argv[0] ?? "", checked.code, checked.stderr);
   return checked.code;
 }
