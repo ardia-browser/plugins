@@ -1,4 +1,4 @@
-import { interruptsIgnored } from "./libc.ts";
+import { guardWrites, interruptsIgnored } from "./libc.ts";
 import { killLiveGroups } from "./proc/group.ts";
 
 export class Stopped extends Error {}
@@ -37,6 +37,7 @@ function stopOn(signal: StopSignal): void {
 export function armAfterUpdateGuard(): void {
   if (startedBy !== undefined) return;
   startedBy = process.ppid;
+  guardWrites();
   for (const name of STOP_SIGNALS) if (name !== "SIGINT" || !interruptsIgnored()) process.on(name, () => stopOn(name));
   setInterval(() => {
     if (parentGone()) stopOn("SIGTERM");

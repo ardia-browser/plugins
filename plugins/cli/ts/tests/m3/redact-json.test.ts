@@ -291,9 +291,11 @@ describe("JSON-aware masking round 3 (Codex r3 on #79)", () => {
     return held.redact(text);
   }
 
-  test("bare top-level numbers and keywords stay JSON", () => {
-    expect(JSON.parse(masked(["1"], "-0.5e+10"))).toBe("***");
-    expect(masked(["false"], "false\r\n")).toBe("false\r\n");
+  test("a bare top-level number or keyword masks as plain text, as redact.py does", () => {
+    expect(masked(["1"], "-0.5e+10")).toBe("-0.5e+***0");
+    expect(masked(["9"], "9")).toBe("***");
+    expect(masked(["false"], "false\r\n")).toBe("***\r\n");
+    expect(JSON.parse(masked(["1"], '{"n":-0.5e+10}'))).toEqual({ n: "***" });
   });
 
   test("a match that takes in a string's quote masks the string", () => {
