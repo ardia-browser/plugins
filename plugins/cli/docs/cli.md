@@ -2873,3 +2873,4 @@ The same CLI, with these differences:
   opens the profile folder, `Ardia` and the file each with `O_NOFOLLOW` (relative to the folder above) and reads
   the one file it opened, which is always a whole version; it never writes there. `ardia history` takes its profile
   labels from the same file (`Profile <dataId>` is that profile's folder).
+
