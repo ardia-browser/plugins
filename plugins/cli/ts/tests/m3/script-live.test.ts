@@ -151,6 +151,13 @@ describe.skipIf(!CHROME)("browse script against headless Chrome", () => {
     expect(Number(reported?.[1] ?? 0) + (rows === 10 ? 1 : 0)).toBeGreaterThanOrEqual(1);
   });
 
+  test("an action still running after the script returns stays inside its timeout", async () => {
+    const slow = await script("browse('wait', '4000');\nawait sleep(30);\nreturn 'returned';", "--timeout", "1s");
+    expect(slow.status).toBe(1);
+    expect(slow.err).toContain("The script timed out after 1s");
+    expect(slow.ms).toBeLessThan(3_500);
+  });
+
   test("a failed page call names its line and call", async () => {
     const done = await script("const a = 1;\nawait page.$eval('#missing', (el) => el.id);");
     expect(done.status).toBe(1);

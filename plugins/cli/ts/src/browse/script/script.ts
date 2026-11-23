@@ -254,6 +254,7 @@ class ScriptRun {
   readonly stop = new AbortController();
   readonly controls = new Map<number, AbortController>();
   readonly mutating = new Set<number>();
+  readonly started = new Set<number>();
   private ended = false;
   private settling: Promise<void> | null = null;
 
@@ -289,7 +290,7 @@ class ScriptRun {
     for (const [id, control] of this.controls) {
       if (this.mutating.has(id)) continue;
       control.abort(new Cancelled());
-      cut += 1;
+      if (this.started.has(id)) cut += 1;
     }
     return cut;
   }
@@ -362,6 +363,7 @@ async function serveCall(run: ScriptRun, request: Request): Promise<Answer> {
   if (light) run.receiptsSkipped += 1;
   try {
     const answer = await run.gate.run(exclusive, () => run.admitted(async () => {
+      run.started.add(request.id);
       if (exclusive) run.mutating.add(request.id);
       if (!exclusive) await run.settle(name, words.slice(1));
       return answerCall(run.ctx, words, index, light);
@@ -383,6 +385,7 @@ async function servePage(run: ScriptRun, request: Request): Promise<Answer> {
   const frame = typeof request["frame"] === "string" && request["frame"] ? request["frame"] : null;
   try {
     return await run.gate.run(false, () => run.admitted(async () => {
+      run.started.add(request.id);
       await run.settle("eval", []);
       const invalid = op === "frames" ? null : validEvaluate(request);
       if (invalid !== null) return { ok: false, error: invalid, code: "usage", call: index };
@@ -415,6 +418,7 @@ async function serve(run: ScriptRun, request: Request): Promise<void> {
   try {
     add("script_calls");
     if (request.op === "sleep") {
+      run.started.add(request.id);
       run.inflight.set(request.id, { argv: null, call: null, line: request["line"], type: "sleep" });
       await sleep(Math.min(Math.max(Number(request["ms"]) || 0, 0), MAX_TIMEOUT * 1000) / 1000);
       answer = { ok: true, text: "", data: {} };
@@ -429,6 +433,7 @@ async function serve(run: ScriptRun, request: Request): Promise<void> {
     run.inflight.delete(request.id);
     run.controls.delete(request.id);
     run.mutating.delete(request.id);
+    run.started.delete(request.id);
     run.inflightBytes -= Number(request["bytes"]) || 0;
   }
   run.reply(request.id, answer);
@@ -616,7 +621,11 @@ export async function run(ctx: Ctx, source: string, seconds: number): Promise<Re
     script = started;
     let outcome: { value: Message } | { timedOut: true };
     try {
-      outcome = await withDeadline(seconds, () => drive(started, source));
+      outcome = await withDeadline(seconds, async () => {
+        const finished = await drive(started, source);
+        await untilCancelled(started.drain());
+        return finished;
+      });
     } catch (error) {
       if (error instanceof Cancelled && keepState(state, started.stateText)) flag("script_state_kept_on_interrupt", true);
       throw error;
