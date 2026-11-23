@@ -37,7 +37,7 @@ function seeded(seed: number): () => number {
   };
 }
 
-const PIECES = ["token=", "page_token=", '"', "\\", "\\\"", "a", "Z9", "&", "=", " ", "\n", "\t", "<", ">", "'", "é", " ", "\u0001", "/", "%22", "\\u0022"];
+const PIECES = ["token=", "page_token=", '"', "\\", "\\\"", "a", "Z9", "&", "=", " ", "\n", "\t", "<", ">", "'", "é", "\u2028", "\u0001", "/", "%22", "\\u0022"];
 
 function sample(random: () => number): string {
   let text = "";
@@ -95,8 +95,8 @@ describe("masking known secrets keeps JSON whole (plugins#72)", () => {
     const value = { exit: 1, text: "line\nbreak\fform é", items: [1, 2, 10], ok: true };
     for (const text of [JSON.stringify(value), JSON.stringify(value, null, 2), asciiOnly(JSON.stringify(value))]) {
       const parsed = stillJson(secrets.redact(text)) as typeof value;
-      expect(parsed.exit).toBe(1);
-      expect(parsed.items).toEqual([1, 2, 10]);
+      expect(parsed.exit as unknown).toBe("***");
+      expect(parsed.items as unknown).toEqual(["***", 2, "***"]);
       expect(parsed.ok).toBe(true);
       expect(parsed.text).toBe("line\nbreak\f***orm é");
     }
@@ -117,8 +117,8 @@ describe("masking known secrets keeps JSON whole (plugins#72)", () => {
       const body = Array.isArray(outer) ? (outer[0] as string) : (outer.body as string);
       const parsed = stillJson(body) as { q: string; n: number; deeper: string };
       expect(parsed.q).toBe("***");
-      expect(parsed.n).toBe(1);
-      expect(stillJson(parsed.deeper)).toEqual({ tok: "***", count: 11 });
+      expect(parsed.n as unknown).toBe("***");
+      expect(stillJson(parsed.deeper)).toEqual({ tok: "***", count: "***" });
     }
   });
 
@@ -132,7 +132,7 @@ describe("masking known secrets keeps JSON whole (plugins#72)", () => {
   test("JSON lines mask line by line and plain text lines still mask by text", () => {
     const text = `${JSON.stringify({ n: 1, s: "café" })}\nplain café 1\n${JSON.stringify(["abc\"def"])}\n`;
     const [first, plain, last] = secrets.redact(text).split("\n");
-    expect(stillJson(first as string)).toEqual({ n: 1, s: "***" });
+    expect(stillJson(first as string)).toEqual({ n: "***", s: "***" });
     expect(plain).toBe("plain *** ***");
     expect(stillJson(last as string)).toEqual(["***"]);
   });
@@ -142,10 +142,66 @@ describe("masking known secrets keeps JSON whole (plugins#72)", () => {
     try {
       addSecret("1");
       addSecret("abc\"def");
-      expect(stillJson(redact(JSON.stringify({ exit: 1, s: 'x abc"def' })))).toEqual({ exit: 1, s: "x ***" });
+      expect(stillJson(redact(JSON.stringify({ exit: 2, s: 'x abc"def' })))).toEqual({ exit: 2, s: "x ***" });
+      expect(stillJson(redact(JSON.stringify({ exit: 1 })))).toEqual({ exit: "***" });
     } finally {
       clearSecrets();
     }
+  });
+
+  test("no secret survives that the plain replacement would have masked (Codex r1 on #79)", () => {
+    const held = new Secrets();
+    held.add("[123456789]");
+    expect(held.redact(JSON.stringify({ s: "[123456789]" }))).toBe('{"s":"***"}');
+    const spanning = new Secrets();
+    spanning.add("12345,67890");
+    const masked = spanning.redact(JSON.stringify({ s: "[12345,67890]" }));
+    expect(masked.includes("12345,67890")).toBe(false);
+    stillJson(masked);
+    const top = new Secrets();
+    top.add("12345,67890");
+    expect(top.redact("[12345,67890]").includes("12345,67890")).toBe(false);
+    const lines = new Secrets();
+    lines.add("alpha\nbeta");
+    for (const text of ['prefix alpha\nbeta suffix\n{"s":"ok"}\n', 'prefix alpha\r\nbeta\n{"s":"ok"}\n'.replace("alpha\r\nbeta", "alpha\nbeta"), '{"s":"ok"}\nalpha\nbeta\n']) {
+      expect(lines.redact(text).includes("alpha\nbeta")).toBe(false);
+    }
+    const crlf = new Secrets();
+    crlf.add("alpha\r\nbeta");
+    expect(crlf.redact('x alpha\r\nbeta y\r\n{"s":"ok"}\r\n').includes("alpha\r\nbeta")).toBe(false);
+  });
+
+  test("keywords never take a mask, and deep nesting keeps every level JSON", () => {
+    const held = new Secrets();
+    held.add("r");
+    held.add("123456789");
+    expect(stillJson(held.redact(JSON.stringify({ ok: true, no: false, none: null, s: "rr" })))).toEqual({ ok: true, no: false, none: null, s: "******" });
+    let text = JSON.stringify({ n: 123456789 });
+    for (let level = 0; level < 12; level += 1) text = JSON.stringify({ s: text });
+    let value: unknown = stillJson(held.redact(text));
+    for (let level = 0; level < 12; level += 1) value = stillJson((value as { s: string }).s);
+    expect(value).toEqual({ n: "***" });
+  });
+
+  test("a re-encoded string never turns an escaped bidi or separator character literal", () => {
+    const held = new Secrets();
+    held.add("secret");
+    const text = JSON.stringify({ body: JSON.stringify({ a: "é \u202e \u2028 \u0085", b: "secret" }) }).replaceAll("\u202e", "\\u202e").replaceAll("\u2028", "\\u2028");
+    expect(/[\u202e\u2028]/u.test(text)).toBe(false);
+    const masked = held.redact(text);
+    expect(/[\u202e\u2028\u0085]/u.test(masked)).toBe(false);
+    expect(stillJson((stillJson(masked) as { body: string }).body)).toEqual({ a: "é \u202e \u2028 \u0085", b: "***" });
+  });
+
+  test("masking is linear: 200,000 repeats of a one-letter secret take well under a second", () => {
+    const held = new Secrets();
+    held.add("a");
+    held.add("aa");
+    const text = JSON.stringify({ s: "a".repeat(200_000) });
+    const started = performance.now();
+    const masked = held.redact(text);
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect((stillJson(masked) as { s: string }).s).toBe("***".repeat(100_000));
   });
 
   test("3,000 random documents with secrets, escapes and nesting mask to valid JSON", () => {
@@ -162,8 +218,9 @@ describe("masking known secrets keeps JSON whole (plugins#72)", () => {
       for (const text of [JSON.stringify(value), JSON.stringify(value, null, 2), asciiOnly(JSON.stringify(value))]) {
         const masked = secrets.redact(text);
         const parsed = stillJson(masked) as typeof value;
-        expect(parsed.n).toBe(value.n);
+        expect(parsed.n as unknown).toBe(String(value.n).includes("1") ? "***" : value.n);
         stillJson(parsed.nested);
+        for (const secret of ["1", "café", 'abc"def']) expect(JSON.stringify(parsed).includes(secret) && !JSON.stringify(value).includes(secret)).toBe(false);
         expect(secrets.redact(masked)).toBe(masked);
       }
     }
