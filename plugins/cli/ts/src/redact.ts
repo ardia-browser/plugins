@@ -224,7 +224,8 @@ function maskedDocument(whole: string, longestFirst: readonly string[]): string 
     }
     return false;
   });
-  return straddles ? before + QUOTED_MASK + after : out;
+  if (!straddles) return out;
+  return /^[{["]/u.test(core) ? before + QUOTED_MASK + after : replaceSecrets(whole, longestFirst);
 }
 
 function maskedCore(text: string, longestFirst: readonly string[]): string {
