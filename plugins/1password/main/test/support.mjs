@@ -87,3 +87,52 @@ export async function listAll(h) {
     request = { snapshot: answer.result.snapshot, cursor: answer.result.cursor };
   }
 }
+
+const unescapedName = (name) => name.replace(/\\(.)/g, "$1");
+const opName = (name) => name.replace(/\s/g, "").toLowerCase();
+
+function applyAssignment(item, argument) {
+  if (argument.startsWith("--url=")) {
+    const href = argument.slice("--url=".length);
+    const urls = item.urls ?? [];
+    const at = Math.max(0, urls.findIndex((url) => url.primary));
+    item.urls = urls.length ? urls.map((url, i) => (i === at ? { ...url, href } : url)) : [{ href, primary: true }];
+    return true;
+  }
+  if (argument.endsWith("[delete]")) {
+    const name = opName(unescapedName(argument.slice(0, -"[delete]".length)));
+    const matching = item.fields.filter((field) => opName(field.label ?? "") === name);
+    if (matching.length !== 1 || matching[0].purpose) return false;
+    item.fields = item.fields.filter((field) => field !== matching[0]);
+    return true;
+  }
+  if (argument.startsWith("username=")) {
+    const field = item.fields.find((entry) => entry.purpose === "USERNAME");
+    field.value = argument.slice("username=".length);
+    return true;
+  }
+  return false;
+}
+
+export function opHoldingPasskey(stored) {
+  const vault = { item: structuredClone(stored), passkey: true };
+  const routes = [
+    ["item get*", () => ok(vault.item)],
+    [
+      "item edit*",
+      (launch) => {
+        if (launch.stdin) {
+          vault.item = JSON.parse(launch.stdin);
+          vault.passkey = false;
+          return ok(vault.item);
+        }
+        const edited = structuredClone(vault.item);
+        const changes = launch.argv.slice(3).filter((argument) => argument !== "--format=json" && !argument.startsWith("--account="));
+        if (!changes.every((argument) => applyAssignment(edited, argument))) return fail("[ERROR] 2026/11/23 10:00:00 the fake op couldn't apply an assignment");
+        vault.item = edited;
+        return ok(vault.item);
+      },
+    ],
+  ];
+  return { vault, routes };
+}

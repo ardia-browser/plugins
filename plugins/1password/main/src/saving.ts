@@ -1,6 +1,6 @@
 import { CredentialError, json, type CredentialContext, type Item, type JsonRecord, type JsonValue, type NewLogin } from "@ardia/plugin-sdk/credentials";
 import { check, isItemId, requireUnlocked, withAccount } from "./cli";
-import { editedTemplate, holds } from "./edits";
+import { holds } from "./edits";
 import { listedItem, revealedItem } from "./items";
 
 const PERSONAL_VAULT_NAMES = new Set(["private", "personal", "employee"]);
@@ -39,13 +39,27 @@ function newLoginTemplate(login: NewLogin): JsonRecord {
   };
 }
 
+function withCredentials(item: JsonRecord, login: NewLogin): JsonRecord | null {
+  if ((json.string(item.category) ?? "LOGIN").toUpperCase() !== "LOGIN") return null;
+  const fields = json.dicts(item.fields).map((field) => ({ ...field }));
+  for (const wanted of newLoginTemplate(login).fields as JsonRecord[]) {
+    const at = fields.findIndex((field) => json.string(field.purpose) === wanted.purpose);
+    if (at < 0) fields.push(wanted);
+    else {
+      const { password_details: _details, entropy: _entropy, ...kept } = fields[at]!;
+      fields[at] = { ...kept, value: wanted.value };
+    }
+  }
+  return { ...item, fields };
+}
+
 async function confirmCredentials(ctx: CredentialContext, id: string, login: NewLogin) {
   const wanted = { username: login.username, password: login.password };
   const stored = await revealedItem(ctx, id);
   if (holds(stored, wanted)) return;
-  const repair = json.string(stored.id) === id ? editedTemplate(stored, wanted) : null;
+  const repair = json.string(stored.id) === id ? withCredentials(stored, login) : null;
   if (!repair) throw CredentialError.failed("incomplete");
-  check(await ctx.cli.verb("item.edit", withAccount(ctx, { id, template: repair as JsonValue })), ctx);
+  check(await ctx.cli.verb("item.replace", withAccount(ctx, { id, template: repair as JsonValue })), ctx);
   if (!holds(await revealedItem(ctx, id), wanted)) throw CredentialError.failed("incomplete");
 }
 

@@ -13,5 +13,4 @@ export const onePassword: CredentialProvider = {
   reveal: (request, ctx) => reveal(ctx, request),
   save: ({ login }, ctx) => saveLogin(ctx, login),
   edit: ({ id, change }, ctx) => editItem(ctx, id, change),
-  addTotp: ({ id, uri }, ctx) => editItem(ctx, id, { totp: { set: uri } }),
 };

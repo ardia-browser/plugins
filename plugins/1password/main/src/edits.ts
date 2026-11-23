@@ -1,14 +1,19 @@
-import { CredentialError, json, totp, type CredentialContext, type Item, type JsonRecord, type JsonValue, type LoginChange } from "@ardia/plugin-sdk/credentials";
+import { CREDENTIAL_LIMITS, CredentialError, json, origins, totp, type CredentialContext, type Item, type JsonRecord, type LoginChange, type VerbParams } from "@ardia/plugin-sdk/credentials";
 import { check, isItemId, requireUnlocked, withAccount } from "./cli";
 import { isOneTimeField, listedItem, purposeValue, revealedItem } from "./items";
 
-export const CODE_FIELD_ID = "ardia-one-time-password";
+export const PASSWORD_IN_APP =
+  "1Password's CLI can't take a new password without showing it to other apps or deleting the login's passkey, so change it in 1Password.";
+export const CODE_IN_APP =
+  "1Password's CLI can't take a new one-time code without showing it to other apps or deleting the login's passkey, so add it in 1Password.";
 
-const USERNAME_FIELD = { id: "username", type: "STRING", purpose: "USERNAME", label: "username" };
-const PASSWORD_FIELD = { id: "password", type: "CONCEALED", purpose: "PASSWORD", label: "password" };
+export const MOST_CODE_FIELDS_REMOVED = 4;
+export const REMOVE_CODE_SLOTS = Array.from({ length: MOST_CODE_FIELDS_REMOVED }, (_, i) => `removeCode${i + 1}`);
 
-const isEmptyChange = (change: LoginChange) =>
-  change.username === undefined && change.password === undefined && change.url === undefined && change.totp === undefined;
+const USERNAME_ASSIGNMENT = /^username=[^\u0000-\u001f\u007f-\u009f]*$/;
+const FIELD_DELETION = /^[^\u0000-\u001f\u007f-\u009f[\]\-][^\u0000-\u001f\u007f-\u009f[\]]*\[delete\]$/;
+const CONTROL_OR_SPACE = /[\s\u0000-\u001f\u007f-\u009f]/;
+const NAMES_OP_RESERVES = new Set(["username", "password", "notesplain", "notes", "title", "url", "website"]);
 
 export function holds(item: JsonRecord, change: LoginChange, now = Date.now()): boolean {
   const fields = json.dicts(item.fields);
@@ -30,49 +35,74 @@ export function holds(item: JsonRecord, change: LoginChange, now = Date.now()): 
   return true;
 }
 
-function setPurpose(fields: JsonRecord[], purpose: string, value: string, added: JsonRecord) {
-  const at = fields.findIndex((field) => json.string(field.purpose) === purpose);
-  if (at >= 0) fields[at] = { ...fields[at], value };
-  else fields.push({ ...added, value });
+function utf8Length(text: string): number {
+  let bytes = 0;
+  for (const character of text) {
+    const point = character.codePointAt(0)!;
+    bytes += point < 0x80 ? 1 : point < 0x800 ? 2 : point < 0x10000 ? 3 : 4;
+  }
+  return bytes;
 }
 
-export function editedTemplate(item: JsonRecord, change: LoginChange): JsonRecord | null {
-  if (isEmptyChange(change) || (json.string(item.category) ?? "LOGIN").toUpperCase() !== "LOGIN") return null;
-  let fields: JsonRecord[] = json.dicts(item.fields).map((field) => ({ ...field }));
-  if (change.username !== undefined) setPurpose(fields, "USERNAME", change.username, USERNAME_FIELD);
-  if (change.password !== undefined) {
-    setPurpose(fields, "PASSWORD", change.password, PASSWORD_FIELD);
-    const at = fields.findIndex((field) => json.string(field.purpose) === "PASSWORD");
-    const { password_details: _details, entropy: _entropy, ...rest } = fields[at]!;
-    fields[at] = rest;
+const fitsIdSlot = (argument: string, shape: RegExp) => shape.test(argument) && utf8Length(argument) <= CREDENTIAL_LIMITS.idSlotLength;
+
+const opName = (name: string) => name.replace(/\s/g, "").toLowerCase();
+
+export function assignableUrl(url: string): boolean {
+  if (!url || url.length > CREDENTIAL_LIMITS.urlLength || url.startsWith("-") || CONTROL_OR_SPACE.test(url) || !origins.isWebOrigin(url)) return false;
+  const scheme = url.slice(0, url.indexOf(":")).toLowerCase();
+  return scheme === "https" || (scheme === "http" && origins.isLocalHost(origins.host(url) ?? ""));
+}
+
+export function fieldDeletion(field: JsonRecord, fields: readonly JsonRecord[]): string | null {
+  const label = json.string(field.label) ?? "";
+  const name = opName(label);
+  if (!name || NAMES_OP_RESERVES.has(name) || /[[\]]/.test(label)) return null;
+  const namesOther = (other: JsonRecord) => other !== field && [other.label, other.id].some((text) => typeof text === "string" && opName(text) === name);
+  if (fields.some(namesOther)) return null;
+  const deletion = `${label.replace(/[\\.=]/g, (character) => `\\${character}`)}[delete]`;
+  return fitsIdSlot(deletion, FIELD_DELETION) ? deletion : null;
+}
+
+export function assignments(item: JsonRecord, change: LoginChange): VerbParams | null {
+  if ((json.string(item.category) ?? "LOGIN").toUpperCase() !== "LOGIN") return null;
+  const params: Record<string, string> = {};
+  if (change.username !== undefined) {
+    const username = `username=${change.username}`;
+    if (!fitsIdSlot(username, USERNAME_ASSIGNMENT)) return null;
+    params.username = username;
   }
-  if (change.totp === "remove") fields = fields.filter((field) => !isOneTimeField(field));
-  else if (change.totp) {
-    const uri = change.totp.set;
-    const at = fields.findIndex(isOneTimeField);
-    if (at >= 0) {
-      const { totp: _code, ...rest } = fields[at]!;
-      fields[at] = { ...rest, value: uri };
-    } else fields.push({ id: CODE_FIELD_ID, type: "OTP", label: "one-time password", value: uri });
-  }
-  const edited: JsonRecord = { ...item, fields };
   if (change.url !== undefined) {
-    const urls = json.dicts(item.urls).map((url) => ({ ...url }));
-    const primary = urls.findIndex((url) => json.bool(url.primary) === true);
-    const at = primary >= 0 ? primary : urls.length ? 0 : -1;
-    if (at >= 0) urls[at] = { ...urls[at], href: change.url };
-    edited.urls = at >= 0 ? urls : [{ href: change.url, primary: true }];
+    if (!assignableUrl(change.url)) return null;
+    params.url = change.url;
   }
-  return edited;
+  if (change.totp === "remove") {
+    const fields = json.dicts(item.fields);
+    const codeFields = fields.filter(isOneTimeField);
+    if (codeFields.length > MOST_CODE_FIELDS_REMOVED) return null;
+    for (const [at, field] of codeFields.entries()) {
+      const deletion = fieldDeletion(field, fields);
+      if (!deletion) return null;
+      params[REMOVE_CODE_SLOTS[at]!] = deletion;
+    }
+  }
+  return params;
 }
 
 export async function editItem(ctx: CredentialContext, id: string, change: LoginChange): Promise<Item> {
   requireUnlocked(ctx);
   if (!isItemId(id)) throw CredentialError.notFound();
-  const template = await revealedItem(ctx, id);
-  const edited = json.string(template.id) === id ? editedTemplate(template, change) : null;
-  if (!edited) throw CredentialError.failed("cantPrepare");
-  const result = await ctx.cli.verb("item.edit", withAccount(ctx, { id, template: edited as JsonValue }));
+  if (change.password !== undefined) throw CredentialError.failed("failed", { detail: PASSWORD_IN_APP });
+  if (change.totp !== undefined && change.totp !== "remove") throw CredentialError.failed("failed", { detail: CODE_IN_APP });
+  const stored = await revealedItem(ctx, id);
+  const params = json.string(stored.id) === id ? assignments(stored, change) : null;
+  if (!params) throw CredentialError.failed("cantPrepare");
+  if (Object.keys(params).length === 0) {
+    const unchanged = listedItem(stored);
+    if (!unchanged || change.totp !== "remove" || !holds(stored, change)) throw CredentialError.failed("cantPrepare");
+    return unchanged;
+  }
+  const result = await ctx.cli.verb("item.assign", withAccount(ctx, { id, ...params }));
   check(result, ctx);
   const returned = json.dict(result.json);
   const saved = listedItem(returned);

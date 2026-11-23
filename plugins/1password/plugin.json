@@ -25,7 +25,6 @@
         "totp",
         "save",
         "edit",
-        "addTotp",
         "touchID"
       ],
       "signIn": {
@@ -49,7 +48,9 @@
         "patterns": {
           "item": "^[A-Za-z0-9]{1,64}$",
           "account": "^[A-Za-z0-9][A-Za-z0-9.@_-]{0,319}$",
-          "vault": "^[A-Za-z0-9]{1,64}$"
+          "vault": "^[A-Za-z0-9]{1,64}$",
+          "usernameAssignment": "^username=[^\\u0000-\\u001f\\u007f-\\u009f]*$",
+          "fieldDeletion": "^[^\\u0000-\\u001f\\u007f-\\u009f\\[\\]\\-][^\\u0000-\\u001f\\u007f-\\u009f\\[\\]]*\\[delete\\]$"
         },
         "env": [
           {
@@ -286,7 +287,85 @@
               "mode": "json"
             }
           },
-          "item.edit": {
+          "item.assign": {
+            "argv": [
+              "item",
+              "edit",
+              {
+                "slot": "id"
+              },
+              {
+                "slot": "username"
+              },
+              {
+                "slot": "removeCode1"
+              },
+              {
+                "slot": "removeCode2"
+              },
+              {
+                "slot": "removeCode3"
+              },
+              {
+                "slot": "removeCode4"
+              },
+              {
+                "flag": "--url",
+                "slot": "url"
+              },
+              "--format=json",
+              {
+                "flag": "--account",
+                "slot": "account"
+              }
+            ],
+            "slots": {
+              "id": {
+                "type": "id",
+                "pattern": "item"
+              },
+              "username": {
+                "type": "id",
+                "pattern": "usernameAssignment",
+                "optional": true
+              },
+              "removeCode1": {
+                "type": "id",
+                "pattern": "fieldDeletion",
+                "optional": true
+              },
+              "removeCode2": {
+                "type": "id",
+                "pattern": "fieldDeletion",
+                "optional": true
+              },
+              "removeCode3": {
+                "type": "id",
+                "pattern": "fieldDeletion",
+                "optional": true
+              },
+              "removeCode4": {
+                "type": "id",
+                "pattern": "fieldDeletion",
+                "optional": true
+              },
+              "url": {
+                "type": "url",
+                "allowLocalHttp": true,
+                "optional": true
+              },
+              "account": {
+                "type": "id",
+                "pattern": "account",
+                "optional": true
+              }
+            },
+            "timeoutMs": 60000,
+            "output": {
+              "mode": "json"
+            }
+          },
+          "item.replace": {
             "argv": [
               "item",
               "edit",

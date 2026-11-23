@@ -92,7 +92,7 @@ describe("the built plugin on Ardia's channel", () => {
   test("says hello with credentials protocol 1 and offers exactly 1Password's handlers", async () => {
     const { hello, ready } = await started();
     assert.deepEqual(hello.params, { protocol: 2, sdk: "2.1.0", credentials: 1 });
-    assert.deepEqual(ready.params.credentialProvider, { handlers: ["state", "signIn", "unlock", "signOut", "list", "reveal", "save", "edit", "addTotp"] });
+    assert.deepEqual(ready.params.credentialProvider, { handlers: ["state", "signIn", "unlock", "signOut", "list", "reveal", "save", "edit"] });
     assert.deepEqual([ready.params.commands, ready.params.tools, ready.params.views, ready.params.decide, ready.params.events], [[], [], [], [], []]);
   });
 
