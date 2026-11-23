@@ -214,8 +214,11 @@ export class NetworkWatch {
   }
 
   async settleLine(from: number): Promise<boolean> {
-    const deadline = monotonic() + SETTLE_LIMIT;
-    const mine = () => this.order.slice(from).some((id) => {
+    const started = monotonic();
+    const deadline = started + SETTLE_LIMIT;
+    const own = () => this.order.slice(from).some((id) => !this.records.get(id)?.background);
+    const quiet = () => monotonic() - Math.max(this.lastEvent, started) >= (own() ? QUIET : FIRST_QUIET);
+    const mine = () => !quiet() || this.order.slice(from).some((id) => {
       const entry = this.records.get(id);
       if (entry === undefined || entry.done || entry.background || LONG_LIVED.has(entry.type)) return false;
       return !entry.answered || (entry.method === "GET" && BODY_TYPES.has(entry.type) && readableType(entry) !== null);

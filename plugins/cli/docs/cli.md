@@ -897,8 +897,8 @@ failure, and a command whose outcome is unknown stops the rest (`not_run`). A li
 the page as the line just before it left it (that line's view after, when it was on the same tab and document), so the
 page is read once between two lines, not twice. A run of `fill`, `type`, `select`, `check` and `uncheck` lines whose
 next target is already known (a CSS selector, or a ref the session has) reads the page once before the run and once
-after its last line, and settles once (each held line still waits for requests it started itself, without the quiet
-window, so a flow keeps their answers): the lines before the last print `✓ fill #name "Ana Ruiz"`, and the last prints
+after its last line, and settles once (each held line still waits the usual quiet window and for requests it started
+itself, so a list it fills in arrives before the next line and a flow keeps their answers): the lines before the last print `✓ fill #name "Ana Ruiz"`, and the last prints
 the run's whole change report (`batch_lines_held` counts the held lines). If a line in the run fails, it gets its own
 error and the report so far goes on the line before it. Lines with `--no-changes`, `--full`, `--max-output` or
 `--out` aren't held. `batch` can't run inside a batch. `close`

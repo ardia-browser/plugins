@@ -174,6 +174,17 @@ describe("review round 3", () => {
     await watch.stop();
   });
 
+  test("a held line waits a quiet window for a request its action starts a moment later", async () => {
+    const [watch, page] = watched();
+    await watch.start();
+    setTimeout(() => sent(watch, page, "late", "Fetch", "https://shop.example/api/cities?country=CA"), 35);
+    setTimeout(() => watch.listener(page, "Network.responseReceived", { requestId: "late", response: { status: 200, mimeType: "application/json" } }), 70);
+    setTimeout(() => watch.listener(page, "Network.loadingFinished", { requestId: "late" }), 90);
+    expect(await watch.settleLine(0)).toBe(true);
+    expect(watch.records.get("late")?.done).toBe(true);
+    await watch.stop();
+  });
+
   test("a held line doesn't wait for a stream body a flow can't keep", async () => {
     const [watch, page] = watched();
     await watch.start();
@@ -181,7 +192,7 @@ describe("review round 3", () => {
     watch.listener(page, "Network.responseReceived", { requestId: "mine", response: { status: 200, mimeType: "text/event-stream" } });
     const started = performance.now();
     expect(await watch.settleLine(0)).toBe(true);
-    expect(performance.now() - started).toBeLessThan(100);
+    expect(performance.now() - started).toBeLessThan(400);
     await watch.stop();
   });
 
