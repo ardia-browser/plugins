@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "bun:test";
-import { ACTIVE_FOR, HOLD_SECONDS, MAX_HELD, RENEW_EVERY, recentlyUsed, TabHolds } from "../src/browse/daemon/holds.ts";
+import { ACTIVE_FOR, HOLD_SECONDS, heldAppTabs, MAX_HELD, RENEW_EVERY, recentlyUsed, TabHolds } from "../src/browse/daemon/holds.ts";
 import { ControlRefused } from "../src/browse/state/apptabs.ts";
 
 type Call = [string, Record<string, unknown>];
@@ -77,11 +77,15 @@ test("close waits for a hold already on its way, then releases, and nothing is h
   assert.deepEqual(holds.holding, []);
 });
 
-test("only tabs used in the last few minutes are held, newest first, at most what the app takes in one call", () => {
+test("only tabs used in the last few minutes are held, newest first, and closed or unmapped ones never crowd out a live tab", () => {
   const used = new Map<string, number>([["old", 0], ["recent", ACTIVE_FOR], ["newest", ACTIVE_FOR + 5]]);
   assert.deepEqual(recentlyUsed(used, ACTIVE_FOR + 10), ["newest", "recent"]);
-  const many = new Map(Array.from({ length: MAX_HELD + 5 }, (_, i): [string, number] => [`t${i}`, i]));
-  assert.equal(recentlyUsed(many, 100).length, MAX_HELD);
+  const closed = Array.from({ length: MAX_HELD }, (_, i) => `closed-${i}`);
+  const recent = [...closed, "live-a", "unmapped", "live-b"];
+  const appTab = (target: string) => (target.startsWith("live") ? `tab-${target}` : target === "unmapped" ? undefined : `tab-${target}`);
+  assert.deepEqual(heldAppTabs(recent, (target) => !target.startsWith("closed"), appTab), ["tab-live-a", "tab-live-b"]);
+  const many = Array.from({ length: MAX_HELD + 5 }, (_, i) => `live-${i}`);
+  assert.equal(heldAppTabs(many, () => true, appTab).length, MAX_HELD);
 });
 
 test("a hold whose answer was lost is still released at close, since it may have reached Ardia", async () => {
@@ -105,11 +109,11 @@ test("when Ardia has no room for another session, the daemon says so and asks ag
     (why) => refusals.push(why),
   );
   await holds.tick(["tab-a"], 0);
-  await holds.tick(["tab-a"], 2);
-  await holds.tick(["tab-a"], RENEW_EVERY - 1);
-  assert.equal(calls.length, 1);
+  await holds.tick(["tab-b", "tab-a"], 2);
+  await holds.tick(["tab-c"], RENEW_EVERY - 1);
+  assert.equal(calls.length, 1, "a different list doesn't skip the wait");
   assert.deepEqual(refusals, ["At most 4 sessions can hold tabs at once."]);
-  await holds.tick(["tab-a"], RENEW_EVERY);
+  await holds.tick(["tab-c"], RENEW_EVERY);
   assert.equal(calls.length, 2);
   assert.deepEqual(holds.holding, []);
 });

@@ -29,7 +29,7 @@ import { dispatch, hooks } from "../commands/all.ts";
 import { Ctx } from "../commands/ctx.ts";
 import { State } from "../state/state.ts";
 import { appCall, appTabMap } from "../state/apptabs.ts";
-import { RENEW_EVERY, recentlyUsed, TabHolds } from "./holds.ts";
+import { heldAppTabs, MAP_RETRY, recentlyUsed, TabHolds } from "./holds.ts";
 import { reportException } from "../../telemetry.ts";
 import { buildStamp, cliVersion } from "../../version.ts";
 
@@ -78,7 +78,7 @@ export class Daemon {
   last = monotonic();
   stopping = false;
   private holdsOf: TabHolds | null = null;
-  private mappedAt = Number.NEGATIVE_INFINITY;
+  private readonly mapTriedAt = new Map<string, number>();
   closing = 0;
   running: Running | null = null;
   closeAfterBatch = false;
@@ -386,14 +386,16 @@ export class Daemon {
     const now = monotonic();
     const recent = recentlyUsed(this.state.usedAt, now);
     for (const target of this.state.usedAt.keys()) if (!recent.includes(target)) this.state.usedAt.delete(target);
-    const unmapped = recent.some((target) => !this.state.appTabs.has(target));
-    if (unmapped && this.state.connected && now - this.mappedAt >= RENEW_EVERY) {
-      this.mappedAt = now;
+    for (const target of this.mapTriedAt.keys()) if (!recent.includes(target)) this.mapTriedAt.delete(target);
+    const live = (target: string) => this.state.targetInfos.has(target);
+    const unmapped = recent.filter((target) => live(target) && !this.state.appTabs.has(target) && now - (this.mapTriedAt.get(target) ?? Number.NEGATIVE_INFINITY) >= MAP_RETRY);
+    if (unmapped.length > 0 && this.state.connected) {
+      for (const target of unmapped) this.mapTriedAt.set(target, now);
       await appTabMap(this.state).catch(() => undefined);
     }
-    const wanted = [...new Set(recent.flatMap((target) => this.state.appTabs.get(target) ?? []))];
-    await this.holds.tick(wanted, now);
+    await this.holds.tick(heldAppTabs(recent, live, (target) => this.state.appTabs.get(target)), now);
   }
+
 
 
 

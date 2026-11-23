@@ -7,12 +7,23 @@ export const MAX_HELD = 32;
 
 export type HoldCall = (method: "tabs.hold" | "tabs.release", params: Record<string, unknown>) => Promise<unknown>;
 
+export const MAP_RETRY = 5;
+
 export function recentlyUsed(usedAt: ReadonlyMap<string, number>, now: number): string[] {
   return [...usedAt]
     .filter(([, at]) => now - at < ACTIVE_FOR)
     .sort((a, b) => b[1] - a[1])
-    .map(([tab]) => tab)
-    .slice(0, MAX_HELD);
+    .map(([tab]) => tab);
+}
+
+export function heldAppTabs(recent: readonly string[], live: (target: string) => boolean, appTab: (target: string) => string | undefined): string[] {
+  const tabs: string[] = [];
+  for (const target of recent) {
+    const app = live(target) ? appTab(target) : undefined;
+    if (app !== undefined && !tabs.includes(app)) tabs.push(app);
+    if (tabs.length === MAX_HELD) break;
+  }
+  return tabs;
 }
 
 const REFUSED = Symbol("refused");
@@ -22,6 +33,7 @@ export class TabHolds {
   private asked: string[] = [];
   private mayHold = false;
   private renewedAt = Number.NEGATIVE_INFINITY;
+  private refusedUntil = Number.NEGATIVE_INFINITY;
   private unsupported = false;
   private closed = false;
   private queue: Promise<void> = Promise.resolve();
@@ -54,14 +66,14 @@ export class TabHolds {
   private async step(want: string[], now: number): Promise<void> {
     if (this.closed || this.unsupported) return;
     if (want.length === 0) return this.releaseHeld();
+    if (now < this.refusedUntil) return;
     const same = want.length === this.asked.length && want.every((tab, i) => tab === this.asked[i]);
     if (same && now - this.renewedAt < RENEW_EVERY) return;
     this.mayHold = true;
     const reply = await this.send("tabs.hold", { session: this.session, tabs: want, seconds: HOLD_SECONDS });
     if (reply === REFUSED) {
       this.held = [];
-      this.asked = want;
-      this.renewedAt = now;
+      this.refusedUntil = now + RENEW_EVERY;
       return;
     }
     if (reply === null) return;

@@ -336,6 +336,7 @@ export class State extends Refs implements temptabs.TempTabState {
   }
 
   forgetTarget(targetId: string): void {
+    this.usedAt.delete(targetId);
     const page = this.pages.get(targetId);
     this.pages.delete(targetId);
     page?.detach();
