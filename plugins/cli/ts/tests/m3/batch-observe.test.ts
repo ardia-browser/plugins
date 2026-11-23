@@ -82,7 +82,7 @@ class FormBrowser {
       return { value: { tag: "input", type: "text", editable: true, disabled: false, value: "", kind: null, shown: true, connected: true } };
     }
     if (source === PREPARE_ACTION) return { value: { connected: true, shown: true, width: 1280, height: 800, box: true, cover: null, x: 60, y: 25, counts: { ...this.counts } } };
-    if (source.includes("inputWatch")) return { value: { ...this.counts, activeFrame: false } };
+    if (source.includes("inputWatch") || source.includes("ardiaBrowseInputWatch")) return { value: { ...this.counts, activeFrame: false } };
     if (source.includes("ardiaBrowse.info")) return { value: { tag: "input", type: "text", editable: true, value: "", connected: true } };
     if (source.includes("isConnected")) return { value: true };
     if (source.includes("visibilityState")) return { value: false };
