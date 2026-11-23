@@ -735,10 +735,17 @@ HOLDS_TEXT = r"""(el) => {
   };
   const collapse = (style) => style.whiteSpaceCollapse
     || ({ pre: "preserve", "pre-wrap": "preserve", "break-spaces": "break-spaces", "pre-line": "preserve-breaks" })[style.whiteSpace] || "collapse";
+  const silent = (node) => node.nodeType === Node.COMMENT_NODE || (node.nodeType === Node.TEXT_NODE && node.data === "")
+    || (node.nodeType === Node.ELEMENT_NODE && /^(STYLE|SCRIPT|TEMPLATE)$/.test(node.tagName));
   const placeholder = (br) => {
-    let next = br.nextSibling;
-    while (next && next.nodeType === Node.TEXT_NODE && next.data === "") next = next.nextSibling;
-    return !next;
+    for (let node = br; node && node !== el; node = node.parentElement) {
+      let next = node.nextSibling;
+      while (next && silent(next)) next = next.nextSibling;
+      if (next) return false;
+      const parent = node.parentElement;
+      if (!parent || parent === el || !getComputedStyle(parent).display.startsWith("inline")) return true;
+    }
+    return true;
   };
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
     acceptNode(node) {

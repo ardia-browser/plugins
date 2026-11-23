@@ -270,7 +270,7 @@ class ActInChrome(unittest.TestCase):
 
     def test_fill_still_fails_when_an_editor_keeps_a_mention_or_its_spaces(self):
         self.browse("open", f"http://127.0.0.1:{self.http_port}/rich-editor.html")
-        for field in ("#keepmention", "#keepspaces", "#keepnbsp", "#keepbreaks", "#keeplines"):
+        for field in ("#keepmention", "#keepspaces", "#keepnbsp", "#keepbreaks", "#keeplines", "#keepspan"):
             done = self.browse("fill", field, "", check=False)
             self.assertEqual(done.returncode, 1, field)
             self.assertIn("still holds text", done.stderr + done.stdout)
