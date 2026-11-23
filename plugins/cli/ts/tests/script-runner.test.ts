@@ -221,6 +221,28 @@ describe("the script runner", () => {
     expect(result?.["value"]).toEqual([["2", "likes", true], "https://x.test/models?page=3&sort=likes", "a b", null, ["q"]]);
   });
 
+  test("structuredClone keeps the types it should and refuses the ones it can't", async () => {
+    const { result } = await runScript(`
+      const source = { when: new Date(5), tags: new Set(["a"]), counts: new Map([["x", 1]]), re: /a+/gi, bytes: new Uint8Array([1, 2, 3]).subarray(1), err: new TypeError("bad"), big: 10n };
+      source.self = source;
+      const copy = structuredClone(source);
+      let refused = "";
+      try { structuredClone({ f() {} }); } catch (e) { refused = e.name; }
+      return [
+        copy !== source && copy.self === copy,
+        copy.when instanceof Date && copy.when.getTime(),
+        copy.tags instanceof Set && [...copy.tags],
+        copy.counts instanceof Map && copy.counts.get("x"),
+        copy.re instanceof RegExp && copy.re.flags,
+        copy.bytes instanceof Uint8Array && [...copy.bytes],
+        copy.err instanceof TypeError && copy.err.message,
+        typeof copy.big === "bigint" && String(copy.big),
+        refused,
+      ];
+    `);
+    expect(result?.["value"]).toEqual([true, 5, ["a"], 1, "gi", [2, 3], "bad", "10", "DataCloneError"]);
+  });
+
   test("waitForSelector passes its state and timeout to wait", async () => {
     const { requests } = await runScript("await page.waitForSelector('#spinner', { state: 'hidden', timeout: '5s' }); await page.waitForSelector('#ready');");
     expect(requests.map((request) => request["argv"])).toEqual([["wait", "#spinner", "--state", "hidden", "--timeout", "5s"], ["wait", "#ready"]]);

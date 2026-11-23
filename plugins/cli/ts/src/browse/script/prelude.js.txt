@@ -397,7 +397,93 @@
     if (answer.error) throw new Error(answer.error);
     return answer.value;
   };
-  const structuredCloneJson = (value) => (value === undefined ? undefined : JSON.parse(JSON.stringify(value)));
+  const ERRORS = { Error, EvalError, RangeError, ReferenceError, SyntaxError, TypeError, URIError };
+  const cloneFailure = (what) => {
+    const error = new Error(`${what} could not be cloned.`);
+    error.name = "DataCloneError";
+    return error;
+  };
+  const structuredCloneValue = (value) => {
+    const seen = new Map();
+    const copyProps = (from, to) => {
+      for (const key of Object.keys(from)) to[key] = copy(from[key]);
+      return to;
+    };
+    const copy = (given) => {
+      if (typeof given === "symbol") throw cloneFailure(String(given));
+      if (typeof given === "function") throw cloneFailure(`${given.name || "function"}`);
+      if (given === null || typeof given !== "object") return given;
+      if (seen.has(given)) return seen.get(given);
+      const tag = Object.prototype.toString.call(given);
+      let out;
+      switch (tag) {
+        case "[object Date]":
+          out = new Date(Date.prototype.getTime.call(given));
+          seen.set(given, out);
+          return out;
+        case "[object RegExp]":
+          out = new RegExp(given.source, given.flags);
+          seen.set(given, out);
+          return out;
+        case "[object Boolean]":
+          out = Object(Boolean.prototype.valueOf.call(given));
+          seen.set(given, out);
+          return out;
+        case "[object Number]":
+          out = Object(Number.prototype.valueOf.call(given));
+          seen.set(given, out);
+          return out;
+        case "[object String]":
+          out = Object(String.prototype.valueOf.call(given));
+          seen.set(given, out);
+          return out;
+        case "[object BigInt]":
+          out = Object(BigInt.prototype.valueOf.call(given));
+          seen.set(given, out);
+          return out;
+        case "[object ArrayBuffer]":
+          out = ArrayBuffer.prototype.slice.call(given, 0);
+          seen.set(given, out);
+          return out;
+        case "[object Map]":
+          out = new Map();
+          seen.set(given, out);
+          for (const [key, item] of Map.prototype.entries.call(given)) out.set(copy(key), copy(item));
+          return out;
+        case "[object Set]":
+          out = new Set();
+          seen.set(given, out);
+          for (const item of Set.prototype.values.call(given)) out.add(copy(item));
+          return out;
+        case "[object Array]":
+          out = new Array(given.length);
+          seen.set(given, out);
+          return copyProps(given, out);
+        case "[object Error]": {
+          const Kind = Object.prototype.hasOwnProperty.call(ERRORS, given.name) ? ERRORS[given.name] : Error;
+          out = new Kind(given.message);
+          seen.set(given, out);
+          if (typeof given.stack === "string") out.stack = given.stack;
+          if ("cause" in given) out.cause = copy(given.cause);
+          return out;
+        }
+        default:
+          if (ArrayBuffer.isView(given)) {
+            const buffer = copy(given.buffer);
+            out = tag === "[object DataView]"
+              ? new DataView(buffer, given.byteOffset, given.byteLength)
+              : new given.constructor(buffer, given.byteOffset, given.length);
+            seen.set(given, out);
+            return out;
+          }
+          if (tag !== "[object Object]") throw cloneFailure(tag.slice(8, -1));
+          out = {};
+          seen.set(given, out);
+          return copyProps(given, out);
+      }
+    };
+    return copy(value);
+  };
   const consoleObject = Object.freeze({ log, info: log, warn: log, error: log, debug: log });
 
   delete globalThis.ShadowRealm;
@@ -419,7 +505,7 @@
   define("URLSearchParams", URLSearchParams);
   define("atob", (value) => base64("atob", value));
   define("btoa", (value) => base64("btoa", value));
-  define("structuredClone", structuredCloneJson);
+  define("structuredClone", (value) => structuredCloneValue(value));
   Object.defineProperty(globalThis, "state", { value: JSON.parse(config.state), writable: true, configurable: false, enumerable: false });
 
   const clean = (value) => {
