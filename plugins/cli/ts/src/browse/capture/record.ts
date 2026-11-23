@@ -12,6 +12,7 @@ import { Result } from "../daemon/render.ts";
 import type { Page } from "../state/page.ts";
 import { Screencast } from "./screencast.ts";
 import { activate, captureOf, releaseClaim } from "./store.ts";
+import { recordInteractions } from "../commands/record.ts";
 
 export const FRAME_RATE = 25;
 export const ENCODER_WAIT = 60;
@@ -188,4 +189,11 @@ export async function stopRecording(ctx: Ctx): Promise<string | null> {
   return recording.path;
 }
 
-register("record", cmdRecord);
+const VIDEO_ACTIONS = new Set(["start", "stop", "restart"]);
+
+export function recordsInteractions(argv: readonly string[]): boolean {
+  const first = argv[0];
+  return first === undefined || (first.startsWith("--") && !VIDEO_ACTIONS.has(first));
+}
+
+register("record", (ctx, argv) => (recordsInteractions(argv) ? recordInteractions(ctx, argv) : cmdRecord(ctx, argv)));

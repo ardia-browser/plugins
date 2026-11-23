@@ -44,6 +44,8 @@ export const EVENTS: readonly string[] = [
   "Runtime.consoleAPICalled",
   "Runtime.exceptionThrown",
   "Runtime.executionContextsCleared",
+  "Runtime.executionContextCreated",
+  "Runtime.bindingCalled",
   "Network.requestWillBeSent",
   "Network.responseReceived",
   "Network.loadingFinished",

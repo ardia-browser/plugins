@@ -8,6 +8,7 @@ import { BrowseError } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
 import { normalizeUrl } from "../commands/parse.ts";
 import { decode } from "./charset.ts";
+import { type FastResult, fastRead } from "./fastpath.ts";
 import { textFromBytes } from "./pdftext.ts";
 import { extractHtml, llmsCandidates, llmsHrefs, llmsLinks, MARKDOWN_TYPES, MAX_BODY, postProcess, sameDocument } from "./readurl.ts";
 
@@ -252,10 +253,24 @@ function rstripSlash(text: string): string {
   return text.replace(/\/+$/u, "");
 }
 
+export function fastResult(url: string, found: FastResult): Result {
+  const note = `[read via ${found.method} from ${found.source}]`;
+  return new Result(
+    { content: found.content, contentType: found.contentType, finalUrl: found.finalUrl, method: found.method, source: found.source, title: found.title, tried: found.tried, truncated: false, url },
+    found.content ? `${found.content}\n${note}` : note,
+    true,
+  );
+}
+
 export async function run(given: string, options: ReadOptions, globalOptions: ReadOptions): Promise<Result> {
   const url = normalizeUrl(given);
   const timeout = Number(options["timeout"] || 10000) / 1000;
   const filter = (options["filter"] as string | undefined) ?? null;
+  if (options["fast"]) {
+    const found = await fastRead(url, timeout, fetchUrl, { outline: options["outline"], filter });
+    if (found === null) throw new BrowseError(`Couldn't read ${url}: it sent no Markdown, llms.txt, ard.json or HTML`, null, "navigation_failed");
+    return fastResult(url, found);
+  }
   if (options["llms"]) {
     const mode = options["llms"];
     if (mode !== "index" && mode !== "full") throw new BrowseError("--llms takes index or full");

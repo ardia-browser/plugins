@@ -23,8 +23,10 @@ import { need, normalizeUrl, parse, SELECTOR_ALIAS, SELECTOR_FLAG, withSelector 
 import { readTextPy } from "./pyfile.ts";
 import { currentOrNew, frameOrMain, originOf, pyIntArg, resolve } from "./shared.ts";
 import "../snapshot/collect.ts";
+import { siteToolsHeader } from "./tool.ts";
 
 export type Header = { key: string; data: unknown; line: string };
+const toolsHeader = (_ctx: Ctx, page: Page): Promise<Header | null> => siteToolsHeader(page);
 export const snapshotHeaders: ((ctx: Ctx, page: Page) => Promise<Header | null>)[] = [];
 export const mediaHooks: {
   diffScreenshot: (ctx: Ctx, argv: string[]) => Promise<Result>;
@@ -47,7 +49,7 @@ function intOption(value: unknown): number | null {
 export async function cmdSnapshot(ctx: Ctx, argv: string[]): Promise<Result> {
   const [options, args] = parse(
     argv,
-    { "--interactive": "bool", "--compact": "bool", "--depth": "value", "--selector": "value", "--urls": "bool", "--cursor": "bool", "--diff": "bool" },
+    { "--interactive": "bool", "--compact": "bool", "--depth": "value", "--selector": "value", "--urls": "bool", "--cursor": "bool", "--diff": "bool", "--tools": "bool" },
     { "-i": "--interactive", "-c": "--compact", "-d": "--depth", "-s": "--selector", "-u": "--urls", "-C": "--cursor" },
   );
   const selector = (options["selector"] as string | undefined) || (args[0] ?? null);
@@ -96,7 +98,8 @@ export async function cmdSnapshot(ctx: Ctx, argv: string[]): Promise<Result> {
       body = renderReport(report);
     }
   }
-  for (const header of snapshotHeaders) {
+  const headers = options["tools"] ? [...snapshotHeaders, toolsHeader] : snapshotHeaders;
+  for (const header of headers) {
     const found = await header(ctx, page);
     if (found === null) continue;
     data[found.key] = found.data;

@@ -16,6 +16,11 @@ import * as temptabs from "../state/temptabs.ts";
 import { monotonic } from "../state/wait.ts";
 import { extractEmbedded, type Spec } from "./flowlog.ts";
 import { drift, fillUrl, headerOk, type Json, listGone, outputRequest, parseParams, save } from "./flows.ts";
+import { Ctx as CommandCtx } from "../commands/ctx.ts";
+import { handlerOf, hooks } from "../commands/index.ts";
+import { addEpisodes } from "./episodes.ts";
+import { fixtureFiles, lostFields, shapeDrift, writeFixture } from "./fixture.ts";
+import { type Driver, replay, type ReplayStep } from "./replay.ts";
 
 export const RUN_TIMEOUT = 60.0;
 export const BODY_LIMIT = 8 * 1024 * 1024;
@@ -69,14 +74,14 @@ async function gotoPage(ctx: Ctx, page: Page, url: string, timeout: number): Pro
 
 export const reader: Reader = { open: openReader, goto: gotoPage };
 
-function resolveParams(flow: Json, given: Record<string, string>): Record<string, string> {
+function resolveParams(flow: Json, given: Record<string, string>, replaying = true): Record<string, string> {
   const known = new Map<string, Json>(flow["params"].map((param: Json) => [param["name"], param]));
   const unknown = Object.keys(given).filter((name) => !known.has(name));
   if (unknown.length > 0) throw new Usage(`${flow["name"]} has no param ${unknown.join(", ")}; its params are: ${[...known.keys()].join(", ") || "none"}`);
   const values: Record<string, string> = Object.create(null);
   for (const [name, param] of known) if (param["example"] !== null && param["example"] !== undefined) values[name] = param["example"];
   Object.assign(values, given);
-  const missing = [...known.keys()].filter((name) => !Object.hasOwn(values, name));
+  const missing = [...known.keys()].filter((name) => !Object.hasOwn(values, name) && (replaying || known.get(name)?.["source"] !== "secret"));
   if (missing.length > 0) {
     throw new Usage(`${flow["name"]} needs ${missing.map((name) => `--param ${name}=…`).join(" ")} (no recorded value is kept for typed text)`);
   }
@@ -127,7 +132,8 @@ function classify(flow: Json, request: Json, answer: Answer): Outcome {
   let changed = value === null ? "the answer isn't the recorded JSON any more" : drift(request["expect"]["signature"], value);
   if (changed === null && listGone(request["expect"]["list"], value as Value)) changed = `the list ${request["expect"]["list"]} is gone`;
   if (changed) {
-    const outcome = failed(`${flow["name"]} drifted: ${changed}. Save the flow again after doing the task in the page`, "drifted", { drift: changed });
+    const drifts = value === null ? [changed] : shapeDrift(request["expect"], value);
+    const outcome = failed(`${flow["name"]} drifted: ${changed}. Save the flow again after doing the task in the page`, "drifted", { drift: changed, drifts });
     return { ...(outcome as { kind: "stop"; error: BrowseError }), drift: changed };
   }
   return { kind: "ok", value: value as Value };
@@ -200,8 +206,77 @@ function runText(flow: Json, shaped: Value): string {
   return `✓ ${flow["name"]}: ${counted} items${where}\n` + (shown > 0 ? renderJson(items) : "(no items)");
 }
 
+function liveDriver(ctx: Ctx): Driver {
+  const quiet = (name: string) => new CommandCtx(ctx.state, { ...ctx.options, settle_only: true }, ctx.cwd, ctx.env, ctx.stdin, name);
+  return {
+    run: async (argv) => {
+      const [name, ...rest] = argv as [string, ...string[]];
+      const handler = handlerOf(name);
+      if (handler === undefined) throw new Usage(`A flow step ran ${name}, which ardia browse doesn't have`);
+      const stepCtx = quiet(name);
+      if (hooks.before) await hooks.before(stepCtx, name, rest);
+      await handler(stepCtx, rest);
+    },
+    snapshot: async () => {
+      const handler = handlerOf("snapshot");
+      if (handler === undefined) return "";
+      return String((await handler(quiet("snapshot"), ["-i"])).text ?? "");
+    },
+    url: () => {
+      const page = ctx.state.current ? (ctx.state.pages.get(ctx.state.current) ?? null) : null;
+      return page ? flowurl.mask(page.url) : "";
+    },
+  };
+}
+
+export const driver: { live: (ctx: Ctx) => Driver } = { live: liveDriver };
+
+export async function replayFlow(ctx: Ctx, root: string, flow: Json, values: Record<string, string>): Promise<Result> {
+  const secrets = flow["params"].filter((param: Json) => param["source"] === "secret").map((param: Json) => values[param["name"]] ?? "").filter((value: string) => value);
+  const steps: ReplayStep[] = flow["steps"].map((step: Json) => ({ seq: step["seq"], action: step["action"] ?? null, command: step["command"] ?? null }));
+  const report = await replay(driver.live(ctx), { name: flow["name"], site: flow["site"] }, steps, values, secrets);
+  const used = Object.fromEntries(Object.entries(values).filter(([name]) => !flow["params"].some((param: Json) => param["name"] === name && param["source"] === "secret")));
+  for (const episode of report.episodes) episode.values = used;
+  try {
+    addEpisodes(root, flow["site"], flow["name"], report.episodes);
+  } catch (error) {
+    if (!(error instanceof BrowseError)) throw error;
+  }
+  flag("flow_replayed", true);
+  count("flow_replay_steps", report.outcomes.length);
+  if (report.episodes.some((episode) => episode.kind === "healed")) flag("flow_replay_fallback", true);
+  const lines = report.outcomes.map((outcome) => {
+    const how = outcome.skipped ? `skipped: ${outcome.skipped}` : outcome.ok ? (outcome.tier && outcome.tier !== "selector" && outcome.tier !== "command" ? `by ${outcome.tier}` : "") : outcome.fatal ? `✗ ${outcome.fatal}` : "✗ no tier found it";
+    return `${outcome.ok ? "✓" : "✗"} [${outcome.seq}] ${outcome.intent}${how ? `  (${how})` : ""}`;
+  });
+  const data = { flow: flow["name"], site: flow["site"], replayed: true, ok: report.ok, steps: report.outcomes };
+  if (!report.ok) {
+    mark(root, flow, false);
+    flag("flow_step_failed", true);
+    const last = report.outcomes.at(-1);
+    throw new BrowseError(
+      `${flow["name"]} stopped at step ${last?.seq} (${last?.intent}): ${last?.fatal ?? "its selectors, an Escape retry and its role and name all missed"}. ` +
+        `The page as it was is kept: \`ardia browse flow heal ${flow["name"]}\` shows it and how to fix the step\n${lines.join("\n")}`,
+      { ...data, episode: report.episodes.at(-1) ?? null },
+      "flow_step_failed",
+    );
+  }
+  mark(root, flow, true);
+  const healed = report.episodes.filter((episode) => episode.kind === "healed").length;
+  const tail = healed > 0 ? `\n${healed} step${healed === 1 ? "" : "s"} needed a fallback; \`ardia browse flow heal ${flow["name"]} --apply\` keeps what worked` : "";
+  return new Result(data, `✓ ${flow["name"]}: replayed ${report.outcomes.length} steps\n${lines.join("\n")}${tail}`);
+}
+
 export async function run(ctx: Ctx, root: string, flow: Json, options: Record<string, unknown>): Promise<Result> {
-  const values = resolveParams(flow, parseParams(options["param"] as string[] | undefined));
+  const replaying = flow["kind"] === "actions" || Boolean(options["replay"]);
+  const values = resolveParams(flow, parseParams(options["param"] as string[] | undefined), replaying);
+  if (replaying && flow["writes"] && !options["yes"]) {
+    throw new BrowseError(`${flow["name"]} sends a form or other write to ${flow["site"]}; nothing was run. Run it again with --yes once the user wants that done`, null, "flow_writes");
+  }
+  if (replaying) {
+    if (options["replay"] && !flow["steps"].some((step: Json) => step["action"])) throw new Usage(`${flow["name"]} keeps no page actions to replay; save it again with \`flow save --actions\``);
+    return replayFlow(ctx, root, flow, values);
+  }
   const shape = shaping.parseShape(options["fields"] as string | undefined, options["where"] as string[] | undefined, options["limit"] as string | undefined);
   const timeout = options["timeout"] ? secondsOf(options["timeout"] as string) : RUN_TIMEOUT;
   if (timeout === undefined) throw new Usage("--timeout takes 30s, 2m or milliseconds");
@@ -232,6 +307,10 @@ export async function run(ctx: Ctx, root: string, flow: Json, options: Record<st
     );
   }
   const outcome = classify(flow, request, answer);
+  if (options["fixture"] && typeof answer["text"] === "string") {
+    writeFixture(ctx.path(options["fixture"] as string), fixtureFiles(flow, request, answer["text"]));
+    flag("flow_fixture", true);
+  }
   if (outcome.kind !== "ok") {
     if (outcome.drift) {
       mark(root, flow, false);
@@ -245,7 +324,13 @@ export async function run(ctx: Ctx, root: string, flow: Json, options: Record<st
   const shaped = shaping.apply(outcome.value, shape, true, request["expect"]["list"] ?? null);
   const items = (shaped as Map<string, Value>).get("items");
   if (items !== null && items !== undefined) count("flow_items", (items as Value[]).length);
-  const data = { flow: flow["name"], site: flow["site"], verified: true, result: plainParams(shaped) };
-  return new Result(data, runText(flow, shaped), true);
+  const lost = lostFields(request["expect"]["itemFields"] ?? [], outcome.value, request["expect"]["list"] ?? null);
+  const data = { flow: flow["name"], site: flow["site"], verified: true, result: plainParams(shaped), ...(lost.length > 0 ? { lostFields: lost } : {}) };
+  const done = new Result(data, runText(flow, shaped), true);
+  if (lost.length > 0) {
+    flag("flow_fields_lost", true);
+    done.notice = `items no longer carry ${lost.join(", ")}; save the flow again if those fields matter`;
+  }
+  return done;
 }
 

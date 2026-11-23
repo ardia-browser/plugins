@@ -3,7 +3,7 @@ import { PY_SPACE_CLASS } from "../../pylib/re.ts";
 import { isSpaceCode, pyStrip, splitlines } from "../../pylib/str.ts";
 import { urljoin, urlsplit, urlunsplit } from "../../pylib/urllib.ts";
 
-export const FLAGS: Readonly<Record<string, string>> = { "--raw": "bool", "--require-md": "bool", "--llms": "value", "--outline": "bool", "--filter": "value", "--timeout": "value" };
+export const FLAGS: Readonly<Record<string, string>> = { "--raw": "bool", "--require-md": "bool", "--llms": "value", "--outline": "bool", "--filter": "value", "--timeout": "value", "--fast": "bool" };
 export const MAX_BODY = 8 * 1024 * 1024;
 export const MARKDOWN_TYPES = ["text/markdown", "text/x-markdown"];
 const LINK = new RegExp(`\\[([^\\]]+)\\]\\(([^)${PY_SPACE_CLASS}]+)\\)`, "g");

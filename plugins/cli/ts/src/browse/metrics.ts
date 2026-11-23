@@ -18,6 +18,7 @@ export const READ_FLAGS = new Set([
   "read_data", "read_data_shaped", "read_scrolled", "read_matched", "read_virtualized_grid", "read_pdf", "read_waited_for_content", "read_beside_busy",
   "read_bot_check", "read_scroll_guessed", "read_scope_shown", "read_scope_empty", "read_waited_for_requests", "read_partial_page", "read_frame_text",
   "read_scroll_waited_at_end", "read_links_from_url", "read_binary_saved", "read_oopif_frames", "snapshot_oopif_frames", "dom_snapshot_used", "dom_snapshot_refused", "selector_in_shadow_root", "oopif_attach_refused", "snapshot_document_changed",
+  "read_fast_doc", "read_fast_raw",
 ]);
 export const ACT_FLAGS = new Set([
   "waited_for_enabled", "fill_picked_option", "fill_inserted_text", "drag_side_given", "drag_list_position", "select_opened_list", "press_targeted",
@@ -31,8 +32,11 @@ export const CHANGE_FLAGS = new Set([
   "waited_for_reaction",
 ]);
 export const CHANGE_COUNTS = new Set(["change_text_chars"]);
-export const FLOW_FLAGS = new Set(["flow_saved", "flow_hint_shown", "flow_run_page", "flow_drifted", "flow_shaped"]);
-export const FLOW_COUNTS = new Set(["flow_requests_kept", "flow_params", "flow_items"]);
+export const FLOW_FLAGS = new Set([
+  "flow_saved", "flow_hint_shown", "flow_run_page", "flow_drifted", "flow_shaped", "flow_replayed", "flow_replay_fallback", "flow_step_failed",
+  "flow_heal_applied", "flow_heal_rejected", "flow_recorded", "flow_fixture", "flow_saved_actions", "flow_fields_lost", "site_tools_found", "site_tool_called", "site_tool_held",
+]);
+export const FLOW_COUNTS = new Set(["flow_requests_kept", "flow_params", "flow_items", "flow_replay_steps", "flow_recorded_steps"]);
 export const FLAGS = new Set([
   "daemon_spawned", "reconnected_after_idle", "output_truncated", "humanize", "unsettled", "daemon_answer_timed_out", "followed_redrawn_ref",
   "script_eval_alias", "script_command_line_split", "script_page_world_hint", "attach_refused", "open_read", "covered_close_ref",

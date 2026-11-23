@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { dumps, Float, type Value } from "../../json.ts";
 import { codePoints } from "../../pystr.ts";
 import { groupThousands } from "../../pylib/format.ts";
@@ -20,8 +21,13 @@ import * as shaping from "../shape.ts";
 import type { State } from "../state/state.ts";
 import { run } from "./flowrun.ts";
 import { baseDomain, type FlowRequest, type Log, logOf, materialize, type Step, type Typed } from "./flowlog.ts";
+import { type Action, actionFromReplay, actionProblem, isElementAction } from "./actions.ts";
+import { applyPatch, applyProposals, loadEpisodes, parsePatch, proposals, writeEpisodes } from "./episodes.ts";
+import { fixtureFiles, writeFixture } from "./fixture.ts";
+import { selectorOf } from "./locators.ts";
 
 export const VERSION = 1;
+export const ACTIONS_VERSION = 2;
 export const DIR_NAME = "Flows";
 const NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/u;
 const PARAM_NAME = /^[a-z][a-z0-9_]{0,23}$/u;
@@ -41,16 +47,22 @@ const ANY_KEY = "*";
 const MAX_EXAMPLE = 40;
 const MAX_WORD = 200;
 const FIELDS = new Set(["version", "name", "description", "site", "origin", "startUrl", "hosts", "createdAt", "createdBy", "params", "output", "verified", "steps"]);
+const V2_FIELDS = new Set([...FIELDS, "kind", "writes"]);
+const KINDS = new Set(["requests", "actions"]);
 const REQUIRED = ["version", "name", "site", "origin", "startUrl", "hosts", "params", "output", "steps"];
 const STEP_FIELDS = new Set(["seq", "command", "url", "ok", "requests"]);
+const V2_STEP_FIELDS = new Set([...STEP_FIELDS, "action"]);
 const REQUEST_FIELDS = new Set(["id", "method", "url", "headers", "kind", "expect", "strippedAuth"]);
 const KEPT_HEADERS = new Set(["accept"]);
 const HEADER_VALUE = /^[A-Za-z0-9/*+.,;= -]{0,100}$/u;
 const PARAM = /\{\{([a-z][a-z0-9_]{0,23})\}\}/gu;
 const SCHEMED = /^[a-z][a-z0-9+.-]*:\/\//iu;
 const HOSTED = /^(localhost|[\p{L}\p{N}_-]+(\.[\p{L}\p{N}_-]+)+)(:\p{Nd}+)?\//iu;
-export const SAVE_FLAGS: Flags = { "--from": "value", "--to": "value", "--param": "multi", "--output": "value", "--description": "value" };
-export const RUN_FLAGS: Flags = { "--param": "multi", "--fields": "value", "--where": "multi", "--limit": "value", "--site": "value", "--timeout": "value" };
+export const SAVE_FLAGS: Flags = { "--from": "value", "--to": "value", "--param": "multi", "--output": "value", "--description": "value", "--actions": "bool", "--fixture": "value" };
+export const RUN_FLAGS: Flags = {
+  "--param": "multi", "--fields": "value", "--where": "multi", "--limit": "value", "--site": "value", "--timeout": "value", "--replay": "bool", "--yes": "bool", "--fixture": "value",
+};
+export const HEAL_FLAGS: Flags = { "--site": "value", "--step": "value", "--selector": "value", "--role": "value", "--name": "value", "--patch": "value", "--apply": "bool", "--clear": "bool" };
 const SITE_FLAGS: Flags = { "--site": "value" };
 const READ_ONLY =
   "Flows are read-only for now: they keep and send GET requests only, and the answer in that range came from {methods}. Do this task in the page";
@@ -298,6 +310,7 @@ export function buildFlow(
   description: string | null = null,
   toolVersion = "",
   knownSecrets: readonly string[] = [],
+  withActions = false,
 ): [Json, Json] {
   const given = { ...givenParams };
   checkName(name);
@@ -433,7 +446,8 @@ export function buildFlow(
     requests.push(kept);
     hosts.add(flowurl.parse(url).origin);
   }
-  if (requests.length === 0) {
+  const actionMode = withActions && steps.some((step) => isElementAction(actionFromReplay(step.replay ?? step.command)));
+  if (requests.length === 0 && !actionMode) {
     if (unkept.length > 0) {
       throw new BrowseError(READ_ONLY.replace("{methods}", unique(unkept).sort(compareText).join(", ")), { dropped }, "flow_not_get");
     }
@@ -445,28 +459,49 @@ export function buildFlow(
       "nothing_to_save",
     );
   }
-  if (output !== null && !requests.some((request) => request["id"] === output)) {
+  if (output !== null && (requests.length > 0 || !actionMode) && !requests.some((request) => request["id"] === output)) {
     throw new Usage(`--output ${output} isn't one of the GET requests kept: ${requests.map((request) => request["id"]).join(", ")}`);
   }
 
   const savedSteps: Json[] = [];
+  const secretParams = new Map<string, string>();
   for (const step of steps) {
     let command = (step.replay ?? step.command).map(String);
     const typed = step.typed ?? {};
+    let actionCommand: string[] | null = null;
     if (typed.value) {
       const shown = typed.secret ? REDACTED : named.has(typed.value) ? placeholder(named.get(typed.value) as string) : null;
+      if (actionMode && typed.secret) {
+        let secretName = secretParams.get(typed.value);
+        if (secretName === undefined) {
+          const taken = new Set(params.map((param) => param["name"]));
+          const hint = slug(typed.field || "password") ?? "password";
+          secretName = hint;
+          for (let number = 2; taken.has(secretName); number += 1) secretName = `${hint.slice(0, 20)}_${number}`;
+          params.push({ name: secretName, example: null, source: "secret" });
+          secretParams.set(typed.value, secretName);
+        }
+        const secretParam = placeholder(secretName);
+        actionCommand = command.map((part) => (part === typed.value ? secretParam : part));
+      }
       command = command.map((part) => (shown && part === typed.value ? shown : part));
     }
     command = scrub(command, secrets).map((part) => maskedPart(part, {}, secrets, values));
     command = command.map((part) => (codePoints(part).length <= MAX_WORD ? part : `${codePoints(part).slice(0, MAX_WORD).join("")}…`));
     const pageUrl = step.url || "";
     const after = pageUrl ? flowurl.mask(templateUrl(pageUrl, values), secrets) : "";
-    savedSteps.push({ seq: step.seq, command, url: after, ok: step.ok ?? true, requests: keptByStep.get(step.seq) ?? [] });
+    const saved: Json = { seq: step.seq, command, url: after, ok: step.ok ?? true, requests: keptByStep.get(step.seq) ?? [] };
+    if (actionMode && (step.ok ?? true)) {
+      const source = actionCommand ? scrub(actionCommand, secrets).map((part) => maskedPart(part, {}, secrets, values)) : command;
+      const action = actionFromReplay(source.some((part) => part.endsWith("…") || part === REDACTED) ? null : source);
+      if (action !== null && actionProblem(action, new Set(params.map((param) => param["name"]))) === null && openOk(action, [...hosts])) saved["action"] = action;
+    }
+    savedSteps.push(saved);
   }
   const startSaved = safeUrl(start.text, values, secrets, start);
   const words = String(description ?? "").split(/\s+/u).filter((word) => word).join(" ");
   const flow: Json = {
-    version: VERSION,
+    version: actionMode ? ACTIONS_VERSION : VERSION,
     name,
     description: codePoints(words).slice(0, MAX_DESCRIPTION).join("") || null,
     site,
@@ -476,10 +511,14 @@ export function buildFlow(
     createdAt: `${new Date().toISOString().slice(0, 19)}Z`,
     createdBy: { tool: "ardia browse", version: toolVersion },
     params,
-    output: output || defaultOutput(requests),
+    output: requests.length > 0 ? output || defaultOutput(requests) : null,
     verified: true,
     steps: savedSteps,
   };
+  if (actionMode) {
+    flow["kind"] = requests.length > 0 ? "requests" : "actions";
+    flow["writes"] = unkept.length > 0;
+  }
   const report: Json = {
     requests: requests.map((request) => ({ id: request["id"], method: request["method"], url: request["url"], kind: request["kind"], list: request["expect"]["list"] })),
     params,
@@ -531,8 +570,11 @@ function pyStr(value: unknown): string {
 
 export function validate(flow: unknown, site: string | null = null, name: string | null = null): Json {
   if (!isObject(flow)) throw invalid("isn't a JSON object");
-  if (flow["version"] !== VERSION) throw invalid(`is version ${reprText(codePoints(pyStr(flow["version"])).slice(0, 10).join(""))}; this ardia reads version ${VERSION}.`);
-  const unknown = Object.keys(flow).filter((key) => !FIELDS.has(key)).sort(compareText);
+  if (flow["version"] !== VERSION && !(flow["version"] === ACTIONS_VERSION && KINDS.has(flow["kind"]))) {
+    throw invalid(`is version ${reprText(codePoints(pyStr(flow["version"])).slice(0, 10).join(""))}; this ardia reads version ${VERSION}.`);
+  }
+  const v2 = flow["version"] === ACTIONS_VERSION;
+  const unknown = Object.keys(flow).filter((key) => !(v2 ? V2_FIELDS : FIELDS).has(key)).sort(compareText);
   const missing = REQUIRED.filter((key) => !Object.hasOwn(flow, key));
   if (unknown.length > 0 || missing.length > 0) {
     const parts = [unknown.length > 0 ? `unknown fields ${codePoints(unknown.join(", ")).slice(0, 80).join("")}` : "", missing.length > 0 ? `missing ${missing.join(", ")}` : ""];
@@ -575,9 +617,16 @@ export function validate(flow: unknown, site: string | null = null, name: string
     if (example !== null && example !== undefined && (typeof example !== "string" || !flowurl.literalOk(example))) throw invalid("has a param example that isn't a short word");
   }
   if (!Array.isArray(flow["steps"])) throw invalid("has no list of steps");
+  if (v2 && (!KINDS.has(flow["kind"]) || (flow["writes"] !== undefined && typeof flow["writes"] !== "boolean"))) throw invalid("has a kind that isn't requests or actions");
+  const paramNames = new Set<string>(flow["params"].map((param: Json) => param["name"]));
   for (const step of flow["steps"]) {
-    if (!isObject(step) || !Object.keys(step).every((key) => STEP_FIELDS.has(key))) throw invalid("has a step with fields a flow doesn't have");
+    if (!isObject(step) || !Object.keys(step).every((key) => (v2 ? V2_STEP_FIELDS : STEP_FIELDS).has(key))) throw invalid("has a step with fields a flow doesn't have");
     checkCommand(step["command"]);
+    if (step["action"] !== undefined) {
+      const problem = actionProblem(step["action"], paramNames);
+      if (problem) throw invalid(`has ${problem}`);
+      checkAction(step["action"] as Action, hosts);
+    }
     for (const request of step["requests"] || []) {
       if (!isObject(request) || !Object.keys(request).every((key) => REQUEST_FIELDS.has(key))) throw invalid("has a request with fields a flow doesn't keep (a body?)");
       if (request["method"] !== "GET") throw invalid("has a request that isn't a GET; flows are read-only");
@@ -588,8 +637,26 @@ export function validate(flow: unknown, site: string | null = null, name: string
       if (!fields.every((field: unknown) => typeof field === "string" && FIELD_NAME.test(field))) throw invalid("has an item field that isn't a short identifier");
     }
   }
-  if (outputRequest(flow) === null) throw invalid("has no output request");
+  if (v2 && flow["kind"] === "actions") {
+    if (flow["output"] !== null) throw invalid("is an action flow with an output request");
+    if (!flow["steps"].some((step: Json) => isElementAction(step["action"]))) throw invalid("is an action flow with no actions");
+  } else if (outputRequest(flow) === null) throw invalid("has no output request");
   return flow;
+}
+
+export function openOk(action: Action, hosts: readonly string[]): boolean {
+  if (action.type !== "open" || typeof action.value !== "string" || action.value.includes("{{")) return true;
+  try {
+    return hosts.includes(flowurl.checked(action.value).origin);
+  } catch (error) {
+    if (error instanceof flowurl.Unsafe || error instanceof PyException) return false;
+    throw error;
+  }
+}
+
+function checkAction(action: Action, hosts: unknown[]): void {
+  if (action.type === "open" && typeof action.value === "string" && !action.value.includes("{{")) strict(action.value, hosts, "an open step");
+  if (action.argv !== undefined && action.argv[0] !== action.type) throw invalid("has a step whose command isn't its action");
 }
 
 export function checkSite(site: unknown): string {
@@ -692,6 +759,7 @@ export function summary(flow: Json): Json {
     params: flow["params"].map((param: Json) => ({ name: param["name"], example: param["example"] ?? null, source: param["source"] ?? null })),
     itemFields: (request["expect"] || {})["itemFields"] || [],
     verified: Boolean(flow["verified"] ?? true),
+    ...(flow["kind"] ? { kind: flow["kind"], writes: Boolean(flow["writes"]) } : {}),
   };
 }
 
@@ -776,9 +844,16 @@ function showText(flow: Json): string {
     const example = param["example"] ? ` (recorded: ${param["example"]})` : " (required)";
     lines.push(`param ${param["name"]} [${pyStr(param["source"])}]${example}`);
   }
+  if (flow["kind"] === "actions") lines.push(`replays ${flow["steps"].length} steps in the page${flow["writes"] ? "; it sends forms, so runs need --yes" : ""}`);
   for (const step of flow["steps"]) {
     const command = step["command"] ? step["command"].join(" ") : "(a step with no command)";
     lines.push(`[${step["seq"]}] ${command}`);
+    const action = step["action"] as Action | undefined;
+    if (action) {
+      const located = [...action.candidates.map((candidate) => selectorOf(candidate)), ...(action.fingerprint ? [`role ${action.fingerprint.role} ${dumps(action.fingerprint.name, "spaced")}`] : [])];
+      const state = action.desired_state === undefined ? "" : ` → ${action.desired_state ? "on" : "off"}`;
+      lines.push(`    ${action.intent}${state}${located.length > 0 ? ` (by ${located.join(" | ")})` : ""}`);
+    }
     for (const request of step["requests"] || []) {
       const mark = request["id"] === flow["output"] ? " ← output" : "";
       lines.push(`    ${request["id"]} ${request["method"]} ${request["url"]} (${request["kind"]})${mark}`);
@@ -803,6 +878,7 @@ export function runLocal(root: string, args: string[], pageUrl: string | null = 
     const flow = load(root, site, positional[0] as string);
     return new Result({ flow }, showText(flow), true);
   }
+  if (action === "heal") return heal(root, args.slice(1), pageUrl);
   if (action === "rm" || action === "remove" || action === "delete") {
     const [options, positional] = parse(args.slice(1), SITE_FLAGS);
     if (positional.length === 0) throw new Usage("Usage: ardia browse flow rm <name> [--site s]");
@@ -815,7 +891,83 @@ export function runLocal(root: string, args: string[], pageUrl: string | null = 
 }
 
 export function runsLocally(args: string[]): boolean {
-  return ["list", "show", "rm", "remove", "delete"].includes(args[0] ?? "list");
+  return ["list", "show", "rm", "remove", "delete", "heal"].includes(args[0] ?? "list");
+}
+
+function readPatch(file: string): unknown {
+  let text: string;
+  try {
+    text = fs.readFileSync(file === "-" ? 0 : file, "utf8");
+  } catch (error) {
+    throw new Usage(`Can't read the heal patch ${file}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Usage(`The heal patch ${file} isn't JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function episodeLine(episode: Json): string {
+  const tried = (episode["tried"] || []).map((item: Json) => `${item["tier"]} ${item["ok"] ? "✓" : `✗ ${item["code"] ?? ""}`}`.trim()).join(", ");
+  const how = episode["kind"] === "healed" ? `passed by ${episode["tier"]}` : `failed${episode["fatal"] ? `: ${episode["fatal"]}` : " at every tier"}`;
+  return `  ${episode["at"]} step ${episode["seq"]} (${episode["intent"]}) ${how}${tried ? ` [${tried}]` : ""}`;
+}
+
+function heal(root: string, args: string[], pageUrl: string | null): Result {
+  const [options, positional] = parse(args, HEAL_FLAGS);
+  if (positional.length !== 1) throw new Usage("Usage: ardia browse flow heal <name> [--apply] [--step n --selector s | --step n --role r --name n | --patch file.json] [--clear]");
+  const name = positional[0] as string;
+  const site = locate(root, name, options["site"] as string | undefined, pageUrl);
+  const flow = load(root, site, name);
+  const episodes = loadEpisodes(root, site, name);
+  let patch = null;
+  if (options["patch"]) patch = parsePatch(readPatch(options["patch"] as string));
+  else if (options["step"] !== undefined) {
+    const seq = seqOf(options["step"] as string, "--step") as number;
+    const role = options["role"] as string | undefined;
+    const roleName = options["name"] as string | undefined;
+    if (!options["selector"] && !(role && roleName)) throw new Usage("flow heal --step n needs --selector <sel> or --role <role> --name <name>");
+    patch = { steps: [{ seq, ...(options["selector"] ? { selector: options["selector"] as string } : {}), ...(role && roleName ? { fingerprint: { role, name: roleName } } : {}) }] };
+  }
+  if (patch !== null) {
+    const { flow: next, changes, rejected } = applyPatch(flow, patch, episodes);
+    if (rejected.length > 0) {
+      flag("flow_heal_rejected", true);
+      throw new BrowseError(`Nothing was changed: ${rejected.map((item) => `step ${item.seq} ${item.what}: ${item.why}`).join("; ")}`, { rejected }, "heal_rejected");
+    }
+    validate(next, site, name);
+    save(root, next);
+    const healed = new Set(changes.map((change) => change.seq));
+    writeEpisodes(root, site, name, episodes.filter((episode) => !healed.has(episode.seq)));
+    flag("flow_heal_applied", true);
+    return new Result({ flow: name, site, changes }, [`✓ Healed ${name} for ${site}`, ...changes.map((change) => `  step ${change.seq}: ${change.candidates.map((candidate) => selectorOf(candidate)).join(" | ")}`)].join("\n"));
+  }
+  const changes = proposals(flow, episodes);
+  if (options["apply"]) {
+    if (changes.length === 0) return new Result({ flow: name, site, changes: [] }, `Nothing to heal in ${name}: no run found a step by a later tier`);
+    const next = applyProposals(flow, changes);
+    validate(next, site, name);
+    save(root, next);
+    const healed = new Set(changes.map((change) => change.seq));
+    writeEpisodes(root, site, name, episodes.filter((episode) => !healed.has(episode.seq)));
+    flag("flow_heal_applied", true);
+    return new Result({ flow: name, site, changes }, [`✓ Healed ${name} for ${site}`, ...changes.map((change) => `  step ${change.seq}: ${change.why}`)].join("\n"));
+  }
+  if (options["clear"]) {
+    writeEpisodes(root, site, name, []);
+    return new Result({ flow: name, site, cleared: episodes.length }, `✓ Cleared ${episodes.length} recorded runs of ${name}`);
+  }
+  const lines = [`${name} on ${site}: ${episodes.length} recorded fallback${episodes.length === 1 ? "" : "s"}`];
+  for (const episode of episodes.slice(-10)) lines.push(episodeLine(episode as unknown as Json));
+  for (const change of changes) lines.push(`  proposal for step ${change.seq}: ${change.why} → ${change.candidates.map((candidate) => selectorOf(candidate)).join(" | ")}`);
+  if (changes.length > 0) lines.push(`→ ardia browse flow heal ${name} --apply`);
+  const stuck = episodes.filter((episode) => episode.kind === "fallback");
+  if (stuck.length > 0) {
+    const last = stuck.at(-1) as (typeof stuck)[number];
+    lines.push(`→ step ${last.seq} needs a new locator: ardia browse flow heal ${name} --step ${last.seq} --selector '<css>' (or --role <role> --name <name>); --json has each failure's snapshot`);
+  }
+  return new Result({ flow: name, site, episodes, proposals: changes }, lines.join("\n"), true);
 }
 
 const HINTED = new WeakMap<State, Set<string>>();
@@ -947,6 +1099,15 @@ function saveText(name: string, path: string, flow: Json, report: Json, secrets:
   return lines.join("\n");
 }
 
+function saveFixture(ctx: Ctx, dir: string, flow: Json, steps: Step[], secrets: readonly string[]): string[] {
+  const request = outputRequest(flow);
+  if (request === null) throw new BrowseError("--fixture needs a flow that keeps a GET answer; an action-only flow has nothing to extract", null, "fixture_failed");
+  const recorded = steps.flatMap((step) => step.requests ?? []).find((item) => item.id === request["id"]);
+  if (!recorded || typeof recorded.text !== "string") throw new BrowseError("--fixture needs the recorded answer, and it was dropped to keep the recording small; record it again", null, "fixture_failed");
+  flag("flow_fixture", true);
+  return writeFixture(ctx.path(dir), fixtureFiles(flow, request, recorded.text, secrets));
+}
+
 export type FlowRunner = (ctx: Ctx, root: string, flow: Json, options: Record<string, unknown>) => Promise<Result>;
 export const runner: { run: FlowRunner } = { run: (ctx, root, flow, options) => run(ctx, root, flow, options) };
 
@@ -973,15 +1134,21 @@ export async function cmdFlow(ctx: Ctx, argv: string[]): Promise<Result> {
       (options["description"] as string | undefined) ?? null,
       cliVersion(),
       log.knownSecrets(),
+      Boolean(options["actions"]),
     );
     validate(flow);
     const path = save(root, flow);
+    let fixture: string[] = [];
+    if (options["fixture"]) fixture = saveFixture(ctx, options["fixture"] as string, flow, steps, log.knownSecrets());
     log.savedThrough = Math.max(log.savedThrough, (steps.at(-1) as Step).seq);
     hintedOf(state).add(flow["site"]);
     flag("flow_saved", true);
     count("flow_requests_kept", report["requests"].length);
     count("flow_params", report["params"].length);
-    return new Result({ flow: summary(flow), path, ...report }, saveText(positional[0] as string, path, flow, report, log.knownSecrets()));
+    if (flow["kind"]) flag("flow_saved_actions", true);
+    const text = saveText(positional[0] as string, path, flow, report, log.knownSecrets());
+    const extra = fixture.length > 0 ? `\n  fixture: ${fixture.join(", ")} (offline: node --test ${fixture.find((file) => file.endsWith(".test.mjs"))})` : "";
+    return new Result({ flow: summary(flow), path, ...report, ...(fixture.length > 0 ? { fixture } : {}) }, text + extra);
   }
   if (action === "run") {
     const [options, positional] = parse(rest, RUN_FLAGS);

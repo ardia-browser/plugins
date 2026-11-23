@@ -37,7 +37,7 @@ export const THIN_POLL = 0.5;
 export const CUT_MARK = 24;
 export const PAGE_SHARE = 6000;
 export const PAGES_CAP_CEILING = 36000;
-export const HTTP_ONLY = ["llms", "require_md", "raw"];
+export const HTTP_ONLY = ["llms", "require_md", "raw", "fast"];
 export const VIRTUALIZED_MARK = "rows rendered; the grid is virtualized";
 export const EMPTY_PAGE =
   "(no text: the site sent an empty page with no title, which usually means it turns away automated or foreign traffic; reading it again rarely helps)";
