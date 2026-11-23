@@ -18,7 +18,16 @@
 <div id="contents" class="plain" contenteditable="true" role="textbox" aria-label="Contents"><span style="display: contents">Old words</span></div>
 <div id="spaces" class="plain" contenteditable="true" role="textbox" aria-label="Spaces" style="white-space: pre-wrap">   </div>
 <div id="mention" class="plain" contenteditable="true" role="textbox" aria-label="Mention"><p><span class="chip" contenteditable="false">@Rachel</span></p></div>
+<div id="keepmention" class="plain stubborn" contenteditable="true" role="textbox" aria-label="Kept mention"><p>Hi <span class="chip" contenteditable="false">@Rachel</span></p></div>
+<div id="keepspaces" class="plain stubborn" contenteditable="true" role="textbox" aria-label="Kept spaces" style="white-space: pre-wrap">   </div>
 <script>
+  for (const stubborn of document.querySelectorAll(".stubborn")) {
+    stubborn.addEventListener("keydown", (event) => {
+      if (event.key !== "Backspace") return;
+      event.preventDefault();
+      for (const text of [...stubborn.querySelectorAll("p")].flatMap((p) => [...p.childNodes]).filter((n) => n.nodeType === Node.TEXT_NODE)) text.remove();
+    });
+  }
   const paragraphs = (editor) => [...editor.children].filter((node) => node.tagName === "P");
   const selectContent = (editor) => {
     const list = paragraphs(editor);

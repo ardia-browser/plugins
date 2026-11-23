@@ -1,17 +1,28 @@
 (el) => {
   if (/^(INPUT|TEXTAREA)$/.test(el.tagName) || !el.isContentEditable) return { text: "value" in el && Boolean(el.value), chrome: false };
   const chrome = Boolean(el.querySelector('[contenteditable="false"]'));
+  const range = document.createRange();
+  const content = (parent) => {
+    if (parent.isContentEditable) return true;
+    let island = parent;
+    for (let up = parent.parentElement; up && up !== el && !up.isContentEditable; up = up.parentElement) island = up;
+    return getComputedStyle(island).display.startsWith("inline");
+  };
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
-      if (node.nodeType === Node.TEXT_NODE) return node.parentElement && node.parentElement.isContentEditable ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+      if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
       return /^(STYLE|SCRIPT|TEMPLATE|INPUT|TEXTAREA)$/.test(node.tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
     },
   });
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-    if (!/[^\s​-‍⁠﻿]/.test(node.data)) continue;
-    let box = node.parentElement;
-    while (box && box !== el && getComputedStyle(box).display === "contents") box = box.parentElement;
-    if (!box || !box.checkVisibility || box.checkVisibility({ checkVisibilityCSS: true })) return { text: true, chrome };
+    const parent = node.parentElement;
+    if (!parent || !content(parent)) continue;
+    const style = getComputedStyle(parent);
+    const shown = /[^\s​-‍⁠﻿]/.test(node.data)
+      || (/[^\S​-‍⁠﻿]/.test(node.data) && /^(pre|pre-wrap|break-spaces)$/.test(style.whiteSpace));
+    if (!shown || style.visibility !== "visible") continue;
+    range.selectNodeContents(node);
+    if (range.getClientRects().length > 0) return { text: true, chrome };
   }
   return { text: false, chrome };
 }

@@ -266,6 +266,13 @@ class ActInChrome(unittest.TestCase):
             self.browse("fill", field, "New words")
             self.assertEqual(self.value(f"document.querySelector('{field}').textContent"), "New words", field)
 
+    def test_fill_still_fails_when_an_editor_keeps_a_mention_or_its_spaces(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/rich-editor.html")
+        for field in ("#keepmention", "#keepspaces"):
+            done = self.browse("fill", field, "", check=False)
+            self.assertEqual(done.returncode, 1, field)
+            self.assertIn("still holds text", done.stderr + done.stdout)
+
     def test_dependent_fields_wait_for_their_target(self):
         out = self.browse("batch", "fill #from Beta", "select #to Yankee", "click #later", "get text #out").stdout
         self.assertIn("later clicked", out)

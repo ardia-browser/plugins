@@ -1,0 +1,40 @@
+{
+ "source": "tests/test_browse_act.py ActInChrome.test_fill_still_fails_when_an_editor_keeps_a_mention_or_its_spaces",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/rich-editor.html"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "fill",
+    "#keepmention",
+    ""
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "fill",
+    "#keepspaces",
+    ""
+   ],
+   "session": "act"
+  }
+ ]
+}
