@@ -121,6 +121,17 @@ class Normalizer(unittest.TestCase):
                      "read-stamp", "metrics", "racy-steps", "request-rows", "divergences", "secrets"):
             self.assertIn(rule, normalize.RULES)
 
+    def test_live_sets_drop_only_the_cached_probes(self):
+        tree = message(id=1, method="Page.getFrameTree", params={}, sessionId="S")
+        shown = message(id=2, method="Runtime.callFunctionOn", sessionId="S", params={"functionDeclaration": "() => document.visibilityState === 'hidden'", "arguments": []})
+        title = message(id=3, method="Runtime.callFunctionOn", sessionId="S", params={"functionDeclaration": "() => document.title", "arguments": []})
+        cached = self.shaped([("mark", 0), ("out", tree), ("in", message(id=1, result={})), ("out", shown), ("in", message(id=2, result={})), ("out", title)])
+        bare = self.shaped([("mark", 0), ("out", title)])
+        self.assertEqual(cached["request_sets"], bare["request_sets"])
+        self.assertEqual(cached["sources"], bare["sources"])
+        self.assertNotEqual(cached["requests"], bare["requests"])
+        self.assertIn("cached-probes", normalize.RULES)
+
     def test_racy_steps_keep_only_the_exit_status(self):
         steps = [{"exit": 1, "out": "", "err": "✗ one\n", "answers": [{"answer": {"code": "navigation_failed", "exit": 1}}]},
                  {"exit": 0, "out": "x\n", "err": "", "answers": []}]
