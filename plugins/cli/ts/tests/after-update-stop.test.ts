@@ -261,7 +261,7 @@ function addonThatRaisesMidWrite(): string {
   raisingFolder = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "ardia-libc-raising-")));
   const built = path.join(raisingFolder, "ardia-libc.so");
   const [program, ...words] = process.platform === "darwin" ? ["/usr/bin/xcrun", "clang", "-bundle", "-undefined", "dynamic_lookup"] : ["cc", "-shared", "-fPIC", "-D_GNU_SOURCE", "-pthread"];
-  execFileSync(program as string, [...words, "-std=c11", "-DARDIA_WRITE_RAISES_SIGINT", "-o", built, path.join(TS, "native", "ardia-libc.c")], { stdio: "ignore" });
+  execFileSync(program as string, [...words, "-std=c11", "-DARDIA_WRITE_RAISES_SIGINT", "-o", built, path.join(TS, "native", "ardia-libc.c")], { stdio: ["ignore", "ignore", "inherit"] });
   raisingAddon = built;
   return built;
 }
