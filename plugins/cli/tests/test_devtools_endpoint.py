@@ -28,6 +28,10 @@ def write_control(root: Path, **fields) -> Path:
 
 def refusing(code: str, message: str):
     def ask(_path):
+        if code == "not_connected":
+            raise endpoint.NotConnected(message)
+        if code == "unknown_method":
+            raise endpoint.MethodUnknown(message)
         raise SocketRefused(code, message)
     return ask
 
@@ -221,7 +225,10 @@ class DevtoolsEndpoint(unittest.TestCase):
                 except SocketRefused as error:
                     outcome.append(error.code)
 
-            worker = threading.Thread(target=ask)
+            import contextvars
+
+            context = contextvars.copy_context()
+            worker = threading.Thread(target=lambda: context.run(ask))
             worker.start()
             sink.cancel()
             worker.join(5)
@@ -241,6 +248,24 @@ class DevtoolsEndpoint(unittest.TestCase):
         with self.assertRaises(SocketRefused) as caught:
             endpoint.ask_socket(path, timeout=1)
         self.assertIn(caught.exception.code, ("unreachable", "timeout"))
+
+    def test_server_codes_never_pick_the_fallback(self):
+        def answer(code, before_hello):
+            def reply(request):
+                if before_hello and request["method"] == "hello":
+                    return [{"id": None, "error": {"code": code, "message": "x"}}]
+                if request["method"] == "hello":
+                    return [{"id": request["id"], "result": {"app": "Ardia", "protocol": 4}}]
+                return [{"id": request["id"], "error": {"code": code, "message": "x"}}]
+            return reply
+
+        for code, before in (("not_connected", False), ("unknown_method", True), ("not_connected", True)):
+            path = write_control(self.root, token=FILE_TOKEN)
+            sock = self.serve(answer(code, before))
+            with self.assertRaises(SocketRefused) as caught:
+                endpoint.ask_socket(sock, timeout=5)
+            self.assertNotIsInstance(caught.exception, (endpoint.NotConnected, endpoint.MethodUnknown), (code, before))
+            sock.unlink()
 
     def test_a_different_port_is_another_server(self):
         path = write_control(self.root)

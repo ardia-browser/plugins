@@ -44,6 +44,18 @@ export class ControlRefused extends Error {
   }
 }
 
+export class NotConnected extends ControlRefused {
+  constructor(message: string) {
+    super("not_connected", message);
+  }
+}
+
+export class MethodUnknown extends ControlRefused {
+  constructor(message: string) {
+    super("unknown_method", message);
+  }
+}
+
 export function controlSocket(state: AppTabState): string | null {
   const found = state.endpoint;
   const source = found?.source;
@@ -75,7 +87,7 @@ export function controlCall(
 ): Promise<unknown> {
   if (signal?.aborted) return Promise.reject(new Cancelled());
   const problem = socketProblem(file);
-  if (problem === "missing") return Promise.reject(new ControlRefused("not_connected", "the control socket isn't there"));
+  if (problem === "missing") return Promise.reject(new NotConnected("the control socket isn't there"));
   if (problem === "unsafe") return Promise.reject(new ControlRefused("unsafe", "the control socket isn't a socket the user owns"));
   return new Promise<unknown>((resolve, reject) => {
     const socket = net.connect(file);
@@ -95,7 +107,7 @@ export function controlCall(
     };
     const timer = setTimeout(() => finish(new ControlRefused("timeout", `the control socket didn't answer ${method} in time`)), timeout * 1000);
     signal?.addEventListener("abort", cancel, { once: true });
-    socket.on("error", (error) => finish(new ControlRefused(connected ? "unreachable" : "not_connected", error.message)));
+    socket.on("error", (error) => finish(connected ? new ControlRefused("unreachable", error.message) : new NotConnected(error.message)));
     socket.on("close", () => finish(new ControlRefused("unreachable", "the control socket closed")));
     socket.once("connect", () => {
       connected = true;
@@ -130,7 +142,7 @@ export function controlCall(
         }
         const failed = record(reply["error"]);
         if (reply["id"] === null && reply["error"] !== undefined) {
-          finish(new ControlRefused(String(failed["code"] || "refused"), String(failed["message"] || "Ardia turned this program away")));
+          finish(new ControlRefused("refused", String(failed["message"] || "Ardia turned this program away")));
           return;
         }
         if (reply["id"] === 1) {
@@ -143,7 +155,9 @@ export function controlCall(
           if (params !== null) request["params"] = params;
           socket.write(`${JSON.stringify(request)}\n`);
         } else if (reply["id"] === 2 && greeted) {
-          if (reply["error"] !== undefined) finish(new ControlRefused(String(failed["code"] || "failed"), String(failed["message"] || "failed")));
+          const code = String(failed["code"] || "failed");
+          const message = String(failed["message"] || "failed");
+          if (reply["error"] !== undefined) finish(code === "unknown_method" ? new MethodUnknown(message) : new ControlRefused(code === "not_connected" ? "failed" : code, message));
           else finish(null, reply["result"] ?? null);
           return;
         }

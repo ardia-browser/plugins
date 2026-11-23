@@ -7,7 +7,7 @@ import { test } from "node:test";
 import "./libc-loaded.ts";
 import { announcePath } from "../src/browse/daemon/announce.ts";
 import { controlFilePath, DEVTOOLS_ENDPOINT_METHOD, type EndpointCall, EndpointError, fromControl, readControlFile, resolveInstance } from "../src/browse/endpoint.ts";
-import { ControlRefused, controlCall } from "../src/browse/state/apptabs.ts";
+import { ControlRefused, controlCall, MethodUnknown, NotConnected } from "../src/browse/state/apptabs.ts";
 
 const FILE_TOKEN = "f".repeat(32);
 const SOCKET_TOKEN = "s".repeat(43);
@@ -27,6 +27,8 @@ function scratch(): string {
 
 const answers = (answer: unknown): EndpointCall => async () => answer;
 const refusing = (code: string, message: string): EndpointCall => async () => {
+  if (code === "not_connected") throw new NotConnected(message);
+  if (code === "unknown_method") throw new MethodUnknown(message);
   throw new ControlRefused(code, message);
 };
 
@@ -236,6 +238,27 @@ test("a control socket path that isn't a socket is unsafe and never falls back",
     writeFileSync(fake, "not a socket");
     await assert.rejects(controlCall(fake, null, DEVTOOLS_ENDPOINT_METHOD, null, 5, null), (error: Error) => error instanceof ControlRefused && error.code === "unsafe");
     await assert.rejects(fromControl(file, null), (error: Error) => error instanceof EndpointError && !error.message.includes(FILE_TOKEN));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("codes the server sends never pick the fallback: not_connected after hello, unknown_method before it", async () => {
+  const root = scratch();
+  try {
+    for (const [code, beforeHello] of [["not_connected", false], ["unknown_method", true], ["not_connected", true]] as const) {
+      const socketFile = path.join(root, `${code}-${beforeHello}.sock`);
+      const server = await serveLines(socketFile, (request) => {
+        if (beforeHello && request["method"] === "hello") return [JSON.stringify({ id: null, error: { code, message: "x" } })];
+        if (request["method"] === "hello") return [JSON.stringify({ id: request["id"], result: { app: "Ardia", protocol: 4 } })];
+        return [JSON.stringify({ id: request["id"], error: { code, message: "x" } })];
+      });
+      try {
+        await assert.rejects(controlCall(socketFile, null, DEVTOOLS_ENDPOINT_METHOD, null, 5, null), (error: Error) => error instanceof ControlRefused && !(error instanceof NotConnected) && !(error instanceof MethodUnknown));
+      } finally {
+        server.close();
+      }
+    }
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -8,7 +8,7 @@ import { addSecret, redact } from "../redact.ts";
 import { parseQsl, quote, urlsplit } from "../pylib/urllib.ts";
 import { connectAt, peerPid, peerUid, socketInfoAt, strerror } from "../libc.ts";
 import { announcePath } from "./daemon/announce.ts";
-import { ControlRefused, controlCall } from "./state/apptabs.ts";
+import { ControlRefused, controlCall, MethodUnknown, NotConnected } from "./state/apptabs.ts";
 import { closeFd, readFdUpTo } from "./paths.ts";
 import { Cancelled, checkCancelled, currentSignal } from "./cdp/cancel.ts";
 import { isSpace, strip } from "../py.ts";
@@ -320,7 +320,7 @@ export async function fromControl(file: string, signal: AbortSignal | null = cur
   } catch (error) {
     if (error instanceof Cancelled) throw error;
     if (!(error instanceof ControlRefused)) throw error;
-    if (error.code === "unknown_method" || (error.code === "not_connected" && record.token !== null)) {
+    if (error instanceof MethodUnknown || (error instanceof NotConnected && record.token !== null)) {
       if (record.token === null) throw new EndpointError(`${NOT_REACHABLE} (${record.label} has no valid token)`);
       return endpointOf(record, record.port, record.token);
     }
