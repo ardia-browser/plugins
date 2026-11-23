@@ -78,7 +78,8 @@ A site Ardia's built-in ad blocker blocks opens as uBlock Origin's "Page blocked
 attach to, and `open` fails with `net::ERR_BLOCKED_BY_CLIENT` or `net::ERR_ABORTED`. When the user wants that site,
 `ardia call sites.allowAds -p site=<host>` trusts it (a site, not a public suffix like `co.uk`; it covers its
 subdomains in every profile), then `open` it again; `sites.adBlocker` lists the trusted sites and `sites.blockAds`
-takes one out. An Ardia without these methods answers `unknown_method`: ask the user to turn off Block Ads & Trackers
+takes one out. An Ardia without these methods answers `unknown_method`, and one that lists them but can't make the
+change yet (Linux before its engine update) answers `refused`: either way, ask the user to turn off Block Ads & Trackers
 in Site Controls for that site.
 
 ## Tabs and sessions
