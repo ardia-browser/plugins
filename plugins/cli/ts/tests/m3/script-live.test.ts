@@ -167,6 +167,13 @@ describe.skipIf(!CHROME)("browse script against headless Chrome", () => {
     expect((await browse(["open", `${origin}/`])).status).toBe(0);
   });
 
+  test("a sleep the script didn't await is stopped when it returns, not waited out", async () => {
+    const returned = await script("sleep(600000);\nreturn 42;", "--timeout", "30s", "--json");
+    expect(returned.status).toBe(0);
+    expect(JSON.parse(returned.out).data.value).toBe(42);
+    expect(returned.ms).toBeLessThan(5_000);
+  });
+
   test("a failed page call names its line and call", async () => {
     const done = await script("const a = 1;\nawait page.$eval('#missing', (el) => el.id);");
     expect(done.status).toBe(1);
