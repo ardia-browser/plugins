@@ -1,22 +1,20 @@
 import assert from "node:assert/strict";
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import { BUILT_LIBC } from "./libc-loaded.ts";
+import { lockHolder } from "./peers.ts";
 
 const SOURCES = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "src");
-const PYTHON = process.env.ARDIA_TEST_PYTHON ?? "python3";
-const HOLD = "import fcntl, os, sys\nfd = os.open(sys.argv[1], os.O_RDWR | os.O_CREAT, 0o600)\nfcntl.flock(fd, fcntl.LOCK_EX)\nprint('held', flush=True)\nsys.stdin.read()\n";
 const scratch = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "ardia-lock-retry-")));
 process.on("exit", () => fs.rmSync(scratch, { recursive: true, force: true }));
 
 test("a lock held elsewhere is retried and given up on without the JIT", async () => {
   fs.mkdirSync(path.join(scratch, "data"), { mode: 0o700 });
-  const holder = spawn(PYTHON, ["-I", "-c", HOLD, path.join(scratch, "data", "busy.lock")], { stdio: ["pipe", "pipe", "inherit"] });
-  await new Promise<void>((resolve) => holder.stdout.once("data", () => resolve()));
+  const holder = await lockHolder(path.join(scratch, "data", "busy.lock"));
   try {
     const script = `import { loadLibc } from ${JSON.stringify(path.join(SOURCES, "libc.ts"))};
 import { openPrivate, takeLockRetrying } from ${JSON.stringify(path.join(SOURCES, "privatefs.ts"))};
@@ -36,7 +34,7 @@ try {
     assert.equal(outcome.taken, false);
     assert.ok((outcome.waitedMs ?? 0) >= 6, `gave up after ${outcome.waitedMs} ms, so it never slept between attempts`);
   } finally {
-    holder.stdin.end();
-    await new Promise((resolve) => holder.once("exit", resolve));
+    holder.release();
+    await holder.exited;
   }
 });

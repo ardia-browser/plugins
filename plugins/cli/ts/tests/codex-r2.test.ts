@@ -19,6 +19,7 @@ import { Decider } from "../src/hooks/decide.ts";
 import { hookFrom, type Hook } from "../src/hooks/model.ts";
 import { HookRunner } from "../src/hooks/runner.ts";
 import { Connection, UNREADABLE_LINE } from "../src/connection.ts";
+import { stallingNestedReplyServer } from "./peers.ts";
 
 const scratch = fs.realpathSync(fs.mkdtempSync(path.join("/tmp", "codex-r2-")));
 afterAll(() => fs.rmSync(scratch, { recursive: true, force: true }));
@@ -384,19 +385,8 @@ describe("control connection failures wake everyone", () => {
   test("a reply nested too deeply fails a request blocked in drain at once", async () => {
     const dir = folder();
     const where = path.join(dir, "s.sock");
-    const server = Bun.spawn(
-      [
-        "/usr/bin/python3",
-        "-I",
-        "-c",
-        "import socket,sys,time\ns=socket.socket(socket.AF_UNIX)\ns.bind(sys.argv[1])\ns.listen(1)\nprint('ready',flush=True)\nc,_=s.accept()\ntime.sleep(0.4)\nc.sendall(b'['*10000+b']'*10000+b'\\n')\ntime.sleep(20)",
-        where,
-      ],
-      { stdout: "pipe", stderr: "inherit" },
-    );
+    const server = await stallingNestedReplyServer(where, 400, 10000);
     try {
-      const reader = server.stdout.getReader();
-      await reader.read();
       const socket = net.connect(where);
       await new Promise<void>((resolve) => socket.once("connect", () => resolve()));
       const fd = (socket as unknown as { _handle: { fd: number } })._handle.fd;
@@ -412,8 +402,7 @@ describe("control connection failures wake everyone", () => {
       for (const outcome of outcomes) expect(String((outcome as Error).message)).toBe(UNREADABLE_LINE);
       expect(took).toBeLessThan(3000);
     } finally {
-      server.kill("SIGKILL");
-      await server.exited;
+      server.stop();
     }
   }, 15000);
 });

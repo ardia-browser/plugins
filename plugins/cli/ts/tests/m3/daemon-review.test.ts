@@ -13,7 +13,7 @@ import { Cancelled } from "../../src/browse/cdp/cancel.ts";
 import { browseDir, closeFd, lockHeld, socketIsOurs } from "../../src/browse/paths.ts";
 import { BUILT_LIBC } from "../libc-loaded.ts";
 import { dumps } from "../../src/json.ts";
-import { alive, ask, config, keyOf, PYTHON, sessionMeta, raw, type Scratch, scratch, socketFile, staleSocket, start, tsChoice, until, quietWatchdog, D2_FIRST_PORT } from "./daemon-helpers.ts";
+import { alive, ask, config, keyOf, sessionMeta, raw, type Scratch, scratch, socketFile, staleSocket, start, tsChoice, until, quietWatchdog, D2_FIRST_PORT } from "./daemon-helpers.ts";
 
 setDefaultTimeout(90_000);
 const TS_DIR = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
@@ -203,11 +203,16 @@ describe("tokens and the spawn", () => {
       ARDIA_PORT: "4444",
     });
     try {
-      const probe = "import os, sys, json\nprint(json.dumps({'env': sorted(k for k in os.environ if k in ('ARDIA_WS', 'ARDIA_CDP_URL', 'AGENT_BROWSER_CDP', 'ARDIA_PORT')), 'config': json.loads(sys.stdin.read())}))";
+      const probe = path.join(found.root, "probe-daemon");
+      fs.writeFileSync(
+        probe,
+        `#!${process.execPath}\nconst names = ["ARDIA_WS", "ARDIA_CDP_URL", "AGENT_BROWSER_CDP", "ARDIA_PORT"];\nconst config = JSON.parse(await Bun.stdin.text());\nconsole.log(JSON.stringify({ env: names.filter((name) => name in process.env).sort(), config }));\n`,
+        { mode: 0o755 },
+      );
       const blank = config(found.data, "envs");
       blank.set("ws", null);
       blank.set("port", null);
-      const spawned = spawnDaemon(dir, keyOf("envs"), blank, { kind: "python", python: PYTHON, code: probe });
+      const spawned = spawnDaemon(dir, keyOf("envs"), blank, { kind: "ts", program: probe });
       await exitOf(spawned.child);
       const seen = JSON.parse(fs.readFileSync(path.join(found.browse, `${keyOf("envs")}.log`), "utf8"));
       expect(seen.env).toEqual([]);

@@ -7,7 +7,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "bun:test";
 import { BUILT_LIBC } from "./libc-loaded.ts";
-import { dlopenReason, errnoError, flock, interruptsIgnored, LibcUnavailable, listAt, loadLibc, mkdirAt, openAt, peerUid, sizeAt as rawSizeAt, strerror, unlinkAt, watchLifeline } from "../src/libc.ts";
+import { offsetOf, systemPipe, systemStrerror } from "./system-libc.ts";
+import { dlopenReason, errnoError, flock, interruptsIgnored, LibcUnavailable, listAt, loadLibc, mkdirAt, nonBlocking, openAt, peerUid, sizeAt as rawSizeAt, strerror, unlinkAt, watchLifeline } from "../src/libc.ts";
 import { close, closeDir, listDir, openPrivate, openPrivateFile, PathError, readPrivate, renameIn, sizeAt, takeLock, unlinkQuietly, writePrivate } from "../src/privatefs.ts";
 
 const CLI = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -184,13 +185,11 @@ test("a lock file another program created with loose permissions is tightened, a
   closeDir(dir);
 });
 
-test("error text is this libc's, as Python's os.strerror gives it", () => {
+test("error text is this libc's own strerror", () => {
   const codes = [0, ...Array.from({ length: 140 }, (_, index) => index + 1), 999, 99_999];
-  const script = "import json, os, sys; print(json.dumps([os.strerror(c) for c in json.loads(sys.argv[1])]))";
-  const python = spawnSync(PYTHON, ["-I", "-c", script, JSON.stringify(codes)], { encoding: "utf8" });
-  assert.equal(python.status, 0, python.stderr);
-  assert.deepEqual(codes.map(strerror), JSON.parse(python.stdout));
-  assert.equal(errnoError(os.constants.errno.EIO, "write").message, `EIO: ${JSON.parse(python.stdout)[os.constants.errno.EIO]}, write`);
+  const expected = codes.map(systemStrerror);
+  assert.deepEqual(codes.map(strerror), expected);
+  assert.equal(errnoError(os.constants.errno.EIO, "write").message, `EIO: ${systemStrerror(os.constants.errno.EIO)}, write`);
 });
 
 test("every integer argument is taken exactly or refused with a thrown error", () => {
@@ -232,8 +231,7 @@ test("listing a folder leaves its descriptor where it was and gives each name's 
     const expected = [Buffer.from("a.jsonl"), Buffer.from("b.jsonl"), Buffer.from("c\u0661.jsonl")];
     if (oddMade) expected.push(Buffer.from("\xff\xfe.jsonl", "latin1"));
     assert.deepEqual(names, expected.sort(Buffer.compare));
-    const offset = spawnSync(PYTHON, ["-I", "-c", "import os; print(os.lseek(3, 0, os.SEEK_CUR))"], { stdio: ["ignore", "pipe", "pipe", dir], encoding: "utf8" });
-    assert.equal(offset.stdout.trim(), "0", offset.stderr);
+    assert.equal(offsetOf(dir), 0);
     if (oddMade) {
       const oddName = names.find((name) => name[0] === 0xff) ?? Buffer.alloc(0);
       assert.equal(rawSizeAt(dir, oddName), 0);
@@ -245,32 +243,23 @@ test("listing a folder leaves its descriptor where it was and gives each name's 
   }
 });
 
-function folderOpenedBeforeItsFiles(): number {
+function folderOpenedBeforeItsFiles(): { folder: string; dir: number } {
   const folder = fs.mkdtempSync(path.join(scratch, "listed-later-"));
   fs.writeFileSync(path.join(folder, "before"), "");
   const dir = fs.openSync(folder, O_RDONLY);
   for (const name of ["after-1", "after-2"]) fs.writeFileSync(path.join(folder, name), "");
-  return dir;
+  return { folder, dir };
 }
 
-function offsetOf(dir: number): number {
-  const done = spawnSync(PYTHON, ["-I", "-c", "import os; print(os.lseek(3, 0, os.SEEK_CUR))"], { stdio: ["ignore", "pipe", "pipe", dir], encoding: "utf8" });
-  assert.equal(done.status, 0, done.stderr);
-  return Number(done.stdout.trim());
-}
-
-test("listAt sees what os.listdir sees in a folder opened before its files were made", () => {
-  const theirs = folderOpenedBeforeItsFiles();
-  const mine = folderOpenedBeforeItsFiles();
+test("listAt sees the files made after the folder was opened, and leaves its offset at the start", () => {
+  const { folder, dir } = folderOpenedBeforeItsFiles();
   try {
-    const script = "import json, os; print(json.dumps(sorted(os.listdir(3))))";
-    const python = spawnSync(PYTHON, ["-I", "-c", script], { stdio: ["ignore", "pipe", "pipe", theirs], encoding: "utf8" });
-    assert.equal(python.status, 0, python.stderr);
-    const names = listAt(mine).map((name) => name.toString()).sort();
-    assert.deepEqual([names, offsetOf(mine)], [JSON.parse(python.stdout), offsetOf(theirs)]);
+    const names = listAt(dir).map((name) => name.toString()).sort();
+    assert.deepEqual(names, fs.readdirSync(folder).sort());
+    assert.deepEqual(names, ["after-1", "after-2", "before"]);
+    assert.equal(offsetOf(dir), 0);
   } finally {
-    fs.closeSync(theirs);
-    fs.closeSync(mine);
+    fs.closeSync(dir);
   }
 });
 
@@ -280,17 +269,23 @@ test("a write to a full non-blocking pipe fails with EAGAIN at once and never wa
 loadLibc(${JSON.stringify(BUILT_LIBC)});
 try { writeWhole(1, Buffer.alloc(1 << 20, 121)); process.exit(3); } catch (error) { process.exitCode = Math.abs((error as NodeJS.ErrnoException).errno ?? 0) === ${os.constants.errno.EAGAIN} && writtenBefore(error) === 0 ? 0 : 4; }
 `);
-  const filler = [
-    "import fcntl, os, subprocess, sys",
-    "r, w = os.pipe()",
-    "fcntl.fcntl(w, fcntl.F_SETFL, fcntl.fcntl(w, fcntl.F_GETFL) | os.O_NONBLOCK)",
-    "for size in (65536, 1):",
-    "    while True:",
-    "        try: os.write(w, b'x' * size)",
-    "        except BlockingIOError: break",
-    "child = subprocess.run([sys.argv[1], sys.argv[2]], stdout=w, timeout=20)",
-    "sys.exit(child.returncode)",
-  ].join("\n");
-  const ran = spawnSync(PYTHON, ["-c", filler, process.execPath, script], { timeout: 30000 });
-  assert.equal(ran.status, 0, ran.stderr?.toString());
+  const { read, write } = systemPipe();
+  try {
+    nonBlocking(write);
+    for (const size of [65536, 1]) {
+      for (;;) {
+        try {
+          fs.writeSync(write, Buffer.alloc(size, 120));
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === "EAGAIN") break;
+          throw error;
+        }
+      }
+    }
+    const ran = spawnSync(process.execPath, [script], { stdio: ["ignore", write, "pipe"], timeout: 20000 });
+    assert.equal(ran.status, 0, ran.stderr?.toString());
+  } finally {
+    fs.closeSync(read);
+    fs.closeSync(write);
+  }
 });
