@@ -1,5 +1,5 @@
 import { dataRoot } from "./control.ts";
-import { controlFilePath, EndpointError, type Endpoint, fromControlFile } from "./browse/endpoint.ts";
+import { controlFilePath, EndpointError, type ControlRecord, readControlFile } from "./browse/endpoint.ts";
 import { envSet, expandUser, join, LINUX, purePath } from "./paths.ts";
 
 export { controlFilePath, dataRoot, EndpointError };
@@ -13,6 +13,6 @@ export function explicitDataRoot(dataDir: string | undefined): string | null {
   return root ? purePath(expandUser(root)) : null;
 }
 
-export function requireControl(root: string): Endpoint {
-  return fromControlFile(controlFilePath(root));
+export function requireControl(root: string): ControlRecord {
+  return readControlFile(controlFilePath(root));
 }

@@ -1689,15 +1689,29 @@ New Tab or an Ardia view is showing; anything else is a 404. The CLI calls it di
 with the token redacted like everywhere else, and falls back to the visibility check if it fails.
 
 The app writes `ArdiaControl.json` when the setting is on:
-`{"port":P,"browser":"/devtools/browser/<guid>","token":"…","pid":…,"generation":N}`. The CLI opens it without
+`{"port":P,"browser":"/devtools/browser/<guid>","token":"…","pid":…,"generation":N}` (`token` may be absent). The CLI opens it without
 following links and trusts it only when it's a regular file the user owns, mode 0600, and `pid` is alive. A `pid`
 that `kill(pid, 0)` answers with EPERM counts as alive, since an agent sandbox (Codex, Seatbelt) can forbid signals to
 Ardia: the CLI then checks `ArdiaControl.sock` (beside the control file on Linux, one folder up on macOS, the same
 place the app announces callers on) without following links, and goes ahead only when it is a socket the user owns
 and the process answering it runs as the user (peer credentials); otherwise it stops there, so a stale file with a
 recycled pid never sends its token anywhere, and the line says why: no socket, nothing accepting, a socket someone
-else owns or serves, or a refusal a sandbox or the folder's permissions may cause. It connects
-to `ws://127.0.0.1:P<browser>?token=<token>`; every CDP call goes over that one browser socket
+else owns or serves, or a refusal a sandbox or the folder's permissions may cause.
+
+The token comes from the control socket, not the file (`fromControl` in `endpoint.ts`, `from_control` in
+`endpoint.py`). The CLI asks `control.devtoolsEndpoint` (ardia-browser/ardia #3908), which answers
+`{port, token, generation}` only to a program the socket admits, so the token connection sits behind the same approval
+as every socket method. The file still gives the browser path and pid, and a `generation` that differs from the file's
+(the server restarted in between) is read again once, then refused.
+- **Falling back to the file's token:** only when the reply is `unknown_method` (an Ardia older than #3908, or Linux and
+  Windows, which don't list the method), or when the socket can't be reached at all and the file still holds a token.
+- **No fallback:** a refusal (`{"id": null, "error": {"code": "refused"}}`, the socket turning the program away) and any
+  other error stop there, with the reason.
+- **Timeout:** the call waits up to 60 s, so a person can answer an approval prompt.
+- **When Ardia stops writing the token:** once a later engine leaves it out of the file, the fallback ends, and
+  `ArdiaControl.json` no longer holds a secret.
+
+It connects to `ws://127.0.0.1:P<browser>?token=<token>`; every CDP call goes over that one browser socket
 (flattened sessions), so it always carries the token. A missing, stale or unsafe file, or a refused connection, prints one line and exits 2:
 `Ardia isn't running, or Command Line isn't installed (Settings › Plugins).` (on Linux, where the switch stays:
 `Ardia isn't running, or "Let the ardia command control Ardia" is off in Settings.`), followed in parentheses by

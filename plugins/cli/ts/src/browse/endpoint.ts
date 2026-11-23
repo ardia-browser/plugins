@@ -8,6 +8,7 @@ import { addSecret, redact } from "../redact.ts";
 import { parseQsl, quote, urlsplit } from "../pylib/urllib.ts";
 import { connectAt, peerPid, peerUid, socketInfoAt, strerror } from "../libc.ts";
 import { announcePath } from "./daemon/announce.ts";
+import { ControlRefused, controlCall } from "./state/apptabs.ts";
 import { closeFd, readFdUpTo } from "./paths.ts";
 import { Cancelled, checkCancelled, currentSignal } from "./cdp/cancel.ts";
 import { isSpace, strip } from "../py.ts";
@@ -223,7 +224,17 @@ function pyIntText(value: unknown): string {
   return typeof value === "boolean" ? (value ? "True" : "False") : String(value);
 }
 
-export function fromControlFile(file: string, signal: (pid: number, sig: 0) => unknown = (target, sig) => process.kill(target, sig)): Endpoint {
+export type ControlRecord = {
+  readonly file: string;
+  readonly label: string;
+  readonly port: bigint;
+  readonly browser: string;
+  readonly token: string | null;
+  readonly pid: bigint;
+  readonly generation: bigint | null;
+};
+
+export function readControlFile(file: string, signal: (pid: number, sig: 0) => unknown = (target, sig) => process.kill(target, sig)): ControlRecord {
   const label = file.slice(file.lastIndexOf("/") + 1);
   let fd: number;
   try {
@@ -248,30 +259,79 @@ export function fromControlFile(file: string, signal: (pid: number, sig: 0) => u
   const control = parse(raw, Number.POSITIVE_INFINITY);
   if (control === undefined) throw new EndpointError(`${NOT_REACHABLE} (${label} isn't valid JSON)`);
   if (!(control instanceof Map)) throw new EndpointError(`${NOT_REACHABLE} (${label} isn't valid)`);
-  const port = control.get("port");
+  const port = pyInt(control.get("port"));
   const browser = control.get("browser");
   const token = control.get("token");
-  const pid = control.get("pid");
-  const generation = control.get("generation");
-  const portNumber = pyInt(port);
-  if (!(portNumber !== undefined && portNumber > 0n && portNumber < 65536n)) throw new EndpointError(`${NOT_REACHABLE} (${label} has no valid port)`);
+  const pid = pyInt(control.get("pid"));
+  if (!(port !== undefined && port > 0n && port < 65536n)) throw new EndpointError(`${NOT_REACHABLE} (${label} has no valid port)`);
   if (!(typeof browser === "string" && BROWSER_PATH.test(browser))) throw new EndpointError(`${NOT_REACHABLE} (${label} has no valid browser path)`);
-  if (!(typeof token === "string" && TOKEN.test(token))) throw new EndpointError(`${NOT_REACHABLE} (${label} has no valid token)`);
-  addSecret(token);
-  const pidNumber = pyInt(pid);
-  if (!(pidNumber !== undefined && pidNumber > 1n && pidNumber < 2n ** 31n)) throw new EndpointError(NOT_REACHABLE);
-  const state = pidState(Number(pidNumber), signal);
+  if (token !== undefined && !(typeof token === "string" && TOKEN.test(token))) throw new EndpointError(`${NOT_REACHABLE} (${label} has no valid token)`);
+  if (typeof token === "string") addSecret(token);
+  if (!(pid !== undefined && pid > 1n && pid < 2n ** 31n)) throw new EndpointError(NOT_REACHABLE);
+  const state = pidState(Number(pid), signal);
   if (state === "gone") throw new EndpointError(NOT_REACHABLE);
-  const problem = state === "unsignalable" ? sandboxHint(Number(pidNumber), announcePath(file)) : undefined;
+  const problem = state === "unsignalable" ? sandboxHint(Number(pid), announcePath(file)) : undefined;
   if (problem !== undefined) throw new EndpointError(`${NOT_REACHABLE} (${problem})`);
+  return { file, label, port, browser, token: typeof token === "string" ? token : null, pid, generation: pyInt(control.get("generation")) ?? null };
+}
+
+function endpointOf(record: ControlRecord, port: bigint, token: string): Endpoint {
   const query = `token=${quote(token, "")}`;
   return {
-    ws: `ws://127.0.0.1:${pyIntText(port)}${browser}?${query}`,
-    source: file,
+    ws: `ws://127.0.0.1:${port}${record.browser}?${query}`,
+    source: record.file,
     explicit: false,
-    active: `http://127.0.0.1:${pyIntText(port)}/ardia/active?${query}`,
-    instance: `${pyIntText(pid)}:${pyInt(generation) === undefined ? "0" : pyIntText(generation)}:${browser}`,
+    active: `http://127.0.0.1:${port}/ardia/active?${query}`,
+    instance: `${record.pid}:${record.generation ?? 0n}:${record.browser}`,
   };
+}
+
+export function fromControlFile(file: string, signal: (pid: number, sig: 0) => unknown = (target, sig) => process.kill(target, sig)): Endpoint {
+  const record = readControlFile(file, signal);
+  if (record.token === null) throw new EndpointError(`${NOT_REACHABLE} (${record.label} has no valid token)`);
+  return endpointOf(record, record.port, record.token);
+}
+
+export const DEVTOOLS_ENDPOINT_METHOD = "control.devtoolsEndpoint";
+export const DEVTOOLS_ENDPOINT_TIMEOUT = 60;
+
+export type EndpointCall = (socketFile: string, signal: AbortSignal | null) => Promise<unknown>;
+
+const askSocket: EndpointCall = (socketFile, signal) => controlCall(socketFile, null, DEVTOOLS_ENDPOINT_METHOD, null, DEVTOOLS_ENDPOINT_TIMEOUT, signal);
+
+function grantedEndpoint(answer: unknown): { port: bigint; token: string; generation: bigint } {
+  const fields = answer instanceof Map ? Object.fromEntries(answer) : (answer as Record<string, unknown> | null) ?? {};
+  const port = typeof fields["port"] === "number" ? BigInt(fields["port"]) : pyInt(fields["port"]);
+  const token = fields["token"];
+  const generation = typeof fields["generation"] === "number" ? BigInt(fields["generation"]) : pyInt(fields["generation"]);
+  if (!(port !== undefined && port > 0n && port < 65536n) || !(typeof token === "string" && TOKEN.test(token)) || generation === undefined) {
+    throw new EndpointError(`${NOT_REACHABLE} (Ardia's control socket answered ${DEVTOOLS_ENDPOINT_METHOD} without a valid port, token and generation)`);
+  }
+  addSecret(token);
+  return { port, token, generation };
+}
+
+export async function fromControl(file: string, signal: AbortSignal | null = currentSignal(), call: EndpointCall = askSocket, pids?: (pid: number, sig: 0) => unknown): Promise<Endpoint> {
+  let record = readControlFile(file, pids);
+  let answer: unknown;
+  try {
+    answer = await call(announcePath(file), signal);
+  } catch (error) {
+    if (error instanceof Cancelled) throw error;
+    if (!(error instanceof ControlRefused)) throw error;
+    if (error.code === "unknown_method" || (error.code === "unreachable" && record.token !== null)) {
+      if (record.token === null) throw new EndpointError(`${NOT_REACHABLE} (${record.label} has no valid token)`);
+      return endpointOf(record, record.port, record.token);
+    }
+    if (error.code === "refused") throw new EndpointError(`Ardia didn't let this program control it (${redact(error.message)})`);
+    throw new EndpointError(`${NOT_REACHABLE} (${redact(error.message)})`);
+  }
+  const granted = grantedEndpoint(answer);
+  if (record.generation !== granted.generation) {
+    record = readControlFile(file, pids);
+    if (record.generation !== granted.generation) throw new EndpointError(`${NOT_REACHABLE} (Ardia restarted its DevTools connection while this command connected; run it again)`);
+  }
+  return endpointOf(record, granted.port, granted.token);
 }
 
 function setting(value: unknown): string | null {
@@ -298,7 +358,7 @@ export async function resolve(config: EndpointConfig, signal: AbortSignal | null
   const fromEnv = envEndpoint();
   if (fromEnv !== null) return fromEnv.kind === "ws" ? fromWs(fromEnv.url, fromEnv.source) : fromPort(fromEnv.port, fromEnv.source, signal);
   const dataDir = setting(config.data_dir);
-  const found = fromControlFile(controlFilePath(dataRoot(dataDir ?? undefined)));
+  const found = await fromControl(controlFilePath(dataRoot(dataDir ?? undefined)), signal);
   checkCancelled(signal);
   return found;
 }

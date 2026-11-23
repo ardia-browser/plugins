@@ -123,6 +123,10 @@ export function controlCall(
           return;
         }
         const failed = record(reply["error"]);
+        if (reply["id"] === null && reply["error"] !== undefined) {
+          finish(new ControlRefused(String(failed["code"] || "refused"), String(failed["message"] || "Ardia turned this program away")));
+          return;
+        }
         if (reply["id"] === 1) {
           if (reply["error"] !== undefined || record(reply["result"])["app"] !== "Ardia") {
             finish(new ControlRefused("unreachable", "something other than Ardia answers on the control socket"));

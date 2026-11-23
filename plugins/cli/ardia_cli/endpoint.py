@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlsplit
 
-from ardia_cli.redact import add_secret
+from ardia_cli.redact import add_secret, redact
 
 CONTROL_FILE = "ArdiaControl.json"
 DATA_DIR_HELP = "the Ardia data dir (default: $ARDIA_DATA_DIR, else the installed app's)"
@@ -82,7 +82,7 @@ def resolve(ws: str | None = None, port: int | None = None, data_dir: str | None
     env_cdp = os.environ.get("ARDIA_CDP_URL")
     if env_cdp:
         return _from_ws(env_cdp, "ARDIA_CDP_URL")
-    return from_control_file(control_file_path(data_root(data_dir)))
+    return from_control(control_file_path(data_root(data_dir)))
 
 
 def env_port_number(text: str) -> int:
@@ -102,8 +102,8 @@ def explicit_data_root(data_dir: str | None = None) -> Path | None:
     return Path(root).expanduser() if root else None
 
 
-def require_control(root: Path) -> Endpoint:
-    return from_control_file(control_file_path(root))
+def require_control(root: Path) -> "ControlRecord":
+    return read_control_file(control_file_path(root))
 
 
 def _from_ws(url: str, source: str) -> Endpoint:
@@ -137,7 +137,17 @@ def _reason(error: Exception) -> str:
     return str(reason or error) or type(error).__name__
 
 
-def from_control_file(path: Path) -> Endpoint:
+@dataclass(frozen=True)
+class ControlRecord:
+    path: Path
+    port: int
+    browser: str
+    token: str | None
+    pid: int
+    generation: int | None
+
+
+def read_control_file(path: Path) -> ControlRecord:
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except FileNotFoundError:
@@ -171,19 +181,120 @@ def from_control_file(path: Path) -> Endpoint:
         raise EndpointError(f"{NOT_REACHABLE} ({path.name} has no valid port)")
     if not (isinstance(browser, str) and _BROWSER_PATH.match(browser)):
         raise EndpointError(f"{NOT_REACHABLE} ({path.name} has no valid browser path)")
-    if not (isinstance(token, str) and _TOKEN.match(token)):
+    if token is not None and not (isinstance(token, str) and _TOKEN.match(token)):
         raise EndpointError(f"{NOT_REACHABLE} ({path.name} has no valid token)")
-    add_secret(token)
+    if isinstance(token, str):
+        add_secret(token)
     if not (isinstance(pid, int) and pid > 1 and _alive(pid)):
         raise EndpointError(NOT_REACHABLE)
+    return ControlRecord(path, port, browser, token, pid, generation if isinstance(generation, int) else None)
+
+
+def _endpoint_of(record: ControlRecord, port: int, token: str) -> Endpoint:
     query = f"token={quote(token, safe='')}"
     return Endpoint(
-        f"ws://127.0.0.1:{port}{browser}?{query}",
-        str(path),
+        f"ws://127.0.0.1:{port}{record.browser}?{query}",
+        str(record.path),
         False,
         f"http://127.0.0.1:{port}/ardia/active?{query}",
-        f"{pid}:{generation if isinstance(generation, int) else 0}:{browser}",
+        f"{record.pid}:{record.generation if record.generation is not None else 0}:{record.browser}",
     )
+
+
+def from_control_file(path: Path) -> Endpoint:
+    record = read_control_file(path)
+    if record.token is None:
+        raise EndpointError(f"{NOT_REACHABLE} ({path.name} has no valid token)")
+    return _endpoint_of(record, record.port, record.token)
+
+
+DEVTOOLS_ENDPOINT_METHOD = "control.devtoolsEndpoint"
+DEVTOOLS_ENDPOINT_TIMEOUT = 60.0
+
+
+class SocketRefused(Exception):
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+def ask_socket(sock_path: Path, timeout: float = DEVTOOLS_ENDPOINT_TIMEOUT):
+    import socket as sockets
+
+    from ardia_cli import control
+
+    sock = sockets.socket(sockets.AF_UNIX, sockets.SOCK_STREAM)
+    sock.settimeout(timeout)
+    try:
+        try:
+            sock.connect(str(sock_path))
+        except OSError as error:
+            raise SocketRefused("unreachable", error.strerror or str(error)) from None
+        if control.peer_uid(sock) != os.getuid():
+            raise SocketRefused("unreachable", "the control socket is served by another user")
+        sock.sendall(control.request_line(1, "hello", {"protocol": control.PROTOCOL}))
+        buffer = b""
+        while True:
+            try:
+                chunk = sock.recv(65536)
+            except OSError as error:
+                raise SocketRefused("timeout" if isinstance(error, TimeoutError) else "unreachable", str(error)) from None
+            if not chunk:
+                raise SocketRefused("unreachable", "the control socket closed")
+            buffer += chunk
+            while b"\n" in buffer:
+                line, buffer = buffer.split(b"\n", 1)
+                try:
+                    reply = json.loads(line)
+                except ValueError:
+                    raise SocketRefused("bad_reply", "the control socket's answer isn't JSON") from None
+                failed = reply.get("error") if isinstance(reply.get("error"), dict) else {}
+                if reply.get("id") is None and "error" in reply:
+                    raise SocketRefused(str(failed.get("code") or "refused"), str(failed.get("message") or "Ardia turned this program away"))
+                if reply.get("id") == 1:
+                    result = reply.get("result")
+                    if "error" in reply or not isinstance(result, dict) or result.get("app") != "Ardia":
+                        raise SocketRefused("unreachable", "something other than Ardia answers on the control socket")
+                    sock.sendall(control.request_line(2, DEVTOOLS_ENDPOINT_METHOD))
+                elif reply.get("id") == 2:
+                    if "error" in reply:
+                        raise SocketRefused(str(failed.get("code") or "failed"), str(failed.get("message") or "failed"))
+                    return reply.get("result")
+    finally:
+        sock.close()
+
+
+def _granted(answer) -> tuple[int, str, int]:
+    port = answer.get("port") if isinstance(answer, dict) else None
+    token = answer.get("token") if isinstance(answer, dict) else None
+    generation = answer.get("generation") if isinstance(answer, dict) else None
+    if not (isinstance(port, int) and 0 < port < 65536 and isinstance(token, str) and _TOKEN.match(token) and isinstance(generation, int)):
+        raise EndpointError(f"{NOT_REACHABLE} (Ardia's control socket answered {DEVTOOLS_ENDPOINT_METHOD} without a valid port, token and generation)")
+    add_secret(token)
+    return port, token, generation
+
+
+def from_control(path: Path, ask=None) -> Endpoint:
+    from ardia_cli import control
+
+    record = read_control_file(path)
+    try:
+        answer = (ask or ask_socket)(control.announce_path(str(path)))
+    except SocketRefused as error:
+        if error.code == "unknown_method" or (error.code == "unreachable" and record.token is not None):
+            if record.token is None:
+                raise EndpointError(f"{NOT_REACHABLE} ({path.name} has no valid token)") from None
+            return _endpoint_of(record, record.port, record.token)
+        if error.code == "refused":
+            raise EndpointError(f"Ardia didn't let this program control it ({redact(error.message)})") from None
+        raise EndpointError(f"{NOT_REACHABLE} ({redact(error.message)})") from None
+    port, token, generation = _granted(answer)
+    if record.generation != generation:
+        record = read_control_file(path)
+        if record.generation != generation:
+            raise EndpointError(f"{NOT_REACHABLE} (Ardia restarted its DevTools connection while this command connected; run it again)")
+    return _endpoint_of(record, port, token)
 
 
 def _alive(pid: int) -> bool:
