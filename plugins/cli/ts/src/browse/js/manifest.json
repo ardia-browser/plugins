@@ -1,7 +1,7 @@
 {
   "js.library.js.txt": {
     "python": "ardia_cli.browse.js.LIBRARY",
-    "sha256": "b017349219e21b1b6325eeb3520a1b2462117ca99198fe5b989d10d32722676c"
+    "sha256": "ddec45ae942baa033282335a03c7bdb85a5d27d3510ceb66c3a4564871b8c646"
   },
   "actions.disabled-state.js.txt": {
     "python": "ardia_cli.browse.actions.DISABLED_STATE",
@@ -70,6 +70,18 @@
   "actions.visible-content.js.txt": {
     "python": "ardia_cli.browse.actions.VISIBLE_CONTENT",
     "sha256": "8286ab368125ec6e3ead0929b529530f2e556486e89324d446d048f865f3386c"
+  },
+  "actions.holds-text.js.txt": {
+    "python": "ardia_cli.browse.actions.HOLDS_TEXT",
+    "sha256": "b284a869956a325d49b743a926ba9aaab2098d427d4f109fb21a9915c7f6054f"
+  },
+  "actions.input-watch.js.txt": {
+    "python": "ardia_cli.browse.actions.INPUT_WATCH",
+    "sha256": "1959cce0744827e94ed909a23d979ac5faa3a10a897ce0d47cdabfdf0b2235af"
+  },
+  "actions.focused-field.js.txt": {
+    "python": "ardia_cli.browse.actions.FOCUSED_FIELD",
+    "sha256": "f7c2fbdf72940ef079a63643c887dc5ab0d7087c74275c2662279401974a2f71"
   },
   "actions.scroll-lock.js.txt": {
     "python": "ardia_cli.browse.actions.SCROLL_LOCK",
@@ -145,7 +157,7 @@
   },
   "readpages.extract.js.txt": {
     "python": "ardia_cli.browse.readpages.EXTRACT",
-    "sha256": "7ffe6ba44aa154872d60614fc0b387b412041bd5429f5a7f3763f45a8cdbcd97"
+    "sha256": "90245a8e876e3010d96ff2c24d059af9341719ce43f3282ad901810d09ddd3da"
   },
   "readpages.settle-probe.js.txt": {
     "python": "ardia_cli.browse.readpages.SETTLE_PROBE",

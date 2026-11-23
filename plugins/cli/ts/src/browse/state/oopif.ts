@@ -69,7 +69,7 @@ export function rootOf(page: Page, frame: string): string | null {
   return session === undefined ? null : (page.oopifs.get(session)?.root ?? null);
 }
 
-export async function childFrames(page: Page, frames: Map<string, Frame>, frameOf: (raw: Json, parent: string | null) => Frame): Promise<void> {
+export async function childFrames(page: Page, frames: Map<string, Frame>, frameOf: (raw: Json, parent: string | null) => Frame): Promise<Map<string, string>> {
   const kept = new Map<string, string>();
   for (const [session, oopif] of [...page.oopifs]) {
     let tree: Json;
@@ -93,6 +93,10 @@ export async function childFrames(page: Page, frames: Map<string, Frame>, frameO
     walk(tree, typeof root["parentId"] === "string" && root["parentId"] ? root["parentId"] : null);
     kept.set(oopif.root, session);
   }
+  return kept;
+}
+
+export function useSessions(page: Page, kept: ReadonlyMap<string, string>): void {
   page.frameSessions.clear();
   for (const [frame, session] of kept) if (page.oopifs.has(session)) page.frameSessions.set(frame, session);
 }

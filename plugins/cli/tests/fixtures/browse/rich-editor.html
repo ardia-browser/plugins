@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>rich editor</title>
+<style>
+  body { font: 14px sans-serif; margin: 20px; }
+  .editor { border: 1px solid #333; min-height: 60px; width: 420px; padding: 6px; margin-bottom: 12px; }
+  .chrome { color: #666; font-size: 12px; user-select: none; }
+  .plain { border: 1px solid #333; min-height: 24px; width: 420px; padding: 4px; margin-bottom: 8px; }
+  .chip { background: #def; border-radius: 4px; padding: 0 3px; }
+</style>
+</head>
+<body>
+<div id="tts" class="editor" contenteditable="true" role="textbox" aria-label="Text to speech"><div class="chrome" contenteditable="false"><button type="button">Voice: Rachel</button> <span>12 / 5000</span></div><p>Hello <span class="chip" contenteditable="false">@Rachel</span> world</p></div>
+<div id="toolbarfield" class="editor" contenteditable="true" role="textbox" aria-label="Toolbar field"><div class="chrome" contenteditable="false" role="toolbar">Voice <span contenteditable="true">rachel</span></div><p>Old words</p></div>
+<div id="blank" class="editor" contenteditable="true" role="textbox" aria-label="Notes"><div class="chrome" contenteditable="false"><span>Drag a voice here</span></div><p><br></p></div>
+<div id="host" class="plain" contenteditable="true">Count <input id="num" type="number" value="0" aria-label="Count"></div>
+<div id="contents" class="plain" contenteditable="true" role="textbox" aria-label="Contents"><span style="display: contents">Old words</span></div>
+<div id="spaces" class="plain" contenteditable="true" role="textbox" aria-label="Spaces" style="white-space: pre-wrap">   </div>
+<div id="mention" class="plain" contenteditable="true" role="textbox" aria-label="Mention"><p><span class="chip" contenteditable="false">@Rachel</span></p></div>
+<div id="keepmention" class="plain stubborn" contenteditable="true" role="textbox" aria-label="Kept mention"><p>Hi <span class="chip" contenteditable="false">@Rachel</span></p></div>
+<div id="keepspaces" class="plain stubborn" contenteditable="true" role="textbox" aria-label="Kept spaces" style="white-space: pre-wrap">   </div>
+<div id="keepbreaks" class="plain stubborn" contenteditable="true" role="textbox" aria-label="Kept breaks"><p>x<br><br>y</p></div>
+<div id="keeplines" class="plain stubborn" contenteditable="true" role="textbox" aria-label="Kept lines"><p>x<br></p><p>y<br></p></div>
+<div id="keepspan" class="plain stubborn" contenteditable="true" role="textbox" aria-label="Kept span break"><p>x<span><br></span><br></p></div>
+<div id="keepnbsp" class="plain stubborn" contenteditable="true" role="textbox" aria-label="Kept space">&nbsp;</div>
+<div id="hiddenhint" class="plain" contenteditable="true" role="textbox" aria-label="Hidden hint"><p>Old words</p><div style="content-visibility: hidden"><span>Hint</span></div></div>
+<script>
+  for (const stubborn of document.querySelectorAll(".stubborn")) {
+    stubborn.addEventListener("keydown", (event) => {
+      if (event.key !== "Backspace") return;
+      event.preventDefault();
+      for (const text of [...stubborn.querySelectorAll("p")].flatMap((p) => [...p.childNodes]).filter((n) => n.nodeType === Node.TEXT_NODE)) text.remove();
+    });
+  }
+  const paragraphs = (editor) => [...editor.children].filter((node) => node.tagName === "P");
+  const selectContent = (editor) => {
+    const list = paragraphs(editor);
+    const range = document.createRange();
+    range.setStartBefore(list[0]);
+    range.setEndAfter(list[list.length - 1]);
+    const selection = getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    editor.dataset.all = "1";
+  };
+  for (const editor of document.querySelectorAll(".editor")) {
+    editor.addEventListener("keydown", (event) => {
+      if (event.key === "a" && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        selectContent(editor);
+        return;
+      }
+      if (event.key === "Backspace" && editor.dataset.all === "1") {
+        event.preventDefault();
+        for (const node of paragraphs(editor)) node.remove();
+        const empty = document.createElement("p");
+        empty.innerHTML = '<br class="trailing-break">';
+        editor.appendChild(empty);
+        const range = document.createRange();
+        range.setStart(empty, 0);
+        range.collapse(true);
+        getSelection().removeAllRanges();
+        getSelection().addRange(range);
+        delete editor.dataset.all;
+        return;
+      }
+      delete editor.dataset.all;
+    });
+  }
+</script>
+</body>
+</html>

@@ -101,10 +101,15 @@ export function raw(file: string, payload: Buffer | string, options: { end?: boo
       resolve({ text: Buffer.concat(chunks).toString("utf8"), closed: false });
     }, options.timeoutMs ?? 20_000);
     socket.on("data", (chunk: Buffer) => chunks.push(chunk));
-    socket.once("close", () => {
+    const hungUp = () => {
       clearTimeout(timer);
       resolve({ text: Buffer.concat(chunks).toString("utf8"), closed: true });
+    };
+    socket.once("end", () => {
+      hungUp();
+      socket.destroy();
     });
+    socket.once("close", hungUp);
     socket.once("error", (error) => {
       clearTimeout(timer);
       const code = (error as NodeJS.ErrnoException).code;

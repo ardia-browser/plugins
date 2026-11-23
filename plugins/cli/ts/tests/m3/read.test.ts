@@ -11,6 +11,7 @@ import { BrowseError, Usage } from "../../src/browse/daemon-errors.ts";
 import { OUTPUT_CAP, render as renderAnswer } from "../../src/browse/daemon/render.ts";
 import { begin } from "../../src/browse/metrics.ts";
 import { browseDir, closeFd } from "../../src/browse/paths.ts";
+import { content } from "../../src/browse/outfile.ts";
 import * as pages from "../../src/browse/read/pages.ts";
 import { extractHtml, postProcess } from "../../src/browse/read/readurl.ts";
 import * as scroll from "../../src/browse/read/scroll.ts";
@@ -362,6 +363,153 @@ describe("ReadingTabs", () => {
       expect([...run.closed].sort()).toEqual([...run.created].sort());
       expect(records.at(-1)?.["error"]).toBe("couldn't load it: net::ERR_FAILED");
     } finally {
+      run.restore();
+    }
+  });
+
+  test("test_links_with_a_url_list_that_page_not_the_session_tab (plugins#74)", async () => {
+    const run = scene();
+    const listed: string[] = [];
+    const previous = pages.readers.linksIn;
+    pages.readers.linksIn = async (_page, listing) => {
+      listed.push(listing);
+      return listing.endsWith("/a") ? ["http://s/p/1", "http://s/about", "http://s/p/2"] : ["http://s/p/2", "http://s/p/3", "http://s/a"];
+    };
+    try {
+      await expect(run.state.page()).rejects.toBeInstanceOf(BrowseError);
+      const listing = await pages.run(run.ctx, { links: "/p/", list: true }, ["http://s/a", "http://s/b"]);
+      expect(listed).toEqual(["http://s/a", "http://s/b"]);
+      expect((listing.data as Record<string, unknown>)["links"]).toEqual(["http://s/p/1", "http://s/p/2", "http://s/p/3"]);
+      expect(listing.text).toBe("http://s/p/1\nhttp://s/p/2\nhttp://s/p/3");
+      expect([...run.closed].sort()).toEqual([...run.created].sort());
+      run.visits.length = 0;
+      const read = await pages.run(run.ctx, { links: "/p/" }, ["http://s/a"]);
+      expect(run.visits.map(([, url]) => url)).toEqual(["http://s/p/1", "http://s/p/2"]);
+      expect((read.data as Record<string, unknown>)["matched"]).toBe(2);
+      pages.readers.linksIn = async () => ["http://s/about"];
+      await expect(pages.run(run.ctx, { links: "/p/", list: true }, ["http://s/a"])).rejects.toMatchObject({ code: "no_links" });
+    } finally {
+      pages.readers.linksIn = previous;
+      run.restore();
+    }
+  });
+
+  test("test_links_from_urls_keep_other_listings_when_one_fails_and_skip_named_listings (plugins#74)", async () => {
+    const run = scene();
+    const previous = pages.readers.linksIn;
+    const asked: boolean[] = [];
+    pages.readers.linksIn = async (_page, listing, _pattern, _timeout, wanted) => {
+      if (listing.endsWith("/down")) throw new BrowseError("couldn't load it: net::ERR_CONNECTION_REFUSED", null, "navigation_failed");
+      const found = listing.endsWith("/catalog/a") ? ["http://s/catalog/b", "http://s/catalog/p1"] : ["http://s/catalog/a", "http://s/catalog/p2"];
+      asked.push(wanted(["http://s/catalog/b"], listing));
+      return found;
+    };
+    try {
+      const listing = await pages.run(run.ctx, { links: "/catalog/", list: true }, ["http://s/catalog/a", "http://s/down", "http://s/catalog/b"]);
+      expect((listing.data as Record<string, unknown>)["links"]).toEqual(["http://s/catalog/p1", "http://s/catalog/p2"]);
+      expect(listing.failed).toBe(true);
+      expect(listing.text).toContain("couldn't list the links on http://s/down: couldn't load it: net::ERR_CONNECTION_REFUSED");
+      expect(asked).toEqual([false, false]);
+      expect([...run.closed].sort()).toEqual([...run.created].sort());
+      pages.readers.linksIn = async () => {
+        throw new BrowseError("couldn't load it: net::ERR_NAME_NOT_RESOLVED", null, "navigation_failed");
+      };
+      await expect(pages.run(run.ctx, { links: "/p/", list: true }, ["http://s/x"])).rejects.toMatchObject({ code: "navigation_failed" });
+    } finally {
+      pages.readers.linksIn = previous;
+      run.restore();
+    }
+  });
+
+  test("test_links_from_urls_survive_a_reader_that_cannot_be_reopened_and_compare_serialized_urls (plugins#74)", async () => {
+    const run = scene();
+    const previous = pages.readers.linksIn;
+    pages.readers.linksIn = async (page, listing) => {
+      if (listing.endsWith("/b")) {
+        page.sessionId = null;
+        run.refuseAttach.add("R2");
+        throw new BrowseError("Ardia detached the tab", null, "tab_detached");
+      }
+      return ["http://s/p/1", "http://s:80/a", "http://S/p/2#top"];
+    };
+    try {
+      const listing = await pages.run(run.ctx, { links: "*", list: true }, ["http://S:80/a", "http://s/b", "http://s/c"]);
+      expect((listing.data as Record<string, unknown>)["links"]).toEqual(["http://s/p/1", "http://S/p/2#top"]);
+      expect(String(listing.text)).toContain("couldn't list the links on http://s/b");
+      expect(String(listing.text)).toContain("couldn't list the links on http://s/c");
+      expect([...run.closed].sort()).toEqual([...run.created].sort());
+    } finally {
+      pages.readers.linksIn = previous;
+      run.restore();
+    }
+  });
+
+  test("test_links_from_urls_keep_polling_past_links_already_picked_and_cap_list_at_twenty (plugins#74)", async () => {
+    const run = scene();
+    const previous = pages.readers.linksIn;
+    const answers: boolean[] = [];
+    pages.readers.linksIn = async (_page, listing, _pattern, _timeout, wanted) => {
+      if (listing.endsWith("/b")) answers.push(wanted(["http://s/p/1"], "http://S:80/b"), wanted(["http://s/b", "http://s/p/2"], "http://S:80/b"));
+      return listing.endsWith("/a") ? ["http://s/p/1"] : Array.from({ length: 26 }, (_, n) => `http://s/p/${n}`);
+    };
+    try {
+      const listing = await pages.run(run.ctx, { links: "*", list: true }, ["http://s/a", "http://s/b"]);
+      expect(answers).toEqual([false, true]);
+      expect(((listing.data as Record<string, unknown>)["links"] as string[]).length).toBe(20);
+      expect(((listing.data as Record<string, unknown>)["matched"])).toBe(26);
+    } finally {
+      pages.readers.linksIn = previous;
+      run.restore();
+    }
+  });
+
+  test("test_links_from_urls_retire_a_reader_whose_listing_failed (plugins#74)", async () => {
+    const run = scene();
+    const previous = pages.readers.linksIn;
+    const readers: string[] = [];
+    pages.readers.linksIn = async (page, listing) => {
+      readers.push(page.targetId);
+      if (listing.endsWith("/b")) throw new BrowseError("The site didn't answer Page.navigate", null, "timeout");
+      return [`${listing}/item`];
+    };
+    try {
+      const listing = await pages.run(run.ctx, { links: "/item", list: true }, ["http://s/a", "http://s/b", "http://s/c"]);
+      expect((listing.data as Record<string, unknown>)["links"]).toEqual(["http://s/a/item", "http://s/c/item"]);
+      expect(readers[0]).toBe(readers[1]);
+      expect(readers[2]).not.toBe(readers[1]);
+      expect([...run.closed].sort()).toEqual([...run.created].sort());
+    } finally {
+      pages.readers.linksIn = previous;
+      run.restore();
+    }
+  });
+
+  test("test_links_from_urls_name_failed_listings_in_the_saved_output (plugins#74 review)", async () => {
+    const data = new Map<string, unknown>([
+      ["pages", [new Map<string, unknown>([["url", "http://s/p/1"], ["title", "One"], ["text", "body"]])]],
+      ["failedListings", [new Map<string, unknown>([["url", "http://s/down"], ["error", "couldn't load it: net::ERR_CONNECTION_REFUSED"]])]],
+    ]);
+    for (const path of ["out.txt", "out.json"]) {
+      const [text, summary] = content("read", data as never, path);
+      expect(summary).toContain("[couldn't list the links on http://s/down: couldn't load it: net::ERR_CONNECTION_REFUSED]");
+      if (path.endsWith(".txt")) expect(text).toContain("couldn't list the links on http://s/down");
+    }
+  });
+
+  test("test_links_from_urls_read_twenty_by_default_whatever_the_listing_count (plugins#74)", async () => {
+    const run = scene();
+    const previous = pages.readers.linksIn;
+    pages.readers.linksIn = async () => Array.from({ length: 26 }, (_, n) => `http://s/p/${n}`);
+    try {
+      const listings = Array.from({ length: 25 }, (_, n) => `http://s/list/${n}`);
+      run.visits.length = 0;
+      await pages.run(run.ctx, { links: "/p/" }, listings);
+      expect(run.visits.length).toBe(20);
+      run.visits.length = 0;
+      await pages.run(run.ctx, { links: "/p/", limit: "26" }, listings.slice(0, 1));
+      expect(run.visits.length).toBe(26);
+    } finally {
+      pages.readers.linksIn = previous;
       run.restore();
     }
   });

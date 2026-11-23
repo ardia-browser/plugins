@@ -1,0 +1,30 @@
+() => {
+  if (!globalThis.ardiaBrowseInputWatch) {
+    const counts = { mousedown: 0, mouseup: 0, pointerdown: 0, pointerup: 0, click: 0, mousemove: 0, keydown: 0, keyup: 0, wheel: 0, beforeinput: 0, input: 0 };
+    for (const type of Object.keys(counts)) {
+      addEventListener(type, (event) => { if (event.isTrusted) counts[type] += 1; }, { capture: true, passive: true });
+    }
+    Object.defineProperty(globalThis, "ardiaBrowseInputWatch", { value: counts, enumerable: false });
+  }
+  if (!globalThis.ardiaBrowseDragStarts) {
+    const drags = { accepted: 0, dragend: 0, drop: 0, dispatched: [] };
+    for (const type of ["dragstart", "dragend", "drop"]) {
+      addEventListener(type, (event) => {
+        if (!event.isTrusted) return;
+        if (type === "dragstart") drags.dispatched.push(event);
+        else drags[type] += 1;
+      }, { capture: true, passive: true });
+    }
+    Object.defineProperty(globalThis, "ardiaBrowseDragStarts", { value: drags, enumerable: false });
+  }
+  const drags = globalThis.ardiaBrowseDragStarts;
+  drags.accepted += drags.dispatched.filter((event) => !event.defaultPrevented).length;
+  drags.dispatched.length = 0;
+  let active = document.activeElement;
+  while (active && active.shadowRoot && active.shadowRoot.activeElement) active = active.shadowRoot.activeElement;
+  return Object.assign({ activeFrame: !!active && ["IFRAME", "FRAME", "EMBED", "OBJECT"].includes(active.tagName) }, globalThis.ardiaBrowseInputWatch, {
+    dragstart: drags.accepted,
+    dragend: drags.dragend,
+    drop: drags.drop,
+  });
+}

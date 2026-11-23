@@ -1,0 +1,99 @@
+(text, after) => {
+  let node = document.activeElement;
+  for (let hops = 0; node && hops < 16; hops++) {
+    let next = node.shadowRoot && node.shadowRoot.activeElement;
+    if (!next) {
+      try { next = node.contentDocument && node.contentDocument.activeElement; } catch (error) { next = null; }
+    }
+    if (!next || next === node) break;
+    node = next;
+  }
+  const field = !!node && /^(INPUT|TEXTAREA)$/.test(node.tagName) && typeof node.value === "string";
+  let host = node;
+  while (host && host.isContentEditable && host.parentElement && host.parentElement.isContentEditable) host = host.parentElement;
+  const editable = !field && !!host && host.isContentEditable;
+  const BLOCK = /^(P|DIV|LI|UL|OL|H[1-6]|BLOCKQUOTE|PRE|TR|TD|TH|TABLE|SECTION|ARTICLE|HEADER|FOOTER)$/;
+  let flattened = "";
+  const silent = (node) => node.nodeType === Node.COMMENT_NODE || node.nodeType === Node.PROCESSING_INSTRUCTION_NODE || (node.nodeType === Node.TEXT_NODE && node.data === "")
+    || (node.nodeType === Node.ELEMENT_NODE && /^(STYLE|SCRIPT|TEMPLATE)$/.test(node.tagName));
+  const trailing = (br) => {
+    for (let node = br; node && node !== host; node = node.parentElement) {
+      let next = node.nextSibling;
+      while (next && silent(next)) next = next.nextSibling;
+      if (next) return false;
+      const parent = node.parentElement;
+      if (!parent || parent === host || !getComputedStyle(parent).display.startsWith("inline")) return true;
+    }
+    return true;
+  };
+  const walk = (parent, mark) => {
+    const children = parent.childNodes;
+    for (let i = 0; i <= children.length; i++) {
+      if (mark && parent === mark.node && i === mark.offset) mark.at = flattened.length;
+      if (i === children.length) break;
+      const child = children[i];
+      if (child.nodeType === Node.TEXT_NODE) {
+        if (mark && child === mark.node) mark.at = flattened.length + mark.offset;
+        flattened += child.data;
+      } else if (child.nodeType === Node.ELEMENT_NODE && !/^(STYLE|SCRIPT|TEMPLATE)$/.test(child.tagName)) {
+        if (child.tagName === "BR") {
+          if (!trailing(child)) flattened += "\n";
+        }
+        else if (!child.isContentEditable) flattened += "\ufffc";
+        else {
+          const block = BLOCK.test(child.tagName);
+          if (block) flattened += "\n";
+          walk(child, mark);
+          if (block) flattened += "\n";
+        }
+      }
+    }
+  };
+  const serialize = (mark) => {
+    flattened = "";
+    walk(host, mark);
+    return flattened;
+  };
+  const contents = () => (field ? node.value : serialize(null));
+  const digest = (value) => {
+    let a = 0xdeadbeef ^ value.length;
+    let b = 0x41c6ce57 ^ value.length;
+    for (let i = 0; i < value.length; i++) {
+      const code = value.charCodeAt(i);
+      a = Math.imul(a ^ code, 2654435761);
+      b = Math.imul(b ^ code, 1597334677);
+    }
+    a = Math.imul(a ^ (a >>> 16), 2246822507) ^ Math.imul(b ^ (b >>> 13), 3266489909);
+    b = Math.imul(b ^ (b >>> 16), 2246822507) ^ Math.imul(a ^ (a >>> 13), 3266489909);
+    return (b >>> 0).toString(16) + ":" + (a >>> 0).toString(16);
+  };
+  if (!globalThis.ardiaBrowseInsertWatch) Object.defineProperty(globalThis, "ardiaBrowseInsertWatch", { value: { expected: null, timer: 0 }, enumerable: false });
+  const watch = globalThis.ardiaBrowseInsertWatch;
+  if (after) {
+    const expected = watch.expected;
+    watch.expected = null;
+    if (!expected || expected.node.deref() !== (field ? node : host)) return false;
+    return digest(contents()) === expected.digest;
+  }
+  watch.expected = null;
+  clearTimeout(watch.timer);
+  if (!field && !editable) return false;
+  if (field && node.type === "password") return false;
+  let caret = null;
+  if (field) {
+    try { if (node.selectionStart === node.selectionEnd) caret = node.selectionStart; } catch (error) { caret = null; }
+  } else {
+    const root = host.getRootNode();
+    const picked = root.getSelection ? root.getSelection() : host.ownerDocument.getSelection();
+    if (picked && picked.rangeCount > 0 && picked.isCollapsed && host.contains(picked.anchorNode)) {
+      const mark = { node: picked.anchorNode, offset: picked.anchorOffset, at: null };
+      serialize(mark);
+      caret = mark.at;
+    }
+  }
+  if (caret === null) return false;
+  const before = contents();
+  watch.expected = { node: new WeakRef(field ? node : host), digest: digest(before.slice(0, caret) + text + before.slice(caret)) };
+  watch.timer = setTimeout(Reflect.set, 10000, watch, "expected", null);
+  return true;
+}

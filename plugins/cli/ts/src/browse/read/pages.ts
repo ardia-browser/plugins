@@ -31,6 +31,7 @@ export const MAX_LIMIT = 100;
 export const PAGE_TIMEOUT_MS = 20000;
 export const LOAD_GRACE = 5.0;
 export const MIN_USEFUL = 120;
+export const LINK_CALL_FLOOR = 1.0;
 export const THIN_WAIT = 5.0;
 export const THIN_POLL = 0.5;
 export const CUT_MARK = 24;
@@ -66,6 +67,7 @@ export function flags(): Record<string, "bool" | "value" | "multi"> {
     "--fields": "value",
     "--where": "multi",
     "--block": "value",
+    "--nav": "bool",
   };
 }
 
@@ -230,6 +232,13 @@ export function footer(limit: number, cutAny: boolean, hidden: number, wanted: n
   return `[${parts.join("; ")}. Narrow it: -s <css> (one region per page), a tighter --links pattern, or --limit <n>; or --max-output ${wanted} for every line${where}]`;
 }
 
+export function noteNav(got: Record<string, unknown>): void {
+  const sections = Number(got["navSections"]) || 0;
+  if (!sections) return;
+  add("read_nav_hidden", sections);
+  add("read_nav_chars_hidden", Number(got["navChars"]) || 0);
+}
+
 export function noteVirtualized(...texts: unknown[]): void {
   if (texts.some((text) => String(text || "").includes(VIRTUALIZED_MARK))) flag("read_virtualized_grid", true);
   if (texts.some((text) => String(text || "").includes(FRAME_MARK))) flag("read_frame_text", true);
@@ -298,6 +307,110 @@ export async function collectLinks(ctx: Ctx, pattern: string): Promise<[string, 
   const got = await page.call(READPAGES_LINKS, [], { frame, read: true });
   const links = distinctLinks(Array.isArray(got) ? got.map(String) : []);
   return [page.url, links, pickLinks(links, pattern, page.url)];
+}
+
+async function linksOn(page: Page, frame: string, until: number): Promise<string[]> {
+  const got = await page.call(READPAGES_LINKS, [], { frame, read: true, timeout: Math.max(LINK_CALL_FLOOR, until - monotonic()) });
+  return distinctLinks(Array.isArray(got) ? got.map(String) : []);
+}
+
+const RETRY_CODES = ["document_changed", "page_navigated", "frame_gone"];
+
+function retryable(error: unknown): error is BrowseError {
+  return error instanceof BrowseError && !(error instanceof ConnectionLost) && RETRY_CODES.includes(error.code ?? "");
+}
+
+async function linksNow(page: Page, until: number): Promise<string[] | BrowseError> {
+  try {
+    return await linksOn(page, page.mainFrame as string, until);
+  } catch (error) {
+    if (unanswered(error)) return error;
+    if (!retryable(error)) throw error;
+    await settle(page, Math.min(until, monotonic() + SETTLE_LIMIT));
+    await page.refreshFrames();
+    try {
+      return await linksOn(page, page.mainFrame as string, until);
+    } catch (again) {
+      if (unanswered(again) || retryable(again)) return again;
+      throw again;
+    }
+  }
+}
+
+function unanswered(error: unknown): error is BrowseError {
+  return error instanceof OutcomeUnknown || (error instanceof BrowseError && !(error instanceof ConnectionLost) && error.code === "timeout");
+}
+
+function sameUrlKey(url: string): string {
+  try {
+    return new URL(canonicalLink(url)).href;
+  } catch {
+    return canonicalLink(url);
+  }
+}
+
+export async function linksIn(page: Page, listing: string, pattern: string, timeout: number, wanted: (found: string[], landed: string) => boolean): Promise<string[]> {
+  await goto(page, listing, timeout, true);
+  const deadline = monotonic() + Math.min(THIN_WAIT, timeout);
+  let scanned: string[] | null = null;
+  let failed: BrowseError | null = null;
+  for (;;) {
+    const now = await linksNow(page, deadline);
+    if (now instanceof BrowseError) {
+      failed = now;
+      scanned = null;
+    } else scanned = now;
+    if ((scanned !== null && wanted(scanned, page.url || listing)) || monotonic() + THIN_POLL >= deadline) break;
+    await sleep(THIN_POLL);
+  }
+  if (scanned === null) {
+    if (failed instanceof OutcomeUnknown) throw new BrowseError(failed.text, null, "timeout");
+    throw failed ?? new BrowseError(`couldn't read the links on ${listing}`, null, "document_changed");
+  }
+  return scanned;
+}
+
+export type ListingFailure = { url: string; error: string };
+
+export async function collectLinksFrom(ctx: Ctx, listings: readonly string[], pattern: string, timeout: number): Promise<[string, string[], string[], ListingFailure[]]> {
+  const state = ctx.state;
+  await state.connect();
+  await temptabs.sweep(state);
+  const opened: string[] = [];
+  const links: string[] = [];
+  const picked: string[] = [];
+  const sources: string[] = [];
+  const failures: ListingFailure[] = [];
+  const skipped = new Set(listings.map(sameUrlKey));
+  const keep = (found: readonly string[], landed: string) => {
+    const here = sameUrlKey(landed);
+    return pickLinks(found, pattern, landed).filter((url) => !skipped.has(sameUrlKey(url)) && sameUrlKey(url) !== here);
+  };
+  try {
+    let page: Page | null = null;
+    for (const listing of listings) {
+      let found: string[];
+      try {
+        if (page === null || page.sessionId === null) page = await openReader(ctx, opened);
+        const reader: Page = page;
+        found = await readers.linksIn(reader, listing, pattern, timeout, (now, landed) => keep(now, landed).some((url) => !picked.includes(url)));
+      } catch (error) {
+        if (!quiet(error) || error instanceof ConnectionLost || (error instanceof OutcomeUnknown && page !== null && state.targetInfos.has(page.targetId))) throw error;
+        failures.push({ url: listing, error: (error as BrowseError).text });
+        page = null;
+        continue;
+      }
+      const landed = page.url || listing;
+      skipped.add(sameUrlKey(landed));
+      sources.push(landed);
+      for (const url of found) if (!links.includes(url)) links.push(url);
+      for (const url of keep(found, landed)) if (!picked.includes(url)) picked.push(url);
+    }
+  } finally {
+    await temptabs.release(state, opened);
+  }
+  flag("read_links_from_url", true);
+  return [sources.join(", ") || listings.join(", "), links, picked, failures];
 }
 
 export async function openReader(ctx: Ctx, opened: string[]): Promise<Page> {
@@ -383,16 +496,16 @@ export async function goto(page: Page, url: string, timeout: number, keepPartial
   return null;
 }
 
-export async function extractFilled(page: Page, selector: string | null, timeout: number): Promise<Record<string, unknown>> {
+export async function extractFilled(page: Page, selector: string | null, timeout: number, nav = false): Promise<Record<string, unknown>> {
   const deadline = monotonic() + Math.min(THIN_WAIT, timeout);
-  let got = record(await page.call(READPAGES_EXTRACT, [selector], { frame: page.mainFrame, read: true }));
+  let got = record(await page.call(READPAGES_EXTRACT, [selector, nav], { frame: page.mainFrame, read: true }));
   if ((Number(got["status"]) || 0) >= 400 || botCheck(String(got["title"] || ""), String(got["text"] || ""), got["status"], false)) return got;
   let waited = false;
   while (thin(got, selector) && monotonic() + THIN_POLL < deadline) {
     waited = true;
     await sleep(THIN_POLL);
     try {
-      got = record(await page.call(READPAGES_EXTRACT, [selector], { frame: page.mainFrame, read: true }));
+      got = record(await page.call(READPAGES_EXTRACT, [selector, nav], { frame: page.mainFrame, read: true }));
     } catch (error) {
       if (!(error instanceof BrowseError) || !["document_changed", "page_navigated", "frame_gone"].includes(error.code ?? "")) throw error;
       await settle(page, Math.min(deadline, monotonic() + SETTLE_LIMIT));
@@ -402,16 +515,16 @@ export async function extractFilled(page: Page, selector: string | null, timeout
   return got;
 }
 
-async function extractAfterDetach(page: Page, url: string, selector: string | null, timeout: number): Promise<Record<string, unknown>> {
+async function extractAfterDetach(page: Page, url: string, selector: string | null, timeout: number, nav: boolean): Promise<Record<string, unknown>> {
   const loaded = page.loader(page.mainFrame);
   try {
-    return await extractFilled(page, selector, timeout);
+    return await extractFilled(page, selector, timeout, nav);
   } catch (error) {
     if (!(error instanceof BrowseError) || error instanceof ConnectionLost || error.code !== "tab_detached") throw error;
     await page.state.reattach(page, url);
     await page.refreshFrames();
     if (page.loader(page.mainFrame) !== loaded) throw error;
-    return extractFilled(page, selector, timeout);
+    return extractFilled(page, selector, timeout, nav);
   }
 }
 
@@ -426,13 +539,14 @@ export async function readIn(page: Page, url: string, selector: string | null, t
       if (selector) out["note"] = `${url} is a PDF, so -s ${selector} doesn't apply; this is the whole document's text`;
       return out;
     }
-    got = await extractAfterDetach(page, url, selector, timeout);
+    got = await extractAfterDetach(page, url, selector, timeout, Boolean(options["nav"]));
   } catch (error) {
     if (!quiet(error) || (error instanceof OutcomeUnknown && page.state.targetInfos.has(page.targetId))) throw error;
     out["error"] = (error as BrowseError).text;
     return out;
   }
   Object.assign(out, { finalUrl: page.url, title: got["title"] || "", status: got["status"] ?? null, readAt: readAt(), text: postProcess(String(got["text"] || ""), options) });
+  noteNav(got);
   if (got["scope"]) {
     out["scope"] = got["scope"];
     flag("read_scope_shown", true);
@@ -447,6 +561,7 @@ export async function readIn(page: Page, url: string, selector: string | null, t
 export const readers = {
   makePage: (state: Ctx["state"], targetId: string): Page => new Page(state, targetId),
   readIn,
+  linksIn,
 };
 
 export async function inLanes<T>(work: readonly T[], width: number, lane: (take: () => T | undefined) => Promise<void>): Promise<void> {
@@ -505,15 +620,23 @@ export async function readTabs(ctx: Ctx, urls: readonly string[], selector: stri
 }
 
 export async function readHttpOne(url: string, options: Options): Promise<PageRecord> {
-  const out: PageRecord = { url, source: "http" };
+  const one = await fetchOneOrPage(url, options, {});
+  return one instanceof Result ? pageFrom(url, one) : one;
+}
+
+export async function fetchOneOrPage(url: string, options: Options, globalOptions: Options): Promise<Result | PageRecord> {
   let result: Result;
   try {
-    result = await fetchRun(url, { ...options }, {});
+    result = await fetchRun(url, { ...options }, globalOptions);
   } catch (error) {
     if (!quiet(error)) throw error;
-    out["error"] = (error as BrowseError).text;
-    return out;
+    return { url, source: "http", error: (error as BrowseError).text };
   }
+  return result.body ? result : pageFrom(url, result);
+}
+
+function pageFrom(url: string, result: Result): PageRecord {
+  const out: PageRecord = { url, source: "http" };
   const data = result.data as Record<string, unknown>;
   Object.assign(out, { finalUrl: data["finalUrl"] || url, title: data["title"] || "", text: data["content"] || "", readAt: readAt() });
   const challenge = botCheck(String(out["title"]), String(out["text"]), out["status"]);
@@ -563,6 +686,11 @@ export async function readLocal(options: Options, positional: string[], stdin: s
   pageTimeout(options);
   if (options["selector"]) throw new Usage("-s needs the browser's DOM; drop --http to read the pages in Ardia");
   const extra = limitNote(urls.length, limit, "--limit");
+  if (urls.length === 1 && globalOptions["out_body"]) {
+    const one = await fetchOneOrPage(urls[0] as string, options, globalOptions);
+    if (one instanceof Result) return one;
+    return resultFor([one], options, globalOptions, extra);
+  }
   return resultFor(await readHttp(urls.slice(0, limit), options), options, globalOptions, extra);
 }
 
@@ -584,18 +712,30 @@ export async function run(ctx: Ctx, options: Options, positional: string[]): Pro
     base = page.url;
   }
   let urls = wantedUrls(options, positional, ctx.stdin, base);
-  const named = urls.length;
+  let named = urls.length;
   let dataExtra: Record<string, unknown> = {};
+  let listingNote = "";
+  let listingFailed = false;
   if (options["links"] !== undefined) {
     const pattern = options["links"] as string;
-    const [source, links, picked] = await collectLinks(ctx, pattern);
-    if (picked.length === 0) throw new BrowseError(noLinksMessage(pattern, source, links), { links: links.length }, "no_links");
-    dataExtra = { listing: source, matched: picked.length };
-    urls = [...urls, ...picked.filter((url) => !urls.includes(url))];
+    const listed = urls.length > 0;
+    const [source, links, picked, failures] = listed ? await collectLinksFrom(ctx, urls, pattern, timeout) : [...(await collectLinks(ctx, pattern)), [] as ListingFailure[]];
+    const failed = failures.map((failure) => `[couldn't list the links on ${failure.url}: ${failure.error}]`).join("\n");
+    if (picked.length === 0) {
+      if (failures.length === urls.length && failures.length > 0) throw new BrowseError(failed.replaceAll(/^\[|\]$/gmu, ""), { failed: failures.length }, "navigation_failed");
+      throw new BrowseError([noLinksMessage(pattern, source, links), failed].filter((part) => part).join("\n"), { links: links.length }, "no_links");
+    }
+    dataExtra = { listing: source, matched: picked.length, ...(failures.length ? { failedListings: failures } : {}) };
+    listingNote = failed;
+    listingFailed = failures.length > 0;
+    if (listed && options["limit"] === undefined) named = 0;
+    urls = picked;
     if (options["list"]) {
-      const shown = options["limit"] !== undefined ? picked.slice(0, limit) : picked;
-      const text = shown.join("\n") + (shown.length < picked.length ? `\n${limitNote(picked.length, limit, "--limit")}` : "");
-      return new Result({ links: shown, matched: picked.length, listing: source }, text, true);
+      const shown = options["limit"] !== undefined || listed ? picked.slice(0, limit) : picked;
+      const text = [shown.join("\n") + (shown.length < picked.length ? `\n${limitNote(picked.length, limit, "--limit")}` : ""), failed].filter((part) => part).join("\n");
+      const listing = new Result({ links: shown, matched: picked.length, listing: source, ...(failures.length ? { failedListings: failures } : {}) }, text, true);
+      listing.failed = failures.length > 0;
+      return listing;
     }
   } else if (options["list"]) throw new Usage("--list goes with --links <pattern>: it prints the links that read would visit");
   if (urls.length === 0) throw new Usage("Usage: ardia browse read <url>... [--stdin] [--links <pattern>] [-s <selector>] [--http]");
@@ -605,7 +745,13 @@ export async function run(ctx: Ctx, options: Options, positional: string[]): Pro
   let records: PageRecord[];
   if (fetchOnly(options)) {
     if (selector) throw new Usage("-s needs the browser's DOM; drop --http to read the pages in Ardia");
-    records = await readHttp(urls, options);
+    if (urls.length === 1 && named === 1 && ctx.options["out_body"]) {
+      const one = await fetchOneOrPage(urls[0] as string, options, ctx.options);
+      if (one instanceof Result) return one;
+      records = [one];
+    } else records = await readHttp(urls, options);
   } else records = await readTabs(ctx, urls, selector, timeout, options);
-  return resultFor(records, options, ctx.options, extra, dataExtra);
+  const result = resultFor(records, options, ctx.options, [extra, listingNote].filter((part) => part).join("\n"), dataExtra);
+  if (listingFailed) result.failed = true;
+  return result;
 }

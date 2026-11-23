@@ -429,8 +429,9 @@ class RefusedAttach(unittest.TestCase):
         self.assertIn("`ardia windows` lists no tab with that page", error.message)
 
     def test_it_adds_nothing_when_ardia_cant_say(self):
-        self.assertTrue(self.refused(None).message.endswith("or is in a window Ardia keeps for itself"))
-        self.assertTrue(self.refused([{"tabs": [{"id": "tab-1", "url": ""}]}]).message.endswith("or is in a window Ardia keeps for itself"))
+        for answer in (None, [{"tabs": [{"id": "tab-1", "url": ""}]}]):
+            message = self.refused(answer).message
+            self.assertTrue(message.endswith("or is in a window Ardia keeps for itself. Ardia 0.2.49 or later has no such limit"), message)
 
 
 class TempTabRecovery(unittest.TestCase):

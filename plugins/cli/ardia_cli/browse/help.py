@@ -111,13 +111,13 @@ Options:
   --pin-tab, --no-pin-tab Fail with tab_gone instead of falling back when the session's tab closes
   --idle-timeout <time>   End an idle session after 10s, 3m, 1h or raw ms (default 1h)
 
-Not available yet: cookies, state save (and state load of a file with cookies), set device|geo|offline|
-headers|credentials|media, network route, upload, download, highlight, clipboard, trace, profiler, record
-and stream enable. No released Ardia lets the ardia command use the DevTools methods they need: it's a
-deliberate limit, so they fail with policy_refused naming the method, say what to do instead, and updating
-won't help yet. A later Ardia adds them behind its full-control setting. A `cdp` method off Ardia's list
-fails the same way, but an older Ardia also refuses some methods a current one allows, so there updating
-may help. set viewport works on a tab this session opened and never showed.
+Need Ardia 0.2.49 or later: cookies, state save (and state load of a file with cookies), set device|geo|
+offline|headers|credentials|media, network route, upload, download, highlight, clipboard, trace,
+profiler, record and stream enable. From 0.2.49 the ardia command is a full DevTools client of Ardia;
+an older Ardia keeps it to a short list of methods, so there they fail with policy_refused naming the
+method and what to do instead, and updating Ardia fixes it. A `cdp` method an older Ardia refuses
+fails the same way.
+set viewport works on a tab this session opened and never showed.
 
 Not here: connect, inspect, install, upgrade, doctor, dashboard, chat (no AI), mcp, profiles,
 confirm/deny, iOS (-p ios, swipe, tap), cloud providers, and launch options (--headed,
@@ -245,8 +245,9 @@ COMMANDS = {
     "network": "ardia browse network requests [--reload] [--filter p] [--type t] [--method m] [--status 2xx] [--clear] | request <id>\n"
                "  --reload starts recording and reloads the page, so its own loads are listed (--type xhr,fetch: its data calls)\n"
                "  | har start [--content text|all|none] | har stop [path] | route <url> [--abort|--body json] | unroute [url]\n\n"
-               "route needs Fetch.enable, which no released Ardia allows yet (policy_refused). Ardia also strips Cookie,\n"
-               "Set-Cookie and Authorization headers from what the command sees.",
+               "route needs Fetch.enable: Ardia 0.2.49 or later (an older one refuses it, policy_refused). Requests, their\n"
+               "details and HAR files leave out Cookie, Cookie2, Set-Cookie, Set-Cookie2, Authorization and Proxy-Authorization\n"
+               "headers.",
     "auth": "ardia browse auth save <name> --url <https url> [--origin <url>]... --username <u> [--password-stdin]\n"
             "  [--username-selector s] [--password-selector s] [--submit-selector s]\n"
             "ardia browse auth login <name> | list | show <name> | delete <name>\n\n"
@@ -276,13 +277,14 @@ COMMANDS = {
             "main list as items. --where keeps items whose field contains the value; unknown fields fail with the valid\n"
             "ones. Codes: redirected, auth_expired, blocked, rate_limited, drifted, fetch_failed, flow_not_get; then drive\n"
             "the page yourself. open and snapshot list a site's flows once.",
-    "read": "ardia browse read [url...] [--links <pattern>] [-s <selector>] [--stdin] [--limit n] [--timeout ms] [--http] [--list] [--out <file>]\n"
+    "read": "ardia browse read [url...] [--links <pattern>] [-s <selector>] [--stdin] [--limit n] [--timeout ms] [--http] [--list] [--out <file>] [--nav]\n"
             "ardia browse read [-s <list>] --scroll [--limit rows] [--match <text>] [--timeout ms]\n"
             "ardia browse read --data [--block n|id] [--fields a,b.c] [--where field=value] [--limit n]\n\n"
             "--data lists the JSON this tab's page embeds (__NEXT_DATA__, JSON-LD, application/json scripts, window.x = {...})\n"
             "with each block's main list and fields; --fields/--where/--limit return just those items from the largest block (or --block).\n\n"
             "Reads each page in a background tab of this session's own (four at a time, through your logins, after its\n"
             "scripts ran) and prints its title, URL and text: the page's <main>, else its body, or what -s matches.\n"
+            "Site menus and link footers outside the main content print as one line each; --nav prints them in full.\n"
             "Tables and ARIA grids print one row per line, cells split by ` | `, with a note when a grid renders only\n"
             "some of its rows. Tabs close when it's done. With no URL it reads the session's tab. --links <pattern> reads every link on the session's tab whose URL contains the\n"
             "pattern (* matches anything), in page order; --list only prints those links. URLs can also come one per line\n"
@@ -329,8 +331,8 @@ COMMANDS = {
               "  EOF",
     "close": "ardia browse close [--all]\n\nCloses only the tabs this session opened (never the browser) and ends the session; a tab another\n"
              "session is using stays open and the answer says so. --all does it for every session.",
-    "record": "ardia browse record start <path.webm> [url] | stop | restart <path.webm> [url]\n\nNeeds Page.startScreencast and ffmpeg on PATH. Not available yet: the current Ardia refuses Page.startScreencast\non purpose (policy_refused); take screenshots instead.",
-    "stream": "ardia browse stream enable [--port n] [--input] | disable | status\n\nBinds 127.0.0.1 only, with its own random token in the URL; view only unless --input. Needs Page.startScreencast, which the current Ardia refuses on purpose for now (policy_refused).",
+    "record": "ardia browse record start <path.webm> [url] | stop | restart <path.webm> [url]\n\nNeeds Page.startScreencast and ffmpeg on PATH. Page.startScreencast needs Ardia 0.2.49 or later; an older\nArdia refuses it (policy_refused), so take screenshots there.",
+    "stream": "ardia browse stream enable [--port n] [--input] | disable | status\n\nBinds 127.0.0.1 only, with its own random token in the URL; view only unless --input. Needs Page.startScreencast: Ardia 0.2.49 or later (an older one refuses it, policy_refused).",
     "react": "ardia browse react tree | inspect <id> | renders start | renders stop | suspense [--only-dynamic]\n\nNeeds `ardia browse open --enable react-devtools <url>`.",
     "plugin": "ardia browse plugin add <npm-name[@version] | owner/repo[#ref]> [--name n] [--capability c]... | list | show <name>\n"
               "  | remove <name> | run <name> <type> [--payload json]\n\n"
@@ -368,9 +370,9 @@ COMMANDS = {
     "keydown": "ardia browse keydown <key> | keyup <key>\n\nHolds a key down until keyup (keys and modifiers as press).",
     "keyup": "ardia browse keyup <key>\n\nReleases a key held with keydown.",
     "upload": "ardia browse upload <sel> <files...>\n\nSets the files of a file input (DOM.setFileInputFiles) and prints what changed. Paths are\n"
-              "relative to the current directory; each must be a file. Not available yet: the current Ardia refuses it on\npurpose (policy_refused); ask the user to choose the file instead.",
+              "relative to the current directory; each must be a file. Needs Ardia 0.2.49 or later; an older Ardia refuses it\n(policy_refused), so ask the user to choose the file there.",
     "download": "ardia browse download <sel> <path>\n\nClicks the element and saves the download it starts to path (Browser.setDownloadBehavior).\n"
-                "`wait --download [path]` waits for the next download that starts, without clicking. Not available yet: the\ncurrent Ardia refuses both on purpose (policy_refused). For download, the error says how to fetch a public text\nfile instead; for wait --download, ask the user to download it.",
+                "`wait --download [path]` waits for the next download that starts, without clicking. Both need Ardia 0.2.49 or\nlater; an older Ardia refuses them (policy_refused). There, for download, the error says how to fetch a public text\nfile instead; for wait --download, ask the user to download it.",
     "cdp": "ardia browse cdp <Domain.method> [--params <json>|-] [--param k=v]... [--param k:=json]... [--target browser|<tab>]\n"
            "  [--timeout 30s]\n\n"
            "Sends one Chrome DevTools Protocol method and prints its result as JSON. It goes to this session's tab, to the\n"
@@ -394,7 +396,7 @@ COMMANDS = {
            "the tab off-screen (it leaves the sidebar), so an emulated page is never on screen; screenshots, snapshots and\n"
            "clicks work there at that size. To see the page, `tab <id> --show` (or `set viewport reset`, in the background):\n"
            "the viewport ends and the page is reloaded in a new tab of its own size. The other settings apply to the session's\n"
-           "tab where it is. Not available yet: device, geo, offline, headers, credentials and media fail with policy_refused\non purpose, since no released Ardia allows them; the error says what to do instead.",
+           "tab where it is. device, geo, offline, headers, credentials and media need Ardia 0.2.49 or later; an older Ardia\nrefuses them (policy_refused), and the error says what to do instead.",
     "state": "ardia browse state save|load <path>\n\nSaves or loads cookies and storage.",
     "dialog": "ardia browse dialog status | accept [text] | dismiss\n\nAnswers the page's open alert, confirm or prompt.",
     "diff": "ardia browse diff snapshot [-b baseline] [-s sel] [-i] [-c] [-d n] | screenshot --baseline <png> | url <u1> <u2>\n\n"
