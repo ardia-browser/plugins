@@ -6,8 +6,8 @@ export const M3_TS = path.dirname(HARNESS);
 export const TS = path.resolve(M3_TS, "..", "..");
 export const CLI = path.dirname(TS);
 
-export const DATA_ROOT = process.env["ARDIA_M3_DATA_ROOT"] || path.join(CLI, "tests", "m3");
-export const FIXTURES = path.join(CLI, "tests", "fixtures", "browse");
+export const DATA_ROOT = process.env["ARDIA_M3_DATA_ROOT"] || M3_TS;
+export const FIXTURES = path.join(TS, "tests", "fixtures", "browse");
 
 export const SCENARIOS = path.join(DATA_ROOT, "scenarios");
 export const TRANSCRIPTS = path.join(DATA_ROOT, "transcripts");

@@ -51,8 +51,8 @@ test("pyregex: Python-only syntax hands back", () => {
 });
 
 test("uniqueItems: every manifest the app refuses for a repeated field is refused", () => {
-  const schema = loads(fs.readFileSync(path.join(HERE, "..", "..", "ardia_cli", "schemas", "plugin.schema.json"), "utf8"));
-  const cases = loads(fs.readFileSync(path.join(HERE, "..", "..", "tests", "fixtures", "plugins", "rejected-manifests.json"), "utf8")) as Value[];
+  const schema = loads(fs.readFileSync(path.join(HERE, "..", "assets", "plugin.schema.json"), "utf8"));
+  const cases = loads(fs.readFileSync(path.join(HERE, "fixtures", "plugins", "rejected-manifests.json"), "utf8")) as Value[];
   const twice = cases.find((row) => (row as Map<string, Value>).get("why") === "a password manager naming a field twice") as Map<string, Value>;
   const messages = validate(twice.get("manifest") as Value, schema).map((problem) => problem.message);
   assert.ok(messages.includes("passwordManager.fields has login twice"));

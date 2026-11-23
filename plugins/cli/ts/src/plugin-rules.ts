@@ -8,7 +8,7 @@ import { codePoints } from "./pystr.ts";
 import { isDict, isList, isNumber, isStr, less, pyEqual, pyStr } from "./pyvalue.ts";
 import { formatPath, validate } from "./schema-check.ts";
 import { v2Defaults, v2Problems } from "./plugin-v2.ts";
-import shippedSchema from "../../ardia_cli/schemas/plugin.schema.json" with { type: "text" };
+import shippedSchema from "../assets/plugin.schema.json" with { type: "text" };
 
 export const MANIFEST = "plugin.json";
 export const SCHEMA = "plugin.schema.json";

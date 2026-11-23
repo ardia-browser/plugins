@@ -15,7 +15,7 @@ const OTHER_DIGITS = "cli-١٩٩٩-٠١-٠١.jsonl";
 const FROZEN = oracle<{ names: [string, boolean][]; keep_local_copy: { kept: boolean; date_mark: string; copies: Record<string, number> } }>("local-copy");
 
 test("the shared table of decimal digits is sorted, disjoint ranges of hex code points, starting with ASCII", () => {
-  const lines = fs.readFileSync(path.join(CLI, "py-decimals.txt"), "utf8").split("\n").filter((line) => line !== "");
+  const lines = fs.readFileSync(path.join(CLI, "ts", "assets", "py-decimals.txt"), "utf8").split("\n").filter((line) => line !== "");
   assert.ok(lines.length > 50);
   assert.equal(lines[0], "0030 0039");
   let last = -1;

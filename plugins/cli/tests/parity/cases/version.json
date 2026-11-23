@@ -1,9 +1,0 @@
-[
- {
-  "id": "version--version",
-  "command": "--version",
-  "argv": [
-   "--version"
-  ]
- }
-]

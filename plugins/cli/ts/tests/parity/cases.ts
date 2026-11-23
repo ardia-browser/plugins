@@ -8,7 +8,7 @@ export const BLOBS = join(PARITY, "blobs.json");
 export const EXPECTED_BLOBS = join(PARITY, "expected-blobs.json");
 export const FIXTURES = join(PARITY, "fixtures");
 export const TS_ROOT = join(PARITY, "..", "..");
-export const SERVED_TABLE = join(TS_ROOT, "..", "served.txt");
+export const SERVED_TABLE = join(TS_ROOT, "assets", "served.txt");
 
 export const ROOTS = ["home", "cli-home", "data", "cwd", "tmp", "outside"];
 export const PROTECTED_ENV = new Set(["HOME", "ARDIA_CLI_HOME", "TMPDIR", "PATH", "ARDIA_TELEMETRY_URL", "http_proxy", "https_proxy", "HTTP_PROXY",

@@ -35,9 +35,15 @@ field() {
 }
 
 (cd "$root" && node -e "import('./scripts/lib/instance.mjs').then(({ session }) => { const fs = require('fs'); fs.writeFileSync(process.argv[1] + '/session.json', JSON.stringify(session({ settings: { cliControl: true } }))); fs.writeFileSync(process.argv[1] + '/onboarding.json', JSON.stringify({ version: 1, completedAt: 1 })); })" "$data")
-port="$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
-python3 -m http.server "$port" --bind 127.0.0.1 --directory "$here/tests/fixtures/browse" >/dev/null 2>&1 &
+node -e 'const [dir, out] = process.argv.slice(1); const path = require("path"); const fs = require("fs");
+require("http").createServer((req, res) => {
+  const file = path.join(dir, path.normalize(decodeURIComponent(new URL(req.url, "http://x").pathname)));
+  if (!file.startsWith(dir + path.sep)) { res.writeHead(403); res.end(); return; }
+  fs.readFile(file, (error, body) => { res.writeHead(error ? 404 : 200, { "Content-Type": file.endsWith(".html") ? "text/html" : "application/octet-stream" }); res.end(error ? "" : body); });
+}).listen(0, "127.0.0.1", function () { fs.writeFileSync(out, String(this.address().port)); });' "$here/ts/tests/fixtures/browse" "$work/port" >/dev/null 2>&1 &
 server=$!
+for _ in $(seq 1 50); do [ -s "$work/port" ] && break; sleep 0.1; done
+port="$(cat "$work/port")"
 open -g -n --env ARDIA_BACKGROUND=1 --env "ARDIA_DATA_DIR=$data" ${metro:+--env "ARDIA_INSTANCE=jsLocation=$metro"} \
   --stdout "$data/app.out.log" --stderr "$data/app.out.log" "$app"
 control="$data/Chromium/ArdiaControl.json"

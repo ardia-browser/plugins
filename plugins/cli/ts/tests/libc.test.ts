@@ -7,12 +7,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "bun:test";
 import { BUILT_LIBC } from "./libc-loaded.ts";
+import { lockHolder } from "./peers.ts";
 import { offsetOf, systemPipe, systemStrerror } from "./system-libc.ts";
 import { dlopenReason, errnoError, flock, interruptsIgnored, LibcUnavailable, listAt, loadLibc, mkdirAt, nonBlocking, openAt, peerUid, sizeAt as rawSizeAt, strerror, unlinkAt, watchLifeline } from "../src/libc.ts";
 import { close, closeDir, listDir, openPrivate, openPrivateFile, PathError, readPrivate, renameIn, sizeAt, takeLock, unlinkQuietly, writePrivate } from "../src/privatefs.ts";
 
 const CLI = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const PYTHON = process.env.ARDIA_TEST_PYTHON ?? "python3";
 const scratch = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "ardia-libc-")));
 const { O_RDONLY, O_RDWR, O_CREAT } = fs.constants;
 process.on("exit", () => fs.rmSync(scratch, { recursive: true, force: true }));
@@ -135,37 +135,18 @@ test("private files are reached through the folder's descriptor, never the worki
   }
 });
 
-const PYTHON_LOCK = `
-import sys, time
-sys.path.insert(0, sys.argv[2])
-from ardia_cli.browse import paths
-dir_fd = paths.open_private(__import__("pathlib").Path(sys.argv[1]), "Telemetry")
-if sys.argv[3] == "hold":
-    lock = paths.take_lock("cli-queue.lock", dir_fd)
-    print("held" if lock is not None else "busy", flush=True)
-    sys.stdin.read()
-else:
-    print("busy" if paths.take_lock("cli-queue.lock", dir_fd) is None else "took", flush=True)
-`;
-
-test("the lock is Python's flock both ways", async () => {
+test("the lock is a flock another process sees both ways", async () => {
   const root = path.join(scratch, "locks");
   fs.mkdirSync(path.join(root, "Telemetry"), { recursive: true, mode: 0o700 });
-  const holder = spawn(PYTHON, ["-I", "-c", PYTHON_LOCK, root, CLI, "hold"], { stdio: ["pipe", "pipe", "inherit"] });
-  const first = await new Promise<string>((resolve) => holder.stdout.once("data", (chunk: Buffer) => resolve(chunk.toString().trim())));
-  assert.equal(first, "held");
+  const holder = await lockHolder(path.join(root, "Telemetry", "cli-queue.lock"));
   const dir = openPrivate(root, ["Telemetry"], false);
   try {
     assert.equal(takeLock("cli-queue.lock", dir), undefined);
-    holder.stdin.end();
-    await new Promise((resolve) => holder.once("exit", resolve));
+    holder.release();
+    await holder.exited;
     const mine = takeLock("cli-queue.lock", dir);
     assert.notEqual(mine, undefined);
-    const python = spawnSync(PYTHON, ["-I", "-c", PYTHON_LOCK, root, CLI, "try"], { encoding: "utf8" });
-    assert.equal(python.stdout.trim(), "busy", python.stderr);
     close(mine);
-    const after = spawnSync(PYTHON, ["-I", "-c", PYTHON_LOCK, root, CLI, "try"], { encoding: "utf8" });
-    assert.equal(after.stdout.trim(), "took", after.stderr);
   } finally {
     closeDir(dir);
   }

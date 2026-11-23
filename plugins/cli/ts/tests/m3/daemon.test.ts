@@ -13,7 +13,6 @@ import {
   keyOf,
   lockHolder,
   PROGRAM,
-  pythonChoice,
   raw,
   type Scratch,
   scratch,
@@ -61,17 +60,6 @@ describe("spawn from the TS client", () => {
     expect(await until(() => !alive(pid), 10_000)).toBe(true);
     expect(fs.existsSync(socketFile(found.data, key))).toBe(false);
     expect(fs.existsSync(path.join(found.browse, `${key}.json`))).toBe(false);
-  });
-
-  test("starts Python's daemon through the same module", async () => {
-    const found = fresh();
-    const { key, pid } = await start(found.data, "py", pythonChoice());
-    pids.push(pid);
-    const answer = await ask(found.data, key, ["session"]);
-    expect(answer).toMatchObject({ exit: 0, out: "py\n" });
-    expect(answer["daemon"]).toBeUndefined();
-    await ask(found.data, key, ["close"]);
-    expect(await until(() => !alive(pid), 10_000)).toBe(true);
   });
 
   test("a daemon that exits before it listens fails fast with the log's tail", async () => {
@@ -187,7 +175,7 @@ describe("the session folder", () => {
   });
 });
 
-for (const [label, choose] of [["ts", tsChoice], ["python", pythonChoice]] as const) {
+for (const [label, choose] of [["ts", tsChoice]] as const) {
 describe(`requests (${label} daemon)`, () => {
   test("an oversized request is dropped without an answer and the daemon keeps serving", async () => {
     const found = fresh();
@@ -237,7 +225,7 @@ describe(`requests (${label} daemon)`, () => {
 }
 
 describe("lifetime", () => {
-  for (const [label, choose] of [["ts", tsChoice], ["python", pythonChoice]] as const) {
+  for (const [label, choose] of [["ts", tsChoice]] as const) {
   test(`${label} daemon: SIGTERM during a request lets it finish within the settle time, then cleans up`, async () => {
     const found = fresh();
     const { key, pid } = await start(found.data, "term", choose());

@@ -45,19 +45,19 @@ every artifact and its `.sha256` (pull requests run it as a dry run). Ardia then
 ## Test
 
 ```sh
-cd plugins/cli
-uv venv --python 3.13 /tmp/ardia-cli-venv
-VIRTUAL_ENV=/tmp/ardia-cli-venv uv pip install --require-hashes --no-build -r requirements.lock
-/tmp/ardia-cli-venv/bin/python -m unittest discover -s tests
-(cd ts && bun install --frozen-lockfile --ignore-scripts && bun test ./tests)
+cd plugins/cli/ts
+bun install --frozen-lockfile --ignore-scripts
+sh scripts/build.sh
+bun run test
+bun run test:parity
 ```
 
-A few checks compare against Ardia's own source, such as the ingest key, the tab group colours and the feedback
-service. They run with `ARDIA_REPO` pointing at an ardia checkout, and skip otherwise.
-`ardia_cli/schemas/plugin.schema.json` is ardia's published `docs/plugin.schema.json`; CI compares it with ardia main
-and fails when they differ, so copy it over. `tests/fixtures/plugins` is a copy of ardia's `tests/fixtures/plugins`.
+`bun run test` runs every file under `ts/tests` except `ts/tests/parity`, in parallel. `bun run test:parity` runs the
+parity cases: each `ardia` call in `ts/tests/parity/cases` checked against its captured result (`docs/cli.md` › Test).
+Both need the built `ts/dist/ardia-ts`. No test needs Python. `ts/assets/plugin.schema.json` is ardia's published
+`docs/plugin.schema.json`; CI compares it with ardia main and fails when they differ, so copy it over.
 
 The command and Ardia talk over the control socket, whose protocol both sides check at `hello`
-(`ardia_cli/control.py` `PROTOCOL`, `MIN_APP_PROTOCOL`; ardia's `automationMethods.ts` `PROTOCOL`,
+(`ts/src/protocol.ts` `PROTOCOL`, `MIN_APP_PROTOCOL`; ardia's `automationMethods.ts` `PROTOCOL`,
 `MIN_CLIENT_PROTOCOL`): raise your minimum when you need the other side's newer behaviour, and the mismatch says which
 one to update.

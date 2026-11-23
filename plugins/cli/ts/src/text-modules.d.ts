@@ -8,7 +8,7 @@ declare module "*.md" {
   export default text;
 }
 
-declare module "*skill_hashes.json" {
+declare module "*skill-hashes.json" {
   const text: string;
   export default text;
 }

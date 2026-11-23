@@ -13,7 +13,7 @@ import AXE_PATH from "../../../vendor/axe.min.js" with { type: "file" };
 import type { Page } from "../state/page.ts";
 import { type Json, record } from "../state/records.ts";
 
-export const AXE_MISSING = "axe-core isn't bundled with this ardia command (apps/cli/scripts/build.sh adds ardia_cli/vendor/axe.min.js)";
+export const AXE_MISSING = "axe-core isn't bundled with this ardia command; reinstall it (plugins/cli/scripts/build.sh embeds ts/vendor/axe.min.js)";
 
 export function axeSource(file: string = AXE_PATH): string {
   try {

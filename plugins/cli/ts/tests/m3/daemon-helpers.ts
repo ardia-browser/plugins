@@ -11,8 +11,6 @@ export { lockHolder, staleSocket } from "../peers.ts";
 export const TS_DIR = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
 export const CLI_DIR = path.resolve(TS_DIR, "..");
 export const PROGRAM = process.env["ARDIA_M3_TS_PROGRAM"] ?? path.join(TS_DIR, "dist", "ardia-ts");
-export const PYTHON = process.env["ARDIA_TEST_PYTHON"] ?? "python3";
-export const PYTHON_CODE = `import sys; sys.path.insert(0, ${JSON.stringify(CLI_DIR)}); from ardia_cli.browse import daemon; daemon.main()`;
 
 export type Scratch = { root: string; data: string; browse: string; done(): void };
 
@@ -52,10 +50,6 @@ export function config(data: string, session: string, extra: Record<string, Valu
 
 export function tsChoice(): DaemonChoice {
   return { kind: "ts", program: PROGRAM };
-}
-
-export function pythonChoice(): DaemonChoice {
-  return { kind: "python", python: PYTHON, code: PYTHON_CODE };
 }
 
 export function connectTo(file: string): Promise<net.Socket | null> {

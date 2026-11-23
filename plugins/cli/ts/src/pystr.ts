@@ -1,4 +1,4 @@
-import decimals from "../../py-decimals.txt" with { type: "text" };
+import decimals from "../assets/py-decimals.txt" with { type: "text" };
 export const SPLIT = 0xffff;
 export const SPLIT_TEXT = String.fromCharCode(SPLIT);
 const SPLIT_AFTER_HIGH = /([\ud800-\udbff])￿/g;

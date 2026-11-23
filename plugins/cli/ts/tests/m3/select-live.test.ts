@@ -10,7 +10,7 @@ setDefaultTimeout(60_000);
 
 const CHROME = process.env["ARDIA_M3_CHROME"];
 const PORT = Number(process.env["ARDIA_M3_PORT_BASE"] ?? "9400") + 16;
-const PAGE = fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), "..", "..", "..", "tests", "fixtures", "browse", "typeahead.html"), "utf8");
+const PAGE = fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), "..", "fixtures", "browse", "typeahead.html"), "utf8");
 
 let root = "";
 let chrome: ChildProcess | null = null;

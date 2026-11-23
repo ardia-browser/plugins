@@ -1,12 +1,12 @@
-import file0 from "../../ardia_cli/skill/SKILL.md" with { type: "text" };
-import file1 from "../../ardia_cli/skill/references/automation.md" with { type: "text" };
-import file2 from "../../ardia_cli/skill/references/config.md" with { type: "text" };
-import file3 from "../../ardia_cli/skill/references/daily-reports.md" with { type: "text" };
-import file4 from "../../ardia_cli/skill/references/flows.md" with { type: "text" };
-import file5 from "../../ardia_cli/skill/references/script.md" with { type: "text" };
-import file6 from "../../ardia_cli/skill/references/troubleshooting.md" with { type: "text" };
-import file7 from "../../ardia_cli/skill/references/userscripts.md" with { type: "text" };
-import hashes from "../../ardia_cli/skill_hashes.json" with { type: "text" };
+import file0 from "../assets/skill/SKILL.md" with { type: "text" };
+import file1 from "../assets/skill/references/automation.md" with { type: "text" };
+import file2 from "../assets/skill/references/config.md" with { type: "text" };
+import file3 from "../assets/skill/references/daily-reports.md" with { type: "text" };
+import file4 from "../assets/skill/references/flows.md" with { type: "text" };
+import file5 from "../assets/skill/references/script.md" with { type: "text" };
+import file6 from "../assets/skill/references/troubleshooting.md" with { type: "text" };
+import file7 from "../assets/skill/references/userscripts.md" with { type: "text" };
+import hashes from "../assets/skill-hashes.json" with { type: "text" };
 
 export const SKILL_FILES: readonly [string, string][] = [
   ["SKILL.md", file0],

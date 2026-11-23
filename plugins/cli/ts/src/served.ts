@@ -1,4 +1,4 @@
-import table from "../../served.txt" with { type: "text" };
+import table from "../assets/served.txt" with { type: "text" };
 
 export const SERVING_SIDES = ["rust", "ts"] as const;
 export type ServingSide = (typeof SERVING_SIDES)[number];

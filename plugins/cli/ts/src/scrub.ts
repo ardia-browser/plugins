@@ -1,7 +1,7 @@
 import { isSpace, strip } from "./py.ts";
 import { pyRegex } from "./pyre.ts";
 import { codePoints, isDecimal, joinCodePoints } from "./pystr.ts";
-import decimals from "../../py-decimals.txt" with { type: "text" };
+import decimals from "../assets/py-decimals.txt" with { type: "text" };
 
 const QUOTED_VALUE = String.raw`r?"""[\s\S]*?(?:"""|\Z)|r?\'\'\'[\s\S]*?(?:\'\'\'|\Z)|\\"(?:[^\\]|\\(?!"))*(?:\\"|\Z)` +
   String.raw`|"(?:[^"\\]|\\[\s\S]?)*(?:"|\Z)|\'(?:[^\'\\]|\\[\s\S]?)*(?:\'|\Z)|` + "`[^`]*(?:`|\\Z)";

@@ -43,7 +43,7 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
-          version=$(python3 -c 'import json; print(json.load(open("plugins/cli/plugin.json"))["version"])')
+          version=$(jq -r .version plugins/cli/plugin.json)
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]] || { echo "::error::plugins/cli/plugin.json's version '$version' isn't a version"; exit 1; }
           publish=false
           if [ "$EVENT" = push ]; then

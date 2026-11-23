@@ -1,19 +1,19 @@
 # The `ardia browse` daemon protocol
 
-One contract between every `ardia browse` client (Python's `ardia_cli/browse/client.py`, the TypeScript client) and
-every daemon (Python's `ardia_cli/browse/daemon.py`, the TypeScript `libexec/ardia-ts daemon`). While both
-implementations ship, any client must work with any daemon that holds the session's key. The machine form is
-`tests/m3/protocol.schema.json`; the M3 harness checks every request, answer and spawn config of both implementations
-against it (`tests/m3/protocol.py`, `python -m unittest tests.test_m3_harness`).
+The contract between the `ardia browse` client (`ts/src/browse/`) and its daemon, the same program run as
+`ardia daemon` (`ts/src/browse/daemon/`). A client only ever reaches a daemon of its own build (the build stamp is
+part of the session key, below); the rules keep the protocol readable as it grows.
+The machine form is `ts/tests/m3/protocol.schema.json`. `ts/tests/m3/harness/protocol.ts` checks against it every
+request, answer and spawn config of a harness run, and `ts/tests/m3/replay-corpus.test.ts` ("the recorded protocol")
+every request and answer in the recorded result files (`docs/m3-harness.md`).
 
 ## Rules
 
 - Fields are only added, never repurposed. A field whose meaning changes gets a new name.
-- A reader ignores fields it doesn't know. Python's daemon reads with `.get`, the TypeScript one reads only the fields
-  below, and both clients print only `out` and `err`.
-- An old daemon answers a command it doesn't know with its usual `Unknown command: <name>. Run \`ardia browse --help\``
-  usage error (exit 1). The TypeScript daemon answers a command Python serves but it doesn't yet with `code:
-  "unsupported"` and says it isn't served by the TypeScript daemon yet.
+- A reader ignores fields it doesn't know. The daemon reads only the fields below, and the client prints only `out`
+  and `err`.
+- The daemon answers a command it doesn't know with `Unknown command: <name>. Run \`ardia browse --help\`` (a usage
+  error, exit 1), and one of agent-browser's commands it skips on purpose with `code: "unsupported"` and why.
 
 ## Files
 
@@ -24,33 +24,32 @@ folder the user owns with mode 0700 (`fstat`), and every file in it is opened re
 |---|---|---|
 | `<key>.lock` | daemon, `flock` exclusive for its whole life | nothing; a held lock means a live daemon |
 | `<key>.sock` | daemon, bound inside the private `.<key>.bind/` folder (umask 0177, mode 0600) and moved into place with an exclusive rename | the Unix socket; unlinked when stale only under the lock, and at exit only if its device and inode are still the ones bound |
-| `<key>.json` | daemon, written atomically | `{"session", "namespace", "endpoint", "pid", "started"}` (Python's `json.dumps` spacing) |
-| `<key>.log` | client creates it (0600, truncated), the daemon writes it as stdout and stderr | redacted log lines |
+| `<key>.json` | daemon, written atomically | `{"session", "namespace", "endpoint", "pid", "started", "build"}` (Python's `json.dumps` spacing: `", "` and `": "`) |
+| `<key>.log` | client creates it (0600, truncated), the daemon writes it as stdout and stderr | redacted log lines, `<time> ardia_cli.browse <LEVEL> <message>` (the logger name kept from the Python daemon, so old and new logs read alike), a stack trace after an exception |
 | `claims/<sha256(target)[:24]>.json` | daemon, under `claims/.lock` | `{"owner": <key>, "session", "target", "kinds": [...]}` |
 | `tabs-<sha256(instance)[:20]>.json` | any daemon, under `tabs.lock` | the shared tab registry, version 3 |
 
-`<key>` is `sha256(namespace + "\0" + endpoint key + "\0" + session)` in hex, first 24 characters. The endpoint key is
-`port:<n>`, `ws:<scheme>://<netloc><path>` or `token:<data root>`. Answers too long for the terminal spill to
+`<key>` is `sha256(namespace + "\0" + endpoint key + "\0" + session + ["\0plugin"] + "\0build:" + build stamp)` in hex,
+first 24 characters; the build stamp is the version plus a hash of the TypeScript sources, baked in by
+`ts/scripts/build.sh` (`docs/cli.md`). The endpoint key is `port:<n>`, `ws:<scheme>://<netloc><path>` or
+`token:<data root>`. Answers too long for the terminal spill to
 `$TMPDIR/ardia-browse-output-<uid>/output-*.txt` (folder 0700, the newest 40 kept). A daemon running from an install
 takes the lease `<version>/.leases/<pid>` beside `realpath` of its program and removes it at exit.
 
 ## Spawn
 
-The client starts a daemon when `<key>.sock` doesn't answer:
+The client starts a daemon when `<key>.sock` doesn't answer: its own program, `<ardia> daemon`
+(`spawnDaemon` in `ts/src/browse/daemon/spawn.ts`).
 
-- Python's: `<python> -I -c "…daemon.main()"`.
-- TypeScript's: `<ardia-ts> daemon`. The TypeScript client starts it when `served.txt` has the row `browse-daemon ts`,
-  or `ARDIA_BROWSE_DAEMON=ts` is set (`ARDIA_BROWSE_DAEMON=python` forces Python's). Otherwise it starts Python's.
-
-Either way the child is detached (its own session), runs with cwd `/`, gets stdin as a pipe and the `<key>.log` file
-descriptor as stdout and stderr, and inherits no other descriptor. The TypeScript client also leaves `ARDIA_WS`,
+The child is detached (its own session), runs with cwd `/`, gets stdin as a pipe and the `<key>.log` file
+descriptor as stdout and stderr, and inherits no other descriptor. The client also leaves `ARDIA_WS`,
 `ARDIA_PORT`, `ARDIA_CDP_URL` and `AGENT_BROWSER_CDP` out of the daemon's environment, moving the endpoint they named
 into `ws` or `port` first (`daemonEnvironment` in `spawn.ts`). The config is written to stdin as one JSON object
 and stdin is closed; the client waits for the write before it polls. Nothing goes in argv or the environment. The
 client then polls for the socket for up to 15 s; if the child exits and the lock isn't held, it fails at once with
 `the ardia browse daemon exited before it listened: <the log's last 2,000 bytes>`.
 
-`ardia-ts daemon` refuses to run (exit 2) with any argument, with a terminal on stdin, or with a config it can't parse.
+`ardia daemon` refuses to run (exit 2) with any argument, with a terminal on stdin, or with a config it can't parse.
 
 ### The config
 
@@ -103,7 +102,8 @@ One line of JSON (UTF-8, `\n`), at most 256 MiB. An answer over that is replaced
 | `metrics` | object of numbers and booleans, optional | the command's telemetry counts, timings and flags |
 | `busy_elsewhere` | true, optional | the session was busy and the request had `beside_if_busy` |
 | `body`, `body_bytes` | base64 string and its byte count, optional | `read --http … --out` of a binary response: its bytes as sent, outside `out` so redaction never touches them; the client checks the count and writes them raw, before and whatever it makes of `out`; sent only when the request's options have `out_body` |
-| `daemon` | `ts/<version>`, optional | sent only by the TypeScript daemon; its absence means Python's |
+| `failed_step_command` | string, optional | a failed `batch`: the browse command of its first failed line (telemetry's `failed_step_command`) |
+| `daemon` | `ts/<version>` | the daemon's version, on every answer it writes |
 
 Planned: `loader` (plugin mode, F1).
 

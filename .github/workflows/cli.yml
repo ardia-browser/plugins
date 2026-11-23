@@ -107,12 +107,14 @@ jobs:
           version=$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' plugins/cli/plugin.json | head -n 1)
           plugins/cli/build.sh "$RUNNER_TEMP/out"
           .github/release/check-build.sh "$RUNNER_TEMP/out" "$version"
-      - name: uv
-        run: curl -LsSf https://astral.sh/uv/0.13.0/install.sh | sh
-      - name: Unit tests, some beside the Python CLI, one file per core at a time
-        run: |
-          ~/.local/bin/uv venv --python 3.13.16 "$RUNNER_TEMP/unit-venv"
-          ARDIA_TEST_PYTHON="$RUNNER_TEMP/unit-venv/bin/python" bun run test
+      - name: plugin.json passes ardia plugins check
+        working-directory: plugins/cli
+        env:
+          ARDIA_DATA_DIR: ${{ runner.temp }}/data
+          ARDIA_TELEMETRY: "off"
+        run: ts/dist/ardia-ts plugins check "$PWD"
+      - name: Unit tests, one file per core at a time
+        run: bun run test
 
   parity:
     name: Parity on ${{ matrix.os }}
@@ -140,89 +142,6 @@ jobs:
       - name: Parity cases against their captured results
         run: bun run test:parity
 
-  python-parity:
-    name: ${{ matrix.name }} on ${{ matrix.os }}
-    needs: route
-    if: needs.route.outputs.cli == 'true'
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-15
-            name: Parity with the Python CLI
-            tests: tests.test_parity.TsParityTable tests.test_parity.TsDeepFixtures tests.test_parity.TsProcess tests.test_parity.HarnessRules tests.test_parity.HarnessCatches tests.test_parity.ServedTable tests.test_parity.ProtocolAgrees tests.test_parity.BuildSmoke tests.test_closed_stdout.TsClosedStdout tests.test_ts_browse_plugin
-          - os: ubuntu-24.04
-            name: Parity with the Python CLI
-            tests: tests.test_parity.TsParityTable tests.test_parity.TsDeepFixtures tests.test_parity.TsProcess tests.test_parity.HarnessRules tests.test_parity.HarnessCatches tests.test_parity.ServedTable tests.test_parity.ProtocolAgrees tests.test_parity.BuildSmoke tests.test_closed_stdout.TsClosedStdout tests.test_ts_browse_plugin
-          - os: macos-15
-            name: Browse daemon harness, replay mode (recordings answer the Python daemon, no browser)
-            tests: tests.test_m3_harness
-    defaults:
-      run:
-        working-directory: plugins/cli
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
-        with:
-          bun-version: 1.3.14
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24.22.2
-      - name: Build the TypeScript ardia
-        working-directory: plugins/cli/ts
-        run: |
-          bun install --frozen-lockfile --ignore-scripts
-          sh scripts/build.sh
-      - name: uv
-        run: curl -LsSf https://astral.sh/uv/0.13.0/install.sh | sh
-      - name: Locked dependencies
-        run: |
-          ~/.local/bin/uv venv --python 3.13.16 "$RUNNER_TEMP/venv"
-          VIRTUAL_ENV="$RUNNER_TEMP/venv" ~/.local/bin/uv pip install --quiet --require-hashes --no-build -r requirements.lock
-      - name: ${{ matrix.name }}
-        env:
-          ARDIA_TS_CLI: ${{ github.workspace }}/plugins/cli/ts/dist/ardia-ts
-          ARDIA_TEST_REQUIRES: ts
-          TESTS: ${{ matrix.tests }}
-        run: '"$RUNNER_TEMP/venv/bin/python" -m unittest -v $TESTS'
-
-  python:
-    name: Python tests on ${{ matrix.os }}
-    needs: route
-    if: needs.route.outputs.cli == 'true'
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-15, ubuntu-24.04]
-    defaults:
-      run:
-        working-directory: plugins/cli
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: uv
-        run: curl -LsSf https://astral.sh/uv/0.13.0/install.sh | sh
-      - name: Locked dependencies
-        run: |
-          ~/.local/bin/uv venv --python 3.13.16 "$RUNNER_TEMP/venv"
-          VIRTUAL_ENV="$RUNNER_TEMP/venv" ~/.local/bin/uv pip install --quiet --require-hashes --no-build -r requirements.lock
-      - run: '"$RUNNER_TEMP/venv/bin/python" -m unittest discover -s tests'
-      - name: plugin.json passes ardia plugins check
-        env:
-          ARDIA_DATA_DIR: ${{ runner.temp }}/data
-          ARDIA_TELEMETRY: "off"
-        run: '"$RUNNER_TEMP/venv/bin/python" -m ardia_cli plugins check "$PWD"'
-
   schema:
     name: The vendored plugin schema is ardia main's
     needs: route
@@ -233,7 +152,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          sparse-checkout: plugins/cli/ardia_cli/schemas
+          sparse-checkout: plugins/cli/ts/assets
       - name: Compare with ardia main's docs/plugin.schema.json
         run: |
           ardia_ref=main
@@ -243,8 +162,8 @@ jobs:
             echo "::warning::ardia $ardia_ref doesn't publish docs/plugin.schema.json: the vendored schema wasn't compared"
             exit 0
           fi
-          diff -u "$RUNNER_TEMP/ardia-plugin.schema.json" plugins/cli/ardia_cli/schemas/plugin.schema.json \
-            || { echo "::error::plugins/cli/ardia_cli/schemas/plugin.schema.json isn't ardia $ardia_ref's docs/plugin.schema.json: copy it over"; exit 1; }
+          diff -u "$RUNNER_TEMP/ardia-plugin.schema.json" plugins/cli/ts/assets/plugin.schema.json \
+            || { echo "::error::plugins/cli/ts/assets/plugin.schema.json isn't ardia $ardia_ref's docs/plugin.schema.json: copy it over"; exit 1; }
 
   main:
     name: Manifest v2 main on ubuntu-24.04
@@ -271,7 +190,7 @@ jobs:
 
   done:
     name: CLI checks pass
-    needs: [route, typescript, parity, python-parity, python, schema, main]
+    needs: [route, typescript, parity, schema, main]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -283,8 +202,6 @@ jobs:
           TYPESCRIPT: ${{ needs.typescript.result }}
           PARITY: ${{ needs.route.outputs.parity }}
           PARITY_RESULT: ${{ needs.parity.result }}
-          PYTHON_PARITY: ${{ needs.python-parity.result }}
-          PYTHON: ${{ needs.python.result }}
           SCHEMA: ${{ needs.schema.result }}
           MAIN_RESULT: ${{ needs.main.result }}
         run: |
@@ -301,7 +218,5 @@ jobs:
           }
           expect typescript "$CLI" "$TYPESCRIPT"
           expect parity "$PARITY" "$PARITY_RESULT"
-          expect python-parity "$CLI" "$PYTHON_PARITY"
-          expect python "$CLI" "$PYTHON"
           expect schema "$CLI" "$SCHEMA"
           expect main "$MAIN" "$MAIN_RESULT"

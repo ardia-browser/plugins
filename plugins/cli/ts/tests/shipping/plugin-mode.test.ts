@@ -11,7 +11,6 @@ import { systemPipe } from "../system-libc.ts";
 
 const PROGRAM = process.env["ARDIA_TS_CLI"] ?? path.resolve(import.meta.dir, "..", "..", "dist", "ardia-ts");
 const BUILT = fs.existsSync(PROGRAM) && fs.existsSync(BUILT_LIBC);
-const REQUIRED = (process.env["ARDIA_TEST_REQUIRES"] ?? "").split(",").includes("ts");
 const CREDENTIAL = `p.${"Ab3_-9xYz0".repeat(4)}Q7w`;
 const BROWSER = "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0";
 const CREDENTIAL_FD = 4;
@@ -21,8 +20,6 @@ const MAX_REQUEST = 16 * 1024 * 1024;
 const TEST_BUILD = "plugin-mode-test";
 const OVERSIZED = "✗ the ardia browse daemon closed the connection before taking the command (see the session log)\n";
 const INSTALL_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b";
-
-if (REQUIRED && !BUILT) throw new Error(`ARDIA_TEST_REQUIRES=ts, and ${PROGRAM} or ${BUILT_LIBC} isn't built`);
 
 type Ran = { status: number | null; signal: NodeJS.Signals | null; stdout: Buffer; stderr: Buffer };
 
