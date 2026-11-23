@@ -14,7 +14,7 @@ const PORT = Number(process.env["ARDIA_M3_PORT_BASE"] ?? "9400") + 12;
 
 const OUTER = (style: string) => `<!doctype html><meta charset="utf-8"><title>Frames</title>
 <style>body{margin:0;font:16px sans-serif} .spacer{height:1400px;background:linear-gradient(#eee,#ccc)} iframe{border:0;width:600px;height:300px;margin-left:120px;display:block} ${style}</style>
-<div class="spacer">top</div><iframe id="outer" src="/inner.html"></iframe><div class="spacer">bottom</div>`;
+<div class="spacer">top</div><iframe id="outer" src="/inner.html"></iframe><div class="veil"></div><div class="spacer">bottom</div>`;
 const INNER = `<!doctype html><meta charset="utf-8"><title>Inner</title>
 <style>body{margin:0;font:16px sans-serif} .pad{height:500px;background:#def} .alert{padding:10px;background:#fee} iframe{border:0;width:400px;height:120px;margin-left:60px;display:block}</style>
 <div class="alert alert-help">Help text up here</div><div class="pad">inner pad</div>
@@ -30,6 +30,8 @@ const LAYOUTS: Record<string, string> = {
   bordered: "iframe#outer{border:12px solid #333;padding:30px 10px 5px 40px}",
   scaled: "iframe#outer{transform:scale(0.75);transform-origin:0 0}",
   everything: "body{zoom:0.9} iframe#outer{border:6px solid #333;padding:20px;transform:scale(0.8);transform-origin:10px 20px}",
+  rotatedUnderVeil:
+    "iframe#outer{transform:rotate(3deg)} .veil{position:absolute;left:0;top:1300px;width:900px;height:600px;background:rgba(0,0,0,0.05);pointer-events:none}",
 };
 
 let root = "";

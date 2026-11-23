@@ -15,7 +15,7 @@ import type { Listener, State } from "../state/state.ts";
 import { monotonic } from "../state/wait.ts";
 import { tokenHex } from "../tokens.ts";
 import { backendsOf } from "../snapshot/collect.ts";
-import { capture, type WatchLike } from "../flows/flowlog.ts";
+import { capture, readableType, type WatchLike } from "../flows/flowlog.ts";
 import { hint } from "../flows/flows.ts";
 import { noteHeader } from "../../notes-files.ts";
 import { pageSite } from "../../notes.ts";
@@ -218,7 +218,7 @@ export class NetworkWatch {
     const mine = () => this.order.slice(from).some((id) => {
       const entry = this.records.get(id);
       if (entry === undefined || entry.done || entry.background || LONG_LIVED.has(entry.type)) return false;
-      return !entry.answered || (entry.method === "GET" && BODY_TYPES.has(entry.type));
+      return !entry.answered || (entry.method === "GET" && BODY_TYPES.has(entry.type) && readableType(entry) !== null);
     });
     while (mine()) {
       if (monotonic() >= deadline) return false;

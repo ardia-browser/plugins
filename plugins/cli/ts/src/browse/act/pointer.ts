@@ -370,7 +370,7 @@ async function outsideItsFrame(page: Page, element: Element, x: number, y: numbe
   if (page.sessionFor(element.frame) !== page.session) return null;
   let hit: Record<string, unknown>;
   try {
-    hit = await page.send("DOM.getNodeForLocation", { x: Math.round(x), y: Math.round(y), includeUserAgentShadowDOM: false, ignorePointerEventsNone: true });
+    hit = await page.send("DOM.getNodeForLocation", { x: Math.round(x), y: Math.round(y), includeUserAgentShadowDOM: false });
   } catch (error) {
     if (error instanceof CdpError || error instanceof Gated) return null;
     throw error;

@@ -174,11 +174,22 @@ describe("review round 3", () => {
     await watch.stop();
   });
 
+  test("a held line doesn't wait for a stream body a flow can't keep", async () => {
+    const [watch, page] = watched();
+    await watch.start();
+    sent(watch, page, "mine", "Fetch", "https://shop.example/api/live");
+    watch.listener(page, "Network.responseReceived", { requestId: "mine", response: { status: 200, mimeType: "text/event-stream" } });
+    const started = performance.now();
+    expect(await watch.settleLine(0)).toBe(true);
+    expect(performance.now() - started).toBeLessThan(100);
+    await watch.stop();
+  });
+
   test("a held line waits for the body of a GET it started, not only its headers", async () => {
     const [watch, page] = watched();
     await watch.start();
     sent(watch, page, "mine", "Fetch", "https://shop.example/api/options");
-    watch.listener(page, "Network.responseReceived", { requestId: "mine", response: { status: 200 } });
+    watch.listener(page, "Network.responseReceived", { requestId: "mine", response: { status: 200, mimeType: "application/json" } });
     setTimeout(() => watch.listener(page, "Network.loadingFinished", { requestId: "mine" }), 60);
     const started = performance.now();
     expect(await watch.settleLine(0)).toBe(true);
