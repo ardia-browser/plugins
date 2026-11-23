@@ -5,7 +5,7 @@ import type { Secrets } from "../redact.ts";
 import type { Call } from "../telemetry.ts";
 import { cleanMetrics, exitOf, outputChars, textOf } from "./answer.ts";
 import { PythonCrash } from "./errors.ts";
-import { AS_TEXT, content, save, savedLine, savedSummary, savesAsCsv, writeFailure } from "./outfile.ts";
+import { AS_TEXT, content, save, savedBody, savedBodyLine, savedLine, savedSummary, savesAsCsv, writeFailure } from "./outfile.ts";
 import type { Printer } from "./output.ts";
 
 type Outcome = { status: number | bigint; crash?: PythonCrash | undefined };
@@ -63,6 +63,20 @@ export function saveAnswer(answer: JsonObject, secrets: Secrets, printer: Printe
   }
   const given = payload.get("data");
   const data: JsonObject = given instanceof Map ? given : new Map();
+  const body = savedBody(command, data);
+  if (body !== null) {
+    let target: string;
+    try {
+      target = save(path, body);
+    } catch (error) {
+      printer.err(`✗ Couldn't write ${path}: ${writeFailure(error)}\n`);
+      return { status: 1 };
+    }
+    call.metrics.set("saved_to_file", true);
+    call.metrics.set("read_binary_saved", true);
+    printer.out(savedBodyLine(target, body, data));
+    return { status: exit };
+  }
   const [text, summary] = content(command, data, path);
   if (savesAsCsv(command, data, path)) call.metrics.set("saved_as_csv", true);
   if (!pyStrip(text)) {

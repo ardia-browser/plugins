@@ -218,7 +218,17 @@ function currentUmask(): number {
   return mask;
 }
 
-export function save(path: string, text: string): string {
+export function savedBody(command: string, data: JsonObject): Uint8Array | null {
+  const encoded = command === "read" ? data.get("bodyBase64") : undefined;
+  return typeof encoded === "string" ? Buffer.from(encoded, "base64") : null;
+}
+
+export function savedBodyLine(target: string, body: Uint8Array, data: JsonObject): string {
+  const kind = data.get("contentType");
+  return `✓ Saved to ${target} (${groupThousands(String(body.length))} bytes${typeof kind === "string" && kind ? `, ${kind}` : ""}), the response body as sent\n`;
+}
+
+export function save(path: string, text: string | Uint8Array): string {
   const target = expandUser(path);
   let folder = false;
   try {
@@ -232,7 +242,8 @@ export function save(path: string, text: string): string {
   try {
     const fd = openSync(temporary, "wx", 0o600);
     try {
-      writeSync(fd, wellFormed(redact(text)));
+      if (typeof text === "string") writeSync(fd, wellFormed(redact(text)));
+      else writeSync(fd, text);
     } finally {
       closeSync(fd);
     }

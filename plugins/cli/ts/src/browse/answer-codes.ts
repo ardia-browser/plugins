@@ -57,6 +57,7 @@ export function codeJsonAnswer(answer: Map<string, Value>, command: string): voi
     if (coded !== undefined) answer.set("out", coded);
     return;
   }
+  if (parsed instanceof Map && parsed.get("success") === true && parsed.has("data")) return;
   if (parsed !== undefined) {
     answer.set("out", errorLine(out.trim()));
     return;
