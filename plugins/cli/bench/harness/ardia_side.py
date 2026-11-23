@@ -99,15 +99,14 @@ def freeze_cli(src, name=""):
     dirty = bool(sh(["git", "-C", str(src), "status", "--porcelain", "--", "."]).stdout.strip())
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     dest = CLI_ROOT / f"{stamp}-{git or 'nogit'}"
-    shutil.copytree(src, dest / "src", ignore=shutil.ignore_patterns("__pycache__", "tests", "bench", ".pytest_cache"))
-    sh(["uv", "venv", "--quiet", "--python", "3.13", str(dest / "venv")], timeout=120).check_returncode()
-    sh(["uv", "pip", "install", "--quiet", "--python", str(dest / "venv/bin/python"), str(dest / "src")],
-       timeout=300).check_returncode()
+    program = dest / "bin" / "ardia"
+    sh(["sh", str(src / "ts" / "scripts" / "build.sh"), "--version", "0.0.0.dev0", "--out", str(program)],
+       timeout=600).check_returncode()
     dev_name({"cli": f"dev:{name}" if name else "dev"})
     dev_bin(name).mkdir(parents=True, exist_ok=True)
     link = dev_bin(name) / "ardia"
     link.unlink(missing_ok=True)
-    link.symlink_to(dest / "venv/bin/ardia")
+    link.symlink_to(program)
     version = sh([str(link), "--version"]).stdout.strip()
     info = {"path": str(dest), "git": git, "dirty": dirty, "version": version,
             "frozen_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds")}

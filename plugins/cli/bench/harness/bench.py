@@ -24,7 +24,7 @@ HELP = f"""Browser-agent bench: Claude Code and Codex driving Ardia through `ard
 
 Commands:
   tasks                         list the registry ({registry.REGISTRY})
-  freeze-cli [--src DIR] [--name N]  snapshot plugins/cli into a venv the runs use (BENCH_HOME/cli, linked from devbin/ardia;
+  freeze-cli [--src DIR] [--name N]  build plugins/cli/ts into a frozen ardia the runs use (BENCH_HOME/cli, linked from devbin/ardia;
                                 with --name, from devbin-N for plans with "cli": "dev:N")
   servers start|stop [TASK...]  start or stop task servers (all tasks when none named); start --port-offset N binds
                                 each port + N (stop stops every offset)
