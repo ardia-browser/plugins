@@ -681,7 +681,8 @@ LIBRARY = r"""
       flush();
       if (collapsed.sections) {
         const kept = lines.reduce((total, line, index) => total + (summaries.includes(index) ? 0 : line.length), 0);
-        if (kept < 400 && collapsed.chars > kept) return api.readable(root);
+        const landmarked = !!(root.ownerDocument || root).querySelector(IN_CONTENT);
+        if (collapsed.chars > kept && (!landmarked || kept < 400)) return api.readable(root);
         hidden.sections += collapsed.sections;
         hidden.chars += collapsed.chars;
       }

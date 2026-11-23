@@ -833,7 +833,8 @@ or links that are mostly `#` anchors on the same page), filters (named so, two o
 sliders or switches, or a dropdown that isn't a language, version or theme switcher), menus whose text is under 100
 characters or is mostly not link text, menus holding a `main`, an `article`, a visible frame or one of those kept menus,
 and everything inside `main` or `article`, also through shadow roots, slots and frames. A page whose
-text outside its menus is under 400 characters and shorter than what they hold, like a sitemap, prints whole. `read -s`
+menus hold more text than the rest of it prints whole when it has no `main` or `article` (a sitemap, a directory of
+links), or when the rest is under 400 characters. `read -s`
 never hides what it was pointed at, and `read <url>` reads `<main>` as before (`--nav` reads the whole body). Agents on
 the WebVoyager control run piped `open --read` through `head`, and the menus came first: on GitHub's home page and an
 Allrecipes search they were a quarter of the text (24% and 26%), and 1 to 6% on the other sites, about 30 to 300

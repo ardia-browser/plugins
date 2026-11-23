@@ -335,6 +335,10 @@ class ReadNavigationInChrome(unittest.TestCase):
         out = self.browse("open", self.url("nav-sitemap.html"), "--read").stdout
         self.assertIn("- Section number 19", out)
         self.assertNotIn("hidden,", out)
+        directory = self.browse("open", self.url("nav-directory.html"), "--read").stdout
+        self.assertIn("Commercial permits can take longer.", directory)
+        self.assertIn("- Permit type 47", directory)
+        self.assertNotIn("hidden,", directory)
 
     def test_menus_that_hold_content_or_controls_stay(self):
         out = self.browse("open", self.url("nav-tricky.html"), "--read").stdout
