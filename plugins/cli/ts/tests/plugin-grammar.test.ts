@@ -1,23 +1,12 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { test } from "bun:test";
 import { splitGlobals, Usage } from "../src/browse/args.ts";
 import { DAEMON_GRAMMAR, daemonParse, type Grammar, pluginVerdict } from "../src/browse/plugin-grammar.ts";
 import { ALIASES } from "../src/browse/tables.ts";
+import { oracle } from "./oracle-fixtures.ts";
 
-const CLI = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
-const PYTHON = process.env.ARDIA_TEST_PYTHON ?? "python3";
-const HELPER = path.join(CLI, "tests", "plugin_grammar.py");
-
-function python(args: string[], input?: unknown): unknown {
-  const run = spawnSync(PYTHON, ["-I", HELPER, ...args], { input: input === undefined ? "" : JSON.stringify(input), encoding: "utf8" });
-  assert.equal(run.status, 0, run.stderr);
-  return JSON.parse(run.stdout);
-}
-
-const CLIENT_WORDS = ["help", "--help", "-h", "--version", "-V"];
+type PythonParse = { command: string; known: boolean; usage?: string; options?: Record<string, unknown>; positionals?: string[] };
+const FROZEN = oracle<{ split: [string[], unknown][]; parse: [string[], PythonParse][]; grammar: Record<string, unknown> }>("plugin-grammar");
 
 const BYPASSES = [
   ["open", "--label", "--", "--read", "https://example.com/"],
@@ -54,20 +43,6 @@ const BYPASSES = [
   ["get", "-\u00b2", "title"],
 ];
 
-function browseArgv(argv: readonly string[]): string[] {
-  const at = argv.indexOf("browse");
-  return argv.slice(at + 1);
-}
-
-function caseArgvs(): string[][] {
-  const out: string[][] = [];
-  for (const file of ["ai-plugin-contract.json", "ai-plugin-review.json"]) {
-    const rows = JSON.parse(readFileSync(path.join(CLI, "tests", "parity", "cases", file), "utf8")) as { argv: string[] }[];
-    for (const row of rows) out.push(browseArgv(row.argv));
-  }
-  return out;
-}
-
 function tsSplit(browse: readonly string[]): unknown {
   try {
     const { found, rest } = splitGlobals(browse);
@@ -81,52 +56,28 @@ function tsSplit(browse: readonly string[]): unknown {
   }
 }
 
-function daemonArgvs(): string[][] {
-  const out: string[][] = [];
-  for (const browse of caseArgvs()) {
-    const split = tsSplit(browse) as { rest?: string[] };
-    const rest = split.rest;
-    if (rest !== undefined && rest.length > 0 && !CLIENT_WORDS.includes(rest[0] as string) && !rest.includes("--help") && !rest.includes("-h")) out.push(rest);
-  }
-  return out;
-}
-
-const GLOBAL_CORPUS = [
-  ["wait", "--state=visible", "#x"],
-  ["wait", "--state", "visible", "#x"],
-  ["--json", "get", "--", "title"],
-  ["--session", "--json", "get", "title"],
-  ["get", "--session"],
-  ["--max-output", "--", "get", "title"],
-  ["--data-dir", "x", "get", "title"],
-];
-
 test("the client's global split agrees with Python's on every case, rejections included", () => {
-  const corpus = [...GLOBAL_CORPUS, ...caseArgvs()];
-  const expected = python(["split"], corpus) as unknown[];
-  corpus.forEach((browse, index) => {
+  assert.ok(FROZEN.split.length > 100);
+  FROZEN.split.forEach(([browse, want]) => {
     const ours = tsSplit(browse) as { rest?: string[] };
     const command = ours.rest?.find((word) => !word.startsWith("-"));
     if (command === "wait" && (ours.rest ?? []).some((word) => word === "--state" || word.startsWith("--state="))) {
-      assert.match((expected[index] as { usage?: string }).usage ?? "", /--state doesn't apply to Ardia/, JSON.stringify(browse));
+      assert.match((want as { usage?: string }).usage ?? "", /--state doesn't apply to Ardia/, JSON.stringify(browse));
       return;
     }
-    assert.deepEqual(ours, expected[index], JSON.stringify(browse));
+    assert.deepEqual(ours, want, JSON.stringify(browse));
   });
 });
 
-type PythonParse = { command: string; known: boolean; usage?: string; options?: Record<string, unknown>; positionals?: string[] };
-
 test("the guard's grammar table is the daemon's, read from its command functions", () => {
   const names = Object.keys(DAEMON_GRAMMAR);
-  assert.deepEqual(python(["grammar", ...names]), Object.fromEntries(names.map((name) => [name, DAEMON_GRAMMAR[name]])));
+  assert.deepEqual(FROZEN.grammar, Object.fromEntries(names.map((name) => [name, DAEMON_GRAMMAR[name]])));
 });
 
 test("the guard parses every daemon argv exactly as Python's parse() does", () => {
-  const corpus = [...BYPASSES, ...daemonArgvs()];
-  const expected = python(["parse"], corpus) as PythonParse[];
-  corpus.forEach((rest, index) => {
-    const want = expected[index] as PythonParse;
+  assert.deepEqual(FROZEN.parse.slice(0, BYPASSES.length).map(([rest]) => rest), BYPASSES);
+  assert.ok(FROZEN.parse.length > 100);
+  FROZEN.parse.forEach(([rest, want]) => {
     const name = ALIASES[rest[0] as string] ?? (rest[0] as string);
     assert.equal(want.command, name, JSON.stringify(rest));
     const grammar = DAEMON_GRAMMAR[name] as Grammar | undefined;

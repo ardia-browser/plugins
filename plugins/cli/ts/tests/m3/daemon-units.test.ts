@@ -1,16 +1,16 @@
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { Cancelled } from "../../src/browse/cdp/cancel.ts";
 import { BadConfig, parseConfig } from "../../src/browse/daemon/config.ts";
 import { FifoLock } from "../../src/browse/daemon/lock.ts";
-import { cap, capNotice, encodeAnswer, joinedBatch, MAX_RESPONSE, render, Result, spillFolder } from "../../src/browse/daemon/render.ts";
+import { cap, capNotice, encodeAnswer, joinedBatch, MAX_RESPONSE, render, Result, SPILL_KEEP, spillFolder } from "../../src/browse/daemon/render.ts";
 import { BrowseError, ConnectionLost } from "../../src/browse/daemon-errors.ts";
-import { browseDir, closeFd, sessionKey } from "../../src/browse/paths.ts";
+import { browseDir, closeFd, sessionKey, takeLock } from "../../src/browse/paths.ts";
 import { Registry } from "../../src/browse/state/registry.ts";
 import { seedTokens, tokenHex } from "../../src/browse/tokens.ts";
-import { CLI_DIR, PYTHON, type Scratch, scratch } from "./daemon-helpers.ts";
+import { oracle } from "../oracle-fixtures.ts";
+import { type Scratch, scratch } from "./daemon-helpers.ts";
 
 setDefaultTimeout(60_000);
 const made: Scratch[] = [];
@@ -19,44 +19,40 @@ afterAll(() => {
   for (const found of made.splice(0)) found.done();
 });
 
-function python(code: string, input: unknown, env: Record<string, string> = {}): unknown {
-  const done = spawnSync(PYTHON, ["-I", "-c", `import sys, json; sys.path.insert(0, ${JSON.stringify(CLI_DIR)})\n${code}`], {
-    input: JSON.stringify(input),
-    env: { ...process.env, ...env },
-    encoding: "utf8",
-    maxBuffer: 256 * 1024 * 1024,
-  });
-  if (done.status !== 0) throw new Error(done.stderr);
-  return JSON.parse(done.stdout);
-}
+type CapCase = { text: string; options: Record<string, unknown>; name: string };
+type RenderCase = { error?: unknown[]; result?: unknown[]; options: Record<string, unknown>; name: string };
+const FROZEN = oracle<{
+  tmp_mark: string;
+  uid_mark: string;
+  cap: [CapCase, [string, string]][];
+  render: [RenderCase, [number, string, string]][];
+  session_key: [[string, string, string], string][];
+  tokens: { seed: number; sizes: number[]; hex: string[] };
+}>("daemon-units");
 
 describe("render", () => {
-  const texts = ["short", "x".repeat(12001), `${"line\n".repeat(3000)}tail`, `${"é😀".repeat(7000)}`, `${"a\n".repeat(5000)}${"b".repeat(3000)}`];
-  const optionSets = [{}, { full: true }, { max_output: 100 }, { max_output: 0 }];
-
   test("cap, its notice and the spill match Python's", () => {
     const found = scratch();
     made.push(found);
-    const tmp = path.join(found.root, "tmp");
+    const tmp = path.join(fs.realpathSync(found.root), "tmp");
     fs.mkdirSync(tmp);
     const previous = process.env["TMPDIR"];
     process.env["TMPDIR"] = tmp;
     try {
-      const cases = texts.flatMap((text) => optionSets.flatMap((options) => ["get", "script", "snapshot", "other"].map((name) => ({ text, options, name }))));
-      const expected = python(
-        "from ardia_cli.browse import daemon\ncases = json.load(sys.stdin)\nout = []\nfor c in cases:\n    t = daemon.cap(c['text'], c['options'], c['name'])\n    out.append([t, daemon.cap_notice(t)])\nprint(json.dumps(out))",
-        cases,
-        { TMPDIR: tmp },
-      ) as [string, string][];
-      const mask = (text: string) => text.replace(/output-[a-z0-9_]{8}\.txt/gu, "output-X.txt");
-      cases.forEach((one, index) => {
+      const folder = path.join(tmp, `ardia-browse-output-${process.getuid?.()}`);
+      const mask = (text: string) => text.replace(/output-[a-z0-9_]{8}\.txt/gu, "output-X.txt").replaceAll(folder, `${FROZEN.tmp_mark}/ardia-browse-output-${FROZEN.uid_mark}`);
+      expect(FROZEN.cap.length).toBe(80);
+      let spilled = 0;
+      for (const [one, [text, notice]] of FROZEN.cap) {
         const got = cap(one.text, one.options, one.name);
-        expect(mask(got)).toBe(mask((expected[index] as [string, string])[0]));
-        expect(mask(capNotice(got))).toBe(mask((expected[index] as [string, string])[1]));
-      });
-      expect(spillFolder()).toBe(path.join(tmp, `ardia-browse-output-${process.getuid?.()}`));
+        expect(mask(got)).toBe(text);
+        expect(mask(capNotice(got))).toBe(notice);
+        if (text.includes(FROZEN.tmp_mark)) spilled += 1;
+      }
+      expect(spillFolder()).toBe(folder);
       const saved = fs.readdirSync(spillFolder());
-      expect(saved.length).toBe(40);
+      expect(spilled).toBeGreaterThan(0);
+      expect(saved.length).toBe(Math.min(spilled, SPILL_KEEP));
       expect(fs.statSync(spillFolder()).mode & 0o777).toBe(0o700);
     } finally {
       if (previous === undefined) delete process.env["TMPDIR"];
@@ -65,35 +61,8 @@ describe("render", () => {
   });
 
   test("errors and results render as Python's do", () => {
-    const cases = [
-      { error: ["Gone", null, null, "plain"], options: {}, name: "get" },
-      { error: ["Gone", { tabId: "t1" }, "tab_gone", "plain"], options: { json: true }, name: "get" },
-      { error: ["Ardia closed the connection (Stop was pressed, control was turned off, or Ardia quit)", null, "connection_lost", "lost"], options: {}, name: "open" },
-      { error: ["bell \u0007 in it", null, null, "plain"], options: {}, name: "wait" },
-      { result: [{ title: "T\u0085x", n: 3, f: 1.5, l: [1, true, null] }, "T\u0085x", true], options: {}, name: "get" },
-      { result: [{ title: "T\u0085x", n: 3, f: 1.5 }, "T", true], options: { json: true }, name: "get" },
-      { result: [{ ms: 50, waited: "timeout" }, "✓ Done", false], options: {}, name: "wait" },
-      { result: [{}, null, false], options: {}, name: "wait" },
-    ];
-    const expected = python(
-      [
-        "from ardia_cli.browse import daemon",
-        "from ardia_cli.browse.commands import Result",
-        "from ardia_cli.browse.errors import BrowseError, ConnectionLost",
-        "out = []",
-        "for c in json.load(sys.stdin):",
-        "    if 'error' in c:",
-        "        m, d, code, kind = c['error']",
-        "        e = ConnectionLost() if kind == 'lost' else BrowseError(m, d, code)",
-        "        out.append(daemon.render(c['options'], error=e, name=c['name']))",
-        "    else:",
-        "        data, text, page = c['result']",
-        "        out.append(daemon.render(c['options'], result=Result(data, text, page), name=c['name']))",
-        "print(json.dumps(out))",
-      ].join("\n"),
-      cases,
-    ) as [number, string, string][];
-    cases.forEach((one, index) => {
+    expect(FROZEN.render.length).toBe(8);
+    for (const [one, want] of FROZEN.render) {
       let got;
       if (one.error) {
         const [message, data, code, kind] = one.error as [string, Record<string, unknown> | null, string | null, string];
@@ -102,8 +71,8 @@ describe("render", () => {
         const [data, text, page] = one.result as [unknown, string | null, boolean];
         got = render(one.options, new Result(data, text, page), null, one.name);
       }
-      expect(got).toEqual(expected[index] as [number, string, string]);
-    });
+      expect(got).toEqual(want);
+    }
   });
 
   test("an answer over the limit becomes the too-large error, and the real limit is 256 MB", () => {
@@ -155,20 +124,19 @@ describe("the command lock", () => {
 
 describe("files shared with Python", () => {
   test("session keys match", () => {
-    const cases = [["", "port:9222", "default"], ["team", "ws:ws://127.0.0.1:1/devtools/browser/x", "s.1"], ["", "token:/tmp/é", "a"]];
-    const expected = python("from ardia_cli.browse import paths\nprint(json.dumps([paths.session_key(*c) for c in json.load(sys.stdin)]))", cases);
-    expect(cases.map(([a, b, c]) => sessionKey(a as string, b as string, c as string))).toEqual(expected as string[]);
+    expect(FROZEN.session_key.length).toBe(3);
+    expect(FROZEN.session_key.map(([[a, b, c]]) => sessionKey(a, b, c))).toEqual(FROZEN.session_key.map(([, want]) => want));
   });
 
   test("seeded tokens match the harness's Python tokens", () => {
-    seedTokens(1234);
-    const ours = [tokenHex(8), tokenHex(14), tokenHex(4)];
+    const { seed, sizes, hex } = FROZEN.tokens;
+    seedTokens(seed);
+    const ours = sizes.map((size) => tokenHex(size));
     seedTokens(null);
-    const expected = python("import random\nt = random.Random(1235)\nprint(json.dumps([t.randbytes(8).hex(), t.randbytes(14).hex(), t.randbytes(4).hex()]))", null);
-    expect(ours).toEqual(expected as string[]);
+    expect(ours).toEqual(hex);
   });
 
-  test("the tab registry reads and writes the same file as Python's", () => {
+  test("two registries share one file, each seeing the other's tabs", () => {
     const found = scratch();
     made.push(found);
     const dir = browseDir(found.data);
@@ -180,22 +148,17 @@ describe("files shared with Python", () => {
       registry.noteOpened("inst", "T1");
       registry.noteUsing("inst", "T2");
       expect([...numbers]).toEqual([["T1", "t1"], ["T2", "t2"]]);
-      const fromPython = python(
-        [
-          "import os, fcntl",
-          "from ardia_cli.browse import paths",
-          "from ardia_cli.browse.tabs import Registry",
-          "root = json.load(sys.stdin)",
-          "fd = paths.browse_dir(__import__('pathlib').Path(root))",
-          "held = paths.take_lock('" + "a".repeat(24) + ".lock', fd)",
-          "r = Registry(fd, 'b' * 24, 'py-side')",
-          "nums = r.numbers('inst', ['T2', 'T3'])",
-          "opened, using = r.others('inst')",
-          "print(json.dumps({'numbers': nums, 'opened': opened, 'using': using}))",
-        ].join("\n"),
-        found.data,
-      ) as Record<string, unknown>;
-      expect(fromPython).toEqual({ numbers: { T2: "t2", T3: "t3" }, opened: { T1: "ts-side" }, using: { T2: ["ts-side"] } });
+      const held = takeLock(`${"a".repeat(24)}.lock`, dir);
+      expect(held).not.toBeNull();
+      const other = new Registry(dir, "b".repeat(24), "py-side");
+      const otherNumbers = other.numbers("inst", ["T2", "T3"]);
+      const [opened, using] = other.others("inst");
+      closeFd(held as number);
+      expect({ numbers: Object.fromEntries(otherNumbers), opened: Object.fromEntries(opened), using: Object.fromEntries(using) }).toEqual({
+        numbers: { T2: "t2", T3: "t3" },
+        opened: { T1: "ts-side" },
+        using: { T2: ["ts-side"] },
+      });
       const file = fs.readdirSync(found.browse).find((name) => name.startsWith("tabs-")) as string;
       expect(file).toBe(Registry.fileFor("inst"));
       const text = fs.readFileSync(path.join(found.browse, file), "utf8");

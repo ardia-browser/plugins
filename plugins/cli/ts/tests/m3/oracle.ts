@@ -49,18 +49,10 @@ function runPure(name: string, input: string): string {
   return dumps(results, "compact", true);
 }
 
-async function main(): Promise<number> {
-  const name = process.argv[2] ?? "";
-  const input = await Bun.stdin.text();
-  if (Object.hasOwn(PURE, name)) {
-    process.stdout.write(runPure(name, input));
-    return 0;
-  }
+export function answers(name: string, input: string): string {
+  if (Object.hasOwn(PURE, name)) return runPure(name, input);
   const twin = FUNCTIONS[name];
-  if (!twin) {
-    process.stderr.write(`oracle.ts: no TypeScript twin registered for ${JSON.stringify(name)}\n`);
-    return 2;
-  }
+  if (!twin) throw new Error(`oracle.ts: no TypeScript twin registered for ${JSON.stringify(name)}`);
   const cases = JSON.parse(input) as unknown[][];
   const results = cases.map((args) => {
     try {
@@ -69,8 +61,13 @@ async function main(): Promise<number> {
       return { error: errorName(error) };
     }
   });
-  process.stdout.write(JSON.stringify(results));
-  return 0;
+  return JSON.stringify(results);
 }
 
-process.exitCode = await main();
+if (import.meta.main) {
+  const name = process.argv[2] ?? "";
+  if (!Object.hasOwn(PURE, name) && !FUNCTIONS[name]) {
+    process.stderr.write(`oracle.ts: no TypeScript twin registered for ${JSON.stringify(name)}\n`);
+    process.exitCode = 2;
+  } else process.stdout.write(answers(name, await Bun.stdin.text()));
+}

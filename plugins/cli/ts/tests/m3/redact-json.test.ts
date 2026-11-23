@@ -1,13 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
 import { Result } from "../../src/browse/daemon/render.ts";
 import { render } from "../../src/browse/daemon/render.ts";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { addSecret, clearSecrets, redact, RedactingStream, Secrets } from "../../src/redact.ts";
+import { type FrozenFunctions, frozenFunctionReports, oracle } from "../oracle-fixtures.ts";
 
-const PYTHON = process.env["ARDIA_TEST_PYTHON"] ?? "python3";
-const FIXED_PATTERN = String.raw`(token=)[^&\s'"<>\\]+`;
+const ORACLE = new URL("./oracle.ts", import.meta.url).pathname;
 
 describe("test_browse_review.TokenNeverPrinted (plugins#3)", () => {
   test("test_json_output_stays_valid_when_a_masked_value_ends_at_an_escaped_quote", () => {
@@ -68,12 +65,9 @@ describe("masking finished JSON keeps it JSON", () => {
   });
 
   test("the mask matches plugins#3's fixed Python pattern exactly", () => {
-    const random = seeded(7);
-    const texts = Array.from({ length: 400 }, () => JSON.stringify({ k: sample(random) }));
-    const code = "import json, re, sys\npattern = re.compile(sys.argv[1])\nprint(json.dumps([pattern.sub(lambda m: m.group(1) + '***', t) for t in json.load(sys.stdin)]))";
-    const done = spawnSync(PYTHON, ["-I", "-c", code, FIXED_PATTERN], { input: JSON.stringify(texts), encoding: "utf8" });
-    expect(done.stderr).toBe("");
-    expect(texts.map((text) => redact(text))).toEqual(JSON.parse(done.stdout));
+    const { rows } = oracle<{ rows: [string, string][] }>("redact-json");
+    expect(rows.length).toBe(400);
+    expect(rows.map(([text]) => redact(text))).toEqual(rows.map(([, masked]) => masked));
   });
 });
 
@@ -412,11 +406,14 @@ describe("bare scalars mask as redact.py does (plugins#104)", () => {
     }
   });
 
-  test("redact and redact.stream agree with redact.py on 2,000 generated cases at fixed seeds", () => {
-    const cli = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
-    for (const [name, seed] of [["redact.stream", "1"], ["redact.stream", "5"], ["redact.redact", "4"]] as const) {
-      const done = spawnSync(PYTHON, ["-m", "tests.m3.pure", name, "--generated", "2000", "--seed", seed], { cwd: cli, encoding: "utf8", timeout: 240_000 });
-      expect(`${done.stdout}${done.stderr}`).toContain(`${name}: 2000 of 2000 cases agree`);
+  test("redact and redact.stream agree with redact.py on 2,000 generated cases at fixed seeds", async () => {
+    const { count, runs } = oracle<{ count: number; runs: { name: string; seed: number; cases: string; expected: string }[] }>("redact-seeds");
+    expect(runs.map((run) => `${run.name}@${run.seed}`)).toEqual(["redact.stream@1", "redact.stream@5", "redact.redact@4"]);
+    for (const run of runs) {
+      const frozen: FrozenFunctions = { count, functions: { [run.name]: { cases: run.cases, expected: run.expected } } };
+      const { reports, cases } = await frozenFunctionReports(frozen, ORACLE, 1);
+      expect(reports.join("\n\n"), `${run.name} at seed ${run.seed}`).toBe("");
+      expect(cases).toBe(count);
     }
   }, 300_000);
 });

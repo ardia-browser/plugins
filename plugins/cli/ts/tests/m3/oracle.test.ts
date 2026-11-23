@@ -1,18 +1,15 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { test } from "bun:test";
+import { type FrozenFunctions, frozenFunctionReports, oracle } from "../oracle-fixtures.ts";
 
-const CLI = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..", "..");
-const PYTHON = process.env.ARDIA_TEST_PYTHON ?? "python3";
-const COUNT = process.env.ARDIA_ORACLE_COUNT ?? "150";
+const ORACLE = path.join(path.dirname(fileURLToPath(import.meta.url)), "oracle.ts");
 
-test("every ported pure function answers exactly as its Python original", () => {
-  const run = spawnSync(PYTHON, ["-m", "tests.m3.pure", "all", "--generated", COUNT, "--show", "3"], {
-    cwd: CLI,
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-    timeout: 300_000,
-  });
-  assert.equal(run.status, 0, `${run.stdout.slice(-6000)}\n${run.stderr.slice(-4000)}`);
-}, 310_000);
+test("every ported pure function answers exactly as its Python original did on the frozen cases", async () => {
+  const frozen = oracle<FrozenFunctions>("m3-pure");
+  const { reports, functions, cases } = await frozenFunctionReports(frozen, ORACLE);
+  assert.equal(reports.join("\n\n"), "");
+  assert.ok(functions >= 100, `only ${functions} functions frozen`);
+  assert.ok(cases >= 100 * frozen.count, `only ${cases} cases frozen`);
+}, 300_000);

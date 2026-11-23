@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
 import { Cancelled, withSignal } from "../../src/browse/cdp/cancel.ts";
 import { BrowseError, Gated, OutcomeUnknown, Usage } from "../../src/browse/daemon-errors.ts";
 import { Result } from "../../src/browse/daemon/render.ts";
@@ -7,6 +6,7 @@ import { Ctx } from "../../src/browse/commands/ctx.ts";
 import { dispatch, hooks, OWNERS, register, served } from "../../src/browse/commands/all.ts";
 import { Element, Page, WORLD_NAME } from "../../src/browse/state/page.ts";
 import { parseRef, PROBE_FANOUT } from "../../src/browse/state/state.ts";
+import { oracle } from "../oracle-fixtures.ts";
 import { cdpError, FakeBrowser, frameTree, LOADER, MAIN, stateWith, timeout } from "./core-helpers.ts";
 
 const NEVER_ON_PAGES = ["Runtime.enable", "Debugger.enable", "Console.enable"];
@@ -401,13 +401,8 @@ describe("the command table", () => {
   const TYPESCRIPT_ONLY = ["links"];
 
   test("every Python command is in the table and served", async () => {
-    const python = process.env["ARDIA_TEST_PYTHON"] ?? "python3";
-    const listed = spawnSync(python, ["-c", "from ardia_cli.browse import commands, capture, audit, flows, react, media; print('\\n'.join(sorted(commands.COMMANDS)))"], {
-      cwd: new URL("../../..", import.meta.url).pathname,
-      encoding: "utf8",
-    });
-    expect(listed.status).toBe(0);
-    const names = listed.stdout.trim().split("\n");
+    const names = oracle<{ commands: string[] }>("core").commands;
+    expect(names.length).toBeGreaterThan(50);
     const fullControl = names.includes("cdp") ? [] : ["cdp"];
     expect(Object.keys(OWNERS).sort()).toEqual([...names, "auth", ...fullControl, ...TYPESCRIPT_ONLY].sort());
     expect(Object.keys(OWNERS).filter((name) => !served(name))).toEqual([]);

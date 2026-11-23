@@ -1,5 +1,5 @@
 import { afterAll, afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { type ChildProcess, spawn, spawnSync } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { Cancelled, withSignal } from "../../src/browse/cdp/cancel.ts";
@@ -14,7 +14,8 @@ import { browseDir, closeFd } from "../../src/browse/paths.ts";
 import * as temptabs from "../../src/browse/state/temptabs.ts";
 import { dumps } from "../../src/json.ts";
 import { BUILT_LIBC } from "../libc-loaded.ts";
-import { config, PYTHON, type Scratch, scratch, socketFile, staleSocket, until, quietWatchdog } from "./daemon-helpers.ts";
+import { oracle } from "../oracle-fixtures.ts";
+import { config, type Scratch, scratch, socketFile, staleSocket, until, quietWatchdog } from "./daemon-helpers.ts";
 
 setDefaultTimeout(60_000);
 const home = process.cwd();
@@ -259,36 +260,9 @@ describe("the command lock", () => {
 });
 
 describe("ARDIA_PORT reads as Python's int", () => {
-  const SAMPLES = [
-    "9222", "+9222", "-5", "9_222", "_9222", "9222_", "9__222", "+_9", " 9222 ", "\t9222\n", "\u00859222", "﻿9222", " 9222　",
-    " " + "9222", "​9222", "９２２２", "٣", "9٣", "0009222", "99999999999999999999999", "", " ", "+", "9 222",
-    "9.0", "0x10", "1e3", "\x1c9\x1f", "٣_٣", "9²", "Ⅸ", "\ud800", "a'b\"c",
-  ];
-
-  function fuzz(count: number): string[] {
-    const pieces = ["0", "1", "9", "０", "٩", "_", "+", "-", " ", "\t", "\u0085", "﻿", " ", " ", "a", "\x1c", "'", "²"];
-    let seed = 7;
-    const next = () => {
-      seed = (seed * 1103515245 + 12345) % 2147483648;
-      return seed;
-    };
-    return Array.from({ length: count }, () => Array.from({ length: next() % 7 }, () => pieces[next() % pieces.length]).join(""));
-  }
-
   test("on the review's inputs and 2,000 fuzzed ones, value and message match Python 3.13", () => {
-    const inputs = [...SAMPLES, ...fuzz(2000)];
-    const done = spawnSync(
-      PYTHON,
-      [
-        "-I",
-        "-c",
-        "import sys, json\nout = []\nfor text in json.load(sys.stdin):\n    try:\n        out.append(['ok', str(int(text))])\n    except ValueError:\n        out.append(['err', f'ARDIA_PORT must be a port number, not {text!r}'])\nprint(json.dumps(out))",
-      ],
-      { input: JSON.stringify(inputs), encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
-    );
-    expect(done.status).toBe(0);
-    const expected = JSON.parse(done.stdout) as [string, string][];
-    const ours = inputs.map((text): [string, string] => {
+    const frozen = oracle<{ ports: [string, [string, string]][] }>("daemon-review3").ports;
+    const ours = frozen.map(([text]): [string, string] => {
       try {
         return ["ok", String(portNumber(text))];
       } catch (error) {
@@ -296,7 +270,8 @@ describe("ARDIA_PORT reads as Python's int", () => {
         return ["err", (error as Error).message];
       }
     });
-    const differ = inputs.map((text, index) => ({ text, ours: ours[index], python: expected[index] })).filter((row) => JSON.stringify(row.ours) !== JSON.stringify(row.python));
+    const differ = frozen.map(([text, python], index) => ({ text, ours: ours[index], python })).filter((row) => JSON.stringify(row.ours) !== JSON.stringify(row.python));
     expect(differ).toEqual([]);
+    expect(frozen.length).toBe(2033);
   });
 });

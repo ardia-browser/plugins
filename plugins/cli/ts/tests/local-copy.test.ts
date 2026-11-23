@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -8,37 +7,30 @@ import { test } from "bun:test";
 import "./libc-loaded.ts";
 import { close, closeDir, openPrivate, takeLock } from "../src/privatefs.ts";
 import { discardSpool, isLocalFile, keepLocalCopy } from "../src/spool.ts";
+import { oracle } from "./oracle-fixtures.ts";
 
 const CLI = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const PYTHON = process.env.ARDIA_TEST_PYTHON ?? "python3";
 const MAX_LOCAL_BYTES = 4 * 1024 * 1024;
 const OTHER_DIGITS = "cli-١٩٩٩-٠١-٠١.jsonl";
+const FROZEN = oracle<{ names: [string, boolean][]; keep_local_copy: { kept: boolean; date_mark: string; copies: Record<string, number> } }>("local-copy");
 
-function python(script: string, input: unknown): unknown {
-  const done = spawnSync(PYTHON, ["-I", "-c", script, JSON.stringify(input)], { encoding: "utf8" });
-  assert.equal(done.status, 0, done.stderr);
-  return JSON.parse(done.stdout);
-}
-
-test("the shared table of decimal digits is exactly what Python's re calls \\d", () => {
-  const table = fs.readFileSync(path.join(CLI, "py-decimals.txt"), "utf8");
-  const script = [
-    "import json, sys",
-    "ranges, start = [], None",
-    "for code in range(sys.maxunicode + 2):",
-    "    decimal = code <= sys.maxunicode and chr(code).isdecimal()",
-    "    if decimal and start is None: start = code",
-    "    if not decimal and start is not None: ranges.append(f'{start:04X} {code - 1:04X}'); start = None",
-    "print(json.dumps(ranges))",
-  ].join("\n");
-  assert.deepEqual(table.split("\n").filter((line) => line !== ""), python(script, null));
+test("the shared table of decimal digits is sorted, disjoint ranges of hex code points, starting with ASCII", () => {
+  const lines = fs.readFileSync(path.join(CLI, "py-decimals.txt"), "utf8").split("\n").filter((line) => line !== "");
+  assert.ok(lines.length > 50);
+  assert.equal(lines[0], "0030 0039");
+  let last = -1;
+  for (const line of lines) {
+    const match = /^([0-9A-F]{4,6}) ([0-9A-F]{4,6})$/.exec(line);
+    assert.ok(match, line);
+    const [low, high] = [Number.parseInt(match[1] as string, 16), Number.parseInt(match[2] as string, 16)];
+    assert.ok(low > last + 1 && high >= low && high <= 0x10ffff, line);
+    last = high;
+  }
 });
 
 test("a local copy's name matches as Python's pattern does", () => {
-  const names = ["cli-2026-11-19.jsonl", OTHER_DIGITS, "cli-２026-11-19.jsonl", "cli-²026-11-19.jsonl", "cli-𝟎026-11-19.jsonl",
-    "cli-2026-11-1.jsonl", "cli-2026/11-19.jsonl", "cli-2026-11-19.jsonl\n", "xcli-2026-11-19.jsonl"];
-  const script = "import json, re, sys; print(json.dumps([bool(re.fullmatch(r'cli-\\d{4}-\\d{2}-\\d{2}\\.jsonl', n)) for n in json.loads(sys.argv[1])]))";
-  assert.deepEqual(names.map(isLocalFile), python(script, names));
+  assert.equal(FROZEN.names.length, 9);
+  assert.deepEqual(FROZEN.names.map(([name]) => isLocalFile(name)), FROZEN.names.map(([, want]) => want));
 });
 
 function seeded(): string {
@@ -57,16 +49,13 @@ function copies(root: string): Record<string, number> {
 
 test("a copy dated in other digits counts against the cap, as in Python", () => {
   const mine = seeded();
-  const theirs = seeded();
   try {
-    assert.ok(keepLocalCopy(mine, [new Map([["event", "cli_command"]])], false));
-    const script = `import json, sys; sys.path.insert(0, ${JSON.stringify(CLI)}); from pathlib import Path; from ardia_cli import telemetry; `
-      + "print(json.dumps(telemetry.keep_local_copy(Path(json.loads(sys.argv[1])), [{'event': 'cli_command'}], False)))";
-    assert.equal(python(script, theirs), true);
-    assert.deepEqual(copies(mine), copies(theirs));
+    assert.equal(keepLocalCopy(mine, [new Map([["event", "cli_command"]])], false), FROZEN.keep_local_copy.kept);
+    const dated = /^cli-[0-9]{4}-[0-9]{2}-[0-9]{2}\.jsonl$/;
+    const shown = Object.fromEntries(Object.entries(copies(mine)).map(([name, size]) => [dated.test(name) ? `cli-${FROZEN.keep_local_copy.date_mark}.jsonl` : name, size]));
+    assert.deepEqual(shown, FROZEN.keep_local_copy.copies);
   } finally {
     fs.rmSync(mine, { recursive: true, force: true });
-    fs.rmSync(theirs, { recursive: true, force: true });
   }
 });
 

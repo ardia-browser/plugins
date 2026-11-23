@@ -1,6 +1,5 @@
 import "../libc-loaded.ts";
 import { afterEach, describe, expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import net from "node:net";
@@ -15,9 +14,9 @@ import { begin } from "../../src/browse/metrics.ts";
 import { State } from "../../src/browse/state/state.ts";
 import { FakeBrowser, frameTree, MAIN, stateWith } from "./core-helpers.ts";
 import { controlFilePath } from "../../src/browse/endpoint.ts";
+import { oracle } from "../oracle-fixtures.ts";
 
-const PYTHON = process.env["ARDIA_TEST_PYTHON"] ?? "python3";
-const CLI = new URL("../../..", import.meta.url).pathname;
+const FROZEN = oracle<{ root_mark: string; review2: { paths: [string, string][]; digits: { tokens: string[]; expected: unknown[] } } }>("core");
 const cleanups: (() => void)[] = [];
 
 afterEach(() => {
@@ -29,13 +28,6 @@ function failure(promise: Promise<unknown>): Promise<unknown> {
     () => null,
     (error: unknown) => error,
   );
-}
-
-function python(code: string, ...args: string[]): string {
-  const done = spawnSync(PYTHON, ["-c", code, ...args], { cwd: CLI, encoding: "utf8" });
-  expect(done.stderr).toBe("");
-  expect(done.status).toBe(0);
-  return done.stdout.trim();
 }
 
 describe("1: every page call is bound to its world's handle", () => {
@@ -248,8 +240,9 @@ describe("6: paths resolve exactly like CPython 3.13's realpath", () => {
     fs.symlinkSync(path.join(root, "realdir", "deep"), path.join(root, "link"));
     fs.symlinkSync("../realdir", path.join(root, "realdir", "back"));
     const ctx = new Ctx(stateWith(new FakeBrowser()), {}, root, {}, null);
-    for (const given of ["loop/../link/out", "link/../out", "loop/x/../y", "realdir/back/back/deep/../z", "missing/../link/./out/", "/../..//link"]) {
-      const expected = python("import sys; from pathlib import Path; print(Path(sys.argv[1], sys.argv[2]).resolve())", root, given);
+    expect(FROZEN.review2.paths.length).toBe(6);
+    for (const [given, want] of FROZEN.review2.paths) {
+      const expected = want.startsWith(FROZEN.root_mark) ? root + want.slice(FROZEN.root_mark.length) : want;
       expect([given, ctx.path(given)]).toEqual([given, expected]);
     }
   });
@@ -301,13 +294,8 @@ describe("9: digits follow the pinned Python's Unicode tables", () => {
   test("U+1E5F1 isn't a digit to Python 3.13; Arabic-Indic digits are", () => {
     const newer = String.fromCodePoint(0x1e5f1);
     const arabic = "٣";
-    const expected = JSON.parse(
-      python(
-        "import json, sys\nfrom ardia_cli.browse import commands\nout = []\nfor token in sys.argv[1:]:\n    try:\n        out.append(['ok', commands.parse([token])[1]])\n    except Exception as error:\n        out.append(['usage', str(error)])\nout.append(commands.normalize_url('127.0.0.1:' + sys.argv[1][1:]))\nout.append(commands.normalize_url('127.0.0.1:' + sys.argv[2][1:]))\nprint(json.dumps(out))",
-        `-${newer}`,
-        `-${arabic}`,
-      ),
-    );
+    expect(FROZEN.review2.digits.tokens).toEqual([`-${newer}`, `-${arabic}`]);
+    const expected = FROZEN.review2.digits.expected;
     const got: unknown[] = [];
     for (const token of [`-${newer}`, `-${arabic}`]) {
       try {

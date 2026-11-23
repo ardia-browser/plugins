@@ -12,28 +12,11 @@ import { FakeBrowser, stateWith } from "./core-helpers.ts";
 import { BrowseError, CdpError, ConnectionLost } from "../../src/browse/daemon-errors.ts";
 import { fieldValues } from "../../src/browse/snapshot/collect.ts";
 import { Cancelled, withSignal } from "../../src/browse/cdp/cancel.ts";
+import { oracle } from "../oracle-fixtures.ts";
 
-const PYTHON = process.env["ARDIA_TEST_PYTHON"] ?? "python3";
+type Decoded = string | { error: string };
+const FROZEN = oracle<{ codecs: [string, string, Decoded][]; utf: [string, string, Decoded][] }>("read-net");
 const NAMES = Object.keys((CODECS as { names: Record<string, string> }).names);
-
-function seeded(seed: number): () => number {
-  let state = seed >>> 0;
-  return () => {
-    state = (state * 1664525 + 1013904223) >>> 0;
-    return state / 2 ** 32;
-  };
-}
-
-function pythonDecodes(cases: [string, string][]): (string | { error: string })[] {
-  const script =
-    "import json,sys\nout=[]\nfor hexed,name in json.load(sys.stdin):\n" +
-    "  try: out.append(bytes.fromhex(hexed).decode(name, errors='replace'))\n" +
-    "  except Exception as e: out.append({'error': type(e).__name__ + ': ' + str(e)})\n" +
-    "sys.stdout.write(json.dumps(out))";
-  const done = spawnSync(PYTHON, ["-I", "-c", script], { input: JSON.stringify(cases), maxBuffer: 1 << 28 });
-  if (done.status !== 0) throw new Error(String(done.stderr));
-  return JSON.parse(String(done.stdout));
-}
 
 function tsDecode(hexed: string, name: string): string | { error: string } {
   try {
@@ -45,47 +28,29 @@ function tsDecode(hexed: string, name: string): string | { error: string } {
 
 describe("charset decoding against CPython", () => {
   test("every codec name and spelling resolves to Python's codec or Python's LookupError", () => {
-    const random = seeded(7);
-    const cases: [string, string][] = [];
-    const spellings = (name: string) => [name, name.toUpperCase(), name.replaceAll("_", "-"), name.replaceAll("_", " "), `${name}-`, `x${name}`];
-    for (const name of [...NAMES, "utf8", "UTF-8", "latin1", "Latin-1", "nope", "base64", "hex", "rot13", "x-unknown"]) {
-      for (const spelled of spellings(name)) {
-        const bytes = Buffer.from(Array.from({ length: 24 }, () => Math.floor(random() * 256)));
-        cases.push([bytes.toString("hex"), spelled]);
-      }
-    }
-    const expected = pythonDecodes(cases);
     const approximate = APPROXIMATE;
     let compared = 0;
     const differences: string[] = [];
-    cases.forEach(([hexed, name], index) => {
-      const want = expected[index];
+    for (const [hexed, name, want] of FROZEN.codecs) {
       const got = tsDecode(hexed, name);
       let codec: string | null = null;
       try {
         codec = codecOf(name);
       } catch {}
-      if (codec !== null && approximate.has(codec) && typeof want === "string") return;
+      if (codec !== null && approximate.has(codec) && typeof want === "string") continue;
       compared += 1;
       if (JSON.stringify(want) !== JSON.stringify(got)) differences.push(`${name} ${hexed}: ${JSON.stringify(want)} vs ${JSON.stringify(got)}`);
-    });
+    }
     expect(differences.slice(0, 5)).toEqual([]);
     expect(compared).toBeGreaterThan(2000);
+    const frozenNames = new Set(FROZEN.codecs.map(([, name]) => name));
+    expect(NAMES.filter((name) => !frozenNames.has(name))).toEqual([]);
   });
 
   test("utf-8, utf-16 and utf-32 replace bad bytes as Python does", () => {
-    const random = seeded(11);
-    const cases: [string, string][] = [];
-    const pieces = ["e282ac", "f09f9880", "c3", "e2", "f0", "ff", "80", "eda080", "f4908080", "c0af", "efbbbf", "fffe", "feff", "00", "41", "0000feff", "fffe0000", "d800"];
-    for (const name of ["utf-8", "utf-8-sig", "utf-16", "utf-16-le", "utf-16-be", "utf-32", "utf-32-le", "utf-32-be"]) {
-      for (let index = 0; index < 400; index += 1) {
-        const parts = Array.from({ length: 1 + Math.floor(random() * 8) }, () => pieces[Math.floor(random() * pieces.length)]);
-        cases.push([parts.join(""), name]);
-      }
-    }
-    const expected = pythonDecodes(cases);
-    const differences = cases.filter(([hexed, name], index) => JSON.stringify(expected[index]) !== JSON.stringify(tsDecode(hexed, name)));
+    const differences = FROZEN.utf.filter(([hexed, name, want]) => JSON.stringify(want) !== JSON.stringify(tsDecode(hexed, name)));
     expect(differences.slice(0, 5)).toEqual([]);
+    expect(FROZEN.utf.length).toBe(3200);
   });
 
   test("names normalize as Python's encodings package does", () => {

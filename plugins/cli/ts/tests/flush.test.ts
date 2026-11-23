@@ -6,14 +6,14 @@ import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterAll, test } from "bun:test";
+import { afterAll, beforeAll, test } from "bun:test";
 import { BUILT_LIBC } from "./libc-loaded.ts";
 import { flush } from "../src/flush.ts";
+import { systemInfo } from "../src/system-info.ts";
 import { cliVersion } from "../src/version.ts";
+import { oracle } from "./oracle-fixtures.ts";
 
 const TS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const CLI = path.resolve(TS, "..");
-const PYTHON = process.env.ARDIA_TEST_PYTHON ?? "python3";
 const PROGRAM = process.env.ARDIA_TS_CLI ?? path.join(TS, "dist", "ardia-ts");
 const INSTALL_ID = "0b6f4c1e-8d2a-4f3b-9c5d-1e2f3a4b5c6d";
 const OTHER_ID = "11111111-2222-4333-8444-555555555555";
@@ -34,6 +34,17 @@ await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 const URL = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1/logs`;
 afterAll(() => server.close());
 
+type FrozenRun = { name: string; status: number; consent: Record<string, unknown>; lines: string[]; tz: string; result: string; bodies: string[]; leftovers: { spool: string | null; failures: unknown } };
+const FROZEN = new Map(oracle<{ runs: FrozenRun[] }>("flush").runs.map((run) => [run.name, run]));
+const savedTz = process.env.TZ;
+beforeAll(() => {
+  process.env.TZ = "UTC";
+});
+afterAll(() => {
+  if (savedTz === undefined) delete process.env.TZ;
+  else process.env.TZ = savedTz;
+});
+
 function record(uuid: string, properties: Record<string, unknown>, extra: Record<string, unknown> = {}): string {
   return JSON.stringify({ uuid, event: "cli_command", distinct_id: INSTALL_ID, timestamp: "2026-11-20T10:11:12.345Z", properties, ...extra });
 }
@@ -44,21 +55,6 @@ function box(lines: string[], consent: Record<string, unknown> = { sharing: true
   fs.mkdirSync(path.join(root, "Telemetry"), { mode: 0o700 });
   fs.writeFileSync(path.join(root, "Telemetry", "cli-queue.jsonl"), lines.map((line) => `${line}\n`).join(""), { mode: 0o600 });
   return root;
-}
-
-async function viaPython(root: string): Promise<string> {
-  const script = `import sys; sys.path.insert(0, sys.argv[2])
-from pathlib import Path
-from ardia_cli import telemetry
-print(telemetry.flush(Path(sys.argv[1]), sys.argv[3], "dev"))`;
-  const child = spawn(PYTHON, ["-I", "-c", script, root, CLI, URL], { env: { PATH: process.env.PATH ?? "/usr/bin:/bin", TZ: Intl.DateTimeFormat().resolvedOptions().timeZone } });
-  let out = "";
-  let err = "";
-  child.stdout.on("data", (chunk) => (out += chunk));
-  child.stderr.on("data", (chunk) => (err += chunk));
-  const code = await new Promise<number | null>((resolve) => child.on("exit", resolve));
-  assert.equal(code, 0, err);
-  return out.trim();
 }
 
 type Attribute = { key: string; value: unknown };
@@ -73,11 +69,29 @@ function withoutPythonVersion(bodies: Seen[]): unknown[] {
   });
 }
 
+const HOST_ATTRIBUTES: Record<string, () => string> = {
+  "os.type": () => systemInfo().osType,
+  "os.version": () => systemInfo().osVersion,
+  "host.arch": () => systemInfo().arch,
+  $os: () => systemInfo().os,
+  $os_version: () => systemInfo().osVersion,
+  arch: () => systemInfo().arch,
+};
+
+function onThisHost(attributes: Attribute[]): void {
+  for (const item of attributes) {
+    const host = HOST_ATTRIBUTES[item.key];
+    if (host !== undefined) item.value = { stringValue: host() };
+  }
+}
+
 function withRunningVersion(bodies: unknown[]): unknown[] {
   return bodies.map((body) => {
-    const copy = structuredClone(body) as { resourceLogs: { scopeLogs: { logRecords: { attributes: Attribute[] }[] }[] }[] };
+    const copy = structuredClone(body) as { resourceLogs: { resource: { attributes: Attribute[] }; scopeLogs: { logRecords: { attributes: Attribute[] }[] }[] }[] };
+    onThisHost(copy.resourceLogs[0]?.resource.attributes ?? []);
     for (const logRecord of copy.resourceLogs[0]?.scopeLogs[0]?.logRecords ?? []) {
       for (const item of logRecord.attributes) if (item.key === "cli_version") item.value = { stringValue: cliVersion() };
+      onThisHost(logRecord.attributes);
     }
     return copy;
   });
@@ -109,18 +123,21 @@ function withoutFrames(value: unknown): unknown {
   return out;
 }
 
-async function both(lines: string[], consent?: Record<string, unknown>): Promise<void> {
-  const pythonRoot = box(lines, consent);
+async function againstPython(name: string, lines: string[], consent?: Record<string, unknown>): Promise<void> {
+  const frozen = FROZEN.get(name);
+  assert.ok(frozen, `no frozen run named ${name}`);
+  assert.deepEqual(frozen.lines, lines);
+  assert.deepEqual(frozen.consent, consent ?? { sharing: true, installId: INSTALL_ID });
+  assert.equal(frozen.status, status);
+  assert.equal(frozen.tz, process.env.TZ);
+  const pythonBodies = withRunningVersion(withoutFrames(withoutPythonVersion(frozen.bodies.map((text) => ({ body: JSON.parse(text), headers: {} })))) as unknown[]);
   const tsRoot = box(lines, consent);
   seen.length = 0;
-  const pythonResult = await viaPython(pythonRoot);
-  const pythonBodies = withRunningVersion(withoutFrames(withoutPythonVersion(seen.splice(0))) as unknown[]);
   const tsResult = await flush(tsRoot, URL, "dev");
   const tsBodies = withoutPythonVersion(seen.splice(0));
-  assert.equal(tsResult, pythonResult);
+  assert.equal(tsResult, frozen.result);
   assert.deepEqual(tsBodies, pythonBodies);
-  assert.deepEqual(leftovers(tsRoot), leftovers(pythonRoot));
-  fs.rmSync(pythonRoot, { recursive: true, force: true });
+  assert.deepEqual(leftovers(tsRoot), frozen.leftovers);
   fs.rmSync(tsRoot, { recursive: true, force: true });
 }
 
@@ -146,32 +163,36 @@ const MIXED = [
   record(uid(9), { command: "x" }, { properties: "not a dict" }),
 ];
 
+test("every frozen Python run is replayed", () => {
+  assert.deepEqual([...FROZEN.keys()], ["mixed", "failed send", "rejected", "oversized", "backlog", "sharing off"]);
+});
+
 test("a mixed spool is sent exactly as Python sends it", async () => {
   status = 200;
-  await both(MIXED);
+  await againstPython("mixed", MIXED);
 });
 
 test("a failed send keeps the events and backs off like Python", async () => {
   status = 503;
-  await both(MIXED);
+  await againstPython("failed send", MIXED);
   status = 200;
 });
 
 test("a rejected batch is dropped, an oversized one split, like Python", async () => {
   status = 400;
-  await both(MIXED);
+  await againstPython("rejected", MIXED);
   status = 413;
-  await both(MIXED);
+  await againstPython("oversized", MIXED);
   status = 200;
 });
 
 test("a large backlog goes in batches like Python", async () => {
   const lines = Array.from({ length: 130 }, (_, index) => record(uid(1000 + index), { command: "tabs", exit_code: index }));
-  await both(lines);
+  await againstPython("backlog", lines);
 }, 30_000);
 
 test("sharing off removes the spool like Python", async () => {
-  await both(MIXED, { sharing: false });
+  await againstPython("sharing off", MIXED, { sharing: false });
 });
 
 test("the program flushes in the background when spawned with the flush argument", async () => {

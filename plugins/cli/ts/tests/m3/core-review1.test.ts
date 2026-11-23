@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -16,10 +15,10 @@ import { Element, Page } from "../../src/browse/state/page.ts";
 import { Refs } from "../../src/browse/state/refs.ts";
 import { State } from "../../src/browse/state/state.ts";
 import "../libc-loaded.ts";
+import { oracle } from "../oracle-fixtures.ts";
 import { cdpError, FakeBrowser, frameTree, LOADER, MAIN, stateWith } from "./core-helpers.ts";
 
-const PYTHON = process.env["ARDIA_TEST_PYTHON"] ?? "python3";
-const CLI = new URL("../../..", import.meta.url).pathname;
+const FROZEN = oracle<{ root_mark: string; review1: { paths: [string, string][]; parse_digits: { argv: string[]; positionals: string[] } } }>("core");
 const cleanups: (() => void)[] = [];
 const registeredSnapshots = Refs.snapshots;
 
@@ -410,9 +409,8 @@ describe("10: paths resolve like Path.resolve", () => {
     fs.mkdirSync(path.join(root, "real", "deep"), { recursive: true });
     fs.symlinkSync(path.join(root, "real", "deep"), path.join(root, "link"));
     const ctx = new Ctx(stateWith(new FakeBrowser()), {}, root, {}, null);
-    const python = spawnSync(PYTHON, ["-c", "import sys; from pathlib import Path; print(Path(sys.argv[1], sys.argv[2]).resolve())", root, "link/../out"], { encoding: "utf8" });
-    expect(python.status).toBe(0);
-    expect(ctx.path("link/../out")).toBe(python.stdout.trim());
+    expect(FROZEN.review1.paths.map(([given]) => given)).toEqual(["link/../out"]);
+    for (const [given, want] of FROZEN.review1.paths) expect(ctx.path(given)).toBe(root + want.slice(FROZEN.root_mark.length));
     expect(ctx.path("link/../out")).toBe(path.join(root, "real", "out"));
   });
 });
@@ -450,8 +448,8 @@ describe("parser nits", () => {
     const repeated = Array.from({ length: 2_000 }, () => ["--x", "v"]).flat();
     const [options] = parse(repeated, { "--x": "multi" });
     expect((options["x"] as string[]).length).toBe(2_000);
-    const python = spawnSync(PYTHON, ["-c", "import json; from ardia_cli.browse import commands; print(json.dumps(commands.parse(['-١', '-1'])[1]))"], { cwd: CLI, encoding: "utf8" });
-    expect(python.status).toBe(0);
-    expect(parse(["-١", "-1"])[1]).toEqual(JSON.parse(python.stdout));
+    const digits = FROZEN.review1.parse_digits;
+    expect(digits.argv).toEqual(["-١", "-1"]);
+    expect(parse(digits.argv)[1]).toEqual(digits.positionals);
   });
 });
