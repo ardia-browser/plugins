@@ -102,7 +102,7 @@ describe("sign in through the 1Password app", () => {
     assert.deepEqual(connect.argv, ["vault", "list", "--format", "json", "--account=ACCOUNTUUID1"]);
     assert.equal(connect.timeoutMs, 90_000);
     assert.equal(connect.signIn, true);
-    assert.deepEqual(connect.env, { OP_INTEGRATION_NAME: "Ardia", OP_INTEGRATION_ID: "ardia" });
+    assert.deepEqual(connect.env, { OP_INTEGRATION_NAME: "Ardia", OP_INTEGRATION_ID: "ardia", OP_BIOMETRIC_UNLOCK_ENABLED: "true" });
   });
 
   test("with several accounts it asks which, then connects the one chosen", async () => {

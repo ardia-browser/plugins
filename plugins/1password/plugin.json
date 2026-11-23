@@ -61,6 +61,10 @@
             "literal": "ardia"
           },
           {
+            "name": "OP_BIOMETRIC_UNLOCK_ENABLED",
+            "literal": "true"
+          },
+          {
             "name": "OP_CONFIG_DIR",
             "testFolder": ""
           }

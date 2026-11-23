@@ -203,6 +203,17 @@ describe("the manifest", () => {
     assert.equal(isolated.env.OP_CONFIG_DIR, "/scratch/1password");
   });
 
+  test("every op command uses the 1Password app without reading its settings, which macOS keeps from apps other than Terminal", () => {
+    const cli = manifest.contributes.credentialProvider.cli;
+    for (const verb of Object.keys(cli.verbs)) {
+      const values = { id: "abcdefghijklmnopqrstuvwxyz", vault: "vvvvvvvvvvvvvvvvvvvvvvvvvv", account: ACCOUNT.account_uuid, template: { title: "x" } };
+      const params = Object.fromEntries(Object.keys(cli.verbs[verb].slots ?? {}).map((slot) => [slot, values[slot]]));
+      const launch = sdk.buildVerbLaunch(manifest, verb, params, () => null, null);
+      assert.equal(launch.refused, undefined, verb);
+      assert.equal(launch.env.OP_BIOMETRIC_UNLOCK_ENABLED, "true", verb);
+    }
+  });
+
   test("op is told it runs for Ardia without a build number, which 1Password's server rejects", () => {
     const names = manifest.contributes.credentialProvider.cli.env.map((entry) => entry.name);
     assert.ok(names.includes("OP_INTEGRATION_NAME"));

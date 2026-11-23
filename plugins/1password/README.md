@@ -13,6 +13,10 @@ Ardia runs `op` only for the commands this plugin's manifest lists (account list
 create and edit, signout), builds every command itself, and never lets the plugin run anything else. Passkeys stay in
 1Password; `op` doesn't expose them.
 
+Ardia sets `OP_BIOMETRIC_UNLOCK_ENABLED=true` for every `op` command. Without it, `op` decides whether the app
+integration is on by reading 1Password's settings file, and macOS keeps apps other than Terminal out of 1Password's
+group container, so `op` run by Ardia would see no accounts and ask you to turn on an integration that is already on.
+
 With more than one 1Password account, sign-in asks which one to use and remembers it. An approval lasts 10 minutes
 for reads Ardia starts in the background; after that, 1Password asks again.
 
