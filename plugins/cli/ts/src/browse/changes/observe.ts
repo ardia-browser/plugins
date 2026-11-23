@@ -323,9 +323,9 @@ function errorView(page: Page): View {
 
 export async function observe<T>(ctx: Ctx, page: Page, run: () => Promise<T>, react: Reaction | null = null): Promise<[T, Report | null]> {
   const state = ctx.state;
-  if (ctx.options["no_changes"]) {
+  if (ctx.options["no_changes"] || ctx.options["settle_only"]) {
     if (react !== null) await watchReaction(state, page, react);
-    return [await run(), null];
+    return [ctx.options["no_changes"] ? await run() : await settled(page, run), null];
   }
   let before: View | null;
   try {

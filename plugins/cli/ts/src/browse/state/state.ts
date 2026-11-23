@@ -1,7 +1,7 @@
 import http from "node:http";
 import { formatG } from "../../pylib/format.ts";
 import { Browser } from "../cdp/browser.ts";
-import { Cancelled, currentSignal, shield, sleep } from "../cdp/cancel.ts";
+import { Cancelled, currentSignal, shield, sleep, untilCancelled } from "../cdp/cancel.ts";
 import { envelopeGone } from "../cdp/raw.ts";
 import { BrowseError, CdpError, ConnectionLost } from "../daemon-errors.ts";
 import { announce, announcePath, type Caller, sameCaller } from "../daemon/announce.ts";
@@ -166,6 +166,7 @@ export class State extends Refs implements temptabs.TempTabState {
   readonly labels = new Map<string, string>();
   readonly registry: Registry;
   readonly appTabs = new Map<string, string>();
+  readonly usedAt = new Map<string, number>();
   readonly appGenerations = new Map<string, unknown>();
   readonly opened = new Set<string>();
   readonly frames = new Map<string, string>();
@@ -235,6 +236,8 @@ export class State extends Refs implements temptabs.TempTabState {
     this.currentTarget = targetId;
   }
 
+  private connecting: Promise<void> | null = null;
+
   get connected(): boolean {
     return this.browser !== null && this.browser.alive && !this.discovering;
   }
@@ -248,7 +251,27 @@ export class State extends Refs implements temptabs.TempTabState {
   }
 
   async connect(): Promise<void> {
-    if (this.connected) return;
+    for (;;) {
+      if (this.connected) return;
+      const pending = this.connecting;
+      if (pending === null) {
+        const attempt = this.connectOnce();
+        this.connecting = attempt;
+        try {
+          return await attempt;
+        } finally {
+          if (this.connecting === attempt) this.connecting = null;
+        }
+      }
+      try {
+        await untilCancelled(pending);
+      } catch (error) {
+        if (!(error instanceof Cancelled) || currentSignal()?.aborted) throw error;
+      }
+    }
+  }
+
+  private async connectOnce(): Promise<void> {
     const started = clock();
     flag("reconnected_after_idle", this.instance !== null);
     if (this.browser !== null && !this.browser.closedByUs) this.lost = true;
@@ -335,6 +358,7 @@ export class State extends Refs implements temptabs.TempTabState {
   }
 
   forgetTarget(targetId: string): void {
+    this.usedAt.delete(targetId);
     const page = this.pages.get(targetId);
     this.pages.delete(targetId);
     page?.detach();
@@ -434,6 +458,10 @@ export class State extends Refs implements temptabs.TempTabState {
     for (const listener of [...this.listeners]) listener(page, method, params);
   }
 
+  noteUsed(targetId: string): void {
+    this.usedAt.set(targetId, monotonic());
+  }
+
   async page(target: string | null = null): Promise<Page> {
     await this.connect();
     const started = clock();
@@ -458,6 +486,7 @@ export class State extends Refs implements temptabs.TempTabState {
         throw new BrowseError("That tab was closed", { targetId }, "tab_gone");
       }
     }
+    this.noteUsed(targetId);
     let page = this.pages.get(targetId);
     if (page === undefined) {
       page = new Page(this, targetId);
