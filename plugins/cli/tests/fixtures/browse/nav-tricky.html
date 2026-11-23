@@ -13,12 +13,25 @@
   <nav class="results-nav"><button>Jump to page 1</button> <button>Jump to page 2</button> <button>Jump to page 3</button> <button>Go to next page of results</button></nav>
   <nav aria-label="Brands"><a href="/brand/0">Brand item 0</a> <a href="/brand/1">Brand item 1</a> <a href="/brand/2">Brand item 2</a> <a href="/brand/3">Brand item 3</a> <a href="/brand/4">Brand item 4</a> <a href="/brand/5">Brand item 5</a> <a href="/brand/6">Brand item 6</a> <a href="/brand/7">Brand item 7</a> <a href="/brand/8">Brand item 8</a> <a href="/brand/9">Brand item 9</a> <a href="/brand/10">Brand item 10</a> <a href="/brand/11">Brand item 11</a></nav>
   <aside aria-label="Related products"><nav><a href="/r/1">Kettle</a> <a href="/r/2">Toaster</a></nav></aside>
+  <nav aria-label="Shadow host"><a href="/hostnav/0">Hostnav item 0</a> <a href="/hostnav/1">Hostnav item 1</a> <a href="/hostnav/2">Hostnav item 2</a> <a href="/hostnav/3">Hostnav item 3</a> <a href="/hostnav/4">Hostnav item 4</a> <a href="/hostnav/5">Hostnav item 5</a> <a href="/hostnav/6">Hostnav item 6</a> <a href="/hostnav/7">Hostnav item 7</a> <a href="/hostnav/8">Hostnav item 8</a> <a href="/hostnav/9">Hostnav item 9</a> <a href="/hostnav/10">Hostnav item 10</a> <a href="/hostnav/11">Hostnav item 11</a><shadow-main></shadow-main></nav>
+  <slot-main><nav aria-label="Slotted"><a href="/slotted/0">Slotted item 0</a> <a href="/slotted/1">Slotted item 1</a> <a href="/slotted/2">Slotted item 2</a> <a href="/slotted/3">Slotted item 3</a> <a href="/slotted/4">Slotted item 4</a> <a href="/slotted/5">Slotted item 5</a> <a href="/slotted/6">Slotted item 6</a> <a href="/slotted/7">Slotted item 7</a> <a href="/slotted/8">Slotted item 8</a> <a href="/slotted/9">Slotted item 9</a> <a href="/slotted/10">Slotted item 10</a> <a href="/slotted/11">Slotted item 11</a></nav></slot-main>
+  <nav aria-label="Departments"><a href="/dept/0">Dept item 0</a> <a href="/dept/1">Dept item 1</a> <a href="/dept/2">Dept item 2</a> <a href="/dept/3">Dept item 3</a> <a href="/dept/4">Dept item 4</a> <a href="/dept/5">Dept item 5</a> <a href="/dept/6">Dept item 6</a> <a href="/dept/7">Dept item 7</a> <a href="/dept/8">Dept item 8</a> <a href="/dept/9">Dept item 9</a> <a href="/dept/10">Dept item 10</a> <a href="/dept/11">Dept item 11</a><ol class="breadcrumb" aria-label="Breadcrumb"><li><a href="/">Shop</a></li><li>Crumb current</li></ol></nav>
+  <footer><a href="/foot/0">Foot item 0</a> <a href="/foot/1">Foot item 1</a> <a href="/foot/2">Foot item 2</a> <a href="/foot/3">Foot item 3</a> <a href="/foot/4">Foot item 4</a> <a href="/foot/5">Foot item 5</a> <a href="/foot/6">Foot item 6</a> <a href="/foot/7">Foot item 7</a> <a href="/foot/8">Foot item 8</a> <a href="/foot/9">Foot item 9</a> <a href="/foot/10">Foot item 10</a> <a href="/foot/11">Foot item 11</a><div class="pagination"><a rel="prev" href="?p=1">Older posts</a> <a rel="next" href="?p=3">Newer posts</a></div></footer>
+  <nav aria-label="Framed ad"><a href="/hiddenframe/0">Hiddenframe item 0</a> <a href="/hiddenframe/1">Hiddenframe item 1</a> <a href="/hiddenframe/2">Hiddenframe item 2</a> <a href="/hiddenframe/3">Hiddenframe item 3</a> <a href="/hiddenframe/4">Hiddenframe item 4</a> <a href="/hiddenframe/5">Hiddenframe item 5</a> <a href="/hiddenframe/6">Hiddenframe item 6</a> <a href="/hiddenframe/7">Hiddenframe item 7</a> <a href="/hiddenframe/8">Hiddenframe item 8</a> <a href="/hiddenframe/9">Hiddenframe item 9</a> <a href="/hiddenframe/10">Hiddenframe item 10</a> <a href="/hiddenframe/11">Hiddenframe item 11</a><iframe style="visibility:hidden" width="300" height="250" srcdoc="x"></iframe></nav>
+  <nav aria-label="Finder"><a href="/finder/0">Finder item 0</a> <a href="/finder/1">Finder item 1</a> <a href="/finder/2">Finder item 2</a> <a href="/finder/3">Finder item 3</a> <a href="/finder/4">Finder item 4</a> <a href="/finder/5">Finder item 5</a> <a href="/finder/6">Finder item 6</a> <a href="/finder/7">Finder item 7</a> <a href="/finder/8">Finder item 8</a> <a href="/finder/9">Finder item 9</a> <a href="/finder/10">Finder item 10</a> <a href="/finder/11">Finder item 11</a><search><form><input name="keywords" aria-label="Find items"><button>Go</button></form></search></nav>
+  <p>Morning <span role="navigation"><a href="/log">Log in</a></span> tomorrow.</p>
   <script>
     customElements.define("shadow-menu", class extends HTMLElement {
       connectedCallback() {
         const root = this.attachShadow({ mode: "open" });
         root.innerHTML = '<nav>' + Array.from({ length: 10 }, (_, j) => '<a href="/shadow/' + j + '">Shadow item ' + j + '</a>').join(" ") + '</nav>';
       }
+    });
+    customElements.define("shadow-main", class extends HTMLElement {
+      connectedCallback() { this.attachShadow({ mode: "open" }).innerHTML = "<main><p>Shadow main text stays.</p></main>"; }
+    });
+    customElements.define("slot-main", class extends HTMLElement {
+      connectedCallback() { this.attachShadow({ mode: "open" }).innerHTML = "<main><slot></slot></main>"; }
     });
   </script>
 </body></html>

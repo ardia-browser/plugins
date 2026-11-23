@@ -832,7 +832,7 @@ breadcrumbs, pagination (named so, or links that are mostly numbers, Next and Pr
 or links that are mostly `#` anchors on the same page), filters (named so, two or more visible checkboxes, radios,
 sliders or switches, or a dropdown that isn't a language, version or theme switcher), menus whose text is under 100
 characters or is mostly not link text, menus holding a `main`, an `article`, a visible frame or one of those kept menus,
-and everything inside `main` or `article`, also across shadow roots and same-origin frames. A page whose
+and everything inside `main` or `article`, also through shadow roots, slots and frames. A page whose
 text outside its menus is under 400 characters and shorter than what they hold, like a sitemap, prints whole. `read -s`
 never hides what it was pointed at, and `read <url>` reads `<main>` as before (`--nav` reads the whole body). Agents on
 the WebVoyager control run piped `open --read` through `head`, and the menus came first: on GitHub's home page and an

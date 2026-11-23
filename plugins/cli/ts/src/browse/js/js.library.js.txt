@@ -388,7 +388,9 @@
       const IN_CONTENT = "main, [role=main], article";
       const CONTROLS = "a[href], button, [role=link], [role=button], [role=menuitem], [role=tab]";
       const FACETS = "input[type=checkbox], input[type=radio], input[type=range], [role=checkbox], [role=radio], [role=slider], [role=switch]";
-      const SEARCH = "input[type=search], [role=search], [role=searchbox], input[name=q], input[name=query], input[name=search]";
+      const SEARCH = "search, input[type=search], [role=search], [role=searchbox], input[name=q], input[name=query], input[name=search]";
+      const KEPT_PARTS = "[class*=bread i], [id*=bread i], [aria-label*=bread i], [class*=paginat i], [id*=paginat i], [aria-label*=paginat i], [class*=pager i], " +
+        "a[rel=next], a[rel=prev], [itemtype*=BreadcrumbList], [class*=facet i], [aria-label*=filter i], [aria-label*=facet i]";
       const KEPT_NAMES = /bread[\s_-]?crumb|paginat|(^|[\s_-])pager([\s_-]|$)|paging|table[\s_-]of[\s_-]contents|(^|[\s_-])toc([\s_-]|$)|on this page|in this (article|page|section)|filter|facet|refine/i;
       const PAGE_STEP = /^(\d+|next|prev(ious)?|older|newer|first|last|[‹›«»<>←→…]+)$|^(page \d+|(go|jump|skip) to\b.*\bpage\b.*|(next|prev(ious)?|first|last) page\b.*)$/i;
       const SWITCHER = /lang|locale|version|theme|appearance|region|country|currency/i;
@@ -400,6 +402,7 @@
         return name.length > 30 ? name.slice(0, 29) + "…" : name;
       };
       const crossing = (node) => {
+        if (node.assignedSlot) return node.assignedSlot;
         if (node.parentNode) return node.parentNode.nodeType === 11 ? node.parentNode.host : node.parentNode;
         try {
           const view = node.nodeType === 9 ? node.defaultView : null;
@@ -412,7 +415,12 @@
         for (let node = el; node; node = crossing(node)) if (node.nodeType === 1 && node.matches(IN_CONTENT)) return true;
         return false;
       };
+      const kept = new Map();
       const keeps = (el) => {
+        if (!kept.has(el)) kept.set(el, keepsNow(el));
+        return kept.get(el);
+      };
+      const keepsNow = (el) => {
         const heading = el.querySelector("h1, h2, h3, h4, h5, h6");
         const labelledBy = (el.getAttribute("aria-labelledby") || "").split(/\s+/).filter(Boolean)
           .map((id) => { const ref = el.ownerDocument.getElementById(id); return ref ? ref.textContent || "" : ""; }).join(" ");
@@ -431,9 +439,15 @@
       const chromeOf = (el) => {
         const tag = el.tagName, role = roleOf(el);
         const label = tag === "NAV" || role === "navigation" ? "navigation" : tag === "FOOTER" || role === "contentinfo" ? "footer" : "";
-        if (!label || inContent(el) || el.querySelector(IN_CONTENT)) return null;
-        if (Array.from(el.querySelectorAll("iframe, frame")).some((frame) => { const box = frame.getBoundingClientRect(); return box.width >= 120 && box.height >= 80; })) return null;
-        if (keeps(el) || Array.from(el.querySelectorAll("nav, [role=navigation]")).some(keeps)) return null;
+        if (!label || inContent(el) || keeps(el)) return null;
+        for (const inner of deep(el)) {
+          if (inner.matches(IN_CONTENT) || (inner.matches(KEPT_PARTS) && shownOnPage(inner))) return null;
+          if (/^(IFRAME|FRAME)$/.test(inner.tagName) && shownOnPage(inner)) {
+            const box = inner.getBoundingClientRect();
+            if (box.width >= 120 && box.height >= 80) return null;
+          }
+          if ((inner.tagName === "NAV" || roleOf(inner) === "navigation") && keeps(inner)) return null;
+        }
         const controls = Array.from(el.querySelectorAll(CONTROLS)).filter(shownOnPage);
         if (!controls.length) return null;
         const text = norm(el.innerText || "").length;
@@ -476,7 +490,7 @@
         const chars = removed.reduce((total, line) => total + line.length + (line ? 1 : 0), 0);
         if (!chars) return;
         if (chars < 100) {
-          if (chrome.label === "navigation" && !wasAside) lines.push("", "[navigation: not the main content]", ...removed, "[end of navigation]", "");
+          if (chrome.label === "navigation" && !wasAside && /^(NAV|ASIDE|SECTION|DIV|UL)$/.test(node.tagName)) lines.push("", "[navigation: not the main content]", ...removed, "[end of navigation]", "");
           else lines.push(...removed);
           return;
         }
@@ -612,7 +626,7 @@
           flush();
           return;
         }
-        if (hidden && !hiding && node !== root && (tag === "NAV" || tag === "FOOTER" || node.hasAttribute("role"))) {
+        if (hidden && !hiding && node !== root && /^(NAV|FOOTER|ASIDE|SECTION|DIV|UL|OL|HEADER|MENU)$/.test(tag)) {
           const chrome = chromeOf(node);
           if (chrome) { hideChrome(node, chrome); return; }
         }

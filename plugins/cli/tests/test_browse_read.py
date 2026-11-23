@@ -339,3 +339,9 @@ class ReadNavigationInChrome(unittest.TestCase):
             self.assertIn(kept, out)
         self.assertIn("[navigation hidden, 12 links: Brand item 0", out)
         self.assertNotIn("Brand item 11", out)
+        for kept in ("Shadow main text stays.", "Hostnav item 11", "Slotted item 11", "Crumb current", "Dept item 11", "Older posts", "Newer posts",
+                     "Morning Log in tomorrow."):
+            self.assertIn(kept, out)
+        self.assertIn("[navigation hidden, 2 sections, 25 links, a search box: Hiddenframe item 0", out)
+        self.assertNotIn("Hiddenframe item 11", out)
+        self.assertNotIn("Finder item 11", out)
