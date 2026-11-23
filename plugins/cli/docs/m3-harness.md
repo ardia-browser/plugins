@@ -29,7 +29,7 @@ from `plugins/cli/ts`.
 ```sh
 sh scripts/build.sh                                       # the daemon the replay starts
 bun tests/m3/harness/main.ts replay                       # every scenario with a recording, pending ones skipped
-bun tests/m3/harness/main.ts replay 'core/*' daemon/waits # names under scenarios/, globs allowed
+bun tests/m3/harness/main.ts replay 'core/*' nav/history # names under scenarios/, globs allowed
 bun tests/m3/harness/main.ts replay core/open_title        # a pending recording named exactly still runs
 bun tests/m3/harness/main.ts list 'act/*'                 # steps, live-only and pending marks
 bun tests/m3/harness/main.ts link-replay                  # every link recording that isn't live-only

@@ -73,6 +73,7 @@ describe.skipIf(process.platform !== "darwin")("the m3 recordings replay against
 
 describe.skipIf(process.platform !== "darwin")("a recording made in another port block", () => {
   const RECORDED_BASE = 9620;
+  const MOVED = "nav/history";
   const REPLAY_BASE = 9980;
   const saved = { base: process.env["ARDIA_M3_PORT_BASE"], transcripts: dataPaths.transcripts };
   let folder = "";
@@ -90,7 +91,8 @@ describe.skipIf(process.platform !== "darwin")("a recording made in another port
 
   function moved(name: string, fixture: number): string {
     const target = path.join(folder, "transcripts");
-    const port = new RegExp(`(?<=(127\\.0\\.0\\.1|localhost):)${RECORDED_FIXTURE}\\b`, "g");
+    const original = recordedFixture(recording(name));
+    const port = new RegExp(`(?<=(127\\.0\\.0\\.1|localhost):)${original}\\b`, "g");
     for (const suffix of [".jsonl.gz", ".result.json.gz"]) {
       let text = gunzipSync(readFileSync(path.join(saved.transcripts, `${name}${suffix}`))).toString("utf8").replace(port, String(fixture));
       if (suffix === ".result.json.gz") {
@@ -108,13 +110,15 @@ describe.skipIf(process.platform !== "darwin")("a recording made in another port
   test("replays in a third block", async () => {
     needsProgram();
     const fixture = RECORDED_BASE + BLOCK - 1;
-    expect([RECORDED_FIXTURE, REPLAY_BASE + BLOCK - 1]).not.toContain(fixture);
-    dataPaths.transcripts = moved("daemon/waits", fixture);
-    expect(recordedFixture(recording("daemon/waits"))).toBe(fixture);
+    const original = recordedFixture(recording(MOVED));
+    expect([original, REPLAY_BASE + BLOCK - 1]).not.toContain(fixture);
+    dataPaths.transcripts = moved(MOVED, fixture);
+    expect(recordedFixture(recording(MOVED))).toBe(fixture);
     process.env["ARDIA_M3_PORT_BASE"] = String(REPLAY_BASE);
     const harness = await new Harness(path.join(folder, "run")).open();
     try {
-      const result = await harness.replay(loadNamed("daemon/waits"), "ts");
+      const result = await harness.replay(loadNamed(MOVED), "ts");
+      expect(result.skipped, `${MOVED} must replay, not skip`).toBeUndefined();
       expect(result.ok, (result.differences ?? []).join("\n")).toBe(true);
     } finally {
       harness.close();
