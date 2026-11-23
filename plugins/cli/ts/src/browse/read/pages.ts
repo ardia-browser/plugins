@@ -300,6 +300,46 @@ export async function collectLinks(ctx: Ctx, pattern: string): Promise<[string, 
   return [page.url, links, pickLinks(links, pattern, page.url)];
 }
 
+async function linksOn(page: Page, frame: string): Promise<string[]> {
+  const got = await page.call(READPAGES_LINKS, [], { frame, read: true });
+  return distinctLinks(Array.isArray(got) ? got.map(String) : []);
+}
+
+export async function linksIn(page: Page, listing: string, pattern: string, timeout: number): Promise<string[]> {
+  await goto(page, listing, timeout, true);
+  let found = await linksOn(page, page.mainFrame as string);
+  const deadline = monotonic() + Math.min(THIN_WAIT, timeout);
+  while (pickLinks(found, pattern, page.url).length === 0 && monotonic() + THIN_POLL < deadline) {
+    await sleep(THIN_POLL);
+    found = await linksOn(page, page.mainFrame as string);
+  }
+  return found;
+}
+
+export async function collectLinksFrom(ctx: Ctx, listings: readonly string[], pattern: string, timeout: number): Promise<[string, string[], string[]]> {
+  const state = ctx.state;
+  await state.connect();
+  await temptabs.sweep(state);
+  const opened: string[] = [];
+  const links: string[] = [];
+  const picked: string[] = [];
+  const sources: string[] = [];
+  try {
+    const page = await openReader(ctx, opened);
+    for (const listing of listings) {
+      const found = await readers.linksIn(page, listing, pattern, timeout);
+      const landed = page.url || listing;
+      sources.push(landed);
+      for (const url of found) if (!links.includes(url)) links.push(url);
+      for (const url of pickLinks(found, pattern, landed)) if (!picked.includes(url) && !listings.includes(url)) picked.push(url);
+    }
+  } finally {
+    await temptabs.release(state, opened);
+  }
+  flag("read_links_from_url", true);
+  return [sources.join(", "), links, picked];
+}
+
 export async function openReader(ctx: Ctx, opened: string[]): Promise<Page> {
   const state = ctx.state;
   const targetId = await temptabs.create(state, opened);
@@ -447,6 +487,7 @@ export async function readIn(page: Page, url: string, selector: string | null, t
 export const readers = {
   makePage: (state: Ctx["state"], targetId: string): Page => new Page(state, targetId),
   readIn,
+  linksIn,
 };
 
 export async function inLanes<T>(work: readonly T[], width: number, lane: (take: () => T | undefined) => Promise<void>): Promise<void> {
@@ -588,10 +629,10 @@ export async function run(ctx: Ctx, options: Options, positional: string[]): Pro
   let dataExtra: Record<string, unknown> = {};
   if (options["links"] !== undefined) {
     const pattern = options["links"] as string;
-    const [source, links, picked] = await collectLinks(ctx, pattern);
+    const [source, links, picked] = urls.length > 0 ? await collectLinksFrom(ctx, urls, pattern, timeout) : await collectLinks(ctx, pattern);
     if (picked.length === 0) throw new BrowseError(noLinksMessage(pattern, source, links), { links: links.length }, "no_links");
     dataExtra = { listing: source, matched: picked.length };
-    urls = [...urls, ...picked.filter((url) => !urls.includes(url))];
+    urls = picked;
     if (options["list"]) {
       const shown = options["limit"] !== undefined ? picked.slice(0, limit) : picked;
       const text = shown.join("\n") + (shown.length < picked.length ? `\n${limitNote(picked.length, limit, "--limit")}` : "");

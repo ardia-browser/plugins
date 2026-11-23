@@ -366,6 +366,33 @@ describe("ReadingTabs", () => {
     }
   });
 
+  test("test_links_with_a_url_list_that_page_not_the_session_tab (plugins#74)", async () => {
+    const run = scene();
+    const listed: string[] = [];
+    const previous = pages.readers.linksIn;
+    pages.readers.linksIn = async (_page, listing) => {
+      listed.push(listing);
+      return listing.endsWith("/a") ? ["http://s/p/1", "http://s/about", "http://s/p/2"] : ["http://s/p/2", "http://s/p/3", "http://s/a"];
+    };
+    try {
+      await expect(run.state.page()).rejects.toBeInstanceOf(BrowseError);
+      const listing = await pages.run(run.ctx, { links: "/p/", list: true }, ["http://s/a", "http://s/b"]);
+      expect(listed).toEqual(["http://s/a", "http://s/b"]);
+      expect((listing.data as Record<string, unknown>)["links"]).toEqual(["http://s/p/1", "http://s/p/2", "http://s/p/3"]);
+      expect(listing.text).toBe("http://s/p/1\nhttp://s/p/2\nhttp://s/p/3");
+      expect([...run.closed].sort()).toEqual([...run.created].sort());
+      run.visits.length = 0;
+      const read = await pages.run(run.ctx, { links: "/p/" }, ["http://s/a"]);
+      expect(run.visits.map(([, url]) => url)).toEqual(["http://s/p/1", "http://s/p/2"]);
+      expect((read.data as Record<string, unknown>)["matched"]).toBe(2);
+      pages.readers.linksIn = async () => ["http://s/about"];
+      await expect(pages.run(run.ctx, { links: "/p/", list: true }, ["http://s/a"])).rejects.toMatchObject({ code: "no_links" });
+    } finally {
+      pages.readers.linksIn = previous;
+      run.restore();
+    }
+  });
+
   test("test_a_cancelled_read_still_closes_its_tabs", async () => {
     const run = scene(5);
     try {
