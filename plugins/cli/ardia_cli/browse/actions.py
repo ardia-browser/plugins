@@ -228,9 +228,7 @@ INPUT_WATCH = """() => {
     drop: drags.drop,
   });
 }"""
-FOCUSED_FIELD = """() => {
-  if (!globalThis.ardiaBrowseFieldIds) Object.defineProperty(globalThis, "ardiaBrowseFieldIds", { value: { ids: new WeakMap(), next: 1 }, enumerable: false });
-  const registry = globalThis.ardiaBrowseFieldIds;
+FOCUSED_FIELD = """(text, after) => {
   let node = document.activeElement;
   for (let hops = 0; node && hops < 16; hops++) {
     let next = node.shadowRoot && node.shadowRoot.activeElement;
@@ -240,18 +238,33 @@ FOCUSED_FIELD = """() => {
     if (!next || next === node) break;
     node = next;
   }
-  if (!node) return null;
-  const field = /^(INPUT|TEXTAREA)$/.test(node.tagName) && typeof node.value === "string";
-  if (!field && !node.isContentEditable) return null;
-  if (!registry.ids.has(node)) registry.ids.set(node, registry.next++);
-  let collapsed = false;
-  if (field) {
-    try { collapsed = node.selectionStart === node.selectionEnd; } catch (error) { collapsed = false; }
-  } else {
-    const picked = node.ownerDocument.getSelection();
-    collapsed = !!picked && picked.rangeCount > 0 && picked.isCollapsed;
+  const field = !!node && /^(INPUT|TEXTAREA)$/.test(node.tagName) && typeof node.value === "string";
+  let host = node;
+  while (host && host.isContentEditable && host.parentElement && host.parentElement.isContentEditable) host = host.parentElement;
+  const editable = !field && !!host && host.isContentEditable;
+  const contents = () => (field ? node.value : host.textContent || "");
+  if (after) {
+    const before = globalThis.ardiaBrowseInsertBefore;
+    if (!before || !before.node.deref || before.node.deref() !== (field ? node : host)) return false;
+    return contents() === before.contents.slice(0, before.caret) + text + before.contents.slice(before.caret);
   }
-  return { id: registry.ids.get(node), length: field ? node.value.length : (node.textContent || "").length, collapsed };
+  Object.defineProperty(globalThis, "ardiaBrowseInsertBefore", { value: null, writable: true, configurable: true, enumerable: false });
+  if (!field && !editable) return false;
+  let caret = null;
+  if (field) {
+    try { if (node.selectionStart === node.selectionEnd) caret = node.selectionStart; } catch (error) { caret = null; }
+  } else {
+    const picked = host.ownerDocument.getSelection();
+    if (picked && picked.rangeCount > 0 && picked.isCollapsed && host.contains(picked.anchorNode)) {
+      const range = host.ownerDocument.createRange();
+      range.setStart(host, 0);
+      range.setEnd(picked.anchorNode, picked.anchorOffset);
+      caret = range.toString().length;
+    }
+  }
+  if (caret === null) return false;
+  globalThis.ardiaBrowseInsertBefore = { node: new WeakRef(field ? node : host), contents: contents(), caret };
+  return true;
 }"""
 LOST_KINDS = (("pointer", ("mousedown", "mouseup", "pointerdown", "pointerup", "click", "mousemove")), ("keys", ("keydown", "keyup")),
               ("text", ("beforeinput", "input")), ("wheel", ("wheel",)), ("drag", ("dragstart", "dragend", "drop")))
@@ -263,24 +276,29 @@ async def input_counts(page, frame):
 
 class TextInserted:
     def __init__(self, page, frame, text: str):
-        self.page, self.frame, self.length, self.before = page, frame, len(text.encode("utf-16-le")) // 2, None
+        self.page, self.frame, self.text, self.ready = page, frame, text, False
 
     async def prepare(self):
-        self.before = await self.page.call(FOCUSED_FIELD, frame=self.frame, read=True)
-
-    async def landed(self) -> bool:
-        before = self.before
-        if not before or not before.get("collapsed") or not self.length:
-            return False
         from ardia_cli.browse.errors import ConnectionLost
 
         try:
-            now = await self.page.call(FOCUSED_FIELD, frame=self.frame, read=True)
+            self.ready = bool(await self.page.call(FOCUSED_FIELD, self.text, False, frame=self.frame, read=True))
+        except ConnectionLost:
+            raise
+        except BrowseError:
+            self.ready = False
+
+    async def landed(self) -> bool:
+        from ardia_cli.browse.errors import ConnectionLost
+
+        if not self.ready:
+            return False
+        try:
+            return bool(await self.page.call(FOCUSED_FIELD, self.text, True, frame=self.frame, read=True))
         except ConnectionLost:
             raise
         except BrowseError:
             return False
-        return bool(now) and now.get("id") == before.get("id") and now.get("length", 0) - before.get("length", 0) == self.length
 
 
 def flag_lost(needs: dict):

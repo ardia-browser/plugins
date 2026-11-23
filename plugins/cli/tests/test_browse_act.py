@@ -263,6 +263,15 @@ class ActInChrome(unittest.TestCase):
         self.assertEqual(done.returncode, 1)
         self.assertIn("received none of its beforeinput/input events", done.stderr + done.stdout)
 
+    def test_a_dropped_text_insert_is_not_confirmed_by_the_page_editing_the_same_field(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/input-probes.html")
+        self.browse("click", "#echo")
+        self.browse("press", "End")
+        done = self.browse("keyboard", "inserttext", "xyz", check=False)
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("received none of its beforeinput/input events", done.stderr + done.stdout)
+        self.assertEqual(self.value("document.querySelector('#echo').value"), "startabc")
+
     def test_a_click_with_no_events_and_no_effect_is_still_not_delivered(self):
         self.browse("open", f"http://127.0.0.1:{self.http_port}/input-probes.html")
         done = self.browse("click", "#dead", check=False)

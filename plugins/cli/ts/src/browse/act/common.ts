@@ -51,25 +51,20 @@ export function delivered(now: Counts, before: Counts, name: string): number {
 export type Postcondition = { prepare: () => Promise<void>; landed: () => Promise<boolean> };
 
 export function textInserted(page: Page, frame: string | null, text: string): Postcondition {
-  let before: Record<string, unknown> | null = null;
+  let ready = false;
+  const probe = async (after: boolean): Promise<boolean> => {
+    try {
+      return Boolean(await page.call(ACTIONS_FOCUSED_FIELD, [text, after], { frame, read: true }));
+    } catch (error) {
+      if (error instanceof BrowseError && !(error instanceof ConnectionLost)) return false;
+      throw error;
+    }
+  };
   return {
     prepare: async () => {
-      const found = await page.call(ACTIONS_FOCUSED_FIELD, [], { frame, read: true });
-      before = found === null ? null : asRecord(found);
+      ready = await probe(false);
     },
-    landed: async () => {
-      if (before === null || !before["collapsed"] || text.length === 0) return false;
-      let now: unknown;
-      try {
-        now = await page.call(ACTIONS_FOCUSED_FIELD, [], { frame, read: true });
-      } catch (error) {
-        if (error instanceof BrowseError && !(error instanceof ConnectionLost)) return false;
-        throw error;
-      }
-      if (now === null) return false;
-      const field = asRecord(now);
-      return field["id"] === before["id"] && Number(field["length"] ?? 0) - Number(before["length"] ?? 0) === text.length;
-    },
+    landed: async () => ready && (await probe(true)),
   };
 }
 

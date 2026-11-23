@@ -275,7 +275,7 @@ async function cmdKeyboard(ctx: Ctx, argv: string[]): Promise<Result> {
           text ? { "beforeinput|input": 1 } : {},
           "The text insert",
           null,
-          textInserted(page, frame, text),
+          text ? textInserted(page, frame, text) : null,
         ),
       [null, frame],
     );

@@ -29,5 +29,11 @@
    ],
    "session": "act"
   }
- ]
+ ],
+ "unstable_steps": {
+  "steps": [
+   1
+  ],
+  "reason": "the page's churn timer types into a field every 100 ms, so open's report shows however many characters it had typed by then"
+ }
 }

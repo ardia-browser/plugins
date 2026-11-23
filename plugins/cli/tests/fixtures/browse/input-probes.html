@@ -13,6 +13,7 @@
 <body>
 <button id="menu-trigger" aria-haspopup="menu" aria-expanded="false" data-state="closed">Options</button>
 <input id="other" aria-label="Other field">
+<input id="echo" aria-label="Echo field" value="start">
 <div id="dead" role="button" style="display:inline-block;padding:6px 12px;border:1px solid #999;user-select:none">Dead button</div>
 <div id="slides" class="editor" contenteditable="true" role="textbox" aria-label="Slide text"></div>
 <div id="menus"></div>
@@ -51,6 +52,13 @@
     event.stopImmediatePropagation();
     event.preventDefault();
     slides.textContent += event.data;
+  }, true);
+  const echo = document.getElementById("echo");
+  echo.addEventListener("focus", () => setTimeout(() => { echo.value += "abc"; }, 300));
+  addEventListener("beforeinput", (event) => {
+    if (event.target !== echo) return;
+    event.stopImmediatePropagation();
+    event.preventDefault();
   }, true);
   if (location.search.includes("churn")) {
     const other = document.getElementById("other");
