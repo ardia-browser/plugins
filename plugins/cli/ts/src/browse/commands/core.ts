@@ -287,6 +287,7 @@ export async function newTab(
   await applyOpenOptions(ctx, page);
   if (url) await navigate(ctx, page, normalizeUrl(url));
   if (show) page = await showTab(ctx, page);
+  state.pairOpenedLater(targetId);
   return page;
 }
 

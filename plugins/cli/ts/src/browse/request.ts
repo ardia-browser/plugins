@@ -172,6 +172,11 @@ export function sessionKey(namespace: string, endpointKey: string, session: stri
   return createHash("sha256").update(raw, "utf8").digest("hex").slice(0, 24);
 }
 
+export function sessionOwner(namespace: string, endpointKey: string, session: string, forPlugin = false): string {
+  const raw = `owner\0${namespace}\0${endpointKey}\0${session}${forPlugin ? "\0plugin" : ""}`;
+  return createHash("sha256").update(raw, "utf8").digest("hex").slice(0, 24);
+}
+
 export function agentEnv(): JsonObject {
   const entries: JsonObject = new Map();
   for (const [name, value] of Object.entries(process.env)) {

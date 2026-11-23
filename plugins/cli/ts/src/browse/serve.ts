@@ -12,7 +12,7 @@ import { Absent, CONNECT_WAIT_MS, connect, exchange, type Link, Stalled } from "
 import { encodeError } from "./output.ts";
 import { loadAnswer } from "./pyjson.ts";
 import type { Secrets } from "../redact.ts";
-import { agentEnv, endpointChoice, endpointKey, namespaceName, optionsFrom, rootOf, sessionKey, sessionName, splitUrl, urlsWithSecrets } from "./request.ts";
+import { agentEnv, endpointChoice, endpointKey, namespaceName, optionsFrom, rootOf, sessionKey, sessionName, sessionOwner, splitUrl, urlsWithSecrets } from "./request.ts";
 import { closeDir } from "../privatefs.ts";
 import { checkSocket, NoDaemon, openBrowseDir, osFailure } from "./session.ts";
 import { awaitDaemon, type DaemonChoice, DaemonDidNotStart, spawnDaemon } from "./daemon/spawn.ts";
@@ -178,6 +178,7 @@ async function readBeside(payload: JsonObject, rest: string[], beside: Beside, c
   const config = new Map(beside.config);
   config.set("session", name);
   config.set("key", key);
+  config.set("owner", sessionOwner(beside.namespace, beside.keySource, name, process.env.ARDIA_BROWSE_FOR_PLUGIN === "1"));
   let socket: Link;
   try {
     socket = await ensureSession({ root: beside.root, key, config, python: beside.python, call });
@@ -291,6 +292,7 @@ export async function roundTrip(found: Found, rest: string[], secrets: Secrets, 
     ["no_auto_dialog", options.get("no_auto_dialog") ?? false],
     ["pin_tab", options.get("pin_tab") ?? null],
     ["for_plugin", process.env.ARDIA_BROWSE_FOR_PLUGIN === "1"],
+    ["owner", sessionOwner(namespace, keySource, session, process.env.ARDIA_BROWSE_FOR_PLUGIN === "1")],
   ]);
   const socket = await ensureSession({ root, key, config, python, call });
   let answer = await ask(socket, payload, rest, timeout, call, false, line);

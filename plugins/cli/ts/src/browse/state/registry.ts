@@ -103,6 +103,7 @@ export class Registry {
     readonly browseFd: number | null,
     readonly key: string,
     readonly session: string,
+    readonly owner: string = key,
   ) {
     this.run = tokenHex(8);
   }
@@ -287,18 +288,18 @@ export class Registry {
 
   sessionTabs(): Set<string> {
     if (this.browseFd === null) return new Set();
-    return this.withSessionTabs((sessions) => new Set(map(sessions.get(this.session)).keys()));
+    return this.withSessionTabs((sessions) => new Set(map(sessions.get(this.owner)).keys()));
   }
 
-  updateSessionTabs(add: readonly string[], drop: readonly string[], dropAll = false): void {
-    if (this.browseFd === null || (add.length === 0 && drop.length === 0 && !dropAll)) return;
+  updateSessionTabs(add: readonly string[], drop: readonly string[]): void {
+    if (this.browseFd === null || (add.length === 0 && drop.length === 0)) return;
     this.withSessionTabs((sessions) => {
-      const tabs = dropAll ? new Map<string, Value>() : new Map(map(sessions.get(this.session)));
+      const tabs = new Map(map(sessions.get(this.owner)));
       for (const app of drop) tabs.delete(app);
       for (const app of add) tabs.set(app, now());
       const kept = new Map(newest(tabs, num, MAX_SESSION_TABS));
-      if (kept.size > 0) sessions.set(this.session, kept);
-      else sessions.delete(this.session);
+      if (kept.size > 0) sessions.set(this.owner, kept);
+      else sessions.delete(this.owner);
       const capped = newest(sessions, latest, MAX_SESSIONS);
       sessions.clear();
       for (const [session, entry] of capped) sessions.set(session, entry);

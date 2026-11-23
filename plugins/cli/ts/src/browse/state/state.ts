@@ -1,7 +1,7 @@
 import http from "node:http";
 import { formatG } from "../../pylib/format.ts";
 import { Browser } from "../cdp/browser.ts";
-import { Cancelled, currentSignal, shield, sleep, untilCancelled } from "../cdp/cancel.ts";
+import { Cancelled, currentSignal, shield, sleep, untilCancelled, withSignal } from "../cdp/cancel.ts";
 import { envelopeGone } from "../cdp/raw.ts";
 import { BrowseError, CdpError, ConnectionLost } from "../daemon-errors.ts";
 import { announce, announcePath, type Caller, sameCaller } from "../daemon/announce.ts";
@@ -14,7 +14,6 @@ import { detachedError, type Element, Page, quiet, WORLD_NAME } from "./page.ts"
 import * as pierce from "./pierce.ts";
 import { type Json, record } from "./records.ts";
 import { isBareRef, parseRef, Refs } from "./refs.ts";
-import { PathError } from "../paths.ts";
 import { Registry } from "./registry.ts";
 import * as temptabs from "./temptabs.ts";
 import { monotonic } from "./wait.ts";
@@ -29,6 +28,8 @@ export const PROBE_FANOUT = 8;
 export const PROBE_PASSES = 3;
 export const PROBE_BACKOFF = 0.25;
 export const REATTACH_TRIES = 3;
+export const PAIR_TRIES = 5;
+export const PAIR_WAIT = 1.0;
 const ENDED_SESSIONS_KEPT = 64;
 
 function rememberEnded(ended: Set<string>, session: string): void {
@@ -51,6 +52,7 @@ export class RestartedBrowser extends BrowseError {
 export type StateConfig = {
   session: string;
   key: string;
+  owner?: string;
   browseFd: number | null;
   noAutoDialog: boolean;
   pinTab: boolean;
@@ -215,7 +217,7 @@ export class State extends Refs implements temptabs.TempTabState {
   ) {
     super();
     this.session = config.session;
-    this.registry = new Registry(config.browseFd, config.key, config.session);
+    this.registry = new Registry(config.browseFd, config.key, config.session, config.owner ?? config.key);
     this.autoDialog = !config.noAutoDialog;
     this.pinTab = config.pinTab;
   }
@@ -404,30 +406,31 @@ export class State extends Refs implements temptabs.TempTabState {
       const drop = present === null ? [] : [...owned].filter((app) => !present.has(app));
       this.registry.updateSessionTabs(add, drop);
       if (readopted) flag("tab_readopted_after_restart", true);
-    } catch (error) {
-      if (!(error instanceof PathError) && !(error instanceof BrowseError)) throw error;
-    }
+    } catch {}
   }
 
   ownsSessionTabs(): boolean {
     try {
       return this.registry.sessionTabs().size > 0;
-    } catch (error) {
-      if (error instanceof PathError || error instanceof BrowseError) return false;
-      throw error;
+    } catch {
+      return false;
     }
+  }
+
+  pairOpenedLater(targetId: string): void {
+    withSignal(null, () => {
+      void (async () => {
+        for (let attempt = 0; attempt < PAIR_TRIES; attempt += 1) {
+          if (attempt > 0) await sleep(PAIR_WAIT);
+          if (!this.opened.has(targetId) || this.appTabs.has(targetId) || this.endpoint === null) return;
+          await appTabMap(this).catch(() => undefined);
+        }
+      })().catch(() => {});
+    });
   }
 
   async readoptOpenedTabs(): Promise<void> {
     if (this.ownsSessionTabs()) await appTabMap(this).catch(() => undefined);
-  }
-
-  forgetSessionTabs(): void {
-    try {
-      this.registry.updateSessionTabs([], [], true);
-    } catch (error) {
-      if (!(error instanceof PathError) && !(error instanceof BrowseError)) throw error;
-    }
   }
 
   setOffscreen(targetId: string, offscreen: boolean): void {

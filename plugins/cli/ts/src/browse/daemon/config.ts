@@ -4,6 +4,7 @@ export type DaemonConfig = {
   session: string;
   namespace: string;
   key: string;
+  owner: string;
   dataRoot: string;
   ws: string | null;
   port: number | null;
@@ -74,6 +75,8 @@ export function parseConfig(text: string): DaemonConfig {
   if (namespace !== "" && !NAME.test(namespace)) throw new BadConfig("namespace must be 1 to 64 letters, digits, '.', '_' or '-'");
   const key = parsed.get("key");
   if (typeof key !== "string" || !KEY.test(key)) throw new BadConfig("key must be 24 lowercase hex digits");
+  const owner = parsed.get("owner") ?? key;
+  if (typeof owner !== "string" || !KEY.test(owner)) throw new BadConfig("owner must be 24 lowercase hex digits");
   const dataRoot = parsed.get("data_root");
   if (typeof dataRoot !== "string" || !dataRoot.startsWith("/") || dataRoot.includes("\0")) throw new BadConfig("data_root must be an absolute path");
   const port = wholeNumber(parsed, "port", 1n, 65535n);
@@ -87,6 +90,7 @@ export function parseConfig(text: string): DaemonConfig {
     session,
     namespace,
     key,
+    owner,
     dataRoot,
     ws: optionalText(parsed, "ws"),
     port: port === null ? null : Number(port),

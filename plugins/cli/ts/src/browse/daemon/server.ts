@@ -111,7 +111,7 @@ export class Daemon {
       throw error;
     }
     this.state = new State(
-      { session: config.session, key: config.key, browseFd: this.dirFd, noAutoDialog: config.noAutoDialog, pinTab: config.pinTab, dataDir: config.dataDir, dataRoot: config.dataRoot },
+      { session: config.session, key: config.key, owner: config.owner, browseFd: this.dirFd, noAutoDialog: config.noAutoDialog, pinTab: config.pinTab, dataDir: config.dataDir, dataRoot: config.dataRoot },
       () => this.resolveEndpoint(),
     );
     bindCommandLock(this.state, this.lock);
@@ -619,7 +619,6 @@ export class Daemon {
         if (!(error instanceof Cancelled)) log.exception("closing the session's tabs failed", error);
       } finally {
         clearTimeout(timer);
-        state.forgetSessionTabs();
       }
     } finally {
       this.lock.release();

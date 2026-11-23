@@ -230,13 +230,16 @@ mouse position, so a humanized path starts where the last one ended. `ardia brow
   (the daemon's redacted stderr). The socket is bound and connected by a relative name after `fchdir` into the
   folder, so a long data dir never hits the 104-byte `sun_path` limit.
 - Which tabs a session opened outlives its daemon and Ardia itself. DevTools target ids change on every relaunch, so
-  `session-tabs.json` (0600, under `tabs.lock`) keeps each session name's opened tabs by Ardia's own tab id (`tab-…`,
-  which session restore keeps). Whenever the daemon pairs targets with Ardia's tabs (its hold scan a few seconds
-  after a tab is used, `tab list`, a `tab close` it would refuse, `close`), a target whose tab id is listed counts as
-  opened by this session again (`tab_readopted_after_restart`), so after a crash and restore `tab close` and `close`
-  still close the session's tabs, and the user's stay the user's. An id Ardia no longer lists is dropped, entries
-  lapse after 3 days, each session keeps its newest 256 and the file its 64 most recent sessions; `close` forgets the
-  session's entries. TypeScript only.
+  `session-tabs.json` (0600, under `tabs.lock`) keeps the session's opened tabs by Ardia's own tab id (`tab-…`, which
+  session restore keeps), under an owner that is the session key without its build stamp: the same namespace,
+  endpoint, plugin mode and session name, so another namespace's `default` never owns them. A tab is recorded within
+  a few seconds of `open` (retried while Ardia hasn't listed it yet) and again whenever the daemon pairs targets with
+  Ardia's tabs (its hold scan, `tab list`, a `tab close` it would refuse, `close`); a target whose tab id is listed
+  counts as opened by this session again (`tab_readopted_after_restart`), so after a crash and restore `tab close` and
+  `close` still close the session's tabs, and the user's stay the user's. An id Ardia no longer lists is dropped (so a
+  tab `close` closed drops out, and one it couldn't reach, asleep or with Ardia gone, stays the session's for a
+  retry); entries lapse after 3 days, each owner keeps its newest 256 and the file its 64 most recent owners. A
+  record that can't be read or written never fails the command. TypeScript only.
 - The daemon holds an exclusive `flock` on `<key>.lock` for its whole life. Only with that lock held does it treat
   an existing `<key>.sock` as stale and unlink it; it binds with umask 0177 so the socket is 0600 from the start,
   records the socket's inode, and at exit unlinks it only if it's still that inode. Both ends check the other's
