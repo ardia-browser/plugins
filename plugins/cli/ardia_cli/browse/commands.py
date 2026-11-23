@@ -2105,7 +2105,9 @@ async def cmd_read(ctx: Ctx, argv):
     if selector:
         content, empty_note = await read_scoped(page, frame, selector)
     else:
-        content = await page.call("() => ardiaBrowse.readable()", frame=frame, read=True)
+        got = await page.call("(nav) => ardiaBrowse.readPage(nav)", bool(options.get("nav")), frame=frame, read=True)
+        content = got.get("text") or ""
+        readpages.note_nav(got)
     content = readurl.post_process(content, options)
     readpages.note_virtualized(content)
     scope = "" if options.get("selector") else await page_scope(page, frame)

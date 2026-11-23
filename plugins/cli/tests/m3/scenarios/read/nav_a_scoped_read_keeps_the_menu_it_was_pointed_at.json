@@ -1,0 +1,24 @@
+{
+ "source": "tests/test_browse_read.py ReadNavigationInChrome.test_a_scoped_read_keeps_the_menu_it_was_pointed_at",
+ "window": [
+  1200,
+  800
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/nav-megamenu.html"
+   ],
+   "session": "nav"
+  },
+  {
+   "argv": [
+    "read",
+    "-s",
+    "header"
+   ],
+   "session": "nav"
+  }
+ ]
+}

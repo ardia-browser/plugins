@@ -1,5 +1,6 @@
 import { BrowseError, ConnectionLost } from "../daemon-errors.ts";
 import { flag } from "../metrics.ts";
+import { noteNav } from "./pages.ts";
 import type { Page } from "../state/page.ts";
 import { quiet } from "../state/page.ts";
 import { record } from "../state/records.ts";
@@ -30,7 +31,7 @@ async function ownerFacts(page: Page, root: string): Promise<Record<string, unkn
   return record(await page.call(OWNER_FACTS, [element], { frame: parent, read: true }));
 }
 
-export async function oopifText(page: Page, frame: string): Promise<string> {
+export async function oopifText(page: Page, frame: string, nav = false): Promise<string> {
   const blocks: string[] = [];
   for (const oopif of page.oopifs.values()) {
     const root = oopif.root;
@@ -41,8 +42,10 @@ export async function oopifText(page: Page, frame: string): Promise<string> {
       if (facts === null || Number(facts["width"]) < 120 || Number(facts["height"]) < 80) continue;
       const title = String(facts["title"]);
       if (NOT_CONTENT.test(`${title} ${facts["id"]} ${facts["className"]} ${facts["src"]}`)) continue;
-      const text = await page.call("() => ardiaBrowse.readable()", [], { frame: root, read: true });
-      if (typeof text !== "string" || !text.trim()) continue;
+      const read = record(await page.call("(nav) => ardiaBrowse.readPage(nav)", [nav], { frame: root, read: true }));
+      const text = String(read["text"] ?? "");
+      if (!text.trim()) continue;
+      noteNav(read);
       blocks.push(`[frame "${title}"]\n${text}\n[end of frame "${title}"]`);
     } catch (error) {
       if (!quiet(error)) throw error;

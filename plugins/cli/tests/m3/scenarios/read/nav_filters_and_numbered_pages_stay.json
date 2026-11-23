@@ -1,0 +1,17 @@
+{
+ "source": "tests/test_browse_read.py ReadNavigationInChrome.test_filters_and_numbered_pages_stay",
+ "window": [
+  1200,
+  800
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/nav-facets.html",
+    "--read"
+   ],
+   "session": "nav"
+  }
+ ]
+}

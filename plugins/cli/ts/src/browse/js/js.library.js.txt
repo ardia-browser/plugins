@@ -377,9 +377,108 @@
       }
       return { elements: out, hints };
     },
-    readable(root) {
+    readPage(nav, root) {
+      const hidden = { sections: 0, chars: 0 };
+      const text = api.readable(root, nav ? null : hidden);
+      return { text, navSections: hidden.sections, navChars: hidden.chars };
+    },
+    readable(root, hidden) {
       root = root || document.body || document.documentElement;
       const lines = [];
+      const IN_CONTENT = "main, [role=main], article";
+      const CONTROLS = "a[href], button, [role=link], [role=button], [role=menuitem], [role=tab]";
+      const FACETS = "input[type=checkbox], input[type=radio], input[type=range], [role=checkbox], [role=radio], [role=slider], [role=switch]";
+      const SEARCH = "input[type=search], [role=search], [role=searchbox], input[name=q], input[name=query], input[name=search]";
+      const KEPT_NAMES = /bread[\s_-]?crumb|paginat|(^|[\s_-])pager([\s_-]|$)|paging|table[\s_-]of[\s_-]contents|(^|[\s_-])toc([\s_-]|$)|on this page|in this (article|page|section)|filter|facet|refine/i;
+      const PAGE_STEP = /^(\d+|next|prev(ious)?|older|newer|first|last|[‹›«»<>←→…]+)$/i;
+      const shownOnPage = (el) => typeof el.checkVisibility !== "function" || el.checkVisibility({ visibilityProperty: true, checkVisibilityCSS: true });
+      const opaque = (el) => typeof el.checkVisibility !== "function" || el.checkVisibility({ visibilityProperty: true, opacityProperty: true });
+      const controlName = (el) => {
+        const name = norm(el.innerText || "") || norm(el.getAttribute("aria-label") || "");
+        return name.length > 30 ? name.slice(0, 29) + "…" : name;
+      };
+      const chromeOf = (el) => {
+        if (el.closest(IN_CONTENT)) return null;
+        const tag = el.tagName, role = roleOf(el);
+        const sidebar = (tag === "ASIDE" || role === "complementary") && !!el.querySelector("nav, [role=navigation]");
+        const label = tag === "NAV" || role === "navigation" || sidebar ? "navigation" : tag === "FOOTER" || role === "contentinfo" ? "footer" : "";
+        if (!label) return null;
+        const heading = el.querySelector("h1, h2, h3, h4, h5, h6");
+        const labelledBy = (el.getAttribute("aria-labelledby") || "").split(/\s+/).filter(Boolean)
+          .map((id) => { const ref = el.ownerDocument.getElementById(id); return ref ? ref.textContent || "" : ""; }).join(" ");
+        const names = [el.getAttribute("aria-label") || "", labelledBy, el.id || "", typeof el.className === "string" ? el.className : "", heading ? (heading.textContent || "").slice(0, 80) : ""].join(" ");
+        if (KEPT_NAMES.test(names) || Array.from(el.querySelectorAll(FACETS)).filter(opaque).length >= 2) return null;
+        const controls = Array.from(el.querySelectorAll(CONTROLS)).filter(shownOnPage);
+        if (!controls.length) return null;
+        const links = controls.filter((control) => control.tagName === "A");
+        const here = el.ownerDocument.location;
+        const local = links.filter((a) => a.hash.length > 1 && a.pathname === here.pathname && a.host === here.host);
+        if (links.length >= 2 && local.length >= links.length * 0.6) return null;
+        const named = controls.map(controlName).filter(Boolean);
+        if (named.length >= 2 && named.filter((name) => PAGE_STEP.test(name)).length >= named.length * 0.6) return null;
+        if (label === "footer" || sidebar) {
+          const text = norm(el.innerText || "").length;
+          const linkText = named.reduce((total, name) => total + name.length, 0);
+          if (linkText < text * 0.5) return null;
+        }
+        return { label, controls: controls.length, names: named, search: !!el.querySelector(SEARCH) };
+      };
+      let hiding = false;
+      let summary = null;
+      const summaries = [];
+      const collapsed = { sections: 0, chars: 0 };
+      const summaryLine = (s) => {
+        const parts = [s.sections > 1 ? `${s.sections} sections` : "", s.controls === 1 ? "1 link" : `${s.controls} links`, s.search ? "a search box" : ""].filter(Boolean);
+        const list = s.names.length ? `: ${s.names.join(" · ")}${s.more ? " …" : ""}` : "";
+        return `[${s.labels.join(" and ")} hidden, ${parts.join(", ")}${list}${s.first ? "; read --nav shows it" : ""}]`;
+      };
+      const addNames = (s, names) => {
+        for (const name of names) {
+          if (s.more || s.names.includes(name)) continue;
+          if (s.size + name.length > 60) { s.more = true; continue; }
+          s.names.push(name);
+          s.size += name.length + 3;
+        }
+      };
+      const hideChrome = (node, chrome) => {
+        flush();
+        const start = lines.length;
+        const wasAside = insideAside;
+        hiding = true;
+        insideAside = true;
+        try {
+          for (const child of node.childNodes) walk(child);
+          if (node.shadowRoot) for (const child of node.shadowRoot.childNodes) walk(child);
+        } finally {
+          hiding = false;
+          insideAside = wasAside;
+        }
+        flush();
+        const removed = lines.splice(start);
+        const chars = removed.reduce((total, line) => total + line.length + (line ? 1 : 0), 0);
+        if (!chars) return;
+        if (chars < 100) {
+          if (chrome.label === "navigation") lines.push("", "[navigation: not the main content]", ...removed, "[end of navigation]", "");
+          else lines.push(...removed);
+          return;
+        }
+        collapsed.sections += 1;
+        collapsed.chars += chars;
+        if (summary && lines.length === summary.at + 2 && lines[summary.at + 1] === "") {
+          summary.sections += 1;
+          summary.controls += chrome.controls;
+          summary.search = summary.search || chrome.search;
+          if (!summary.labels.includes(chrome.label)) summary.labels.push(chrome.label);
+          addNames(summary, chrome.names);
+          lines[summary.at] = summaryLine(summary);
+          return;
+        }
+        const first = !summary;
+        summary = { at: lines.length + 1, sections: 1, controls: chrome.controls, search: chrome.search, labels: [chrome.label], names: [], size: 0, more: false, first };
+        addNames(summary, chrome.names);
+        summaries.push(summary.at);
+        lines.push("", summaryLine(summary), "");
+      };
       const SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "SVG", "HEAD"]);
       const ASIDE_TITLE = /^(related|recently viewed|you (may|might) also like|similar (items|products)|sponsored|recommended|customers (also|who)|more (from|like this)|frequently bought|people also)/i;
       const ASIDE_NAME = /(^|[-_\s])(related|recently-?viewed|recommend\w*|sponsored|similar-?(items|products)|also-?(bought|viewed))([-_\s]|$)/i;
@@ -495,6 +594,10 @@
           flush();
           return;
         }
+        if (hidden && !hiding && node !== root && (tag === "NAV" || tag === "ASIDE" || tag === "FOOTER" || node.hasAttribute("role"))) {
+          const chrome = chromeOf(node);
+          if (chrome) { hideChrome(node, chrome); return; }
+        }
         if (!insideAside && node !== root && /^(NAV|ASIDE|SECTION|DIV|UL)$/.test(tag)) {
           const label = asideLabel(node);
           if (label) {
@@ -532,6 +635,12 @@
       };
       walk(root);
       flush();
+      if (collapsed.sections) {
+        const kept = lines.reduce((total, line, index) => total + (summaries.includes(index) ? 0 : line.length), 0);
+        if (kept < 400 && collapsed.chars > kept) return api.readable(root);
+        hidden.sections += collapsed.sections;
+        hidden.chars += collapsed.chars;
+      }
       const out = [];
       for (const line of lines) {
         if (line === "" && (out.length === 0 || out[out.length - 1] === "")) continue;

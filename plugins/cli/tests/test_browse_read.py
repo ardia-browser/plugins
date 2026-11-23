@@ -79,6 +79,21 @@ class CapNotice(unittest.TestCase):
         values = {"read_rows": 200, "read_pages": 12, "read_scrolled": True, "read_matched": True, "read_virtualized_grid": True, "read_text": "x"}
         self.assertEqual(command_metrics.clean(values), {key: value for key, value in values.items() if key != "read_text"})
 
+    def test_hidden_navigation_counts_survive_the_telemetry_filter(self):
+        values = {"read_nav_hidden": 3, "read_nav_chars_hidden": 2400}
+        self.assertEqual(command_metrics.clean(values), values)
+
+    def test_hidden_navigation_adds_up_across_pages(self):
+        metrics = command_metrics.Metrics("read", False, True)
+        token = command_metrics.current.set(metrics)
+        try:
+            readpages.note_nav({"navSections": 2, "navChars": 900})
+            readpages.note_nav({"navSections": 0, "navChars": 0})
+            readpages.note_nav({"navSections": 1, "navChars": 300})
+        finally:
+            command_metrics.current.reset(token)
+        self.assertEqual((metrics.values["read_nav_hidden"], metrics.values["read_nav_chars_hidden"]), (3, 1200))
+
     def test_output_truncated_counts_read_footers(self):
         self.assertTrue(any(marker in "x\n[pages cut to fit 6,000 characters. Narrow it: …" for marker in command_metrics.OUTPUT_MARKERS))
         self.assertTrue(any(marker in "x\n[+3 pages not shown. Narrow it: …" for marker in command_metrics.OUTPUT_MARKERS))
@@ -216,3 +231,103 @@ class ReadListsInChrome(unittest.TestCase):
         limited = self.browse("read", "-s", "[role=grid]", "--scroll", "--limit", "40").stdout.splitlines()
         self.assertEqual(len(limited), 41)
         self.assertIn("stopped at --limit 40", limited[-1])
+
+
+@unittest.skipUnless(CHROME and Path(CHROME).exists(), "set ARDIA_BROWSE_CHROME to a Chrome binary to read real menus")
+class ReadNavigationInChrome(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.scratch = Path(tempfile.mkdtemp(prefix="ardia-read-nav-"))
+        cls.data = cls.scratch / "cli-data"
+        cls.data.mkdir()
+        cls.http_port, cls.port = browse_driver.free_port(), browse_driver.free_port()
+        browse_driver.begin_class(f"http://127.0.0.1:{cls.http_port}")
+        cls.server = subprocess.Popen([sys.executable, "-I", "-m", "http.server", str(cls.http_port), "--bind", "127.0.0.1"], cwd=FIXTURES,
+                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        cls.chrome = subprocess.Popen([CHROME, "--headless=new", f"--remote-debugging-port={cls.port}", f"--user-data-dir={cls.scratch / 'profile'}",
+                                       "--no-first-run", "--window-size=1200,800", "about:blank"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            wait_for(lambda: answers(f"http://127.0.0.1:{cls.port}/json/version"), 30, "Chrome's DevTools port")
+            wait_for(lambda: answers(f"http://127.0.0.1:{cls.http_port}/nav-megamenu.html"), 10, "the fixture server")
+        except BaseException:
+            cls.tearDownClass()
+            raise
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            cls.browse("close", check=False)
+        finally:
+            for process in (cls.chrome, cls.server):
+                process.terminate()
+                process.wait(10)
+            shutil.rmtree(cls.scratch, ignore_errors=True)
+
+    @classmethod
+    def browse(cls, *args, check=True):
+        return browse_driver.browse(args, endpoint=["--port", str(cls.port)], data_dir=cls.data, session="nav", check=check)
+
+    def setUp(self):
+        browse_driver.begin(self.id())
+
+    def tearDown(self):
+        browse_driver.end()
+
+    def url(self, name):
+        return f"http://127.0.0.1:{self.http_port}/{name}"
+
+    def test_a_mega_menu_and_a_link_footer_read_as_one_line_each(self):
+        out = self.browse("open", self.url("nav-megamenu.html"), "--read").stdout
+        self.assertIn("[navigation hidden, 15 links, a search box: Search · Dinners · Meals · Ingredients · Occasions …; read --nav shows it]", out)
+        self.assertNotIn("Kitchen Tips", out)
+        self.assertNotIn("idea", out)
+        self.assertIn("[navigation: not the main content]\nLog in Join\n[end of navigation]", out)
+        self.assertIn("[footer hidden, 24 links: Company link 0 · Company link 1 · Company link 2 …]", out)
+        self.assertNotIn("Legal link 7", out)
+        self.assertNotIn("© 2026", out)
+        for kept in ("- Home\n- Desserts\n- Cookies", "# Best Chocolate Chip Cookies", "Rated 4.6 from 19,342 ratings.", "Ingredients Directions Nutrition Reviews",
+                     "- 2 cups semisweet chocolate chips", "1 2 3 Next"):
+            self.assertIn(kept, out)
+
+    def test_nav_prints_every_menu(self):
+        self.browse("open", self.url("nav-megamenu.html"))
+        out = self.browse("read", "--nav").stdout
+        self.assertNotIn("hidden,", out)
+        for shown in ("- Kitchen Tips", "- Sweepstakes", "Legal link 7", "© 2026 Mega Recipes", "# Best Chocolate Chip Cookies"):
+            self.assertIn(shown, out)
+        self.assertNotIn("idea", out)
+
+    def test_read_of_a_url_reads_main_unless_nav_asks_for_the_whole_page(self):
+        main = self.browse("read", self.url("nav-megamenu.html")).stdout
+        self.assertIn("# Best Chocolate Chip Cookies", main)
+        self.assertNotIn("Dinners", main)
+        self.assertNotIn("hidden,", main)
+        whole = self.browse("read", self.url("nav-megamenu.html"), "--nav").stdout
+        self.assertIn("- Dinners", whole)
+        self.assertIn("Legal link 7", whole)
+
+    def test_a_scoped_read_keeps_the_menu_it_was_pointed_at(self):
+        self.browse("open", self.url("nav-megamenu.html"))
+        out = self.browse("read", "-s", "header").stdout
+        self.assertIn("- Kitchen Tips", out)
+        self.assertNotIn("hidden,", out)
+
+    def test_docs_keep_their_page_contents_and_hide_the_site_tree(self):
+        out = self.browse("open", self.url("nav-docs.html"), "--read").stdout
+        self.assertIn("[navigation: not the main content]\nHome Docs\n[end of navigation]", out)
+        self.assertIn("[navigation hidden, 30 links: Guide page 0 · Guide page 1 · Guide page 2 · Guide page 3 …; read --nav shows it]", out)
+        self.assertNotIn("Guide page 29", out)
+        self.assertIn("Install Configure Upgrade FAQ", out)
+        self.assertIn("Open widget.toml and set the port to 8080 before the first start.", out)
+
+    def test_filters_and_numbered_pages_stay(self):
+        out = self.browse("open", self.url("nav-facets.html"), "--read").stdout
+        self.assertIn("[navigation hidden, 14 links: Models · Datasets · Spaces · Docs · Pricing · Log In …; read --nav shows it]", out)
+        self.assertIn("Clear all\napache-2.0\nmit\ncc-by-sa-4.0\ngpl-3.0\nbsd-3-clause", out)
+        self.assertIn("replit/replit-code-v1-3b 748 likes", out)
+        self.assertIn("Previous 1 2 3 Next", out)
+
+    def test_a_page_that_is_mostly_navigation_prints_it(self):
+        out = self.browse("open", self.url("nav-sitemap.html"), "--read").stdout
+        self.assertIn("- Section number 19", out)
+        self.assertNotIn("hidden,", out)

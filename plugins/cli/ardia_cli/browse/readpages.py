@@ -56,15 +56,16 @@ LINKS = r"""() => {
   return out;
 }"""
 
-EXTRACT = r"""(selector) => {
+EXTRACT = r"""(selector, nav) => {
   let roots;
   if (selector) {
     roots = ardiaBrowse.queryAll(selector);
   } else {
-    const main = document.querySelector("main, [role=main]");
+    const main = nav ? null : document.querySelector("main, [role=main]");
     roots = main && (main.innerText || "").trim() ? [main] : [document.body || document.documentElement];
   }
-  const text = roots.filter(Boolean).map((root) => ardiaBrowse.readable(root)).filter(Boolean).join("\n\n");
+  const hidden = { sections: 0, chars: 0 };
+  const text = roots.filter(Boolean).map((root) => ardiaBrowse.readable(root, selector || nav ? null : hidden)).filter(Boolean).join("\n\n");
   let status = null;
   try {
     const entry = performance.getEntriesByType("navigation")[0];
@@ -72,7 +73,7 @@ EXTRACT = r"""(selector) => {
   } catch (e) {}
   let scope = "";
   try { scope = ardiaBrowse.scope(); } catch (e) {}
-  return { title: document.title || "", text, matched: roots.length, status, scope };
+  return { title: document.title || "", text, matched: roots.length, status, scope, navSections: hidden.sections, navChars: hidden.chars };
 }"""
 
 SETTLE_PROBE = r"""() => {
@@ -168,7 +169,7 @@ def flags() -> dict:
     from ardia_cli.browse import readurl
 
     return {**readurl.FLAGS, "--http": "bool", "--stdin": "bool", "--links": "value", "--limit": "value", "--selector": "value", "--list": "bool",
-            "--scroll": "bool", "--match": "value", "--data": "bool", "--fields": "value", "--where": "multi", "--block": "value"}
+            "--scroll": "bool", "--match": "value", "--data": "bool", "--fields": "value", "--where": "multi", "--block": "value", "--nav": "bool"}
 
 
 ALIASES = {"-s": "--selector"}
@@ -345,6 +346,15 @@ EMPTY_PAGE = ("(no text: the site sent an empty page with no title, which usuall
               "traffic; reading it again rarely helps)")
 
 FRAME_MARK = '[frame "'
+
+
+def note_nav(got: dict) -> None:
+    from ardia_cli import command_metrics
+
+    sections = int(got.get("navSections") or 0)
+    if sections:
+        command_metrics.add("read_nav_hidden", sections)
+        command_metrics.add("read_nav_chars_hidden", int(got.get("navChars") or 0))
 
 
 def note_virtualized(*texts: str) -> None:
@@ -589,12 +599,12 @@ def thin(got: dict, selector: str | None) -> bool:
     return (selector and not got.get("matched")) or len((got.get("text") or "").strip()) < MIN_USEFUL
 
 
-async def extract_filled(page, selector: str | None, timeout: float) -> dict:
+async def extract_filled(page, selector: str | None, timeout: float, nav: bool = False) -> dict:
     from ardia_cli import command_metrics
 
     loop = asyncio.get_running_loop()
     deadline = loop.time() + min(THIN_WAIT, timeout)
-    got = await page.call(EXTRACT, selector, frame=page.main_frame, read=True)
+    got = await page.call(EXTRACT, selector, nav, frame=page.main_frame, read=True)
     if (got.get("status") or 0) >= 400 or bot_check(got.get("title") or "", got.get("text") or "", got.get("status"), count=False):
         return got
     waited = False
@@ -602,7 +612,7 @@ async def extract_filled(page, selector: str | None, timeout: float) -> dict:
         waited = True
         await asyncio.sleep(THIN_POLL)
         try:
-            got = await page.call(EXTRACT, selector, frame=page.main_frame, read=True)
+            got = await page.call(EXTRACT, selector, nav, frame=page.main_frame, read=True)
         except BrowseError as error:
             if error.code not in ("document_changed", "page_navigated", "frame_gone"):
                 raise
@@ -626,7 +636,7 @@ async def read_in(ctx, page, url: str, selector: str | None, timeout: float, opt
             if selector:
                 record["note"] = f"{url} is a PDF, so -s {selector} doesn't apply; this is the whole document's text"
             return record
-        got = await extract_filled(page, selector, timeout)
+        got = await extract_filled(page, selector, timeout, bool(options.get("nav")))
     except ConnectionLost:
         raise
     except BrowseError as error:
@@ -634,6 +644,7 @@ async def read_in(ctx, page, url: str, selector: str | None, timeout: float, opt
         return record
     record.update(finalUrl=page.url, title=got.get("title") or "", status=got.get("status"), readAt=read_at(),
                   text=readurl.post_process(got.get("text") or "", options))
+    note_nav(got)
     if got.get("scope"):
         record["scope"] = got["scope"]
         command_metrics_flag("read_scope_shown")
