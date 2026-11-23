@@ -254,6 +254,8 @@ class ActInChrome(unittest.TestCase):
         self.assertNotIn("Skip to content", listed)
         self.assertIn('checkbox "Safe search"', listed)
         self.assertIn('button "More options"', listed)
+        self.assertIn('textbox "City"', listed)
+        self.assertIn('button "Remove connection"', listed)
         self.browse("fill", "#q", "duck")
         shown = re.search(r'button "Search" \[ref=(e\d+)\]', self.browse("snapshot", "-i").stdout)
         self.assertIsNotNone(shown)

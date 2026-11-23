@@ -40,11 +40,15 @@ BOXLESS = r"""() => {
     }
     return false;
   };
+  const typed = (el) => el.isContentEditable || /^(TEXTAREA|SELECT)$/.test(el.tagName)
+    || (el.tagName === "INPUT" && !/^(button|submit|reset|image|checkbox|radio)$/.test(el.type))
+    || /^(textbox|searchbox|combobox|spinbutton|slider|listbox)$/.test(el.getAttribute("role") || "");
   const CONTROLS = 'a[href], button, input:not([type="hidden"]), select, textarea, summary, [role], [tabindex], [contenteditable]';
   const visit = (root) => {
     for (const el of root.querySelectorAll(CONTROLS)) {
-      if (found.length >= 200) return;
-      if (/^(IFRAME|FRAME|OPTION)$/.test(el.tagName) || el.closest('[aria-hidden="true"], [inert]')) continue;
+      if (found.length >= 50) return;
+      if (/^(IFRAME|FRAME|OPTION)$/.test(el.tagName) || el instanceof SVGElement || el.closest('[aria-hidden="true"], [inert]')) continue;
+      if (typed(el)) continue;
       if (el.checkVisibility && !el.checkVisibility({ checkVisibilityCSS: true })) continue;
       if (!boxed(el) && !standIn(el)) found.push(el);
     }
