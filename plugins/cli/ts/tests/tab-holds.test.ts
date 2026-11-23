@@ -3,7 +3,7 @@ import { test } from "bun:test";
 import { ACTIVE_FOR, HOLD_SECONDS, heldAppTabs, MAP_RETRY, MAX_HELD, RENEW_EVERY, recentlyUsed, shouldScan, TabHolds } from "../src/browse/daemon/holds.ts";
 import { ControlRefused } from "../src/browse/state/apptabs.ts";
 
-type Call = [string, Record<string, unknown>];
+type Call = Parameters<ConstructorParameters<typeof TabHolds>[1]>;
 
 function recorder(answer: (method: string, params: Record<string, unknown>) => unknown = (method, params) => (method === "tabs.hold" ? { held: params["tabs"] } : { released: [] })) {
   const calls: Call[] = [];
@@ -142,4 +142,15 @@ test("the tabs Ardia answered as gone are reported, so the daemon stops asking f
   const { holds } = recorder(() => ({ held: ["tab-a"], gone: ["tab-closed"] }));
   await holds.tick(["tab-a", "tab-closed"], 0);
   assert.deepEqual(holds.gone, ["tab-closed"]);
+});
+
+test("after an answer that never came, the next tick asks again instead of waiting out the renewal minute", async () => {
+  let lose = false;
+  const { calls, holds } = recorder((method, params) => (lose ? new ControlRefused("timeout", "lost") : method === "tabs.hold" ? { held: params["tabs"] } : {}));
+  await holds.tick(["tab-a"], 0);
+  lose = true;
+  await holds.tick(["tab-a"], RENEW_EVERY);
+  lose = false;
+  await holds.tick(["tab-a"], RENEW_EVERY + 2);
+  assert.equal(calls.length, 3, "the lost renewal is sent again on the next tick");
 });

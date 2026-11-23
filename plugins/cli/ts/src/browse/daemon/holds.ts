@@ -1,4 +1,5 @@
 import { ControlRefused } from "../state/apptabs.ts";
+import { record } from "../state/records.ts";
 
 export const HOLD_SECONDS = 120;
 export const RENEW_EVERY = 60;
@@ -87,9 +88,12 @@ export class TabHolds {
       this.refusedUntil = now + RENEW_EVERY;
       return;
     }
-    if (reply === null) return;
-    const held = (reply as { held?: unknown }).held;
-    const gone = (reply as { gone?: unknown }).gone;
+    if (reply === null) {
+      this.asked = [];
+      return;
+    }
+    const held = record(reply)["held"];
+    const gone = record(reply)["gone"];
     this.goneLast = Array.isArray(gone) ? gone.filter((tab): tab is string => typeof tab === "string") : [];
     this.held = Array.isArray(held) ? held.filter((tab): tab is string => typeof tab === "string") : want;
     this.asked = want;
