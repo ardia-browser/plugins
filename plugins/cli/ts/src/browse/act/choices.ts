@@ -11,7 +11,18 @@ export function splitFinal(text: string): [string, string] | null {
   return [chars.slice(0, -1).join(""), last];
 }
 
-export const OVERLAY_INPUT = `(el) => {
+export const POPUP_SELECTOR = "[role=listbox], [role=dialog], [role=menu], [role=combobox], [role=tree], [role=grid], [popover], dialog";
+export const POPUPS_BEFORE = "ardiaBrowsePopupsBefore";
+
+export const MARK_POPUPS = `(el) => {
+  const doc = el.ownerDocument;
+  const shown = Array.from(doc.querySelectorAll("${POPUP_SELECTOR}")).filter((node) => node.getClientRects().length > 0);
+  if (!Object.getOwnPropertyDescriptor(globalThis, "${POPUPS_BEFORE}")) Object.defineProperty(globalThis, "${POPUPS_BEFORE}", { value: null, writable: true, enumerable: false });
+  globalThis.${POPUPS_BEFORE} = { opener: el, shown: new WeakSet(shown) };
+  return true;
+}`;
+
+export const OVERLAY_INPUT = `(el, opened) => {
   const doc = el.ownerDocument;
   let active = doc.activeElement;
   while (active && active.shadowRoot && active.shadowRoot.activeElement) active = active.shadowRoot.activeElement;
@@ -22,14 +33,22 @@ export const OVERLAY_INPUT = `(el) => {
   if (!(active.isContentEditable || textual) || active.readOnly || active.disabled) return null;
   const ids = [el.getAttribute("aria-controls"), el.getAttribute("aria-owns")].filter(Boolean).join(" ").split(/\\s+/).filter(Boolean);
   const root = el.getRootNode();
-  const linked = ids.some((id) => {
+  const owned = ids.some((id) => {
     const node = (root.getElementById ? root.getElementById(id) : null) || doc.getElementById(id);
     return !!node && (node === active || node.contains(active));
   });
-  const popup = active.closest("[role=listbox], [role=dialog], [role=menu], [role=combobox], [role=tree], [role=grid], [popover], dialog");
-  const role = (el.getAttribute("role") || "").toLowerCase();
-  const opener = role === "combobox" || /^(listbox|dialog|menu|tree|grid|true)$/.test((el.getAttribute("aria-haspopup") || "").toLowerCase());
-  return linked || (opener && popup) ? active : null;
+  if (owned) return active;
+  if (!opened) return null;
+  const before = globalThis.${POPUPS_BEFORE};
+  const popup = active.closest("${POPUP_SELECTOR}");
+  if (!before || before.opener !== el || !popup || before.shown.has(popup)) return null;
+  return active;
+}`;
+
+export const HOLDS_FOCUS = `(el) => {
+  let holdsFocus = el.ownerDocument.activeElement;
+  while (holdsFocus && holdsFocus.shadowRoot && holdsFocus.shadowRoot.activeElement) holdsFocus = holdsFocus.shadowRoot.activeElement;
+  return !!holdsFocus && (holdsFocus === el || (!!el.contains && el.contains(holdsFocus)) || (!!el.shadowRoot && el.shadowRoot.contains(holdsFocus)));
 }`;
 
 export const CHECK_STATE = `(el) => {

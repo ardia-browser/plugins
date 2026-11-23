@@ -1,11 +1,13 @@
-import { BrowseError, CdpError, Gated } from "../daemon-errors.ts";
+import { BrowseError, CdpError, ConnectionLost, Gated } from "../daemon-errors.ts";
 import { add, flag } from "../metrics.ts";
-import { type AxNode, buildTree, isAxList } from "../snapshot/tree.ts";
+import { INNER_TEXT } from "../snapshot/collect.ts";
+import { type AxNode, buildTree, clipped, INTERACTIVE, isAxList } from "../snapshot/tree.ts";
 import type { Element, Page } from "../state/page.ts";
 import { parseRef, type Ref } from "../state/refs.ts";
 
 export type Identity = { role: string; name: string };
-export type Drift = { field: "role" | "name" | "both"; was: Identity; now: Identity };
+export type Seen = Identity | "ignored" | null;
+export type Drift = { field: "role" | "name" | "both" | "hidden"; was: Identity; now: Identity | null };
 
 export const DRIFT_GUARDED = new Set(["click", "dblclick", "fill", "type", "press", "check", "uncheck", "select", "drag", "upload", "download", "hover", "focus", "tap"]);
 
@@ -13,8 +15,9 @@ function squash(text: string): string {
   return text.replace(/\s+/gu, " ").trim();
 }
 
-export function driftBetween(was: Identity, now: Identity | null): Drift | null {
+export function driftBetween(was: Identity, now: Seen): Drift | null {
   if (now === null || !was.role) return null;
+  if (now === "ignored") return { field: "hidden", was, now: null };
   const roleChanged = was.role !== now.role;
   const nameChanged = squash(was.name) !== squash(now.name);
   if (!roleChanged && !nameChanged) return null;
@@ -26,6 +29,13 @@ export function describeIdentity(identity: Identity): string {
 }
 
 export function driftMessage(ref: string, action: string, drift: Drift): string {
+  if (drift.field === "hidden" || drift.now === null) {
+    return (
+      `@${ref} changed since it was last seen, so ${action} wasn't sent: ${describeIdentity(drift.was)} is now hidden from the ` +
+      "accessibility tree (aria-hidden, inert or no longer rendered), as when a dialog opens over it. Snapshot again (snapshot -i) " +
+      "to see what's in front now"
+    );
+  }
   const what = drift.field === "role" ? "its role" : drift.field === "name" ? "its name" : "its role and name";
   return (
     `@${ref} changed since it was last seen, so ${action} wasn't sent: ${what} went from ${describeIdentity(drift.was)} to ` +
@@ -34,13 +44,21 @@ export function driftMessage(ref: string, action: string, drift: Drift): string 
   );
 }
 
-export function identityOf(nodes: readonly AxNode[], backend: number): Identity | null {
-  const found = buildTree(nodes, backend);
+export function identityOf(nodes: readonly AxNode[], backend: number): Seen {
+  const own = nodes.find((node) => node.backendDOMNodeId === backend);
+  if (own === undefined) return null;
+  if (own.ignored === true) return "ignored";
+  const found = buildTree(nodes.filter((node) => node.backendDOMNodeId === backend).map((node) => ({ ...node, parentId: undefined, childIds: [] })));
   const node = found.find((item) => item.backend === backend) ?? null;
-  return node === null ? null : { role: node.role, name: node.name };
+  return node === null ? "ignored" : { role: node.role, name: node.name };
 }
 
-export async function currentIdentity(page: Page, element: Element): Promise<Identity | null> {
+async function renderedText(page: Page, element: Element): Promise<string> {
+  const text = await page.call(INNER_TEXT, [element], { frame: element.frame, read: true });
+  return clipped(typeof text === "string" ? text : text ? String(text) : "");
+}
+
+export async function currentIdentity(page: Page, element: Element): Promise<Seen> {
   let result: Record<string, unknown>;
   try {
     result = await page.send(
@@ -53,16 +71,18 @@ export async function currentIdentity(page: Page, element: Element): Promise<Ide
     throw error;
   }
   const nodes = result["nodes"];
-  return isAxList(nodes) ? identityOf(nodes, element.backendId) : null;
+  const seen = isAxList(nodes) ? identityOf(nodes, element.backendId) : null;
+  if (seen === null || seen === "ignored" || seen.name || INTERACTIVE.has(seen.role)) return seen;
+  return { role: seen.role, name: await renderedText(page, element) };
 }
 
 export async function refuseDrift(page: Page, element: Element, ref: Ref | undefined, action: string): Promise<void> {
   if (ref === undefined || !ref.role || ref.backend !== element.backendId) return;
-  let now: Identity | null;
+  let now: Seen;
   try {
     now = await currentIdentity(page, element);
   } catch (error) {
-    if (error instanceof BrowseError && error.code !== "connection_lost") return;
+    if (error instanceof BrowseError && !(error instanceof ConnectionLost)) return;
     throw error;
   }
   const drift = driftBetween({ role: ref.role, name: ref.name }, now);

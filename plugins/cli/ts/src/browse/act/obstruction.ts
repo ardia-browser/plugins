@@ -1,4 +1,5 @@
-import { BrowseError } from "../daemon-errors.ts";
+import { BrowseError, ConnectionLost } from "../daemon-errors.ts";
+import { currentIdentity } from "./drift.ts";
 import { add, flag } from "../metrics.ts";
 import type { Element, Page } from "../state/page.ts";
 import { asRecord } from "./common.ts";
@@ -39,14 +40,14 @@ export const OBSTRUCTION_WORDS: Readonly<Record<Obstruction, string>> = {
   sibling: "another element on top of it",
 };
 
-export const BLOCKER_AT = `(el, x, y, pick) => {
+export const BLOCKER_AT = `(el, x, y, pick, given) => {
   const doc = el.ownerDocument;
   const view = doc.defaultView || window;
   const width = view.innerWidth;
   const height = view.innerHeight;
   const up = (node) => node.assignedSlot || node.parentElement || (node.parentNode && node.parentNode.host) || null;
-  const facts = { offscreen: x < 0 || y < 0 || x > width || y > height, clipped: false, frameOwner: false, modal: false, position: "static", layer: null, width, height, found: false, role: "", name: "" };
-  for (let node = up(el); node && node !== doc.documentElement && node !== doc.body; node = up(node)) {
+  const facts = { offscreen: !given && (x < 0 || y < 0 || x > width || y > height), clipped: false, frameOwner: false, modal: false, position: "static", layer: null, width, height, found: false, role: "", name: "" };
+  for (let node = given ? null : up(el); node && node !== doc.documentElement && node !== doc.body; node = up(node)) {
     if (node.nodeType !== 1) continue;
     const style = view.getComputedStyle(node);
     if (style.overflowX === "visible" && style.overflowY === "visible") continue;
@@ -56,8 +57,8 @@ export const BLOCKER_AT = `(el, x, y, pick) => {
       break;
     }
   }
-  let hit = doc.elementFromPoint(x, y);
-  while (hit && hit.shadowRoot) {
+  let hit = given || doc.elementFromPoint(x, y);
+  while (!given && hit && hit.shadowRoot) {
     const inner = hit.shadowRoot.elementFromPoint(x, y);
     if (!inner || inner === hit) break;
     hit = inner;
@@ -122,10 +123,27 @@ export function noteObstruction(kind: Obstruction): void {
   add("obstruction_refusals");
 }
 
-export async function findBlocker(page: Page, element: Element, x: number, y: number): Promise<Blocker | null> {
+export type CoverAt = { frame: string; backend: number };
+
+async function refFor(page: Page, node: Element, facts: BlockerFacts): Promise<string> {
+  const known = page.state.knownRef(page, node.frame, node.backendId);
+  if (known !== null) return known.id;
+  const seen = await currentIdentity(page, node);
+  const identity = seen !== null && seen !== "ignored" ? seen : { role: "", name: facts.name ?? "" };
+  return page.state.addRef(page, node, identity.role, identity.name);
+}
+
+export async function findBlocker(page: Page, element: Element, x: number, y: number, at: CoverAt | null = null): Promise<Blocker | null> {
+  let probe = element;
+  if (at !== null) {
+    const owner = await page.resolveBackend(at.backend, at.frame, "the element in the way");
+    if (owner === null) return null;
+    probe = owner;
+  }
+  const given = at !== null ? probe : null;
   let facts: BlockerFacts;
   try {
-    facts = asRecord(await page.call(BLOCKER_AT, [element, x, y, false], { frame: element.frame, read: true })) as BlockerFacts;
+    facts = asRecord(await page.call(BLOCKER_AT, [probe, x, y, false, given], { frame: probe.frame, read: true })) as BlockerFacts;
   } catch (error) {
     if (error instanceof BrowseError) return null;
     throw error;
@@ -134,15 +152,14 @@ export async function findBlocker(page: Page, element: Element, x: number, y: nu
   if (kind === "offscreen") return { kind, ref: null, role: "", name: "" };
   let ref: string | null = null;
   try {
-    const remote = await page.call(BLOCKER_AT, [element, x, y, true], { frame: element.frame, byValue: false, read: true });
-    const node = await page.elementFrom(remote, element.frame, "the element in the way");
-    if (node !== null && node.backendId !== element.backendId) {
-      const known = page.state.knownRef(page, element.frame, node.backendId);
-      ref = known !== null ? known.id : page.state.addRef(page, node, facts.role ?? "", facts.name ?? "");
+    const remote = await page.call(BLOCKER_AT, [probe, x, y, true, given], { frame: probe.frame, byValue: false, read: true });
+    const node = await page.elementFrom(remote, probe.frame, "the element in the way");
+    if (node !== null && (node.backendId !== element.backendId || node.frame !== element.frame)) {
+      ref = await refFor(page, node, facts);
       flag("click_blocker_ref", true);
     }
   } catch (error) {
-    if (!(error instanceof BrowseError)) throw error;
+    if (!(error instanceof BrowseError) || error instanceof ConnectionLost) throw error;
   }
   return { kind, ref, role: facts.role ?? "", name: facts.name ?? "" };
 }

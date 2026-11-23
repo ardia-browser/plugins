@@ -2,7 +2,7 @@ import { formatG } from "../../pylib/format.ts";
 import { joinedWords, pyLen, reprText } from "../../pylib/str.ts";
 import { casefold } from "../../pylib/unicode.ts";
 import { sleep } from "../cdp/cancel.ts";
-import { BrowseError, CdpError } from "../daemon-errors.ts";
+import { BrowseError, CdpError, ConnectionLost } from "../daemon-errors.ts";
 import { FORMATS, normalize, SET_DIRECTLY, SET_VALUE } from "../fields.ts";
 import { inputOf } from "../input/input.ts";
 import {
@@ -22,8 +22,8 @@ import { add, flag } from "../metrics.ts";
 import { Element, type Page } from "../state/page.ts";
 import { monotonic } from "../state/wait.ts";
 import { asRecord, expectInput, poll, textInserted } from "./common.ts";
-import { checkedFrom, CHECK_STATE, matchOptions, OPTION_ROWS, type OptionRow, OVERLAY_INPUT, splitFinal } from "./choices.ts";
-import { type Readback, readBack } from "./readback.ts";
+import { checkedFrom, CHECK_STATE, HOLDS_FOCUS, MARK_POPUPS, matchOptions, OPTION_ROWS, type OptionRow, OVERLAY_INPUT, splitFinal } from "./choices.ts";
+import { type Readback, readBack, secretField } from "./readback.ts";
 import { click, scrollIntoView, targetPoint, waitEnabled } from "./pointer.ts";
 
 export const SUGGESTION_TIMEOUT = 4.0;
@@ -126,20 +126,21 @@ export const OVERLAY_WAIT = 1.0;
 
 export type Filled = [boolean, Stored, (Readback | null)?];
 
-export async function overlayInput(page: Page, element: Element): Promise<Element | null> {
+export async function overlayInput(page: Page, element: Element, opened = false): Promise<Element | null> {
   try {
-    const remote = await page.call(OVERLAY_INPUT, [element], { frame: element.frame, byValue: false, read: true });
+    const remote = await page.call(OVERLAY_INPUT, [element, opened], { frame: element.frame, byValue: false, read: true });
     return remote !== null && typeof remote === "object" ? await page.elementFrom(remote, element.frame, `the field that took focus from ${element.label}`) : null;
   } catch (error) {
-    if (error instanceof BrowseError && error.code !== "connection_lost") return null;
+    if (error instanceof BrowseError && !(error instanceof ConnectionLost)) return null;
     throw error;
   }
 }
 
 async function overlayAfterOpening(page: Page, element: Element, humanize: boolean): Promise<Element | null> {
   if ((await comboKind(page, element)) !== "button") return null;
+  await page.call(MARK_POPUPS, [element], { frame: element.frame });
   await click(page, element, humanize);
-  return poll(() => overlayInput(page, element), OVERLAY_WAIT);
+  return poll(() => overlayInput(page, element, true), OVERLAY_WAIT);
 }
 
 export async function fill(page: Page, given: Element, text: string, humanize: boolean, guard: Guard = null, known: Record<string, unknown> | null = null): Promise<Filled> {
@@ -151,6 +152,7 @@ export async function fill(page: Page, given: Element, text: string, humanize: b
   }
   if (facts["tag"] === "select" && guard === null) return [false, await pickOption(page, element, text), null];
   let retargeted = false;
+  let secret = secretField(facts);
   if (!facts["editable"] || facts["disabled"]) {
     const cell = guard === null ? await cellOf(page, element) : null;
     if (cell !== null) return [false, await fillCell(page, element, cell, text, humanize), null];
@@ -160,6 +162,7 @@ export async function fill(page: Page, given: Element, text: string, humanize: b
     element = opened;
     retargeted = true;
     facts = await info(page, element);
+    secret ||= secretField(facts);
   }
   if (facts["tag"] === "input" && SET_DIRECTLY.has(String(facts["type"]))) return [retargeted, await setValue(page, element, String(facts["type"]), text), null];
   const loader = page.loader(element.frame);
@@ -172,12 +175,13 @@ export async function fill(page: Page, given: Element, text: string, humanize: b
     element = followed;
     replaced = true;
     facts = await info(page, element);
+    secret ||= secretField(facts);
   }
   retargeted = retargeted || replaced;
   await clearField(page, element, humanize);
   if (text && insertsAtOnce(facts, humanize, guard)) await insertThenFinalKey(page, element, text);
   else if (text) await typeInto(page, element, text, humanize, guard);
-  return [retargeted, null, text ? await readBack(page, element, text) : null];
+  return [retargeted, null, text ? await readBack(page, element, text, secret) : null];
 }
 
 export function insertsAtOnce(facts: Record<string, unknown>, humanize: boolean, guard: Guard): boolean {
@@ -297,6 +301,26 @@ async function fillCell(page: Page, element: Element, cell: Element, text: strin
   return { cell: name !== undefined ? joinedWords(name) : element.label, value: now, was };
 }
 
+export async function refuseMovedFocus(page: Page, element: Element, typed: string): Promise<void> {
+  let held: unknown;
+  try {
+    held = await page.call(HOLDS_FOCUS, [element], { frame: element.frame, read: true });
+  } catch (error) {
+    if (!(error instanceof BrowseError) || error instanceof ConnectionLost) throw error;
+    held = false;
+  }
+  if (held === true) return;
+  flag("fill_focus_moved", true);
+  const lead = typed
+    ? `The text up to its last character went into ${element.label}, but focus moved off it before the last keystroke, so that keystroke`
+    : `Focus moved off ${element.label} before the keystroke, so it`;
+  throw new BrowseError(
+    `${lead} wasn't sent (it would have landed in another field). Snapshot to see where focus went, then finish the field with \`type\``,
+    { typed: Array.from(typed).length },
+    "focus_moved",
+  );
+}
+
 export async function insertThenFinalKey(page: Page, element: Element, text: string): Promise<void> {
   const split = splitFinal(text);
   if (split === null) {
@@ -305,6 +329,7 @@ export async function insertThenFinalKey(page: Page, element: Element, text: str
   }
   const [head, last] = split;
   if (head) await insertText(page, element, head);
+  await refuseMovedFocus(page, element, head);
   flag("fill_final_key", true);
   const input = inputOf(page);
   const keyboard = input.keyboard();
@@ -396,7 +421,7 @@ export async function optionRows(page: Page, element: Element): Promise<OptionRo
     const rows = await page.call(OPTION_ROWS, [element], { frame: element.frame, read: true });
     return Array.isArray(rows) ? (rows as OptionRow[]) : null;
   } catch (error) {
-    if (error instanceof BrowseError && error.code !== "connection_lost") return null;
+    if (error instanceof BrowseError && !(error instanceof ConnectionLost)) return null;
     throw error;
   }
 }

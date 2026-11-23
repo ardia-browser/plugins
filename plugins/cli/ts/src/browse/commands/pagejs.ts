@@ -18,6 +18,7 @@ import { allow } from "./permissions.ts";
 import type { Ctx } from "./ctx.ts";
 import { register } from "./index.ts";
 import { need, parse } from "./parse.ts";
+import { raceDialog, refuseIfDialog } from "../changes/dialogs.ts";
 
 export const EVAL_TIMEOUT = 60.0;
 export const ISOLATED_EVAL = "function (source) { return (0, eval)(source); }";
@@ -150,8 +151,9 @@ export async function cmdEval(ctx: Ctx, argv: string[]): Promise<Result> {
   const mainWorld = !options["isolated"];
   if (mainWorld) flag("eval_main_world", true);
   let value: unknown;
+  await refuseIfDialog(page, "`eval`");
   try {
-    value = mainWorld ? await evaluateMain(page, fixed, limit) : await evaluateIsolated(page, fixed, limit);
+    value = await raceDialog(page, () => (mainWorld ? evaluateMain(page, fixed, limit) : evaluateIsolated(page, fixed, limit)), "`eval`");
   } catch (error) {
     if (!(error instanceof OutcomeUnknown) || !/didn't answer Runtime\.(evaluate|callFunctionOn)/u.test(error.text)) throw error;
     flag("eval_timed_out", true);

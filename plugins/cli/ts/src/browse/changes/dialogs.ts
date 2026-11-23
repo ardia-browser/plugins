@@ -1,6 +1,6 @@
 import { headPoints } from "../../pylib/str.ts";
 import { redact } from "../../redact.ts";
-import { sleep } from "../cdp/cancel.ts";
+import { currentSignal, later, sleep, withSignal } from "../cdp/cancel.ts";
 import { BrowseError } from "../daemon-errors.ts";
 import { add, flag } from "../metrics.ts";
 import type { Page } from "../state/page.ts";
@@ -11,7 +11,7 @@ import { monotonic } from "../state/wait.ts";
 
 export const AUTO_HANDLED = new Set(["alert", "beforeunload"]);
 export const AUTO_GRACE = 0.3;
-export const DIALOG_GRACE = 0.25;
+export const CLEANUP_WAIT = 3.0;
 export const DIALOG_POLL = 0.05;
 export const MESSAGE_SHOWN = 200;
 export const DOWNLOADS_KEPT = 8;
@@ -55,9 +55,7 @@ function noteBlocked(): void {
 }
 
 export function blocking(page: Page): Json | null {
-  const dialog = page.dialog;
-  if (dialog === null) return null;
-  return dialog;
+  return page.dialog ?? null;
 }
 
 export async function refuseIfDialog(page: Page, action: string): Promise<void> {
@@ -65,7 +63,7 @@ export async function refuseIfDialog(page: Page, action: string): Promise<void> 
   if (dialog === null) return;
   if (autoHandled(page.state, dialog["type"])) {
     const deadline = monotonic() + AUTO_GRACE;
-    while (page.dialog !== null && monotonic() < deadline) await sleep(DIALOG_POLL);
+    while (blocking(page) !== null && monotonic() < deadline) await sleep(DIALOG_POLL);
     dialog = blocking(page);
     if (dialog === null) return;
   }
@@ -92,37 +90,68 @@ export function openDialog(state: State): Json | null {
   return null;
 }
 
-export async function raceDialog<T>(page: Page, work: Promise<T>, action: string): Promise<T> {
-  let finished = false;
-  const settled = work.then(
-    (value) => {
-      finished = true;
-      return value;
-    },
-    (error: unknown) => {
-      finished = true;
-      throw error;
-    },
+export type Outcome<T> = { value: T } | { error: unknown };
+
+function settle<T>(work: Promise<T>): Promise<Outcome<T>> {
+  return work.then(
+    (value) => ({ value }),
+    (error: unknown) => ({ error }),
   );
-  const watch = async (): Promise<never> => {
-    let since: number | null = null;
-    for (;;) {
-      await sleep(DIALOG_POLL);
-      if (finished) return new Promise<never>(() => {});
-      const dialog = page.dialog;
-      if (dialog === null || autoHandled(page.state, dialog["type"])) {
-        since = null;
-        continue;
-      }
-      since ??= monotonic();
-      if (monotonic() - since >= DIALOG_GRACE) {
-        settled.catch(() => {});
-        noteBlocked();
-        throw new DialogBlocked(dialog, action, true);
-      }
-    }
+}
+
+export async function cleanupWithin(outcome: Promise<unknown>, seconds: number): Promise<boolean> {
+  let stop = () => {};
+  const timer = new Promise<boolean>((resolve) => {
+    stop = later(seconds * 1000, () => resolve(false));
+  });
+  try {
+    return await Promise.race([outcome.then(() => true), timer]);
+  } finally {
+    stop();
+  }
+}
+
+export async function raceDialog<T>(page: Page, run: () => Promise<T>, action: string, landed = true): Promise<T> {
+  const parent = currentSignal();
+  const child = new AbortController();
+  const forward = () => child.abort();
+  if (parent !== null) {
+    if (parent.aborted) child.abort();
+    else parent.addEventListener("abort", forward, { once: true });
+  }
+  let latched: Json | null = null;
+  let trip: () => void = () => {};
+  const tripped = new Promise<null>((resolve) => {
+    trip = () => resolve(null);
+  });
+  const latch = (dialog: Json | null) => {
+    if (latched !== null || dialog === null || dialog === undefined || autoHandled(page.state, dialog["type"])) return;
+    latched = { ...dialog };
+    child.abort();
+    trip();
   };
-  return Promise.race([settled, watch()]);
+  const listener: Listener = (eventPage, method, params) => {
+    if (eventPage === page && method === "Page.javascriptDialogOpening") latch(params);
+  };
+  const listeners = page.state?.listeners ?? [];
+  listeners.push(listener);
+  const poll = setInterval(() => latch(blocking(page)), DIALOG_POLL * 1000);
+  try {
+    const outcome = settle(withSignal(child.signal, run));
+    const first = await Promise.race([outcome, tripped]);
+    if (latched === null && first !== null) {
+      if ("error" in first) throw first.error;
+      return first.value;
+    }
+    if (!(await cleanupWithin(outcome, CLEANUP_WAIT))) flag("dialog_cleanup_unconfirmed", true);
+    noteBlocked();
+    throw new DialogBlocked(latched as unknown as Json, action, landed);
+  } finally {
+    clearInterval(poll);
+    const at = listeners.indexOf(listener);
+    if (at >= 0) listeners.splice(at, 1);
+    parent?.removeEventListener("abort", forward);
+  }
 }
 
 export class ReceiptWatch {

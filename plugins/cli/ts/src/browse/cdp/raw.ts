@@ -43,6 +43,10 @@ function of(state: State): RawSessions {
   return raw;
 }
 
+export function rawSessionOf(state: State, key: string): string | null {
+  return RAW.get(state)?.sessions.get(key) ?? null;
+}
+
 export function forgetSession(state: State, sessionId: string | null): void {
   const raw = RAW.get(state);
   if (raw === undefined || !sessionId) return;

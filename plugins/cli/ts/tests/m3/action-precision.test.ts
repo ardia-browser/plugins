@@ -1,21 +1,23 @@
 import { describe, expect, test } from "bun:test";
-import { checkedFrom, listOptions, matchOptions, MAX_OPTIONS_LISTED, splitFinal } from "../../src/browse/act/choices.ts";
+import { checkedFrom, HOLDS_FOCUS, listOptions, matchOptions, MAX_OPTIONS_LISTED, OVERLAY_INPUT, POPUPS_BEFORE, splitFinal } from "../../src/browse/act/choices.ts";
 import { driftBetween, driftMessage, guardDrift, identityOf, refuseDrift } from "../../src/browse/act/drift.ts";
 import { insertThenFinalKey, setChecked } from "../../src/browse/act/fields.ts";
 import { click, PREPARE_ACTION } from "../../src/browse/act/pointer.ts";
 import { BLOCKER_AT, blockerPhrase, classify, findBlocker } from "../../src/browse/act/obstruction.ts";
 import { PRECISION_COUNTS, PRECISION_FLAGS } from "../../src/browse/act/precision-metrics.ts";
-import { fieldKind, type FieldRead, judgeReadback, readbackNote } from "../../src/browse/act/readback.ts";
-import { mayRetry, refusedRetry, sideEffectful } from "../../src/browse/act/retry.ts";
-import { sleep } from "../../src/browse/cdp/cancel.ts";
+import { fieldKind, type FieldRead, fieldRead, judgeReadback, READ_FIELD, readbackNote, secretField } from "../../src/browse/act/readback.ts";
+import { LostMidAction, mayRetry, refusedRetry, sideEffectful } from "../../src/browse/act/retry.ts";
+import { shield, sleep } from "../../src/browse/cdp/cancel.ts";
+import { safeCode } from "../../src/browse/codes.ts";
+import { outsideItsFrame } from "../../src/browse/act/pointer.ts";
 import {
   DialogBlocked, dialogLine, downloadLine, openDialog, pageForSelector, raceDialog, ReceiptWatch, refuseIfDialog,
 } from "../../src/browse/changes/dialogs.ts";
-import { MUTATION_NOISE_FILTER, REACTION_STATE, STYLE_THROTTLE_MS, UNWATCH_REACTION, WATCH_REACTION } from "../../src/browse/changes/noise.ts";
-import { decorate, landedReport, NetworkWatch, netError, SETTLE_LIMIT, STALE_REQUEST } from "../../src/browse/changes/observe.ts";
+import { MUTATION_NOISE_FILTER, REACTION_STATE, reactionExpiry, STYLE_THROTTLE_MS, UNWATCH_REACTION, WATCH_REACTION } from "../../src/browse/changes/noise.ts";
+import { decorate, dialogAfterwards, landedReport, NetworkWatch, netError, SETTLE_LIMIT, STALE_REQUEST } from "../../src/browse/changes/observe.ts";
 import { diff, type View } from "../../src/browse/changes/report.ts";
 import { asData, renderReport } from "../../src/browse/changes/text.ts";
-import { budget, MAX_SCALE, noteRawThrottle, throttleFrom, throttleLine, throttleOf } from "../../src/browse/changes/throttle.ts";
+import { budget, MAX_SCALE, noteManagedThrottle, noteRawThrottle, throttleFrom, throttleLine, throttleOf } from "../../src/browse/changes/throttle.ts";
 import { checkedResult, filledResult } from "../../src/browse/commands/act.ts";
 import { BrowseError, ConnectionLost, OutcomeUnknown } from "../../src/browse/daemon-errors.ts";
 import { active, begin } from "../../src/browse/metrics.ts";
@@ -83,11 +85,13 @@ describe("obstruction classes", () => {
         return args[3] ? { objectId: "O2" } : { ...VIEWPORT, found: true, modal: true, role: "dialog", name: "Cookies" };
       },
       elementFrom: async () => cover,
+      sessionFor: () => "S",
+      send: async () => ({ nodes: AX(9, "dialog", "Cookie settings") }),
       state: { knownRef: () => null, addRef: (_page: unknown, node: Element, role: string, name: string) => (added.push([node.backendId, role, name]), "e40") },
     } as unknown as Page;
     const [blocker, values] = await measured(() => findBlocker(page, element, 10, 10));
     expect(blocker).toEqual({ kind: "modal", ref: "e40", role: "dialog", name: "Cookies" });
-    expect(added).toEqual([[9, "dialog", "Cookies"]]);
+    expect(added).toEqual([[9, "dialog", "Cookie settings"]]);
     expect(values.get("click_blocker_ref")).toBe(true);
   });
 
@@ -108,6 +112,11 @@ describe("obstruction classes", () => {
       knownRef: () => null,
       addRef: (_page: unknown, node: Element, role: string, name: string) => (this.minted.push([node.backendId, role, name]), "e41"),
     };
+
+    override async send(method: string, given: Record<string, unknown> | null = null): Promise<Record<string, unknown>> {
+      if (method === "Accessibility.getPartialAXTree") return { nodes: AX(77, "dialog", "Join our list") };
+      return super.send(method, given);
+    }
 
     override async call(fn: string, args: unknown[] = []): Promise<unknown> {
       if (fn === PREPARE_ACTION) return { ...((await super.call(fn, args)) as Record<string, unknown>), cover: "div.newsletter-modal" };
@@ -186,7 +195,8 @@ describe("role and name drift", () => {
   test("the identity is read the way the snapshot reads it", () => {
     expect(identityOf(AX(4, "DisclosureTriangle", " More "), 4)).toEqual({ role: "button", name: "More" });
     expect(identityOf([{ nodeId: "1", ignored: false, role: { value: "Date" }, name: { value: "Due" }, backendDOMNodeId: 4 }], 4)).toEqual({ role: "textbox", name: "Due" });
-    expect(identityOf([{ nodeId: "1", ignored: true, role: { value: "button" }, backendDOMNodeId: 4 }], 4)).toBeNull();
+    expect(identityOf([{ nodeId: "1", ignored: true, role: { value: "button" }, backendDOMNodeId: 4 }], 4)).toBe("ignored");
+    expect(identityOf([], 4)).toBeNull();
   });
 
   test("a ref whose element was renamed is refused before acting, and counted", async () => {
@@ -263,6 +273,13 @@ describe("insert then the last key", () => {
   });
 
   class TypingRenderer extends FakeRenderer {
+    focused = true;
+
+    override async call(fn: string, args: unknown[] = []): Promise<unknown> {
+      if (fn === HOLDS_FOCUS) return this.focused;
+      return super.call(fn, args);
+    }
+
     override async send(method: string, given: Record<string, unknown> | null = null): Promise<Record<string, unknown>> {
       if (method === "Input.insertText") {
         this.counts["beforeinput"] = (this.counts["beforeinput"] ?? 0) + 1;
@@ -298,7 +315,7 @@ describe("insert then the last key", () => {
   });
 });
 
-const FIELD: FieldRead = { tag: "input", type: "text", value: "", maxLength: -1, autocomplete: "", hint: "", combo: null };
+const FIELD: FieldRead = { tag: "input", type: "text", value: "", length: null, secret: false, maxLength: -1, autocomplete: "", hint: "", combo: null };
 
 describe("field readback", () => {
   test("kinds come from the type, autocomplete and the field's own words", () => {
@@ -596,6 +613,7 @@ describe("throttle-scaled budgets", () => {
     noteRawThrottle(page.state, "T", "Page.reload", {});
     expect(throttleOf(page.page)?.cpu).toBe(3);
     page.overrides.set("Emulation.setCPUThrottlingRate", { rate: 6 });
+    noteManagedThrottle(page.page, "Emulation.setCPUThrottlingRate");
     expect(throttleOf(page.page)?.scale).toBe(6);
   });
 
@@ -661,7 +679,7 @@ describe("blocking dialogs", () => {
 
   test("a dialog that opens mid-action fails it fast instead of hanging", async () => {
     const page = dialogPage();
-    const hanging = new Promise<string>(() => {});
+    const hanging = () => sleep(60).then(() => "never");
     setTimeout(() => (page.dialog = { type: "beforeunload", message: "" }), 30);
     setTimeout(() => (page.dialog = { type: "confirm", message: "Leave?" }), 60);
     const started = monotonic();
@@ -673,9 +691,9 @@ describe("blocking dialogs", () => {
 
   test("work that finishes first wins, and its errors pass through", async () => {
     const page = dialogPage();
-    expect(await raceDialog(page, sleep(0.02).then(() => "done"), "`click`")).toBe("done");
+    expect(await raceDialog(page, () => sleep(0.02).then(() => "done"), "`click`")).toBe("done");
     const boom = new BrowseError("boom", null, "x");
-    expect(await failure(() => raceDialog(page, Promise.reject(boom), "`click`"))).toBe(boom);
+    expect(await failure(() => raceDialog(page, () => Promise.reject(boom), "`click`"))).toBe(boom);
   });
 
   test("the page for a selector is the ref's tab, else the current one", () => {
@@ -795,5 +813,294 @@ describe("telemetry names", () => {
     for (const name of PRECISION_FLAGS) expect(isMetricFlag(name)).toBe(true);
     for (const name of PRECISION_COUNTS) expect(isMetricCount(name)).toBe(true);
     for (const kind of ["modal", "fixed_header", "iframe", "clipped_scroll", "overlay", "offscreen", "sibling"]) expect(PRECISION_FLAGS.has(`click_obstructed_${kind}`)).toBe(true);
+  });
+});
+
+describe("review round 1", () => {
+  test("a dialog dismissed within a moment still stops the action, and its input stops at once", async () => {
+    const page = dialogPage();
+    const sent: string[] = [];
+    const action = async () => {
+      sent.push("press");
+      await sleep(0.4);
+      sent.push("more input");
+      return "done";
+    };
+    setTimeout(() => (page.dialog = { type: "confirm", message: "Sure?" }), 30);
+    setTimeout(() => (page.dialog = null), 60);
+    const error = await failure(() => raceDialog(page, action, "`click`"));
+    expect(error.code).toBe("dialog_blocked");
+    expect(error.message).toContain('saying "Sure?"');
+    await sleep(0.5);
+    expect(sent).toEqual(["press"]);
+  });
+
+  test("the opening event latches even before the page record is set", async () => {
+    const page = dialogPage();
+    setTimeout(() => {
+      for (const listener of [...(page.state.listeners as ((p: Page | null, m: string, x: Record<string, unknown>) => void)[])]) {
+        listener(page, "Page.javascriptDialogOpening", { type: "prompt", message: "Name?" });
+      }
+    }, 30);
+    const error = await failure(() => raceDialog(page, () => sleep(5).then(() => 1), "`fill`"));
+    expect((error.data?.["dialog"] as { type: string }).type).toBe("prompt");
+    expect((page.state.listeners as unknown[]).length).toBe(0);
+  });
+
+  test("the action's own cleanup finishes before control returns", async () => {
+    const page = dialogPage();
+    const order: string[] = [];
+    const action = async () => {
+      try {
+        await sleep(5);
+      } finally {
+        await shield(async () => {
+          await sleep(0.15, null);
+          order.push("released");
+        });
+      }
+    };
+    setTimeout(() => (page.dialog = { type: "confirm", message: "x" }), 20);
+    await failure(() => raceDialog(page, action, "`click`"));
+    order.push("returned");
+    expect(order).toEqual(["released", "returned"]);
+  });
+
+  test("an auto-accepted alert never latches", async () => {
+    const page = dialogPage();
+    setTimeout(() => (page.dialog = { type: "alert", message: "Saved" }), 10);
+    expect(await raceDialog(page, () => sleep(0.15).then(() => "done"), "`click`")).toBe("done");
+  });
+
+  test("the documented codes survive the JSON allowlist", () => {
+    for (const code of ["dialog_blocked", "ref_drifted", "outcome_unknown", "focus_moved", "covered"]) expect(safeCode(code)).toBe(code);
+  });
+
+  test("the last keystroke isn't sent when focus moved off the field", async () => {
+    class MovedRenderer extends FakeRenderer {
+      override async call(fn: string, args: unknown[] = []): Promise<unknown> {
+        if (fn === HOLDS_FOCUS) return false;
+        return super.call(fn, args);
+      }
+
+      override async send(method: string, given: Record<string, unknown> | null = null): Promise<Record<string, unknown>> {
+        if (method === "Input.insertText") this.counts["input"] = (this.counts["input"] ?? 0) + 1;
+        return super.send(method, given);
+      }
+    }
+    const page = new MovedRenderer();
+    const [error, values] = await measured(() => failure(() => insertThenFinalKey(page.page, new Element("F", "O", 1, "@e1"), "Lond")));
+    expect(error.code).toBe("focus_moved");
+    expect(error.message).toContain("The text up to its last character went into @e1, but focus moved off it before the last keystroke");
+    expect(error.data).toEqual({ typed: 3 });
+    expect(page.params.filter(([method]) => method === "Input.dispatchKeyEvent")).toEqual([]);
+    expect(values.get("fill_focus_moved")).toBe(true);
+  });
+
+  type FakeNode = Record<string, unknown>;
+
+  function popupWorld(controls: string | null, popupShownBefore: boolean) {
+    const popup: FakeNode = { id: "pop" };
+    const active: FakeNode = { tagName: "INPUT", type: "text", readOnly: false, disabled: false, isContentEditable: false, closest: () => popup };
+    const doc: FakeNode = { activeElement: active, body: {}, getElementById: (id: string) => (id === "pop" ? { contains: (node: unknown) => node === active } : null) };
+    const el: FakeNode = {
+      ownerDocument: doc,
+      contains: () => false,
+      getRootNode: () => doc,
+      getAttribute: (name: string) => (name === "aria-controls" ? controls : name === "role" ? "combobox" : null),
+    };
+    const shown = new WeakSet<object>(popupShownBefore ? [popup] : []);
+    return { el, active, before: { opener: el, shown } };
+  }
+
+  function overlay(world: ReturnType<typeof popupWorld>, opened: boolean, marked = true): unknown {
+    const holder = globalThis as unknown as Record<string, unknown>;
+    holder[POPUPS_BEFORE] = marked ? world.before : null;
+    try {
+      return (new Function(`return ${OVERLAY_INPUT}`)() as (el: unknown, opened: boolean) => unknown)(world.el, opened);
+    } finally {
+      delete holder[POPUPS_BEFORE];
+    }
+  }
+
+  test("focus is followed into a popup only on evidence the field owns it", () => {
+    const unowned = popupWorld(null, false);
+    expect(overlay(unowned, false)).toBeNull();
+    expect(overlay(unowned, true, false)).toBeNull();
+    const owned = popupWorld("pop", true);
+    expect(overlay(owned, false)).toBe(owned.active);
+    const freshAfterClick = popupWorld(null, false);
+    expect(overlay(freshAfterClick, true)).toBe(freshAfterClick.active);
+    const alreadyOpen = popupWorld(null, true);
+    expect(overlay(alreadyOpen, true)).toBeNull();
+  });
+
+  test("an unnamed container ref keeps the snapshot's generic role, and its name falls back to rendered text", async () => {
+    expect(identityOf([{ nodeId: "7", ignored: false, role: { value: "group" }, name: { value: "" }, backendDOMNodeId: 7 }], 7)).toEqual({ role: "generic", name: "" });
+    const page = {
+      sessionFor: () => "S",
+      send: async () => ({ nodes: [{ nodeId: "7", ignored: false, role: { value: "generic" }, name: { value: "" }, backendDOMNodeId: 7 }] }),
+      call: async () => "Open  menu",
+      state: { refs: new Map() },
+    } as unknown as Page;
+    await refuseDrift(page, new Element("F", "O", 7, "@e9"), { id: "e9", role: "generic", name: "Open menu", backend: 7 } as never, "click");
+  });
+
+  test("a ref that became hidden from the accessibility tree is refused, not passed", async () => {
+    const page = axPage([{ nodeId: "1", ignored: true, role: { value: "button" }, backendDOMNodeId: 5 }]);
+    const error = await failure(() => refuseDrift(page, new Element("F", "O", 5, "@e7"), { id: "e7", role: "button", name: "Pay", backend: 5 } as never, "click"));
+    expect(error.code).toBe("ref_drifted");
+    expect(error.data).toMatchObject({ field: "hidden", now: null });
+    expect(error.message).toContain('button "Pay" is now hidden from the accessibility tree');
+    expect(driftBetween({ role: "button", name: "x" }, null)).toBeNull();
+  });
+
+  test("a minted blocker ref carries its accessibility identity, so acting on it doesn't drift", async () => {
+    const refs = new Map<string, unknown>();
+    const header = new Element("F", "H", 12, "header");
+    const page = {
+      call: async (_fn: string, args: unknown[]) => (args[3] ? { objectId: "H" } : { ...VIEWPORT, found: true, position: "fixed", layer: { top: 0, bottom: 60, left: 0, right: 1000 }, role: "header", name: "" }),
+      elementFrom: async () => header,
+      sessionFor: () => "S",
+      send: async () => ({ nodes: AX(12, "banner", "Site") }),
+      state: {
+        refs,
+        knownRef: () => null,
+        addRef: (_page: unknown, node: Element, role: string, name: string) => {
+          refs.set("e50", { id: "e50", role, name, backend: node.backendId });
+          return "e50";
+        },
+      },
+    } as unknown as Page;
+    const blocker = await findBlocker(page, new Element("F", "O", 5, "@e5"), 10, 10);
+    expect(blocker?.ref).toBe("e50");
+    expect(refs.get("e50")).toMatchObject({ role: "banner", name: "Site" });
+    await guardDrift(page, header, "@e50", "click");
+  });
+
+  function framePage(owner: number, hit: { frameId: string; backendNodeId: number }) {
+    const asked: string[] = [];
+    const page = {
+      session: "S",
+      mainFrame: "P",
+      frames: new Map([["P", { parent: null }], ["F", { parent: "P" }]]),
+      sessionFor: () => "S",
+      send: async (method: string) => {
+        asked.push(method);
+        if (method === "DOM.getNodeForLocation") return hit;
+        if (method === "DOM.getFrameOwner") return { backendNodeId: owner };
+        return {};
+      },
+    } as unknown as Page;
+    return { page, asked };
+  }
+
+  test("a parent-frame overlay over an iframe target is found, paired with its own frame and node", async () => {
+    const { page } = framePage(12, { frameId: "P", backendNodeId: 40 });
+    const [found, values] = await measured(() => outsideItsFrame(page, new Element("F", "O", 3, "@e3"), 300, 200));
+    expect(found).toEqual({ where: "the point 300,200, which isn't on it in the page around its frame", at: { frame: "P", backend: 40 } });
+    expect(values.get("frame_point_unconfirmed")).toBe(true);
+  });
+
+  test("a hit on the target's own iframe element is not a cover", async () => {
+    const { page, asked } = framePage(12, { frameId: "P", backendNodeId: 12 });
+    expect(await outsideItsFrame(page, new Element("F", "O", 3, "@e3"), 300, 200)).toBeNull();
+    expect(asked).toEqual(["DOM.getNodeForLocation", "DOM.getFrameOwner"]);
+  });
+
+  test("a blocker found in another frame is classified there, not re-probed in the child", async () => {
+    const overlayNode = new Element("P", "OV", 40, "overlay");
+    const probes: unknown[] = [];
+    const page = {
+      resolveBackend: async (backend: number, frame: string) => (backend === 40 && frame === "P" ? overlayNode : null),
+      call: async (_fn: string, args: unknown[], options: { frame: string }) => {
+        probes.push([options.frame, args[4] === overlayNode]);
+        return args[3] ? { objectId: "OV" } : { ...VIEWPORT, found: true, position: "fixed", layer: { top: 0, bottom: 800, left: 0, right: 1000 }, role: "div", name: "" };
+      },
+      elementFrom: async () => overlayNode,
+      sessionFor: () => "S",
+      send: async () => ({ nodes: [] }),
+      state: { knownRef: () => null, addRef: () => "e60" },
+    } as unknown as Page;
+    const blocker = await findBlocker(page, new Element("F", "O", 3, "@e3"), 10, 10, { frame: "P", backend: 40 });
+    expect(blocker).toEqual({ kind: "overlay", ref: "e60", role: "div", name: "" });
+    expect(probes).toEqual([["P", true], ["P", true]]);
+  });
+
+  test("a secret field's value never leaves the page, even after its type is toggled", () => {
+    const probe = new Function(`return ${READ_FIELD}`)() as (el: unknown, latched: boolean) => Record<string, unknown>;
+    const field = (type: string, autocomplete: string | null = null) => ({
+      tagName: "INPUT", type, value: "hunter2", maxLength: -1, name: "", id: "", isContentEditable: false,
+      getAttribute: (name: string) => (name === "autocomplete" ? autocomplete : null),
+    });
+    expect(probe(field("text"), true)).toMatchObject({ value: null, length: 7, secret: true });
+    expect(probe(field("password"), false)).toMatchObject({ value: null, length: 7, secret: true });
+    expect(probe(field("text", "one-time-code"), false)).toMatchObject({ value: null, secret: true });
+    expect(probe(field("text"), false)).toMatchObject({ value: "hunter2", secret: false });
+  });
+
+  test("a secret is judged by its length alone", () => {
+    const read = fieldRead({ tag: "input", type: "text", value: null, length: 7, secret: true });
+    expect(judgeReadback(read, "hunter2")).toEqual({ status: "ok", kind: "password", reason: null, held: null });
+    expect(judgeReadback(read, "hunter22")).toEqual({ status: "did_not_commit", kind: "password", reason: "it holds 7 characters, not 8", held: null });
+    expect(judgeReadback(fieldRead({ tag: "input", value: null, secret: true }), "x").status).toBe("unverified");
+    expect(secretField({ tag: "input", type: "password" })).toBe(true);
+    expect(secretField({ tag: "input", type: "text" })).toBe(false);
+  });
+
+  test("a lost connection mid-action keeps its transport class but carries outcome_unknown", async () => {
+    const [lost, values] = await measured(async () => refusedRetry("click", new ConnectionLost()));
+    expect(lost).toBeInstanceOf(ConnectionLost);
+    expect(lost).toBeInstanceOf(LostMidAction);
+    expect(lost.code).toBe("outcome_unknown");
+    expect(lost.exitCode).toBe(2);
+    expect(safeCode(lost.code)).toBe("outcome_unknown");
+    expect(values.get("retry_refusals")).toBe(1);
+    expect(refusedRetry("click", lost)).toBe(lost);
+    const plain = new ConnectionLost();
+    expect(refusedRetry("snapshot", plain)).toBe(plain);
+  });
+
+  test("a raw throttle ends with its raw session, and the newest of raw and set wins", () => {
+    const page = new WatchPage();
+    let alive = true;
+    noteRawThrottle(page.state, "T", "Emulation.setCPUThrottlingRate", { rate: 4 }, () => alive);
+    expect(throttleOf(page.page)?.cpu).toBe(4);
+    page.overrides.set("Emulation.setCPUThrottlingRate", { rate: 2 });
+    noteManagedThrottle(page.page, "Emulation.setCPUThrottlingRate");
+    expect(throttleOf(page.page)?.cpu).toBe(2);
+    noteRawThrottle(page.state, "T", "Emulation.setCPUThrottlingRate", { rate: 6 }, () => alive);
+    expect(throttleOf(page.page)?.cpu).toBe(6);
+    alive = false;
+    expect(throttleOf(page.page)?.cpu).toBe(2);
+    page.overrides.delete("Emulation.setCPUThrottlingRate");
+    expect(throttleOf(page.page)).toBeNull();
+  });
+
+  test("the in-page watch lives as long as the scaled reaction budget", () => {
+    expect(reactionExpiry(1.5, 1.0)).toBe(3000);
+    expect(reactionExpiry(6, 1.0)).toBe(7000);
+    expect(WATCH_REACTION).toContain("(el, id, expiry)");
+  });
+
+  test("a write redirected to a read is swept like a read; an unredirected write isn't", async () => {
+    const page = new WatchPage();
+    const watch = new NetworkWatch(page.page);
+    await watch.start();
+    watch.listener(page.page, "Network.requestWillBeSent", { requestId: "r", type: "XHR", request: { method: "POST", url: "https://x/save" } });
+    watch.listener(page.page, "Network.requestWillBeSent", { requestId: "r", type: "XHR", request: { method: "GET", url: "https://x/poll" }, redirectResponse: { status: 303 } });
+    watch.listener(page.page, "Network.requestWillBeSent", { requestId: "w", type: "Fetch", request: { method: "POST", url: "https://x/write" } });
+    const old = monotonic() - STALE_REQUEST - 0.01;
+    (watch.records.get("r") as { started: number }).started = old;
+    (watch.records.get("w") as { started: number }).started = old;
+    expect(watch.busy()).toBe(true);
+    watch.listener(page.page, "Network.loadingFinished", { requestId: "w" });
+    expect(watch.busy()).toBe(false);
+    await watch.stop();
+  });
+
+  test("a dialog that opens while the page settles keeps the action's result and says it landed", () => {
+    expect(dialogAfterwards(new DialogBlocked({ type: "confirm", message: "Leave?" }, "`click`", true))).toBe("a JavaScript confirm dialog opened afterwards and froze the page");
+    expect(dialogAfterwards(new BrowseError("x", null, "covered"))).toBeNull();
   });
 });

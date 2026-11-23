@@ -92,6 +92,7 @@ class FormBrowser {
     if (source.includes("inputWatch") || source.includes("ardiaBrowseInputWatch")) return { value: { ...this.counts, activeFrame: false } };
     if (source.includes("ardiaBrowse.info")) return { value: { tag: "input", type: "text", editable: true, value: "", connected: true } };
     if (source.includes("api.filterField(field)")) return { value: false };
+    if (source.includes("holdsFocus")) return { value: true };
     if (source.includes("isConnected")) return { value: true };
     if (source.includes("visibilityState")) return { value: false };
     if (source.includes("document.title")) return { value: "Form" };
@@ -222,5 +223,59 @@ describe("a JavaScript dialog in a batch", () => {
     expect(results.map((result) => (result as { code?: string }).code ?? null)).toEqual(["dialog_blocked", "dialog_blocked"]);
     expect((results[1] as { error?: string }).error).toContain("so `fill` wasn't sent");
     expect(browser.count("Input.insertText")).toBe(0);
+  });
+});
+
+class LateDialogBrowser extends FormBrowser {
+  pressed = false;
+  late: "settle" | "eval" = "settle";
+  opened: (() => void) | null = null;
+
+  override async send(method: string, params: Record<string, unknown> | null = null, options: { signal?: AbortSignal } = {}): Promise<Record<string, unknown>> {
+    if (method === "Input.dispatchMouseEvent" && params?.["type"] === "mousePressed") this.pressed = true;
+    const settling = this.late === "settle" && this.pressed && method === "Accessibility.getFullAXTree";
+    const evaluating = this.late === "eval" && method === "Runtime.evaluate" && String(params?.["expression"] ?? "").includes("confirm(");
+    if ((settling || evaluating) && this.opened !== null) {
+      this.sent.push(method);
+      this.opened();
+      this.opened = null;
+      return new Promise((_, reject) => options.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true }));
+    }
+    return super.send(method, params);
+  }
+}
+
+function lateSetup(late: "settle" | "eval"): { state: State; browser: LateDialogBrowser } {
+  const { state } = setup();
+  const browser = new LateDialogBrowser();
+  browser.late = late;
+  state.browser = browser as never;
+  browser.opened = () => {
+    const page = state.pages.get("T");
+    if (page) page.dialog = { type: "confirm", message: "Leave this page?" };
+  };
+  return { state, browser };
+}
+
+describe("a dialog after the action landed", () => {
+  test("one that opens while the page settles keeps the click's success and says it landed", async () => {
+    const { state } = lateSetup("settle");
+    const started = performance.now();
+    const { results, text } = await batch(state, ["--bail", "click #go", "fill #a one"]);
+    expect(performance.now() - started).toBeLessThan(8000);
+    expect(results[0]?.success).toBe(true);
+    expect(text).toContain("it landed, but a JavaScript confirm dialog opened afterwards and froze the page");
+    expect(text).toContain('! confirm dialog "Leave this page?" is open');
+    expect((results[1] as { code?: string }).code).toBe("not_run");
+  });
+
+  test("eval that opens a confirm fails fast with the dialog", async () => {
+    const { state } = lateSetup("eval");
+    const started = performance.now();
+    const { results } = await batch(state, ["eval confirm('Leave?')", "eval 1"]);
+    expect(performance.now() - started).toBeLessThan(8000);
+    expect(results.map((result) => (result as { code?: string }).code ?? null)).toEqual(["dialog_blocked", "dialog_blocked"]);
+    expect((results[0] as { error?: string }).error).toContain("`eval` opened a JavaScript confirm dialog");
+    expect((results[1] as { error?: string }).error).toContain("so `eval` wasn't sent");
   });
 });

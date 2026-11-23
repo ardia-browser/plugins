@@ -1,5 +1,10 @@
 export const STYLE_THROTTLE_MS = 200;
 export const REACTION_EXPIRY_MS = 3000;
+
+export function reactionExpiry(limitSeconds: number, callSeconds: number): number {
+  return Math.max(REACTION_EXPIRY_MS, Math.ceil((limitSeconds + callSeconds) * 1000));
+}
+
 export const QUIET_WATCH = "ardiaBrowseQuietWatch";
 
 export const MUTATION_NOISE_FILTER = `(record, seen, now) => {
@@ -27,7 +32,7 @@ const STOP_QUIET = `const stopQuiet = (watch) => {
     if (globalThis.${QUIET_WATCH} === watch) globalThis.${QUIET_WATCH} = null;
   };`;
 
-export const WATCH_REACTION_SOURCE = `(given, id) => {
+export const WATCH_REACTION_SOURCE = `(given, id, expiry) => {
   const api = ardiaBrowse;
   const field = given || document.activeElement;
   if (!api.filterField(field)) return false;
@@ -39,7 +44,7 @@ export const WATCH_REACTION_SOURCE = `(given, id) => {
   watch.stop = () => stopQuiet(watch);
   const expire = () => {
     clearTimeout(watch.timer);
-    watch.timer = setTimeout(() => { if (globalThis.${QUIET_WATCH} === watch) stopQuiet(watch); }, ${REACTION_EXPIRY_MS});
+    watch.timer = setTimeout(() => { if (globalThis.${QUIET_WATCH} === watch) stopQuiet(watch); }, Math.max(${REACTION_EXPIRY_MS}, Number(expiry) || 0));
   };
   watch.onInput = () => { watch.lastInput = performance.now(); expire(); };
   field.addEventListener("input", watch.onInput, true);
@@ -65,8 +70,8 @@ export const WATCH_REACTION_SOURCE = `(given, id) => {
   return true;
 }`;
 
-export const WATCH_REACTION = `(el, id) => (${WATCH_REACTION_SOURCE})(el, id)`;
-export const WATCH_REACTION_FOCUSED = `(id) => (${WATCH_REACTION_SOURCE})(null, id)`;
+export const WATCH_REACTION = `(el, id, expiry) => (${WATCH_REACTION_SOURCE})(el, id, expiry)`;
+export const WATCH_REACTION_FOCUSED = `(id, expiry) => (${WATCH_REACTION_SOURCE})(null, id, expiry)`;
 
 export const REACTION_STATE = `(id) => {
   const watch = globalThis.${QUIET_WATCH};

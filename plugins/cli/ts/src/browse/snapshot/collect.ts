@@ -64,7 +64,7 @@ export async function backendsOf(page: Page, frame: string, name: string, limit:
   let at = 0;
   return ids.map((id) => (id > 0 ? id : (fresh[at++] ?? 0)));
 }
-const INNER_TEXT = "(el) => (el.innerText || el.textContent || '').replace(/\\s+/g, ' ').trim()";
+export const INNER_TEXT = "(el) => (el.innerText || el.textContent || '').replace(/\\s+/g, ' ').trim()";
 
 export async function settledAll(work: Promise<unknown>[]): Promise<void> {
   await Promise.allSettled(work);

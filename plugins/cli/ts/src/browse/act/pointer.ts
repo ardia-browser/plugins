@@ -21,7 +21,7 @@ import type { Element, Page } from "../state/page.ts";
 import type { State } from "../state/state.ts";
 import { monotonic } from "../state/wait.ts";
 import { asRecord, type Counts, expectInput, mouseButton, poll, rect, viewport, type Viewport } from "./common.ts";
-import { blockerPhrase, findBlocker, noteObstruction } from "./obstruction.ts";
+import { blockerPhrase, type CoverAt, findBlocker, noteObstruction } from "./obstruction.ts";
 
 export const CLEANUP_TIMEOUT = 2.0;
 export const LAYOUT_WAIT = 2.0;
@@ -368,7 +368,26 @@ function outsideMain([x, y]: [number, number], vp: Viewport): boolean {
 
 const HOLDS_HIT = "(el, hit) => el === hit || el.contains(hit) || (!!el.labels && Array.from(el.labels).some((label) => label === hit || label.contains(hit)))";
 
-async function outsideItsFrame(page: Page, element: Element, x: number, y: number): Promise<string | null> {
+export type FrameCover = { where: string; at: CoverAt | null };
+
+async function frameOwners(page: Page, frame: string): Promise<Set<string>> {
+  const owners = new Set<string>();
+  for (let current: string | null = frame; current !== null && current !== page.mainFrame; ) {
+    const parent: string | null = page.frames.get(current)?.parent ?? null;
+    let owner: Record<string, unknown>;
+    try {
+      owner = await page.send("DOM.getFrameOwner", { frameId: current });
+    } catch (error) {
+      if (error instanceof CdpError || error instanceof Gated) break;
+      throw error;
+    }
+    if (typeof owner["backendNodeId"] === "number") owners.add(JSON.stringify([parent, owner["backendNodeId"]]));
+    current = parent;
+  }
+  return owners;
+}
+
+export async function outsideItsFrame(page: Page, element: Element, x: number, y: number): Promise<FrameCover | null> {
   if (page.sessionFor(element.frame) !== page.session) return null;
   let hit: Record<string, unknown>;
   try {
@@ -378,17 +397,18 @@ async function outsideItsFrame(page: Page, element: Element, x: number, y: numbe
     throw error;
   }
   const where = `the point ${Math.round(x)},${Math.round(y)}, which isn't on it in the page around its frame`;
-  const frame = hit["frameId"];
+  const frame = typeof hit["frameId"] === "string" && hit["frameId"] ? hit["frameId"] : element.frame;
   const backend = hit["backendNodeId"];
-  if (typeof frame === "string" && frame && frame !== element.frame) {
+  if (frame !== element.frame) {
+    if (typeof backend === "number" && (await frameOwners(page, element.frame)).has(JSON.stringify([frame, backend]))) return null;
     flag("frame_point_unconfirmed", true);
-    return where;
+    return { where, at: typeof backend === "number" ? { frame, backend } : null };
   }
   if (typeof backend !== "number" || backend === element.backendId) return null;
   const node = await page.resolveBackend(backend, element.frame, "the node at the click point");
   if (node === null || (await page.call(HOLDS_HIT, [element, node], { frame: element.frame, read: true }))) return null;
   flag("frame_point_unconfirmed", true);
-  return where;
+  return { where, at: { frame, backend } };
 }
 
 export async function targetPoint(page: Page, element: Element, humanize: boolean, checkCover = true, waitForEnabled = false): Promise<Point> {
@@ -434,7 +454,9 @@ export async function targetPoint(page: Page, element: Element, humanize: boolea
   let cx = 0;
   let cy = 0;
   let cover: string | null = null;
+  let coverAt: CoverAt | null = null;
   for (let round = 0; round < 4; round += 1) {
+    coverAt = null;
     if (round > 0) {
       box = await settledBox(page, element);
       if (box === null) throw notVisible(element);
@@ -450,7 +472,10 @@ export async function targetPoint(page: Page, element: Element, humanize: boolea
       [[cx, cy], box] = await aimAt(page, element, box, facts, fx, fy);
       cover = facts.cover ?? null;
     }
-    if (!cover && !inMain && directPoint(facts) === null) cover = await outsideItsFrame(page, element, cx, cy);
+    if (!cover && !inMain) {
+      const outside = await outsideItsFrame(page, element, cx, cy);
+      if (outside !== null) [cover, coverAt] = [outside.where, outside.at];
+    }
     if (!cover) break;
     const [hx, hy] = [facts.x ?? 0, facts.y ?? 0];
     if (!tried.has(`consent ${cover}`) && !cover.startsWith("nothing")) {
@@ -495,7 +520,7 @@ export async function targetPoint(page: Page, element: Element, humanize: boolea
       );
     }
     if (cover) {
-      const blocker = await findBlocker(page, element, hx, hy);
+      const blocker = await findBlocker(page, element, hx, hy, coverAt);
       const kind = blocker?.kind ?? "sibling";
       noteObstruction(kind);
       const blockerRef = blocker?.ref ? `@${blocker.ref}` : null;

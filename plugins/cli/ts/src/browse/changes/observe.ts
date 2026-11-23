@@ -1,12 +1,12 @@
 import { pyLen, pyStrip } from "../../pylib/str.ts";
 import { redact } from "../../redact.ts";
-import { Cancelled, currentSignal, later, shield, sleep, untilCancelled, withSignal } from "../cdp/cancel.ts";
+import { Cancelled, later, shield, sleep, untilCancelled } from "../cdp/cancel.ts";
 import type { Ctx } from "../commands/ctx.ts";
 import { parse } from "../commands/parse.ts";
 import { BrowseError, CdpError, ConnectionLost, Gated, Usage } from "../daemon-errors.ts";
 import { refusedRetry } from "../act/retry.ts";
 import { raceDialog, ReceiptWatch, refuseIfDialog } from "./dialogs.ts";
-import { REACTION_STATE, UNWATCH_REACTION, WATCH_REACTION, WATCH_REACTION_FOCUSED } from "./noise.ts";
+import { REACTION_STATE, reactionExpiry, UNWATCH_REACTION, WATCH_REACTION, WATCH_REACTION_FOCUSED } from "./noise.ts";
 import { budget, throttleOf } from "./throttle.ts";
 import { Result } from "../daemon/render.ts";
 import { CHANGES_TEXT_JS } from "../js/index.ts";
@@ -102,6 +102,7 @@ type RequestRecord = {
   wrote?: { method: string; url: string };
   started: number;
   frame: string | null;
+  hop?: string;
 };
 
 function dict(value: unknown): Json {
@@ -136,7 +137,7 @@ export class NetworkWatch {
   }
 
   swept(entry: RequestRecord, now: number): boolean {
-    return SWEPT_TYPES.has(entry.type) && READ_METHODS.has(entry.method) && now - entry.started >= this.stale;
+    return SWEPT_TYPES.has(entry.type) && READ_METHODS.has(entry.hop ?? entry.method) && now - entry.started >= this.stale;
   }
 
   private onEvent(eventPage: Page | null, method: string, params: Json): void {
@@ -160,6 +161,7 @@ export class NetworkWatch {
         const wasBackground = entry.background;
         const hop = String(request["url"] || "");
         const hopMethod = String(request["method"] || entry.method);
+        entry.hop = hopMethod.toUpperCase();
         entry.background = background(String(params["type"] || entry.type), hop, hopMethod, this.page.url);
         if (!entry.listed && !READ_METHODS.has(hopMethod.toUpperCase()) && !knownCollector(hop, hopMethod, this.page.url)) {
           entry.listed = true;
@@ -355,13 +357,14 @@ export async function watchReaction(state: State, page: Page, react: Reaction): 
   const [element, given] = react;
   let frame = given;
   const watchId = tokenHex(6);
+  const expiry = reactionExpiry(budget(page, REACTION_LIMIT), REACTION_CALL_TIMEOUT);
   let started: unknown;
   try {
     if (element !== null) {
       frame = element.frame;
-      started = await reactionCall(page, WATCH_REACTION, [element, watchId], frame, REACTION_CALL_TIMEOUT);
+      started = await reactionCall(page, WATCH_REACTION, [element, watchId, expiry], frame, REACTION_CALL_TIMEOUT);
     } else {
-      started = await reactionCall(page, WATCH_REACTION_FOCUSED, [watchId], frame, REACTION_CALL_TIMEOUT);
+      started = await reactionCall(page, WATCH_REACTION_FOCUSED, [watchId, expiry], frame, REACTION_CALL_TIMEOUT);
     }
   } catch (error) {
     if (error instanceof BrowseError || error instanceof TimedOut) return;
@@ -497,7 +500,7 @@ export async function flushBatch(ctx: Ctx, batch: BatchObserve): Promise<Report 
   };
   if (group.session !== group.page.session) return unknown("Ardia detached the tab during these lines, so their changes couldn't be followed");
   try {
-    return decorate(await finish(ctx, group.page, group.before, group.watch, group.navigations, batch, null), group.page, group.watch, group.receipts);
+    return await finishGuarded(ctx, group.page, group.before, group.watch, group.navigations, batch, null, group.receipts);
   } catch (error) {
     if (!(error instanceof BrowseError)) throw error;
     return unknown(error.message);
@@ -531,21 +534,37 @@ export function actionName(ctx: Ctx): string {
 }
 
 export async function guarded<T>(ctx: Ctx, page: Page, run: () => Promise<T>): Promise<T> {
-  const parent = currentSignal();
-  const child = new AbortController();
-  const forward = () => child.abort();
-  if (parent !== null) {
-    if (parent.aborted) child.abort();
-    else parent.addEventListener("abort", forward, { once: true });
-  }
   try {
-    return await raceDialog(page, withSignal(child.signal, run), actionName(ctx));
+    return await raceDialog(page, run, actionName(ctx));
   } catch (error) {
-    if (error instanceof BrowseError && error.code === "dialog_blocked") child.abort();
-    if (error instanceof BrowseError && !(error instanceof ConnectionLost)) throw refusedRetry(ctx.command, error);
+    if (error instanceof BrowseError) throw refusedRetry(ctx.command, error);
     throw error;
-  } finally {
-    parent?.removeEventListener("abort", forward);
+  }
+}
+
+export function dialogAfterwards(error: unknown): string | null {
+  if (!(error instanceof BrowseError) || error.code !== "dialog_blocked") return null;
+  const dialog = (error.data?.["dialog"] ?? {}) as Record<string, unknown>;
+  return `a JavaScript ${String(dialog["type"] ?? "dialog")} dialog opened afterwards and froze the page`;
+}
+
+async function finishGuarded(
+  ctx: Ctx,
+  page: Page,
+  before: View | null,
+  watch: NetworkWatch,
+  navigations: number,
+  batch: BatchObserve | undefined,
+  captureFrom: number | null,
+  receipts: ReceiptWatch,
+): Promise<Report> {
+  try {
+    return decorate(await raceDialog(page, () => finish(ctx, page, before, watch, navigations, batch, captureFrom), actionName(ctx)), page, watch, receipts);
+  } catch (error) {
+    const why = dialogAfterwards(error);
+    if (why === null) throw error;
+    await watch.stop();
+    return decorate(landedReport(page, watch, why), page, watch, receipts);
   }
 }
 
@@ -644,7 +663,7 @@ export async function observe<T>(ctx: Ctx, page: Page, run: () => Promise<T>, re
   }
   if (batch !== undefined) batch.pending = null;
   try {
-    return [value, decorate(await finish(ctx, page, before, watch, navigations, batch, lineStart), page, watch, receipts)];
+    return [value, await finishGuarded(ctx, page, before, watch, navigations, batch, lineStart, receipts)];
   } catch (error) {
     receipts.stop();
     if (error instanceof ConnectionLost) {

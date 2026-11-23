@@ -12,6 +12,7 @@ import type { Ctx } from "./ctx.ts";
 import { canonical, register } from "./index.ts";
 import { enableCredentials } from "../capture/network.ts";
 import { need, parse } from "./parse.ts";
+import { noteManagedThrottle } from "../changes/throttle.ts";
 
 export const OFFSCREEN_TIMEOUT = 10.0;
 export const NEEDS_HIDDEN_TAB =
@@ -41,6 +42,7 @@ export const setHooks: { credentials: CredentialsHook } = { credentials: (ctx, p
 async function overridden(page: Page, method: string, params: Record<string, unknown>): Promise<void> {
   await page.send(method, params);
   page.overrides.set(method, params);
+  noteManagedThrottle(page, method);
 }
 
 function int(text: string): number {

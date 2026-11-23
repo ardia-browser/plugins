@@ -12,16 +12,29 @@ export type Throttle = { cpu: number | null; latencyMs: number | null; throughpu
 
 type Overrides = ReadonlyMap<string, Readonly<Record<string, unknown>> | null>;
 
-const raw = new WeakMap<object, Map<string, Map<string, Record<string, unknown>>>>();
+type RawEntry = { params: Record<string, unknown>; at: number; live: () => boolean };
 
-export function noteRawThrottle(state: object, targetId: string, method: string, given: unknown): void {
+const raw = new WeakMap<object, Map<string, Map<string, RawEntry>>>();
+const managed = new WeakMap<object, Map<string, number>>();
+let sequence = 0;
+
+export function noteRawThrottle(state: object, targetId: string, method: string, given: unknown, live: () => boolean = () => true): void {
   if (!THROTTLE_METHODS.has(method)) return;
   const params = given !== null && typeof given === "object" && !Array.isArray(given) ? (given as Record<string, unknown>) : {};
   let targets = raw.get(state);
   if (targets === undefined) raw.set(state, (targets = new Map()));
   let methods = targets.get(targetId);
   if (methods === undefined) targets.set(targetId, (methods = new Map()));
-  methods.set(method, { ...params });
+  sequence += 1;
+  methods.set(method, { params: { ...params }, at: sequence, live });
+}
+
+export function noteManagedThrottle(page: object, method: string): void {
+  if (!THROTTLE_METHODS.has(method)) return;
+  let methods = managed.get(page);
+  if (methods === undefined) managed.set(page, (methods = new Map()));
+  sequence += 1;
+  methods.set(method, sequence);
 }
 
 function number(value: unknown): number | null {
@@ -47,8 +60,16 @@ export function throttleFrom(overrides: Overrides): Throttle | null {
 export function throttleOf(page: Page): Throttle | null {
   const merged = new Map<string, Readonly<Record<string, unknown>> | null>();
   const state = page.state as object | undefined;
-  for (const [method, params] of (state ? raw.get(state)?.get(page.targetId) : undefined) ?? []) merged.set(method, params);
-  for (const [method, params] of page.overrides ?? []) if (THROTTLE_METHODS.has(method)) merged.set(method, params as Record<string, unknown> | null);
+  const rawMethods = (state ? raw.get(state)?.get(page.targetId) : undefined) ?? new Map<string, RawEntry>();
+  const overrides = page.overrides ?? new Map();
+  for (const method of THROTTLE_METHODS) {
+    const fromRaw = rawMethods.get(method);
+    const live = fromRaw !== undefined && fromRaw.live();
+    if (fromRaw !== undefined && !live) rawMethods.delete(method);
+    const setAt = managed.get(page)?.get(method) ?? 0;
+    if (live && (!overrides.has(method) || fromRaw.at > setAt)) merged.set(method, fromRaw.params);
+    else if (overrides.has(method)) merged.set(method, (overrides.get(method) ?? null) as Record<string, unknown> | null);
+  }
   return throttleFrom(merged);
 }
 

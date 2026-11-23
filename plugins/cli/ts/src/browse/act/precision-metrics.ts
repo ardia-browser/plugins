@@ -12,6 +12,8 @@ export const PRECISION_FLAGS: ReadonlySet<string> = new Set([
   "read_retry_after_detach",
   "action_landed_settle_lost",
   "fill_final_key",
+  "fill_focus_moved",
+  "dialog_cleanup_unconfirmed",
   "fill_followed_focus",
   "fill_readback_mismatch",
   "fill_readback_unverified",

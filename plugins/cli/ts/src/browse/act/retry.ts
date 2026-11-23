@@ -23,8 +23,19 @@ export function noteReadRetry(): void {
   flag("read_retry_after_detach", true);
 }
 
+export class LostMidAction extends ConnectionLost {
+  override readonly code: string = "outcome_unknown";
+}
+
 export function refusedRetry(command: string, error: BrowseError): BrowseError {
-  if (!sideEffectful(command) || !LOST_MIDWAY.has(error.code ?? "")) return error;
+  if (!sideEffectful(command)) return error;
+  if (error instanceof ConnectionLost) {
+    if (error instanceof LostMidAction) return error;
+    flag("side_effect_retry_refused", true);
+    add("retry_refusals");
+    return new LostMidAction(error.message);
+  }
+  if (!LOST_MIDWAY.has(error.code ?? "")) return error;
   flag("side_effect_retry_refused", true);
   add("retry_refusals");
   return new OutcomeUnknown(`\`${command}\``, "Ardia detached the tab after it had started (snapshot to see where the page is)");
