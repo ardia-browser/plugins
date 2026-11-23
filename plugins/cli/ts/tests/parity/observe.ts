@@ -5,6 +5,7 @@ import {
 } from "node:fs";
 import { constants as osConstants } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
+import { withoutGroupWrite } from "./modes.ts";
 import { decodeBlob, expand, expandText, fileBytes, type Places } from "./blobs.ts";
 import { type Case, containedPath, checkCaseIsContained, FIXTURES, PATH_ENV, SERVED_TABLE, UnsafeCase } from "./cases.ts";
 import { DEFAULT_HELLO, FakeArdia, FakeDaemon, PARITY_BUILD, stampedSessionKey } from "./fakes.ts";
@@ -187,6 +188,7 @@ export class Install {
         writeFileSync(join(this.root, "served.txt"), rows.map((words) => `${words.slice(0, -1).join(" ")} ts\n`).join(""));
       }
       cpSync(FIXTURES, join(this.scratch, "src", "tests", "fixtures"), { recursive: true });
+      withoutGroupWrite(join(this.scratch, "src", "tests", "fixtures"));
       writeFileSync(this.profile, SANDBOX_PROFILE.replace("{denied}", deniedPrograms().map((path) => `(literal "${path}")`).join(" ")));
     } catch (error) {
       rmSync(this.scratch, { recursive: true, force: true });

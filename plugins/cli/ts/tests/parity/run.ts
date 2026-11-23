@@ -6,6 +6,9 @@ import { compare, comparable, decodeExpected, expectedFor, Marks, type Field } f
 import { Install, runSide, SideDidNotStart, type Spawner } from "./observe.ts";
 
 export const DEFAULT_JOBS = 6;
+export const CAPTURED_UMASK = 0o022;
+
+process.umask(CAPTURED_UMASK);
 
 export type Outcome = {
   id: string;

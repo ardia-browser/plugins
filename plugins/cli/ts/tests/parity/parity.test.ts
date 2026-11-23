@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "bun:test";
-import { PARITY } from "./cases.ts";
+import { loadCases, PARITY } from "./cases.ts";
 import { runEngineDetached } from "./detached.ts";
 import type { EngineResult } from "./engine.ts";
 import { passed, programPath, report } from "./run.ts";
@@ -23,7 +23,11 @@ if (!(process.platform in capture.platforms)) {
   let result: EngineResult | undefined;
   let failure: unknown;
   try {
-    result = await runEngineDetached();
+    const ids = loadCases().map((kase) => kase.id);
+    const deep = ids.filter((id) => id.startsWith("ts-r3--") && id.endsWith("-deep"));
+    const rest = await runEngineDetached({ only: ids.filter((id) => !deep.includes(id)) });
+    const alone = await runEngineDetached({ only: deep, jobs: 1 });
+    result = { total: rest.total + alone.total, ms: rest.ms + alone.ms, strayRoutes: [...rest.strayRoutes, ...alone.strayRoutes], outcomes: [...rest.outcomes, ...alone.outcomes] };
   } catch (error) {
     failure = error;
   }

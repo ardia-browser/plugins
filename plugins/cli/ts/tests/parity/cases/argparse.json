@@ -2264,6 +2264,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia config [-h] <command> ...\n\nSet Ardia up from ${ARDIA_CONFIG_HOME:-${XDG_CONFIG_HOME:-~/.config}}/ardia/config/config.json, dotfiles style. Ardia reads the file at launch and whenever it\nchanges, and never writes it; these commands edit it for you and check it against the schema Ardia writes.\nNone of them need Ardia running.\n\nThe config folder is ${ARDIA_CONFIG_HOME:-${XDG_CONFIG_HOME:-~/.config}}/ardia/config, or <data dir>/config with --data-dir or $ARDIA_DATA_DIR. Keys, allowed\nvalues and defaults come from config.schema.json in the config folder, else <data dir>/config-schema/ (the named\ndata dir, else the installed app's).\n\nCommands:\n  path               print the config folder\n  init               create the folder, config.json and the schemas (never overwrites)\n  get [KEY]          print a setting from the file, or the whole file\n  set KEY VALUE      check VALUE and write it (KEY is a setting or shortcuts.<command id>)\n  unset KEY          take a key out of the file (Ardia keeps its current value)\n  list               every setting: allowed values, default and the file's value\n  edit               open config.json in $VISUAL, $EDITOR or xdg-open (vi with no display), then check it\n  check              check config.json and the theme it names\n\nExit status: 0 done, 1 a check failed or the input is wrong.\n\npositional arguments:\n  <command>\n    path      print the config folder\n    init      create the config folder, config.json and the schemas Ardia\n              wrote; never overwrites a file\n    get       print a setting from config.json, or the whole file\n    set       check a value and write it to config.json\n    unset     take a key out of config.json\n    list      list every setting with its allowed values, default and file\n              value\n    edit      open config.json in $VISUAL or $EDITOR and check it, else with\n              xdg-open\n    check     check config.json and the theme it names\n\noptions:\n  -h, --help  show this help message and exit\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "config"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -2415,6 +2555,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia config [-h] <command> ...\n\nSet Ardia up from ${ARDIA_CONFIG_HOME:-${XDG_CONFIG_HOME:-~/.config}}/ardia/config/config.json, dotfiles style. Ardia reads the file at launch and whenever it\nchanges, and never writes it; these commands edit it for you and check it against the schema Ardia writes.\nNone of them need Ardia running.\n\nThe config folder is ${ARDIA_CONFIG_HOME:-${XDG_CONFIG_HOME:-~/.config}}/ardia/config, or <data dir>/config with --data-dir or $ARDIA_DATA_DIR. Keys, allowed\nvalues and defaults come from config.schema.json in the config folder, else <data dir>/config-schema/ (the named\ndata dir, else the installed app's).\n\nCommands:\n  path               print the config folder\n  init               create the folder, config.json and the schemas (never overwrites)\n  get [KEY]          print a setting from the file, or the whole file\n  set KEY VALUE      check VALUE and write it (KEY is a setting or shortcuts.<command id>)\n  unset KEY          take a key out of the file (Ardia keeps its current value)\n  list               every setting: allowed values, default and the file's value\n  edit               open config.json in $VISUAL, $EDITOR or xdg-open (vi with no display), then check it\n  check              check config.json and the theme it names\n\nExit status: 0 done, 1 a check failed or the input is wrong.\n\npositional arguments:\n  <command>\n    path      print the config folder\n    init      create the config\n              folder, config.json and\n              the schemas Ardia wrote;\n              never overwrites a file\n    get       print a setting from\n              config.json, or the\n              whole file\n    set       check a value and write\n              it to config.json\n    unset     take a key out of\n              config.json\n    list      list every setting with\n              its allowed values,\n              default and file value\n    edit      open config.json in\n              $VISUAL or $EDITOR and\n              check it, else with xdg-\n              open\n    check     check config.json and\n              the theme it names\n\noptions:\n  -h, --help  show this help message\n              and exit\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "config"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -2431,6 +2711,146 @@
    "status": 0,
    "stdout": {
     "text": "usage: ardia config [-h] <command> ...\n\nSet Ardia up from ~/.config/ardia/config.json, dotfiles style. Ardia reads the file at launch and whenever it\nchanges, and never writes it; these commands edit it for you and check it against the schema Ardia writes.\nNone of them need Ardia running.\n\nThe config folder is ~/.config/ardia, or <data dir>/config with --data-dir or $ARDIA_DATA_DIR. Keys, allowed\nvalues and defaults come from config.schema.json in the config folder, else <data dir>/config-schema/ (the named\ndata dir, else the installed app's).\n\nCommands:\n  path               print the config folder\n  init               create the folder, config.json and the schemas (never overwrites)\n  get [KEY]          print a setting from the file, or the whole file\n  set KEY VALUE      check VALUE and write it (KEY is a setting or shortcuts.<command id>)\n  unset KEY          take a key out of the file (Ardia keeps its current value)\n  list               every setting: allowed values, default and the file's value\n  edit               open config.json in $VISUAL, $EDITOR or vi, then check it\n  check              check config.json and the theme it names\n\nExit status: 0 done, 1 a check failed or the input is wrong.\n\npositional arguments:\n  <command>\n    path      print the config folder\n    init      create the config folder, config.json and the schemas Ardia wrote; never overwrites a file\n    get       print a setting from config.json, or the whole file\n    set       check a value and write it to config.json\n    unset     take a key out of config.json\n    list      list every setting with its allowed values, default and file value\n    edit      open config.json in $VISUAL, $EDITOR, else vi, then check it\n    check     check config.json and the theme it names\n\noptions:\n  -h, --help  show this help message and exit\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "-h",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "-h",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "config"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia config [-h] <command> ...\n\nSet Ardia up from ${ARDIA_CONFIG_HOME:-${XDG_CONFIG_HOME:-~/.config}}/ardia/config/config.json, dotfiles style. Ardia reads the file at launch and whenever it\nchanges, and never writes it; these commands edit it for you and check it against the schema Ardia writes.\nNone of them need Ardia running.\n\nThe config folder is ${ARDIA_CONFIG_HOME:-${XDG_CONFIG_HOME:-~/.config}}/ardia/config, or <data dir>/config with --data-dir or $ARDIA_DATA_DIR. Keys, allowed\nvalues and defaults come from config.schema.json in the config folder, else <data dir>/config-schema/ (the named\ndata dir, else the installed app's).\n\nCommands:\n  path               print the config folder\n  init               create the folder, config.json and the schemas (never overwrites)\n  get [KEY]          print a setting from the file, or the whole file\n  set KEY VALUE      check VALUE and write it (KEY is a setting or shortcuts.<command id>)\n  unset KEY          take a key out of the file (Ardia keeps its current value)\n  list               every setting: allowed values, default and the file's value\n  edit               open config.json in $VISUAL, $EDITOR or xdg-open (vi with no display), then check it\n  check              check config.json and the theme it names\n\nExit status: 0 done, 1 a check failed or the input is wrong.\n\npositional arguments:\n  <command>\n    path      print the config folder\n    init      create the config folder, config.json and the schemas Ardia wrote; never overwrites a file\n    get       print a setting from config.json, or the whole file\n    set       check a value and write it to config.json\n    unset     take a key out of config.json\n    list      list every setting with its allowed values, default and file value\n    edit      open config.json in $VISUAL or $EDITOR and check it, else with xdg-open\n    check     check config.json and the theme it names\n\noptions:\n  -h, --help  show this help message and exit\n"
    },
    "stderr": {
     "text": ""
@@ -2869,6 +3289,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia config check [-h] [--data-dir DIR] [--json]\n\nCheck config.json and the theme it names, the way Ardia reads them. Exit 1 on any problem.\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir; the config folder is <DIR>/config\n                  (default: $ARDIA_DATA_DIR, else ${ARDIA_CONFIG_HOME:-\n                  ${XDG_CONFIG_HOME:-~/.config}}/ardia/config)\n  --json          print JSON\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": "check",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": "check",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "config check"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -2886,6 +3446,146 @@
    "status": 0,
    "stdout": {
     "text": "usage: ardia config edit [-h] [--data-dir DIR]\n\nOpen config.json (created first if needed) in $VISUAL, $EDITOR, else vi, wait for the editor to exit, then\ncheck it like ardia config check.\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir; the config folder is <DIR>/config\n                  (default: $ARDIA_DATA_DIR, else ~/.config/ardia)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": "edit",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": "edit",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "config edit"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia config edit [-h] [--data-dir DIR]\n\nOpen config.json (created first if needed) in $VISUAL or $EDITOR, wait for the editor to exit, then\ncheck it like ardia config check. With neither set, in a desktop session it opens the file with xdg-open, which\nreturns at once, so run ardia config check once you've saved it; with no display or no xdg-open it uses vi.\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir; the config folder is <DIR>/config\n                  (default: $ARDIA_DATA_DIR, else ${ARDIA_CONFIG_HOME:-\n                  ${XDG_CONFIG_HOME:-~/.config}}/ardia/config)\n"
    },
    "stderr": {
     "text": ""
@@ -3173,6 +3873,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia config get [-h] [--data-dir DIR] [--json] [KEY]\n\nPrint a setting from config.json (exit 1 when the file doesn't set it), or the whole file.\nKEY is a setting name or shortcuts.<command id>.\n\npositional arguments:\n  KEY             a setting name or shortcuts.<command id>\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir; the config folder is <DIR>/config\n                  (default: $ARDIA_DATA_DIR, else ${ARDIA_CONFIG_HOME:-\n                  ${XDG_CONFIG_HOME:-~/.config}}/ardia/config)\n  --json          print JSON\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "config get"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -3190,6 +4030,146 @@
    "status": 0,
    "stdout": {
     "text": "usage: ardia config init [-h] [--data-dir DIR]\n\nCreate the config folder, config.json and the schemas Ardia wrote; never overwrites a file.\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir; the config folder is <DIR>/config\n                  (default: $ARDIA_DATA_DIR, else ~/.config/ardia)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": "init",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": "init",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "config init"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia config init [-h] [--data-dir DIR]\n\nCreate the config folder, config.json and the schemas Ardia wrote; never overwrites a file.\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir; the config folder is <DIR>/config\n                  (default: $ARDIA_DATA_DIR, else ${ARDIA_CONFIG_HOME:-\n                  ${XDG_CONFIG_HOME:-~/.config}}/ardia/config)\n"
    },
    "stderr": {
     "text": ""
@@ -3477,6 +4457,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia config list [-h] [--data-dir DIR] [--json]\n\nList every setting with its allowed values, default and file value.\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir; the config folder is <DIR>/config\n                  (default: $ARDIA_DATA_DIR, else ${ARDIA_CONFIG_HOME:-\n                  ${XDG_CONFIG_HOME:-~/.config}}/ardia/config)\n  --json          print JSON\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": "list",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": "list",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "config list"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -3494,6 +4614,146 @@
    "status": 0,
    "stdout": {
     "text": "usage: ardia config path [-h] [--data-dir DIR]\n\nPrint the config folder.\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir; the config folder is <DIR>/config\n                  (default: $ARDIA_DATA_DIR, else ~/.config/ardia)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": "path",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": "path",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "config path"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia config path [-h] [--data-dir DIR]\n\nPrint the config folder.\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir; the config folder is <DIR>/config\n                  (default: $ARDIA_DATA_DIR, else ${ARDIA_CONFIG_HOME:-\n                  ${XDG_CONFIG_HOME:-~/.config}}/ardia/config)\n"
    },
    "stderr": {
     "text": ""
@@ -3781,6 +5041,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia config set [-h] [--data-dir DIR] KEY VALUE\n\nWrite one setting to config.json. VALUE is parsed as JSON, else taken as a string, and checked against the schema\nfirst. The file is rewritten even when it already holds the value, so a running Ardia applies it again.\n\nExamples:\n  ardia config set tabLayout top\n  ardia config set glassTintAmount 0.5\n  ardia config set shortcuts.newTab cmd+shift+n\n  ardia config set shortcuts.reopenClosedTab ''\n\nShortcuts are one string per command: modifiers cmd, opt (option, alt), ctrl (control), shift, fn, joined with +,\nthen a character, f1-f20, space, tab, return, escape, delete, up, down, left, right, home, end, pageup or pagedown;\nor glyphs like ⌘⇧T; '' unbinds.\n\npositional arguments:\n  KEY             a setting name or shortcuts.<command id>\n  VALUE           JSON, else a plain string\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir; the config folder is <DIR>/config\n                  (default: $ARDIA_DATA_DIR, else ${ARDIA_CONFIG_HOME:-\n                  ${XDG_CONFIG_HOME:-~/.config}}/ardia/config)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": "set",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": "set",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "config set"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -3798,6 +5198,146 @@
    "status": 0,
    "stdout": {
     "text": "usage: ardia config unset [-h] [--data-dir DIR] KEY\n\nTake a key out of config.json. Ardia keeps the value it has; to go back to the default, set the default.\n\npositional arguments:\n  KEY             a setting name or shortcuts.<command id>\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir; the config folder is <DIR>/config\n                  (default: $ARDIA_DATA_DIR, else ~/.config/ardia)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": "unset",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": "unset",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "config unset"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia config unset [-h] [--data-dir DIR] KEY\n\nTake a key out of config.json. Ardia keeps the value it has; to go back to the default, set the default.\n\npositional arguments:\n  KEY             a setting name or shortcuts.<command id>\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir; the config folder is <DIR>/config\n                  (default: $ARDIA_DATA_DIR, else ${ARDIA_CONFIG_HOME:-\n                  ${XDG_CONFIG_HOME:-~/.config}}/ardia/config)\n"
    },
    "stderr": {
     "text": ""
@@ -6856,6 +8396,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia history [-h] [--days N] [--limit N] [--profile P] [--domains]\n                     [--json] [--data-dir DIR]\n\nList recent history per URL, newest first: url, title, visits (in the window), total_visits, last_visit (ISO 8601,\nlocal time) and profile. Only http(s) pages; subframe navigations and hidden URLs are left out. --domains rolls it\nup per domain (domain, visits, pages, last_visit, top_title, profile), most visited first.\n\nReads <data dir>/<app profile>/Ardia/linux-session.json and Chromium's History files, never cookies, passwords,\nLogin Data or Web Data. Needs Ardia running with control allowed (Command Line installed; on Linux, its Settings switch). Incognito, guest and\nsystem profiles are skipped.\n\nExit status: 0 done, 1 the data couldn't be read or ran out of time (20 s), 2 Ardia can't be reached.\n\nExamples:\n  ardia history\n  ardia history --days 7 --domains --limit 20\n  ardia history --profile Work --json\n\noptions:\n  -h, --help      show this help message and exit\n  --days N        how far back to look (default 1)\n  --limit N       at most this many rows (default 200, 0 for all)\n  --profile P     a profile name or its folder under <data dir>/ (default:\n                  all)\n  --domains       one row per domain instead of per URL\n  --json          print JSON\n  --data-dir DIR  the Ardia data dir (default: $ARDIA_DATA_DIR, else the\n                  installed app's)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "history"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -7007,6 +8687,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia history [-h] [--days N]\n                     [--limit N]\n                     [--profile P]\n                     [--domains]\n                     [--json]\n                     [--data-dir DIR]\n\nList recent history per URL, newest first: url, title, visits (in the window), total_visits, last_visit (ISO 8601,\nlocal time) and profile. Only http(s) pages; subframe navigations and hidden URLs are left out. --domains rolls it\nup per domain (domain, visits, pages, last_visit, top_title, profile), most visited first.\n\nReads <data dir>/<app profile>/Ardia/linux-session.json and Chromium's History files, never cookies, passwords,\nLogin Data or Web Data. Needs Ardia running with control allowed (Command Line installed; on Linux, its Settings switch). Incognito, guest and\nsystem profiles are skipped.\n\nExit status: 0 done, 1 the data couldn't be read or ran out of time (20 s), 2 Ardia can't be reached.\n\nExamples:\n  ardia history\n  ardia history --days 7 --domains --limit 20\n  ardia history --profile Work --json\n\noptions:\n  -h, --help      show this help\n                  message and exit\n  --days N        how far back to look\n                  (default 1)\n  --limit N       at most this many\n                  rows (default 200, 0\n                  for all)\n  --profile P     a profile name or\n                  its folder under\n                  <data dir>/\n                  (default: all)\n  --domains       one row per domain\n                  instead of per URL\n  --json          print JSON\n  --data-dir DIR  the Ardia data dir\n                  (default:\n                  $ARDIA_DATA_DIR,\n                  else the installed\n                  app's)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "history"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -7023,6 +8843,146 @@
    "status": 0,
    "stdout": {
     "text": "usage: ardia history [-h] [--days N] [--limit N] [--profile P] [--domains] [--json] [--data-dir DIR]\n\nList recent history per URL, newest first: url, title, visits (in the window), total_visits, last_visit (ISO 8601,\nlocal time) and profile. Only http(s) pages; subframe navigations and hidden URLs are left out. --domains rolls it\nup per domain (domain, visits, pages, last_visit, top_title, profile), most visited first.\n\nReads <data dir>/session.json and Chromium's History files, never cookies, passwords,\nLogin Data or Web Data. Needs Ardia running with control allowed (Command Line installed; on Linux, its Settings switch). Incognito, guest and\nsystem profiles are skipped.\n\nExit status: 0 done, 1 the data couldn't be read or ran out of time (20 s), 2 Ardia can't be reached.\n\nExamples:\n  ardia history\n  ardia history --days 7 --domains --limit 20\n  ardia history --profile Work --json\n\noptions:\n  -h, --help      show this help message and exit\n  --days N        how far back to look (default 1)\n  --limit N       at most this many rows (default 200, 0 for all)\n  --profile P     a profile name or its folder under Chromium/ (default: all)\n  --domains       one row per domain instead of per URL\n  --json          print JSON\n  --data-dir DIR  the Ardia data dir (default: $ARDIA_DATA_DIR, else the installed app's)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "-h",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "-h",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "history"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia history [-h] [--days N] [--limit N] [--profile P] [--domains] [--json] [--data-dir DIR]\n\nList recent history per URL, newest first: url, title, visits (in the window), total_visits, last_visit (ISO 8601,\nlocal time) and profile. Only http(s) pages; subframe navigations and hidden URLs are left out. --domains rolls it\nup per domain (domain, visits, pages, last_visit, top_title, profile), most visited first.\n\nReads <data dir>/<app profile>/Ardia/linux-session.json and Chromium's History files, never cookies, passwords,\nLogin Data or Web Data. Needs Ardia running with control allowed (Command Line installed; on Linux, its Settings switch). Incognito, guest and\nsystem profiles are skipped.\n\nExit status: 0 done, 1 the data couldn't be read or ran out of time (20 s), 2 Ardia can't be reached.\n\nExamples:\n  ardia history\n  ardia history --days 7 --domains --limit 20\n  ardia history --profile Work --json\n\noptions:\n  -h, --help      show this help message and exit\n  --days N        how far back to look (default 1)\n  --limit N       at most this many rows (default 200, 0 for all)\n  --profile P     a profile name or its folder under <data dir>/ (default: all)\n  --domains       one row per domain instead of per URL\n  --json          print JSON\n  --data-dir DIR  the Ardia data dir (default: $ARDIA_DATA_DIR, else the installed app's)\n"
    },
    "stderr": {
     "text": ""
@@ -7460,6 +9420,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia hooks [-h] <command> ...\n\nRun hooks from hooks.json in the config folder (${ARDIA_CONFIG_HOME:-${XDG_CONFIG_HOME:-~/.config}}/ardia/config, or <data dir>/config with\n--data-dir or $ARDIA_DATA_DIR) in one process:\n\n  {\n    \"hooks\": [\n      { \"name\": \"yt-to-media\", \"on\": [\"tab.navigated\"], \"match\": [\"https://*.youtube.com/*\"],\n        \"run\": [\"~/bin/yt-hook\"], \"timeout\": 30, \"fullUrls\": true },\n      { \"name\": \"fresh-tab\", \"on\": \"app.launched\", \"command\": \"newTab\" },\n      { \"name\": \"standup\", \"at\": \"09:55\", \"days\": [\"mon\", \"tue\", \"wed\", \"thu\", \"fri\"], \"run\": [\"~/bin/standup\"] },\n      { \"name\": \"old-reddit\", \"on\": \"tab.opening\", \"rewrite\": [{ \"match\": \"https://www.reddit.com/*\", \"to\": \"https://old.reddit.com{path}{query}\" }] },\n      { \"name\": \"jira\", \"omnibox\": { \"title\": \"Jira\", \"keyword\": \"j\" }, \"run\": [\"~/bin/jira-suggest\"] }\n    ]\n  }\n\nA hook has one trigger (on, at, every or omnibox) and one action (run, command, or a decide answer). Event hooks\nrun like ardia on (see ardia on --help); command hooks run an Ardia command in the event's window and tab; decide\nhooks (tab.opening, link.opening, download.deciding, permission.requested) answer before Ardia acts, as rules\nArdia applies itself or as a program whose stdout is the answer; scheduled hooks get a schedule.fired event.\nRules that route or rewrite links, pick folders, run decide programs or read the address bar wait for approval in\nArdia's Settings › Advanced › Automation. run re-reads hooks.json when it changes; an invalid file keeps the hooks\nloaded before. Output goes to ${XDG_STATE_HOME:-~/.local/state}/ardia/hooks.log (rotated at 5 MB). See docs/automation.md.\n\nCommands:\n  run         run the hooks until interrupted\n  install     run them at login: a systemd user service (dev.ardia.hooks.service) that keeps ardia hooks run alive\n  uninstall   remove the systemd user service\n  list        the hooks in hooks.json and whether the systemd user service runs\n\npositional arguments:\n  <command>\n    run        run the hooks until interrupted\n    install    run the hooks at login (systemd user service\n               dev.ardia.hooks.service)\n    uninstall  remove the systemd user service\n    list       list the hooks and the systemd user service's state\n\noptions:\n  -h, --help   show this help message and exit\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "hooks",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "hooks",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "hooks"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -7611,6 +9711,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia hooks [-h] <command> ...\n\nRun hooks from hooks.json in the config folder (${ARDIA_CONFIG_HOME:-${XDG_CONFIG_HOME:-~/.config}}/ardia/config, or <data dir>/config with\n--data-dir or $ARDIA_DATA_DIR) in one process:\n\n  {\n    \"hooks\": [\n      { \"name\": \"yt-to-media\", \"on\": [\"tab.navigated\"], \"match\": [\"https://*.youtube.com/*\"],\n        \"run\": [\"~/bin/yt-hook\"], \"timeout\": 30, \"fullUrls\": true },\n      { \"name\": \"fresh-tab\", \"on\": \"app.launched\", \"command\": \"newTab\" },\n      { \"name\": \"standup\", \"at\": \"09:55\", \"days\": [\"mon\", \"tue\", \"wed\", \"thu\", \"fri\"], \"run\": [\"~/bin/standup\"] },\n      { \"name\": \"old-reddit\", \"on\": \"tab.opening\", \"rewrite\": [{ \"match\": \"https://www.reddit.com/*\", \"to\": \"https://old.reddit.com{path}{query}\" }] },\n      { \"name\": \"jira\", \"omnibox\": { \"title\": \"Jira\", \"keyword\": \"j\" }, \"run\": [\"~/bin/jira-suggest\"] }\n    ]\n  }\n\nA hook has one trigger (on, at, every or omnibox) and one action (run, command, or a decide answer). Event hooks\nrun like ardia on (see ardia on --help); command hooks run an Ardia command in the event's window and tab; decide\nhooks (tab.opening, link.opening, download.deciding, permission.requested) answer before Ardia acts, as rules\nArdia applies itself or as a program whose stdout is the answer; scheduled hooks get a schedule.fired event.\nRules that route or rewrite links, pick folders, run decide programs or read the address bar wait for approval in\nArdia's Settings › Advanced › Automation. run re-reads hooks.json when it changes; an invalid file keeps the hooks\nloaded before. Output goes to ${XDG_STATE_HOME:-~/.local/state}/ardia/hooks.log (rotated at 5 MB). See docs/automation.md.\n\nCommands:\n  run         run the hooks until interrupted\n  install     run them at login: a systemd user service (dev.ardia.hooks.service) that keeps ardia hooks run alive\n  uninstall   remove the systemd user service\n  list        the hooks in hooks.json and whether the systemd user service runs\n\npositional arguments:\n  <command>\n    run        run the hooks until\n               interrupted\n    install    run the hooks at login\n               (systemd user service d\n               ev.ardia.hooks.service)\n    uninstall  remove the systemd user\n               service\n    list       list the hooks and the\n               systemd user service's\n               state\n\noptions:\n  -h, --help   show this help message\n               and exit\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "hooks",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "hooks",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "hooks"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -7627,6 +9867,146 @@
    "status": 0,
    "stdout": {
     "text": "usage: ardia hooks [-h] <command> ...\n\nRun hooks from hooks.json in the config folder (~/.config/ardia, or <data dir>/config with\n--data-dir or $ARDIA_DATA_DIR) in one process:\n\n  {\n    \"hooks\": [\n      { \"name\": \"yt-to-media\", \"on\": [\"tab.navigated\"], \"match\": [\"https://*.youtube.com/*\"],\n        \"run\": [\"~/bin/yt-hook\"], \"timeout\": 30, \"fullUrls\": true },\n      { \"name\": \"fresh-tab\", \"on\": \"app.launched\", \"command\": \"newTab\" },\n      { \"name\": \"standup\", \"at\": \"09:55\", \"days\": [\"mon\", \"tue\", \"wed\", \"thu\", \"fri\"], \"run\": [\"~/bin/standup\"] },\n      { \"name\": \"old-reddit\", \"on\": \"tab.opening\", \"rewrite\": [{ \"match\": \"https://www.reddit.com/*\", \"to\": \"https://old.reddit.com{path}{query}\" }] },\n      { \"name\": \"jira\", \"omnibox\": { \"title\": \"Jira\", \"keyword\": \"j\" }, \"run\": [\"~/bin/jira-suggest\"] }\n    ]\n  }\n\nA hook has one trigger (on, at, every or omnibox) and one action (run, command, or a decide answer). Event hooks\nrun like ardia on (see ardia on --help); command hooks run an Ardia command in the event's window and tab; decide\nhooks (tab.opening, link.opening, download.deciding, permission.requested) answer before Ardia acts, as rules\nArdia applies itself or as a program whose stdout is the answer; scheduled hooks get a schedule.fired event.\nRules that route or rewrite links, pick folders, run decide programs or read the address bar wait for approval in\nArdia's Settings › Advanced › Automation. run re-reads hooks.json when it changes; an invalid file keeps the hooks\nloaded before. Output goes to ~/Library/Logs/Ardia/hooks.log (rotated at 5 MB). See docs/automation.md.\n\nCommands:\n  run         run the hooks until interrupted\n  install     run them at login: a LaunchAgent (dev.ardia.hooks) that keeps ardia hooks run alive\n  uninstall   remove the LaunchAgent\n  list        the hooks in hooks.json and whether the LaunchAgent runs\n\npositional arguments:\n  <command>\n    run        run the hooks until interrupted\n    install    run the hooks at login (LaunchAgent dev.ardia.hooks)\n    uninstall  remove the LaunchAgent\n    list       list the hooks and the LaunchAgent's state\n\noptions:\n  -h, --help   show this help message and exit\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "hooks",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "-h",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "hooks",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "-h",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "hooks"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia hooks [-h] <command> ...\n\nRun hooks from hooks.json in the config folder (${ARDIA_CONFIG_HOME:-${XDG_CONFIG_HOME:-~/.config}}/ardia/config, or <data dir>/config with\n--data-dir or $ARDIA_DATA_DIR) in one process:\n\n  {\n    \"hooks\": [\n      { \"name\": \"yt-to-media\", \"on\": [\"tab.navigated\"], \"match\": [\"https://*.youtube.com/*\"],\n        \"run\": [\"~/bin/yt-hook\"], \"timeout\": 30, \"fullUrls\": true },\n      { \"name\": \"fresh-tab\", \"on\": \"app.launched\", \"command\": \"newTab\" },\n      { \"name\": \"standup\", \"at\": \"09:55\", \"days\": [\"mon\", \"tue\", \"wed\", \"thu\", \"fri\"], \"run\": [\"~/bin/standup\"] },\n      { \"name\": \"old-reddit\", \"on\": \"tab.opening\", \"rewrite\": [{ \"match\": \"https://www.reddit.com/*\", \"to\": \"https://old.reddit.com{path}{query}\" }] },\n      { \"name\": \"jira\", \"omnibox\": { \"title\": \"Jira\", \"keyword\": \"j\" }, \"run\": [\"~/bin/jira-suggest\"] }\n    ]\n  }\n\nA hook has one trigger (on, at, every or omnibox) and one action (run, command, or a decide answer). Event hooks\nrun like ardia on (see ardia on --help); command hooks run an Ardia command in the event's window and tab; decide\nhooks (tab.opening, link.opening, download.deciding, permission.requested) answer before Ardia acts, as rules\nArdia applies itself or as a program whose stdout is the answer; scheduled hooks get a schedule.fired event.\nRules that route or rewrite links, pick folders, run decide programs or read the address bar wait for approval in\nArdia's Settings › Advanced › Automation. run re-reads hooks.json when it changes; an invalid file keeps the hooks\nloaded before. Output goes to ${XDG_STATE_HOME:-~/.local/state}/ardia/hooks.log (rotated at 5 MB). See docs/automation.md.\n\nCommands:\n  run         run the hooks until interrupted\n  install     run them at login: a systemd user service (dev.ardia.hooks.service) that keeps ardia hooks run alive\n  uninstall   remove the systemd user service\n  list        the hooks in hooks.json and whether the systemd user service runs\n\npositional arguments:\n  <command>\n    run        run the hooks until interrupted\n    install    run the hooks at login (systemd user service dev.ardia.hooks.service)\n    uninstall  remove the systemd user service\n    list       list the hooks and the systemd user service's state\n\noptions:\n  -h, --help   show this help message and exit\n"
    },
    "stderr": {
     "text": ""
@@ -8065,6 +10445,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia hooks install [-h] [--data-dir DIR]\n\nWrite ${XDG_CONFIG_HOME:-~/.config}/systemd/user/dev.ardia.hooks.service, which runs the installed ardia's hooks run\nat login and restarts it when it fails, then enable and start it (systemctl --user). Refused with --data-dir or\n$ARDIA_DATA_DIR.\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir (default: $ARDIA_DATA_DIR, else the\n                  installed app's)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "hooks",
+      "subcommand": "install",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "hooks",
+      "subcommand": "install",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "hooks install"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -8082,6 +10602,146 @@
    "status": 0,
    "stdout": {
     "text": "usage: ardia hooks list [-h] [--data-dir DIR] [--json]\n\nList the hooks in hooks.json, check them, and show whether the LaunchAgent is\nloaded. Exit 1 if hooks.json is invalid.\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir (default: $ARDIA_DATA_DIR, else the\n                  installed app's)\n  --json          print JSON\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "hooks",
+      "subcommand": "list",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "hooks",
+      "subcommand": "list",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "hooks list"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia hooks list [-h] [--data-dir DIR] [--json]\n\nList the hooks in hooks.json, check them, and show whether the systemd user\nservice is active. Exit 1 if hooks.json is invalid.\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir (default: $ARDIA_DATA_DIR, else the\n                  installed app's)\n  --json          print JSON\n"
    },
    "stderr": {
     "text": ""
@@ -8369,6 +11029,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia hooks run [-h] [--data-dir DIR] [--log PATH]\n\nRun every hook in hooks.json until interrupted, reloading the file when it\nchanges.\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir (default: $ARDIA_DATA_DIR, else the\n                  installed app's)\n  --log PATH      where output goes (default\n                  ${XDG_STATE_HOME:-~/.local/state}/ardia/hooks.log; - for the\n                  terminal)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "hooks",
+      "subcommand": "run",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "hooks",
+      "subcommand": "run",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "hooks run"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -8386,6 +11186,146 @@
    "status": 0,
    "stdout": {
     "text": "usage: ardia hooks uninstall [-h] [--data-dir DIR]\n\nUnload and remove the dev.ardia.hooks LaunchAgent. Refused with --data-dir or\n$ARDIA_DATA_DIR.\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir (default: $ARDIA_DATA_DIR, else the\n                  installed app's)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "hooks",
+      "subcommand": "uninstall",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "hooks",
+      "subcommand": "uninstall",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "hooks uninstall"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia hooks uninstall [-h] [--data-dir DIR]\n\nStop, disable and remove the dev.ardia.hooks.service systemd user service.\nRefused with --data-dir or $ARDIA_DATA_DIR.\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir (default: $ARDIA_DATA_DIR, else the\n                  installed app's)\n"
    },
    "stderr": {
     "text": ""
@@ -9880,6 +12820,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia pinned [-h] [--json] [--data-dir DIR]\n\nList the user's favorites (the tiles) and pinned tabs (tabs in pinned folders), in profile order. Each row has\ntitle, url, pinned_url, kind (favorite or pinned), folder, profile and parked (a profile no window shows).\n\nReads <data dir>/<app profile>/Ardia/linux-session.json and Chromium's History files, never cookies, passwords,\nLogin Data or Web Data. Needs Ardia running with control allowed (Command Line installed; on Linux, its Settings switch). Incognito, guest and\nsystem profiles are skipped.\n\nExit status: 0 done, 1 the data couldn't be read or ran out of time (20 s), 2 Ardia can't be reached.\n\noptions:\n  -h, --help      show this help message and exit\n  --json          print JSON\n  --data-dir DIR  the Ardia data dir (default: $ARDIA_DATA_DIR, else the\n                  installed app's)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "pinned"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -10031,6 +13111,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia pinned [-h] [--json]\n                    [--data-dir DIR]\n\nList the user's favorites (the tiles) and pinned tabs (tabs in pinned folders), in profile order. Each row has\ntitle, url, pinned_url, kind (favorite or pinned), folder, profile and parked (a profile no window shows).\n\nReads <data dir>/<app profile>/Ardia/linux-session.json and Chromium's History files, never cookies, passwords,\nLogin Data or Web Data. Needs Ardia running with control allowed (Command Line installed; on Linux, its Settings switch). Incognito, guest and\nsystem profiles are skipped.\n\nExit status: 0 done, 1 the data couldn't be read or ran out of time (20 s), 2 Ardia can't be reached.\n\noptions:\n  -h, --help      show this help\n                  message and exit\n  --json          print JSON\n  --data-dir DIR  the Ardia data dir\n                  (default:\n                  $ARDIA_DATA_DIR,\n                  else the installed\n                  app's)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "pinned"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -10047,6 +13267,146 @@
    "status": 0,
    "stdout": {
     "text": "usage: ardia pinned [-h] [--json] [--data-dir DIR]\n\nList the user's favorites (the tiles) and pinned tabs (tabs in pinned folders), in profile order. Each row has\ntitle, url, pinned_url, kind (favorite or pinned), folder, profile and parked (a profile no window shows).\n\nReads <data dir>/session.json and Chromium's History files, never cookies, passwords,\nLogin Data or Web Data. Needs Ardia running with control allowed (Command Line installed; on Linux, its Settings switch). Incognito, guest and\nsystem profiles are skipped.\n\nExit status: 0 done, 1 the data couldn't be read or ran out of time (20 s), 2 Ardia can't be reached.\n\noptions:\n  -h, --help      show this help message and exit\n  --json          print JSON\n  --data-dir DIR  the Ardia data dir (default: $ARDIA_DATA_DIR, else the installed app's)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "-h",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "-h",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "pinned"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia pinned [-h] [--json] [--data-dir DIR]\n\nList the user's favorites (the tiles) and pinned tabs (tabs in pinned folders), in profile order. Each row has\ntitle, url, pinned_url, kind (favorite or pinned), folder, profile and parked (a profile no window shows).\n\nReads <data dir>/<app profile>/Ardia/linux-session.json and Chromium's History files, never cookies, passwords,\nLogin Data or Web Data. Needs Ardia running with control allowed (Command Line installed; on Linux, its Settings switch). Incognito, guest and\nsystem profiles are skipped.\n\nExit status: 0 done, 1 the data couldn't be read or ran out of time (20 s), 2 Ardia can't be reached.\n\noptions:\n  -h, --help      show this help message and exit\n  --json          print JSON\n  --data-dir DIR  the Ardia data dir (default: $ARDIA_DATA_DIR, else the installed app's)\n"
    },
    "stderr": {
     "text": ""
@@ -10484,6 +13844,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia plugins [-h] <command> ...\n\nInstall, list and manage Ardia plugins. A plugin is a folder with a plugin.json; it lives in the plugins folder\nof the config folder (<parity:box>/home/.config/ardia/config/plugins, or <data dir>/config/plugins with --data-dir or $ARDIA_DATA_DIR). Ardia sees\na plugin the moment its folder appears, and every plugin starts off: turning one on shows what it gets, in Ardia.\nSee docs/plugins.md.\n\nCommands:\n  list       the plugins, whether they're on and what they add\n  install    copy a plugin folder (or a lone plugin.json) into the plugins folder\n  check      check plugin manifests against plugin.schema.json\n  remove     remove a plugin (through Ardia when it's running)\n  enable     ask Ardia to show a plugin's consent sheet\n  disable    turn a plugin off\n  call       call one of a plugin's tools and print its result as JSON\n  path       print the plugins folder\n\npositional arguments:\n  <command>\n    list      list the plugins\n    install   install a plugin from a folder or plugin.json\n    check     check plugin manifests\n    remove    remove a plugin\n    enable    show a plugin's consent sheet in Ardia\n    disable   turn a plugin off\n    call      call a plugin's tool\n    path      print the plugins folder\n\noptions:\n  -h, --help  show this help message and exit\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "plugins",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "plugins",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "plugins"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -10635,6 +14135,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia plugins [-h]\n                     <command> ...\n\nInstall, list and manage Ardia plugins. A plugin is a folder with a plugin.json; it lives in the plugins folder\nof the config folder (<parity:box>/home/.config/ardia/config/plugins, or <data dir>/config/plugins with --data-dir or $ARDIA_DATA_DIR). Ardia sees\na plugin the moment its folder appears, and every plugin starts off: turning one on shows what it gets, in Ardia.\nSee docs/plugins.md.\n\nCommands:\n  list       the plugins, whether they're on and what they add\n  install    copy a plugin folder (or a lone plugin.json) into the plugins folder\n  check      check plugin manifests against plugin.schema.json\n  remove     remove a plugin (through Ardia when it's running)\n  enable     ask Ardia to show a plugin's consent sheet\n  disable    turn a plugin off\n  call       call one of a plugin's tools and print its result as JSON\n  path       print the plugins folder\n\npositional arguments:\n  <command>\n    list      list the plugins\n    install   install a plugin from a\n              folder or plugin.json\n    check     check plugin manifests\n    remove    remove a plugin\n    enable    show a plugin's consent\n              sheet in Ardia\n    disable   turn a plugin off\n    call      call a plugin's tool\n    path      print the plugins folder\n\noptions:\n  -h, --help  show this help message\n              and exit\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "plugins",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "plugins",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "plugins"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -10651,6 +14291,146 @@
    "status": 0,
    "stdout": {
     "text": "usage: ardia plugins [-h] <command> ...\n\nInstall, list and manage Ardia plugins. A plugin is a folder with a plugin.json; it lives in the plugins folder\nof the config folder (<parity:box>/home/.config/ardia/plugins, or <data dir>/config/plugins with --data-dir or $ARDIA_DATA_DIR). Ardia sees\na plugin the moment its folder appears, and every plugin starts off: turning one on shows what it gets, in Ardia.\nSee docs/plugins.md.\n\nCommands:\n  list       the plugins, whether they're on and what they add\n  install    copy a plugin folder (or a lone plugin.json) into the plugins folder\n  check      check plugin manifests against plugin.schema.json\n  remove     remove a plugin (through Ardia when it's running)\n  enable     ask Ardia to show a plugin's consent sheet\n  disable    turn a plugin off\n  call       call one of a plugin's tools and print its result as JSON\n  path       print the plugins folder\n\npositional arguments:\n  <command>\n    list      list the plugins\n    install   install a plugin from a folder or plugin.json\n    check     check plugin manifests\n    remove    remove a plugin\n    enable    show a plugin's consent sheet in Ardia\n    disable   turn a plugin off\n    call      call a plugin's tool\n    path      print the plugins folder\n\noptions:\n  -h, --help  show this help message and exit\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "plugins",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "-h",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "plugins",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "-h",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "plugins"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia plugins [-h] <command> ...\n\nInstall, list and manage Ardia plugins. A plugin is a folder with a plugin.json; it lives in the plugins folder\nof the config folder (<parity:box>/home/.config/ardia/config/plugins, or <data dir>/config/plugins with --data-dir or $ARDIA_DATA_DIR). Ardia sees\na plugin the moment its folder appears, and every plugin starts off: turning one on shows what it gets, in Ardia.\nSee docs/plugins.md.\n\nCommands:\n  list       the plugins, whether they're on and what they add\n  install    copy a plugin folder (or a lone plugin.json) into the plugins folder\n  check      check plugin manifests against plugin.schema.json\n  remove     remove a plugin (through Ardia when it's running)\n  enable     ask Ardia to show a plugin's consent sheet\n  disable    turn a plugin off\n  call       call one of a plugin's tools and print its result as JSON\n  path       print the plugins folder\n\npositional arguments:\n  <command>\n    list      list the plugins\n    install   install a plugin from a folder or plugin.json\n    check     check plugin manifests\n    remove    remove a plugin\n    enable    show a plugin's consent sheet in Ardia\n    disable   turn a plugin off\n    call      call a plugin's tool\n    path      print the plugins folder\n\noptions:\n  -h, --help  show this help message and exit\n"
    },
    "stderr": {
     "text": ""
@@ -13834,6 +17614,146 @@
    "status": 0,
    "stdout": {
     "text": "usage: ardia scripts test [-h] [--url URL] [--expect JS] [--wait SECONDS]\n                          [--screenshot PATH] [--keep] [--json]\n                          [--data-dir DIR] [--port N] [--ws URL]\n                          FILE\n\nBuild FILE, open a background tab of its own, register the script at document start, open the page, and report.\n\nThe script runs where its @match/@include rules say, at its @run-at point, in the top frame and (without @noframes)\nevery iframe, cross-origin ones included. The report lists the script's own console output and uncaught exceptions\n(with positions mapped back to your source files), errors the page threw itself, whether it ran in the top frame\nand in iframes, and the --expect value. After the script ran and the page loaded, the test listens for --wait seconds (Chrome\nreports an unhandled promise rejection about a second late), retrying --expect (a JavaScript expression, awaited,\nin the page's world) until it's truthy. The tab closes at the end unless --keep.\n\n@inject-into content runs in the page's world here (ardia command connections can't create isolated worlds), with\na warning.\n\nExit status: 0 the script ran without uncaught exceptions and --expect was truthy, 1 otherwise (build error, the\npage didn't match, an exception, a falsy --expect), 2 Ardia can't be reached.\n\nExamples:\n  ardia scripts test hide-sidebar.user.ts\n  ardia scripts test dark.user.ts --url https://github.com/ --expect 'document.documentElement.dataset.dark'\n  ardia scripts test x.user.ts --wait 5 --screenshot /tmp/x.png --json\n\npositional arguments:\n  FILE               the .ts or .js userscript\n\noptions:\n  -h, --help         show this help message and exit\n  --url URL          the page to open (default: the first @match without\n                     wildcards in its host)\n  --expect JS        a JavaScript expression that must end up truthy\n  --wait SECONDS     how long to listen after the page loaded, retrying\n                     --expect until it's truthy (default 2)\n  --screenshot PATH  save a PNG of the tab at the end\n  --keep             leave the tab open\n  --json             print the report as JSON\n  --data-dir DIR     the Ardia data dir to find (default: $ARDIA_DATA_DIR,\n                     else the installed app's)\n  --port N           a plain DevTools server on 127.0.0.1:N (testing)\n  --ws URL           a browser WebSocket URL\n\nEndpoint: --ws, else --port (plain DevTools servers only), else $ARDIA_CDP_URL, else\n<data dir>/Chromium/ArdiaControl.json with --data-dir or $ARDIA_DATA_DIR, else the installed Ardia's.\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "test",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "test",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts test"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia scripts test [-h] [--url URL] [--expect JS] [--wait SECONDS]\n                          [--screenshot PATH] [--keep] [--json]\n                          [--data-dir DIR] [--port N] [--ws URL]\n                          FILE\n\nBuild FILE, open a background tab of its own, register the script at document start, open the page, and report.\n\nThe script runs where its @match/@include rules say, at its @run-at point, in the top frame and (without @noframes)\nevery iframe, cross-origin ones included. The report lists the script's own console output and uncaught exceptions\n(with positions mapped back to your source files), errors the page threw itself, whether it ran in the top frame\nand in iframes, and the --expect value. After the script ran and the page loaded, the test listens for --wait seconds (Chrome\nreports an unhandled promise rejection about a second late), retrying --expect (a JavaScript expression, awaited,\nin the page's world) until it's truthy. The tab closes at the end unless --keep.\n\n@inject-into content runs in the page's world here (ardia command connections can't create isolated worlds), with\na warning.\n\nExit status: 0 the script ran without uncaught exceptions and --expect was truthy, 1 otherwise (build error, the\npage didn't match, an exception, a falsy --expect), 2 Ardia can't be reached.\n\nExamples:\n  ardia scripts test hide-sidebar.user.ts\n  ardia scripts test dark.user.ts --url https://github.com/ --expect 'document.documentElement.dataset.dark'\n  ardia scripts test x.user.ts --wait 5 --screenshot /tmp/x.png --json\n\npositional arguments:\n  FILE               the .ts or .js userscript\n\noptions:\n  -h, --help         show this help message and exit\n  --url URL          the page to open (default: the first @match without\n                     wildcards in its host)\n  --expect JS        a JavaScript expression that must end up truthy\n  --wait SECONDS     how long to listen after the page loaded, retrying\n                     --expect until it's truthy (default 2)\n  --screenshot PATH  save a PNG of the tab at the end\n  --keep             leave the tab open\n  --json             print the report as JSON\n  --data-dir DIR     the Ardia data dir to find (default: $ARDIA_DATA_DIR,\n                     else the installed app's)\n  --port N           a plain DevTools server on 127.0.0.1:N (testing)\n  --ws URL           a browser WebSocket URL\n\nEndpoint: --ws, else --port (plain DevTools servers only), else $ARDIA_CDP_URL, else\n<data dir>/ArdiaControl.json with --data-dir or $ARDIA_DATA_DIR, else the installed Ardia's\n(${ARDIA_CONFIG_HOME:-${XDG_CONFIG_HOME:-~/.config}}/ardia).\n"
    },
    "stderr": {
     "text": ""
@@ -19017,6 +22937,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia theme check [-h] [--data-dir DIR] [--json] [NAME|FILE]\n\nCheck a theme by name or file (default: the active one). Exit 1 on any problem.\n\npositional arguments:\n  NAME|FILE       a theme name or a path to a theme file\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir; the config folder is <DIR>/config\n                  (default: $ARDIA_DATA_DIR, else ${ARDIA_CONFIG_HOME:-\n                  ${XDG_CONFIG_HOME:-~/.config}}/ardia/config)\n  --json          print JSON\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "theme",
+      "subcommand": "check",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "theme",
+      "subcommand": "check",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "theme check"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -19034,6 +23094,146 @@
    "status": 0,
    "stdout": {
     "text": "usage: ardia theme get [-h] [--data-dir DIR] [--theme NAME] [--json] [KEY]\n\nPrint a key from a theme (default: the active one), or the whole file. Exit 1 when the file doesn't set\nthe key; the message gives Ardia's default when the schema has one.\n\npositional arguments:\n  KEY             a dotted key: dark.ROLE, light.ROLE, type.family,\n                  metrics.radius.row, layout.hide, icons.SYMBOL\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir; the config folder is <DIR>/config\n                  (default: $ARDIA_DATA_DIR, else ~/.config/ardia)\n  --theme NAME    the theme to work on (default: the active one)\n  --json          print JSON\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "theme",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "theme",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "theme get"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia theme get [-h] [--data-dir DIR] [--theme NAME] [--json] [KEY]\n\nPrint a key from a theme (default: the active one), or the whole file. Exit 1 when the file doesn't set\nthe key; the message gives Ardia's default when the schema has one.\n\npositional arguments:\n  KEY             a dotted key: dark.ROLE, light.ROLE, type.family,\n                  metrics.radius.row, layout.hide, icons.SYMBOL\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir; the config folder is <DIR>/config\n                  (default: $ARDIA_DATA_DIR, else ${ARDIA_CONFIG_HOME:-\n                  ${XDG_CONFIG_HOME:-~/.config}}/ardia/config)\n  --theme NAME    the theme to work on (default: the active one)\n  --json          print JSON\n"
    },
    "stderr": {
     "text": ""
@@ -19321,6 +23521,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia theme list [-h] [--data-dir DIR] [--json]\n\nList the themes, the active one marked with *.\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir; the config folder is <DIR>/config\n                  (default: $ARDIA_DATA_DIR, else ${ARDIA_CONFIG_HOME:-\n                  ${XDG_CONFIG_HOME:-~/.config}}/ardia/config)\n  --json          print JSON\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "theme",
+      "subcommand": "list",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "theme",
+      "subcommand": "list",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "theme list"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -19338,6 +23678,146 @@
    "status": 0,
    "stdout": {
     "text": "usage: ardia theme new [-h] [--data-dir DIR] [--from THEME] NAME\n\nWrite themes/NAME.json with every dark and light colour role and the type, metrics, layout and icons\nblocks, from Ardia's defaults or from another theme (its values win, key by key). Names use lowercase\nletters, digits, - and _. It never overwrites a file.\n\npositional arguments:\n  NAME            the theme's name\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir; the config folder is <DIR>/config\n                  (default: $ARDIA_DATA_DIR, else ~/.config/ardia)\n  --from THEME    start from this theme instead of Ardia's defaults\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "theme",
+      "subcommand": "new",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "theme",
+      "subcommand": "new",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "theme new"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia theme new [-h] [--data-dir DIR] [--from THEME] NAME\n\nWrite themes/NAME.json with every dark and light colour role and the type, metrics, layout and icons\nblocks, from Ardia's defaults or from another theme (its values win, key by key). Names use lowercase\nletters, digits, - and _. It never overwrites a file.\n\npositional arguments:\n  NAME            the theme's name\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir; the config folder is <DIR>/config\n                  (default: $ARDIA_DATA_DIR, else ${ARDIA_CONFIG_HOME:-\n                  ${XDG_CONFIG_HOME:-~/.config}}/ardia/config)\n  --from THEME    start from this theme instead of Ardia's defaults\n"
    },
    "stderr": {
     "text": ""
@@ -19625,6 +24105,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia theme set [-h] [--data-dir DIR] [--theme NAME] KEY VALUE\n\nWrite one key to a theme (default: the active one); a running Ardia restyles at once. KEY is a dotted path whose\nfirst part is dark, light, type, metrics, layout or icons. Under icons, everything after icons. is one SF Symbol\nname (icons.chevron.down). VALUE is parsed as JSON, else taken as a string, and checked against theme.schema.json\nfirst; a value that fails leaves the file as it was. The file is rewritten even when it already holds the value, so\na running Ardia applies it again. With no active theme and no --theme, it creates themes/custom.json and makes it\nthe active theme.\n\nExamples:\n  ardia theme set dark.accent '#FF9F5A'\n  ardia theme set type.family \"Avenir Next\"\n  ardia theme set type.sizes.body 14\n  ardia theme set metrics.rowHeight 40\n  ardia theme set metrics.radius.row 14\n  ardia theme set layout.hide '[\"navButtons\"]'\n  ardia theme set layout.addressField bottom\n  ardia theme set icons.plus plus.circle\n  ardia theme set --theme nord light.accent '#5E81AC'\n\npositional arguments:\n  KEY             a dotted key: dark.ROLE, light.ROLE, type.family,\n                  metrics.radius.row, layout.hide, icons.SYMBOL\n  VALUE           JSON, else a plain string\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir; the config folder is <DIR>/config\n                  (default: $ARDIA_DATA_DIR, else ${ARDIA_CONFIG_HOME:-\n                  ${XDG_CONFIG_HOME:-~/.config}}/ardia/config)\n  --theme NAME    the theme to work on (default: the active one)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "theme",
+      "subcommand": "set",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "theme",
+      "subcommand": "set",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "theme set"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -19777,6 +24397,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia theme unset [-h] [--data-dir DIR] [--theme NAME] KEY\n\nTake a key out of a theme (default: the active one) and drop the blocks it leaves empty. Ardia goes back\nto its own value for that key.\n\npositional arguments:\n  KEY             a dotted key: dark.ROLE, light.ROLE, type.family,\n                  metrics.radius.row, layout.hide, icons.SYMBOL\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir; the config folder is <DIR>/config\n                  (default: $ARDIA_DATA_DIR, else ${ARDIA_CONFIG_HOME:-\n                  ${XDG_CONFIG_HOME:-~/.config}}/ardia/config)\n  --theme NAME    the theme to work on (default: the active one)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "theme",
+      "subcommand": "unset",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "theme",
+      "subcommand": "unset",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "theme unset"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -19794,6 +24554,146 @@
    "status": 0,
    "stdout": {
     "text": "usage: ardia theme use [-h] [--data-dir DIR] NAME\n\nSet theme in config.json (created first if needed). none goes back to Ardia's own palette.\n\npositional arguments:\n  NAME            a theme name, or none\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir; the config folder is <DIR>/config\n                  (default: $ARDIA_DATA_DIR, else ~/.config/ardia)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "theme",
+      "subcommand": "use",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "theme",
+      "subcommand": "use",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "theme use"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia theme use [-h] [--data-dir DIR] NAME\n\nSet theme in config.json (created first if needed). none goes back to Ardia's own palette.\n\npositional arguments:\n  NAME            a theme name, or none\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir; the config folder is <DIR>/config\n                  (default: $ARDIA_DATA_DIR, else ${ARDIA_CONFIG_HOME:-\n                  ${XDG_CONFIG_HOME:-~/.config}}/ardia/config)\n"
    },
    "stderr": {
     "text": ""
@@ -26710,6 +31610,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia hooks [-h] <command> ...\n\nRun hooks from hooks.json in the config folder (${ARDIA_CONFIG_HOME:-${XDG_CONFIG_HOME:-~/.config}}/ardia/config, or <data dir>/config with\n--data-dir or $ARDIA_DATA_DIR) in one process:\n\n  {\n    \"hooks\": [\n      { \"name\": \"yt-to-media\", \"on\": [\"tab.navigated\"], \"match\": [\"https://*.youtube.com/*\"],\n        \"run\": [\"~/bin/yt-hook\"], \"timeout\": 30, \"fullUrls\": true },\n      { \"name\": \"fresh-tab\", \"on\": \"app.launched\", \"command\": \"newTab\" },\n      { \"name\": \"standup\", \"at\": \"09:55\", \"days\": [\"mon\", \"tue\", \"wed\", \"thu\", \"fri\"], \"run\": [\"~/bin/standup\"] },\n      { \"name\": \"old-reddit\", \"on\": \"tab.opening\", \"rewrite\": [{ \"match\": \"https://www.reddit.com/*\", \"to\": \"https://old.reddit.com{path}{query}\" }] },\n      { \"name\": \"jira\", \"omnibox\": { \"title\": \"Jira\", \"keyword\": \"j\" }, \"run\": [\"~/bin/jira-suggest\"] }\n    ]\n  }\n\nA hook has one trigger (on, at, every or omnibox) and one action (run, command, or a decide answer). Event hooks\nrun like ardia on (see ardia on --help); command hooks run an Ardia command in the event's window and tab; decide\nhooks (tab.opening, link.opening, download.deciding, permission.requested) answer before Ardia acts, as rules\nArdia applies itself or as a program whose stdout is the answer; scheduled hooks get a schedule.fired event.\nRules that route or rewrite links, pick folders, run decide programs or read the address bar wait for approval in\nArdia's Settings › Advanced › Automation. run re-reads hooks.json when it changes; an invalid file keeps the hooks\nloaded before. Output goes to ${XDG_STATE_HOME:-~/.local/state}/ardia/hooks.log (rotated at 5 MB). See docs/automation.md.\n\nCommands:\n  run         run the hooks until interrupted\n  install     run them at login: a systemd user service (dev.ardia.hooks.service) that keeps ardia hooks run alive\n  uninstall   remove the systemd user service\n  list        the hooks in hooks.json and whether the systemd user service runs\n\npositional arguments:\n  <command>\n    run        run the hooks until interrupted\n    install    run the hooks at login (systemd user service\n               dev.ardia.hooks.service)\n    uninstall  remove the systemd user service\n    list       list the hooks and the systemd user service's state\n\noptions:\n  -h, --help   show this help message and exit\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "hooks",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "hooks",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "hooks"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -26725,6 +31765,146 @@
    "status": 0,
    "stdout": {
     "text": "usage: ardia config [-h] <command> ...\n\nSet Ardia up from ~/.config/ardia/config.json, dotfiles style. Ardia reads the file at launch and whenever it\nchanges, and never writes it; these commands edit it for you and check it against the schema Ardia writes.\nNone of them need Ardia running.\n\nThe config folder is ~/.config/ardia, or <data dir>/config with --data-dir or $ARDIA_DATA_DIR. Keys, allowed\nvalues and defaults come from config.schema.json in the config folder, else <data dir>/config-schema/ (the named\ndata dir, else the installed app's).\n\nCommands:\n  path               print the config folder\n  init               create the folder, config.json and the schemas (never overwrites)\n  get [KEY]          print a setting from the file, or the whole file\n  set KEY VALUE      check VALUE and write it (KEY is a setting or shortcuts.<command id>)\n  unset KEY          take a key out of the file (Ardia keeps its current value)\n  list               every setting: allowed values, default and the file's value\n  edit               open config.json in $VISUAL, $EDITOR or vi, then check it\n  check              check config.json and the theme it names\n\nExit status: 0 done, 1 a check failed or the input is wrong.\n\npositional arguments:\n  <command>\n    path      print the config folder\n    init      create the config folder, config.json and the schemas Ardia\n              wrote; never overwrites a file\n    get       print a setting from config.json, or the whole file\n    set       check a value and write it to config.json\n    unset     take a key out of config.json\n    list      list every setting with its allowed values, default and file\n              value\n    edit      open config.json in $VISUAL, $EDITOR, else vi, then check it\n    check     check config.json and the theme it names\n\noptions:\n  -h, --help  show this help message and exit\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "config"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia config [-h] <command> ...\n\nSet Ardia up from ${ARDIA_CONFIG_HOME:-${XDG_CONFIG_HOME:-~/.config}}/ardia/config/config.json, dotfiles style. Ardia reads the file at launch and whenever it\nchanges, and never writes it; these commands edit it for you and check it against the schema Ardia writes.\nNone of them need Ardia running.\n\nThe config folder is ${ARDIA_CONFIG_HOME:-${XDG_CONFIG_HOME:-~/.config}}/ardia/config, or <data dir>/config with --data-dir or $ARDIA_DATA_DIR. Keys, allowed\nvalues and defaults come from config.schema.json in the config folder, else <data dir>/config-schema/ (the named\ndata dir, else the installed app's).\n\nCommands:\n  path               print the config folder\n  init               create the folder, config.json and the schemas (never overwrites)\n  get [KEY]          print a setting from the file, or the whole file\n  set KEY VALUE      check VALUE and write it (KEY is a setting or shortcuts.<command id>)\n  unset KEY          take a key out of the file (Ardia keeps its current value)\n  list               every setting: allowed values, default and the file's value\n  edit               open config.json in $VISUAL, $EDITOR or xdg-open (vi with no display), then check it\n  check              check config.json and the theme it names\n\nExit status: 0 done, 1 a check failed or the input is wrong.\n\npositional arguments:\n  <command>\n    path      print the config folder\n    init      create the config folder, config.json and the schemas Ardia\n              wrote; never overwrites a file\n    get       print a setting from config.json, or the whole file\n    set       check a value and write it to config.json\n    unset     take a key out of config.json\n    list      list every setting with its allowed values, default and file\n              value\n    edit      open config.json in $VISUAL or $EDITOR and check it, else with\n              xdg-open\n    check     check config.json and the theme it names\n\noptions:\n  -h, --help  show this help message and exit\n"
    },
    "stderr": {
     "text": ""
@@ -27025,6 +32205,146 @@
    "status": 0,
    "stdout": {
     "text": "usage: ardia plugins [-h] <command> ...\n\nInstall, list and manage Ardia plugins. A plugin is a folder with a plugin.json; it lives in the plugins folder\nof the config folder (<parity:box>/home/.config/ardia/plugins, or <data dir>/config/plugins with --data-dir or $ARDIA_DATA_DIR). Ardia sees\na plugin the moment its folder appears, and every plugin starts off: turning one on shows what it gets, in Ardia.\nSee docs/plugins.md.\n\nCommands:\n  list       the plugins, whether they're on and what they add\n  install    copy a plugin folder (or a lone plugin.json) into the plugins folder\n  check      check plugin manifests against plugin.schema.json\n  remove     remove a plugin (through Ardia when it's running)\n  enable     ask Ardia to show a plugin's consent sheet\n  disable    turn a plugin off\n  call       call one of a plugin's tools and print its result as JSON\n  path       print the plugins folder\n\npositional arguments:\n  <command>\n    list      list the plugins\n    install   install a plugin from a folder or plugin.json\n    check     check plugin manifests\n    remove    remove a plugin\n    enable    show a plugin's consent sheet in Ardia\n    disable   turn a plugin off\n    call      call a plugin's tool\n    path      print the plugins folder\n\noptions:\n  -h, --help  show this help message and exit\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "plugins",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "plugins",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "plugins"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia plugins [-h] <command> ...\n\nInstall, list and manage Ardia plugins. A plugin is a folder with a plugin.json; it lives in the plugins folder\nof the config folder (<parity:box>/home/.config/ardia/config/plugins, or <data dir>/config/plugins with --data-dir or $ARDIA_DATA_DIR). Ardia sees\na plugin the moment its folder appears, and every plugin starts off: turning one on shows what it gets, in Ardia.\nSee docs/plugins.md.\n\nCommands:\n  list       the plugins, whether they're on and what they add\n  install    copy a plugin folder (or a lone plugin.json) into the plugins folder\n  check      check plugin manifests against plugin.schema.json\n  remove     remove a plugin (through Ardia when it's running)\n  enable     ask Ardia to show a plugin's consent sheet\n  disable    turn a plugin off\n  call       call one of a plugin's tools and print its result as JSON\n  path       print the plugins folder\n\npositional arguments:\n  <command>\n    list      list the plugins\n    install   install a plugin from a folder or plugin.json\n    check     check plugin manifests\n    remove    remove a plugin\n    enable    show a plugin's consent sheet in Ardia\n    disable   turn a plugin off\n    call      call a plugin's tool\n    path      print the plugins folder\n\noptions:\n  -h, --help  show this help message and exit\n"
    },
    "stderr": {
     "text": ""
