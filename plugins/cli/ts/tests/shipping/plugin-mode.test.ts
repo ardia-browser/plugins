@@ -60,13 +60,14 @@ function holdersFromProc(files: string[]): number[] {
   return found;
 }
 
+const LSOF = ["/usr/sbin/lsof", "/usr/bin/lsof"].find((candidate) => fs.existsSync(candidate));
+
 function lockHolders(files: string[]): number[] {
   if (files.length === 0) return [];
-  const listed = spawnSync("lsof", ["-t", ...files], { encoding: "utf8", timeout: 20_000 });
   const pids =
-    listed.error !== undefined
+    LSOF === undefined
       ? holdersFromProc(files)
-      : (listed.stdout ?? "")
+      : (spawnSync(LSOF, ["-t", ...files], { encoding: "utf8", timeout: 20_000 }).stdout ?? "")
           .split(/\s+/)
           .filter((word) => word !== "")
           .map(Number);

@@ -8,6 +8,7 @@ const ORACLE = path.join(path.dirname(fileURLToPath(import.meta.url)), "oracle.t
 
 test("every ported pure function answers exactly as its Python original did on the frozen cases", async () => {
   const frozen = oracle<FrozenFunctions>("m3-pure");
+  if (process.platform === "linux") Object.assign(frozen.functions, oracle<FrozenFunctions>("m3-pure-linux").functions);
   const { reports, functions, cases } = await frozenFunctionReports(frozen, ORACLE);
   assert.equal(reports.join("\n\n"), "");
   assert.ok(functions >= 100, `only ${functions} functions frozen`);

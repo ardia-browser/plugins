@@ -133,12 +133,28 @@ async function againstPython(name: string, lines: string[], consent?: Record<str
   const pythonBodies = withRunningVersion(withoutFrames(withoutPythonVersion(frozen.bodies.map((text) => ({ body: JSON.parse(text), headers: {} })))) as unknown[]);
   const tsRoot = box(lines, consent);
   seen.length = 0;
-  const tsResult = await flush(tsRoot, URL, "dev");
+  const tsResult = await flushInUtc(tsRoot);
   const tsBodies = withoutPythonVersion(seen.splice(0));
   assert.equal(tsResult, frozen.result);
   assert.deepEqual(tsBodies, pythonBodies);
   assert.deepEqual(leftovers(tsRoot), frozen.leftovers);
   fs.rmSync(tsRoot, { recursive: true, force: true });
+}
+
+const FLUSH_IN_UTC = path.join(fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "ardia-flush-utc-"))), "flush-in-utc.ts");
+fs.writeFileSync(
+  FLUSH_IN_UTC,
+  `import ${JSON.stringify(path.join(TS, "tests", "libc-loaded.ts"))};\nimport { flush } from ${JSON.stringify(path.join(TS, "src", "flush.ts"))};\nconst [root, url] = process.argv.slice(2);\nprocess.stdout.write(JSON.stringify(await flush(root, url, "dev")));\n`,
+);
+afterAll(() => fs.rmSync(path.dirname(FLUSH_IN_UTC), { recursive: true, force: true }));
+
+async function flushInUtc(root: string): Promise<string> {
+  const child = Bun.spawn([process.execPath, FLUSH_IN_UTC, root, URL], { env: { ...process.env, TZ: "UTC" }, stdout: "pipe", stderr: "pipe" });
+  const timer = setTimeout(() => child.kill("SIGKILL"), 30_000);
+  const [out, err, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+  clearTimeout(timer);
+  assert.equal(code, 0, err);
+  return JSON.parse(out) as string;
 }
 
 function uid(index: number): string {
