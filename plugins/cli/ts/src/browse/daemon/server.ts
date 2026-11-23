@@ -396,7 +396,7 @@ export class Daemon {
     const recent = recentlyUsed(this.state.usedAt, now, [...this.active].map((task) => task.startedAt));
     for (const target of this.state.usedAt.keys()) if (!recent.includes(target)) this.state.usedAt.delete(target);
     const live = (target: string) => this.state.targetInfos.has(target);
-    const unmapped = recent.filter((target) => live(target) && !this.state.appTabs.has(target));
+    const unmapped = [...new Set([...recent.filter((target) => live(target) && !this.state.appTabs.has(target)), ...this.state.unrecordedCreated()])];
     if (this.state.connected && shouldScan(unmapped, this.state.usedAt, this.scannedAt, now)) {
       this.scannedAt = now;
       await appTabMap(this.state).catch(() => undefined);

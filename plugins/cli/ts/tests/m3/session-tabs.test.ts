@@ -264,6 +264,32 @@ describe("the tabs a session opened outlive its daemon and Ardia's restart", () 
     }
   });
 
+  test("a tab the session created stays due for a lookup until its page is on disk, however long that takes", () => {
+    const { dir, browse } = folder();
+    try {
+      const blocker = path.join(browse, SESSION_TABS);
+      fs.mkdirSync(blocker);
+      const state = daemon(dir, "a", "rl", RUN_1);
+      opens(state, "TARGET");
+      page(state, "TARGET", "tab-run1-4");
+      state.opened.add("TARGET-FOLLOWED");
+      page(state, "TARGET-FOLLOWED", "tab-run1-9");
+      expect(state.unrecordedCreated()).toEqual(["TARGET"]);
+      for (let attempt = 0; attempt < 10; attempt += 1) state.noteAppTabs(new Map([["TARGET", "tab-run1-4"]]));
+      expect(state.unrecordedCreated()).toEqual(["TARGET"]);
+      fs.rmdirSync(blocker);
+      state.noteAppTabs(new Map([["TARGET", "tab-run1-4"]]));
+      expect(state.unrecordedCreated()).toEqual([]);
+      const next = daemon(dir, "b", "rl", RUN_1);
+      opens(next, "TARGET");
+      page(next, "TARGET", "tab-run1-4");
+      next.noteAppTabs(new Map([["TARGET", "tab-run1-4"]]));
+      expect(next.unrecordedCreated()).toEqual([]);
+    } finally {
+      closeFd(dir);
+    }
+  });
+
   test("entries older than three days lapse, an owner keeps its newest tabs, and a damaged file starts over", () => {
     const { dir, browse } = folder();
     try {

@@ -185,6 +185,7 @@ export class State extends Refs implements temptabs.TempTabState {
   readonly appGenerations = new Map<string, unknown>();
   readonly opened = new Set<string>();
   readonly created = new Set<string>();
+  readonly persisted = new Set<string>();
   readonly frames = new Map<string, string>();
   readonly leases = new Set<string>();
   readonly claims = new ClaimSet();
@@ -381,6 +382,7 @@ export class State extends Refs implements temptabs.TempTabState {
     const wasOpened = this.opened.has(targetId);
     this.opened.delete(targetId);
     this.created.delete(targetId);
+    this.persisted.delete(targetId);
     this.frames.delete(targetId);
     this.targetInfos.delete(targetId);
     this.views.delete(targetId);
@@ -425,6 +427,7 @@ export class State extends Refs implements temptabs.TempTabState {
         if (this.opened.has(target)) {
           const ours = this.created.has(target) || entry?.target === target;
           if (ours && (entry === undefined || entry.target !== target || entry.run !== run)) put.set(app, { run, target });
+          else if (ours) this.persisted.add(target);
         } else if (entry !== undefined && run !== "" && (entry.target === target || entry.run !== run)) {
           this.opened.add(target);
           this.created.add(target);
@@ -436,6 +439,7 @@ export class State extends Refs implements temptabs.TempTabState {
       const stale = owned.size + put.size >= MAX_SESSION_TABS ? Number.POSITIVE_INFINITY : wallSeconds() - TOUCH_AFTER;
       const touch = present === null ? [] : [...owned].filter(([app, entry]) => present.has(app) && !put.has(app) && entry.at < stale).map(([app]) => app);
       this.registry.updateSessionTabs(put, [], touch);
+      for (const entry of put.values()) this.persisted.add(entry.target);
       if (readopted) flag("tab_readopted_after_restart", true);
     } catch {}
   }
@@ -478,6 +482,10 @@ export class State extends Refs implements temptabs.TempTabState {
         }
       })().catch(() => {});
     });
+  }
+
+  unrecordedCreated(): string[] {
+    return [...this.created].filter((target) => this.opened.has(target) && this.targetInfos.has(target) && !this.persisted.has(target));
   }
 
   needsPairingBeforeClose(): boolean {
