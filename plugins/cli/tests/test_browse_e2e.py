@@ -1461,7 +1461,7 @@ async def main(data_dir):
             if gone:
                 break
             await asyncio.sleep(0.1)
-        print(json.dumps({"attached": attached, "gone": gone, "unlisted": await refused(browser, "Network.getCookies", {})}))
+        print(json.dumps({"attached": attached, "gone": gone, "unlisted": await refused(browser, "Storage.getCookies", {})}))
     finally:
         await browser.close()
 
@@ -1607,6 +1607,7 @@ class BrowseTokenPath(unittest.TestCase):
         else:
             self.assertNotIn("isn't allowed for the ardia command", said["gone"]["message"])
         if said["unlisted"]:
+            self.assertTrue(said["unlisted"]["gated"], said["unlisted"])
             self.assertEqual(said["unlisted"]["reason"], "")
             self.assertIn("Ardia 0.2.49 or later", said["unlisted"]["message"])
 

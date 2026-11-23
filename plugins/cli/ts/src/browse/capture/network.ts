@@ -284,7 +284,7 @@ async function networkHar(ctx: Ctx, argv: string[]): Promise<Result> {
   const target = named !== undefined ? ctx.path(named) : path.join(path.dirname(defaultPath(ctx, "png")), `capture-${Math.floor(Date.now() / 1000)}.har`);
   fs.writeFileSync(target, dumps(document, "spaced").toWellFormed(), "utf8");
   const shown = named ?? target;
-  const note = " (Cookie, Set-Cookie, Authorization and Proxy-Authorization headers are left out)";
+  const note = " (cookie and authorization headers are left out)";
   return new Result({ path: shown, entries: entries.length }, `✓ HAR saved to ${shown} (${entries.length} entries)${note}`);
 }
 

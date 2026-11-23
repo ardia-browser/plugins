@@ -1266,7 +1266,8 @@ class EngineRefusalShape(unittest.TestCase):
     def test_recorded_headers_leave_credentials_out(self):
         from ardia_cli.browse.page import clip_headers
 
-        kept = clip_headers({"Accept": "*/*", "Cookie": "sid=1", "authorization": "Bearer x", "Set-Cookie": "a=b", "Proxy-Authorization": "Basic y", "X-Trace": "t"})
+        kept = clip_headers({"Accept": "*/*", "Cookie": "sid=1", "authorization": "Bearer x", "Set-Cookie": "a=b", "Proxy-Authorization": "Basic y",
+                             "Cookie2": "c=d", "set-cookie2": "e=f", "X-Trace": "t"})
         self.assertEqual(kept, {"Accept": "*/*", "X-Trace": "t"})
 
 if __name__ == "__main__":

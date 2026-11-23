@@ -1129,7 +1129,7 @@ WebUI pages are tabs too: `tab list`, `tab <id>` and `open` take `chrome://`, `c
 `chrome-untrusted://` and `devtools://` pages (`PAGE_SCHEMES` in `state.py`), which an older engine refuses to attach
 to (`to that target`).
 
-The command leaves `Cookie`, `Set-Cookie`, `Authorization` and `Proxy-Authorization` out of every request it records
+The command leaves `Cookie`, `Cookie2`, `Set-Cookie`, `Set-Cookie2`, `Authorization` and `Proxy-Authorization` out of every request it records
 (`clip_headers` / `clipHeaders`, `CREDENTIAL_HEADERS`), so `network requests`, `network request <id>` and HAR files
 never contain them, on any engine and over `--port` too. An older engine also stripped them from its events; from
 0.2.49 the engine passes events through unchanged, so the command does it.

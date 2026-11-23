@@ -46,7 +46,7 @@ export function clip(text: unknown, limit = RECORD_TEXT_LIMIT): unknown {
   return `${points.slice(0, limit).join("")}… [${points.length - limit} more characters]`;
 }
 
-export const CREDENTIAL_HEADERS: ReadonlySet<string> = new Set(["cookie", "set-cookie", "authorization", "proxy-authorization"]);
+export const CREDENTIAL_HEADERS: ReadonlySet<string> = new Set(["cookie", "cookie2", "set-cookie", "set-cookie2", "authorization", "proxy-authorization"]);
 
 export function clipHeaders(headers: unknown): Json {
   const out: Json = {};

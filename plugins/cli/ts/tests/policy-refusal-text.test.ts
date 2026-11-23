@@ -89,6 +89,6 @@ test("only the engine's own refusal reply counts, never the phrase echoed inside
 });
 
 test("recorded headers leave credentials out", () => {
-  const kept = clipHeaders({ Accept: "*/*", Cookie: "sid=1", authorization: "Bearer x", "Set-Cookie": "a=b", "Proxy-Authorization": "Basic y", "X-Trace": "t" });
+  const kept = clipHeaders({ Accept: "*/*", Cookie: "sid=1", authorization: "Bearer x", "Set-Cookie": "a=b", "Proxy-Authorization": "Basic y", Cookie2: "c=d", "set-cookie2": "e=f", "X-Trace": "t" });
   expect(kept).toEqual({ Accept: "*/*", "X-Trace": "t" });
 });
