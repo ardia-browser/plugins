@@ -17,6 +17,7 @@
       "accent": "#6D4AFF",
       "readsOffline": false,
       "capabilities": ["totp", "save", "touchID"],
+      "passkeys": [{ "via": "extension", "extensions": ["ghmbeldphafepmbegfdlkpapadhbakde"] }],
       "signIn": {
         "methods": [
           {

@@ -33,8 +33,9 @@ describe("manifest", () => {
     assert.equal(provider.readsOffline, false);
   });
 
-  test("offers totp, save and Touch ID, and no edit, addTotp or passkeys", () => {
+  test("offers totp, save and Touch ID, and leaves passkeys to the Proton Pass extension", () => {
     assert.deepEqual(provider.capabilities, ["totp", "save", "touchID"]);
+    assert.deepEqual(provider.passkeys, [{ via: "extension", extensions: ["ghmbeldphafepmbegfdlkpapadhbakde"] }]);
     assert.equal(provider.signIn.unlock, undefined);
   });
 
