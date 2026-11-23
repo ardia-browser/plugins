@@ -1,5 +1,5 @@
 import { attach, observe } from "../changes/observe.ts";
-import { filledResult, selectIn, typedResult } from "../commands/act.ts";
+import { checkedResult, filledResult, selectIn, typedResult } from "../commands/act.ts";
 import type { Ctx } from "../commands/ctx.ts";
 import { Result } from "../daemon/render.ts";
 import { inputOf } from "../input/input.ts";
@@ -20,16 +20,16 @@ export async function findAct(ctx: Ctx, page: Page, element: Element, ref: strin
   }
   if (action === "fill") {
     const text = rest.slice(1).join(" ");
-    const [[retargeted, stored], report] = await observe(ctx, page, () => fill(page, element, text, humanize), [element, null]);
-    return attach(filledResult("filled", label, retargeted, text, stored), report);
+    const [[retargeted, stored, readback], report] = await observe(ctx, page, () => fill(page, element, text, humanize), [element, null]);
+    return attach(filledResult("filled", label, retargeted, text, stored, readback ?? null), report);
   }
   if (action === "type") {
     const [retargeted, report] = await observe(ctx, page, () => typeText(page, element, rest.slice(1).join(" "), humanize), [element, null]);
     return attach(typedResult("typed", label, retargeted), report);
   }
   if (action === "check" || action === "uncheck") {
-    const [, report] = await observe(ctx, page, () => setChecked(page, element, action === "check", humanize));
-    return attach(new Result({ [`${action}ed`]: label }), report);
+    const [changed, report] = await observe(ctx, page, () => setChecked(page, element, action === "check", humanize));
+    return attach(checkedResult(action === "check", label, changed), report);
   }
   if (action === "select") return selectIn(ctx, page, element, label, rest.slice(1), humanize);
   if (action === "hover") {

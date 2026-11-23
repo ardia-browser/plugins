@@ -3,6 +3,7 @@ import { pyLen } from "../pylib/str.ts";
 import { roundHalfEven } from "../pylib/format.ts";
 import { ALIASES, KNOWN_COMMANDS } from "./tables.ts";
 import { safeCode } from "./codes.ts";
+import { PRECISION_COUNTS, PRECISION_FLAGS } from "./act/precision-metrics.ts";
 
 export const MAX_MS = 3_600_000;
 export const MAX_COUNT = 100_000_000;
@@ -56,8 +57,8 @@ export const MAIN_PHASE: Readonly<Record<string, string>> = { snapshot: "snapsho
 export const FAILED_WITHOUT_CODE = "command_failed";
 export const OUTPUT_MARKERS = ["\n[output capped at ", "\n[truncated ", "\n[pages cut to fit ", " not shown. Narrow it: "];
 
-const ALL_FLAGS = [FLAGS, READ_FLAGS, ACT_FLAGS, CHANGE_FLAGS, FLOW_FLAGS];
-const ALL_NUMBERS = [DURATIONS, COUNTS, ACT_COUNTS, CHANGE_COUNTS, FLOW_COUNTS];
+const ALL_FLAGS = [FLAGS, READ_FLAGS, ACT_FLAGS, CHANGE_FLAGS, FLOW_FLAGS, PRECISION_FLAGS];
+const ALL_NUMBERS = [DURATIONS, COUNTS, ACT_COUNTS, CHANGE_COUNTS, FLOW_COUNTS, PRECISION_COUNTS];
 
 export type MetricValue = boolean | number;
 

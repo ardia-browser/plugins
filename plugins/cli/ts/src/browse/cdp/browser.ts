@@ -57,6 +57,8 @@ export const EVENTS: readonly string[] = [
   "Tracing.tracingComplete",
   "Browser.downloadWillBegin",
   "Browser.downloadProgress",
+  "Page.downloadWillBegin",
+  "Page.downloadProgress",
 ];
 
 export const MUTATING_METHODS: ReadonlySet<string> = new Set([

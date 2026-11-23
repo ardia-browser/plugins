@@ -1,4 +1,5 @@
 import { Float, type Value } from "./json.ts";
+import { PRECISION_COUNTS, PRECISION_FLAGS } from "./browse/act/precision-metrics.ts";
 import { METRIC_COUNTS, METRIC_DURATIONS, METRIC_FLAGS, METRIC_MAX_COUNT, METRIC_MAX_MS } from "./telemetry-tables.ts";
 
 export const TS_ONLY_FLAGS: readonly string[] = [
@@ -38,9 +39,9 @@ export const TS_ONLY_FLAGS: readonly string[] = [
 
 export const TS_ONLY_COUNTS: readonly string[] = ["failed_step_index", "script_calls", "script_concurrent_peak", "script_receipts_skipped"];
 
-const FLAGS = new Set([...METRIC_FLAGS, ...TS_ONLY_FLAGS]);
+const FLAGS = new Set([...METRIC_FLAGS, ...TS_ONLY_FLAGS, ...PRECISION_FLAGS]);
 const DURATIONS = new Set(METRIC_DURATIONS);
-const COUNTS = new Set([...METRIC_COUNTS, ...TS_ONLY_COUNTS]);
+const COUNTS = new Set([...METRIC_COUNTS, ...TS_ONLY_COUNTS, ...PRECISION_COUNTS]);
 
 function roundHalfEven(value: number): bigint {
   const floor = Math.floor(value);

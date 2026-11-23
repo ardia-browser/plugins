@@ -10,6 +10,7 @@ import { borrowedTab } from "./borrowed.ts";
 import type { Ctx } from "./ctx.ts";
 import { register } from "./index.ts";
 import { type Flags, need, parse } from "./parse.ts";
+import { noteRawThrottle } from "../changes/throttle.ts";
 
 export const CDP_METHOD = /^[A-Z][A-Za-z0-9]*\.[a-z][A-Za-z0-9]*$/u;
 export const CDP_USAGE = "cdp <Domain.method> [--params <json>|-] [--param k=v | k:=json] [--target browser|<tab>] [--timeout 30s]";
@@ -73,11 +74,13 @@ export async function cmdCdp(ctx: Ctx, argv: string[]): Promise<Result> {
       await state.refreshTargets();
       const targetId = await state.findTab(target);
       [result, session] = await state.registry.holding(state.instance, targetId, () => raw.send(state, targetId, method, params, timeout));
+      noteRawThrottle(state, targetId, method, params);
       where = state.tabId(targetId);
     } else {
       const page = await state.page();
       refuseRawOnBorrowed(ctx, page, method);
       [result, session] = await raw.send(state, page.targetId, method, params, timeout);
+      noteRawThrottle(state, page.targetId, method, params);
       where = state.tabId(page.targetId);
     }
   } catch (error) {

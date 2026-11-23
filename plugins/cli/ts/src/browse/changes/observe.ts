@@ -1,9 +1,13 @@
 import { pyLen, pyStrip } from "../../pylib/str.ts";
 import { redact } from "../../redact.ts";
-import { Cancelled, later, shield, sleep, untilCancelled } from "../cdp/cancel.ts";
+import { Cancelled, currentSignal, later, shield, sleep, untilCancelled, withSignal } from "../cdp/cancel.ts";
 import type { Ctx } from "../commands/ctx.ts";
 import { parse } from "../commands/parse.ts";
 import { BrowseError, CdpError, ConnectionLost, Gated, Usage } from "../daemon-errors.ts";
+import { refusedRetry } from "../act/retry.ts";
+import { raceDialog, ReceiptWatch, refuseIfDialog } from "./dialogs.ts";
+import { REACTION_STATE, UNWATCH_REACTION, WATCH_REACTION, WATCH_REACTION_FOCUSED } from "./noise.ts";
+import { budget, throttleOf } from "./throttle.ts";
 import { Result } from "../daemon/render.ts";
 import { CHANGES_TEXT_JS } from "../js/index.ts";
 import { clock, count, flag, spent } from "../metrics.ts";
@@ -45,6 +49,8 @@ export const FIRST_QUIET = 0.05;
 export const QUIET = 0.12;
 export const POLL = 0.025;
 export const STOP_TIMEOUT = 2.0;
+export const STALE_REQUEST = 1.5;
+export const SWEPT_TYPES = new Set(["XHR", "Fetch", "Ping", "Other", "Preflight", "CSPViolationReport", "Manifest", "Prefetch"]);
 export const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 export const LONG_LIVED = new Set(["EventSource", "WebSocket"]);
 export const BODY_TYPES = new Set(["XHR", "Fetch", "Document"]);
@@ -94,6 +100,8 @@ type RequestRecord = {
   background: boolean;
   listed: boolean;
   wrote?: { method: string; url: string };
+  started: number;
+  frame: string | null;
 };
 
 function dict(value: unknown): Json {
@@ -109,9 +117,27 @@ export class NetworkWatch {
   counting = false;
   ignored = 0;
   readonly earlier = new Set<string>();
+  navigationError: string | null = null;
+  readonly limit: number;
+  readonly stale: number;
   readonly listener: Listener = (eventPage, method, params) => this.onEvent(eventPage, method, params);
 
-  constructor(readonly page: Page) {}
+  constructor(readonly page: Page) {
+    this.limit = budget(page, SETTLE_LIMIT);
+    this.stale = (this.limit / SETTLE_LIMIT) * STALE_REQUEST;
+  }
+
+  private touch(entry: RequestRecord): void {
+    if (LONG_LIVED.has(entry.type)) {
+      flag("settle_ignored_streams", true);
+      return;
+    }
+    if (!entry.background) this.lastEvent = monotonic();
+  }
+
+  swept(entry: RequestRecord, now: number): boolean {
+    return SWEPT_TYPES.has(entry.type) && READ_METHODS.has(entry.method) && now - entry.started >= this.stale;
+  }
 
   private onEvent(eventPage: Page | null, method: string, params: Json): void {
     if (eventPage !== this.page || !method.startsWith("Network.")) return;
@@ -155,18 +181,20 @@ export class NetworkWatch {
           done: false,
           background: background(type, raw, String(request["method"] || "GET"), this.page.url),
           listed: !READ_METHODS.has(String(request["method"] || "GET").toUpperCase()) && !knownCollector(raw, String(request["method"] || "GET"), this.page.url),
+          started: monotonic(),
+          frame: typeof params["frameId"] === "string" ? params["frameId"] : null,
         };
         this.records.set(requestId, entry);
         this.order.push(requestId);
         if (entry.background) this.ignored += 1;
       }
-      if (!entry.background) this.lastEvent = monotonic();
+      this.touch(entry);
       const redirect = dict(params["redirectResponse"]);
       if (params["redirectResponse"] && redirect["status"] !== undefined && redirect["status"] !== null) entry.statuses.push(redirect["status"]);
     } else {
       const entry = this.records.get(requestId);
       if (entry === undefined) return;
-      if (!entry.background) this.lastEvent = monotonic();
+      this.touch(entry);
       if (method === "Network.responseReceived") {
         const response = dict(params["response"]);
         if (response["status"] !== undefined && response["status"] !== null) entry.statuses.push(response["status"]);
@@ -176,6 +204,11 @@ export class NetworkWatch {
       else if (method === "Network.loadingFailed") {
         entry.done = true;
         entry.failed = params["canceled"] ? "canceled" : [...String(params["errorText"] || "failed")].slice(0, 200).join("");
+        const navigationFailed = entry.type === "Document" && !params["canceled"] && (entry.frame === null || entry.frame === this.page.mainFrame);
+        if (navigationFailed && netError(entry.failed)) {
+          this.navigationError = entry.failed;
+          flag("navigation_net_error", true);
+        }
       }
     }
   }
@@ -206,7 +239,18 @@ export class NetworkWatch {
   }
 
   busy(): boolean {
-    return [...this.records.values()].some((entry) => !entry.done && !entry.answered && !entry.background && !LONG_LIVED.has(entry.type));
+    const now = monotonic();
+    let swept = false;
+    const busy = [...this.records.values()].some((entry) => {
+      if (entry.done || entry.answered || entry.background || LONG_LIVED.has(entry.type)) return false;
+      if (this.swept(entry, now)) {
+        swept = true;
+        return false;
+      }
+      return true;
+    });
+    if (swept && !busy) flag("settle_swept_stale_requests", true);
+    return busy;
   }
 
   foreground(): boolean {
@@ -215,12 +259,12 @@ export class NetworkWatch {
 
   async settleLine(from: number): Promise<boolean> {
     const started = monotonic();
-    const deadline = started + SETTLE_LIMIT;
+    const deadline = started + this.limit;
     const own = () => this.order.slice(from).some((id) => !this.records.get(id)?.background);
     const quiet = () => monotonic() - Math.max(this.lastEvent, started) >= (own() ? QUIET : FIRST_QUIET);
     const mine = () => !quiet() || this.order.slice(from).some((id) => {
       const entry = this.records.get(id);
-      if (entry === undefined || entry.done || entry.background || LONG_LIVED.has(entry.type)) return false;
+      if (entry === undefined || entry.done || entry.background || LONG_LIVED.has(entry.type) || this.swept(entry, monotonic())) return false;
       return !entry.answered || (entry.method === "GET" && BODY_TYPES.has(entry.type) && readableType(entry) !== null);
     });
     while (mine()) {
@@ -232,7 +276,7 @@ export class NetworkWatch {
 
   async settle(pageBusy: (() => Promise<boolean>) | null = null): Promise<boolean> {
     const started = monotonic();
-    const deadline = started + SETTLE_LIMIT;
+    const deadline = started + this.limit;
     for (;;) {
       const now = monotonic();
       const quiet = this.foreground() || this.ignored > 0 ? QUIET : FIRST_QUIET;
@@ -288,6 +332,10 @@ export class NetworkWatch {
   }
 }
 
+export function netError(text: string | undefined): boolean {
+  return typeof text === "string" && text.startsWith("net::ERR_") && text !== "net::ERR_ABORTED";
+}
+
 export async function navigationBusy(page: Page, navigations: number): Promise<boolean> {
   if (page.navigations === navigations) return false;
   const main = page.mainFrame;
@@ -311,9 +359,9 @@ export async function watchReaction(state: State, page: Page, react: Reaction): 
   try {
     if (element !== null) {
       frame = element.frame;
-      started = await reactionCall(page, "(el, id) => ardiaBrowse.watchReaction(el, id)", [element, watchId], frame, REACTION_CALL_TIMEOUT);
+      started = await reactionCall(page, WATCH_REACTION, [element, watchId], frame, REACTION_CALL_TIMEOUT);
     } else {
-      started = await reactionCall(page, "(id) => ardiaBrowse.watchReaction(null, id)", [watchId], frame, REACTION_CALL_TIMEOUT);
+      started = await reactionCall(page, WATCH_REACTION_FOCUSED, [watchId], frame, REACTION_CALL_TIMEOUT);
     }
   } catch (error) {
     if (error instanceof BrowseError || error instanceof TimedOut) return;
@@ -343,18 +391,19 @@ export async function settleReaction(state: State, name: string | null = null, a
   if (pending === undefined || !reactionWaits(name, argv)) return;
   pendingReactions.delete(state);
   const { page, frame, id } = pending;
-  const deadline = monotonic() + REACTION_LIMIT + REACTION_CALL_TIMEOUT;
+  const limit = budget(page, REACTION_LIMIT);
+  const deadline = monotonic() + limit + REACTION_CALL_TIMEOUT;
   try {
     let waited = true;
     while (monotonic() < deadline) {
       const budget = Math.max(Math.min(REACTION_CALL_TIMEOUT, deadline - monotonic()), 0.05);
-      const watch = dict(await reactionCall(page, "(id) => ardiaBrowse.reactionState(id)", [id], frame, budget));
+      const watch = dict(await reactionCall(page, REACTION_STATE, [id], frame, budget));
       if (Object.keys(watch).length === 0) {
         waited = false;
         break;
       }
       const reacted = watch["sinceLast"] !== null && watch["sinceLast"] !== undefined;
-      if (Number(watch["sinceInput"]) >= REACTION_LIMIT * 1000) break;
+      if (Number(watch["sinceInput"]) >= limit * 1000) break;
       if (Number(watch["sinceInput"]) >= REACTION_WINDOW * 1000 && !watch["busy"] && (!reacted || Number(watch["sinceLast"]) >= REACTION_QUIET * 1000)) {
         if (reacted) flag("waited_for_reaction", true);
         waited = false;
@@ -367,7 +416,7 @@ export async function settleReaction(state: State, name: string | null = null, a
     if (!(error instanceof BrowseError) && !(error instanceof TimedOut)) throw error;
   } finally {
     try {
-      await reactionCall(page, "(id) => ardiaBrowse.unwatchReaction(id)", [id], frame, REACTION_CALL_TIMEOUT);
+      await reactionCall(page, UNWATCH_REACTION, [id], frame, REACTION_CALL_TIMEOUT);
     } catch (error) {
       if (!(error instanceof BrowseError) && !(error instanceof TimedOut)) throw error;
     }
@@ -379,7 +428,7 @@ function errorView(page: Page): View {
 }
 
 export type Seen = { page: Page; view: View; frame: string; loader: string | null; navigations: number };
-type Group = { page: Page; session: string | null; before: View | null; watch: NetworkWatch; navigations: number };
+type Group = { page: Page; session: string | null; before: View | null; watch: NetworkWatch; navigations: number; receipts: ReceiptWatch };
 
 export class BatchObserve {
   previous: Seen | null = null;
@@ -408,7 +457,10 @@ export async function endBatch(state: State, batch: BatchObserve): Promise<void>
   if (batches.get(state) === batch) batches.delete(state);
   const group = batch.pending;
   batch.pending = null;
-  if (group !== null) await group.watch.stop();
+  if (group !== null) {
+    group.receipts.stop();
+    await group.watch.stop();
+  }
 }
 
 export function deferring(state: State): boolean {
@@ -436,6 +488,7 @@ export async function flushBatch(ctx: Ctx, batch: BatchObserve): Promise<Report 
   batch.pending = null;
   if (group === null) return null;
   const unknown = async (why: string) => {
+    group.receipts.stop();
     await group.watch.stop();
     const report = diff(null, errorView(group.page), group.watch.writes());
     report.document = "unknown";
@@ -444,10 +497,55 @@ export async function flushBatch(ctx: Ctx, batch: BatchObserve): Promise<Report 
   };
   if (group.session !== group.page.session) return unknown("Ardia detached the tab during these lines, so their changes couldn't be followed");
   try {
-    return await finish(ctx, group.page, group.before, group.watch, group.navigations, batch, null);
+    return decorate(await finish(ctx, group.page, group.before, group.watch, group.navigations, batch, null), group.page, group.watch, group.receipts);
   } catch (error) {
     if (!(error instanceof BrowseError)) throw error;
     return unknown(error.message);
+  }
+}
+
+export function decorate(report: Report, page: Page, watch: NetworkWatch, receipts: ReceiptWatch | null): Report {
+  if (receipts !== null) {
+    receipts.stop();
+    const { dialogs, downloads } = receipts.receipt();
+    if (dialogs.length > 0) report.dialogs = dialogs;
+    if (downloads.length > 0) report.downloads = downloads;
+  }
+  if (watch.navigationError) report.navigationError = watch.navigationError;
+  const throttle = throttleOf(page);
+  if (throttle !== null) report.throttle = throttle;
+  if (watch.limit !== SETTLE_LIMIT) report.settleLimit = watch.limit;
+  return report;
+}
+
+export function landedReport(page: Page, watch: NetworkWatch, why: string): Report {
+  flag("action_landed_settle_lost", true);
+  const report = diff(null, errorView(page), watch.writes());
+  report.document = "unknown";
+  report.error = `it landed, but ${why.replace(/\.$/u, "")}, so what it changed wasn't checked (it wasn't sent again)`;
+  return report;
+}
+
+export function actionName(ctx: Ctx): string {
+  return ctx.command ? `\`${ctx.command}\`` : "the action";
+}
+
+export async function guarded<T>(ctx: Ctx, page: Page, run: () => Promise<T>): Promise<T> {
+  const parent = currentSignal();
+  const child = new AbortController();
+  const forward = () => child.abort();
+  if (parent !== null) {
+    if (parent.aborted) child.abort();
+    else parent.addEventListener("abort", forward, { once: true });
+  }
+  try {
+    return await raceDialog(page, withSignal(child.signal, run), actionName(ctx));
+  } catch (error) {
+    if (error instanceof BrowseError && error.code === "dialog_blocked") child.abort();
+    if (error instanceof BrowseError && !(error instanceof ConnectionLost)) throw refusedRetry(ctx.command, error);
+    throw error;
+  } finally {
+    parent?.removeEventListener("abort", forward);
   }
 }
 
@@ -505,40 +603,54 @@ export async function observe<T>(ctx: Ctx, page: Page, run: () => Promise<T>, re
   const state = ctx.state;
   const batch = batches.get(state);
   if (batch?.pending && (batch.pending.page !== page || batch.pending.session !== page.session)) batch.flushed = await flushBatch(ctx, batch);
+  await refuseIfDialog(page, actionName(ctx));
   if (ctx.options["no_changes"] || ctx.options["settle_only"]) {
     if (batch?.pending) batch.flushed = await flushBatch(ctx, batch);
     if (react !== null) await watchReaction(state, page, react);
-    return [ctx.options["no_changes"] ? await run() : await settled(page, run), null];
+    const work = () => guarded(ctx, page, run);
+    return [ctx.options["no_changes"] ? await work() : await settled(page, work), null];
   }
   const group = batch?.pending ?? null;
   const reused = group === null && batch !== undefined ? reusable(state, page, batch.previous) : null;
   const before = group !== null ? group.before : (reused ?? (await viewBefore(state, page)));
   const watch = group !== null ? group.watch : new NetworkWatch(page);
+  const receipts = group !== null ? group.receipts : new ReceiptWatch(page);
   const navigations = group !== null ? group.navigations : page.navigations;
   const holding = batch !== undefined && batch.defer;
   const session = group !== null ? group.session : page.session;
   let lineStart = 0;
   let value: T;
   try {
-    if (group === null) await watch.start();
+    if (group === null) {
+      receipts.start();
+      await watch.start();
+    }
     lineStart = watch.order.length;
     if (react !== null) await watchReaction(state, page, react);
-    value = await run();
+    value = await guarded(ctx, page, run);
   } catch (error) {
-    if (batch !== undefined && (group !== null || holding)) batch.pending = { page, session, before, watch, navigations };
-    else await watch.stop();
+    if (batch !== undefined && (group !== null || holding)) batch.pending = { page, session, before, watch, navigations, receipts };
+    else {
+      receipts.stop();
+      await watch.stop();
+    }
     throw error;
   }
   if (holding) {
-    batch.pending = { page, session, before, watch, navigations };
+    batch.pending = { page, session, before, watch, navigations, receipts };
     await watch.settleLine(lineStart);
     await observeHooks.capture(page, lineOf(watch, lineStart));
     return [value, null];
   }
   if (batch !== undefined) batch.pending = null;
   try {
-    return [value, await finish(ctx, page, before, watch, navigations, batch, lineStart)];
+    return [value, decorate(await finish(ctx, page, before, watch, navigations, batch, lineStart), page, watch, receipts)];
   } catch (error) {
+    receipts.stop();
+    if (error instanceof ConnectionLost) {
+      await watch.stop();
+      return [value, landedReport(page, watch, error.message)];
+    }
     if (batch !== undefined && group !== null && error instanceof BrowseError) {
       await watch.stop();
       const report = diff(null, errorView(page), watch.writes());

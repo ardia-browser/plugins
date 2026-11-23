@@ -22,6 +22,8 @@ import { add, flag } from "../metrics.ts";
 import { Element, type Page } from "../state/page.ts";
 import { monotonic } from "../state/wait.ts";
 import { asRecord, expectInput, poll, textInserted } from "./common.ts";
+import { checkedFrom, CHECK_STATE, matchOptions, OPTION_ROWS, type OptionRow, OVERLAY_INPUT, splitFinal } from "./choices.ts";
+import { type Readback, readBack } from "./readback.ts";
 import { click, scrollIntoView, targetPoint, waitEnabled } from "./pointer.ts";
 
 export const SUGGESTION_TIMEOUT = 4.0;
@@ -120,40 +122,68 @@ export async function notEditableMessage(page: Page, element: Element): Promise<
   return `${element.label} is a ${named}, which takes no typing; use click, select or check`;
 }
 
-export async function fill(page: Page, given: Element, text: string, humanize: boolean, guard: Guard = null, known: Record<string, unknown> | null = null): Promise<[boolean, Stored]> {
+export const OVERLAY_WAIT = 1.0;
+
+export type Filled = [boolean, Stored, (Readback | null)?];
+
+export async function overlayInput(page: Page, element: Element): Promise<Element | null> {
+  try {
+    const remote = await page.call(OVERLAY_INPUT, [element], { frame: element.frame, byValue: false, read: true });
+    return remote !== null && typeof remote === "object" ? await page.elementFrom(remote, element.frame, `the field that took focus from ${element.label}`) : null;
+  } catch (error) {
+    if (error instanceof BrowseError && error.code !== "connection_lost") return null;
+    throw error;
+  }
+}
+
+async function overlayAfterOpening(page: Page, element: Element, humanize: boolean): Promise<Element | null> {
+  if ((await comboKind(page, element)) !== "button") return null;
+  await click(page, element, humanize);
+  return poll(() => overlayInput(page, element), OVERLAY_WAIT);
+}
+
+export async function fill(page: Page, given: Element, text: string, humanize: boolean, guard: Guard = null, known: Record<string, unknown> | null = null): Promise<Filled> {
   let element = given;
   let facts = known ?? (await info(page, element));
   if (facts["disabled"]) {
     await waitEnabled(page, element);
     facts = await info(page, element);
   }
-  if (facts["tag"] === "select" && guard === null) return [false, await pickOption(page, element, text)];
+  if (facts["tag"] === "select" && guard === null) return [false, await pickOption(page, element, text), null];
+  let retargeted = false;
   if (!facts["editable"] || facts["disabled"]) {
     const cell = guard === null ? await cellOf(page, element) : null;
-    if (cell !== null) return [false, await fillCell(page, element, cell, text, humanize)];
-    throw new BrowseError(await notEditableMessage(page, element), null, "not_editable");
+    if (cell !== null) return [false, await fillCell(page, element, cell, text, humanize), null];
+    const opened = guard === null ? await overlayAfterOpening(page, element, humanize) : null;
+    if (opened === null) throw new BrowseError(await notEditableMessage(page, element), null, "not_editable");
+    flag("fill_followed_focus", true);
+    element = opened;
+    retargeted = true;
+    facts = await info(page, element);
   }
-  if (facts["tag"] === "input" && SET_DIRECTLY.has(String(facts["type"]))) return [false, await setValue(page, element, String(facts["type"]), text)];
+  if (facts["tag"] === "input" && SET_DIRECTLY.has(String(facts["type"]))) return [retargeted, await setValue(page, element, String(facts["type"]), text), null];
   const loader = page.loader(element.frame);
   await focusField(page, element, facts, humanize, true);
-  let retargeted: boolean;
-  [element, retargeted] = await settleFocus(page, element, loader);
+  let replaced: boolean;
+  [element, replaced] = await settleFocus(page, element, loader);
+  const followed = await overlayInput(page, element);
+  if (followed !== null) {
+    flag("fill_followed_focus", true);
+    element = followed;
+    replaced = true;
+    facts = await info(page, element);
+  }
+  retargeted = retargeted || replaced;
   await clearField(page, element, humanize);
-  const kindKnown = !retargeted && Object.hasOwn(facts, "kind");
-  if (text && insertsAtOnce(facts, humanize, guard) && (kindKnown ? facts["tag"] !== "input" || facts["kind"] === null : await plainInput(page, element, facts))) await insertText(page, element, text);
+  if (text && insertsAtOnce(facts, humanize, guard)) await insertThenFinalKey(page, element, text);
   else if (text) await typeInto(page, element, text, humanize, guard);
-  return [retargeted, null];
+  return [retargeted, null, text ? await readBack(page, element, text) : null];
 }
 
 export function insertsAtOnce(facts: Record<string, unknown>, humanize: boolean, guard: Guard): boolean {
   if (humanize || guard !== null) return false;
   if (facts["tag"] === "input") return INSERTED_INPUT_TYPES.has(String(facts["type"] || "text"));
   return facts["tag"] === "textarea" || Boolean(facts["editable"]);
-}
-
-async function plainInput(page: Page, element: Element, facts: Record<string, unknown>): Promise<boolean> {
-  if (facts["tag"] !== "input") return true;
-  return (await comboKind(page, element)) === null;
 }
 
 export async function pickOption(page: Page, element: Element, text: string): Promise<string> {
@@ -267,6 +297,29 @@ async function fillCell(page: Page, element: Element, cell: Element, text: strin
   return { cell: name !== undefined ? joinedWords(name) : element.label, value: now, was };
 }
 
+export async function insertThenFinalKey(page: Page, element: Element, text: string): Promise<void> {
+  const split = splitFinal(text);
+  if (split === null) {
+    await insertText(page, element, text);
+    return;
+  }
+  const [head, last] = split;
+  if (head) await insertText(page, element, head);
+  flag("fill_final_key", true);
+  const input = inputOf(page);
+  const keyboard = input.keyboard();
+  await expectInput(
+    page,
+    element.frame,
+    () => input.gesture("fill", () => keyboard.typeText(last, false)),
+    { keydown: 1, keyup: 1 },
+    "The last keystroke",
+    element,
+    null,
+    textInserted(page, element.frame || page.mainFrame, last),
+  );
+}
+
 export async function insertText(page: Page, element: Element, text: string): Promise<void> {
   flag("fill_inserted_text", true);
   const input = inputOf(page);
@@ -304,13 +357,22 @@ export async function typeText(page: Page, given: Element, text: string, humaniz
   const loader = page.loader(given.frame);
   await focusField(page, given, facts, humanize, true);
   const [element, retargeted] = await settleFocus(page, given, loader);
-  await typeInto(page, element, text, humanize);
+  if (text && insertsAtOnce(facts, humanize, null)) await insertThenFinalKey(page, element, text);
+  else await typeInto(page, element, text, humanize);
   return retargeted;
 }
 
-export async function setChecked(page: Page, element: Element, wanted: boolean, humanize: boolean): Promise<void> {
+export async function checkedState(page: Page, element: Element): Promise<boolean | "mixed" | null> {
+  return checkedFrom(await page.call(CHECK_STATE, [element], { frame: element.frame, read: true }));
+}
+
+export async function setChecked(page: Page, element: Element, wanted: boolean, humanize: boolean): Promise<boolean> {
   let facts = await info(page, element);
-  if (facts["checked"] === wanted) return;
+  const before = await checkedState(page, element);
+  if (before === wanted || (before === null && facts["checked"] === wanted)) {
+    flag("check_already_set", true);
+    return false;
+  }
   if (facts["disabled"]) await waitEnabled(page, element);
   let target: Element | null = element;
   try {
@@ -324,13 +386,27 @@ export async function setChecked(page: Page, element: Element, wanted: boolean, 
   await click(page, target, humanize);
   await sleep(0.05);
   facts = await info(page, element);
-  if (facts["checked"] !== wanted) throw new BrowseError(`Clicking ${element.label} didn't ${wanted ? "check" : "uncheck"} it`);
+  const after = await checkedState(page, element);
+  if ((after ?? facts["checked"]) !== wanted) throw new BrowseError(`Clicking ${element.label} didn't ${wanted ? "check" : "uncheck"} it`);
+  return true;
+}
+
+export async function optionRows(page: Page, element: Element): Promise<OptionRow[] | null> {
+  try {
+    const rows = await page.call(OPTION_ROWS, [element], { frame: element.frame, read: true });
+    return Array.isArray(rows) ? (rows as OptionRow[]) : null;
+  } catch (error) {
+    if (error instanceof BrowseError && error.code !== "connection_lost") return null;
+    throw error;
+  }
 }
 
 export async function select(page: Page, element: Element, values: string[]): Promise<unknown> {
   await waitEnabled(page, element);
+  const rows = await optionRows(page, element);
+  const chosen = rows === null ? values : matchOptions(values, rows, element.label);
   await page.focusElement(element);
-  return page.call("(el, values) => ardiaBrowse.selectOptions(el, values)", [element, values], { frame: element.frame });
+  return page.call("(el, values) => ardiaBrowse.selectOptions(el, values)", [element, chosen], { frame: element.frame });
 }
 
 export function plain(text: unknown): string {

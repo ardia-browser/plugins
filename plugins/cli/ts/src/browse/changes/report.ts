@@ -2,6 +2,8 @@ import { pyStr, truthy } from "../../pylib/plain.ts";
 import { reprText } from "../../pylib/str.ts";
 import { attrs, interactiveRows, line } from "../snapshot/render.ts";
 import { type Node, walk } from "../snapshot/tree.ts";
+import type { DialogSeen, DownloadSeen } from "./dialogs.ts";
+import type { Throttle } from "./throttle.ts";
 
 export const MAX_ADDED = 40;
 export const MAX_NAVIGATED = 150;
@@ -44,6 +46,11 @@ export type Report = {
   notes?: string | null;
   unsettled?: boolean;
   error?: string | null;
+  dialogs?: DialogSeen[];
+  downloads?: DownloadSeen[];
+  throttle?: Throttle | null;
+  navigationError?: string | null;
+  settleLimit?: number;
 };
 
 export function entry(level: number, node: Node): Row {

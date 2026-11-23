@@ -7,11 +7,14 @@ import { joinedWords, pyFloat, pyLen } from "../../pylib/str.ts";
 import { shlexQuote } from "../../pylib/shlex.ts";
 import { click, hover, tap, TOUCH_OFF } from "../act/pointer.ts";
 import { drag, listAfter, listBefore } from "../act/drag.ts";
-import { choose, comboKind, fieldFacts, fill, plain, select, settledSuggestions, SUGGESTION_HINT_WAIT, setChecked, type Item, typeText, uniqueMatch, unwatchSuggestions, watchSuggestions } from "../act/fields.ts";
+import { choose, comboKind, fieldFacts, type Filled, fill, plain, select, settledSuggestions, SUGGESTION_HINT_WAIT, setChecked, type Item, typeText, uniqueMatch, unwatchSuggestions, watchSuggestions } from "../act/fields.ts";
 import { asRecord, expectInput, mouseButton, overFrame, textInserted } from "../act/common.ts";
 import { scroll, SCROLL_DEFAULT } from "../act/scroll.ts";
+import { type Readback, readbackNote } from "../act/readback.ts";
 import { scrollIntoView } from "../act/pointer.ts";
 import { attach, deferring, observe, type Reaction, TimedOut, within } from "../changes/observe.ts";
+import { refuseIfDialogFor } from "../changes/dialogs.ts";
+import { guardDrift } from "../act/drift.ts";
 import { type Report } from "../changes/report.ts";
 import { BrowseError, Gated, Usage } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
@@ -32,7 +35,11 @@ export const NO_REACTION_HINT =
 export const DOWNLOAD_FETCH_LIMIT = 50 * 1024 * 1024;
 
 export async function resolve(ctx: Ctx, selector: string): Promise<[Page, Element]> {
-  return ctx.state.locate(selector, null, CHECKS_PRESENCE.has(ctx.command) ? 0 : APPEAR_WAIT);
+  const reading = CHECKS_PRESENCE.has(ctx.command);
+  if (!reading) await refuseIfDialogFor(ctx.state, selector, `\`${ctx.command}\``);
+  const [page, element] = await ctx.state.locate(selector, null, reading ? 0 : APPEAR_WAIT);
+  if (!reading) await guardDrift(page, element, selector, ctx.command);
+  return [page, element];
 }
 
 function humanizing(ctx: Ctx, options: Record<string, unknown>): boolean {
@@ -135,8 +142,13 @@ export function typedResult(key: string, selector: string, retargeted: boolean):
   return new Result({ [key]: selector, retargeted: true }, `✓ Done (the page replaced ${selector} with a new field when it was focused; typed into that one)`);
 }
 
-export function filledResult(key: string, selector: string, retargeted: boolean, text: string, stored: unknown): Result {
-  if (stored === null || stored === undefined) return typedResult(key, selector, retargeted);
+export function filledResult(key: string, selector: string, retargeted: boolean, text: string, stored: unknown, readback: Readback | null = null): Result {
+  if (stored === null || stored === undefined) {
+    const typed = typedResult(key, selector, retargeted);
+    if (readback === null) return typed;
+    const verify = { status: readback.status, kind: readback.kind, ...(readback.reason ? { reason: readback.reason } : {}) };
+    return withText(typed, `${typed.text ?? "✓ Done"}${readbackNote(readback)}`, { verify });
+  }
   if (typeof stored === "object") {
     const cell = stored as Record<string, unknown>;
     const now = cell["value"];
@@ -163,7 +175,7 @@ async function cmdFill(ctx: Ctx, argv: string[]): Promise<Result> {
   const humanize = humanizing(ctx, options);
   const facts = await fieldFacts(page, element);
   const typeahead = facts["kind"] === "typeahead";
-  const run = async (): Promise<[[boolean, unknown], Item[]]> => {
+  const run = async (): Promise<[Filled, Item[]]> => {
     if (!(typeahead && text)) return [await fill(page, element, text, humanize, null, facts), []];
     await watchSuggestions(page, element);
     try {
@@ -175,8 +187,8 @@ async function cmdFill(ctx: Ctx, argv: string[]): Promise<Result> {
   };
   const textBefore = deferring(ctx.state) ? null : await pageTextMark(page, element);
   const react: Reaction | null = typeahead ? null : [element, null];
-  const [[[retargeted, stored], found], report] = await observe(ctx, page, run, react);
-  let result = filledResult("filled", selector, retargeted, text, stored);
+  const [[[retargeted, stored, readback], found], report] = await observe(ctx, page, run, react);
+  let result = filledResult("filled", selector, retargeted, text, stored, readback ?? null);
   if (found.length > 0) {
     const best = uniqueMatch(text, found) ? text : (found[0] as Item).text;
     result = withText(
@@ -300,8 +312,14 @@ async function cmdCheck(ctx: Ctx, argv: string[]): Promise<Result> {
   need(args, 1, `${ctx.command} <selector>`);
   const [page, element] = await resolve(ctx, args[0] as string);
   const wanted = ctx.command === "check";
-  const [, report] = await observe(ctx, page, () => setChecked(page, element, wanted, humanizing(ctx, options)));
-  return attach(new Result({ [wanted ? "checked" : "unchecked"]: args[0] }), report);
+  const [changed, report] = await observe(ctx, page, () => setChecked(page, element, wanted, humanizing(ctx, options)));
+  return attach(checkedResult(wanted, args[0] as string, changed), report);
+}
+
+export function checkedResult(wanted: boolean, selector: string, changed: boolean): Result {
+  const key = wanted ? "checked" : "unchecked";
+  if (changed) return new Result({ [key]: selector, changed: true });
+  return new Result({ [key]: selector, changed: false }, `✓ Already ${key}, so nothing was clicked`);
 }
 
 async function fieldName(page: Page, element: Element, selector: string): Promise<string> {

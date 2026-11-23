@@ -6,6 +6,7 @@ import { flag } from "../metrics.ts";
 import type { Element, Page } from "../state/page.ts";
 import { record } from "../state/records.ts";
 import { monotonic } from "../state/wait.ts";
+import { budget } from "../changes/throttle.ts";
 
 export const DELIVERY_TIMEOUT = 1.5;
 export const POLL = 0.05;
@@ -129,7 +130,7 @@ export async function expectInput<T>(
   const result = await run();
   const names = Object.keys(needs);
   if (names.length === 0 || (before["activeFrame"] && names.some((name) => KEY_EVENTS.some((key) => name.includes(key))))) return result;
-  const deadline = monotonic() + DELIVERY_TIMEOUT;
+  const deadline = monotonic() + budget(page, DELIVERY_TIMEOUT);
   for (;;) {
     let now: Counts;
     try {

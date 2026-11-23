@@ -11,6 +11,9 @@ import {
   RUN_HINT, RUN_LABEL, type TextBlock, type View, was,
 } from "./report.ts";
 import { maskedUrl, stripInlineRefs, wordCount } from "./urls.ts";
+import { formatG } from "../../pylib/format.ts";
+import { dialogLine, downloadLine } from "./dialogs.ts";
+import { throttleLine } from "./throttle.ts";
 
 export function runLabel(value: string | null | undefined): string {
   const text = squashed(redact(value || ""));
@@ -140,7 +143,11 @@ export function renderReport(report: Report, beforeKnown = true): string {
   const writes = report.network;
   lines.push(...writes.slice(0, MAX_WRITES).map(networkLine));
   if (writes.length > MAX_WRITES) lines.push(`… ${writes.length - MAX_WRITES} more requests (\`network requests\`)`);
-  if (report.unsettled) lines.push("(the page was still busy after 1.5 s; snapshot again for the final state)");
+  if (report.navigationError) lines.push(`✗ the page didn't load: ${report.navigationError}`);
+  for (const seen of report.dialogs ?? []) lines.push(dialogLine(seen));
+  for (const seen of report.downloads ?? []) lines.push(downloadLine(seen));
+  if (report.unsettled) lines.push(`(the page was still busy after ${formatG(report.settleLimit ?? 1.5)} s; snapshot again for the final state)`);
+  if (report.throttle) lines.push(throttleLine(report.throttle));
   if (report.error) lines.push(`(couldn't read the page afterwards: ${report.error})`);
   if ([added, report.changed.map(([, now]) => now)].some((rows) => itemRuns(rows).some((part) => part.kind === "run"))) lines.push(RUN_HINT);
   return lines.length ? `changes:\n${lines.join("\n")}` : "changes: none";
@@ -175,6 +182,10 @@ export function asData(report: Report): Record<string, unknown> {
   if (report.text) data.text = { lines: report.text.lines, more: truthy(report.text.more), where: report.text.where || null };
   if (report.unsettled) data.unsettled = true;
   if (report.error) data.error = report.error;
+  if (report.navigationError) data.navigationError = report.navigationError;
+  if (report.dialogs && report.dialogs.length) data.dialogs = report.dialogs;
+  if (report.downloads && report.downloads.length) data.downloads = report.downloads;
+  if (report.throttle) data.throttle = report.throttle;
   return data;
 }
 

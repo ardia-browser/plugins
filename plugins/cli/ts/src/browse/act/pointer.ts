@@ -21,6 +21,7 @@ import type { Element, Page } from "../state/page.ts";
 import type { State } from "../state/state.ts";
 import { monotonic } from "../state/wait.ts";
 import { asRecord, type Counts, expectInput, mouseButton, poll, rect, viewport, type Viewport } from "./common.ts";
+import { blockerPhrase, findBlocker, noteObstruction } from "./obstruction.ts";
 
 export const CLEANUP_TIMEOUT = 2.0;
 export const LAYOUT_WAIT = 2.0;
@@ -478,25 +479,36 @@ export async function targetPoint(page: Page, element: Element, humanize: boolea
       const vp = await viewport(page, element.frame);
       const where = `${element.label} is outside the visible page (its middle is at ${fixed(hx, 0)},${fixed(hy, 0)} in a ${vp.width}×${vp.height} viewport)`;
       const lock = await scrollLock(page, element);
+      noteObstruction("offscreen");
       if (lock) {
         flag("click_scroll_locked", true);
         throw new BrowseError(
           `Element ${where}, and the page won't scroll to it: ${lock}. Close that first (press Escape, or its close button), then retry`,
-          { point: [cx, cy], viewport: [vp.width, vp.height], scrollLock: lock },
+          { point: [cx, cy], viewport: [vp.width, vp.height], scrollLock: lock, obstruction: "offscreen", blocker: null },
           "outside_viewport",
         );
       }
       throw new BrowseError(
         `Element ${where}, so a click there would land on nothing. Scroll it into view (scrollintoview), or snapshot again if the page moved`,
-        { point: [cx, cy], viewport: [vp.width, vp.height] },
+        { point: [cx, cy], viewport: [vp.width, vp.height], obstruction: "offscreen", blocker: null },
         "outside_viewport",
       );
     }
     if (cover) {
+      const blocker = await findBlocker(page, element, hx, hy);
+      const kind = blocker?.kind ?? "sibling";
+      noteObstruction(kind);
+      const blockerRef = blocker?.ref ? `@${blocker.ref}` : null;
       const closer = await closeControl(page, element, hx, hy);
       const first = closer ? (closer.split(" ")[0] as string) : null;
-      const way = closer ? `; its close control is ${closer} (\`click ${first}\`), then retry` : "; interact with that element first, snapshot again, then retry";
-      throw new BrowseError(`Element ${element.label} is covered by ${cover}${way}`, { coveredBy: cover, closeRef: first }, "covered");
+      const dismiss = blockerRef ? `dismiss ${blockerRef} first` : "interact with that element first";
+      const way = closer ? `; its close control is ${closer} (\`click ${first}\`), then retry` : `; ${dismiss}, snapshot again, then retry`;
+      const what = blocker !== null ? `, ${blockerPhrase(blocker)}` : "";
+      throw new BrowseError(
+        `Element ${element.label} is covered by ${cover}${what}${way}`,
+        { coveredBy: cover, closeRef: first, obstruction: kind, blocker: blockerRef, point: [cx, cy] },
+        "covered",
+      );
     }
   }
   return [cx, cy, { connected: true, counts: facts.counts ?? null }];

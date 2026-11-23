@@ -41,6 +41,13 @@ class FormBrowser {
       this.counts.beforeinput += 1;
       this.counts.input += 1;
     }
+    if (method === "Input.dispatchKeyEvent") {
+      if (params?.["type"] === "keyDown") {
+        this.counts.keydown += 1;
+        if (this.focused !== null && typeof params["text"] === "string") this.values.set(this.focused, (this.values.get(this.focused) ?? "") + params["text"]);
+      }
+      if (params?.["type"] === "keyUp") this.counts.keyup += 1;
+    }
     if (method === "Input.dispatchMouseEvent") {
       if (params?.["type"] === "mousePressed") this.counts.mousedown += 1;
       if (params?.["type"] === "mouseReleased") this.counts.mouseup += 1;
@@ -84,6 +91,7 @@ class FormBrowser {
     if (source === PREPARE_ACTION) return { value: { connected: true, shown: true, width: 1280, height: 800, box: true, cover: null, x: 60, y: 25, counts: { ...this.counts } } };
     if (source.includes("inputWatch") || source.includes("ardiaBrowseInputWatch")) return { value: { ...this.counts, activeFrame: false } };
     if (source.includes("ardiaBrowse.info")) return { value: { tag: "input", type: "text", editable: true, value: "", connected: true } };
+    if (source.includes("api.filterField(field)")) return { value: false };
     if (source.includes("isConnected")) return { value: true };
     if (source.includes("visibilityState")) return { value: false };
     if (source.includes("document.title")) return { value: "Form" };
@@ -162,5 +170,57 @@ describe("fieldTarget", () => {
     expect(fieldTarget(["check", "@e9"])).toBe("@e9");
     expect(fieldTarget(["type", "--delay", "50", "#a", "x"])).toBeNull();
     expect(fieldTarget(["click", "#go"])).toBeNull();
+  });
+});
+
+class DialogBrowser extends FormBrowser {
+  opened: (() => void) | null = null;
+
+  override async send(method: string, params: Record<string, unknown> | null = null): Promise<Record<string, unknown>> {
+    if (method === "Input.dispatchMouseEvent" && params?.["type"] === "mousePressed" && this.opened !== null) {
+      this.sent.push(method);
+      this.opened();
+      this.opened = null;
+      return new Promise(() => {});
+    }
+    return super.send(method, params);
+  }
+}
+
+function dialogSetup(): { state: State; browser: DialogBrowser } {
+  const { state } = setup();
+  const browser = new DialogBrowser();
+  state.browser = browser as never;
+  browser.opened = () => {
+    const page = state.pages.get("T");
+    if (page) page.dialog = { type: "confirm", message: "Discard the draft?" };
+  };
+  return { state, browser };
+}
+
+describe("a JavaScript dialog in a batch", () => {
+  test("--bail stops at the line that opened it and runs nothing after", async () => {
+    const { state, browser } = dialogSetup();
+    const started = performance.now();
+    const { results } = await batch(state, ["--bail", "click #go", "fill #a one", "fill #b two"]);
+    expect(performance.now() - started).toBeLessThan(5000);
+    expect(results.map((result) => [result.success, (result as { code?: string }).code ?? null])).toEqual([
+      [false, "dialog_blocked"],
+      [false, "not_run"],
+      [false, "not_run"],
+    ]);
+    expect((results[0] as { error?: string }).error).toContain('`click` opened a JavaScript confirm dialog saying "Discard the draft?"');
+    expect((results[1] as { error?: string }).error).toContain("a JavaScript dialog is open and --bail stops here");
+    expect(browser.count("Input.insertText")).toBe(0);
+  });
+
+  test("without --bail each later line fails fast instead of hanging on the frozen page", async () => {
+    const { state, browser } = dialogSetup();
+    const started = performance.now();
+    const { results } = await batch(state, ["click #go", "fill #a one"]);
+    expect(performance.now() - started).toBeLessThan(5000);
+    expect(results.map((result) => (result as { code?: string }).code ?? null)).toEqual(["dialog_blocked", "dialog_blocked"]);
+    expect((results[1] as { error?: string }).error).toContain("so `fill` wasn't sent");
+    expect(browser.count("Input.insertText")).toBe(0);
   });
 });
