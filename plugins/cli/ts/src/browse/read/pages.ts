@@ -559,9 +559,9 @@ export function limitNote(found: number, limit: number, flagName: string): strin
 export async function readLocal(options: Options, positional: string[], stdin: string | null, globalOptions: Options): Promise<Result> {
   const urls = wantedUrls(options, positional, stdin);
   if (urls.length === 0) throw new Usage("Usage: ardia browse read <url>... [--stdin] [--links <pattern>] [-s <selector>] [--http]");
-  if (urls.length === 1 && globalOptions["out_body"] && !options["selector"]) return fetchRun(urls[0] as string, options, globalOptions);
   const limit = pagesLimit(options, urls.length);
   pageTimeout(options);
+  if (urls.length === 1 && globalOptions["out_body"] && !options["selector"]) return fetchRun(urls[0] as string, options, globalOptions);
   if (options["selector"]) throw new Usage("-s needs the browser's DOM; drop --http to read the pages in Ardia");
   const extra = limitNote(urls.length, limit, "--limit");
   return resultFor(await readHttp(urls.slice(0, limit), options), options, globalOptions, extra);

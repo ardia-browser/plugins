@@ -2566,7 +2566,7 @@ Its read side (slice D4: `browse/snapshot/collect.ts`, `take.ts`, `browse/read/`
   whole multi-URL read (FB-A2CU, FB-5QSW). A body that isn't text (a known binary type, image, audio, video, font, archive or office format (playlists and `model/*` read as text), or any other non-text type whose body
   holds a NUL byte or invalid UTF-8; `text/*`, JSON, XML, JavaScript, `+json`/`+xml`, playlists and a declared UTF-16/32
   charset always read as text) is never
-  decoded: with `--out` (alone or on a `batch` line) the bytes are saved as sent, up to 8 MB (`read_binary_saved`); a PDF too; they travel in the answer's `body` field, outside the redacted text, and only for the `read` that carries `--out` (`out_body`), not a `read` inside a `script --out`,
+  decoded: with `--out` (alone or on a `batch` line) the body's bytes are saved byte for byte (after HTTP content decoding, so a gzipped response saves unzipped), up to 8 MB (`read_binary_saved`); a PDF too; they travel in the answer's `body` field, outside the redacted text, and only for the `read` that carries `--out` (`out_body`), not a `read` inside a `script --out`,
   where Python wrote the decoded text with U+FFFD in place of every invalid byte (FB-8EJR). Without `--out` the page
   fails with `binary_body` and says to save it; a response over 8 MB with `--out` fails with `result_too_large`
   rather than saving part of it, and a single URL given on stdin saves the same way. A `--json` read where some pages failed prints its `success: true`

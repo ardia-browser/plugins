@@ -26,8 +26,11 @@ const BINARY_FAMILIES = ["image/", "audio/", "video/", "font/"];
 const BINARY_TYPES = new Set([
   "application/zip", "application/gzip", "application/x-gzip", "application/x-tar", "application/x-7z-compressed", "application/x-rar-compressed",
   "application/vnd.rar", "application/x-bzip2", "application/x-xz", "application/zstd", "application/wasm", "application/x-sqlite3",
-  "application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint", "application/x-msdownload", "application/java-archive",
+  "application/protobuf", "application/x-protobuf", "application/vnd.google.protobuf", "application/msgpack", "application/x-msgpack",
+  "application/cbor", "application/bson", "application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint", "application/x-msdownload", "application/java-archive",
 ]);
+const QUOTED_CHARSET = /charset\s*=\s*"([^"]+)"/iu;
+const CONTROL_BYTES = /[\x00-\x08\x0b\x0e-\x1a\x1c-\x1f]/u;
 const UNICODE_CHARSETS = /^utf(16|32)(le|be)?$/u;
 
 export type Fetched = [number, string, string, string, Uint8Array?];
@@ -101,8 +104,7 @@ export function binaryBody(kind: string, charset: string | null, body: Uint8Arra
   const sample = body.length > MAX_BODY ? trimmedToChar(body.subarray(0, MAX_BODY)) : body;
   if (charset !== null && !/^utf-?8$/iu.test(charset)) return false;
   try {
-    new TextDecoder("utf-8", { fatal: true }).decode(sample);
-    return false;
+    return CONTROL_BYTES.test(new TextDecoder("utf-8", { fatal: true }).decode(sample));
   } catch {
     return true;
   }
@@ -212,7 +214,7 @@ export async function fetchUrl(url: string, timeout: number, accept = ACCEPT, bi
       if (body.length > MAX_BODY) throw new BrowseError(`${url} is a PDF over ${MAX_BODY} bytes; read it in a tab instead (drop --http)`);
       return [response.status, "application/pdf", await textFromBytes(body), final];
     }
-    const charset = CHARSET.exec(contentType);
+    const charset = CHARSET.exec(contentType) ?? QUOTED_CHARSET.exec(contentType);
     const declared = charset ? (charset[1] as string) : null;
     if (binaryBody(kind, declared, body)) {
       const size = body.length > MAX_BODY ? `over ${groupThousands(String(MAX_BODY))}` : groupThousands(String(body.length));

@@ -230,7 +230,7 @@ export class BodyDamaged extends Error {}
 
 export function savedBodyLine(target: string, body: Uint8Array, data: JsonObject): string {
   const kind = data.get("contentType");
-  return `✓ Saved to ${target} (${groupThousands(String(body.length))} bytes${typeof kind === "string" && kind ? `, ${kind}` : ""}), the response body as sent\n`;
+  return `✓ Saved to ${target} (${groupThousands(String(body.length))} bytes${typeof kind === "string" && kind ? `, ${kind}` : ""}), the response body byte for byte (after any HTTP content decoding)\n`;
 }
 
 export function save(path: string, text: string | Uint8Array): string {
