@@ -25,8 +25,11 @@ If your account has an extra password, enter it in the optional Extra Password f
 you type straight to `pass-cli`; the plugin never sees it. Unlocking Proton Pass in Ardia asks for Touch ID or your Mac
 password, since `pass-cli` keeps its own session.
 
-Proton Pass reads need the internet, so Ardia doesn't refresh it while you're offline. Editing logins, adding codes to
-existing logins and passkeys aren't available yet, since `pass-cli` doesn't offer them.
+Proton Pass reads need the internet, so Ardia doesn't refresh it while you're offline. Editing logins and adding codes
+to existing logins aren't available yet, since `pass-cli` doesn't offer them.
+
+Passkeys sign in and save through the Proton Pass browser extension, so their private keys never leave Proton. Ardia
+lists your Proton passkeys in its sign-in sheet and fill menu, from the names and ids `pass-cli` lists with each login.
 
 ## Build and test
 

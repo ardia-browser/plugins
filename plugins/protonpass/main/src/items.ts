@@ -1,9 +1,17 @@
-import { CREDENTIAL_LIMITS, json, origins, totp, type Item, type JsonRecord, type ListedItem, type VerbResult } from "@ardia/plugin-sdk/credentials";
+import { CREDENTIAL_LIMITS, base64url, json, origins, totp, type Item, type ItemPasskey, type JsonRecord, type ListedItem, type VerbResult } from "@ardia/plugin-sdk/credentials";
 
 export const APPROVAL_HOSTS = ["proton.me"];
 
 const IDENTIFIER = /^[A-Za-z0-9_=+-]{1,200}$/;
 const UNSAFE_CHARACTERS = /[\u0000-\u001f\u007f-\u009f؜‎‏‪-‮⁦-⁩]/g;
+const HAS_UNSAFE_CHARACTER = new RegExp(UNSAFE_CHARACTERS.source);
+const SHORTEST_CREDENTIAL_ID = 16;
+const LONGEST_CREDENTIAL_ID = 384;
+const LONGEST_RP_ID = 253;
+const URL_SAFE_BASE64 = /^[A-Za-z0-9_-]+$/;
+const STANDARD_BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+const RP_ID_CHARACTERS = /^[A-Za-z0-9.-]+$/;
+const ALL_DIGITS_AND_DOTS = /^[0-9.]+$/;
 
 export const isIdentifier = (text: string) => IDENTIFIER.test(text);
 
@@ -41,7 +49,74 @@ function displayText(text: string, longest: number): string {
   return plain.length > longest ? plain.slice(0, longest) : plain;
 }
 
-const isClean = (text: string, longest: number) => text.length <= longest && !new RegExp(UNSAFE_CHARACTERS.source).test(text);
+const isClean = (text: string, longest: number) => text.length <= longest && !HAS_UNSAFE_CHARACTER.test(text);
+
+const fitsCredentialId = (length: number) => length >= SHORTEST_CREDENTIAL_ID && length <= LONGEST_CREDENTIAL_ID;
+
+function byteArray(value: readonly unknown[]): Uint8Array | null {
+  if (!fitsCredentialId(value.length)) return null;
+  const bytes = new Uint8Array(value.length);
+  for (let index = 0; index < value.length; index++) {
+    const byte = value[index];
+    if (typeof byte !== "number" || !Number.isInteger(byte) || byte < 0 || byte > 255) return null;
+    bytes[index] = byte;
+  }
+  return bytes;
+}
+
+function base64Bytes(text: string): Uint8Array | null {
+  if (text.length > Math.ceil(LONGEST_CREDENTIAL_ID / 3) * 4) return null;
+  let urlSafe: string;
+  if (URL_SAFE_BASE64.test(text)) urlSafe = text;
+  else if (STANDARD_BASE64.test(text) && text.length % 4 === 0) urlSafe = text.replace(/=+$/, "").replaceAll("+", "-").replaceAll("/", "_");
+  else return null;
+  const bytes = base64url.decode(urlSafe, LONGEST_CREDENTIAL_ID);
+  return bytes && fitsCredentialId(bytes.length) && base64url.encode(bytes) === urlSafe ? bytes : null;
+}
+
+function credentialIdBytes(value: unknown): Uint8Array | null {
+  if (Array.isArray(value)) return byteArray(value);
+  return typeof value === "string" ? base64Bytes(value) : null;
+}
+
+function relyingParty(value: unknown): string | null {
+  if (typeof value !== "string" || value.length === 0 || value.length > LONGEST_RP_ID || !RP_ID_CHARACTERS.test(value)) return null;
+  const rpId = value.toLowerCase();
+  if (rpId.startsWith(".") || rpId.endsWith(".") || rpId.includes("..") || ALL_DIGITS_AND_DOTS.test(rpId)) return null;
+  return rpId.split(".").every((label) => label.length <= 63 && !label.startsWith("-") && !label.endsWith("-")) ? rpId : null;
+}
+
+function passkeyOf(passkey: JsonRecord): ItemPasskey | null {
+  const id = credentialIdBytes(passkey.credential_id);
+  const rpId = relyingParty(passkey.rp_id);
+  if (!id || !rpId) return null;
+  return {
+    credentialId: base64url.encode(id),
+    rpId,
+    userName: displayText(json.string(passkey.user_name) ?? "", CREDENTIAL_LIMITS.passkeyNameLength),
+    displayName: displayText(json.string(passkey.user_display_name) ?? "", CREDENTIAL_LIMITS.passkeyNameLength),
+    discoverable: true,
+    counter: 0,
+  };
+}
+
+function passkeysOf(login: JsonRecord): ItemPasskey[] {
+  const listed = login.passkeys;
+  if (!Array.isArray(listed) || listed.length === 0) return [];
+  const kept: ItemPasskey[] = [];
+  const seen = new Set<string>();
+  for (const candidate of listed) {
+    if (kept.length >= CREDENTIAL_LIMITS.passkeysPerItem) break;
+    const record = json.dict(candidate);
+    const passkey = record ? passkeyOf(record) : null;
+    if (!passkey) continue;
+    const key = `${passkey.rpId} ${passkey.credentialId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    kept.push(passkey);
+  }
+  return kept;
+}
 
 function addUrl(urls: string[], url: string | undefined) {
   if (!url || urls.includes(url) || urls.length >= CREDENTIAL_LIMITS.urlsPerItem) return;
@@ -66,6 +141,7 @@ export function loginItem(entry: JsonRecord, share: string, vault: string | unde
   const period = code ? totp.period(code) : undefined;
   const updatedAt = json.milliseconds(entry.modify_time);
   const vaultName = vault ? displayText(vault, CREDENTIAL_LIMITS.vaultNameLength) : "";
+  const passkeys = passkeysOf(login);
   return {
     id: itemId(share, id),
     title: displayText(json.string(content.title) ?? "", CREDENTIAL_LIMITS.itemTitleLength),
@@ -75,6 +151,7 @@ export function loginItem(entry: JsonRecord, share: string, vault: string | unde
     ...(period !== undefined ? { totpPeriod: period } : {}),
     ...(vaultName ? { vault: vaultName } : {}),
     ...(updatedAt !== undefined ? { updatedAt } : {}),
+    ...(passkeys.length ? { passkeys } : {}),
   };
 }
 
