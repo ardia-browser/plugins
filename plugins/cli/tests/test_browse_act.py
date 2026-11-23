@@ -252,6 +252,8 @@ class ActInChrome(unittest.TestCase):
         paragraphs = "[...document.querySelectorAll('#tts > p')].map((p) => p.textContent).join('|')"
         self.assertEqual(self.value(paragraphs), "New words")
         self.assertEqual(self.value("document.querySelector('#tts .chrome').textContent"), "Voice: Rachel 12 / 5000")
+        self.browse("fill", "#toolbarfield", "New words")
+        self.assertEqual(self.value("[...document.querySelectorAll('#toolbarfield > p')].map((p) => p.textContent).join('|')"), "New words")
 
     def test_fill_types_straight_into_an_editor_holding_only_chrome(self):
         self.browse("open", f"http://127.0.0.1:{self.http_port}/rich-editor.html")
@@ -268,7 +270,7 @@ class ActInChrome(unittest.TestCase):
 
     def test_fill_still_fails_when_an_editor_keeps_a_mention_or_its_spaces(self):
         self.browse("open", f"http://127.0.0.1:{self.http_port}/rich-editor.html")
-        for field in ("#keepmention", "#keepspaces", "#keepnbsp"):
+        for field in ("#keepmention", "#keepspaces", "#keepnbsp", "#keepbreaks"):
             done = self.browse("fill", field, "", check=False)
             self.assertEqual(done.returncode, 1, field)
             self.assertIn("still holds text", done.stderr + done.stdout)

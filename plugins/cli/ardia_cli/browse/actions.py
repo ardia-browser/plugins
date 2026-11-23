@@ -733,23 +733,39 @@ HOLDS_TEXT = r"""(el) => {
     for (let up = parent.parentElement; up && up !== el && !up.isContentEditable; up = up.parentElement) island = up;
     return getComputedStyle(island).display.startsWith("inline");
   };
+  const collapse = (style) => style.whiteSpaceCollapse
+    || ({ pre: "preserve", "pre-wrap": "preserve", "break-spaces": "break-spaces", "pre-line": "preserve-breaks" })[style.whiteSpace] || "collapse";
+  const placeholder = (br) => {
+    let next = br.nextSibling;
+    while (next && next.nodeType === Node.TEXT_NODE && next.data === "") next = next.nextSibling;
+    return !next;
+  };
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
-      if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
-      return /^(STYLE|SCRIPT|TEMPLATE|INPUT|TEXTAREA)$/.test(node.tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
+      if (node.nodeType === Node.TEXT_NODE || node.tagName === "BR") return NodeFilter.FILTER_ACCEPT;
+      if (/^(STYLE|SCRIPT|TEMPLATE|INPUT|TEXTAREA)$/.test(node.tagName)) return NodeFilter.FILTER_REJECT;
+      if (!node.isContentEditable && /^(toolbar|menubar)$/.test((node.getAttribute("role") || "").trim().split(/\s+/)[0])) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_SKIP;
     },
   });
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const parent = node.parentElement;
     if (!parent || !content(parent)) continue;
     const style = getComputedStyle(parent);
-    const shown = /[^ \t\n\r\f\u200b-\u200d\u2060\ufeff]/.test(node.data)
-      || (/[ \t\n\r\f]/.test(node.data) && /^(pre|pre-wrap|break-spaces)$/.test(style.whiteSpace))
-      || (/\n/.test(node.data) && style.whiteSpace === "pre-line");
+    const kept = collapse(style);
+    const shown = node.nodeType === Node.TEXT_NODE
+      ? /[^ \t\n\r\f\u200b-\u200d\u2060\ufeff]/.test(node.data)
+        || (/[ \t\n\r\f]/.test(node.data) && (kept === "preserve" || kept === "break-spaces"))
+        || (/\n/.test(node.data) && kept === "preserve-breaks")
+      : !placeholder(node);
     if (!shown || style.visibility !== "visible") continue;
     let box = parent;
     while (box && box !== el && getComputedStyle(box).display === "contents") box = box.parentElement;
     if (box && box.checkVisibility && !box.checkVisibility()) continue;
+    if (node.nodeType !== Node.TEXT_NODE) {
+      if (node.getClientRects().length > 0) return { text: true, chrome };
+      continue;
+    }
     range.selectNodeContents(node);
     if (range.getClientRects().length > 0) return { text: true, chrome };
   }

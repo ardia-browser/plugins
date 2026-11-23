@@ -43,6 +43,22 @@
    ],
    "session": "act",
    "main_world": true
+  },
+  {
+   "argv": [
+    "fill",
+    "#toolbarfield",
+    "New words"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "[...document.querySelectorAll('#toolbarfield > p')].map((p) => p.textContent).join('|')"
+   ],
+   "session": "act",
+   "main_world": true
   }
  ]
 }
