@@ -185,6 +185,14 @@ describe.skipIf(!CHROME)("browse script against headless Chrome", () => {
     expect(JSON.parse(caught.out).data.value).toBe("no_session_tab");
   });
 
+  test("a script stopped by a fatal error keeps the state it had saved", async () => {
+    const flooded = await script("state.kept = 'before the flood';\nawait page.title();\nfor (let i = 0; i < 1500; i++) page.title();\nawait sleep(5000);");
+    expect(flooded.status).toBe(1);
+    expect(flooded.err).toContain("calls waiting at once");
+    const next = await script("return state.kept;", "--json");
+    expect(JSON.parse(next.out).data.value).toBe("before the flood");
+  });
+
   test("a busy loop is stopped at its timeout, keeps its state, and the session goes on", async () => {
     const stopped = await script("state.rows = [1, 2];\nawait page.title();\nfor (;;) {}", "--timeout", "2s");
     expect(stopped.status).toBe(1);

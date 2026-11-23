@@ -628,7 +628,8 @@ export async function run(ctx: Ctx, source: string, seconds: number): Promise<Re
         return finished;
       });
     } catch (error) {
-      if (error instanceof Cancelled && keepState(state, started.stateText)) flag("script_state_kept_on_interrupt", true);
+      const kept = keepState(state, started.stateText);
+      if (error instanceof Cancelled && kept) flag("script_state_kept_on_interrupt", true);
       throw error;
     }
     if ("timedOut" in outcome) {
