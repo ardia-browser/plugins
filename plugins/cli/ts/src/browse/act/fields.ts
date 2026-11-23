@@ -42,6 +42,14 @@ export type Item = { text: string; exact?: string[]; pieces?: string[] };
 export type Guard = (() => Promise<void>) | null;
 export type Stored = string | Record<string, unknown> | null;
 
+export const FIELD_FACTS = "(el) => Object.assign(ardiaBrowse.info(el), { kind: ardiaBrowse.comboKind(el), shown: document.visibilityState !== 'hidden' })";
+
+export async function fieldFacts(page: Page, element: Element): Promise<Record<string, unknown>> {
+  const facts = asRecord(await page.call(FIELD_FACTS, [element], { frame: element.frame, read: true }));
+  if (facts["shown"]) page.shownAt = monotonic();
+  return facts;
+}
+
 async function info(page: Page, element: Element): Promise<Record<string, unknown>> {
   return asRecord(await page.call("(el) => ardiaBrowse.info(el)", [element], { frame: element.frame }));
 }
@@ -105,9 +113,9 @@ export async function notEditableMessage(page: Page, element: Element): Promise<
   return `${element.label} is a ${named}, which takes no typing; use click, select or check`;
 }
 
-export async function fill(page: Page, given: Element, text: string, humanize: boolean, guard: Guard = null): Promise<[boolean, Stored]> {
+export async function fill(page: Page, given: Element, text: string, humanize: boolean, guard: Guard = null, known: Record<string, unknown> | null = null): Promise<[boolean, Stored]> {
   let element = given;
-  let facts = await info(page, element);
+  let facts = known ?? (await info(page, element));
   if (facts["disabled"]) {
     await waitEnabled(page, element);
     facts = await info(page, element);
@@ -124,7 +132,8 @@ export async function fill(page: Page, given: Element, text: string, humanize: b
   let retargeted: boolean;
   [element, retargeted] = await settleFocus(page, element, loader);
   await clearField(page, element, humanize);
-  if (text && insertsAtOnce(facts, humanize, guard) && (await plainInput(page, element, facts))) await insertText(page, element, text);
+  const kindKnown = !retargeted && Object.hasOwn(facts, "kind");
+  if (text && insertsAtOnce(facts, humanize, guard) && (kindKnown ? facts["tag"] !== "input" || facts["kind"] === null : await plainInput(page, element, facts))) await insertText(page, element, text);
   else if (text) await typeInto(page, element, text, humanize, guard);
   return [retargeted, null];
 }
@@ -261,6 +270,7 @@ export async function insertText(page: Page, element: Element, text: string): Pr
     { "beforeinput|input": 1 },
     "The text insert",
     element,
+    null,
     textInserted(page, element.frame || page.mainFrame, text),
   );
 }

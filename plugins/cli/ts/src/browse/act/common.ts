@@ -113,13 +113,14 @@ export async function expectInput<T>(
   needs: Needs,
   action: string,
   element: Element | null = null,
+  primed: Counts | null = null,
   postcondition: Postcondition | null = null,
 ): Promise<T> {
   const frame = given || page.mainFrame;
   const loader = page.loader(frame);
   let before: Counts;
   try {
-    before = await inputCounts(page, frame);
+    before = primed ?? (await inputCounts(page, frame));
     if (postcondition !== null) await postcondition.prepare();
   } catch (error) {
     if (error instanceof ConnectionLost || !(error instanceof BrowseError)) throw error;
