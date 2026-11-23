@@ -91,7 +91,7 @@ python3 -I harness/bench.py servers start calendar --port-offset 1000
 python3 -I harness/bench.py stop
 ```
 
-- **`freeze-cli`** builds `plugins/cli/ts` (`ts/scripts/build.sh`) into its own folder. Every run uses that `ardia` (`--cli installed` uses
+- **`freeze-cli`** packs `plugins/cli` with `scripts/build.sh`, as the release does (`bin/ardia`, its addon and `libexec/esbuild`), into its own folder. Every run uses that `ardia` (`--cli installed` uses
   `~/.local/bin/ardia` instead), so edits made during a plan don't leak into it. `freeze-cli --name N` freezes into
   `devbin-N` and `cli/N.json` instead and leaves the default alone; a plan with `"cli": "dev:N"` uses it, so a rerun
   of a changed CLI can run next to a plan still using the old one.

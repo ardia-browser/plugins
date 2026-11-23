@@ -9,7 +9,7 @@
   },
   "linux": {
    "python": "3.13.16",
-   "captured_at": "2026-11-23T13:41:22Z"
+   "captured_at": "2026-11-23T13:52:27Z"
   }
  },
  "linux_differs": [
@@ -71,7 +71,6 @@
   "hooks-list--empty-list",
   "hooks-list--folder",
   "hooks-list--good",
-  "hooks-list--good-json",
   "hooks-list--help",
   "hooks-list--help-80",
   "hooks-list--installed",

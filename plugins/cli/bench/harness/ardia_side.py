@@ -99,9 +99,11 @@ def freeze_cli(src, name=""):
     dirty = bool(sh(["git", "-C", str(src), "status", "--porcelain", "--", "."]).stdout.strip())
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     dest = CLI_ROOT / f"{stamp}-{git or 'nogit'}"
-    program = dest / "bin" / "ardia"
-    sh(["sh", str(src / "ts" / "scripts" / "build.sh"), "--version", "0.0.0.dev0", "--out", str(program)],
-       timeout=600).check_returncode()
+    version = "0.0.0-bench.1"
+    sh(["sh", str(src / "scripts" / "build.sh"), version, str(dest / "packed")], timeout=900).check_returncode()
+    tarball = next((dest / "packed").glob(f"ardia-cli-{version}-*.tar.gz"))
+    sh(["tar", "-xzf", str(tarball), "-C", str(dest)]).check_returncode()
+    program = dest / f"ardia-cli-{version}" / "bin" / "ardia"
     dev_name({"cli": f"dev:{name}" if name else "dev"})
     dev_bin(name).mkdir(parents=True, exist_ok=True)
     link = dev_bin(name) / "ardia"

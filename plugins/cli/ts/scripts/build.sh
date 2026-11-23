@@ -64,7 +64,7 @@ if [ -n "$headers" ]; then
 fi
 $compiler $warnings $platform -O2 $link -o "$addon" native/ardia-libc.c
 if command -v sha256sum >/dev/null 2>&1; then digest="sha256sum"; else digest="shasum -a 256"; fi
-sources=$(find src -type f | LC_ALL=C sort | xargs $digest | $digest | cut -c1-12)
+sources=$(find src assets vendor native -type f | LC_ALL=C sort | xargs $digest | $digest | cut -c1-12)
 "$bun" build src/main.ts --compile --minify \
   --no-compile-autoload-dotenv --no-compile-autoload-bunfig \
   --no-compile-autoload-tsconfig --no-compile-autoload-package-json \

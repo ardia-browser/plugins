@@ -587,12 +587,12 @@
    "timed_out": false
   },
   "expected_linux": {
-   "status": 1,
+   "status": 0,
    "stdout": {
-    "text": "systemd user service dev.ardia.hooks.service: not installed (ardia hooks install)\n"
+    "text": "fresh  [command]  on app.launched  command newTab\nnote  [event]  on tab.opened,tab.closed  run /bin/echo hi  timeout 2.5s\nall  [event]  on *  run ~/bin/all  timeout 60s\nidle  [event]  on tab.idle idle 30m  run /bin/true  timeout 60s\naway  [event]  on user.idle,user.active idle 2h  run /bin/true  timeout 86400s\nstandup  [scheduled]  at 09:55 on mon,fri  command openSettings:general\nparis  [scheduled]  at 23:59 daily Europe/Paris  run /bin/true  timeout 60s\nhourly  [scheduled]  every 1h  run ~/bin/tick  timeout 60s\nquarter  [scheduled]  every 15m  run ~/bin/tick  timeout 60s\ndaily  [scheduled]  every 1d  command x\nsecs  [scheduled]  every 90s  command x\nask  [decide]  on link.opening  run ~/bin/route\ncancel  [decide]  on tab.opening  answers in Ardia (cancel)\nroute  [decide]  on link.opening  answers in Ardia (route)\ndrop  [decide]  on link.opening  answers in Ardia (drop)\nfolder  [decide]  on download.deciding  answers in Ardia (folder)\nperm  [decide]  on permission.requested  answers in Ardia (permission)\njira  [omnibox]  omnibox Jira (keyword j)  run ~/bin/jira\neverywhere  [omnibox]  omnibox Search (global)  run /bin/cat\nünï ☃  [event]  on page.error  run /bin/echo a\tb  timeout 60s\nsystemd user service dev.ardia.hooks.service: not installed (ardia hooks install)\n"
    },
    "stderr": {
-    "text": "ardia hooks: <parity:box>/data/config/hooks.json: hook paris: timezone Europe/Paris isn't a known time zone\n"
+    "text": ""
    },
    "requests": [],
    "daemon_requests": [],
@@ -604,7 +604,7 @@
      "properties": {
       "command": "hooks",
       "subcommand": "list",
-      "exit_code": 1,
+      "exit_code": 0,
       "error_code": null,
       "flags": "",
       "cli_version": "0.0.0.dev0",
@@ -629,7 +629,7 @@
      "properties": {
       "command": "hooks",
       "subcommand": "list",
-      "exit_code": 1,
+      "exit_code": 0,
       "error_code": null,
       "flags": "",
       "cli_version": "0.0.0.dev0",
@@ -639,7 +639,7 @@
    ],
    "usage": {
     "recent": [
-     "hooks list (exit 1)"
+     "hooks list"
     ],
     "tasks": {}
    },
@@ -792,146 +792,6 @@
    "usage": {
     "recent": [
      "hooks list"
-    ],
-    "tasks": {}
-   },
-   "flush": {
-    "failures": 0,
-    "next_at": 9000000000000.0
-   },
-   "files": {
-    "cli-home/Usage": [
-     "written",
-     "dir",
-     448
-    ],
-    "cli-home/Usage/usage.json": [
-     "written",
-     "file",
-     384,
-     {
-      "text": "<compared apart>"
-     }
-    ],
-    "cli-home/Usage/usage.lock": [
-     "written",
-     "file",
-     384,
-     {
-      "text": ""
-     }
-    ],
-    "data/Telemetry/cli-flush-claim.lock": [
-     "written",
-     "file",
-     384,
-     {
-      "text": ""
-     }
-    ],
-    "data/Telemetry/cli-flush.json": [
-     "written",
-     "file",
-     384,
-     {
-      "text": "<compared apart>"
-     }
-    ],
-    "data/Telemetry/cli-queue.jsonl": [
-     "written",
-     "file",
-     384,
-     {
-      "text": "<compared apart>"
-     }
-    ],
-    "data/Telemetry/cli-queue.lock": [
-     "written",
-     "file",
-     384,
-     {
-      "text": ""
-     }
-    ],
-    "data/Telemetry/local": [
-     "written",
-     "dir",
-     448
-    ],
-    "data/Telemetry/local/cli-<parity:today>.jsonl": [
-     "written",
-     "file",
-     384,
-     {
-      "text": "<compared apart>"
-     }
-    ],
-    "data/Telemetry/local/cli-local.lock": [
-     "written",
-     "file",
-     384,
-     {
-      "text": "<compared apart>"
-     }
-    ]
-   },
-   "helpers": [],
-   "timed_out": false
-  },
-  "expected_linux": {
-   "status": 1,
-   "stdout": {
-    "text": "{\n  \"file\": \"<parity:box>/data/config/hooks.json\",\n  \"problem\": \"<parity:box>/data/config/hooks.json: hook paris: timezone Europe/Paris isn't a known time zone\",\n  \"hooks\": [],\n  \"agent\": {\n    \"installed\": false,\n    \"loaded\": false\n  }\n}\n"
-   },
-   "stderr": {
-    "text": ""
-   },
-   "requests": [],
-   "daemon_requests": [],
-   "telemetry": [
-    {
-     "event": "cli_command",
-     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
-     "timestamp": "<now float s>",
-     "properties": {
-      "command": "hooks",
-      "subcommand": "list",
-      "exit_code": 1,
-      "error_code": null,
-      "flags": "--json",
-      "cli_version": "0.0.0.dev0",
-      "$environment": "dev"
-     },
-     "sent": true
-    }
-   ],
-   "queued": [
-    {
-     "event": "cli_command",
-     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
-     "timestamp": "2026-01-01T00:00:00.000Z",
-     "properties": {
-      "command": "earlier"
-     }
-    },
-    {
-     "event": "cli_command",
-     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
-     "timestamp": "<now float s>",
-     "properties": {
-      "command": "hooks",
-      "subcommand": "list",
-      "exit_code": 1,
-      "error_code": null,
-      "flags": "--json",
-      "cli_version": "0.0.0.dev0",
-      "$environment": "dev"
-     }
-    }
-   ],
-   "usage": {
-    "recent": [
-     "hooks list (exit 1)"
     ],
     "tasks": {}
    },
