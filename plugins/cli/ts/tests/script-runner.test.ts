@@ -207,6 +207,20 @@ describe("the script runner", () => {
     ]);
   });
 
+  test("searchParams a script holds follows later edits of the URL", async () => {
+    const { result } = await runScript(`
+      const u = new URL("https://x.test/models?page=1");
+      const params = u.searchParams;
+      u.search = "?page=2&sort=likes";
+      const afterSearch = [params.get("page"), params.get("sort"), u.searchParams === params];
+      params.set("page", 3);
+      const afterSet = u.href;
+      u.href = "https://x.test/other?q=a+b";
+      return [afterSearch, afterSet, params.get("q"), params.get("page"), [...params.keys()]];
+    `);
+    expect(result?.["value"]).toEqual([["2", "likes", true], "https://x.test/models?page=3&sort=likes", "a b", null, ["q"]]);
+  });
+
   test("waitForSelector passes its state and timeout to wait", async () => {
     const { requests } = await runScript("await page.waitForSelector('#spinner', { state: 'hidden', timeout: '5s' }); await page.waitForSelector('#ready');");
     expect(requests.map((request) => request["argv"])).toEqual([["wait", "#spinner", "--state", "hidden", "--timeout", "5s"], ["wait", "#ready"]]);

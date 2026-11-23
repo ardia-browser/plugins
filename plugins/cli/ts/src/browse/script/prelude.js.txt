@@ -278,17 +278,23 @@
       return spaced;
     }
   };
+  const parseQuery = (text) => {
+    const pairs = [];
+    for (const part of String(text).replace(/^\?/, "").split("&")) {
+      if (!part) continue;
+      const at = part.indexOf("=");
+      pairs.push(at < 0 ? [decodeForm(part), ""] : [decodeForm(part.slice(0, at)), decodeForm(part.slice(at + 1))]);
+    }
+    return pairs;
+  };
   class URLSearchParams {
     #pairs = [];
     #owner = null;
+    #updating = false;
     constructor(init) {
       if (init == null) return;
       if (typeof init === "string") {
-        for (const part of init.replace(/^\?/, "").split("&")) {
-          if (!part) continue;
-          const at = part.indexOf("=");
-          this.#pairs.push(at < 0 ? [decodeForm(part), ""] : [decodeForm(part.slice(0, at)), decodeForm(part.slice(at + 1))]);
-        }
+        this.#pairs = parseQuery(init);
       } else if (Symbol.iterator in Object(init)) {
         for (const [key, value] of init) this.#pairs.push([String(key), String(value)]);
       } else {
@@ -299,8 +305,17 @@
       params.#owner = owner;
       return params;
     }
+    static _reload(params, search) {
+      if (!params.#updating) params.#pairs = parseQuery(search);
+    }
     #changed() {
-      if (this.#owner) this.#owner.search = this.toString();
+      if (!this.#owner) return;
+      this.#updating = true;
+      try {
+        this.#owner.search = this.toString();
+      } finally {
+        this.#updating = false;
+      }
     }
     get size() { return this.#pairs.length; }
     append(key, value) { this.#pairs.push([String(key), String(value)]); this.#changed(); }
@@ -324,7 +339,9 @@
     toString() { return this.#pairs.map(([k, v]) => encodeForm(k) + "=" + encodeForm(v)).join("&"); }
   }
   const bindParams = URLSearchParams._bind;
+  const reloadParams = URLSearchParams._reload;
   delete URLSearchParams._bind;
+  delete URLSearchParams._reload;
   const URL_FIELDS = ["href", "origin", "protocol", "username", "password", "host", "hostname", "port", "pathname", "search", "hash"];
   const urlParts = new WeakMap();
   const urlParams = new WeakMap();
@@ -367,7 +384,8 @@
       set(value) {
         if (field === "origin") return;
         urlParts.set(this, parseUrl("urlset", [partsOf(this).href, field, String(value)]));
-        if (field !== "search") urlParams.delete(this);
+        const params = urlParams.get(this);
+        if (params) reloadParams(params, partsOf(this).search);
       },
       enumerable: true,
       configurable: false,
