@@ -18,9 +18,13 @@
     const parent = node.parentElement;
     if (!parent || !content(parent)) continue;
     const style = getComputedStyle(parent);
-    const shown = /[^\s​-‍⁠﻿]/.test(node.data)
-      || (/[^\S​-‍⁠﻿]/.test(node.data) && /^(pre|pre-wrap|break-spaces)$/.test(style.whiteSpace));
+    const shown = /[^ \t\n\r\f\u200b-\u200d\u2060\ufeff]/.test(node.data)
+      || (/[ \t\n\r\f]/.test(node.data) && /^(pre|pre-wrap|break-spaces)$/.test(style.whiteSpace))
+      || (/\n/.test(node.data) && style.whiteSpace === "pre-line");
     if (!shown || style.visibility !== "visible") continue;
+    let box = parent;
+    while (box && box !== el && getComputedStyle(box).display === "contents") box = box.parentElement;
+    if (box && box.checkVisibility && !box.checkVisibility()) continue;
     range.selectNodeContents(node);
     if (range.getClientRects().length > 0) return { text: true, chrome };
   }

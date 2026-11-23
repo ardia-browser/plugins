@@ -47,7 +47,7 @@
   {
    "argv": [
     "eval",
-    "document.querySelector('#contents').textContent"
+    "document.querySelector('#contents').innerText.trim()"
    ],
    "session": "act",
    "main_world": true
@@ -63,7 +63,7 @@
   {
    "argv": [
     "eval",
-    "document.querySelector('#spaces').textContent"
+    "document.querySelector('#spaces').innerText.trim()"
    ],
    "session": "act",
    "main_world": true
@@ -79,7 +79,23 @@
   {
    "argv": [
     "eval",
-    "document.querySelector('#mention').textContent"
+    "document.querySelector('#mention').innerText.trim()"
+   ],
+   "session": "act",
+   "main_world": true
+  },
+  {
+   "argv": [
+    "fill",
+    "#hiddenhint",
+    "New words"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.querySelector('#hiddenhint').innerText.trim()"
    ],
    "session": "act",
    "main_world": true

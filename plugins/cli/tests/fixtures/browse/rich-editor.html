@@ -20,6 +20,8 @@
 <div id="mention" class="plain" contenteditable="true" role="textbox" aria-label="Mention"><p><span class="chip" contenteditable="false">@Rachel</span></p></div>
 <div id="keepmention" class="plain stubborn" contenteditable="true" role="textbox" aria-label="Kept mention"><p>Hi <span class="chip" contenteditable="false">@Rachel</span></p></div>
 <div id="keepspaces" class="plain stubborn" contenteditable="true" role="textbox" aria-label="Kept spaces" style="white-space: pre-wrap">   </div>
+<div id="keepnbsp" class="plain stubborn" contenteditable="true" role="textbox" aria-label="Kept space">&nbsp;</div>
+<div id="hiddenhint" class="plain" contenteditable="true" role="textbox" aria-label="Hidden hint"><p>Old words</p><div style="content-visibility: hidden"><span>Hint</span></div></div>
 <script>
   for (const stubborn of document.querySelectorAll(".stubborn")) {
     stubborn.addEventListener("keydown", (event) => {

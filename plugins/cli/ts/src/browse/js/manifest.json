@@ -73,7 +73,7 @@
   },
   "actions.holds-text.js.txt": {
     "python": "ardia_cli.browse.actions.HOLDS_TEXT",
-    "sha256": "054645daece4dab06e4f5eb9e6a7eef3b1eff2f45fee28c51913448e6dd6fda8"
+    "sha256": "f1640b19d80ead2eec19e77c61ce6b1a1cfc591ff6528176b92a017a3d89bbe1"
   },
   "actions.scroll-lock.js.txt": {
     "python": "ardia_cli.browse.actions.SCROLL_LOCK",
