@@ -92,12 +92,16 @@ export const RECORDER_SOURCE = `(() => {
     }
     return "/" + parts.join("/");
   };
-  const describe = (el) => ({
-    tag: el.localName, role: roleOf(el), name: nameOf(el), ariaLabel: short(el.getAttribute("aria-label")), placeholder: short(el.getAttribute("placeholder")),
+  const describe = (el) => {
+    const hidden = secret(el);
+    return {
+    tag: el.localName, role: roleOf(el), name: hidden ? quietName(el) : nameOf(el), ariaLabel: short(el.getAttribute("aria-label")), placeholder: short(el.getAttribute("placeholder")),
     fieldName: short(el.getAttribute("name"), 80), testId: short(el.getAttribute("data-testid") || el.getAttribute("data-test-id") || el.getAttribute("data-test"), 80),
-    text: field(el) ? "" : short(el.innerText || el.textContent, 60), id: short(el.id, 80), classes: [...el.classList].slice(0, 6), css: cssPath(el), xpath: xpathOf(el),
+    text: field(el) || hidden ? "" : short(el.innerText || el.textContent, 60), id: short(el.id, 80), classes: [...el.classList].slice(0, 6), css: cssPath(el), xpath: xpathOf(el),
     type: short(el.getAttribute("type") || (el.localName === "select" ? "select" : ""), 20).toLowerCase(), checked: "checked" in el ? Boolean(el.checked) : null,
-  });
+    };
+  };
+  const quietName = (el) => short(el.getAttribute("aria-label")) || labelledBy(el) || labels(el) || short(el.getAttribute("placeholder")) || short(el.getAttribute("title"));
   const INTERACTIVE = "a[href],button,input,select,textarea,summary,label,option,[role=button],[role=link],[role=checkbox],[role=radio],[role=switch],[role=tab],[role=menuitem],[role=option],[role=combobox],[role=textbox],[contenteditable=''],[contenteditable=true],[onclick],[tabindex]";
   const targetOf = (event) => {
     const path = event.composedPath ? event.composedPath() : [event.target];
@@ -116,8 +120,8 @@ export const RECORDER_SOURCE = `(() => {
   const sensitive = new WeakSet();
   const secret = (el) => {
     if (sensitive.has(el)) return true;
-    const hint = [el.getAttribute("autocomplete"), el.getAttribute("name"), el.id, el.getAttribute("aria-label"), el.getAttribute("placeholder")].join(" ");
-    const hidden = (el.localName === "input" && el.type === "password") || /one-time-code|cc-|password|passcode|\\bpin\\b|otp|cvv|cvc|card.?num|ssn|secret|token/i.test(hint);
+    const hint = [el.getAttribute("autocomplete"), el.getAttribute("name"), el.id, el.getAttribute("aria-label"), el.getAttribute("placeholder"), labels(el), labelledBy(el)].join(" ");
+    const hidden = (el.localName === "input" && el.type === "password") || /one-time-code|cc-|password|passcode|passphrase|\\bpin\\b|otp|2fa|mfa|cvv|cvc|card.?num|ssn|secret|token|(recovery|backup|security|verification|auth\\w*)\\s*code/i.test(hint);
     if (hidden) sensitive.add(el);
     return hidden;
   };
@@ -280,9 +284,9 @@ export async function teardown(page: Page, installed: Teardown, settle: () => Pr
         return;
       }
     };
+    if (installed.identifier !== null) await quietly("Page.removeScriptToEvaluateOnNewDocument", { identifier: installed.identifier });
     for (const context of installed.contexts) await quietly("Runtime.evaluate", { expression: STOP_SOURCE, contextId: context, returnByValue: true });
     await settle();
-    if (installed.identifier !== null) await quietly("Page.removeScriptToEvaluateOnNewDocument", { identifier: installed.identifier });
     if (installed.binding) await quietly("Runtime.removeBinding", { name: BINDING });
   });
 }

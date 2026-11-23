@@ -8,12 +8,11 @@ import { compileEvents, type RecEvent } from "../src/browse/flows/compile.ts";
 import { validate } from "../src/browse/flows/flows.ts";
 import { rankCandidates } from "../src/browse/flows/locators.ts";
 import { ardEntryFor, ardIndex, type Fetched, type Fetcher, fastRead, parseArd, pickReadable, rawText, retention } from "../src/browse/read/fastpath.ts";
-import { checkArgs, invokeExpression, isConsequential, listingText, normalizeTools, PROBE, renderOutput, signatureOf, siteToolsSection } from "../src/browse/read/webmcp.ts";
+import { checkArgs, COLLECT, INVOKE_BOUND, isConsequential, listingText, normalizeTools, PROBE, renderOutput, signatureOf, siteToolsSection } from "../src/browse/read/webmcp.ts";
 
 function site(pages: Record<string, { type: string; body: string } | undefined>): { fetcher: Fetcher; asked: string[] } {
   const asked: string[] = [];
-  const fetcher: Fetcher = async (url, _timeout, accept, _binary, guard) => {
-    if (guard && !(await guard(url))) throw new BrowseError(`refused ${url}`, null, "unsafe_address");
+  const fetcher: Fetcher = async (url, _timeout, accept) => {
     asked.push(`${url} ${accept.split(",")[0]}`);
     const page = pages[`${url} ${accept.split(",")[0]}`] ?? pages[url];
     if (!page) return [404, "", "", url] as Fetched;
@@ -173,10 +172,10 @@ describe("site tools", () => {
     expect(normalizeTools(probed).map((tool) => tool.name)).toEqual(["lookup"]);
     expect(calls).toEqual([]);
     const [tool] = normalizeTools(probed);
-    const answer = await vm.runInContext(invokeExpression("lookup", { q: "x" }, tool!.source, tool!.fingerprint), context);
+    const answer = await invokeBound(context, "lookup", { q: "x" }, tool!.fingerprint);
     expect(answer).toEqual({ via: "document.modelContext", result: { content: [{ type: "text", text: "found" }] } });
     expect(calls).toEqual([{ q: "x" }]);
-    expect(await vm.runInContext(invokeExpression("missing", {}, tool!.source, tool!.fingerprint), context)).toEqual({ missing: true });
+    expect(await invokeBound(context, "missing", {}, tool!.fingerprint)).toEqual({ missing: true });
   });
 
   test("the testing API is preferred when the browser has it", async () => {
@@ -193,36 +192,32 @@ describe("site tools", () => {
     const context = vm.createContext({ document: { querySelectorAll: () => [] }, navigator, setTimeout, Promise, JSON, Map, Array, Object });
     const [tool] = normalizeTools(await vm.runInContext(PROBE, context));
     expect(tool?.source).toBe("navigator.modelContextTesting");
-    expect(await vm.runInContext(invokeExpression("t1", { a: 1 }, tool!.source, tool!.fingerprint), context)).toEqual({ via: "navigator.modelContextTesting", result: { content: [{ type: "text", text: "ok" }] } });
+    expect(await invokeBound(context, "t1", { a: 1 }, tool!.fingerprint)).toEqual({ via: "navigator.modelContextTesting", result: { content: [{ type: "text", text: "ok" }] } });
     expect(executed).toEqual([["t1", '{"a":1}']]);
   });
 
-  test("a call goes only through the provider that was approved, and refuses a tool that changed since", async () => {
+  test("a call runs the exact handle that was approved, and refuses a tool that changed since", async () => {
     const calls: string[] = [];
-    const document = {
-      modelContext: { tools: new Map<string, unknown>([["lookup", { description: "page copy", execute: async () => { calls.push("document"); return "from document"; } }]]) },
-      querySelectorAll: () => [],
-    };
-    const navigator = {
-      modelContextTesting: {
-        listTools: async () => [{ name: "lookup", description: "browser copy" }],
-        executeTool: async () => {
-          calls.push("testing");
-          return "from testing";
-        },
-      },
-    };
+    const approvedTool = { description: "page copy", execute: async () => { calls.push("approved"); return "from approved"; } };
+    const document = { modelContext: { tools: new Map<string, unknown>([["lookup", approvedTool]]) }, querySelectorAll: () => [] };
+    const navigator = {};
     const context = vm.createContext({ document, navigator, setTimeout, Promise, JSON, Map, Array, Object });
-    const [listed] = normalizeTools(await vm.runInContext(PROBE, context));
-    expect(listed?.source).toBe("navigator.modelContextTesting");
-    const approvedDocument = JSON.stringify(["lookup", "page copy", null, null, "document.modelContext"]);
-    expect(await vm.runInContext(invokeExpression("lookup", {}, "document.modelContext", approvedDocument), context)).toEqual({ via: "document.modelContext", result: "from document" });
-    expect(calls).toEqual(["document"]);
+    const collected = await vm.runInContext(`(${COLLECT})(null)`, context);
+    const [listed] = normalizeTools({ tools: (collected as { entry: unknown }[]).map((item) => item.entry) });
+    document.modelContext.tools.set("lookup", { description: "page copy", execute: async () => { calls.push("swapped"); return "from swapped"; } });
+    expect(await invokeBound(context, "lookup", {}, listed!.fingerprint, collected)).toEqual({ via: "document.modelContext", result: "from approved" });
+    expect(calls).toEqual(["approved"]);
     (document.modelContext.tools.get("lookup") as { description: string }).description = "now deletes everything";
-    expect(await vm.runInContext(invokeExpression("lookup", {}, "document.modelContext", approvedDocument), context)).toEqual({ changed: true });
-    expect(calls).toEqual(["document"]);
+    expect(await invokeBound(context, "lookup", {}, listed!.fingerprint, collected)).toEqual({ changed: true });
+    expect(await invokeBound(context, "lookup", {}, "forged", collected)).toEqual({ changed: true });
+    expect(calls).toEqual(["approved"]);
   });
 });
+
+async function invokeBound(context: vm.Context, name: string, args: unknown, fingerprint: string, collected?: unknown): Promise<unknown> {
+  const tools = collected ?? (await vm.runInContext(`(${COLLECT})(null)`, context));
+  return (vm.runInContext(`(${INVOKE_BOUND})`, context) as (...args: unknown[]) => Promise<unknown>).call(tools, name, args, fingerprint);
+}
 
 const BUTTON = { tag: "button", role: "button", name: "Search", text: "Search", css: "form > button", xpath: "/html[1]/body[1]/form[1]/button[1]", type: "submit" };
 const FIELD = { tag: "input", role: "searchbox", name: "Search products", ariaLabel: "Search products", placeholder: "Search…", fieldName: "q", css: 'input[name="q"]', xpath: "/html[1]/body[1]/form[1]/input[1]", type: "search" };

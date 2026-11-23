@@ -1167,8 +1167,10 @@ plain rule, and what a rule can't fix is kept as structured data for whoever fix
   command (so no `eval` can hide in one), an `open` off the flow's hosts, and an action flow with no element action.
   A version 2 file without a `kind` reads as an unknown version.
 - **Running.** `flow run` replays an action flow, or a request flow with `--replay`; a flow with `writes` needs
-  `--yes` (`flow_writes`). Each element step tries its candidates in rank order, each only when it matches exactly
-  one element (`get count`; several is `ambiguous` and skipped), then presses Escape once (a stray
+  `--yes` (`flow_writes`) whenever a step does more than open, wait, scroll, hover, focus or switch frames, whatever
+  the file's `writes` says. Each element step tries its candidates in rank order, each only when it matches exactly
+  one element (`get count`, for every locator a command resolves itself, role selectors for press and submit
+  included; several is `ambiguous` and skipped), then presses Escape once (a stray
   menu or popover) and tries them again, then finds the element by role and name (`find role <role> <action> --name
   <name> --exact`, so several matches never pick one). An answer of unknown outcome (`outcome_unknown`), a lost
   connection, a closed tab or a policy refusal stops at once and is never retried, the Escape press included. A step every tier misses stops the
@@ -1176,8 +1178,9 @@ plain rule, and what a rule can't fix is kept as structured data for whoever fix
 - **Episodes.** Every step that needed a later tier (`healed`) and the step that stopped a run (`fallback`) is kept in
   `<data dir>/Flows/<site>/<name>.episodes.json` (0600, the last 20, at most 512 KB): the step, its intent, its
   fingerprint, every attempt (`tier`, the command with secrets masked, the error code), the page's `snapshot -i`
-  before the failure, the locator that matched, and the non-secret param values the run used; every string in it
-  has the run's secrets masked before it's written.
+  before the failure, the locator that matched, and the non-secret param values the run used; the whole episode,
+  values included, has the run's secrets masked after it's assembled, so a secret that's also a plain param's value
+  never lands on disk.
 - **`flow heal <name>`** lists the episodes and what a rule can fix: a step found by role and name gets that
   fingerprint as its first candidate, a step found by a later candidate gets that one first (matched by value; an episode whose locator or
   fingerprint is no longer in the flow proposes nothing); `--apply` writes them
@@ -1196,7 +1199,7 @@ plain rule, and what a rule can't fix is kept as structured data for whoever fix
   `page.html` (the page with only its JSON blocks kept, styles and other scripts emptied, secrets masked) or
   `answer.json`, `extract.mjs` (the extraction and shape check as plain functions: `extract`, `check`, `items`),
   `extract.test.mjs` (`node --test`) and `flow.json`, so the extraction is tested offline with no browser. The folder
-  must be a real folder the user owns (a link is `fixture_unsafe`); files are created new with `O_EXCL`,
+  must be a real folder the user owns, checked as given without resolving links (a link is `fixture_unsafe`); files are created new with `O_EXCL`,
   `O_NOFOLLOW` and mode 0600, and if any is already there nothing is written (`fixture_exists`).
 
 ### Recording a flow
@@ -1213,8 +1216,10 @@ after that is an `open` step. Each element is described where it is (role, acces
 field sends no value, and neither does one that ever looked secret while being typed in (a password, one-time
 code, card or PIN field, by type, autocomplete, name or label), even if it turns into plain text before it's left.
 Typed text a flow can't keep as an example (spaces, punctuation) stays a param with no example. A recorded flow
-always has `writes: true`, so its runs need `--yes`; stopping flushes pending fields before the binding and script
-are removed, and removing them isn't cut short by an interrupted command. Steps in a same-origin frame are wrapped in `frame <css>` and `frame main`. Hosts off the start
+always has `writes: true`, so its runs need `--yes`. Stopping removes the new-document script first, then flushes
+pending fields in each recorder world while still listening, then removes the binding; none of it is cut short by an
+interrupted command. A field's `<label>` and `aria-labelledby` text count when deciding it's secret, and a secret
+editable element is described by its label only, never its text. Steps in a same-origin frame are wrapped in `frame <css>` and `frame main`. Hosts off the start
 page's site and addresses a flow can't keep are left out and listed. Without `--save` the flow is printed.
 
 ### Site tools (WebMCP)
@@ -1226,9 +1231,9 @@ type)` with `[page says read-only]` or `[CONSEQUENTIAL]`: a destructive, consequ
 name with a word like delete, pay, send, add or update, which a read-only annotation doesn't clear. `snapshot --tools` adds the same
 as a `# site tools` line. `ardia browse tool <name> ['{json}' | -] [--yes]` checks the arguments against the tool's
 input schema and needs `--yes` for every call, since each runs the page's own code (`unconfirmed_tool`, or
-`consequential_tool`). It records the document and the tool's provider and description when it finds it, and the
-call goes through that same provider in that same document, refused if the page navigated (`document_changed`)
-or the tool changed (`site_tool_changed`); and prints its output as `[UNTRUSTED]` page data (`data.isError` and exit 1 when the tool says it
+`consequential_tool`). Finding and calling happen on one object in the page's JavaScript context: the call
+runs the exact handler that was found, through the same provider, after checking the tool still matches what was
+approved (`site_tool_changed`); a new document invalidates the object (`document_changed`); and prints its output as `[UNTRUSTED]` page data (`data.isError` and exit 1 when the tool says it
 failed). Names, descriptions and output all come from the page.
 
 ### Reading documentation fast
@@ -1239,8 +1244,12 @@ is Markdown), `llms_txt` (the nearest `llms.txt` links this page's Markdown; at 
 `ard` (`/.well-known/ard.json` maps the page to Markdown; at the root, its index), then `readability` (the reader's
 text) or `raw` (the page's whole visible text, when the reader kept under 25% of it). `tried` lists what was asked
 for. `--outline` and `--filter` work on any of them. Every request, including a Markdown address a page's
-`ard.json` lists and each redirect, must be on the page's own origin or reach only public addresses after DNS
-(loopback, private, link-local, CGNAT, ULA and metadata addresses are refused as `unsafe_address`). A directory
+`ard.json` lists and each redirect, connects to the address it was checked against: the name is resolved once,
+checked, and the connection is pinned to that address (TLS still verifies the name), so a name that answers a
+public address first and a private one later can't be used to reach the private one. Only the page's own origin
+may be private (the user asked for it); anything else must resolve only to public addresses (loopback, private,
+link-local, site-local, CGNAT, ULA and metadata addresses are refused). A refusal fails the read with
+`unsafe_address` rather than counting as a miss, and a binary page read the usual way keeps the same rules. A directory
 URL's sibling is `<dir>/index.md`. A binary first answer (a PDF) is read the usual way. On the session's tab each
 probe has 4 s, the tab's own text is the fallback, and `tried` lists every step.
 

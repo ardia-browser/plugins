@@ -86,7 +86,7 @@ function stepAt(flow: Json, seq: number): Json | null {
 }
 
 function same(a: Candidate, b: Candidate): boolean {
-  return a.by === b.by && a.value === b.value && (a.name ?? "") === (b.name ?? "");
+  return a.by === b.by && a.value === b.value && (a.name ?? "") === (b.name ?? "") && (a.tag ?? "") === (b.tag ?? "");
 }
 
 export function proposals(flow: Json, episodes: readonly Episode[]): Change[] {

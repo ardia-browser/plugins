@@ -141,8 +141,13 @@ async function readFast(ctx: Ctx, options: Record<string, unknown>): Promise<Res
     flag("read_fast_doc", true);
     return fastResult(page.url, found);
   }
-  if (probe.binary !== null || (await pageIsPdf(page))) return null;
   const frame = frameOrMain(ctx, page);
+  if (frame === page.mainFrame && (await pageIsPdf(page))) {
+    const content = postProcess(await pageText(page), options);
+    const tried = [...probe.tried, "pdf"];
+    return new Result({ content, contentType: "application/pdf", finalUrl: page.url, method: "raw", source: "pdf", tried, truncated: false, url: page.url }, content ? `${content}\n[read via raw from the tab's PDF]` : "[read via raw from the tab's PDF]", true);
+  }
+  if (probe.binary !== null) probe.tried.push("binary");
   const nav = Boolean(options["nav"]);
   const read = record(await page.call("(nav) => ardiaBrowse.readPage(nav)", [nav], { frame, read: true }));
   const visible = String((await page.call(BODY_TEXT, [], { frame, read: true })) ?? "");

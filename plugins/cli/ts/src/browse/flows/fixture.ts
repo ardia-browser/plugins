@@ -247,6 +247,11 @@ function codeOf(error: unknown): string {
   return typeof error === "object" && error !== null ? String((error as { code?: unknown }).code ?? "") : "";
 }
 
+export function fixtureDir(cwd: string, given: string, home: string | undefined = process.env["HOME"]): string {
+  const expanded = home && (given === "~" || given.startsWith("~/")) ? path.join(home, given.slice(1)) : given;
+  return path.resolve(cwd, expanded);
+}
+
 export function writeFixture(dir: string, files: FixtureFiles): string[] {
   let info: fs.Stats | null = null;
   try {

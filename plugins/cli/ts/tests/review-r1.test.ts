@@ -47,30 +47,35 @@ describe("read --fast stays off private networks", () => {
   test("a hop is allowed on the page's own origin or on a host that resolves only to public addresses", async () => {
     const resolve = async (host: string) => ({ "public.example": ["93.184.216.34"], "rebind.example": ["93.184.216.34", "10.0.0.5"], "inside.example": ["192.168.0.10"] })[host] ?? [];
     const guard = hopGuard("http://127.0.0.1:8765/docs", resolve);
-    expect(await guard("http://127.0.0.1:8765/llms.txt")).toBe(true);
-    expect(await guard("http://127.0.0.1:9999/")).toBe(false);
-    expect(await guard("http://169.254.169.254/latest/meta-data")).toBe(false);
-    expect(await guard("http://[::ffff:a9fe:a9fe]/")).toBe(false);
-    expect(await guard("https://public.example/guide.md")).toBe(true);
-    expect(await guard("https://rebind.example/guide.md")).toBe(false);
-    expect(await guard("https://inside.example/guide.md")).toBe(false);
-    expect(await guard("http://localhost/")).toBe(false);
-    expect(await guard("file:///etc/passwd")).toBe(false);
+    expect(await guard.check("http://127.0.0.1:8765/llms.txt")).toBe(true);
+    expect(await guard.check("http://127.0.0.1:9999/")).toBe(false);
+    expect(await guard.check("http://169.254.169.254/latest/meta-data")).toBe(false);
+    expect(await guard.check("http://[::ffff:a9fe:a9fe]/")).toBe(false);
+    expect(await guard.check("https://public.example/guide.md")).toBe(true);
+    expect(await guard.check("https://rebind.example/guide.md")).toBe(false);
+    expect(await guard.check("https://inside.example/guide.md")).toBe(false);
+    expect(await guard.check("http://localhost/")).toBe(false);
+    expect(await guard.check("file:///etc/passwd")).toBe(false);
   });
 
   test("an ard.json entry pointing at the metadata service is never fetched", async () => {
     const asked: string[] = [];
     const ard = JSON.stringify({ documents: [{ url: "/guide", markdown: "http://169.254.169.254/latest/meta-data/iam" }] });
     const fetcher: Fetcher = async (url, _timeout, _accept, _binary, guard) => {
-      if (guard && !(await guard(url))) throw new BrowseError(`refused ${url}`, null, "unsafe_address");
+      if (guard && !(await guard.check(url))) throw new BrowseError(`refused ${url}`, null, "unsafe_address");
       asked.push(url);
       if (url === "https://docs.example.com/.well-known/ard.json") return [200, "application/json", ard, url] as Fetched;
       if (url === "https://docs.example.com/guide") return [200, "text/html", "<html><body><main><p>Guide text here.</p></main></body></html>", url] as Fetched;
       return [404, "", "", url] as Fetched;
     };
-    const found = await fastRead("https://docs.example.com/guide", 2, fetcher, {}, true, { tried: [], binary: null }, async () => ["93.184.216.34"]);
+    let refused: unknown = null;
+    try {
+      await fastRead("https://docs.example.com/guide", 2, fetcher, {}, true, { tried: [], binary: null }, async () => ["93.184.216.34"]);
+    } catch (error) {
+      refused = error;
+    }
     expect(asked).not.toContain("http://169.254.169.254/latest/meta-data/iam");
-    expect(found?.method).toBe("readability");
+    expect((refused as BrowseError).code).toBe("unsafe_address");
   });
 });
 
@@ -94,7 +99,9 @@ describe("read --fast edge cases", () => {
     };
     const probe: Probe = { tried: [], binary: null };
     expect(await fastRead("https://docs.example.com/a.pdf", 2, fetcher, {}, true, probe)).toBeNull();
-    expect(probe).toEqual({ tried: ["markdown"], binary: "application/pdf" });
+    expect(probe.tried).toEqual(["markdown"]);
+    expect(probe.binary).toBe("application/pdf");
+    expect(typeof probe.guard?.request).toBe("function");
     expect(calls).toBe(1);
   });
 });
@@ -178,7 +185,7 @@ describe("recording teardown", () => {
     await teardown(fakePage(log) as never, { identifier: "7", binding: true, contexts: new Set([3, 4]), closed: false }, async () => {
       log.push("settle");
     });
-    expect(log).toEqual(["Runtime.evaluate stop 3", "Runtime.evaluate stop 4", "settle", "Page.removeScriptToEvaluateOnNewDocument", "Runtime.removeBinding"]);
+    expect(log).toEqual(["Page.removeScriptToEvaluateOnNewDocument", "Runtime.evaluate stop 3", "Runtime.evaluate stop 4", "settle", "Runtime.removeBinding"]);
     const failing: string[] = [];
     await teardown(fakePage(failing, true) as never, { identifier: "7", binding: true, contexts: new Set([3]), closed: false });
     expect(failing).toHaveLength(3);

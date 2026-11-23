@@ -1,8 +1,19 @@
 import { lookup } from "node:dns/promises";
+import http from "node:http";
+import https from "node:https";
 import net from "node:net";
+import { Readable } from "node:stream";
+import { BrowseError } from "../daemon-errors.ts";
 
 export type Resolver = (host: string) => Promise<string[]>;
-export type HopGuard = (url: string) => Promise<boolean>;
+export type PinnedInit = { headers: Record<string, string>; signal: AbortSignal; ca?: string[] | null };
+export type HopGuard = { check(url: string): Promise<boolean>; request(url: string, init: PinnedInit): Promise<Response> };
+
+export class UnsafeAddress extends BrowseError {
+  constructor(url: string) {
+    super(`Didn't fetch ${url}: it's on a private, local or link-local address the page doesn't share an origin with`, null, "unsafe_address");
+  }
+}
 
 const V4_BLOCKS: readonly [string, number][] = [
   ["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8], ["169.254.0.0", 16], ["172.16.0.0", 12], ["192.0.0.0", 24],
@@ -55,7 +66,7 @@ export function privateAddress(address: string): boolean {
     const low = groups[7] as number;
     return v4Private([high >> 8, high & 255, low >> 8, low & 255].join("."));
   }
-  if ((first & 0xfe00) === 0xfc00 || (first & 0xffc0) === 0xfe80 || (first & 0xff00) === 0xff00 || (first === 0x2001 && groups[1] === 0x0db8)) return true;
+  if ((first & 0xfe00) === 0xfc00 || (first & 0xffc0) === 0xfe80 || (first & 0xffc0) === 0xfec0 || (first & 0xff00) === 0xff00 || (first === 0x2001 && groups[1] === 0x0db8)) return true;
   return false;
 }
 
@@ -70,21 +81,88 @@ function originOf(url: string): string | null {
   }
 }
 
+function localName(host: string): boolean {
+  return host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal") || !host.includes(".");
+}
+
+function hostOf(url: string): string {
+  return new URL(url).hostname.replace(/^\[|\]$/gu, "").toLowerCase();
+}
+
+class Refused extends Error {
+  readonly unsafe = true;
+}
+
 export function hopGuard(base: string, resolve: Resolver = dnsResolve): HopGuard {
   const home = originOf(base);
-  return async (url) => {
-    const origin = originOf(url);
-    if (origin === null) return false;
-    if (origin === home) return true;
-    const host = new URL(url).hostname.replace(/^\[|\]$/gu, "").toLowerCase();
-    if (net.isIP(host)) return !privateAddress(host);
-    if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal") || !host.includes(".")) return false;
+  const homeHost = home === null ? "" : hostOf(base);
+  let homeLocal: boolean | null = home === null ? false : net.isIP(homeHost) ? privateAddress(homeHost) : localName(homeHost) ? true : null;
+  const pick = async (url: string): Promise<string | null> => {
+    const host = hostOf(url);
+    const atHome = originOf(url) === home;
+    if (net.isIP(host)) return atHome || !privateAddress(host) ? host : null;
+    if (!atHome && localName(host)) return null;
     let addresses: string[];
     try {
       addresses = await resolve(host);
     } catch {
-      return false;
+      return null;
     }
-    return addresses.length > 0 && addresses.every((address) => !privateAddress(address));
+    if (addresses.length === 0) return null;
+    const allPublic = addresses.every((address) => !privateAddress(address));
+    if (atHome) {
+      if (homeLocal === null) homeLocal = !allPublic;
+      if (homeLocal) return addresses[0] as string;
+    }
+    return allPublic ? (addresses[0] as string) : null;
   };
+  const check = async (url: string): Promise<boolean> => {
+    const origin = originOf(url);
+    if (origin === null) return false;
+    return (await pick(url)) !== null;
+  };
+  const request = (url: string, init: PinnedInit): Promise<Response> =>
+    new Promise((resolveResponse, reject) => {
+      const parsed = new URL(url);
+      const host = hostOf(url);
+      const pinned = pick(url);
+      const lookupPinned = (_name: string, options: unknown, callback: (...args: unknown[]) => void) => {
+        pinned.then(
+          (address) => {
+            if (address === null) {
+              callback(new Refused(url));
+              return;
+            }
+            const family = net.isIPv6(address) ? 6 : 4;
+            if (options && typeof options === "object" && (options as { all?: boolean }).all) callback(null, [{ address, family }]);
+            else callback(null, address, family);
+          },
+          (error: unknown) => callback(error),
+        );
+      };
+      const transport = parsed.protocol === "https:" ? https : http;
+      const options: Record<string, unknown> = { method: "GET", headers: init.headers, lookup: lookupPinned, signal: init.signal };
+      if (parsed.protocol === "https:") {
+        options["servername"] = net.isIP(host) ? undefined : host;
+        if (init.ca) options["ca"] = init.ca;
+      }
+      const outgoing = transport.request(url, options, (incoming) => {
+        const headers = new Headers();
+        for (const [name, value] of Object.entries(incoming.headers)) {
+          if (value === undefined) continue;
+          for (const item of Array.isArray(value) ? value : [value]) headers.append(name, item);
+        }
+        const status = incoming.statusCode ?? 502;
+        const body = status === 204 || status === 304 ? null : (Readable.toWeb(incoming) as unknown as ReadableStream<Uint8Array>);
+        try {
+          resolveResponse(new Response(body, { status: status < 200 || status > 599 ? 502 : status, headers }));
+        } catch (error) {
+          incoming.destroy();
+          reject(error);
+        }
+      });
+      outgoing.on("error", (error: unknown) => reject(error instanceof Refused || (error as { unsafe?: boolean })?.unsafe || (error as { cause?: { unsafe?: boolean } })?.cause?.unsafe ? new UnsafeAddress(url) : error));
+      outgoing.end();
+    });
+  return { check, request };
 }

@@ -123,7 +123,7 @@ export async function replayStep(driver: Driver, step: ReplayStep, values: Reado
     const tryCandidate = async (tier: Tier, index: number): Promise<boolean> => {
       const candidate = action.candidates[index] as Candidate;
       const argv = ladder[index] as string[];
-      if (candidate.by !== "role") {
+      if (argv[0] !== "find") {
         const matches = await countOf(driver, selectorOf(candidate));
         if (matches !== 1) {
           tried.push({ tier, argv: shown(argv, secrets), ok: false, code: matches === 0 ? "not_found" : "ambiguous", error: `${matches} elements match ${clip(selectorOf(candidate), 120)}; a replay acts only on exactly one` });

@@ -19,8 +19,8 @@ import { drift, fillUrl, headerOk, type Json, listGone, outputRequest, parsePara
 import { Ctx as CommandCtx } from "../commands/ctx.ts";
 import { handlerOf, hooks } from "../commands/index.ts";
 import { addEpisodes } from "./episodes.ts";
-import { fixtureFiles, lostFields, shapeDrift, writeFixture } from "./fixture.ts";
-import { type Driver, replay, type ReplayStep } from "./replay.ts";
+import { fixtureDir, fixtureFiles, lostFields, shapeDrift, writeFixture } from "./fixture.ts";
+import { type Driver, replay, type ReplayStep, scrubbed } from "./replay.ts";
 
 export const RUN_TIMEOUT = 60.0;
 export const BODY_LIMIT = 8 * 1024 * 1024;
@@ -206,6 +206,16 @@ function runText(flow: Json, shaped: Value): string {
   return `✓ ${flow["name"]}: ${counted} items${where}\n` + (shown > 0 ? renderJson(items) : "(no items)");
 }
 
+export const QUIET_ACTIONS = new Set(["open", "frame", "wait", "scroll", "hover", "focus"]);
+
+export function needsConfirmation(flow: Json): boolean {
+  if (flow["writes"] !== false) return true;
+  return (flow["steps"] ?? []).some((step: Json) => {
+    const action = step?.["action"];
+    return action !== null && action !== undefined && !QUIET_ACTIONS.has(String(action["type"]));
+  });
+}
+
 function liveDriver(ctx: Ctx): Driver {
   const quiet = (name: string) => new CommandCtx(ctx.state, { ...ctx.options, settle_only: true }, ctx.cwd, ctx.env, ctx.stdin, name);
   return {
@@ -242,7 +252,7 @@ export async function replayFlow(ctx: Ctx, root: string, flow: Json, values: Rec
   const steps: ReplayStep[] = flow["steps"].map((step: Json) => ({ seq: step["seq"], action: step["action"] ?? null, command: step["command"] ?? null }));
   const report = await replay(driver.live(ctx), { name: flow["name"], site: flow["site"] }, steps, values, secrets);
   const used = Object.fromEntries(Object.entries(values).filter(([name]) => !flow["params"].some((param: Json) => param["name"] === name && param["source"] === "secret")));
-  for (const episode of report.episodes) episode.values = used;
+  report.episodes = report.episodes.map((episode) => scrubbed({ ...episode, values: used }, secrets));
   try {
     addEpisodes(root, flow["site"], flow["name"], report.episodes);
   } catch (error) {
@@ -276,7 +286,7 @@ export async function replayFlow(ctx: Ctx, root: string, flow: Json, values: Rec
 export async function run(ctx: Ctx, root: string, flow: Json, options: Record<string, unknown>): Promise<Result> {
   const replaying = flow["kind"] === "actions" || Boolean(options["replay"]);
   const values = resolveParams(flow, parseParams(options["param"] as string[] | undefined), replaying);
-  if (replaying && flow["writes"] && !options["yes"]) {
+  if (replaying && needsConfirmation(flow) && !options["yes"]) {
     throw new BrowseError(`${flow["name"]} replays clicks and forms on ${flow["site"]}, which may change things there; nothing was run. Run it again with --yes once the user wants that done`, null, "flow_writes");
   }
   if (replaying) {
@@ -314,7 +324,7 @@ export async function run(ctx: Ctx, root: string, flow: Json, options: Record<st
   }
   const outcome = classify(flow, request, answer);
   if (options["fixture"] && typeof answer["text"] === "string") {
-    writeFixture(ctx.path(options["fixture"] as string), fixtureFiles(flow, request, answer["text"]));
+    writeFixture(fixtureDir(ctx.cwd, options["fixture"] as string), fixtureFiles(flow, request, answer["text"]));
     flag("flow_fixture", true);
   }
   if (outcome.kind !== "ok") {

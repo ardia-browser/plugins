@@ -23,7 +23,7 @@ import { run } from "./flowrun.ts";
 import { baseDomain, type FlowRequest, type Log, logOf, materialize, type Step, type Typed } from "./flowlog.ts";
 import { type Action, actionFromReplay, actionProblem, isElementAction } from "./actions.ts";
 import { applyPatch, applyProposals, loadEpisodes, parsePatch, proposals, writeEpisodes } from "./episodes.ts";
-import { fixtureFiles, writeFixture } from "./fixture.ts";
+import { fixtureDir, fixtureFiles, writeFixture } from "./fixture.ts";
 import { selectorOf } from "./locators.ts";
 
 export const VERSION = 1;
@@ -1105,7 +1105,7 @@ function saveFixture(ctx: Ctx, dir: string, flow: Json, steps: Step[], secrets: 
   const recorded = steps.flatMap((step) => step.requests ?? []).find((item) => item.id === request["id"]);
   if (!recorded || typeof recorded.text !== "string") throw new BrowseError("--fixture needs the recorded answer, and it was dropped to keep the recording small; record it again", null, "fixture_failed");
   flag("flow_fixture", true);
-  return writeFixture(ctx.path(dir), fixtureFiles(flow, request, recorded.text, secrets));
+  return writeFixture(fixtureDir(ctx.cwd, dir), fixtureFiles(flow, request, recorded.text, secrets));
 }
 
 export type FlowRunner = (ctx: Ctx, root: string, flow: Json, options: Record<string, unknown>) => Promise<Result>;

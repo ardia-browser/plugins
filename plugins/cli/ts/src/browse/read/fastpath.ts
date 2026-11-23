@@ -62,6 +62,10 @@ export function pickReadable(readable: string, visible: string): { content: stri
   return { content: readable, method: "readability", kept };
 }
 
+export function listedMarkdown(kind: string, text: string): boolean {
+  return !/html|xml|json/iu.test(kind) && !text.trimStart().startsWith("<");
+}
+
 function isMarkdown(kind: string, text: string): boolean {
   if (MARKDOWN_TYPES.includes(kind)) return true;
   return kind === "text/plain" && Boolean(text) && !text.slice(0, 300).toLowerCase().includes("<html");
@@ -164,13 +168,18 @@ export function markdownSibling(url: string): string | null {
   return parsed.href;
 }
 
-export type Probe = { tried: string[]; binary: string | null };
+export type Probe = { tried: string[]; binary: string | null; guard?: HopGuard | null };
+
+function refused(error: unknown): boolean {
+  return error instanceof BrowseError && error.code === "unsafe_address";
+}
 
 async function quiet(fetcher: Fetcher, url: string, timeout: number, accept: string, guard: HopGuard): Promise<Fetched | null> {
   try {
     const got = await fetcher(url, timeout, accept, "skip", guard);
     return got[0] === 200 && got[4] === undefined ? got : null;
   } catch (error) {
+    if (refused(error)) throw error;
     if (error instanceof BrowseError) return null;
     throw error;
   }
@@ -188,11 +197,12 @@ export async function fastRead(
   fetcher: Fetcher,
   options: FastOptions = {},
   htmlFallback = true,
-  probe: Probe = { tried: [], binary: null },
+  probe: Probe = { tried: [], binary: null, guard: null },
   resolve?: Resolver,
 ): Promise<FastResult | null> {
   const tried = probe.tried;
   const guard = hopGuard(url, resolve);
+  probe.guard = guard;
   tried.push("markdown");
   let first: Fetched | null = null;
   try {
@@ -203,7 +213,7 @@ export async function fastRead(
     }
     first = got[0] === 200 ? got : null;
   } catch (error) {
-    if (!(error instanceof BrowseError)) throw error;
+    if (refused(error) || !(error instanceof BrowseError)) throw error;
   }
   if (first && isMarkdown(first[1], first[2])) {
     return done({ content: first[2], method: "markdown", source: first[3], finalUrl: first[3], title: "", tried, contentType: first[1] || "text/markdown" }, options);
@@ -229,7 +239,7 @@ export async function fastRead(
       const target = urljoin(source, href);
       if (!sameDocument(target, final)) continue;
       const md = await quiet(fetcher, target, timeout, MARKDOWN_ACCEPT, guard);
-      if (md && md[2] && isMarkdown(md[1] || "text/markdown", md[2])) return done({ content: md[2], method: "llms_txt", source: md[3], finalUrl: final, title: "", tried, contentType: "text/markdown" }, options);
+      if (md && md[2] && listedMarkdown(md[1], md[2])) return done({ content: md[2], method: "llms_txt", source: md[3], finalUrl: final, title: "", tried, contentType: "text/markdown" }, options);
     }
     if (atRoot(final)) {
       const content = options.outline ? body : llmsLinks(body, source, options.filter ?? null).join("\n") || body;
@@ -244,12 +254,12 @@ export async function fastRead(
     const entry = ardEntryFor(doc, final);
     if (entry?.markdown) {
       const md = await quiet(fetcher, entry.markdown, timeout, MARKDOWN_ACCEPT, guard);
-      if (md && md[2] && isMarkdown(md[1] || "text/markdown", md[2])) return done({ content: md[2], method: "ard", source: md[3], finalUrl: final, title: entry.title, tried, contentType: "text/markdown" }, options);
+      if (md && md[2] && listedMarkdown(md[1], md[2])) return done({ content: md[2], method: "ard", source: md[3], finalUrl: final, title: entry.title, tried, contentType: "text/markdown" }, options);
     }
     if (atRoot(final) && (doc.entries.length > 0 || doc.description)) {
       if (doc.markdown) {
         const md = await quiet(fetcher, doc.markdown, timeout, MARKDOWN_ACCEPT, guard);
-        if (md && md[2] && isMarkdown(md[1] || "text/markdown", md[2])) return done({ content: md[2], method: "ard", source: md[3], finalUrl: final, title: doc.name, tried, contentType: "text/markdown" }, options);
+        if (md && md[2] && listedMarkdown(md[1], md[2])) return done({ content: md[2], method: "ard", source: md[3], finalUrl: final, title: doc.name, tried, contentType: "text/markdown" }, options);
       }
       return done({ content: ardIndex(doc), method: "ard", source: ard?.[3] ?? ardUrl, finalUrl: final, title: doc.name, tried, contentType: "text/markdown" }, options);
     }

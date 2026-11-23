@@ -280,12 +280,14 @@ export const COLLECT = `async (only) => {
 
 export const PROBE = `(async () => ({ tools: (await (${COLLECT})(null)).map((item) => item.entry) }))()`;
 
-export function invokeExpression(name: string, args: unknown, source: string, fingerprint: string): string {
-  return `(async (name, args, source, fingerprint) => {
+export const LIST_BOUND = "function () { return { tools: this.map((item) => item.entry) }; }";
+
+export const INVOKE_BOUND = `async function (name, args, fingerprint) {
   const plain = (value) => { try { return value === undefined ? null : JSON.parse(JSON.stringify(value)); } catch { return String(value); } };
-  const found = (await (${COLLECT})(source)).find((item) => item.entry.name === name);
-  if (!found) return { missing: true };
-  if (found.entry.fingerprint !== fingerprint) return { changed: true };
-  return { via: source, result: plain(await found.call(name, args)) };
-})(${JSON.stringify(name)}, ${JSON.stringify(args ?? {})}, ${JSON.stringify(source)}, ${JSON.stringify(fingerprint)})`;
-}
+  const approved = this.find((item) => item.entry.name === name);
+  if (!approved) return { missing: true };
+  if (approved.entry.fingerprint !== fingerprint) return { changed: true };
+  const fresh = (await (${COLLECT})(approved.entry.source)).find((item) => item.entry.name === name);
+  if (!fresh || fresh.entry.fingerprint !== fingerprint) return { changed: true };
+  return { via: approved.entry.source, result: plain(await approved.call(name, args)) };
+}`;
