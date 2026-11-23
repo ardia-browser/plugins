@@ -192,7 +192,8 @@
                 "optional": true
               }
             },
-            "timeoutMs": 60000,
+            "timeoutMs": 300000,
+            "outputLimitBytes": 167772160,
             "output": {
               "mode": "json",
               "items": "$"
