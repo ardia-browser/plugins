@@ -55,6 +55,16 @@ function runnerEnv(): Record<string, string> {
   return env;
 }
 
+function payloadSize(event: RunnerEvent): number {
+  const fields = event as Record<string, unknown>;
+  let size = 0;
+  for (const key of ["request", "line", "value", "result", "name"]) {
+    const value = fields[key];
+    if (typeof value === "string") size += value.length;
+  }
+  return size;
+}
+
 export class Runner {
   readonly child: Subprocess;
   readonly ready: Promise<number>;
@@ -98,14 +108,15 @@ export class Runner {
       this.confined = null;
       return;
     }
-    if (given.type === "request" && typeof given.request === "string") {
-      this.queuedBytes += given.request.length;
-      if (this.queuedBytes > QUEUED_BYTES) {
-        this.overBudget = true;
-        this.kill();
-        return;
-      }
+    const size = payloadSize(given);
+    if (this.queuedBytes + size > QUEUED_BYTES) {
+      this.overBudget = true;
+      this.events.splice(0, this.events.length);
+      this.queuedBytes = 0;
+      this.kill();
+      return;
     }
+    this.queuedBytes += size;
     this.push(given);
   }
 
@@ -144,7 +155,7 @@ export class Runner {
     for (;;) {
       const event = this.events.shift();
       if (event !== undefined) {
-        if (event.type === "request" && typeof event.request === "string") this.queuedBytes -= event.request.length;
+        this.queuedBytes = Math.max(this.queuedBytes - payloadSize(event), 0);
         return event;
       }
       if (this.exit !== null) return this.exit;

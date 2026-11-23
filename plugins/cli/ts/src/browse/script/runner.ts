@@ -8,6 +8,9 @@ export const PRELUDE_URL = "ardia-script-api.js";
 export const RUNNER_LIFETIME_MS = 15 * 60 * 1000;
 export const LOG_LIMIT = 1024 * 1024;
 export const ARGS_LIMIT = 16 * 1024 * 1024;
+export const LOG_LINE_LIMIT = 64 * 1024;
+export const RESULT_LIMIT = 64 * 1024 * 1024;
+export const STATE_LIMIT = 16 * 1024 * 1024;
 
 export type StartMessage = { type: "start"; source: string; state: string; readBatch: number; stateLimit: number };
 export type ReplyMessage = { type: "reply"; id: number; answer: string };
@@ -93,14 +96,18 @@ export function startRunner(link: RunnerLink): void {
       if (typeof kind !== "string" || typeof payload !== "string" || finished) return undefined;
       switch (kind) {
         case "request":
+          if (payload.length > ARGS_LIMIT + 64 * 1024) return "";
           link.post({ type: "request", request: payload });
           return "";
-        case "log":
+        case "log": {
           if (logged > LOG_LIMIT * 4) return "";
-          logged += payload.length;
-          link.post({ type: "log", line: payload });
+          const line = payload.length > LOG_LINE_LIMIT ? `${payload.slice(0, LOG_LINE_LIMIT)}… [${payload.length - LOG_LINE_LIMIT} more characters]` : payload;
+          logged += line.length;
+          link.post({ type: "log", line });
           return "";
+        }
         case "state":
+          if (payload.length > STATE_LIMIT) return "";
           link.post({ type: "state", value: payload });
           return "";
         case "missing":
@@ -136,7 +143,10 @@ export function startRunner(link: RunnerLink): void {
           finished = true;
           for (const timer of timers.values()) clearTimeout(timer);
           timers.clear();
-          link.post({ type: "done", result: payload });
+          link.post({
+            type: "done",
+            result: payload.length <= RESULT_LIMIT ? payload : JSON.stringify({ kind: "error", message: "the script's result is over 64 MB; return less, or keep it in `state`", name: "Error", line: null, code: null, command: null }),
+          });
           return "";
         default:
           return undefined;

@@ -930,8 +930,10 @@ Each `page.*` call is a browse command on the session, served straight from the 
 CDP hop per call). Read-only calls (`get`, `is`, `read`, `page.evaluate`, `page.$eval`, `page.$$eval`,
 `page.frames()`) run side by side, up to 8 at once, so `Promise.all` over them is concurrent; every other call waits
 for the calls before it and runs alone, in the order the script made them. Calls still queued when the script returns
-never run (the result says how many), and every call still running when a script fails, times out or is
-interrupted is cancelled and awaited before the command answers, so none outlives the session's lock.
+never run, and calls it didn't await that are still running when it ends are stopped (the result says how many of
+each); every call still running when a script ends, fails, times out or is interrupted is cancelled and its promise
+awaited before the command answers. A CDP reply that arrives later (a temporary tab created past its deadline) is
+still cleaned up when it lands, as for any command.
 `page.evaluate` counts as a read: an `evaluate` that changes the page should be awaited on its own, not inside
 `Promise.all`. A script has exactly the authority of the `ardia browse` commands it calls, no more: `screenshot` and
 `pdf` write the files it names and `read --http` fetches through the daemon, as they do from a shell. Actions made through `page` (`click`, `fill`, `type`, `press`, `select`,

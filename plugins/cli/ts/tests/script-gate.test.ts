@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Dropped, Gate } from "../src/browse/script/host.ts";
-import { evaluateExpression, frameFunction, selectorExpression, validEvaluate } from "../src/browse/script/page-calls.ts";
+import { ArgumentsTooDeep, evaluateExpression, frameFunction, literal, selectorExpression, validEvaluate } from "../src/browse/script/page-calls.ts";
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve = () => {};
@@ -128,6 +128,16 @@ describe("page calls a script makes", () => {
   test("arguments arrive as JSON, own __proto__ keys included", () => {
     const args = JSON.parse('[{"__proto__": {"x": 1}, "y": 2}]') as unknown[];
     expect(evaluateWith(evaluateExpression({ op: "evaluate", fn: "(o) => [Object.keys(o).sort(), o.y]", isFunction: true, args }), DOCUMENT)).toEqual([["__proto__", "y"], 2]);
+  });
+
+  test("arguments are literals, so the page's own JSON.parse never sees them", () => {
+    const expression = evaluateExpression({ op: "evaluate", fn: "(n) => n", isFunction: true, args: [7] });
+    expect(expression).not.toContain("JSON");
+    expect(new Function("JSON", `return (${expression});`)({ parse: () => [99] })).toBe(7);
+    expect(literal({ a: [1, "x", null, true], "": -0 })).toBe('{["a"]:[1,"x",null,true],[""]:-0}');
+    let deep: unknown = 1;
+    for (let i = 0; i < 600; i += 1) deep = [deep];
+    expect(() => literal(deep)).toThrow(ArgumentsTooDeep);
   });
 
   test("$eval hands over the element and fails clearly when nothing matches", () => {

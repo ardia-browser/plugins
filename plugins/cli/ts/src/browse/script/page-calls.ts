@@ -8,8 +8,28 @@ function argsOf(request: PageRequest): unknown[] {
   return Array.isArray(request["args"]) ? (request["args"] as unknown[]) : [];
 }
 
+export const MAX_ARGUMENT_DEPTH = 500;
+
+export class ArgumentsTooDeep extends Error {
+  constructor() {
+    super(`the arguments nest more than ${MAX_ARGUMENT_DEPTH} levels deep`);
+  }
+}
+
+export function literal(value: unknown, depth = 0): string {
+  if (depth > MAX_ARGUMENT_DEPTH) throw new ArgumentsTooDeep();
+  if (value === null || value === undefined) return "null";
+  if (typeof value === "number") return Number.isFinite(value) ? (Object.is(value, -0) ? "-0" : String(value)) : "null";
+  if (typeof value === "boolean" || typeof value === "string") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => literal(item, depth + 1)).join(",")}]`;
+  if (typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>).map(([key, item]) => `[${JSON.stringify(key)}]:${literal(item, depth + 1)}`).join(",")}}`;
+  }
+  return "null";
+}
+
 function jsonArgs(request: PageRequest): string {
-  return `JSON.parse(${JSON.stringify(JSON.stringify(argsOf(request)))})`;
+  return literal(argsOf(request));
 }
 
 function fnOf(request: PageRequest): string {

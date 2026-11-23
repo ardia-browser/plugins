@@ -18,7 +18,7 @@ import { add, count, flag } from "../metrics.ts";
 import { record } from "../state/records.ts";
 import type { State } from "../state/state.ts";
 import { Dropped, Gate, MEMORY_LIMIT, type Runner, type RunnerEvent, takeRunner, whenReady } from "./host.ts";
-import { evaluateExpression, frameFunction, framesAnswer, selectorExpression, validEvaluate } from "./page-calls.ts";
+import { ArgumentsTooDeep, evaluateExpression, frameFunction, framesAnswer, selectorExpression, validEvaluate } from "./page-calls.ts";
 import { renderJson } from "./render.ts";
 import { MAX_TIMEOUT, parseTimeout } from "./timeout.ts";
 import { EVAL_TIMEOUT } from "../commands/pagejs.ts";
@@ -228,6 +228,16 @@ async function answerCall(ctx: Ctx, argv: string[], index: number, light: boolea
 type Tracked = { argv: unknown; call: number | null; line: unknown; type: string };
 type Request = Record<string, unknown> & { id: number; op: string };
 
+function fatalError(error: unknown): boolean {
+  if (!(error instanceof Error) || error instanceof Dropped || error instanceof Cancelled) return false;
+  return error instanceof OutcomeUnknown || error instanceof ConnectionLost || !(error instanceof BrowseError);
+}
+
+function pageFailure(error: unknown, index: number): Answer {
+  if (fatalError(error) || !(error instanceof BrowseError)) throw error;
+  return { ok: false, error: error.text, code: error.code ?? null, call: index };
+}
+
 class ScriptRun {
   readonly gate = new Gate();
   readonly calls: unknown[][] = [];
@@ -264,9 +274,16 @@ class ScriptRun {
     try {
       return await work();
     } catch (error) {
-      if (error instanceof Error && !(error instanceof Dropped) && !(error instanceof Cancelled)) this.fail(error);
+      if (fatalError(error)) this.fail(error as Error);
       throw error;
     }
+  }
+
+  stopRunning(): number {
+    const cut = this.running.size;
+    this.gate.close();
+    if (cut > 0) this.stop.abort(new Cancelled());
+    return cut;
   }
 
   keep(line: string): void {
@@ -358,26 +375,26 @@ async function servePage(run: ScriptRun, request: Request): Promise<Answer> {
   try {
     return await run.gate.run(false, () => run.admitted(async () => {
       await run.settle("eval", []);
-      if (op === "frames") {
-        flag("script_frames_listed", true);
-        return { ok: true, text: "", data: await framesAnswer(await run.ctx.state.page()) };
-      }
-      const invalid = validEvaluate(request);
+      const invalid = op === "frames" ? null : validEvaluate(request);
       if (invalid !== null) return { ok: false, error: invalid, code: "usage", call: index };
-      if (frame !== null) {
-        flag("script_frame_eval", true);
-        const page = await run.ctx.state.page();
-        const [declaration, args] = frameFunction(request);
-        try {
-          return { ok: true, text: "", data: { result: jsonCopy(await page.call(declaration, args, { frame, read: false, timeout: EVAL_TIMEOUT })) } };
-        } catch (error) {
-          if (error instanceof OutcomeUnknown || error instanceof ConnectionLost || !(error instanceof BrowseError)) throw error;
-          return { ok: false, error: error.text, code: error.code ?? null, call: index };
+      try {
+        if (op === "frames") {
+          flag("script_frames_listed", true);
+          return { ok: true, text: "", data: await framesAnswer(await run.ctx.state.page()) };
         }
+        if (frame !== null) {
+          flag("script_frame_eval", true);
+          const page = await run.ctx.state.page();
+          const [declaration, args] = frameFunction(request);
+          return { ok: true, text: "", data: { result: jsonCopy(await page.call(declaration, args, { frame, read: false, timeout: EVAL_TIMEOUT })) } };
+        }
+        const expression = op === "evaluate" ? evaluateExpression(request) : selectorExpression(request);
+        const answer = await answerCall(run.ctx, ["eval", expression], index, false);
+        return answer.ok ? answer : { ...answer, call: index };
+      } catch (error) {
+        if (error instanceof ArgumentsTooDeep) return { ok: false, error: error.message, code: "usage", call: index };
+        return pageFailure(error, index);
       }
-      const expression = op === "evaluate" ? evaluateExpression(request) : selectorExpression(request);
-      const answer = await answerCall(run.ctx, ["eval", expression], index, false);
-      return answer.ok ? answer : { ...answer, call: index };
     }));
   } finally {
     run.done.push("eval");
@@ -451,9 +468,7 @@ async function drive(run: ScriptRun, source: string): Promise<Message> {
         run.fail(tooBusy(`The script made more than ${MAX_CALLS.toLocaleString("en-US")} calls; do less per run and keep results in \`state\``));
         continue;
       }
-      request["bytes"] = event.request.length;
-      run.inflightBytes += event.request.length;
-      if (run.inflightBytes > IN_FLIGHT_BYTES) {
+      if (run.inflightBytes + event.request.length > IN_FLIGHT_BYTES) {
         run.fail(tooBusy(`The script's waiting calls carried more than ${IN_FLIGHT_BYTES / 1024 / 1024} MB of arguments; send less at once`));
         continue;
       }
@@ -461,6 +476,8 @@ async function drive(run: ScriptRun, source: string): Promise<Message> {
         run.fail(tooBusy(`The script had more than ${MAX_PENDING.toLocaleString("en-US")} calls waiting at once; await them in smaller groups (Promise.all over a few dozen at a time)`));
         continue;
       }
+      request["bytes"] = event.request.length;
+      run.inflightBytes += event.request.length;
       const work = withSignal(signal, () => serve(run, request));
       run.running.add(work);
       void work.finally(() => run.running.delete(work));
@@ -474,16 +491,15 @@ async function drive(run: ScriptRun, source: string): Promise<Message> {
       const text = typeof event.result === "string" && event.result.length <= RESULT_LIMIT ? event.result : null;
       const result = text !== null && parseText(text) !== undefined ? (JSON.parse(text) as unknown) : null;
       const unawaited = run.gate.close();
-      await untilCancelled(Promise.allSettled([...run.running]));
+      const cut = run.stopRunning();
       if (run.error !== null) throw run.error;
       const message: Message =
         result !== null && typeof result === "object" && !Array.isArray(result)
           ? (result as Message)
           : { kind: "error", message: text === null ? "the script's result is over 64 MB; return less, or keep it in `state`" : "the script's result couldn't be read" };
-      return { ...message, unawaited, logs: run.logs, logsDropped: run.logsDropped, state: run.stateText };
+      return { ...message, unawaited, cut, logs: run.logs, logsDropped: run.logsDropped, state: run.stateText };
     } else if (event.type === "exit") {
-      run.gate.close();
-      await untilCancelled(Promise.allSettled([...run.running]));
+      run.stopRunning();
       if (run.error !== null) throw run.error;
       if (runner.overBudget) throw tooBusy("The script sent more than 128 MB of calls faster than they were served; send less at once");
       return { ...crashed(event, runner.overMemory), logs: run.logs, logsDropped: run.logsDropped, state: run.stateText };
@@ -612,6 +628,8 @@ export async function run(ctx: Ctx, source: string, seconds: number): Promise<Re
   const notes: string[] = [];
   const unawaited = Number(message["unawaited"]) || 0;
   if (unawaited) notes.push(`[${unawaited} command${unawaited !== 1 ? "s" : ""} the script didn't await never ran]`);
+  const cut = Number(message["cut"]) || 0;
+  if (cut) notes.push(`[${cut} command${cut !== 1 ? "s" : ""} the script didn't await ${cut !== 1 ? "were" : "was"} still running when it ended and ${cut !== 1 ? "were" : "was"} stopped]`);
   if (message["kind"] === "error") {
     const line = sourceLine(source, message["line"]);
     const failed = message["command"];

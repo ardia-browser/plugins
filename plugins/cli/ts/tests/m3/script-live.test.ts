@@ -34,10 +34,10 @@ function answers(): Promise<boolean> {
 
 type Ran = { status: number | null; out: string; err: string; ms: number };
 
-async function browse(args: string[], input?: string): Promise<Ran> {
+async function browse(args: string[], input?: string, session = "scripts"): Promise<Ran> {
   const env = { ...process.env, HOME: path.join(root, "home"), ARDIA_DATA_DIR: path.join(root, "data"), ARDIA_TELEMETRY: "off" };
   const started = performance.now();
-  const child = Bun.spawn([PROGRAM, "browse", "--port", String(PORT), "--session", "scripts", ...args], {
+  const child = Bun.spawn([PROGRAM, "browse", "--port", String(PORT), "--session", session, ...args], {
     env,
     cwd: root,
     stdin: input === undefined ? "ignore" : new Blob([input]),
@@ -146,6 +146,20 @@ describe.skipIf(!CHROME)("browse script against headless Chrome", () => {
     const done = await script("await page.locator('h4').first();");
     expect(done.status).toBe(1);
     expect(done.err).toContain("page.locator isn't part of ardia's script API");
+  });
+
+  test("a script that fails keeps its own error, even with a call it never awaited", async () => {
+    const failed = await script("sleep(60000);\nthrow new Error('first failure');", "--timeout", "10s");
+    expect(failed.status).toBe(1);
+    expect(failed.err).toContain("line 2: first failure");
+    expect(failed.err).not.toContain("timed out");
+    expect(failed.ms).toBeLessThan(8_000);
+  });
+
+  test("a page call without a tab fails in a way the script can catch", async () => {
+    const caught = await browse(["script", "--json"], "try { await page.frames(); return 'no error'; } catch (e) { return e.code; }", "no-tab-yet");
+    expect(caught.status).toBe(0);
+    expect(JSON.parse(caught.out).data.value).toBe("no_session_tab");
   });
 
   test("a busy loop is stopped at its timeout, keeps its state, and the session goes on", async () => {
