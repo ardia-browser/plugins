@@ -37,15 +37,15 @@ jobs:
           cli=true
           reason="a $EVENT run checks everything"
           if [ "$EVENT" = pull_request ]; then
-            changed=$(git diff --no-renames --name-only HEAD^1 HEAD)
+            git diff --no-renames --name-only -z HEAD^1 HEAD > "$RUNNER_TEMP/changed"
             cli=false
             reason="only docs and the bench changed"
-            while IFS= read -r path; do
+            while IFS= read -r -d '' path; do
               case $path in
                 plugins/cli/README.md|plugins/cli/docs/*|plugins/cli/bench/*) ;;
-                plugins/cli/*|.github/workflows/cli.yml|.github/release/check-build.sh) cli=true; reason="$path changed"; break ;;
+                *) cli=true; reason="$path changed"; break ;;
               esac
-            done <<<"$changed"
+            done < "$RUNNER_TEMP/changed"
           fi
           main=false
           [ "$cli" = false ] || [ -z "$(git ls-tree --name-only HEAD plugins/cli/main/package.json)" ] || main=true
@@ -248,11 +248,28 @@ jobs:
     timeout-minutes: 5
     steps:
       - env:
-          RESULTS: ${{ join(needs.*.result, ' ') }}
           ROUTE: ${{ needs.route.result }}
+          CLI: ${{ needs.route.outputs.cli }}
+          MAIN: ${{ needs.route.outputs.main }}
+          TYPESCRIPT: ${{ needs.typescript.result }}
+          PYTHON_PARITY: ${{ needs.python-parity.result }}
+          PYTHON: ${{ needs.python.result }}
+          SCHEMA: ${{ needs.schema.result }}
+          MAIN_RESULT: ${{ needs.main.result }}
         run: |
-          echo "results: $RESULTS"
-          [ "$ROUTE" = success ] || { echo "::error::the route job didn't finish, so no check ran"; exit 1; }
-          for result in $RESULTS; do
-            case $result in success|skipped) ;; *) echo "::error::a check ended $result"; exit 1 ;; esac
-          done
+          set -euo pipefail
+          [ "$ROUTE" = success ] || { echo "::error::the route job ended $ROUTE, so no check ran"; exit 1; }
+          expect() {
+            local job=$1 should_run=$2 result=$3
+            echo "$job: $result (should run: $should_run)"
+            if [ "$should_run" = true ]; then
+              [ "$result" = success ] || { echo "::error::$job should have passed and ended $result"; exit 1; }
+            else
+              [ "$result" = skipped ] || { echo "::error::$job should have been skipped and ended $result"; exit 1; }
+            fi
+          }
+          expect typescript "$CLI" "$TYPESCRIPT"
+          expect python-parity "$CLI" "$PYTHON_PARITY"
+          expect python "$CLI" "$PYTHON"
+          expect schema "$CLI" "$SCHEMA"
+          expect main "$MAIN" "$MAIN_RESULT"
