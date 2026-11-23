@@ -2,6 +2,7 @@ import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import type { ServerWebSocket } from "bun";
 import { type Entry, parse, readTranscript, redactedText } from "./canon.ts";
 import { type Elastic, ReplayConn } from "./replay.ts";
+import { ELASTIC } from "./harness/paths.ts";
 
 type Fault = { at: number; kind: "kill" | "stop" | "close" | "drop" | "error" | "hold"; seconds?: number; code?: number; method?: string };
 type Link = { conn: number; upstream: WebSocket | null; queue: string[]; replay: ReplayConn | null; dropId: number | null };
@@ -36,7 +37,7 @@ const recording = (replayPath ? readTranscript(replayPath) : []).map((entry) =>
 );
 const recordedScratch = recording.find((entry) => entry.k === "meta")?.scratch;
 const recordedVersion = recording.find((entry) => entry.k === "version")?.body;
-const elasticRules = JSON.parse(readFileSync(new URL("../../../tests/m3/elastic.json", import.meta.url), "utf8")) as { lookahead: number; methods: string[]; probes: string[] };
+const elasticRules = JSON.parse(readFileSync(ELASTIC, "utf8")) as { lookahead: number; methods: string[]; probes: string[] };
 const elastic: Elastic = {
   lookahead: elasticRules.lookahead,
   repeats(form) {
