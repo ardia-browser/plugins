@@ -1,0 +1,23 @@
+{
+ "source": "tests/test_browse_read.py ReadNavigationInChrome.test_nav_prints_every_menu",
+ "window": [
+  1200,
+  800
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/nav-megamenu.html"
+   ],
+   "session": "nav"
+  },
+  {
+   "argv": [
+    "read",
+    "--nav"
+   ],
+   "session": "nav"
+  }
+ ]
+}
