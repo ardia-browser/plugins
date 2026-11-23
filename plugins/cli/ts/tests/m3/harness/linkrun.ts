@@ -10,7 +10,7 @@ import { load as loadTranscript, Subs, transcript } from "./normalize.ts";
 import { LINK_DRIVER, LINK_SCENARIOS, LINK_TRANSCRIPTS, TAP } from "./paths.ts";
 import { isRecord, type Json, type JsonRecord, pyLoads } from "./pyvalues.ts";
 import { tapCall } from "./side.ts";
-import { gzipped, linkResultText, publish, type Outcome, type RecordOptions, type Source } from "./runner.ts";
+import { gzipped, linkResultText, messageOf, publish, type Outcome, type RecordOptions, type Source } from "./runner.ts";
 
 const DRIVER_TIMEOUT_MS = 600_000;
 const TAP_START_MS = 30_000;
@@ -177,9 +177,11 @@ export class LinkHarness {
   }
 
   async live(scenario: LinkScenario): Promise<Outcome> {
-    const runs = await Promise.all([this.side(scenario, "live-A", null), this.side(scenario, "live-B", null)]);
-    const found = [...driverFailures("A", runs[0]), ...driverFailures("B", runs[1])];
-    if (found.length === 0) {
+    const settled = await Promise.allSettled([this.side(scenario, "live-A", null), this.side(scenario, "live-B", null)]);
+    const found = settled.flatMap((side, index) => (side.status === "rejected" ? [`side ${"AB"[index]} failed: ${messageOf(side.reason)}`]
+      : driverFailures("AB"[index] as string, side.value)));
+    const runs = settled.map((side) => (side.status === "fulfilled" ? side.value : null));
+    if (found.length === 0 && runs[0] && runs[1]) {
       found.push(...compared(normalizedLink(runs[0], runs[0].transcript, scenario), normalizedLink(runs[1], runs[1].transcript, scenario), LIVE_PARTS));
     }
     if (!this.keep) rmSync(path.join(this.scratch, scenario.name), { recursive: true, force: true });
@@ -192,7 +194,13 @@ export class LinkHarness {
     const tries = Math.max(1, options.tries ?? DEFAULT_TRIES);
     let last: string[] = [];
     for (let attempt = 1; attempt <= tries; attempt += 1) {
-      const run = await this.side(scenario, "record", null);
+      let run: LinkRun;
+      try {
+        run = await this.side(scenario, "record", null);
+      } catch (error) {
+        last = [`attempt ${attempt}: the recording run failed: ${messageOf(error)}`];
+        continue;
+      }
       last = driverFailures("ts", run);
       if (last.length > 0) continue;
       const candidates = path.join(this.scratch, name, "candidate");
@@ -202,7 +210,8 @@ export class LinkHarness {
       writeFileSync(source.transcript, gzipped(readFileSync(run.transcript)));
       writeFileSync(source.result, gzipped(linkResultText(run.outcomeLine, run.subs)));
       for (let round = 1; round <= verify && last.length === 0; round += 1) {
-        const replayed = await this.replayFrom(scenario, source, `verify-${round}`);
+        const replayed = await this.replayFrom(scenario, source, `verify-${round}`).catch((error: unknown): Outcome =>
+          ({ name, mode: "replay ts", ok: false, differences: [`the replay failed: ${messageOf(error)}`] }));
         if (!replayed.ok) last = [`attempt ${attempt}, replay ${round} of ${verify}:`, ...(replayed.differences ?? []).slice(0, 10)];
       }
       if (last.length > 0) continue;

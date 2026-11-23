@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { gunzipSync } from "node:zlib";
@@ -195,7 +195,29 @@ describe("a TypeScript recording replays literally", () => {
 });
 
 describe("publishing a recording", () => {
-  test("a failure on the second file puts the first back and leaves nothing staged", () => {
+  test("a failed second rename puts the first file back and leaves nothing staged", () => {
+    const folder = mkdtempSync(path.join(tmpdir(), "ardia-m3-publish-"));
+    try {
+      const [a, b, newA, newB] = ["a.jsonl.gz", "b.result.json.gz", "new-a", "new-b"].map((name) => path.join(folder, name)) as [string, string, string, string];
+      writeFileSync(a, "old a");
+      writeFileSync(b, "old b");
+      writeFileSync(newA, "new a");
+      writeFileSync(newB, "new b");
+      let renames = 0;
+      const failingSecond = (from: string, to: string) => {
+        renames += 1;
+        if (renames === 2) throw new Error("injected rename failure");
+        renameSync(from, to);
+      };
+      expect(() => publish([[newA, a], [newB, b]], failingSecond)).toThrow("injected rename failure");
+      expect([readFileSync(a, "utf8"), readFileSync(b, "utf8")]).toEqual(["old a", "old b"]);
+      expect(readdirSync(folder).sort()).toEqual(["a.jsonl.gz", "b.result.json.gz", "new-a", "new-b"]);
+    } finally {
+      rmSync(folder, { recursive: true, force: true });
+    }
+  });
+
+  test("staging that fails leaves the old files and nothing else", () => {
     const folder = mkdtempSync(path.join(tmpdir(), "ardia-m3-publish-"));
     try {
       const [a, b, newA, newB] = ["a.jsonl.gz", "b.result.json.gz", "new-a", "new-b"].map((name) => path.join(folder, name)) as [string, string, string, string];
@@ -243,13 +265,63 @@ function copiedRoot(): string {
 }
 
 function harness(root: string, ...argv: string[]): { status: number | null; out: string } {
+  return harnessWith({}, root, ...argv);
+}
+
+function harnessWith(env: Record<string, string>, root: string, ...argv: string[]): { status: number | null; out: string } {
   const done = spawnSync(process.execPath, [path.join(HARNESS, "main.ts"), ...argv], {
-    env: { ...process.env, ARDIA_M3_DATA_ROOT: root, ARDIA_M3_PORT_BASE: RECORD_PORT_BASE },
+    env: { ...process.env, ARDIA_M3_DATA_ROOT: root, ARDIA_M3_PORT_BASE: RECORD_PORT_BASE, ...env },
     encoding: "utf8",
     timeout: RECORD_MS - 10_000,
   });
   return { status: done.status, out: `${done.stdout}${done.stderr}` };
 }
+
+describe("a browser that can't start", () => {
+  function broken(): { folder: string; chrome: string } {
+    const folder = mkdtempSync(path.join(tmpdir(), "ardia-m3-nochrome-"));
+    const chrome = path.join(folder, "chrome-headless-shell");
+    writeFileSync(chrome, "not a program");
+    chmodSync(chrome, 0o644);
+    return { folder, chrome };
+  }
+
+  test("is a refused start, not an error thrown somewhere else", async () => {
+    const { folder, chrome } = broken();
+    const saved = process.env[CHROME_ENV];
+    process.env[CHROME_ENV] = chrome;
+    try {
+      await expect(launchChrome(portBase() + BLOCK + 17, path.join(folder, "profile"), [800, 600])).rejects.toThrow(`${CHROME_ENV} couldn't be started`);
+    } finally {
+      if (saved === undefined) delete process.env[CHROME_ENV];
+      else process.env[CHROME_ENV] = saved;
+      rmSync(folder, { recursive: true, force: true });
+    }
+  });
+
+  test("makes record try again up to --tries and report it, and live report both sides", () => {
+    const { folder, chrome } = broken();
+    const root = copiedRoot();
+    try {
+      const recorded = harnessWith({ [CHROME_ENV]: chrome }, root, "record", "daemon/close_reopen", "--tries", "2");
+      expect(recorded.status, recorded.out).toBe(1);
+      expect(recorded.out).toContain("none of 2 attempt(s)");
+      expect(recorded.out).toContain("attempt 2: the recording run failed");
+      expect(existsSync(path.join(root, "transcripts", "daemon", "close_reopen.jsonl.gz"))).toBe(false);
+      const twin = harnessWith({ [CHROME_ENV]: chrome }, root, "live", "daemon/close_reopen");
+      expect(twin.status, twin.out).toBe(1);
+      expect(twin.out).toContain("side A failed");
+      expect(twin.out).toContain("side B failed");
+      const links = harnessWith({ [CHROME_ENV]: chrome }, root, "link-live", "round_trips");
+      expect(links.status, links.out).toBe(1);
+      expect(links.out).toContain("side A failed");
+      expect(links.out).toContain("side B failed");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+      rmSync(folder, { recursive: true, force: true });
+    }
+  }, 120_000);
+});
 
 describe.skipIf(!live)("record and live against headless Chromium", () => {
   test("a recording made from TypeScript replays, says who made it, and live agrees with itself", () => {

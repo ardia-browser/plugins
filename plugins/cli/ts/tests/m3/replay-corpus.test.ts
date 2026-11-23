@@ -13,7 +13,7 @@ import { PENDING } from "./harness/pending.ts";
 import { recordedFixture, type Scenario } from "./harness/side.ts";
 
 const REPLAY_MS = 900_000;
-const MINIMUM_CORPUS = 82;
+const MINIMUM_CORPUS = 81;
 const MINIMUM_LINK = 4;
 const MINIMUM_ANSWERS = 50;
 const RETRIES = 2;

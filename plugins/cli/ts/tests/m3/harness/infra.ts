@@ -318,8 +318,13 @@ export async function launchChrome(port: number, profile: string, window: [numbe
   } finally {
     closeSync(log);
   }
+  let failed: Error | null = null;
+  chrome.once("error", (error) => {
+    failed = error;
+  });
   const deadline = performance.now() + CHROME_START_MS;
   while (performance.now() < deadline) {
+    if (failed !== null) throw new Error(`${CHROME_ENV} couldn't be started: ${(failed as Error).message}`);
     if (chrome.exitCode !== null || chrome.signalCode !== null) break;
     if (await ours(port, profile)) return chrome;
     await sleep(100);

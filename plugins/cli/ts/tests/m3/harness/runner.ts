@@ -69,6 +69,10 @@ export function readExpectation(name: string, file = expectation(name)): JsonRec
   return raw;
 }
 
+export function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export function sourceOf(name: string): Source {
   return { transcript: recording(name), result: expectation(name) };
 }
@@ -209,7 +213,10 @@ export class Harness {
   }
 
   async live(scenario: Scenario, a = "ts", b = "ts"): Promise<Outcome> {
-    const [first, second] = await Promise.all([this.side(scenario, "live-A", a, null), this.side(scenario, "live-B", b, null)]);
+    const settled = await Promise.allSettled([this.side(scenario, "live-A", a, null), this.side(scenario, "live-B", b, null)]);
+    const broken = settled.flatMap((side, index) => (side.status === "rejected" ? [`side ${"AB"[index]} failed: ${messageOf(side.reason)}`] : []));
+    if (broken.length > 0) return { name: scenario.name, mode: `live ${a}/${b}`, ok: false, differences: broken };
+    const [first, second] = settled.map((side) => (side as PromiseFulfilledResult<ReplayRun>).value) as [ReplayRun, ReplayRun];
     const unstable = scenario.unstable_steps?.steps ?? null;
     const differences = compared(shapedOf(first, scenario, unstable) as unknown as Record<string, unknown>, shapedOf(second, scenario, unstable) as unknown as Record<string, unknown>, LIVE);
     differences.push(...checkedProtocol(first, "A"), ...checkedProtocol(second, "B"));
@@ -224,7 +231,13 @@ export class Harness {
     const candidates = path.join(this.scratch, name.replaceAll("/", "__"), "candidate");
     let last: string[] = [];
     for (let attempt = 1; attempt <= tries; attempt += 1) {
-      const result = await this.side(scenario, "record", "ts", null);
+      let result: ReplayRun;
+      try {
+        result = await this.side(scenario, "record", "ts", null);
+      } catch (error) {
+        last = [`attempt ${attempt}: the recording run failed: ${messageOf(error)}`];
+        continue;
+      }
       const failed = result.steps.filter((step) => String(step.err ?? "").includes("[harness: the step timed out]"));
       if (failed.length > 0) {
         last = [`attempt ${attempt}: a step timed out while recording`];
@@ -237,7 +250,8 @@ export class Harness {
       writeFileSync(source.result, gzipped(recordedResultText(result)));
       last = [];
       for (let round = 1; round <= verify && last.length === 0; round += 1) {
-        const replayed = await this.replayFrom(scenario, source, "ts", `verify-${round}`);
+        const replayed = await this.replayFrom(scenario, source, "ts", `verify-${round}`).catch((error: unknown): Outcome =>
+          ({ name, mode: "replay ts", ok: false, differences: [`the replay failed: ${messageOf(error)}`] }));
         if (!replayed.ok) last = [`attempt ${attempt}, replay ${round} of ${verify}:`, ...(replayed.differences ?? []).slice(0, 10)];
       }
       if (last.length > 0) continue;
@@ -286,7 +300,7 @@ function locked(lock: string): void {
   }
 }
 
-export function publish(pairs: [string, string][]): void {
+export function publish(pairs: [string, string][], rename: (from: string, to: string) => void = renameSync): void {
   const first = pairs[0];
   if (first === undefined) return;
   mkdirSync(path.dirname(first[1]), { recursive: true });
@@ -305,7 +319,7 @@ export function publish(pairs: [string, string][]): void {
     }
     try {
       for (const entry of staged) {
-        renameSync(entry[0], entry[1]);
+        rename(entry[0], entry[1]);
         done.push(entry);
       }
     } catch (error) {

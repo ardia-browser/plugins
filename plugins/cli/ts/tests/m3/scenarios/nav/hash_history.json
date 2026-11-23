@@ -1,4 +1,5 @@
 {
+ "live_only": "on a slower runner the TypeScript daemon's 0.75 s frame-tree cache (plugins#92) runs out sooner, so after `back` it sends one Page.getFrameTree more than the recording has; replay matches it to the recording's later tree (taken after `forward`, at #/people/4), and the next `get url`, which reads the tracked URL, reports that. A real browser answers with the current tree, so the daemon is right; replay can't yet tell an extra probe from one it reached early",
  "steps": [
   {"argv": ["open", "{fixture}/hashapp.html", "--no-changes"], "session": "hash"},
   {"argv": ["wait", "--text", "Directory"], "session": "hash"},
