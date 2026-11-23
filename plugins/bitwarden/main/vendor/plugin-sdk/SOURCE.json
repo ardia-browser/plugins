@@ -1,7 +1,7 @@
 {
   "repository": "https://github.com/ardia-browser/ardia",
   "path": "packages/plugin-sdk/src",
-  "commit": "9b2797350d4fa2d9db8b055b720e962fb1fe5553",
+  "commit": "395922f49f3620a2a7bb63283dbda70544997280",
   "sha256": {
     "api.ts": "8178d054adec1dd75a60f06800d6b6260167ff746afeb3f5780f866019a22f8e",
     "componentProps.ts": "aceaf3b68a6e950a959bb4758c4cb4cb87fdf5053a6f2b0f3762d1f8cbd66604",
@@ -41,6 +41,6 @@
     "testing.ts": "9dfa634c9eefcc75017d43cc744e671f94d742740c848ec1071fe03f581545cc",
     "totp.ts": "d3025cd24865305f194949b53bf6fb32e5d965a249cdc34efa85e3f3e2236066",
     "types.ts": "1d2c11be2e1b86e9ab62abf232bac299d5b90204bca085ed5123e79ac2c9d872",
-    "verbLaunch.ts": "59bdee9b30c9367db46084a6f1ef625fec2d1b3dc5d0cb726b2bd5f8a4c3c54d"
+    "verbLaunch.ts": "baf4361d123c95cc87bb8f05d9d11685aa0bc803c17358b4142a6399c5b9a1ee"
   }
 }
