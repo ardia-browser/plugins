@@ -29,7 +29,7 @@ import { dispatch, hooks } from "../commands/all.ts";
 import { Ctx } from "../commands/ctx.ts";
 import { State } from "../state/state.ts";
 import { appCall, appTabMap } from "../state/apptabs.ts";
-import { ACTIVE_FOR, RENEW_EVERY, TabHolds } from "./holds.ts";
+import { RENEW_EVERY, recentlyUsed, TabHolds } from "./holds.ts";
 import { reportException } from "../../telemetry.ts";
 import { buildStamp, cliVersion } from "../../version.ts";
 
@@ -77,7 +77,8 @@ export class Daemon {
   pending = 0;
   last = monotonic();
   stopping = false;
-  private readonly holds = new TabHolds((method, params) => appCall(this.state, method, params));
+  private holdsOf: TabHolds | null = null;
+  private readonly usedAt = new Map<string, number>();
   private mappedAt = Number.NEGATIVE_INFINITY;
   closing = 0;
   running: Running | null = null;
@@ -321,7 +322,7 @@ export class Daemon {
   }
 
   private async cleanupInner(): Promise<void> {
-    await this.holds.releaseAll();
+    await this.holds.close();
     await temptabs.drain(this.state);
     if (this.state.connected) {
       for (const page of [...this.state.pages.values()]) if (page.sessionId && page.input.releaseAll) await page.input.releaseAll();
@@ -372,18 +373,26 @@ export class Daemon {
     await this.renewHolds();
   }
 
+  private get holds(): TabHolds {
+    this.holdsOf ??= new TabHolds(this.key, (method, params) => appCall(this.state, method, params));
+    return this.holdsOf;
+  }
+
   private async renewHolds(): Promise<void> {
+    if (this.stopping) return;
     const now = monotonic();
-    const active = !this.stopping && (this.pending > 0 || now - this.last < ACTIVE_FOR);
     const current = this.state.current;
-    if (active && current !== null && !this.state.appTabs.has(current) && this.state.connected && now - this.mappedAt >= RENEW_EVERY) {
+    if (current !== null) this.usedAt.set(current, this.pending > 0 ? now : Math.max(this.usedAt.get(current) ?? Number.NEGATIVE_INFINITY, this.last));
+    const recent = recentlyUsed(this.usedAt, now);
+    for (const target of this.usedAt.keys()) if (!recent.includes(target)) this.usedAt.delete(target);
+    if (current !== null && recent.includes(current) && !this.state.appTabs.has(current) && this.state.connected && now - this.mappedAt >= RENEW_EVERY) {
       this.mappedAt = now;
       await appTabMap(this.state).catch(() => undefined);
     }
-    const targets = new Set([...(current !== null ? [current] : []), ...this.state.pages.keys()]);
-    const wanted = [...new Set([...targets].flatMap((target) => this.state.appTabs.get(target) ?? []))];
-    await this.holds.tick(wanted, now, active);
+    const wanted = [...new Set(recent.flatMap((target) => this.state.appTabs.get(target) ?? []))];
+    await this.holds.tick(wanted, now);
   }
+
 
   async handle(socket: net.Socket): Promise<void> {
     const fd = socketFd(socket);
