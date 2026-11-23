@@ -11,7 +11,7 @@ const USAGE = `The browse daemon's replay harness in Bun (docs/m3-harness.md), n
 
 Scenarios are names under the data root's scenarios/ (globs allowed). The client is the TypeScript CLI from source
 with a seeded daemon spawn; the daemon is ARDIA_M3_TS_PROGRAM (default ts/dist/ardia-ts). Ports come from
-ARDIA_M3_PORT_BASE (a block of 20, default 9400).
+ARDIA_M3_PORT_BASE (a block of 20, default 9600).
 `;
 
 function report(results: Outcome[], asJson: boolean): number {

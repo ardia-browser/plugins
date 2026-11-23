@@ -4,7 +4,7 @@ import net from "node:net";
 import path from "node:path";
 import { FIXTURES } from "./paths.ts";
 
-export const DEFAULT_BASE = 9400;
+export const DEFAULT_BASE = 9600;
 export const BLOCK = 20;
 export const RECORDED_FIXTURE = DEFAULT_BASE + BLOCK - 1;
 const PROBE_MS = 200;

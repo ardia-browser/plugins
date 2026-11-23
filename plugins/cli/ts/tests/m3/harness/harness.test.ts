@@ -34,6 +34,19 @@ function scratch(): string {
 }
 
 describe("normalize", () => {
+  test("live sets leave out the probes the TS daemon caches, and replay still sees them", () => {
+    const visibility = "() => document.visibilityState === 'hidden'";
+    const found = shaped([["mark", 0], ["out", message({ id: 1, method: "Page.getFrameTree", params: {} })], ["in", message({ id: 1, result: {} })],
+      ["out", message({ id: 2, method: "Runtime.callFunctionOn", params: { functionDeclaration: visibility } })], ["in", message({ id: 2, result: {} })],
+      ["out", message({ id: 3, method: "Page.navigate", params: { url: "about:blank" } })], ["in", message({ id: 3, result: {} })]]);
+    const sets = (found["request_sets"] as Record<string, Record<string, string[]>>)["0"] ?? {};
+    expect(Object.values(sets).flat().some((form) => form.includes("Page.getFrameTree") || form.includes("visibilityState"))).toBe(false);
+    expect(Object.values(sets).flat().some((form) => form.includes("Page.navigate"))).toBe(true);
+    expect(Object.values(requestsOf(found)["0"] ?? {}).flat(2).filter((form) => form.includes("Page.getFrameTree") || form.includes("Runtime.callFunctionOn")).length).toBe(2);
+    expect((found["sources"] as Record<string, string[]>)["0"] ?? []).toEqual([]);
+    expect(RULES["cached-probes"]).toBeDefined();
+  });
+
   test("browser ids become placeholders by first appearance", () => {
     const a = shaped([["mark", 0], ["out", message({ id: 1, method: "Target.createTarget", params: { url: "about:blank" } })], ["in", message({ id: 1, result: { targetId: "AAAA1111" } })],
       ["out", message({ id: 2, method: "Target.attachToTarget", params: { targetId: "AAAA1111" } })]]);
@@ -188,7 +201,7 @@ describe("port blocks", () => {
     process.env["ARDIA_M3_PORT_BASE"] = "9440";
     expect(portRange()).toEqual([9440, 9459]);
     delete process.env["ARDIA_M3_PORT_BASE"];
-    expect(portRange()).toEqual([9400, 9419]);
+    expect(portRange()).toEqual([9600, 9619]);
     for (const bad of ["94x0", "80", "65530"]) {
       process.env["ARDIA_M3_PORT_BASE"] = bad;
       expect(() => portBase()).toThrow(PortsBusy);

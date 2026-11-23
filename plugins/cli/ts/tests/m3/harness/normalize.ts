@@ -11,6 +11,11 @@ export const INT_IDS: Record<string, string> = { nodeId: "node", parentNodeId: "
   executionContextId: "context", contextId: "context" };
 const SOURCE_KEYS = ["expression", "functionDeclaration", "source"];
 const READY_PROBE = "() => document.readyState";
+const VISIBILITY_PROBE = "() => document.visibilityState === 'hidden'";
+
+function cachedProbe(message: Record<string, unknown>): boolean {
+  return message["method"] === "Page.getFrameTree" || ((message["params"] ?? {}) as Record<string, unknown>)["functionDeclaration"] === VISIBILITY_PROBE;
+}
 const KEY_TEXT = "[0-9a-f]{24}";
 const KEY = new RegExp(`\\b${KEY_TEXT}\\b`, "g");
 const WHOLE_KEY = new RegExp(`^${KEY_TEXT}$`);
@@ -41,6 +46,7 @@ export const RULES: Record<string, string> = {
   "request-rows": "the `[<renderer pid>.<n>]` request id at the start of a `network requests` row becomes `[<REQUEST>]`; Chromium numbers subresource requests by its renderer's process id, which differs between any two browsers",
   "live-sets": "live mode compares each step's requests as a set of distinct forms; order, counts and concurrency are replay's job, because Chromium's load timing decides how often the daemon polls",
   "ready-probe": "live mode ignores the `() => document.readyState` probe, which the daemon sends only when the load event hasn't arrived yet",
+  "cached-probes": "live mode ignores `Page.getFrameTree` and the `document.visibilityState` probe (its request and its source hash), which the TS daemon skips when it read them in the last 0.75 s and 0.25 s (plugins#92), so two runs differ only by timing",
   "replay-order": "replay checks order in the tap: a request matches the recording within `lookahead` concurrency groups (elastic.json), so tasks that interleave by timing don't fail",
   "replay-repeats": "replay lets the read-only probes listed in elastic.json repeat or be skipped, since their count follows the daemon's sleeps",
   "unstable-steps": "live mode compares only exit and stderr of the steps a scenario lists in `unstable_steps`, and none of their requests, with the reason in the scenario",
@@ -185,8 +191,10 @@ function parsed(text: string | undefined): Message | null {
 export function transcript(entries: Entry[], subs: Subs, rewrite: Rewrite | null = null): { shaped: Pick<Shaped, "requests" | "request_sets" | "sources">; ids: Ids } {
   const ids = new Ids();
   let local = new Ids();
+  let setLocal = new Ids();
   let step = "setup";
   const steps = new Map<string, Map<string, string[][]>>();
+  const setSteps = new Map<string, Map<string, Set<string>>>();
   const openBySession = new Map<string, Set<unknown>>();
   const sessionOf = new Map<string, string>();
   const sources = new Map<string, Set<string>>();
@@ -196,6 +204,7 @@ export function transcript(entries: Entry[], subs: Subs, rewrite: Rewrite | null
     if (kind === "mark") {
       step = String(entry.step === undefined ? "None" : entry.step);
       local = new Ids();
+      setLocal = new Ids();
       continue;
     }
     if (kind === "fault") {
@@ -247,11 +256,20 @@ export function transcript(entries: Entry[], subs: Subs, rewrite: Rewrite | null
     openBySession.set(session, waiting);
     if (waiting.size === 0 || groups.length === 0) groups.push([]);
     (groups[groups.length - 1] as string[]).push(form);
+    if (!cachedProbe(message)) {
+      const setForm = subs.text(canonical(wholeNumbers(setLocal.walk(rest))));
+      const setSession = `${conn}:${sessionId ? (setLocal.walk(sessionId, "sessionId") as string) : "browser"}`;
+      const setByStep = setSteps.get(step) ?? new Map<string, Set<string>>();
+      setSteps.set(step, setByStep);
+      const forms = setByStep.get(setSession) ?? new Set<string>();
+      setByStep.set(setSession, forms);
+      forms.add(setForm);
+    }
     waiting.add(message.id);
     sessionOf.set(`${conn}:${message.id}`, session);
     for (const name of SOURCE_KEYS) {
       const source = ((message.params ?? {}) as Record<string, unknown>)[name];
-      if (typeof source === "string" && source !== READY_PROBE) {
+      if (typeof source === "string" && source !== READY_PROBE && source !== VISIBILITY_PROBE) {
         const found = sources.get(step) ?? new Set<string>();
         sources.set(step, found);
         found.add(sha16(subs.text(source)));
@@ -262,12 +280,12 @@ export function transcript(entries: Entry[], subs: Subs, rewrite: Rewrite | null
   const sets: Record<string, unknown> = {};
   for (const [name, sessions] of steps) {
     const shapedSessions: Record<string, string[][]> = {};
-    const setSessions: Record<string, string[]> = {};
-    for (const [session, groups] of sessions) {
-      shapedSessions[session] = groups.map((group) => [...group].sort());
-      setSessions[session] = [...new Set(groups.flat().filter((form) => !form.includes(READY_PROBE)))].sort();
-    }
+    for (const [session, groups] of sessions) shapedSessions[session] = groups.map((group) => [...group].sort());
     requests[name] = shapedSessions;
+  }
+  for (const [name, sessions] of setSteps) {
+    const setSessions: Record<string, string[]> = {};
+    for (const [session, forms] of sessions) setSessions[session] = [...forms].filter((form) => !form.includes(READY_PROBE)).sort();
     sets[name] = setSessions;
   }
   const shapedSources: Record<string, unknown> = {};
