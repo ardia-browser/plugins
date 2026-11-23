@@ -333,6 +333,7 @@ export async function leaveOffscreen(ctx: Ctx, page: Page): Promise<Page> {
   if (state.registry.reserveClose(state.instance, old)) {
     try {
       await (state.browser as Browser).send("Target.closeTarget", { targetId: old });
+      state.closedOpenedTab(old);
     } catch (error) {
       if (!quiet(error)) throw error;
     } finally {

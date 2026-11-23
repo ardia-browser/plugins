@@ -48,9 +48,9 @@ describe("the tabs a session opened outlive its daemon and Ardia's restart", () 
     try {
       const first = daemon(dir, "a", "default", "instance-1", sessionOwner("agent-a", "token:/data", "default"));
       first.opened.add("TARGET");
-      first.noteAppTabs(new Map([["TARGET", "tab-run1-4"]]), null);
+      first.noteAppTabs(new Map([["TARGET", "tab-run1-4"]]));
       const second = daemon(dir, "b", "default", "instance-1", sessionOwner("agent-b", "token:/data", "default"));
-      second.noteAppTabs(new Map([["TARGET", "tab-run1-4"]]), null);
+      second.noteAppTabs(new Map([["TARGET", "tab-run1-4"]]));
       expect(second.opened.size).toBe(0);
     } finally {
       closeFd(dir);
@@ -69,48 +69,54 @@ describe("the tabs a session opened outlive its daemon and Ardia's restart", () 
     try {
       const before = daemon(dir, "a", "rl", "instance-1");
       before.opened.add("TARGET-BEFORE");
-      before.noteAppTabs(new Map([["TARGET-BEFORE", "tab-run1-4"], ["TARGET-USER-BEFORE", "tab-run1-1"]]), new Set(["tab-run1-1", "tab-run1-4"]));
+      before.noteAppTabs(new Map([["TARGET-BEFORE", "tab-run1-4"], ["TARGET-USER-BEFORE", "tab-run1-1"]]));
       expect([...before.registry.sessionTabs()]).toEqual(["tab-run1-4"]);
 
       const after = daemon(dir, "b", "rl", "instance-2");
       expect(after.opened.size).toBe(0);
-      after.noteAppTabs(new Map([["TARGET-AFTER", "tab-run1-4"], ["TARGET-USER-AFTER", "tab-run1-1"]]), new Set(["tab-run1-1", "tab-run1-4"]));
+      after.noteAppTabs(new Map([["TARGET-AFTER", "tab-run1-4"], ["TARGET-USER-AFTER", "tab-run1-1"]]));
       expect([...after.opened]).toEqual(["TARGET-AFTER"]);
 
       const someoneElse = daemon(dir, "c", "other", "instance-2");
-      someoneElse.noteAppTabs(new Map([["TARGET-AFTER", "tab-run1-4"]]), null);
+      someoneElse.noteAppTabs(new Map([["TARGET-AFTER", "tab-run1-4"]]));
       expect(someoneElse.opened.size).toBe(0);
     } finally {
       closeFd(dir);
     }
   });
 
-  test("a tab Ardia no longer lists is forgotten and a partial lookup forgets nothing", () => {
+  test("a tab Ardia leaves out of a listing (a parked pin) stays the session's, and a close the session made forgets it", () => {
     const { dir } = folder();
     try {
       const state = daemon(dir, "a", "rl", "instance-1");
-      state.registry.updateSessionTabs(["tab-run1-4", "tab-run1-5"], []);
-      state.noteAppTabs(new Map(), null);
-      expect(state.registry.sessionTabs().size).toBe(2);
-      state.noteAppTabs(new Map(), new Set(["tab-run1-5", "tab-run1-1"]));
+      state.opened.add("TARGET-A");
+      state.opened.add("TARGET-B");
+      state.noteAppTabs(new Map([["TARGET-A", "tab-run1-4"], ["TARGET-B", "tab-run1-5"]]));
+      state.noteAppTabs(new Map());
+      expect([...state.registry.sessionTabs()].sort()).toEqual(["tab-run1-4", "tab-run1-5"]);
+      state.appTabs.set("TARGET-A", "tab-run1-4");
+      state.closedOpenedTab("TARGET-A");
       expect([...state.registry.sessionTabs()]).toEqual(["tab-run1-5"]);
-      expect(state.ownsSessionTabs()).toBe(true);
+      state.closedOpenedTab("TARGET-NEVER-PAIRED");
+      expect([...state.registry.sessionTabs()]).toEqual(["tab-run1-5"]);
     } finally {
       closeFd(dir);
     }
   });
 
-  test("a listing asked for before a tab was recorded never drops it", () => {
+  test("close looks Ardia's tabs up only when a live tab isn't recorded or a recorded one isn't paired", () => {
     const { dir } = folder();
     try {
       const state = daemon(dir, "a", "rl", "instance-1");
-      const askedBefore = Date.now() / 1000 - 1;
-      state.opened.add("TARGET-NEW");
-      state.noteAppTabs(new Map([["TARGET-NEW", "tab-run1-9"]]), null);
-      state.noteAppTabs(new Map(), new Set(["tab-run1-1"]), askedBefore);
-      expect([...state.registry.sessionTabs()]).toEqual(["tab-run1-9"]);
-      state.noteAppTabs(new Map(), new Set(["tab-run1-1"]), Date.now() / 1000 + 1);
-      expect(state.registry.sessionTabs().size).toBe(0);
+      expect(state.needsPairingBeforeClose()).toBe(false);
+      state.targetInfos.set("TARGET", { targetId: "TARGET", url: "https://example.com/", title: "", type: "page" });
+      state.opened.add("TARGET");
+      expect(state.needsPairingBeforeClose()).toBe(true);
+      state.appTabs.set("TARGET", "tab-run1-4");
+      state.noteAppTabs(new Map([["TARGET", "tab-run1-4"]]));
+      expect(state.needsPairingBeforeClose()).toBe(false);
+      state.registry.updateSessionTabs(["tab-restored-2"], []);
+      expect(state.needsPairingBeforeClose()).toBe(true);
     } finally {
       closeFd(dir);
     }
@@ -124,10 +130,10 @@ describe("the tabs a session opened outlive its daemon and Ardia's restart", () 
       const state = daemon(dir, "a", "rl", "instance-1");
       state.opened.add("TARGET");
       state.appTabs.set("TARGET", "tab-run1-4");
-      state.noteAppTabs(new Map([["TARGET", "tab-run1-4"]]), null);
+      state.noteAppTabs(new Map([["TARGET", "tab-run1-4"]]));
       expect(state.recorded("TARGET")).toBe(false);
       fs.rmdirSync(blocker);
-      state.noteAppTabs(new Map([["TARGET", "tab-run1-4"]]), null);
+      state.noteAppTabs(new Map([["TARGET", "tab-run1-4"]]));
       expect(state.recorded("TARGET")).toBe(true);
     } finally {
       closeFd(dir);
@@ -165,7 +171,7 @@ describe("the tabs a session opened outlive its daemon and Ardia's restart", () 
       fs.mkdirSync(path.join(browse, SESSION_TABS));
       const state = daemon(dir, "a", "rl", "instance-1");
       state.opened.add("TARGET");
-      expect(() => state.noteAppTabs(new Map([["TARGET", "tab-run1-4"], ["OTHER", "tab-run1-1"]]), new Set(["tab-run1-1", "tab-run1-4"]))).not.toThrow();
+      expect(() => state.noteAppTabs(new Map([["TARGET", "tab-run1-4"], ["OTHER", "tab-run1-1"]]))).not.toThrow();
       expect(state.ownsSessionTabs()).toBe(false);
       expect([...state.opened]).toEqual(["TARGET"]);
     } finally {

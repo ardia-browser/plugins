@@ -654,6 +654,7 @@ export class Daemon {
         try {
           await state.browser?.send("Target.closeTarget", { targetId });
           tally.closed += 1;
+          state.closedOpenedTab(targetId);
         } finally {
           registry.finishClose(instance, targetId);
         }

@@ -17,8 +17,8 @@ export const CLOSE_HOLD = 30.0;
 export const HOLD_MARK = "#";
 export const SESSION_TABS = "session-tabs.json";
 export const SESSION_TABS_VERSION = 1n;
-export const MAX_SESSION_TABS = 256;
-export const MAX_SESSIONS = 64;
+export const MAX_SESSION_TABS = 64;
+export const MAX_SESSIONS = 32;
 
 export type Instance = string | null;
 type Data = JsonObject;
@@ -291,11 +291,11 @@ export class Registry {
     return this.withSessionTabs((sessions) => new Set(map(sessions.get(this.owner)).keys()));
   }
 
-  updateSessionTabs(add: readonly string[], drop: readonly string[], recordedBefore = Number.POSITIVE_INFINITY): void {
+  updateSessionTabs(add: readonly string[], drop: readonly string[]): void {
     if (this.browseFd === null || (add.length === 0 && drop.length === 0)) return;
     this.withSessionTabs((sessions) => {
       const tabs = new Map(map(sessions.get(this.owner)));
-      for (const app of drop) if (num(tabs.get(app)) < recordedBefore) tabs.delete(app);
+      for (const app of drop) tabs.delete(app);
       for (const app of add) tabs.set(app, now());
       const kept = new Map(newest(tabs, num, MAX_SESSION_TABS));
       if (kept.size > 0) sessions.set(this.owner, kept);

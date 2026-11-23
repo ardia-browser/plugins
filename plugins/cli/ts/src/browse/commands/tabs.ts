@@ -60,6 +60,7 @@ async function closeTab(ctx: Ctx, which: string | undefined): Promise<Result> {
     throw error;
   }
   state.registry.finishClose(state.instance, targetId);
+  state.closedOpenedTab(targetId);
   state.forgetTarget(targetId);
   return new Result({ closed: tab, targetId }, `✓ Tab [${tab}] closed`);
 }
