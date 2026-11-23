@@ -53,7 +53,6 @@ def register(oracle):
     oracle("d7.notes_site")(notes.site_of)
     oracle("d7.page_site")(notes.page_site)
     oracle("d7.notes_args")(parse_notes)
-    oracle("d7.worker_source")(lambda source, state: list(script.worker_source(source, state)))
     oracle("d7.split_command_line")(script.split_command_line)
     oracle("d7.tail")(lambda lines, limit: script.tail(lines, limit))
     oracle("d7.page_world_hint")(script.page_world_hint)

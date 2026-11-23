@@ -14,6 +14,16 @@ export const TS_ONLY_FLAGS: readonly string[] = [
   "read_oopif_frames",
   "route_enable_undone",
   "select_retyped",
+  "script_eval_args",
+  "script_frame_eval",
+  "script_frames_listed",
+  "script_memory_limit",
+  "script_missing_api",
+  "script_runner_crashed",
+  "script_runner_unconfined",
+  "script_runner_warm",
+  "script_sandbox_hint",
+  "script_selector_eval",
   "select_word_match",
   "selector_in_shadow_root",
   "setup_session_dropped",
@@ -25,7 +35,7 @@ export const TS_ONLY_FLAGS: readonly string[] = [
   "tab_close_interrupted",
 ];
 
-export const TS_ONLY_COUNTS: readonly string[] = ["failed_step_index"];
+export const TS_ONLY_COUNTS: readonly string[] = ["failed_step_index", "script_calls", "script_concurrent_peak", "script_receipts_skipped"];
 
 const FLAGS = new Set([...METRIC_FLAGS, ...TS_ONLY_FLAGS]);
 const DURATIONS = new Set(METRIC_DURATIONS);
