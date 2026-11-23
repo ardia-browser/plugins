@@ -46,9 +46,12 @@ BOXLESS = r"""() => {
     || (el.tagName === "INPUT" && !/^(button|submit|reset|image|checkbox|radio)$/.test(el.type))
     || /^(textbox|searchbox|combobox|spinbutton|slider|listbox)$/.test(roleOf(el));
   const skipLink = (el) => {
-    const href = el.tagName === "A" ? el.getAttribute("href") || "" : "";
-    if (!href.startsWith("#") || href.length < 2) return false;
-    let id = href.slice(1);
+    if (el.tagName !== "A" || !el.href) return false;
+    let url;
+    try { url = new URL(el.href, location.href); } catch (error) { return false; }
+    const here = new URL(location.href);
+    if (url.hash.length < 2 || url.origin + url.pathname + url.search !== here.origin + here.pathname + here.search) return false;
+    let id = url.hash.slice(1);
     try { id = decodeURIComponent(id); } catch (error) {}
     return !!(document.getElementById(id) || document.getElementsByName(id)[0]);
   };
@@ -400,9 +403,13 @@ async def clickable_map(page, frame: str) -> dict[int, list]:
 
 
 async def boxless(page, frame: str) -> set[int]:
+    from ardia_cli.browse.errors import ConnectionLost
+
     try:
         remote = await page.call(BOXLESS, frame=frame, by_value=False, read=True)
         elements = await page.elements_from(remote, frame, "control")
+    except ConnectionLost:
+        raise
     except BrowseError:
         return set()
     return {element.backend_id for element in elements}
