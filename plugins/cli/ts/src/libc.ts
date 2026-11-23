@@ -32,16 +32,18 @@ type Native = {
   removeDirAt(dir: number, name: Name): number;
   lock(fd: number, exclusive: boolean, wait: boolean): number;
   watchLifeline(fd: number): number;
-  writeSome(fd: number, bytes: Uint8Array, offset: number): number;
+  writeSome(fd: number, bytes: Uint8Array, offset: number, guarded: boolean): number;
   strerror(errno: number): string | number;
   execProgram(path: string, argv: Buffer, env: Buffer): number;
   zoneName(seconds: number): string | number;
   processInfo(pid: number): [number, Buffer, Buffer] | null | number;
   accountHome(name: string): Buffer | null | number;
+  confineProcess(): number;
+  footprint(pid: number): number;
 };
 
 
-const EXPORTS: readonly (keyof Native)[] = ["peerUid", "peerPid", "interruptsIgnored", "openAt", "connectAt", "socketInfoAt", "openFileAt", "mkdirAt", "renameAt", "renamePaths", "unlinkAt", "sizeAt", "statAt", "armWatchdog", "disarmWatchdog", "registerGroup", "unregisterGroup", "renameExclusiveAt", "removeDirAt", "swapAt", "nonBlocking", "listAt", "lock", "watchLifeline", "writeSome", "strerror", "execProgram", "zoneName", "processInfo", "accountHome"];
+const EXPORTS: readonly (keyof Native)[] = ["peerUid", "peerPid", "interruptsIgnored", "openAt", "connectAt", "socketInfoAt", "openFileAt", "mkdirAt", "renameAt", "renamePaths", "unlinkAt", "sizeAt", "statAt", "armWatchdog", "disarmWatchdog", "registerGroup", "unregisterGroup", "renameExclusiveAt", "removeDirAt", "swapAt", "nonBlocking", "listAt", "lock", "watchLifeline", "writeSome", "strerror", "execProgram", "zoneName", "processInfo", "accountHome", "confineProcess", "footprint"];
 const ERRNO_NAMES = new Map<number, string>(Object.entries(constants.errno).map(([name, value]) => [value, name]));
 const EWOULDBLOCK = constants.errno.EWOULDBLOCK ?? constants.errno.EAGAIN;
 
@@ -55,6 +57,7 @@ export class LibcUnavailable extends Error {
 }
 
 let loaded: Native | undefined;
+let loadedFile: string | undefined;
 
 export function libcBeside(executable: string = process.execPath): string {
   let real = executable;
@@ -97,6 +100,11 @@ export function loadLibc(file: string = libcBeside()): void {
   const missing = EXPORTS.find((name) => typeof module.exports[name] !== "function");
   if (missing !== undefined) throw new LibcUnavailable(file, `it has no ${missing}`);
   loaded = module.exports as unknown as Native;
+  loadedFile = file;
+}
+
+export function libcFile(): string | undefined {
+  return loadedFile;
 }
 
 function native(): Native {
@@ -239,9 +247,15 @@ export function watchLifeline(fd: number): void {
   checked(native().watchLifeline(fd), "pthread_create");
 }
 
+let guardedWrites = false;
+
+export function guardWrites(): void {
+  guardedWrites = true;
+}
+
 export function writeSome(fd: number, bytes: Uint8Array, offset = 0): number {
   const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const written = native().writeSome(fd, buffer, offset);
+  const written = native().writeSome(fd, buffer, offset, guardedWrites);
   if (written < 0) throw errnoError(-written, "write");
   if (written === 0 && offset < buffer.length) throw errnoError(constants.errno.EIO, "write");
   return written;
@@ -299,4 +313,13 @@ export function processInfo(pid: number): ProcessFacts | null {
   if (typeof facts === "number") throw errnoError(-facts, "proc_pidinfo");
   if (facts === null) return null;
   return { ppid: facts[0], path: facts[1], args: facts[2] };
+}
+
+export function confineProcess(): number {
+  return checked(native().confineProcess(), "confine");
+}
+
+export function footprint(pid: number): number | null {
+  const bytes = native().footprint(pid);
+  return bytes < 0 ? null : bytes;
 }

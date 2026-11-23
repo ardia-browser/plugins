@@ -12,6 +12,11 @@ INT_IDS = {"nodeId": "node", "parentNodeId": "node", "backendNodeId": "backend",
            "contextId": "context"}
 SOURCE_KEYS = ("expression", "functionDeclaration", "source")
 READY_PROBE = "() => document.readyState"
+VISIBILITY_PROBE = "() => document.visibilityState === 'hidden'"
+
+
+def cached_probe(message: dict) -> bool:
+    return message.get("method") == "Page.getFrameTree" or (message.get("params") or {}).get("functionDeclaration") == VISIBILITY_PROBE
 KEY = re.compile(r"\b[0-9a-f]{24}\b")
 TABS_FILE = re.compile(r"tabs-[0-9a-f]+")
 READ_STAMP = re.compile(r"(?<=\[read )\d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC(?=\])|(?:(?<=\(read )|(?<=, read ))\d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC(?=[,)])")
@@ -77,6 +82,7 @@ RULES = {
     "request-rows": "the `[<renderer pid>.<n>]` request id at the start of a `network requests` row becomes `[<REQUEST>]`; Chromium numbers subresource requests by its renderer's process id, which differs between any two browsers",
     "live-sets": "live mode compares each step's requests as a set of distinct forms; order, counts and concurrency are replay's job, because Chromium's load timing decides how often the daemon polls",
     "ready-probe": "live mode ignores the `() => document.readyState` probe, which the daemon sends only when the load event hasn't arrived yet",
+    "cached-probes": "live mode ignores `Page.getFrameTree` and the `document.visibilityState` probe (its request and its source hash), which the TS daemon skips when it read them in the last 0.75 s and 0.25 s (plugins#92), so two runs differ only by timing",
     "replay-order": "replay checks order in the tap: a request matches the recording within `lookahead` concurrency groups (tests/m3/elastic.json), so tasks that interleave by timing don't fail",
     "replay-repeats": "replay lets the read-only probes listed in tests/m3/elastic.json repeat or be skipped, since their count follows the daemon's sleeps",
     "unstable-steps": "live mode compares only exit and stderr of the steps a scenario lists in `unstable_steps`, and none of their requests, with the reason in the scenario",
@@ -172,8 +178,10 @@ class Subs:
 def transcript(entries: list[dict], subs: Subs, rewrite=None) -> tuple[dict, Ids]:
     ids = Ids()
     local = Ids()
+    set_local = Ids()
     step: str = "setup"
     steps: dict[str, dict] = {}
+    set_steps: dict[str, dict] = {}
     open_by_session: dict[tuple, set] = {}
     session_of: dict[tuple, tuple] = {}
     sources: dict[str, set] = {}
@@ -183,6 +191,7 @@ def transcript(entries: list[dict], subs: Subs, rewrite=None) -> tuple[dict, Ids
         if kind == "mark":
             step = str(entry.get("step"))
             local = Ids()
+            set_local = Ids()
             continue
         if kind == "fault":
             step = f"{step}/after-fault"
@@ -224,15 +233,19 @@ def transcript(entries: list[dict], subs: Subs, rewrite=None) -> tuple[dict, Ids
         if not waiting or not groups:
             groups.append([])
         groups[-1].append(form)
+        if not cached_probe(message):
+            set_form = subs.text(canonical(whole_numbers(set_local.walk({name: value for name, value in message.items() if name != "id"}))))
+            set_session = f"{conn}:{set_local.walk(session[1], 'sessionId') if session[1] else 'browser'}"
+            set_steps.setdefault(step, {}).setdefault(set_session, set()).add(set_form)
         waiting.add(message["id"])
         session_of[(conn, message["id"])] = session
         for name in SOURCE_KEYS:
             source = (message.get("params") or {}).get(name)
-            if isinstance(source, str) and source != READY_PROBE:
+            if isinstance(source, str) and source not in (READY_PROBE, VISIBILITY_PROBE):
                 sources.setdefault(step, set()).add(hashlib.sha256(subs.text(source).encode()).hexdigest()[:16])
     shaped = {name: {session: [sorted(group) for group in groups] for session, groups in sessions.items()} for name, sessions in steps.items()}
-    sets = {name: {session: sorted({form for group in groups for form in group if READY_PROBE not in form}) for session, groups in sessions.items()}
-            for name, sessions in steps.items()}
+    sets = {name: {session: sorted(form for form in forms if READY_PROBE not in form) for session, forms in sessions.items()}
+            for name, sessions in set_steps.items()}
     return {"requests": shaped, "request_sets": sets, "sources": {name: sorted(found) for name, found in sources.items()}}, ids
 
 

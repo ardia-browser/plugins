@@ -36,10 +36,11 @@ const NAME_LETTERS = "abcdefghijklmnopqrstuvwxyz0123456789_";
 const TEMP_ATTEMPTS = 100;
 
 export type Options = Record<string, unknown>;
-export type Answer = [number, string, string];
+export type Answer = [number, string, string, Uint8Array?];
 
 export class Result {
   failed = false;
+  body: Uint8Array | null = null;
   notice: string | null = null;
   batch: unknown = undefined;
   outputCap: number | null = null;
@@ -78,7 +79,7 @@ export function compactJson(value: unknown): string {
 export function render(options: Options, result: Result | null = null, error: BrowseError | null = null, name = ""): Answer {
   const [code, out, err] = renderPlain(options, result, error, name);
   rendered(name, result as never, error === null ? null : { code: safeCode(error.code), exit: error.exitCode }, out + err);
-  return [code, redact(out), redact(err)];
+  return result?.body ? [code, redact(out), redact(err), result.body] : [code, redact(out), redact(err)];
 }
 
 export function renderPlain(options: Options, result: Result | null, error: BrowseError | null, name = ""): Answer {

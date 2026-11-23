@@ -7,7 +7,7 @@ import { quoteSelectorLiterals } from "../../src/browse/commands/pagejs.ts";
 import { baseDomain, embeddedJson, findArguments, keptHeaders, type Step } from "../../src/browse/flows/flowlog.ts";
 import { buildFlow, drift, fillUrl, maskedPart, parseParams, signature, siteOf as flowSite, slug, templateUrl, validate } from "../../src/browse/flows/flows.ts";
 import { renderJson } from "../../src/browse/script/render.ts";
-import { keptPreview, pageWorldHint, splitCommandLine, stateSummary, tail, workerSource } from "../../src/browse/script/script.ts";
+import { keptPreview, pageWorldHint, splitCommandLine, stateSummary, tail } from "../../src/browse/script/script.ts";
 import { parseTimeout } from "../../src/browse/script/timeout.ts";
 import { parseText } from "../../src/json.ts";
 import { float, num, optionalText, text, texts, toValue } from "./values.ts";
@@ -56,10 +56,6 @@ export const D7_FUNCTIONS: Record<string, (...args: Value[]) => Value> = {
   "d7.notes_args": (args) => {
     const request = parseArgs(texts(args));
     return [request.action, request.site, request.text];
-  },
-  "d7.worker_source": (source, state) => {
-    const [code, offset] = workerSource(text(source), text(state));
-    return [code, BigInt(offset)];
   },
   "d7.split_command_line": (argv) => splitCommandLine(texts(argv)),
   "d7.tail": (lines, limit) => tail(texts(lines), num(limit)),

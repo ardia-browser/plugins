@@ -1,4 +1,6 @@
 {
+ "live_only": "the TypeScript daemon names clickable elements with one page call that remembers their backend ids and returns the title, and reuses the frame tree it read in the last 0.75 s (plugins#92); Python describes every clickable and reads the title again each time, so this runs ts against ts",
+ "designed": "the TypeScript daemon names clickable elements with one page call that remembers their backend ids and returns the title, and reuses the frame tree it read in the last 0.75 s (plugins#92); Python describes every clickable and reads the title again each time, so this runs ts against ts",
  "unstable_steps": {
   "steps": [
    5

@@ -24,7 +24,8 @@ A session starts with no tab: run one of these first. `snapshot -i` lists what y
 
 - This page's text: `ardia browse read`, or `read -s <sel>`. Other pages, any number, in one call:
   `read <url> <url> …`, or every link here whose URL matches: `read --links /p/ -s table.specs` (`--list` or
-  `links <pattern>`: just the URLs). They load in background tabs, logged in.
+  `links <pattern>`: just the URLs). They load in background tabs, logged in. Site menus print as
+  one `[navigation hidden, …]` line; `read --nav` shows them.
 - A page's data: `read --data` (JSON it embeds), `network requests --reload --type xhr,fetch`
   (JSON it loads); `read --http <url>` gets it.
 - A long or scroll-loaded list (`1–40 of 200`): `read --scroll` (the main list, or `-s <list>`; `--match <text>`).
@@ -62,18 +63,17 @@ For steps that repeat per item, write one script.
 
 ```sh
 ardia browse script <<'EOF'
-const rows = [];
-for (const url of await page.links('/p/')) {
-  await page.goto(url);
-  rows.push({ name: await page.text('h1'), price: await page.text('.price') });
+const out = {};
+for (const tag of ['Books', 'Music']) {
+  await page.click(`text=${tag}`);
+  out[tag] = await page.$$eval('.item', (es) => es.map((e) => e.innerText));
 }
-return rows;
+return out;
 EOF
 ```
 
-- `page.goto/click/fill/select/press/text(sel)/links(pat)/snapshot('-i')`, `read(urls)`, `browse('cmd', …)`.
-  The script runs outside the page (no `document`): DOM code goes in `page.evaluate((x) => …, x)`. Recipes:
-  `references/script.md`.
+- `page.goto/click/fill/select/press/text(sel)/links(pat)`, `read(urls)`, `browse('cmd', …)`. Runs outside the
+  page (no `document`): DOM code goes in `page.evaluate((x) => …, x)`. Recipes: `references/script.md`.
 - Save data with `--out <file>` (`script`, `read`, `eval`; `.csv` makes a table). Build files from saved data,
   never from rows typed into code or retyped output. `state` keeps its contents between scripts.
 - Click with `page.click(sel)` (i-th: `` `li >> nth=${i}` ``), not `el.click()` in `page.evaluate` (no pointer

@@ -5,7 +5,7 @@ import type { Secrets } from "../redact.ts";
 import type { Call } from "../telemetry.ts";
 import { cleanMetrics, exitOf, outputChars, textOf } from "./answer.ts";
 import { PythonCrash } from "./errors.ts";
-import { AS_TEXT, content, save, savedLine, savedSummary, savesAsCsv, writeFailure } from "./outfile.ts";
+import { AS_TEXT, BodyDamaged, content, save, savedBody, savedBodyLine, savedLine, savedSummary, savesAsCsv, writeFailure } from "./outfile.ts";
 import type { Printer } from "./output.ts";
 
 type Outcome = { status: number | bigint; crash?: PythonCrash | undefined };
@@ -24,6 +24,26 @@ function saveTo(path: string, text: string, printer: Printer): string | null {
     printer.out(text);
     return null;
   }
+}
+
+function saveBody(path: string, body: Uint8Array, out: string, printer: Printer, call: Call, exit: number | bigint): Outcome {
+  let target: string;
+  try {
+    target = save(path, body);
+  } catch (error) {
+    printer.err(`✗ Couldn't write ${path}: ${writeFailure(error)}\n`);
+    return { status: 1 };
+  }
+  call.metrics.set("saved_to_file", true);
+  call.metrics.set("read_binary_saved", true);
+  let data: JsonObject = new Map();
+  try {
+    const payload = loads(out);
+    const given = payload instanceof Map ? payload.get("data") : undefined;
+    if (given instanceof Map) data = given;
+  } catch {}
+  printer.out(savedBodyLine(target, body, data));
+  return { status: exit };
 }
 
 export function saveAnswer(answer: JsonObject, secrets: Secrets, printer: Printer, call: Call, command: string, path: string): Outcome {
@@ -49,6 +69,15 @@ export function saveAnswer(answer: JsonObject, secrets: Secrets, printer: Printe
     printer.out(savedLine(target, out));
     return { status: exit };
   }
+  let body: Uint8Array | null;
+  try {
+    body = savedBody(command, answer);
+  } catch (error) {
+    if (!(error instanceof BodyDamaged)) throw error;
+    printer.err(`✗ The response body didn't arrive whole, so ${path} wasn't written; run the command again\n`);
+    return { status: 1 };
+  }
+  if (body !== null) return saveBody(path, body, out, printer, call, exit);
   let payload: Value;
   try {
     payload = loads(out);

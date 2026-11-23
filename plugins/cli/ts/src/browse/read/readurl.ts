@@ -162,9 +162,17 @@ export function llmsCandidates(url: string, name = "llms.txt"): string[] {
   }
 }
 
+function canonicalUrl(text: string): string {
+  try {
+    return new URL(text).href;
+  } catch {
+    return text;
+  }
+}
+
 export function sameDocument(target: string, final: string): boolean {
   const trim = (text: string) => {
-    const bare = text.replace(/\/+$/, "");
+    const bare = canonicalUrl(text).replace(/\/+$/, "");
     return bare.endsWith(".md") ? bare.slice(0, -3) : bare;
   };
   return trim(target) === trim(final) && target.endsWith(".md");

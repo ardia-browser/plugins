@@ -30,6 +30,10 @@ function codedObject(parsed: Map<string, Value>): string | undefined {
   return `${dumps(parsed, "compact")}\n`;
 }
 
+function pagesPayload(data: Value | undefined): boolean {
+  return data instanceof Map && Array.isArray(data.get("pages"));
+}
+
 function codedRows(rows: Value[]): boolean {
   let changed = false;
   for (const row of rows) {
@@ -57,6 +61,7 @@ export function codeJsonAnswer(answer: Map<string, Value>, command: string): voi
     if (coded !== undefined) answer.set("out", coded);
     return;
   }
+  if ((ALIASES[command] ?? command) === "read" && parsed instanceof Map && parsed.get("success") === true && pagesPayload(parsed.get("data"))) return;
   if (parsed !== undefined) {
     answer.set("out", errorLine(out.trim()));
     return;
