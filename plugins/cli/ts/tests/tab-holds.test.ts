@@ -83,3 +83,33 @@ test("only tabs used in the last few minutes are held, newest first, at most wha
   const many = new Map(Array.from({ length: MAX_HELD + 5 }, (_, i): [string, number] => [`t${i}`, i]));
   assert.equal(recentlyUsed(many, 100).length, MAX_HELD);
 });
+
+test("a hold whose answer was lost is still released at close, since it may have reached Ardia", async () => {
+  let lose = true;
+  const { calls, holds } = recorder((method, params) => (method === "tabs.hold" && lose ? new ControlRefused("timeout", "lost") : method === "tabs.hold" ? { held: params["tabs"] } : {}));
+  await holds.tick(["tab-a"], 0);
+  lose = false;
+  await holds.close();
+  assert.deepEqual(calls.map(([method]) => method), ["tabs.hold", "tabs.release"]);
+});
+
+test("when Ardia has no room for another session, the daemon says so and asks again a minute later, not every tick", async () => {
+  const refusals: string[] = [];
+  const calls: string[] = [];
+  const holds = new TabHolds(
+    "s5",
+    async (method) => {
+      calls.push(method);
+      throw new ControlRefused("refused", "At most 4 sessions can hold tabs at once.");
+    },
+    (why) => refusals.push(why),
+  );
+  await holds.tick(["tab-a"], 0);
+  await holds.tick(["tab-a"], 2);
+  await holds.tick(["tab-a"], RENEW_EVERY - 1);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(refusals, ["At most 4 sessions can hold tabs at once."]);
+  await holds.tick(["tab-a"], RENEW_EVERY);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(holds.holding, []);
+});

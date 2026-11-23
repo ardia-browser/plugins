@@ -78,7 +78,6 @@ export class Daemon {
   last = monotonic();
   stopping = false;
   private holdsOf: TabHolds | null = null;
-  private readonly usedAt = new Map<string, number>();
   private mappedAt = Number.NEGATIVE_INFINITY;
   closing = 0;
   running: Running | null = null;
@@ -374,24 +373,28 @@ export class Daemon {
   }
 
   private get holds(): TabHolds {
-    this.holdsOf ??= new TabHolds(this.key, (method, params) => appCall(this.state, method, params));
+    this.holdsOf ??= new TabHolds(
+      this.key,
+      (method, params) => appCall(this.state, method, params),
+      (why) => log.warning(`Ardia refused to keep this session's tabs loaded (${why}); trying again in a minute`),
+    );
     return this.holdsOf;
   }
 
   private async renewHolds(): Promise<void> {
     if (this.stopping) return;
     const now = monotonic();
-    const current = this.state.current;
-    if (current !== null) this.usedAt.set(current, this.pending > 0 ? now : Math.max(this.usedAt.get(current) ?? Number.NEGATIVE_INFINITY, this.last));
-    const recent = recentlyUsed(this.usedAt, now);
-    for (const target of this.usedAt.keys()) if (!recent.includes(target)) this.usedAt.delete(target);
-    if (current !== null && recent.includes(current) && !this.state.appTabs.has(current) && this.state.connected && now - this.mappedAt >= RENEW_EVERY) {
+    const recent = recentlyUsed(this.state.usedAt, now);
+    for (const target of this.state.usedAt.keys()) if (!recent.includes(target)) this.state.usedAt.delete(target);
+    const unmapped = recent.some((target) => !this.state.appTabs.has(target));
+    if (unmapped && this.state.connected && now - this.mappedAt >= RENEW_EVERY) {
       this.mappedAt = now;
       await appTabMap(this.state).catch(() => undefined);
     }
     const wanted = [...new Set(recent.flatMap((target) => this.state.appTabs.get(target) ?? []))];
     await this.holds.tick(wanted, now);
   }
+
 
 
   async handle(socket: net.Socket): Promise<void> {

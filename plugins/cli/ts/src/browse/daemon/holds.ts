@@ -15,9 +15,12 @@ export function recentlyUsed(usedAt: ReadonlyMap<string, number>, now: number): 
     .slice(0, MAX_HELD);
 }
 
+const REFUSED = Symbol("refused");
+
 export class TabHolds {
   private held: string[] = [];
   private asked: string[] = [];
+  private mayHold = false;
   private renewedAt = Number.NEGATIVE_INFINITY;
   private unsupported = false;
   private closed = false;
@@ -26,6 +29,7 @@ export class TabHolds {
   constructor(
     private readonly session: string,
     private readonly call: HoldCall,
+    private readonly onRefused: (why: string) => void = () => {},
   ) {}
 
   get holding(): readonly string[] {
@@ -52,7 +56,14 @@ export class TabHolds {
     if (want.length === 0) return this.releaseHeld();
     const same = want.length === this.asked.length && want.every((tab, i) => tab === this.asked[i]);
     if (same && now - this.renewedAt < RENEW_EVERY) return;
+    this.mayHold = true;
     const reply = await this.send("tabs.hold", { session: this.session, tabs: want, seconds: HOLD_SECONDS });
+    if (reply === REFUSED) {
+      this.held = [];
+      this.asked = want;
+      this.renewedAt = now;
+      return;
+    }
     if (reply === null) return;
     const held = (reply as { held?: unknown }).held;
     this.held = Array.isArray(held) ? held.filter((tab): tab is string => typeof tab === "string") : want;
@@ -61,19 +72,25 @@ export class TabHolds {
   }
 
   private async releaseHeld(): Promise<void> {
-    if (this.unsupported || this.asked.length === 0) return;
-    if ((await this.send("tabs.release", { session: this.session })) === null) return;
+    if (this.unsupported || !this.mayHold) return;
+    const reply = await this.send("tabs.release", { session: this.session });
+    if (reply === null || reply === REFUSED) return;
+    this.mayHold = false;
     this.held = [];
     this.asked = [];
     this.renewedAt = Number.NEGATIVE_INFINITY;
   }
 
-  private async send(method: "tabs.hold" | "tabs.release", params: Record<string, unknown>): Promise<object | null> {
+  private async send(method: "tabs.hold" | "tabs.release", params: Record<string, unknown>): Promise<object | null | typeof REFUSED> {
     try {
       const reply = await this.call(method, params);
       return typeof reply === "object" && reply !== null ? reply : {};
     } catch (error) {
       if (error instanceof ControlRefused && error.code === "unknown_method") this.unsupported = true;
+      if (error instanceof ControlRefused && error.code === "refused") {
+        this.onRefused(error.message);
+        return REFUSED;
+      }
       return null;
     }
   }

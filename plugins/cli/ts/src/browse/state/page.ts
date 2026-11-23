@@ -399,6 +399,7 @@ export class Page {
     const top = this.session;
     const session = options.session ?? top;
     if (session === null || top === null) throw new BrowseError(DETACHED, null, "tab_detached");
+    this.state.noteUsed(this.targetId);
     if (this.crashed && !CRASH_SAFE.has(method)) throw new BrowseError(CRASHED, null, "tab_crashed");
     if (this.unansweredAt && monotonic() - this.unansweredAt < BUSY_MEMORY && !BUSY_SAFE.has(method)) await this.stillBusy(method);
     options.guard?.();

@@ -166,6 +166,7 @@ export class State extends Refs implements temptabs.TempTabState {
   readonly labels = new Map<string, string>();
   readonly registry: Registry;
   readonly appTabs = new Map<string, string>();
+  readonly usedAt = new Map<string, number>();
   readonly appGenerations = new Map<string, unknown>();
   readonly opened = new Set<string>();
   readonly frames = new Map<string, string>();
@@ -434,6 +435,10 @@ export class State extends Refs implements temptabs.TempTabState {
     for (const listener of [...this.listeners]) listener(page, method, params);
   }
 
+  noteUsed(targetId: string): void {
+    this.usedAt.set(targetId, monotonic());
+  }
+
   async page(target: string | null = null): Promise<Page> {
     await this.connect();
     const started = clock();
@@ -458,6 +463,7 @@ export class State extends Refs implements temptabs.TempTabState {
         throw new BrowseError("That tab was closed", { targetId }, "tab_gone");
       }
     }
+    this.noteUsed(targetId);
     let page = this.pages.get(targetId);
     if (page === undefined) {
       page = new Page(this, targetId);
