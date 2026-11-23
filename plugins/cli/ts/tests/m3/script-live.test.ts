@@ -158,6 +158,15 @@ describe.skipIf(!CHROME)("browse script against headless Chrome", () => {
     expect(slow.ms).toBeLessThan(3_500);
   });
 
+  test("an evaluate the script didn't await finishes in the page before the command answers", async () => {
+    const returned = await script("page.evaluate(() => new Promise((done) => setTimeout(() => { document.title = 'late write'; done(1); }, 400)));\nawait sleep(30);\nreturn 'returned';");
+    expect(returned.status).toBe(0);
+    expect(returned.out).not.toContain("stopped");
+    const read = await script("return await page.title();", "--json");
+    expect(JSON.parse(read.out).data.value).toBe("late write");
+    expect((await browse(["open", `${origin}/`])).status).toBe(0);
+  });
+
   test("a failed page call names its line and call", async () => {
     const done = await script("const a = 1;\nawait page.$eval('#missing', (el) => el.id);");
     expect(done.status).toBe(1);

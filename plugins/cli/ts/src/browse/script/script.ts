@@ -387,6 +387,7 @@ async function servePage(run: ScriptRun, request: Request): Promise<Answer> {
   try {
     return await run.gate.run(false, () => run.admitted(async () => {
       run.started.add(request.id);
+      if (op !== "frames") run.mutating.add(request.id);
       await run.settle("eval", []);
       const invalid = op === "frames" ? null : validEvaluate(request);
       if (invalid !== null) return { ok: false, error: invalid, code: "usage", call: index };
