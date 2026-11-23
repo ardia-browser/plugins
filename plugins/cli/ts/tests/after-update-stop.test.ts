@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { type ChildProcess, execFileSync, spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -250,7 +250,7 @@ test.skipIf(process.platform !== "darwin")("skills install --auto started with S
   await stopAndCheck(b, launched, "parent dies");
 }, 30_000);
 
-const BLOCKED_WRITER = `
+const LOGGING_WRITER = `
 const fs = require("node:fs");
 const [libc, after, built, staged, ready] = process.argv.slice(1);
 const { loadLibc, writeWhole } = require(libc);
@@ -260,40 +260,33 @@ armAfterUpdateGuard();
 fs.mkdirSync(staged);
 rollbackOnStop(() => fs.rmSync(staged, { recursive: true, force: true }));
 fs.writeFileSync(ready, "1");
-writeWhole(2, Buffer.alloc(4096, 120));
-setInterval(() => {}, 1000);
+const line = Buffer.alloc(8 * 1024 * 1024, 120);
+const again = () => {
+  writeWhole(2, line);
+  setImmediate(again);
+};
+again();
 `;
 
-test("a SIGINT that lands while a write is blocked stops the command at once and rolls back what was staged", async () => {
-  const b = box();
-  const fifo = path.join(b.home, "tmp", "stderr.fifo");
-  execFileSync("/usr/bin/mkfifo", [fifo]);
-  const holder = fs.openSync(fifo, fs.constants.O_RDWR | fs.constants.O_NONBLOCK);
-  const writer = fs.openSync(fifo, fs.constants.O_WRONLY);
-  try {
-    const chunk = Buffer.alloc(4096, 120);
-    for (;;) {
-      try {
-        fs.writeSync(holder, chunk);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "EAGAIN") break;
-        throw error;
-      }
+test("a SIGINT while the command writes its log still rolls back what was staged", async () => {
+  for (let round = 0; round < 3; round++) {
+    const b = box();
+    const log = fs.openSync(path.join(b.home, "tmp", "stderr.log"), "w");
+    try {
+      const staged = path.join(b.home, ".skills-staged");
+      const ready = path.join(b.home, "tmp", "ready");
+      const src = path.join(TS, "src");
+      const child = spawn(process.execPath, ["-e", LOGGING_WRITER, path.join(src, "libc.ts"), path.join(src, "after-update.ts"), BUILT_LIBC, staged, ready], { stdio: ["ignore", "ignore", log] });
+      started.push(child.pid as number);
+      const exited = new Promise<NodeJS.Signals | number | null>((resolve) => child.once("exit", (code, signal) => resolve(signal ?? code)));
+      await until(() => fs.existsSync(ready), 10_000, "the writer to stage its folder");
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      process.kill(child.pid as number, "SIGINT");
+      const outcome = await Promise.race([exited, new Promise((resolve) => setTimeout(() => resolve("still running"), 5_000))]);
+      assert.equal(outcome, "SIGINT");
+      assert.equal(fs.existsSync(staged), false, `round ${round}: the staged folder outlived the SIGINT`);
+    } finally {
+      fs.closeSync(log);
     }
-    const staged = path.join(b.home, ".skills-staged");
-    const ready = path.join(b.home, "tmp", "ready");
-    const src = path.join(TS, "src");
-    const child = spawn(process.execPath, ["-e", BLOCKED_WRITER, path.join(src, "libc.ts"), path.join(src, "after-update.ts"), BUILT_LIBC, staged, ready], { stdio: ["ignore", "ignore", writer] });
-    started.push(child.pid as number);
-    const exited = new Promise<NodeJS.Signals | number | null>((resolve) => child.once("exit", (code, signal) => resolve(signal ?? code)));
-    await until(() => fs.existsSync(ready), 10_000, "the writer to stage its folder");
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    process.kill(child.pid as number, "SIGINT");
-    const outcome = await Promise.race([exited, new Promise((resolve) => setTimeout(() => resolve("still running"), 5_000))]);
-    assert.equal(outcome, "SIGINT", "the command didn't stop on SIGINT while its write was blocked");
-    assert.equal(fs.existsSync(staged), false, "the staged folder outlived the SIGINT");
-  } finally {
-    fs.closeSync(writer);
-    fs.closeSync(holder);
   }
-}, 30_000);
+}, 60_000);

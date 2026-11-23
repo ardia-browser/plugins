@@ -32,7 +32,7 @@ type Native = {
   removeDirAt(dir: number, name: Name): number;
   lock(fd: number, exclusive: boolean, wait: boolean): number;
   watchLifeline(fd: number): number;
-  writeSome(fd: number, bytes: Uint8Array, offset: number, interruptKills: boolean): number;
+  writeSome(fd: number, bytes: Uint8Array, offset: number): number;
   strerror(errno: number): string | number;
   execProgram(path: string, argv: Buffer, env: Buffer): number;
   zoneName(seconds: number): string | number;
@@ -239,16 +239,9 @@ export function watchLifeline(fd: number): void {
   checked(native().watchLifeline(fd), "pthread_create");
 }
 
-let interruptedWrite: (() => never) | undefined;
-
-export function stopWritesOnInterrupt(stop: () => never): void {
-  interruptedWrite = stop;
-}
-
 export function writeSome(fd: number, bytes: Uint8Array, offset = 0): number {
   const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const written = native().writeSome(fd, buffer, offset, interruptedWrite === undefined);
-  if (written === -constants.errno.EINTR && interruptedWrite !== undefined) interruptedWrite();
+  const written = native().writeSome(fd, buffer, offset);
   if (written < 0) throw errnoError(-written, "write");
   if (written === 0 && offset < buffer.length) throw errnoError(constants.errno.EIO, "write");
   return written;

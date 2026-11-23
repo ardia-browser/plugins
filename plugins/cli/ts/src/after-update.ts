@@ -1,4 +1,4 @@
-import { interruptsIgnored, stopWritesOnInterrupt } from "./libc.ts";
+import { interruptsIgnored } from "./libc.ts";
 import { killLiveGroups } from "./proc/group.ts";
 
 export class Stopped extends Error {}
@@ -29,7 +29,7 @@ function die(signal: StopSignal): never {
   process.exit(128 + ({ SIGHUP: 1, SIGINT: 2, SIGTERM: 15 } as const)[signal]);
 }
 
-function stopOn(signal: StopSignal): never {
+function stopOn(signal: StopSignal): void {
   stopping ??= signal;
   die(stopping);
 }
@@ -37,9 +37,7 @@ function stopOn(signal: StopSignal): never {
 export function armAfterUpdateGuard(): void {
   if (startedBy !== undefined) return;
   startedBy = process.ppid;
-  const interruptible = !interruptsIgnored();
-  if (interruptible) stopWritesOnInterrupt(() => stopOn("SIGINT"));
-  for (const name of STOP_SIGNALS) if (name !== "SIGINT" || interruptible) process.on(name, () => stopOn(name));
+  for (const name of STOP_SIGNALS) if (name !== "SIGINT" || !interruptsIgnored()) process.on(name, () => stopOn(name));
   setInterval(() => {
     if (parentGone()) stopOn("SIGTERM");
   }, PARENT_POLL_MS).unref();
