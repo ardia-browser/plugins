@@ -256,7 +256,7 @@ async def network_har(ctx, argv):
 
     Path(path).write_text(well_formed(json.dumps(document, ensure_ascii=False)), encoding="utf-8")
     shown = args[1] if len(args) > 1 else path
-    note = " (Ardia strips Cookie, Set-Cookie and Authorization headers on the token path)" if not ctx.state.endpoint.explicit else ""
+    note = " (Cookie, Set-Cookie, Authorization and Proxy-Authorization headers are left out)"
     return Result({"path": shown, "entries": len(entries)}, f"✓ HAR saved to {shown} ({len(entries)} entries){note}")
 
 

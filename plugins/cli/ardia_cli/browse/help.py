@@ -245,8 +245,8 @@ COMMANDS = {
     "network": "ardia browse network requests [--reload] [--filter p] [--type t] [--method m] [--status 2xx] [--clear] | request <id>\n"
                "  --reload starts recording and reloads the page, so its own loads are listed (--type xhr,fetch: its data calls)\n"
                "  | har start [--content text|all|none] | har stop [path] | route <url> [--abort|--body json] | unroute [url]\n\n"
-               "route needs Fetch.enable: Ardia 0.2.49 or later (an older one refuses it, policy_refused, and strips Cookie,\n"
-               "Set-Cookie and Authorization headers from what the command sees).",
+               "route needs Fetch.enable: Ardia 0.2.49 or later (an older one refuses it, policy_refused). Requests, their\n"
+               "details and HAR files leave out Cookie, Set-Cookie, Authorization and Proxy-Authorization headers.",
     "auth": "ardia browse auth save <name> --url <https url> [--origin <url>]... --username <u> [--password-stdin]\n"
             "  [--username-selector s] [--password-selector s] [--submit-selector s]\n"
             "ardia browse auth login <name> | list | show <name> | delete <name>\n\n"

@@ -4,9 +4,10 @@ import { failure } from "../src/browse/cdp/browser.ts";
 import { Gated } from "../src/browse/daemon-errors.ts";
 import { commandHelp } from "../src/browse/help.ts";
 import { CommandFailed } from "../src/browse/cdp/link.ts";
+import { clipHeaders } from "../src/browse/state/records.ts";
 
 function refused(method: string, command: string): Gated {
-  const error = failure(method, new CommandFailed("m", { code: -32000, message: `${method} isn't allowed for the ardia command` }));
+  const error = failure(method, new CommandFailed("m", { code: -32000, message: `ardia: ${method} isn't allowed for the ardia command` }));
   expect(error).toBeInstanceOf(Gated);
   return (error as Gated).during(command);
 }
@@ -41,13 +42,13 @@ test("download, emulation, media and screencast each name their own way around",
   expect(refused("Page.startScreencast", "record start").text).toContain("Until then: take a `screenshot`");
   expect(refused("Page.startScreencast", "stream enable").text).toContain("Until then: take a `screenshot`");
   expect(refused("Network.getCookies", "cookies get").text).toContain("Until then: `eval document.cookie`");
-  const unnamed = failure("Overlay.enable", new CommandFailed("m", { code: -32000, message: "Overlay.enable isn't allowed for the ardia command" })) as Gated;
+  const unnamed = failure("Overlay.enable", new CommandFailed("m", { code: -32000, message: "ardia: Overlay.enable isn't allowed for the ardia command" })) as Gated;
   expect(unnamed.text).toContain("Overlay.enable isn't allowed on this Ardia");
   expect(unnamed.text).toContain("Ardia 0.2.49 or later allows them all: update Ardia");
 });
 
 test("clipboard copy and paste, refused with a reason, still get the not-yet message and keep the reason", () => {
-  const error = failure("Input.dispatchKeyEvent", new CommandFailed("m", { code: -32000, message: "Input.dispatchKeyEvent with those editing commands isn't allowed for the ardia command" })) as Gated;
+  const error = failure("Input.dispatchKeyEvent", new CommandFailed("m", { code: -32000, message: "ardia: Input.dispatchKeyEvent with those editing commands isn't allowed for the ardia command" })) as Gated;
   const copy = error.during("clipboard copy");
   expect(copy.text).toContain("`clipboard copy` needs Ardia 0.2.49 or later (Input.dispatchKeyEvent with those editing commands isn't allowed for the ardia command)");
   expect(copy.text).toContain("Until then: `fill` or `type` puts text in, and `get value` (a field) or `get text` reads it out");
@@ -55,7 +56,7 @@ test("clipboard copy and paste, refused with a reason, still get the not-yet mes
 });
 
 test("a refusal with a reason about the tab keeps its own message", () => {
-  const error = failure("Emulation.setDeviceMetricsOverride", new CommandFailed("m", { code: -32000, message: "Emulation.setDeviceMetricsOverride on a tab that isn't off-screen isn't allowed for the ardia command" })) as Gated;
+  const error = failure("Emulation.setDeviceMetricsOverride", new CommandFailed("m", { code: -32000, message: "ardia: Emulation.setDeviceMetricsOverride on a tab that isn't off-screen isn't allowed for the ardia command" })) as Gated;
   expect(error.text).toContain("which this Ardia allows for the ardia command, but not on a tab that isn't off-screen");
   expect(error.text).toContain("Ardia 0.2.49 or later has no such limit");
   expect(error.text).not.toContain("needs Ardia");
@@ -75,4 +76,19 @@ test("the help says these commands need Ardia 0.2.49 or later, which an update f
     expect(commandHelp(name)).not.toContain("Not available yet");
     expect(commandHelp(name)).not.toContain("on purpose");
   }
+});
+
+test("only the engine's own refusal reply counts, never the phrase echoed inside another error", () => {
+  const echoed = failure("Browser.setPermission", new CommandFailed("m", { code: -32602, message: "Invalid parameters: setting 'x isn't allowed for the ardia command'" }));
+  expect(echoed).not.toBeInstanceOf(Gated);
+  const otherCode = failure("DOM.setFileInputFiles", new CommandFailed("m", { code: -32602, message: "ardia: DOM.setFileInputFiles isn't allowed for the ardia command" }));
+  expect(otherCode).not.toBeInstanceOf(Gated);
+  const otherMethod = failure("DOM.setFileInputFiles", new CommandFailed("m", { code: -32601, message: "ardia: DOM.setFileInputFilesX isn't allowed for the ardia command" }));
+  expect(otherMethod).not.toBeInstanceOf(Gated);
+  expect(failure("Fetch.enable", new CommandFailed("m", { code: -32601, message: "ardia: Fetch.enable isn't allowed for the ardia command" }))).toBeInstanceOf(Gated);
+});
+
+test("recorded headers leave credentials out", () => {
+  const kept = clipHeaders({ Accept: "*/*", Cookie: "sid=1", authorization: "Bearer x", "Set-Cookie": "a=b", "Proxy-Authorization": "Basic y", "X-Trace": "t" });
+  expect(kept).toEqual({ Accept: "*/*", "X-Trace": "t" });
 });

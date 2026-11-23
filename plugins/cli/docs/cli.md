@@ -1129,8 +1129,10 @@ WebUI pages are tabs too: `tab list`, `tab <id>` and `open` take `chrome://`, `c
 `chrome-untrusted://` and `devtools://` pages (`PAGE_SCHEMES` in `state.py`), which an older engine refuses to attach
 to (`to that target`).
 
-On the token path an older engine also strips `Cookie`, `Set-Cookie` and `Authorization` from network events, so
-`network requests` and HAR files from it never contain them.
+The command leaves `Cookie`, `Set-Cookie`, `Authorization` and `Proxy-Authorization` out of every request it records
+(`clip_headers` / `clipHeaders`, `CREDENTIAL_HEADERS`), so `network requests`, `network request <id>` and HAR files
+never contain them, on any engine and over `--port` too. An older engine also stripped them from its events; from
+0.2.49 the engine passes events through unchanged, so the command does it.
 
 The policy also refuses some uses of methods it allows (`ac_cli_token_policy.cc`), and says which in its reply:
 `ardia: <method> <reason> isn't allowed for the ardia command`. The command keeps that reason (`data.reason`, same

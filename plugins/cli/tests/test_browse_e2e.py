@@ -1435,14 +1435,16 @@ REFUSALS = """
 import asyncio, json, sys
 from ardia_cli import endpoint
 from ardia_cli.browse.connection import Browser
-from ardia_cli.browse.errors import Gated
+from ardia_cli.browse.errors import CdpError, Gated
 
 
 async def refused(browser, method, params):
     try:
         await browser.send(method, params)
     except Gated as error:
-        return {"reason": error.reason, "message": error.message}
+        return {"gated": True, "reason": error.reason, "message": error.message}
+    except CdpError as error:
+        return {"gated": False, "reason": "", "message": error.message}
     return None
 
 
@@ -1598,9 +1600,12 @@ class BrowseTokenPath(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         said = json.loads(done.stdout)
         self.assertTrue(said["attached"])
-        self.assertEqual(said["gone"]["reason"], "to that target")
-        self.assertIn("Ardia allows for the ardia command, but not to that target", said["gone"]["message"])
-        self.assertIn("Target.attachToTarget to that target isn't allowed for the ardia command", said["gone"]["message"])
+        if said["gone"]["gated"]:
+            self.assertEqual(said["gone"]["reason"], "to that target")
+            self.assertIn("Ardia allows for the ardia command, but not to that target", said["gone"]["message"])
+            self.assertIn("Target.attachToTarget to that target isn't allowed for the ardia command", said["gone"]["message"])
+        else:
+            self.assertNotIn("isn't allowed for the ardia command", said["gone"]["message"])
         if said["unlisted"]:
             self.assertEqual(said["unlisted"]["reason"], "")
             self.assertIn("Ardia 0.2.49 or later", said["unlisted"]["message"])

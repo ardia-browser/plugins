@@ -46,10 +46,13 @@ export function clip(text: unknown, limit = RECORD_TEXT_LIMIT): unknown {
   return `${points.slice(0, limit).join("")}… [${points.length - limit} more characters]`;
 }
 
+export const CREDENTIAL_HEADERS: ReadonlySet<string> = new Set(["cookie", "set-cookie", "authorization", "proxy-authorization"]);
+
 export function clipHeaders(headers: unknown): Json {
   const out: Json = {};
   let used = 0;
   for (const [name, value] of Object.entries(record(headers))) {
+    if (CREDENTIAL_HEADERS.has(name.toLowerCase())) continue;
     const kept = clip(String(value), HEADER_VALUE_LIMIT) as string;
     used += pyLength(name) + pyLength(kept);
     if (used > HEADERS_LIMIT) {

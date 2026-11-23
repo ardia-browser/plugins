@@ -1247,5 +1247,27 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
         pass
 
 
+
+class EngineRefusalShape(unittest.TestCase):
+    def test_only_the_engines_own_reply_counts_as_a_refusal(self):
+        from ardia_cli.browse.errors import CdpError
+
+        echoed = failure("Browser.setPermission", SimpleNamespace(detail="Invalid parameters: setting 'x isn't allowed for the ardia command'", code=-32602))
+        self.assertIsInstance(echoed, CdpError)
+        self.assertNotIsInstance(echoed, Gated)
+        other_code = failure("DOM.setFileInputFiles", SimpleNamespace(detail="ardia: DOM.setFileInputFiles isn't allowed for the ardia command", code=-32602))
+        self.assertNotIsInstance(other_code, Gated)
+        other_method = failure("DOM.setFileInputFiles", SimpleNamespace(detail="ardia: DOM.setFileInputFilesX isn't allowed for the ardia command", code=-32601))
+        self.assertNotIsInstance(other_method, Gated)
+        self.assertIsInstance(failure("Fetch.enable", SimpleNamespace(detail="ardia: Fetch.enable isn't allowed for the ardia command", code=-32601)), Gated)
+        with_reason = failure("Page.navigate", SimpleNamespace(detail="ardia: Page.navigate to that URL isn't allowed for the ardia command", code=-32000))
+        self.assertEqual((type(with_reason), with_reason.reason), (Gated, "to that URL"))
+
+    def test_recorded_headers_leave_credentials_out(self):
+        from ardia_cli.browse.page import clip_headers
+
+        kept = clip_headers({"Accept": "*/*", "Cookie": "sid=1", "authorization": "Bearer x", "Set-Cookie": "a=b", "Proxy-Authorization": "Basic y", "X-Trace": "t"})
+        self.assertEqual(kept, {"Accept": "*/*", "X-Trace": "t"})
+
 if __name__ == "__main__":
     unittest.main()

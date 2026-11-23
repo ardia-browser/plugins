@@ -31,7 +31,7 @@ describe("Browser", () => {
   test("send maps failures, timeouts and loss as connection.py does", async () => {
     const replies: Record<string, unknown> = {
       "Test.nope": { error: { code: -32000, message: "nope" } },
-      "Page.navigate": { error: { code: -32000, message: "Page.navigate to that URL isn't allowed for the ardia command" } },
+      "Page.navigate": { error: { code: -32000, message: "ardia: Page.navigate to that URL isn't allowed for the ardia command" } },
       "Test.odd": { error: "boom" },
       "Test.number": { error: { code: null, message: 5 } },
       "Test.null": { result: null },
