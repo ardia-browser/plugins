@@ -624,8 +624,9 @@ static napi_value write_some(napi_env env, napi_callback_info info) {
   void *data = NULL;
   size_t length = 0;
   bool is_buffer = false;
-  if (!take_args(env, info, 3, &call)) return status(env, -EINVAL);
-  if (!int_arg(&call, 0, &fd) || !int_arg(&call, 2, &offset)) return NULL;
+  bool guarded = false;
+  if (!take_args(env, info, 4, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &fd) || !int_arg(&call, 2, &offset) || !bool_arg(&call, 3, &guarded)) return NULL;
   if (napi_is_buffer(env, call.argv[1], &is_buffer) != napi_ok || !is_buffer || napi_get_buffer_info(env, call.argv[1], &data, &length) != napi_ok) {
     napi_throw_type_error(env, NULL, "ardia-libc: expected a buffer");
     return NULL;
@@ -640,7 +641,10 @@ static napi_value write_some(napi_env env, napi_callback_info info) {
   plain.sa_handler = SIG_DFL;
   sigemptyset(&plain.sa_mask);
   if (sigaction(SIGINT, NULL, &kept) != 0) return status(env, failed());
-  bool swapped = kept.sa_handler != SIG_IGN && !write_cannot_block(fd) && sigaction(SIGINT, &plain, NULL) == 0;
+  bool swapped = kept.sa_handler != SIG_IGN && !(guarded && write_cannot_block(fd)) && sigaction(SIGINT, &plain, NULL) == 0;
+#ifdef ARDIA_WRITE_PAUSE_US
+  usleep(ARDIA_WRITE_PAUSE_US);
+#endif
   ssize_t result = write_once(fd, (const char *)data + offset, length - (size_t)offset);
   if (swapped) sigaction(SIGINT, &kept, NULL);
   return number(env, (double)result);
