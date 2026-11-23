@@ -23,6 +23,7 @@ export type SiteTool = {
   source: string;
   schema: Record<string, unknown> | null;
   fingerprint: string;
+  binding: "handler" | "name";
 };
 
 function clip(text: unknown, limit: number): string {
@@ -103,10 +104,16 @@ export function normalizeTools(raw: unknown): SiteTool[] {
       source: clip(tool["source"], 40) || "page",
       schema,
       fingerprint: typeof tool["fingerprint"] === "string" ? (tool["fingerprint"] as string) : "",
+      binding: tool["binding"] === "handler" ? "handler" : "name",
     });
     if (out.length >= MAX_TOOLS) break;
   }
   return out;
+}
+
+export function discoveryErrors(raw: unknown): string[] {
+  const found = record(raw)?.["errors"];
+  return Array.isArray(found) ? found.filter((item): item is string => typeof item === "string").slice(0, 10).map((item) => clip(item, 200)) : [];
 }
 
 export function signatureOf(tool: SiteTool): string {
@@ -194,28 +201,33 @@ export function failedOutput(value: unknown): boolean {
 
 export const COLLECT = `async (only) => {
   const found = [];
+  const errors = [];
+  found.errors = errors;
   const seen = new Set();
+  const failed = (source, error) => { errors.push(source + ": " + String((error && error.message) || error).slice(0, 200)); };
   const plain = (value) => { try { return value === undefined || value === null ? null : JSON.parse(JSON.stringify(value)); } catch { return null; } };
-  const within = (promise) => Promise.race([promise, new Promise((done) => setTimeout(() => done(null), 1500))]);
-  const add = (tool, source, handler, call) => {
+  const within = (promise, label) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(label + " didn't answer within 1.5 s")), 1500))]);
+  const add = (given, tool, source, handler, receiver, binding, call) => {
     if (!tool || typeof tool !== "object" || found.length >= ${MAX_TOOLS}) return;
-    const name = typeof tool.name === "string" ? tool.name : "";
+    const name = typeof tool.name === "string" ? tool.name : typeof given === "string" ? given : "";
     if (!name || seen.has(name)) return;
     seen.add(name);
     const entry = { name, description: typeof tool.description === "string" ? tool.description.slice(0, 600) : "", inputSchema: plain(tool.inputSchema ?? tool.input_schema ?? tool.parameters ?? null), annotations: plain(tool.annotations ?? null), source };
     entry.fingerprint = JSON.stringify([entry.name, entry.description, entry.inputSchema, entry.annotations, entry.source]);
-    found.push({ entry, handler, call });
+    entry.binding = binding;
+    found.push({ entry, handler, receiver, call });
   };
   const itemsOf = async (holder) => {
     for (const key of ["listTools", "getTools"]) {
       if (typeof holder[key] !== "function") continue;
-      const got = await within(holder[key]());
-      return Array.isArray(got) ? got : got && Array.isArray(got.tools) ? got.tools : [];
+      const got = await within(holder[key](), key + "()");
+      const list = Array.isArray(got) ? got : got && Array.isArray(got.tools) ? got.tools : [];
+      return list.map((item) => [null, item]);
     }
     const tools = holder.tools ?? holder.registeredTools;
-    if (tools instanceof Map) return [...tools].map(([key, item]) => (item && typeof item === "object" && !item.name ? { ...item, name: String(key) } : item));
-    if (Array.isArray(tools)) return tools;
-    if (tools && typeof tools === "object") return Object.entries(tools).map(([key, item]) => (item && typeof item === "object" && !item.name ? { ...item, name: key } : item));
+    if (tools instanceof Map) return [...tools].map(([key, item]) => [String(key), item]);
+    if (Array.isArray(tools)) return tools.map((item) => [null, item]);
+    if (tools && typeof tools === "object") return Object.entries(tools);
     return [];
   };
   let nav = null;
@@ -223,25 +235,27 @@ export const COLLECT = `async (only) => {
   const testing = nav && nav.modelContextTesting;
   if (testing && (!only || only === "navigator.modelContextTesting")) {
     try {
-      for (const item of await itemsOf(testing)) {
+      for (const [given, item] of await itemsOf(testing)) {
         const executeTool = typeof testing.executeTool === "function" ? testing.executeTool : null;
-        add(item, "navigator.modelContextTesting", executeTool, async (name, args) => {
+        add(given, item, "navigator.modelContextTesting", executeTool, testing, "name", async (name, args) => {
           if (!executeTool) throw new Error("the browser registered this tool with nothing to call");
           const result = await executeTool.call(testing, name, JSON.stringify(args));
           if (typeof result !== "string") return result;
           try { return JSON.parse(result); } catch { return result; }
         });
       }
-    } catch {}
+    } catch (error) {
+      failed("navigator.modelContextTesting", error);
+    }
   }
   for (const [label, holder] of [["document.modelContext", document.modelContext], ["navigator.modelContext", nav && nav.modelContext]]) {
     if (!holder || (typeof holder !== "object" && typeof holder !== "function") || (only && only !== label)) continue;
     try {
-      for (const item of await itemsOf(holder)) {
+      for (const [given, item] of await itemsOf(holder)) {
         const execute = item && typeof item.execute === "function" ? item.execute : null;
         const providerKey = ["executeTool", "callTool", "invokeTool"].find((key) => typeof holder[key] === "function");
         const provider = providerKey ? holder[providerKey] : null;
-        add(item, label, execute || provider, async (name, args) => {
+        add(given, item, label, execute || provider, execute ? item : holder, execute ? "handler" : "name", async (name, args) => {
           if (execute) {
             const client = { requestUserInteraction: async () => { throw new Error("this tool asked for user interaction, which the ardia command doesn't give"); } };
             return execute.call(item, args, client);
@@ -250,7 +264,9 @@ export const COLLECT = `async (only) => {
           throw new Error("the page registered this tool with nothing to call");
         });
       }
-    } catch {}
+    } catch (error) {
+      failed(label, error);
+    }
   }
   if (!only || only === "form") {
     try {
@@ -264,7 +280,7 @@ export const COLLECT = `async (only) => {
           if (field.required) required.push(field.name);
         }
         const tool = { name: form.getAttribute("toolname"), description: form.getAttribute("tooldescription") || "", inputSchema: { type: "object", properties, required }, annotations: { readOnlyHint: (form.getAttribute("method") || "get").toLowerCase() === "get" } };
-        add(tool, "form", form, async (name, args) => {
+        add(null, tool, "form", form, document, "handler", async (name, args) => {
           for (const [key, value] of Object.entries(args || {})) {
             const field = form.elements.namedItem(key);
             if (!field || field.type === "file" || field.type === "password") continue;
@@ -278,14 +294,16 @@ export const COLLECT = `async (only) => {
           return { content: [{ type: "text", text: "The form was submitted" }] };
         });
       }
-    } catch {}
+    } catch (error) {
+      failed("form", error);
+    }
   }
   return found;
 }`;
 
-export const PROBE = `(async () => ({ tools: (await (${COLLECT})(null)).map((item) => item.entry) }))()`;
+export const PROBE = `(async () => { const found = await (${COLLECT})(null); return { tools: found.map((item) => item.entry), errors: found.errors.slice(0, 10) }; })()`;
 
-export const LIST_BOUND = "function () { return { tools: this.map((item) => item.entry) }; }";
+export const LIST_BOUND = "function () { return { tools: this.map((item) => item.entry), errors: Array.isArray(this.errors) ? this.errors.slice(0, 10) : [] }; }";
 
 export const INVOKE_BOUND = `async function (name, args, fingerprint) {
   const plain = (value) => { try { return value === undefined ? null : JSON.parse(JSON.stringify(value)); } catch { return String(value); } };
@@ -293,6 +311,6 @@ export const INVOKE_BOUND = `async function (name, args, fingerprint) {
   if (!approved) return { missing: true };
   if (approved.entry.fingerprint !== fingerprint) return { changed: true };
   const fresh = (await (${COLLECT})(approved.entry.source)).find((item) => item.entry.name === name);
-  if (!fresh || fresh.entry.fingerprint !== fingerprint || !approved.handler || fresh.handler !== approved.handler) return { changed: true };
-  return { via: approved.entry.source, result: plain(await approved.call(name, args)) };
+  if (!fresh || fresh.entry.fingerprint !== fingerprint || !approved.handler || fresh.handler !== approved.handler || fresh.receiver !== approved.receiver || fresh.entry.binding !== approved.entry.binding) return { changed: true };
+  return { via: approved.entry.source, binding: approved.entry.binding, result: plain(await approved.call(name, args)) };
 }`;

@@ -1207,12 +1207,16 @@ plain rule, and what a rule can't fix is kept as structured data for whoever fix
 `ardia browse record [--save <name>] [--timeout 2m] [--idle 20s] [--here] [--description text]` watches the tab the
 user is on (the session's with `--here`) and turns what they do into a version 2 action flow; `record start|stop|
 restart` is still the video recorder. It runs entirely in ardia's own isolated page world, the one every command already uses, so it needs no
-`Runtime.addBinding` or named new-document world and works on an Ardia whose token policy refuses those: each
-document gets the listeners on the first poll, they queue what happens, the command drains every frame's queue
-every 0.1 s, and stopping removes the listeners and drains what's left, even if the command was interrupted. When a
-page hides for a navigation (a click on a link or a submit button), events the poll hasn't read yet are handed to
-the next document through one `sessionStorage` key holding a token for this recording, read and removed on that
-document's first poll; a key from another recording is dropped, and stopping removes it. It stops after `--timeout`
+`Runtime.addBinding` or named new-document world and works on an Ardia whose token policy refuses those. Each
+document gets the listeners on the next poll (every 0.05 s), and each event leaves that world at once as one marked
+`console.debug` line, which the command reads from `Runtime.consoleAPICalled` (the `Runtime.enable` the `console`
+command already uses) only when it comes from ardia's own world in that tab, so the page can neither see nor forge
+it; these lines never show in `console`. Nothing is written to the page's storage. A press is recorded at
+`pointerdown` and confirmed by its click, so the click that submits a form or follows a link is kept even when the
+page is gone a moment later; a press that never clicked and wasn't followed by a navigation within 2.5 s (a drag) is
+dropped. On `pagehide` the listeners come off at once, so a page restored from the back-forward cache gets fresh ones,
+and stopping looks at the tab's frames again, removes the listeners and keeps what they flush, even if the command was
+interrupted. It stops after `--timeout`
 (2 minutes, at most 10), after `--idle` quiet seconds once something was done, or when the tab closes. Only trusted events count. A click, a change of a field or a
 list, Enter or Escape and a form being sent are kept; a navigation within 2.5 s of one of them is its result, and one
 after that is an `open` step. Each element is described where it is (role, accessible name, `aria-label`,
@@ -1235,8 +1239,12 @@ as a `# site tools` line. `ardia browse tool <name> ['{json}' | -] [--yes]` chec
 input schema and needs `--yes` for every call, since each runs the page's own code (`unconfirmed_tool`, or
 `consequential_tool`). Finding and calling happen on one object in the page's JavaScript context: the call
 runs the exact handler function captured when it was found (a tool's `execute`, or the provider's or browser's
-call), and is refused if the page has since swapped that function or changed the tool (`site_tool_changed`); the
-object is released afterwards, and a page error while reading or calling a tool is `page_script_error`; a new document invalidates the object (`document_changed`); and prints its output as `[UNTRUSTED]` page data (`data.isError` and exit 1 when the tool says it
+call) with the receiver it was found on, and is refused if the page has since swapped that function or its object,
+or changed the tool (`site_tool_changed`). A provider that only has `executeTool(name, args)` picks the handler by
+name, so for its tools only the provider, its dispatch function and the tool's details are pinned; those tools are
+marked `binding: "name"` and the answer says so; the
+object is released afterwards, and a page error while reading or calling a tool, or a provider whose `listTools()` or
+`getTools()` throws or doesn't answer in 1.5 s, is `page_script_error`, never `no_site_tool`; a new document invalidates the object (`document_changed`); and prints its output as `[UNTRUSTED]` page data (`data.isError` and exit 1 when the tool says it
 failed). Names, descriptions and output all come from the page.
 
 ### Reading documentation fast

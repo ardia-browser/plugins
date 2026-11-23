@@ -1,4 +1,5 @@
 import "./libc-loaded.ts";
+import { RECORD_MARK } from "../src/browse/state/page.ts";
 import { afterAll, describe, expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
@@ -199,7 +200,7 @@ describe("recorder sensitivity", () => {
     const handlers: Record<string, (event: unknown) => void> = {};
     const sent: Record<string, any>[] = [];
     const context = vm.createContext({
-      __ardiaRecordQueue: { get length() { return sent.length; }, push: (payload: string) => sent.push(JSON.parse(payload)) },
+      console: { debug: (line: string) => sent.push(JSON.parse(line.slice(RECORD_MARK.length))) },
       addEventListener: (name: string, handler: (event: unknown) => void) => {
         handlers[name] = handler;
       },

@@ -50,6 +50,7 @@ export type World = { frame: string; loader: string | null; context: number; han
 export type Frame = { id: string; url: string; loader: string | null; parent: string | null; name: string; origin: string };
 export type Lifecycle = { loader: string | null; names: Set<string> };
 export type Viewport = [number, number] | null;
+export const RECORD_MARK = "\u2063ardia-record\u2063";
 export type SendOptions = { timeout?: number; mutation?: boolean; inputEvent?: boolean; guard?: () => void; session?: string | null };
 export type CallOptions = { frame?: string | null; byValue?: boolean; awaitPromise?: boolean; timeout?: number; read?: boolean };
 
@@ -736,6 +737,17 @@ export class Page {
     oopif.childEvent(this, session, method, params);
   }
 
+  ownWorld(context: unknown): boolean {
+    return typeof context === "number" && [...this.worlds.values()].some((world) => world[1] === context);
+  }
+
+  recorderMessage(params: Json): string | null {
+    const first = Array.isArray(params["args"]) ? (params["args"][0] as Json | undefined) : undefined;
+    const value = first && first["type"] === "string" ? first["value"] : null;
+    if (typeof value !== "string" || !value.startsWith(RECORD_MARK) || !this.ownWorld(params["executionContextId"])) return null;
+    return value.slice(RECORD_MARK.length);
+  }
+
   onEvent(method: string, params: Json): void {
     if (FRAME_EVENTS.has(method)) this.framesChanged();
     if (method === "Target.attachedToTarget" || method === "Target.detachedFromTarget") {
@@ -786,7 +798,7 @@ export class Page {
       this.dragIntercepted = null;
       waiter?.(record(params["data"]));
     } else if (method === "Runtime.consoleAPICalled") {
-      this.console.add(consoleEntry(params));
+      if (!this.recorderMessage(params)) this.console.add(consoleEntry(params));
     } else if (method === "Runtime.exceptionThrown") {
       this.errors.add(errorEntry(params));
     } else if (method.startsWith("Network.") && this.networkOn) {

@@ -10,7 +10,8 @@ export const REDACTED = "<redacted>";
 const PARAM_NAME = /^[a-z][a-z0-9_]{0,23}$/u;
 
 export type RecEvent = {
-  kind: "click" | "fill" | "select" | "press" | "submit" | "navigate";
+  kind: "click" | "confirm" | "fill" | "select" | "press" | "submit" | "navigate";
+  pointer?: number;
   at: number;
   target?: Descriptor | null;
   value?: string | null;
@@ -80,8 +81,27 @@ function submitsWrite(event: RecEvent): boolean {
   return (event.method ?? "get").toLowerCase() !== "get";
 }
 
+export function settledClicks(given: readonly RecEvent[]): RecEvent[] {
+  const confirmed = new Map<number, boolean | null>();
+  for (const event of given) if (event.kind === "confirm" && typeof event.pointer === "number") confirmed.set(event.pointer, event.checked ?? null);
+  const navigations = given.filter((event) => event.kind === "navigate").map((event) => event.at);
+  const out: RecEvent[] = [];
+  for (const event of given) {
+    if (event.kind === "confirm") continue;
+    if (event.kind === "click" && typeof event.pointer === "number") {
+      if (confirmed.has(event.pointer)) {
+        const checked = confirmed.get(event.pointer);
+        out.push(checked === null || checked === undefined ? event : { ...event, checked });
+      } else if (navigations.some((at) => at >= event.at && at - event.at <= CAUSED_WINDOW_MS)) out.push(event);
+      continue;
+    }
+    out.push(event);
+  }
+  return out;
+}
+
 export function compileEvents(given: readonly RecEvent[], startUrl: string): Compiled {
-  const events = [...given].slice(0, MAX_EVENTS).sort((a, b) => a.at - b.at);
+  const events = settledClicks([...given].slice(0, MAX_EVENTS).sort((a, b) => a.at - b.at));
   const steps: CompiledStep[] = [];
   const params: CompiledParam[] = [];
   const skipped: { at: number; why: string }[] = [];

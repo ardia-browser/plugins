@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import { sleep, withSignal } from "../cdp/cancel.ts";
 import { BrowseError, ConnectionLost, Usage } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
@@ -11,36 +10,30 @@ import { ACTIONS_VERSION, checkName, originAllowed, save, siteOf, validate, type
 import { selectorOf } from "../flows/locators.ts";
 import { secondsOf } from "../limits.ts";
 import { count, flag } from "../metrics.ts";
-import type { Page } from "../state/page.ts";
+import { type Page, RECORD_MARK } from "../state/page.ts";
 import type { Listener } from "../state/state.ts";
 import { monotonic } from "../state/wait.ts";
 import { cliVersion } from "../../version.ts";
 import type { Ctx } from "./ctx.ts";
 import { parse } from "./parse.ts";
 
-export const QUEUE = "__ardiaRecordQueue";
 export const QUEUE_LIMIT = 500;
 export const DEFAULT_TIMEOUT = 120;
 export const MAX_TIMEOUT = 600;
 export const DEFAULT_IDLE = 20;
 export const MAX_EVENTS = 500;
 export const MAX_PAYLOAD = 16 * 1024;
-export const POLL = 0.1;
+export const POLL = 0.05;
 export const FLAGS = { "--save": "value", "--timeout": "value", "--idle": "value", "--here": "bool", "--description": "value" } as const;
 
-export const CARRY = "__ardiaRecordCarry";
-
-export function recorderSource(token: string): string {
-  return `(() => {
+export const RECORDER_SOURCE = `(() => {
   if (globalThis.__ardiaRecorderStop) return;
-  const queue = globalThis[${JSON.stringify(QUEUE)}] || (globalThis[${JSON.stringify(QUEUE)}] = []);
-  const send = (payload) => { if (queue.length < ${QUEUE_LIMIT}) queue.push(payload); };
-  const token = ${JSON.stringify(token)};
-  try {
-    const carried = JSON.parse(sessionStorage.getItem(${JSON.stringify(CARRY)}) || "null");
-    if (carried !== null) sessionStorage.removeItem(${JSON.stringify(CARRY)});
-    if (token && carried && carried.token === token && Array.isArray(carried.events)) for (const item of carried.events) if (typeof item === "string") send(item);
-  } catch {}
+  let sent = 0;
+  const send = (payload) => {
+    if (sent >= ${QUEUE_LIMIT}) return;
+    sent += 1;
+    try { console.debug(${JSON.stringify(RECORD_MARK)} + payload); } catch {}
+  };
   const INPUT_ROLES = { button: "button", submit: "button", reset: "button", image: "button", checkbox: "checkbox", radio: "radio", range: "slider", number: "spinbutton", search: "searchbox" };
   const TAG_ROLES = { button: "button", summary: "button", textarea: "textbox", option: "option", h1: "heading", h2: "heading", h3: "heading", h4: "heading", h5: "heading", h6: "heading", nav: "navigation", main: "main", dialog: "dialog" };
   const short = (text, limit = 100) => String(text || "").replace(/\\s+/g, " ").trim().slice(0, limit);
@@ -153,14 +146,39 @@ export function recorderSource(token: string): string {
     if (el.localName === "select") emit({ kind: "select", target: describe(el), value: [...el.selectedOptions].map((option) => short(option.label || option.text)).join(", ") });
     else if (textual(el)) flush(el);
   };
+  const clickTarget = (event) => {
+    let el = targetOf(event);
+    if (!el) return null;
+    if (el.localName === "label" && el.control) el = el.control;
+    if (textual(el) || el.localName === "select" || el.localName === "option") return null;
+    return el;
+  };
+  const formMethod = (el) => (el.form ? (el.form.getAttribute("method") || "get").toLowerCase() : null);
+  const stateOf = (el) => ("checked" in el ? Boolean(el.checked) : null);
+  const pressed = new WeakMap();
+  let pointerSeq = 0;
+  const onPointer = (event) => {
+    if (!event.isTrusted || event.button !== 0) return;
+    const el = clickTarget(event);
+    if (!el) return;
+    flushAll();
+    pointerSeq += 1;
+    pressed.set(el, pointerSeq);
+    const toggle = el.localName === "input" && (el.type === "checkbox" || el.type === "radio");
+    emit({ kind: "click", pointer: pointerSeq, target: describe(el), checked: toggle ? el.type === "radio" || !el.checked : stateOf(el), method: formMethod(el) });
+  };
   const onClick = (event) => {
     if (!event.isTrusted || event.button !== 0) return;
-    let el = targetOf(event);
+    const el = clickTarget(event);
     if (!el) return;
-    if (el.localName === "label" && el.control) el = el.control;
-    if (textual(el) || el.localName === "select" || el.localName === "option") return;
+    const pointer = pressed.get(el);
+    if (pointer !== undefined) {
+      pressed.delete(el);
+      emit({ kind: "confirm", pointer, checked: stateOf(el) });
+      return;
+    }
     flushAll();
-    emit({ kind: "click", target: describe(el), checked: "checked" in el ? Boolean(el.checked) : null, method: el.form ? (el.form.getAttribute("method") || "get").toLowerCase() : null });
+    emit({ kind: "click", target: describe(el), checked: stateOf(el), method: formMethod(el) });
   };
   const onKey = (event) => {
     if (!event.isTrusted || (event.key !== "Enter" && event.key !== "Escape")) return;
@@ -175,31 +193,19 @@ export function recorderSource(token: string): string {
     flushAll();
     emit({ kind: "submit", target: form && form.nodeType === 1 ? describe(form) : null, method: form && form.getAttribute ? (form.getAttribute("method") || "get").toLowerCase() : "get" });
   };
-  const onHide = () => {
-    flushAll();
-    if (!token || queue.length === 0) return;
-    try { sessionStorage.setItem(${JSON.stringify(CARRY)}, JSON.stringify({ token, events: queue.splice(0) })); } catch {}
-  };
   const options = { capture: true, passive: true };
-  const listeners = [["focusin", onFocus], ["input", onInput], ["change", onChange], ["click", onClick], ["keydown", onKey], ["submit", onSubmit], ["pagehide", onHide]];
-  for (const [name, listener] of listeners) addEventListener(name, listener, options);
-  globalThis.__ardiaRecorderStop = () => {
+  const detach = () => {
     flushAll();
     for (const [name, listener] of listeners) removeEventListener(name, listener, options);
-    try { sessionStorage.removeItem(${JSON.stringify(CARRY)}); } catch {}
     delete globalThis.__ardiaRecorderStop;
   };
+  const listeners = [["focusin", onFocus], ["input", onInput], ["change", onChange], ["pointerdown", onPointer], ["click", onClick], ["keydown", onKey], ["submit", onSubmit], ["pagehide", detach]];
+  for (const [name, listener] of listeners) addEventListener(name, listener, options);
+  globalThis.__ardiaRecorderStop = detach;
 })()`;
-}
 
-export const RECORDER_SOURCE = recorderSource("");
-
-export function drainSource(token: string): string {
-  return `() => { ${recorderSource(token)}; return (globalThis[${JSON.stringify(QUEUE)}] || []).splice(0); }`;
-}
-
-export const STOP_DRAIN = `() => { if (globalThis.__ardiaRecorderStop) globalThis.__ardiaRecorderStop(); return (globalThis[${JSON.stringify(QUEUE)}] || []).splice(0); }`;
-export const DRAIN = drainSource("");
+export const DRAIN = `() => { ${RECORDER_SOURCE}; return []; }`;
+export const STOP_DRAIN = "() => { if (globalThis.__ardiaRecorderStop) globalThis.__ardiaRecorderStop(); return []; }";
 
 export function parseEvent(payload: unknown): RecEvent | null {
   if (typeof payload !== "string" || payload.length > MAX_PAYLOAD) return null;
@@ -211,7 +217,8 @@ export function parseEvent(payload: unknown): RecEvent | null {
   }
   if (raw === null || typeof raw !== "object") return null;
   const event = raw as Record<string, unknown>;
-  if (!["click", "fill", "select", "press", "submit"].includes(String(event["kind"]))) return null;
+  if (!["click", "confirm", "fill", "select", "press", "submit"].includes(String(event["kind"]))) return null;
+  if (event["kind"] === "confirm" && typeof event["pointer"] !== "number") return null;
   if (typeof event["at"] !== "number") return null;
   return event as unknown as RecEvent;
 }
@@ -288,13 +295,16 @@ export function recordedFlow(name: string, events: readonly RecEvent[], startUrl
   return { flow, skipped };
 }
 
-export type Pages = { frames(): string[]; call(fn: string, frame: string): Promise<unknown>; closed(): boolean };
+export type Pages = { frames(): string[]; call(fn: string, frame: string): Promise<unknown>; closed(): boolean; refresh(): Promise<void> };
 
 export function livePages(page: Page): Pages {
   return {
     frames: () => [...page.frames.keys()],
     call: (fn, frame) => page.call(fn, [], { frame, read: true, timeout: 5 }),
     closed: () => page.crashed,
+    refresh: async () => {
+      await page.refreshFrames(true);
+    },
   };
 }
 
@@ -323,6 +333,11 @@ export async function finalDrain(pages: Pages, into: RecEvent[]): Promise<void> 
   if (pages.closed()) return;
   await withSignal(null, async () => {
     try {
+      await pages.refresh();
+    } catch (error) {
+      if (error instanceof ConnectionLost) return;
+    }
+    try {
       await drainFrames(pages, STOP_DRAIN, into);
     } catch {
       return;
@@ -336,9 +351,7 @@ export async function capture(
   timeout: number,
   idle: number,
   pages: Pages = livePages(page),
-  token: string = randomBytes(12).toString("hex"),
 ): Promise<{ events: RecEvent[]; startUrl: string; stoppedBy: string }> {
-  const drain = drainSource(token);
   const state = ctx.state;
   const startUrl = page.url;
   const events: RecEvent[] = [];
@@ -349,7 +362,14 @@ export async function capture(
       if (source === null && method === "Target.targetDestroyed" && params["targetId"] === page.targetId) closed = true;
       return;
     }
-    if (method === "Page.frameNavigated") {
+    if (method === "Runtime.consoleAPICalled") {
+      const payload = page.recorderMessage(params);
+      const event = payload === null ? null : parseEvent(payload);
+      if (event !== null && events.length < MAX_EVENTS) {
+        events.push(event);
+        lastAt = monotonic();
+      }
+    } else if (method === "Page.frameNavigated") {
       const frame = params["frame"] as Record<string, unknown> | undefined;
       if (frame && !frame["parentId"] && typeof frame["url"] === "string" && events.length < MAX_EVENTS) events.push({ kind: "navigate", at: Date.now(), url: frame["url"] });
     } else if (method === "Inspector.detached" || method === "Inspector.targetCrashed") closed = true;
@@ -357,6 +377,7 @@ export async function capture(
   state.listeners.push(listener);
   let stoppedBy = "timeout";
   try {
+    await page.enableRuntime();
     await page.refreshFrames();
     const deadline = monotonic() + timeout;
     for (;;) {
@@ -365,7 +386,7 @@ export async function capture(
         stoppedBy = "the tab closed";
         break;
       }
-      if ((await drainFrames(pages, drain, events)) > 0) lastAt = monotonic();
+      if ((await drainFrames(pages, DRAIN, events)) > 0) lastAt = monotonic();
       const now = monotonic();
       if (now >= deadline) break;
       if (events.some((event) => event.kind !== "navigate") && now - lastAt >= idle) {

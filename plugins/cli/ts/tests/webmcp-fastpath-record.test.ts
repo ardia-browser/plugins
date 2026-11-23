@@ -173,7 +173,7 @@ describe("site tools", () => {
     expect(calls).toEqual([]);
     const [tool] = normalizeTools(probed);
     const answer = await invokeBound(context, "lookup", { q: "x" }, tool!.fingerprint);
-    expect(answer).toEqual({ via: "document.modelContext", result: { content: [{ type: "text", text: "found" }] } });
+    expect(answer).toEqual({ via: "document.modelContext", binding: "handler", result: { content: [{ type: "text", text: "found" }] } });
     expect(calls).toEqual([{ q: "x" }]);
     expect(await invokeBound(context, "missing", {}, tool!.fingerprint)).toEqual({ missing: true });
   });
@@ -192,7 +192,7 @@ describe("site tools", () => {
     const context = vm.createContext({ document: { querySelectorAll: () => [] }, navigator, setTimeout, Promise, JSON, Map, Array, Object });
     const [tool] = normalizeTools(await vm.runInContext(PROBE, context));
     expect(tool?.source).toBe("navigator.modelContextTesting");
-    expect(await invokeBound(context, "t1", { a: 1 }, tool!.fingerprint)).toEqual({ via: "navigator.modelContextTesting", result: { content: [{ type: "text", text: "ok" }] } });
+    expect(await invokeBound(context, "t1", { a: 1 }, tool!.fingerprint)).toEqual({ via: "navigator.modelContextTesting", binding: "name", result: { content: [{ type: "text", text: "ok" }] } });
     expect(executed).toEqual([["t1", '{"a":1}']]);
   });
 
@@ -211,7 +211,7 @@ describe("site tools", () => {
       return { collected, fingerprint: listed!.fingerprint };
     };
     let bound = await fresh();
-    expect(await invokeBound(context, "lookup", {}, bound.fingerprint, bound.collected)).toEqual({ via: "document.modelContext", result: "from approved" });
+    expect(await invokeBound(context, "lookup", {}, bound.fingerprint, bound.collected)).toEqual({ via: "document.modelContext", binding: "handler", result: "from approved" });
     approvedTool["execute"] = async () => {
       calls.push("hijacked");
       return "hijacked";
@@ -325,7 +325,7 @@ describe("record", () => {
     const sent: string[] = [];
     const listeners: string[] = [];
     const context = vm.createContext({
-      __ardiaRecordQueue: sent,
+      console: { debug: (line: string) => sent.push(line) },
       addEventListener: (name: string) => listeners.push(name),
       removeEventListener: () => {},
       CSS: { escape: (text: string) => text },
@@ -338,6 +338,6 @@ describe("record", () => {
     vm.runInContext("var globalThis = this;", context);
     vm.runInContext(RECORDER_SOURCE, context);
     vm.runInContext(RECORDER_SOURCE, context);
-    expect(listeners).toEqual(["focusin", "input", "change", "click", "keydown", "submit", "pagehide"]);
+    expect(listeners).toEqual(["focusin", "input", "change", "pointerdown", "click", "keydown", "submit", "pagehide"]);
   });
 });

@@ -1,10 +1,11 @@
 import "./libc-loaded.ts";
+import { RECORD_MARK } from "../src/browse/state/page.ts";
 import { afterAll, describe, expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import vm from "node:vm";
-import { capture, DRAIN, drainFrames, drainSource, finalDrain, type Pages, RECORDER_SOURCE, recordedFlow, STOP_DRAIN } from "../src/browse/commands/record.ts";
+import { capture, DRAIN, drainFrames, finalDrain, type Pages, RECORDER_SOURCE, recordedFlow, STOP_DRAIN } from "../src/browse/commands/record.ts";
 import { BrowseError, OutcomeUnknown, Usage } from "../src/browse/daemon-errors.ts";
 import type { Action } from "../src/browse/flows/actions.ts";
 import { compileEvents } from "../src/browse/flows/compile.ts";
@@ -177,12 +178,15 @@ describe("recording drains a queue in ardia's own page world", () => {
       calls,
       frames: () => ["main", "child"],
       call: async (fn, frame) => {
-        const kind = fn === STOP_DRAIN ? "stop" : fn === DRAIN || fn === drainSource("t0") ? "drain" : "?";
+        const kind = fn === STOP_DRAIN ? "stop" : fn === DRAIN ? "drain" : "?";
         calls.push(`${kind} ${frame}`);
         if (frame === "child" && kind === "drain") throw new Error("frame gone");
         return script[kind]?.shift() ?? [];
       },
       closed: () => closed,
+      refresh: async () => {
+        calls.push("refresh");
+      },
     };
   }
 
@@ -209,9 +213,9 @@ describe("recording drains a queue in ardia's own page world", () => {
   test("capture polls until idle and ends with a stop drain, with no binding or init script", async () => {
     const pages = fakePages({ drain: [[payload("click", 1)]], stop: [[payload("fill", 5)]] });
     const sent: string[] = [];
-    const page = { url: "https://app.example.com/", crashed: false, refreshFrames: async () => new Map(), send: async (method: string) => sent.push(method) };
+    const page = { url: "https://app.example.com/", crashed: false, refreshFrames: async () => new Map(), enableRuntime: async () => {}, send: async (method: string) => sent.push(method) };
     const ctx = { state: { listeners: [] as unknown[] } };
-    const { events, stoppedBy } = await capture(ctx as never, page as never, 5, 0.3, pages, "t0");
+    const { events, stoppedBy } = await capture(ctx as never, page as never, 5, 0.3, pages);
     expect(stoppedBy).toBe("idle");
     expect(events.map((event) => event.kind)).toEqual(["click", "fill"]);
     expect(pages.calls.at(-2)).toBe("stop main");
@@ -245,7 +249,7 @@ describe("recorder privacy", () => {
     const handlers: Record<string, (event: unknown) => void> = {};
     const sent: Record<string, unknown>[] = [];
     const context = vm.createContext({
-      __ardiaRecordQueue: { get length() { return sent.length; }, push: (payload: string) => sent.push(JSON.parse(payload)) },
+      console: { debug: (line: string) => sent.push(JSON.parse(line.slice(RECORD_MARK.length))) },
       addEventListener: (name: string, handler: (event: unknown) => void) => {
         handlers[name] = handler;
       },

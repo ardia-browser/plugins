@@ -64,7 +64,7 @@ export function pickReadable(readable: string, visible: string): { content: stri
 
 function jsonBody(text: string): boolean {
   const body = text.trim();
-  if (!(body.startsWith("{") || body.startsWith("["))) return false;
+  if (!body) return false;
   try {
     JSON.parse(body);
     return true;
