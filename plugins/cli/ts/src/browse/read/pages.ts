@@ -505,15 +505,23 @@ export async function readTabs(ctx: Ctx, urls: readonly string[], selector: stri
 }
 
 export async function readHttpOne(url: string, options: Options): Promise<PageRecord> {
-  const out: PageRecord = { url, source: "http" };
+  const one = await fetchOneOrPage(url, options, {});
+  return one instanceof Result ? pageFrom(url, one) : one;
+}
+
+export async function fetchOneOrPage(url: string, options: Options, globalOptions: Options): Promise<Result | PageRecord> {
   let result: Result;
   try {
-    result = await fetchRun(url, { ...options }, {});
+    result = await fetchRun(url, { ...options }, globalOptions);
   } catch (error) {
     if (!quiet(error)) throw error;
-    out["error"] = (error as BrowseError).text;
-    return out;
+    return { url, source: "http", error: (error as BrowseError).text };
   }
+  return result.body ? result : pageFrom(url, result);
+}
+
+function pageFrom(url: string, result: Result): PageRecord {
+  const out: PageRecord = { url, source: "http" };
   const data = result.data as Record<string, unknown>;
   Object.assign(out, { finalUrl: data["finalUrl"] || url, title: data["title"] || "", text: data["content"] || "", readAt: readAt() });
   const challenge = botCheck(String(out["title"]), String(out["text"]), out["status"]);
@@ -561,9 +569,13 @@ export async function readLocal(options: Options, positional: string[], stdin: s
   if (urls.length === 0) throw new Usage("Usage: ardia browse read <url>... [--stdin] [--links <pattern>] [-s <selector>] [--http]");
   const limit = pagesLimit(options, urls.length);
   pageTimeout(options);
-  if (urls.length === 1 && globalOptions["out_body"] && !options["selector"]) return fetchRun(urls[0] as string, options, globalOptions);
   if (options["selector"]) throw new Usage("-s needs the browser's DOM; drop --http to read the pages in Ardia");
   const extra = limitNote(urls.length, limit, "--limit");
+  if (urls.length === 1 && globalOptions["out_body"]) {
+    const one = await fetchOneOrPage(urls[0] as string, options, globalOptions);
+    if (one instanceof Result) return one;
+    return resultFor([one], options, globalOptions, extra);
+  }
   return resultFor(await readHttp(urls.slice(0, limit), options), options, globalOptions, extra);
 }
 
@@ -606,8 +618,11 @@ export async function run(ctx: Ctx, options: Options, positional: string[]): Pro
   let records: PageRecord[];
   if (fetchOnly(options)) {
     if (selector) throw new Usage("-s needs the browser's DOM; drop --http to read the pages in Ardia");
-    if (urls.length === 1 && named === 1 && ctx.options["out_body"]) return fetchRun(urls[0] as string, options, ctx.options);
-    records = await readHttp(urls, options);
+    if (urls.length === 1 && named === 1 && ctx.options["out_body"]) {
+      const one = await fetchOneOrPage(urls[0] as string, options, ctx.options);
+      if (one instanceof Result) return one;
+      records = [one];
+    } else records = await readHttp(urls, options);
   } else records = await readTabs(ctx, urls, selector, timeout, options);
   return resultFor(records, options, ctx.options, extra, dataExtra);
 }

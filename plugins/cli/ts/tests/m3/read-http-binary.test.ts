@@ -44,6 +44,7 @@ beforeAll(() => {
       if (url.pathname === "/proto") return new Response(Uint8Array.from([0x08, 0x01]), { headers: { "content-type": "application/protobuf" } });
       if (url.pathname === "/octets-control") return new Response(Uint8Array.from([0x08, 0x01]), { headers: { "content-type": "application/octet-stream" } });
       if (url.pathname === "/utf16-quoted") return new Response(Buffer.from("Hi", "utf16le"), { headers: { "content-type": 'application/octet-stream; charset="utf-16-le"' } });
+      if (url.pathname === "/ascii-control") return new Response(Uint8Array.from([0x08, 0x01]), { headers: { "content-type": "application/octet-stream; charset=us-ascii" } });
       if (url.pathname === "/utf16") return new Response(Buffer.from("Hello", "utf16le"), { headers: { "content-type": "application/octet-stream; charset=utf-16le" } });
       if (url.pathname === "/pixmap") return new Response(Uint8Array.from([0x50, 0x36, 0x0a, 0x31, 0x20, 0x31, 0x0a, 0x32, 0x35, 0x35, 0x0a, 0x01, 0x02, 0x03]), { headers: { "content-type": "image/x-portable-pixmap" } });
       if (url.pathname === "/readable") return new Response("<html><title>Readable</title><body><main>A readable page with enough words in it.</main></body></html>", { headers: { "content-type": "text/html" } });
@@ -190,6 +191,14 @@ describe("read --http keeps binary bodies whole (plugins#73, FB-8EJR)", () => {
     await expect(readLocal({ stdin: true, http: true, limit: "0" }, [], `${base}/proto\n`, { out_body: true })).rejects.toBeInstanceOf(Usage);
     await expect(readLocal({ stdin: true, http: true, timeout: "soon" }, [], `${base}/proto\n`, { out_body: true })).rejects.toBeInstanceOf(Usage);
     expect((await readLocal({ stdin: true, http: true }, [], `${base}/proto\n`, { out_body: true })).body?.length).toBe(2);
+  });
+
+  test("Codex r5: a declared charset doesn't skip the control-byte check; one text URL on stdin still saves page records", async () => {
+    expect((await fetchRun(`${base}/ascii-control`, {}, { out_body: true })).body?.length).toBe(2);
+    await expect(fetchRun(`${base}/ascii-control`, {}, {})).rejects.toMatchObject({ code: "binary_body" });
+    const text = await readLocal({ stdin: true, http: true }, [], `${base}/caf%C3%A9\n`, { out_body: true });
+    expect(text.body).toBeNull();
+    expect(((text.data as Record<string, unknown>)["pages"] as Record<string, unknown>[])[0]?.["title"]).toBe("Café");
   });
 
   test("a UTF-16 body served as octets reads as text, a pixmap saves raw", async () => {

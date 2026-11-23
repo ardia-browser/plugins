@@ -30,7 +30,12 @@ const BINARY_TYPES = new Set([
   "application/cbor", "application/bson", "application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint", "application/x-msdownload", "application/java-archive",
 ]);
 const QUOTED_CHARSET = /charset\s*=\s*"([^"]+)"/iu;
-const CONTROL_BYTES = /[\x00-\x08\x0b\x0e-\x1a\x1c-\x1f]/u;
+const TEXT_CONTROLS = new Set([0x09, 0x0a, 0x0c, 0x0d, 0x1b]);
+
+function holdsControlBytes(body: Uint8Array): boolean {
+  for (const byte of body) if (byte < 0x20 && !TEXT_CONTROLS.has(byte)) return true;
+  return false;
+}
 const UNICODE_CHARSETS = /^utf(16|32)(le|be)?$/u;
 
 export type Fetched = [number, string, string, string, Uint8Array?];
@@ -100,11 +105,12 @@ export function binaryBody(kind: string, charset: string | null, body: Uint8Arra
   if (textualType(kind)) return false;
   if (binaryType(kind)) return true;
   if (charset !== null && UNICODE_CHARSETS.test(charset.toLowerCase().replaceAll(/[-_]/gu, ""))) return false;
-  if (body.includes(0)) return true;
+  if (holdsControlBytes(body)) return true;
   const sample = body.length > MAX_BODY ? trimmedToChar(body.subarray(0, MAX_BODY)) : body;
   if (charset !== null && !/^utf-?8$/iu.test(charset)) return false;
   try {
-    return CONTROL_BYTES.test(new TextDecoder("utf-8", { fatal: true }).decode(sample));
+    new TextDecoder("utf-8", { fatal: true }).decode(sample);
+    return false;
   } catch {
     return true;
   }
