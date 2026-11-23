@@ -29,6 +29,22 @@
   },
   {
    "argv": [
+    "press",
+    "@e13",
+    "Enter"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "location.hash"
+   ],
+   "session": "act",
+   "main_world": true
+  },
+  {
+   "argv": [
     "fill",
     "#q",
     "duck"
@@ -38,7 +54,7 @@
   {
    "argv": [
     "click",
-    "@e19"
+    "@e21"
    ],
    "session": "act"
   },

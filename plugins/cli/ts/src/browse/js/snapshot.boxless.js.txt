@@ -19,18 +19,25 @@
     return false;
   };
   const roleOf = (el) => (el.getAttribute("role") || "").trim().split(/\s+/)[0].toLowerCase();
-  const typed = (el) => el.isContentEditable || /^(TEXTAREA|SELECT)$/.test(el.tagName)
+  const PRESSABLE = /^(button|link|checkbox|radio|switch|tab|menuitem|menuitemcheckbox|menuitemradio|option|treeitem)$/;
+  const typed = (el) => (el.isContentEditable && !/^(A|BUTTON|SUMMARY)$/.test(el.tagName) && !PRESSABLE.test(roleOf(el))) || /^(TEXTAREA|SELECT)$/.test(el.tagName)
     || (el.tagName === "INPUT" && !/^(button|submit|reset|image|checkbox|radio)$/.test(el.type))
     || /^(textbox|searchbox|combobox|spinbutton|slider|listbox)$/.test(roleOf(el));
-  const PRESSABLE = /^(button|link|checkbox|radio|switch|tab|menuitem|menuitemcheckbox|menuitemradio|option|treeitem)$/;
+  const skipLink = (el) => {
+    const href = el.tagName === "A" ? el.getAttribute("href") || "" : "";
+    if (!href.startsWith("#") || href.length < 2) return false;
+    let id = href.slice(1);
+    try { id = decodeURIComponent(id); } catch (error) {}
+    return !!(document.getElementById(id) || document.getElementsByName(id)[0]);
+  };
   const judged = (el) => /^(A|BUTTON|INPUT|SUMMARY)$/.test(el.tagName) || el.hasAttribute("tabindex") || PRESSABLE.test(roleOf(el));
   const CONTROLS = 'a[href], button, input:not([type="hidden"]), select, textarea, summary, [role], [tabindex], [contenteditable]';
   const visit = (root) => {
     for (const el of root.querySelectorAll(CONTROLS)) {
       if (found.length >= 50) return;
       if (/^(IFRAME|FRAME|OPTION)$/.test(el.tagName) || el instanceof SVGElement || el.closest('[aria-hidden="true"], [inert]')) continue;
-      if (typed(el) || !judged(el)) continue;
-      if (el.checkVisibility && !el.checkVisibility({ checkVisibilityCSS: true })) continue;
+      if (typed(el) || !judged(el) || skipLink(el)) continue;
+      if (el.checkVisibility && !el.checkVisibility({ checkVisibilityCSS: true }) && getComputedStyle(el).display !== "contents") continue;
       if (!boxed(el) && !standIn(el)) found.push(el);
     }
     for (const host of root.querySelectorAll("*")) {
