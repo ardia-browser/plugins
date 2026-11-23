@@ -436,8 +436,9 @@ export class Daemon {
         return;
       }
       if ("error" in outcome) throw outcome.error;
-      const [code, out, err] = outcome.answer;
+      const [code, out, err, body] = outcome.answer;
       const fields: [string, Value][] = [];
+      if (body) fields.push(["body", Buffer.from(body).toString("base64")], ["body_bytes", BigInt(body.length)]);
       const extra = answerFields(metrics);
       if (extra.metrics) fields.push(["metrics", new Map([...extra.metrics].map(([key, value]): [string, Value] => [key, typeof value === "number" ? BigInt(value) : value]))]);
       if (extra.code) fields.push(["code", extra.code]);
@@ -496,7 +497,7 @@ export class Daemon {
       if (hooks.afterCommand) await hooks.afterCommand(this.state);
       const notice = this.state.notice;
       this.state.notice = null;
-      answer = [answer[0], answer[1], (notice ? `${redact(notice)}\n` : "") + answer[2]];
+      answer = [answer[0], answer[1], (notice ? `${redact(notice)}\n` : "") + answer[2], ...(answer[3] ? [answer[3]] : [])] as Answer;
       const batchClose = hooks.closeAfterBatch ? hooks.closeAfterBatch(this.state) : false;
       closeAfter = (this.closeAfterBatch || batchClose) && name === "batch" && answer[0] === 0;
       this.closeAfterBatch = false;

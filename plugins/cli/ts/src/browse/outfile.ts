@@ -1,4 +1,4 @@
-import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, renameSync, rmSync, statSync, writeSync } from "node:fs";
+import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, renameSync, rmSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { dumps, Float, type JsonObject, type Value } from "../json.ts";
 import { expandUser } from "../paths.ts";
@@ -8,7 +8,7 @@ import { groupThousands } from "../pylib/format.ts";
 import { joinedWords, splitlines } from "../pylib/str.ts";
 import { redact } from "../redact.ts";
 import { Usage } from "./daemon-errors.ts";
-import { wellFormed } from "./paths.ts";
+import { wellFormed, writeAllFd } from "./paths.ts";
 
 export const TAKES_OUT = ["script", "eval", "read", "snapshot", "get"];
 export const AS_TEXT = ["snapshot", "get"];
@@ -225,7 +225,22 @@ function currentUmask(): number {
   return mask;
 }
 
-export function save(path: string, text: string): string {
+export function savedBody(command: string, answer: JsonObject): Uint8Array | null {
+  const encoded = command === "read" ? answer.get("body") : undefined;
+  if (typeof encoded !== "string") return null;
+  const body = Buffer.from(encoded, "base64");
+  if (body.toString("base64") !== encoded || answer.get("body_bytes") !== BigInt(body.length)) throw new BodyDamaged();
+  return body;
+}
+
+export class BodyDamaged extends Error {}
+
+export function savedBodyLine(target: string, body: Uint8Array, data: JsonObject): string {
+  const kind = data.get("contentType");
+  return `✓ Saved to ${target} (${groupThousands(String(body.length))} bytes${typeof kind === "string" && kind ? `, ${kind}` : ""}), the response body byte for byte (after any HTTP content decoding)\n`;
+}
+
+export function save(path: string, text: string | Uint8Array): string {
   const target = expandUser(path);
   let folder = false;
   try {
@@ -239,7 +254,7 @@ export function save(path: string, text: string): string {
   try {
     const fd = openSync(temporary, "wx", 0o600);
     try {
-      writeSync(fd, wellFormed(redact(text)));
+      writeAllFd(fd, typeof text === "string" ? Buffer.from(wellFormed(redact(text)), "utf8") : text);
     } finally {
       closeSync(fd);
     }

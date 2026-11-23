@@ -1,3 +1,4 @@
+import { urljoin } from "../../pylib/urllib.ts";
 import { formatG } from "../../pylib/format.ts";
 import { sleep } from "../cdp/cancel.ts";
 import { BrowseError, Usage } from "../daemon-errors.ts";
@@ -78,7 +79,13 @@ export async function cmdRead(ctx: Ctx, argv: string[]): Promise<Result> {
     return pagedata.run(page, frameOrMain(ctx, page), options);
   }
   if (scrolls(options)) return runScroll(ctx, options, args);
-  if (pages.singleFetch(options, args)) return fetchRun(args[0] as string, options, ctx.options);
+  if (pages.singleFetch(options, args)) {
+    const given = args[0] as string;
+    if (!pages.relative(given)) return fetchRun(given, options, ctx.options);
+    const page = await ctx.state.page();
+    await page.refreshFrames();
+    return fetchRun(urljoin(page.url, given), options, ctx.options);
+  }
   if (pages.wantsPages(options, args)) return pages.run(ctx, options, args);
   if (options["llms"] || options["require_md"] || options["http"]) {
     const page = await ctx.state.page();
