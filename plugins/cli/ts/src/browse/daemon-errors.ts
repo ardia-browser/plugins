@@ -73,6 +73,7 @@ const SCREENSHOTS_INSTEAD = "take a `screenshot` at each moment that matters";
 const SIGN_IN_INSTEAD = "ask the user to sign in in the tab, then work there";
 const TIMINGS_INSTEAD = "`eval` can read the page's own `performance` timings";
 const OTHER_WAY = "do this step another way, or ask the user to do it";
+export const FULL_CONTROL_ARDIA = "0.2.49";
 export const NOT_YET_REASONS: ReadonlySet<string> = new Set(["with those editing commands"]);
 export const NOT_YET: ReadonlyMap<string, string> = new Map([
   ["upload", "ask the user to choose the file in the page, then carry on"],
@@ -110,12 +111,15 @@ function knownLimit(command: string | null | undefined): boolean {
 export function notYetMessage(command: string | null | undefined, method: string, refusal: string): string {
   const what = command ? `\`${command}\`` : method;
   if (!knownLimit(command)) {
-    return `${what} isn't allowed on this Ardia (${refusal}). Updating Ardia may help; if it doesn't, ${OTHER_WAY}`;
+    return (
+      `${what} isn't allowed on this Ardia (${refusal}). Its engine keeps the ardia command to a short list of DevTools ` +
+      `methods, and Ardia ${FULL_CONTROL_ARDIA} or later allows them all: update Ardia, or ${OTHER_WAY}`
+    );
   }
   return (
-    `${what} isn't available yet (${refusal}). No released Ardia lets the ardia command do this: it's a deliberate safety limit, not a bug, ` +
-    "so retrying or updating Ardia won't help today. A later Ardia adds it behind its full-control setting. " +
-    `Instead: ${insteadFor(command)}`
+    `${what} needs Ardia ${FULL_CONTROL_ARDIA} or later (${refusal}). This Ardia's engine keeps the ardia command to a short ` +
+    `list of DevTools methods; ${FULL_CONTROL_ARDIA} lets it use them all, so update Ardia and run it again. ` +
+    `Until then: ${insteadFor(command)}`
   );
 }
 
@@ -136,7 +140,7 @@ export class Gated extends BrowseError {
       message = notYetMessage(command, method, refusal);
     } else if (why) {
       const hint = Object.hasOwn(REFUSAL_HINTS, why) ? REFUSAL_HINTS[why] : undefined;
-      message = `${what}, which Ardia allows for the ardia command, but not ${why} (${refusal})` + (hint ? `: ${hint}` : "");
+      message = `${what}, which this Ardia allows for the ardia command, but not ${why} (${refusal})` + (hint ? `: ${hint}` : "") + `. Ardia ${FULL_CONTROL_ARDIA} or later has no such limit`;
     } else {
       message = notYetMessage(command, method, refusal);
     }

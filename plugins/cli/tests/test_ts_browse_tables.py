@@ -105,8 +105,8 @@ TS_HELP_ADDITIONS = (
      "  eval <js>                  Run JavaScript in the page [-b base64] [--stdin] [--timeout 2m] [--isolated]\n"),
     ("OVERVIEW", "             set device|geo|offline|headers|credentials|media\n",
      "             set device|geo|offline|headers|credentials|media|permission\n"),
-    ("OVERVIEW", "set device|geo|offline|\nheaders|credentials|media, network route,",
-     "set device|geo|offline|\nheaders|credentials|media|permission, network route,"),
+    ("OVERVIEW", "set device|geo|\noffline|headers|credentials|media, network route,",
+     "set device|geo|\noffline|headers|credentials|media|permission, network route,"),
     ("OVERVIEW", "(--links <pattern>: every matching link; -s sel)\n",
      "(--links <pattern>: every matching link; -s sel)\n"
      "  links [pattern]            List the session tab's links whose URL contains pattern (read --links … --list)\n"),
@@ -149,8 +149,8 @@ TS_HELP_ADDITIONS = (
     ("set", "  | credentials <user> <pass> | media [dark|light|no-preference] [reduced-motion]\n\n",
      "  | credentials <user> <pass> | media [dark|light|no-preference] [reduced-motion]\n"
      "  | permission geolocation|notifications|camera|microphone|clipboard [more …]\n\n"
-     "set permission grants those permissions to the tab's site ahead of any prompt (Browser.setPermission, which no\n"
-     "released Ardia allows yet: it fails with policy_refused).\n"),
+     "set permission grants those permissions to the tab's site ahead of any prompt (Browser.setPermission: Ardia\n"
+     "0.2.49 or later; an older one refuses it with policy_refused).\n"),
     ("read", "--links <pattern> reads every link on the session's tab whose URL contains the\npattern (* matches anything), in page order; --list only prints those links.",
      "--links <pattern> reads every link whose URL contains the pattern (* matches\nanything), in page order, from each URL you name (opened in a background tab, not read itself), else from the session's\ntab; --list only prints those links."),
     ("read", "Every URL you name is read (up to 100);\n--links finds at mos",

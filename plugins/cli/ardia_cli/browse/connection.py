@@ -58,10 +58,17 @@ def is_mutation(method: str) -> bool:
     return method in MUTATING_METHODS or method.startswith(("Input.", "Emulation."))
 
 
+def engine_refused(method: str, detail, code) -> bool:
+    if code not in (-32601, -32000) or not isinstance(detail, str):
+        return False
+    lead = f"ardia: {method}"
+    return detail.startswith(lead) and detail.endswith(POLICY_REFUSAL) and detail[len(lead):len(lead) + 1] == " "
+
+
 def failure(method: str, error) -> Exception:
     detail = error.detail or "The browser rejected the command"
     text = f"{method}: {detail} (code {error.code})"
-    if POLICY_REFUSAL in text:
+    if engine_refused(method, detail, error.code):
         return Gated(method, reason=refusal_reason(text, method))
     return CdpError(method, detail, error.code)
 

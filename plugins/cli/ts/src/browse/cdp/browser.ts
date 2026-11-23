@@ -110,10 +110,16 @@ export function isMutation(method: string): boolean {
   return MUTATING_METHODS.has(method) || method.startsWith("Input.") || method.startsWith("Emulation.");
 }
 
+export function engineRefused(method: string, detail: unknown, code: unknown): boolean {
+  if ((code !== -32601 && code !== -32000) || typeof detail !== "string") return false;
+  const lead = `ardia: ${method}`;
+  return detail.startsWith(lead) && detail.endsWith(POLICY_REFUSAL) && detail.slice(lead.length, lead.length + 1) === " ";
+}
+
 export function failure(method: string, error: CommandFailed): BrowseError {
   const detail = pyTruthy(error.detail) ? pyText(error.detail) : "The browser rejected the command";
   const text = `${method}: ${detail} (code ${pyText(error.code)})`;
-  if (text.includes(POLICY_REFUSAL)) return new Gated(method, null, null, refusalReason(text, method));
+  if (engineRefused(method, error.detail, error.code)) return new Gated(method, null, null, refusalReason(text, method));
   return new CdpError(method, detail, null, error.code);
 }
 

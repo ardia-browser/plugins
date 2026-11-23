@@ -95,10 +95,15 @@ def clip(text, limit: int = RECORD_TEXT_LIMIT):
     return text[:limit] + f"… [{len(text) - limit} more characters]"
 
 
+CREDENTIAL_HEADERS = frozenset({"cookie", "cookie2", "set-cookie", "set-cookie2", "authorization", "proxy-authorization"})
+
+
 def clip_headers(headers) -> dict:
     out = {}
     used = 0
     for name, value in (headers or {}).items():
+        if str(name).lower() in CREDENTIAL_HEADERS:
+            continue
         value = clip(str(value), HEADER_VALUE_LIMIT)
         used += len(name) + len(value)
         if used > HEADERS_LIMIT:

@@ -22,8 +22,8 @@ from ardia_cli.browse.errors import Gated, Usage
 
 CLI = Path(__file__).resolve().parents[1]
 CHROMIUM = os.environ.get("ARDIA_BROWSE_CHROMIUM", "")
-NOT_YET = "isn't available yet"
-LIMIT = "No released Ardia lets the ardia command do this: it's a deliberate safety limit, not a bug"
+NOT_YET = "needs Ardia 0.2.49 or later"
+LIMIT = "This Ardia's engine keeps the ardia command to a short list of DevTools methods; 0.2.49 lets it use them all, so update Ardia and run it again"
 PAGE = """<!doctype html><title>files</title>
 <input type=file id=f multiple><div id=out></div>
 <a id=dl href="data:text/plain;base64,aGVsbG8gZG93bmxvYWQ=" download="hello.txt">get</a>
@@ -189,13 +189,14 @@ class RawCdp(unittest.TestCase):
                 cdp(FakeState(), *argv)
             self.assertIn(said, caught.exception.message, argv)
 
-    def test_a_refused_method_says_it_is_a_deliberate_limit(self):
+    def test_a_refused_method_says_which_ardia_allows_it(self):
         refused = failure("Storage.getCookies", SimpleNamespace(detail="ardia: Storage.getCookies isn't allowed for the ardia command", code=-32000))
         state = FakeState({"Storage.getCookies": refused})
         with self.assertRaises(Gated) as caught:
             cdp(state, "Storage.getCookies")
         self.assertEqual(caught.exception.message, "`cdp` isn't allowed on this Ardia (Storage.getCookies isn't allowed for the ardia command). "
-                                                   "Updating Ardia may help; if it doesn't, do this step another way, or ask the user to do it")
+                                                   "Its engine keeps the ardia command to a short list of DevTools methods, and Ardia 0.2.49 or "
+                                                   "later allows them all: update Ardia, or do this step another way, or ask the user to do it")
 
     def test_a_borrowed_tab_takes_raw_calls_only_when_named(self):
         from ardia_cli.browse.errors import BrowseError
@@ -1031,8 +1032,7 @@ class NotAvailableYet(unittest.TestCase):
                                          ("Network.getCookies", "cookies get", "`eval document.cookie`")):
             error = Gated(method, command)
             self.assertTrue(error.message.startswith(f"`{command}` {NOT_YET} ({method} isn't allowed for the ardia command). {LIMIT}"), error.message)
-            self.assertIn("A later Ardia adds it behind its full-control setting", error.message)
-            self.assertIn(f"Instead: {instead}", error.message)
+            self.assertIn(f"Until then: {instead}", error.message)
             self.assertEqual((error.code, error.data), ("policy_refused", {"method": method, "reason": ""}))
             self.assertNotIn(": update Ardia", error.message)
 
@@ -1046,8 +1046,9 @@ class NotAvailableYet(unittest.TestCase):
         text = browse_help.OVERVIEW + "".join(browse_help.COMMANDS.values())
         for old in ("(gated", "Gated by", "gated by", "doesn't allow yet", "not allowed by Ardia's policy", "Older Ardia"):
             self.assertNotIn(old, text)
-        self.assertIn("Not available yet: cookies, state save", browse_help.OVERVIEW)
-        self.assertNotIn("update Ardia", browse_help.COMMANDS["network"])
+        self.assertIn("Need Ardia 0.2.49 or later: cookies, state save", browse_help.OVERVIEW)
+        self.assertNotIn("Not available yet", text)
+        self.assertIn("Ardia 0.2.49 or later", browse_help.COMMANDS["network"])
         self.assertIn("DOM.setFileInputFiles", browse_help.COMMANDS["upload"])
         self.assertIn("wait --download", browse_help.COMMANDS["download"])
 
@@ -1245,6 +1246,29 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *args):
         pass
 
+
+
+class EngineRefusalShape(unittest.TestCase):
+    def test_only_the_engines_own_reply_counts_as_a_refusal(self):
+        from ardia_cli.browse.errors import CdpError
+
+        echoed = failure("Browser.setPermission", SimpleNamespace(detail="Invalid parameters: setting 'x isn't allowed for the ardia command'", code=-32602))
+        self.assertIsInstance(echoed, CdpError)
+        self.assertNotIsInstance(echoed, Gated)
+        other_code = failure("DOM.setFileInputFiles", SimpleNamespace(detail="ardia: DOM.setFileInputFiles isn't allowed for the ardia command", code=-32602))
+        self.assertNotIsInstance(other_code, Gated)
+        other_method = failure("DOM.setFileInputFiles", SimpleNamespace(detail="ardia: DOM.setFileInputFilesX isn't allowed for the ardia command", code=-32601))
+        self.assertNotIsInstance(other_method, Gated)
+        self.assertIsInstance(failure("Fetch.enable", SimpleNamespace(detail="ardia: Fetch.enable isn't allowed for the ardia command", code=-32601)), Gated)
+        with_reason = failure("Page.navigate", SimpleNamespace(detail="ardia: Page.navigate to that URL isn't allowed for the ardia command", code=-32000))
+        self.assertEqual((type(with_reason), with_reason.reason), (Gated, "to that URL"))
+
+    def test_recorded_headers_leave_credentials_out(self):
+        from ardia_cli.browse.page import clip_headers
+
+        kept = clip_headers({"Accept": "*/*", "Cookie": "sid=1", "authorization": "Bearer x", "Set-Cookie": "a=b", "Proxy-Authorization": "Basic y",
+                             "Cookie2": "c=d", "set-cookie2": "e=f", "X-Trace": "t"})
+        self.assertEqual(kept, {"Accept": "*/*", "X-Trace": "t"})
 
 if __name__ == "__main__":
     unittest.main()
