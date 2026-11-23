@@ -157,7 +157,7 @@ function maskedString(raw: string, longestFirst: readonly string[]): string {
   if (!held && !embedded) return raw;
   const masked = embedded ? maskedDocument(value, longestFirst) : replaceSecrets(value, longestFirst);
   if (masked === value) return raw;
-  return encodedLike(raw, masked.trim() === QUOTED_MASK ? MASK : masked);
+  return encodedLike(raw, masked);
 }
 
 function maskedLeaves(text: string, nodes: readonly JsonNode[], longestFirst: readonly string[]): string {

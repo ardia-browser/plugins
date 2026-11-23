@@ -87,9 +87,28 @@ function stillJson(text: string): unknown {
   }
 }
 
+const HELD = ["1", "f", "u00", 'abc"def', "café", "tok\\en"];
+
+function decodedValues(value: unknown): string[] {
+  if (typeof value === "number") return [String(value)];
+  if (typeof value === "string") {
+    const inner = /^\s*[{["]/u.test(value) ? (() => {
+      try {
+        return { parsed: JSON.parse(value) as unknown };
+      } catch {
+        return null;
+      }
+    })() : null;
+    return inner ? [...decodedValues(inner.parsed)] : [value];
+  }
+  if (Array.isArray(value)) return value.flatMap(decodedValues);
+  if (value !== null && typeof value === "object") return Object.entries(value).flatMap(([key, item]) => [key, ...decodedValues(item)]);
+  return [];
+}
+
 describe("masking known secrets keeps JSON whole (plugins#72)", () => {
   const secrets = new Secrets();
-  for (const secret of ["1", "f", "u00", "abc\"def", "café", "tok\\en"]) secrets.add(secret);
+  for (const secret of HELD) secrets.add(secret);
 
   test("a secret that is a number, an escape letter or part of an escape never breaks the JSON around it", () => {
     const value = { exit: 1, text: "line\nbreak\fform é", items: [1, 2, 10], ok: true };
@@ -152,7 +171,7 @@ describe("masking known secrets keeps JSON whole (plugins#72)", () => {
   test("no secret survives that the plain replacement would have masked (Codex r1 on #79)", () => {
     const held = new Secrets();
     held.add("[123456789]");
-    expect(held.redact(JSON.stringify({ s: "[123456789]" }))).toBe('{"s":"***"}');
+    expect(JSON.parse(JSON.parse(held.redact(JSON.stringify({ s: "[123456789]" }))).s)).toBe("***");
     const spanning = new Secrets();
     spanning.add("12345,67890");
     const masked = spanning.redact(JSON.stringify({ s: "[12345,67890]" }));
@@ -220,7 +239,7 @@ describe("masking known secrets keeps JSON whole (plugins#72)", () => {
         const parsed = stillJson(masked) as typeof value;
         expect(parsed.n as unknown).toBe(String(value.n).includes("1") ? "***" : value.n);
         stillJson(parsed.nested);
-        for (const secret of ["1", "café", 'abc"def']) expect(JSON.stringify(parsed).includes(secret) && !JSON.stringify(value).includes(secret)).toBe(false);
+        for (const decoded of decodedValues(parsed)) for (const secret of HELD) expect(decoded.includes(secret)).toBe(false);
         expect(secrets.redact(masked)).toBe(masked);
       }
     }
@@ -245,7 +264,7 @@ describe("JSON-aware masking round 2 (Codex r2 on #79)", () => {
     for (const [secret, text] of [["[true]", '{"s":"[true]"}'], ['["private-key"]', JSON.stringify({ s: '["private-key"]' })], ["[123456789]", '{"s":"[123456789]"}']] as const) {
       const out = masked([secret], text);
       expect(out.includes(secret)).toBe(false);
-      expect(JSON.parse(out)).toEqual({ s: "***" });
+      expect(JSON.parse(JSON.parse(out).s)).toBe("***");
     }
   });
 
@@ -348,5 +367,16 @@ describe("JSON-aware masking round 5 (Codex r5 on #79)", () => {
     const out = masked(["}\n{"], '{"n":1}\n'.repeat(32_000));
     expect(out.includes("}\n{")).toBe(false);
     expect(performance.now() - started).toBeLessThan(3000);
+  });
+});
+
+describe("review threads on #79", () => {
+  test("an embedded document masked whole keeps its quotes, so it still parses (Greptile)", () => {
+    const held = new Secrets();
+    held.add("secret");
+    const out = JSON.parse(held.redact(JSON.stringify({ s: JSON.stringify("secret") }))) as { s: string };
+    expect(JSON.parse(out.s)).toBe("***");
+    const array = JSON.parse(held.redact(JSON.stringify({ s: JSON.stringify(["secret", 2]) }))) as { s: string };
+    expect(JSON.parse(array.s)).toEqual(["***", 2]);
   });
 });
