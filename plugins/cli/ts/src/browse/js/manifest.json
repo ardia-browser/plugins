@@ -169,6 +169,6 @@
   },
   "snapshot.boxless.js.txt": {
     "python": "ardia_cli.browse.snapshot.BOXLESS",
-    "sha256": "73f8dff2b8abfd37b54720b2b321b4b94777e370a3559de3659dfcc7c1d5f9ff"
+    "sha256": "dea10c44843dd606584e4bfeb11bcbb2e9556f2e6f50accd4a4f3fdf71ef5630"
   }
 }

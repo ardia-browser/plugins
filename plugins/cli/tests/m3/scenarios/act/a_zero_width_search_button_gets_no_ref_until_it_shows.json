@@ -37,15 +37,8 @@
   },
   {
    "argv": [
-    "snapshot",
-    "-i"
-   ],
-   "session": "act"
-  },
-  {
-   "argv": [
     "click",
-    "@e16"
+    "@e19"
    ],
    "session": "act"
   },
