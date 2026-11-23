@@ -286,7 +286,7 @@ def ask_socket(sock_path: Path, timeout: float = DEVTOOLS_ENDPOINT_TIMEOUT):
 
     size = len(os.fsencode(str(sock_path)))
     if size > (control.LINUX_SUN_PATH_MAX if LINUX else control.SUN_PATH_MAX):
-        raise SocketRefused("unsafe", f"the control socket path is {size} bytes, too long for a Unix socket")
+        raise NotConnected(f"the control socket path is {size} bytes, too long for a Unix socket")
     try:
         info = os.lstat(sock_path)
     except (FileNotFoundError, NotADirectoryError, PermissionError) as error:

@@ -67,7 +67,7 @@ export function controlSocket(state: AppTabState): string | null {
 }
 
 function socketProblem(file: string): "missing" | "unsafe" | null {
-  if (Buffer.byteLength(file) > SUN_PATH_MAX) return "unsafe";
+  if (Buffer.byteLength(file) > SUN_PATH_MAX) return "missing";
   try {
     const info = fs.lstatSync(file);
     return info.isSocket() && info.uid === uid() ? null : "unsafe";

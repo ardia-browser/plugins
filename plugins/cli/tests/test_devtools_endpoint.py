@@ -221,7 +221,7 @@ class DevtoolsEndpoint(unittest.TestCase):
 
             def ask():
                 try:
-                    outcome.append(endpoint.ask_socket(path, timeout=2))
+                    outcome.append(endpoint.ask_socket(path, timeout=10))
                 except SocketRefused as error:
                     outcome.append(error.code)
 
@@ -231,9 +231,9 @@ class DevtoolsEndpoint(unittest.TestCase):
             worker = threading.Thread(target=lambda: context.run(ask))
             worker.start()
             sink.cancel()
-            worker.join(5)
+            worker.join(2)
             endpoint.OPEN_SOCKETS.reset(mark)
-            self.assertFalse(worker.is_alive())
+            self.assertFalse(worker.is_alive(), "a cancelled token read must end at once, not wait out its timeout")
             if outcome == ["cancelled"]:
                 continue
             server.settimeout(1)
@@ -244,10 +244,31 @@ class DevtoolsEndpoint(unittest.TestCase):
             connection.close()
 
     def test_a_peer_that_closes_after_hello_is_unreachable_not_a_raw_error(self):
-        path = self.serve(lambda request: [{"id": request["id"], "result": {"app": "Ardia", "protocol": 4}}] if request["method"] == "hello" else [])
+        path = self.root / "ArdiaControl.sock"
+        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        server.bind(str(path))
+        server.listen(1)
+        self.addCleanup(server.close)
+
+        def greet_and_close():
+            connection, _ = server.accept()
+            buffer = b""
+            while b"\n" not in buffer:
+                chunk = connection.recv(65536)
+                if not chunk:
+                    break
+                buffer += chunk
+            hello = json.loads(buffer.split(b"\n", 1)[0])
+            connection.sendall(json.dumps({"id": hello["id"], "result": {"app": "Ardia", "protocol": 4}}).encode() + b"\n")
+            connection.shutdown(socket.SHUT_RDWR)
+            connection.close()
+
+        peer = threading.Thread(target=greet_and_close, daemon=True)
+        peer.start()
         with self.assertRaises(SocketRefused) as caught:
-            endpoint.ask_socket(path, timeout=1)
-        self.assertIn(caught.exception.code, ("unreachable", "timeout"))
+            endpoint.ask_socket(path, timeout=5)
+        peer.join(5)
+        self.assertEqual(caught.exception.code, "unreachable")
 
     def test_server_codes_never_pick_the_fallback(self):
         def answer(code, before_hello):
@@ -266,6 +287,17 @@ class DevtoolsEndpoint(unittest.TestCase):
                 endpoint.ask_socket(sock, timeout=5)
             self.assertNotIsInstance(caught.exception, (endpoint.NotConnected, endpoint.MethodUnknown), (code, before))
             sock.unlink()
+
+    def test_a_socket_path_too_long_still_uses_the_files_token(self):
+        from ardia_cli import control
+
+        deep = self.root / ("d" * 60) / ("e" * 60)
+        path = write_control(deep, token=FILE_TOKEN)
+        sock = control.announce_path(str(path))
+        self.assertGreater(len(os.fsencode(str(sock))), 107)
+        with self.assertRaises(endpoint.NotConnected):
+            endpoint.ask_socket(sock, timeout=5)
+        self.assertTrue(endpoint.from_control(path).ws.endswith(f"token={FILE_TOKEN}"))
 
     def test_a_different_port_is_another_server(self):
         path = write_control(self.root)

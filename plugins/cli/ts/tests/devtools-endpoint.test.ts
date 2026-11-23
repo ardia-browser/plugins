@@ -263,3 +263,16 @@ test("codes the server sends never pick the fallback: not_connected after hello,
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("a control socket path too long for a Unix socket can't connect, so the file's token still works", async () => {
+  const root = scratch();
+  try {
+    const deep = path.join(root, "d".repeat(60), "e".repeat(60));
+    const file = writeControl(deep, { token: FILE_TOKEN });
+    assert.ok(Buffer.byteLength(announcePath(file)) > 104);
+    await assert.rejects(controlCall(announcePath(file), null, DEVTOOLS_ENDPOINT_METHOD, null, 5, null), (error: Error) => error instanceof NotConnected);
+    assert.match((await fromControl(file, null)).ws, new RegExp(`token=${FILE_TOKEN}$`));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
