@@ -352,5 +352,7 @@ class ReadNavigationInChrome(unittest.TestCase):
         for kept in ("Correction: an earlier version misstated the date.", "Directory item 13", "Regional item 13", "Installation instructions",
                      "Upgrade instructions", "Docsmenu item 13", "In stock only", "Stockmenu item 13"):
             self.assertIn(kept, out)
+        for kept in ("Turn off power before opening the panel.", "Pagedmenu item 13", "Previous 1 2 Next"):
+            self.assertIn(kept, out)
         self.assertIn("14 links, a search box: Shadowsearch item 0", out)
         self.assertNotIn("Shadowsearch item 13", out)

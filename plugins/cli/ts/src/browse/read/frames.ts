@@ -10,7 +10,7 @@ const OWNER_FACTS =
   "(el) => { const box = el.getBoundingClientRect(); const norm = (s) => String(s || '').replace(/\\s+/g, ' ').trim(); " +
   "return { width: box.width, height: box.height, title: norm(el.getAttribute('title') || el.getAttribute('name') || '') || 'frame', " +
   "id: el.id || '', className: typeof el.className === 'string' ? el.className : '', src: el.getAttribute('src') || '', " +
-  "inContent: (() => { for (let n = el; n; n = n.assignedSlot || n.parentElement || (n.getRootNode().host || null)) if (n.matches('main, article, [role~=main i], [role~=article i]')) return true; return false; })() }; }";
+  "inContent: (() => { for (let n = el; n; n = n.assignedSlot || n.parentElement || n.getRootNode().host || n.ownerDocument.defaultView.frameElement || null) if (n.matches('main, article, [role~=main i], [role~=article i]')) return true; return false; })() }; }";
 const NOT_CONTENT = /(^|[^a-z])(ads?|advert\w*|sponsored|doubleclick|googlesyndication|adservice|recaptcha|captcha)([^a-z]|$)|3rd party ad/iu;
 
 function depthBelow(page: Page, frame: string, top: string): number | null {

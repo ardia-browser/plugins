@@ -448,7 +448,7 @@ LIBRARY = r"""
         const label = tag === "NAV" || role === "navigation" ? "navigation" : tag === "FOOTER" || role === "contentinfo" ? "footer" : "";
         if (!label || inContent(el) || keeps(el)) return null;
         let search = false, anchors = 0;
-        for (const inner of deep(el)) {
+        for (const inner of [...(el.shadowRoot ? deep(el.shadowRoot) : []), ...deep(el)]) {
           if (inner.matches(IN_CONTENT) || (inner.matches(KEPT_PARTS) && shownOnPage(inner))) return null;
           if (inner.matches(FACETS) && opaque(inner)) return null;
           if (/^(IFRAME|FRAME)$/.test(inner.tagName) && shownOnPage(inner)) {
@@ -461,7 +461,7 @@ LIBRARY = r"""
           if (!search && inner.matches(SEARCH)) search = true;
         }
         const controls = Array.from(el.querySelectorAll(CONTROLS)).filter(shownOnPage);
-        if (!controls.length) return null;
+        if (!controls.length || controls.filter((control) => PAGE_STEP.test(fullName(control))).length >= 3) return null;
         const text = norm(el.innerText || "").length;
         const linkText = controls.reduce((total, control) => total + fullName(control).length, 0);
         if (linkText < text * 0.5) return null;
