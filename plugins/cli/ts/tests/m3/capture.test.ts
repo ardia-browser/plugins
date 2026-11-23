@@ -300,7 +300,7 @@ describe("record through a PATH stub (no real encode)", () => {
     await cmdRecord(ctx, ["start", "out.webm"]);
     const pidFile = path.join(dir, "pid");
     const wroteBy = performance.now() + 10_000;
-    while (!fs.existsSync(pidFile) && performance.now() < wroteBy) await tick(20);
+    while (!(fs.existsSync(pidFile) && fs.readFileSync(pidFile, "utf8").endsWith("\n")) && performance.now() < wroteBy) await tick(20);
     const stop = new AbortController();
     const stopping = withSignal(stop.signal, () => cmdRecord(ctx, ["stop"]));
     await tick(300);

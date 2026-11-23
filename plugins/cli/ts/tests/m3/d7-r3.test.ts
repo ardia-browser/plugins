@@ -177,11 +177,12 @@ describe("helper groups and the daemon's exit", () => {
       `import { loadLibc } from ${JSON.stringify(path.resolve(import.meta.dir, "../../src/libc.ts"))};\nloadLibc(${JSON.stringify(BUILT_LIBC)});\n` +
         `import { run } from ${JSON.stringify(source)};\n` +
         `run(["/bin/sh", "-c", "trap '' TERM; (trap '' TERM; sleep 30) & echo $! > ${pidFile}; wait"], { timeout: 60 }).catch(() => {});\n` +
-        `const end = Date.now() + 5000; while (!require("node:fs").existsSync(${JSON.stringify(pidFile)}) && Date.now() < end) await Bun.sleep(20);\n` +
+        `const end = Date.now() + 5000; const fs = require("node:fs"); while (!(fs.existsSync(${JSON.stringify(pidFile)}) && fs.readFileSync(${JSON.stringify(pidFile)}, "utf8").endsWith("\\n")) && Date.now() < end) await Bun.sleep(20);\n` +
         "process.exit(0);\n",
     );
     expect(spawnSync(process.execPath, [runner], { timeout: 20000 }).status).toBe(0);
     const pid = Number(fs.readFileSync(pidFile, "utf8"));
+    expect(pid).toBeGreaterThan(0);
     expect(await until(() => !alive(pid), 2000)).toBe(true);
   });
 

@@ -42,7 +42,7 @@ function daemonLike(dir: string, mode: "exit" | "watchdog" | "settled"): { statu
       `loadLibc(${JSON.stringify(LIBC)});`,
       `const ran = run(["/bin/sh", "-c", ${JSON.stringify(holder)}], { timeout: 60 }).then(() => "settled", () => "failed");`,
       `const end = Date.now() + 5000;`,
-      `while (!fs.existsSync(${JSON.stringify(pidFile)}) && Date.now() < end) await Bun.sleep(20);`,
+      `while (!(fs.existsSync(${JSON.stringify(pidFile)}) && fs.readFileSync(${JSON.stringify(pidFile)}, "utf8").endsWith("\\n")) && Date.now() < end) await Bun.sleep(20);`,
       mode === "settled" ? `console.log(await ran);` : `await Bun.sleep(300);`,
       mode === "watchdog"
         ? `armWatchdog(fs.openSync(${JSON.stringify(dir)}, "r"), "no-such.sock", 0n, 0n, 200, 3); const stuck = Date.now() + 10000; while (Date.now() < stuck) {} process.exit(9);`
