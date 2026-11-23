@@ -9,6 +9,7 @@ export const RUNNER_LIFETIME_MS = 15 * 60 * 1000;
 export const LOG_LIMIT = 1024 * 1024;
 export const ARGS_LIMIT = 16 * 1024 * 1024;
 export const LOG_LINE_LIMIT = 64 * 1024;
+export const LOG_TOTAL = LOG_LIMIT * 4;
 export const RESULT_LIMIT = 64 * 1024 * 1024;
 export const STATE_LIMIT = 16 * 1024 * 1024;
 
@@ -100,8 +101,8 @@ export function startRunner(link: RunnerLink): void {
           link.post({ type: "request", request: payload });
           return "";
         case "log": {
-          if (logged > LOG_LIMIT * 4) return "";
           const line = payload.length > LOG_LINE_LIMIT ? `${payload.slice(0, LOG_LINE_LIMIT)}… [${payload.length - LOG_LINE_LIMIT} more characters]` : payload;
+          if (logged + line.length > LOG_TOTAL) return "";
           logged += line.length;
           link.post({ type: "log", line });
           return "";

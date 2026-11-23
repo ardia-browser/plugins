@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { BUILT_LIBC } from "./libc-loaded.ts";
 import { Runner, type RunnerEvent, whenReady } from "../src/browse/script/host.ts";
+import { LOG_TOTAL, type RunnerInbound, type RunnerOutbound, startRunner } from "../src/browse/script/runner.ts";
 
 setDefaultTimeout(30_000);
 
@@ -241,6 +242,27 @@ describe("the script runner", () => {
       ];
     `);
     expect(result?.["value"]).toEqual([true, 5, ["a"], 1, "gi", [2, 3], "bad", "10", "DataCloneError"]);
+  });
+
+  test("the runner never sends more log text than its total, whatever the line sizes", async () => {
+    const posted: RunnerOutbound[] = [];
+    let deliver: (message: RunnerInbound) => void = () => {};
+    const finished = new Promise<void>((resolve) => {
+      startRunner({
+        post: (message) => {
+          posted.push(message);
+          if (message.type === "done") resolve();
+        },
+        onMessage: (listener) => {
+          deliver = listener;
+        },
+      });
+    });
+    deliver({ type: "start", source: "const line = 'x'.repeat(70 * 1024);\nfor (let i = 0; i < 100; i++) log(line);\nreturn 1;", state: "{}", readBatch: 100, stateLimit: 1 << 24 });
+    await finished;
+    const sent = posted.filter((message) => message.type === "log").reduce((total, message) => total + (message as { line: string }).line.length, 0);
+    expect(sent).toBeGreaterThan(LOG_TOTAL - 70 * 1024);
+    expect(sent).toBeLessThanOrEqual(LOG_TOTAL);
   });
 
   test("waitForSelector passes its state and timeout to wait", async () => {
