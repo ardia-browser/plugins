@@ -316,6 +316,18 @@ describe("the script runner", () => {
     expect(String(result?.["message"])).toContain("page.$$eval");
   });
 
+  test("arguments over the limit in UTF-8 bytes are refused in the script, not left waiting", async () => {
+    const { result, requests } = await runScript(`
+      const started = Date.now();
+      let refused = "";
+      try { await page.evaluate((x) => x.length, "界".repeat(6 * 1024 * 1024)); } catch (e) { refused = e.name + ": " + e.message; }
+      const fits = await page.evaluate((x) => x.length, "界".repeat(1024));
+      return [refused, Date.now() - started < 10000, fits];
+    `);
+    expect(result?.["value"]).toEqual(["RangeError: the arguments of that call are over 16 MB", true, 7]);
+    expect(requests).toHaveLength(1);
+  });
+
   test("arguments that aren't JSON are refused in the script", async () => {
     const { result, requests } = await runScript("await page.evaluate((n) => n, 10n);");
     expect(result).toMatchObject({ kind: "error", name: "TypeError", message: "page.evaluate() takes JSON values as arguments" });
