@@ -314,7 +314,20 @@ async function linksNow(page: Page, until: number): Promise<string[]> {
     if (!(error instanceof BrowseError) || error instanceof ConnectionLost || !RETRY_CODES.includes(error.code ?? "")) throw error;
     await settle(page, Math.min(until, monotonic() + SETTLE_LIMIT));
     await page.refreshFrames();
-    return [];
+    try {
+      return await linksOn(page, page.mainFrame as string);
+    } catch (again) {
+      if (!(again instanceof BrowseError) || again instanceof ConnectionLost || !RETRY_CODES.includes(again.code ?? "")) throw again;
+      return [];
+    }
+  }
+}
+
+function sameUrlKey(url: string): string {
+  try {
+    return new URL(canonicalLink(url)).href;
+  } catch {
+    return canonicalLink(url);
   }
 }
 
@@ -340,22 +353,23 @@ export async function collectLinksFrom(ctx: Ctx, listings: readonly string[], pa
   const picked: string[] = [];
   const sources: string[] = [];
   const failures: ListingFailure[] = [];
-  const skipped = new Set(listings.map(canonicalLink));
-  const keep = (found: readonly string[], landed: string) => pickLinks(found, pattern, landed).filter((url) => !skipped.has(url));
+  const skipped = new Set(listings.map(sameUrlKey));
+  const keep = (found: readonly string[], landed: string) => pickLinks(found, pattern, landed).filter((url) => !skipped.has(sameUrlKey(url)));
   try {
     let page: Page | null = null;
     for (const listing of listings) {
-      if (page === null || page.sessionId === null) page = await openReader(ctx, opened);
       let found: string[];
       try {
-        found = await readers.linksIn(page, listing, pattern, timeout, (now, landed) => keep(now, landed).length > 0);
+        if (page === null || page.sessionId === null) page = await openReader(ctx, opened);
+        const reader: Page = page;
+        found = await readers.linksIn(reader, listing, pattern, timeout, (now, landed) => keep(now, landed).length > 0);
       } catch (error) {
-        if (!quiet(error) || error instanceof ConnectionLost || (error instanceof OutcomeUnknown && state.targetInfos.has(page.targetId))) throw error;
+        if (!quiet(error) || error instanceof ConnectionLost || (error instanceof OutcomeUnknown && page !== null && state.targetInfos.has(page.targetId))) throw error;
         failures.push({ url: listing, error: (error as BrowseError).text });
         continue;
       }
       const landed = page.url || listing;
-      skipped.add(canonicalLink(landed));
+      skipped.add(sameUrlKey(landed));
       sources.push(landed);
       for (const url of found) if (!links.includes(url)) links.push(url);
       for (const url of keep(found, landed)) if (!picked.includes(url)) picked.push(url);
@@ -364,7 +378,7 @@ export async function collectLinksFrom(ctx: Ctx, listings: readonly string[], pa
     await temptabs.release(state, opened);
   }
   flag("read_links_from_url", true);
-  return [sources.join(", ") || listings.join(", "), links, picked.filter((url) => !skipped.has(url)), failures];
+  return [sources.join(", ") || listings.join(", "), links, picked, failures];
 }
 
 export async function openReader(ctx: Ctx, opened: string[]): Promise<Page> {

@@ -420,6 +420,29 @@ describe("ReadingTabs", () => {
     }
   });
 
+  test("test_links_from_urls_survive_a_reader_that_cannot_be_reopened_and_compare_serialized_urls (plugins#74)", async () => {
+    const run = scene();
+    const previous = pages.readers.linksIn;
+    pages.readers.linksIn = async (page, listing) => {
+      if (listing.endsWith("/b")) {
+        page.sessionId = null;
+        run.refuseAttach.add("R2");
+        throw new BrowseError("Ardia detached the tab", null, "tab_detached");
+      }
+      return ["http://s/p/1", "http://s:80/a", "http://S/p/2#top"];
+    };
+    try {
+      const listing = await pages.run(run.ctx, { links: "*", list: true }, ["http://S:80/a", "http://s/b", "http://s/c"]);
+      expect((listing.data as Record<string, unknown>)["links"]).toEqual(["http://s/p/1", "http://S/p/2#top"]);
+      expect(String(listing.text)).toContain("couldn't list the links on http://s/b");
+      expect(String(listing.text)).toContain("couldn't list the links on http://s/c");
+      expect([...run.closed].sort()).toEqual([...run.created].sort());
+    } finally {
+      pages.readers.linksIn = previous;
+      run.restore();
+    }
+  });
+
   test("test_links_from_urls_read_twenty_by_default_whatever_the_listing_count (plugins#74)", async () => {
     const run = scene();
     const previous = pages.readers.linksIn;
