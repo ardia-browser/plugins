@@ -272,6 +272,20 @@ class ActInChrome(unittest.TestCase):
         self.assertIn("received none of its beforeinput/input events", done.stderr + done.stdout)
         self.assertEqual(self.value("document.querySelector('#echo').value"), "startabc")
 
+    def test_a_dropped_text_insert_is_not_confirmed_by_text_appearing_in_a_non_editable_chip(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/input-probes.html")
+        self.browse("eval", "const r = document.createRange(); r.setStart(document.querySelector('#chipped').firstChild, 1); r.collapse(true); document.querySelector('#chipped').focus(); getSelection().removeAllRanges(); getSelection().addRange(r); 'ok'")
+        done = self.browse("keyboard", "inserttext", "x", check=False)
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("received none of its beforeinput/input events", done.stderr + done.stdout)
+        self.assertEqual(self.value("document.querySelector('#chipped').textContent"), "AxB")
+
+    def test_a_text_insert_that_replaces_an_empty_paragraph_placeholder_is_confirmed(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/input-probes.html")
+        self.browse("click", "#placeholder")
+        self.browse("keyboard", "inserttext", "Hi")
+        self.assertEqual(self.value("document.querySelector('#placeholder').innerHTML"), "<p>Hi</p>")
+
     def test_a_click_with_no_events_and_no_effect_is_still_not_delivered(self):
         self.browse("open", f"http://127.0.0.1:{self.http_port}/input-probes.html")
         done = self.browse("click", "#dead", check=False)

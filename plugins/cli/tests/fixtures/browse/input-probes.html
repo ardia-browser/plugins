@@ -16,6 +16,8 @@
 <input id="echo" aria-label="Echo field" value="start">
 <div id="dead" role="button" style="display:inline-block;padding:6px 12px;border:1px solid #999;user-select:none">Dead button</div>
 <div id="slides" class="editor" contenteditable="true" role="textbox" aria-label="Slide text"></div>
+<div id="placeholder" class="editor" contenteditable="true" role="textbox" aria-label="Placeholder"><p><br></p></div>
+<div id="chipped" class="editor" contenteditable="true" role="textbox" aria-label="Chipped">A<span id="chip" contenteditable="false">B</span></div>
 <div id="menus"></div>
 <script>
   const state = { opened: 0, dead: 0 };
@@ -59,6 +61,20 @@
     event.stopImmediatePropagation();
     event.preventDefault();
     setTimeout(() => { echo.value += "abc"; }, 100);
+  }, true);
+  const placeholder = document.getElementById("placeholder");
+  addEventListener("beforeinput", (event) => {
+    if (event.target !== placeholder || event.inputType !== "insertText") return;
+    event.stopImmediatePropagation();
+    event.preventDefault();
+    placeholder.querySelector("p").textContent = event.data;
+  }, true);
+  const chipped = document.getElementById("chipped");
+  addEventListener("beforeinput", (event) => {
+    if (event.target !== chipped) return;
+    event.stopImmediatePropagation();
+    event.preventDefault();
+    setTimeout(() => { document.getElementById("chip").textContent = event.data + "B"; }, 100);
   }, true);
   if (location.search.includes("churn")) {
     const other = document.getElementById("other");

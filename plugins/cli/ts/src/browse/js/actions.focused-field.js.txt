@@ -24,7 +24,12 @@
         if (mark && child === mark.node) mark.at = flattened.length + mark.offset;
         flattened += child.data;
       } else if (child.nodeType === Node.ELEMENT_NODE && !/^(STYLE|SCRIPT|TEMPLATE)$/.test(child.tagName)) {
-        if (child.tagName === "BR") flattened += "\n";
+        if (child.tagName === "BR") {
+          let next = child.nextSibling;
+          while (next && next.nodeType === Node.TEXT_NODE && next.data === "") next = next.nextSibling;
+          if (next) flattened += "\n";
+        }
+        else if (!child.isContentEditable) flattened += "\ufffc";
         else {
           const block = BLOCK.test(child.tagName);
           if (block) flattened += "\n";
