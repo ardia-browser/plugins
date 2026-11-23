@@ -831,13 +831,15 @@ POST http://127.0.0.1:8792/api/events → 200
 - **Typing.** Without `--humanize`, `fill` and `type` put all but the last character in with one `Input.insertText`
   and press the last one as a real key down and up, so autocompletes, comboboxes and framework key listeners fire
   (text ending in a newline or tab is inserted whole, so no Enter submits a form). Just before that last key, focus is
-  checked again, inside the same dispatch, and so it is before the insert: if it moved off the field, nothing more
+  checked again, inside the same dispatch, and so it is before the insert, including that no other frame on the
+  page took focus: if it moved off the field, nothing more
   is sent and the error is `focus_moved`, which never claims the earlier text reached the field (check it with
   `get value`). Focus is followed into a popup's own search field only when the field names that popup
   (`aria-controls`, `aria-owns`), the popup sits inside the field's own `role=combobox` widget, or the popup is labelled
   by the field (`aria-labelledby`). Whether a field is secret (a password input, or `autocomplete` of
   `current-password`, `new-password`, `one-time-code`, `cc-csc` or `cc-number`) is decided before typing, and stays
-  decided for that element for as long as its document lasts, across later fills: it's read back as its length alone, so its value never leaves the page, and the change
+  decided for that element for as long as its document lasts, across later fills (a document with over 1,024
+  such fields masks every field in it): it's read back as its length alone, so its value never leaves the page, and the change
   report and snapshots show its value masked even after a "show password" toggle changes its type. Other fields are read
   back by kind: phone and card numbers by their digits, dates by their
   numbers, a `maxlength` cut named as such. `data.verify.status` is `ok`, `did_not_commit` (with a `→` line saying

@@ -635,7 +635,7 @@ export async function observe<T>(ctx: Ctx, page: Page, run: () => Promise<T>, re
   await refuseIfDialog(page, actionName(ctx));
   if (ctx.options["no_changes"] || ctx.options["settle_only"]) {
     if (batch?.pending) batch.flushed = await flushBatch(ctx, batch);
-    if (react !== null) await watchReaction(state, page, react);
+    if (react !== null) await raceDialog(page, () => watchReaction(state, page, react), actionName(ctx), false);
     if (ctx.options["no_changes"]) return [await guarded(ctx, page, run), null];
     let landed: { value: T } | null = null;
     const work = async () => {

@@ -8,7 +8,7 @@ import { BLOCKER_AT, blockerPhrase, classify, findBlocker } from "../../src/brow
 import { PRECISION_COUNTS, PRECISION_FLAGS } from "../../src/browse/act/precision-metrics.ts";
 import { fieldKind, type FieldRead, fieldRead, judgeReadback, latchSecret, READ_FIELD, readbackNote, SECRET_PROBE, secretField } from "../../src/browse/act/readback.ts";
 import { maskSecretValues } from "../../src/browse/snapshot/collect.ts";
-import { isSecret, markSecret } from "../../src/browse/state/secrets.ts";
+import { isSecret, markSecret, SECRET_FIELDS_PER_DOCUMENT } from "../../src/browse/state/secrets.ts";
 import { Node } from "../../src/browse/snapshot/tree.ts";
 import { entriesOf } from "../../src/browse/changes/report.ts";
 import { Result, renderPlain } from "../../src/browse/daemon/render.ts";
@@ -915,7 +915,7 @@ describe("review round 1", () => {
 
   function popupWorld(given: World = {}) {
     const popup: FakeNode = { id: "pop", getAttribute: (name: string) => (name === "aria-labelledby" ? (given.popupLabel ?? null) : null) };
-    const active: FakeNode = { tagName: "INPUT", type: "text", readOnly: false, disabled: false, isContentEditable: false, closest: () => popup, getAttribute: () => null };
+    const active: FakeNode = { tagName: "INPUT", type: "text", readOnly: false, disabled: false, isContentEditable: false, parentElement: { closest: () => popup }, getAttribute: () => null };
     const doc: FakeNode = { activeElement: active, body: {}, getElementById: (id: string) => (id === "pop" ? { contains: (node: unknown) => node === active } : null) };
     const widget: FakeNode = { contains: (node: unknown) => node === active };
     const el: FakeNode = {
@@ -923,7 +923,7 @@ describe("review round 1", () => {
       ownerDocument: doc,
       contains: () => false,
       getRootNode: () => doc,
-      closest: () => (given.widget ? widget : null),
+      parentElement: { closest: () => (given.widget ? widget : null) },
       getAttribute: (name: string) => (name === "aria-controls" ? (given.controls ?? null) : name === "role" ? "combobox" : name === "aria-haspopup" ? "listbox" : null),
     };
     return { el, active };
@@ -1297,7 +1297,7 @@ describe("review round 3", () => {
     const probe = new Function(`return ${OVERLAY_INPUT}`)() as (el: unknown) => unknown;
     expect(probe(el)).toBeNull();
     const popup = { getAttribute: () => null };
-    expect(probe({ ...el, ownerDocument: { ...doc, activeElement: { ...active, closest: () => popup } } })).not.toBeNull();
+    expect(probe({ ...el, ownerDocument: { ...doc, activeElement: { ...active, parentElement: { closest: () => popup } } } })).not.toBeNull();
   });
 
   test("a named container changing role drifts; unnamed ones stay interchangeable", () => {
@@ -1305,5 +1305,63 @@ describe("review round 3", () => {
     expect(driftBetween({ role: "group", name: "Shipping" }, { role: "generic", name: "Shipping" })?.field).toBe("role");
     expect(driftBetween({ role: "group", name: "" }, { role: "generic", name: "" })).toBeNull();
     expect(sameRole({ role: "group", name: "x" }, { role: "group", name: "x" })).toBe(true);
+  });
+});
+
+describe("review round 4", () => {
+  const tabFor = (loader = "L") => ({ targetId: "T", frames: new Map([["F", { loader }]]) });
+
+  test("a document past the marker cap masks every field instead of dropping old markers", () => {
+    const state = { pages: new Map([["T", {}]]) };
+    for (let backend = 0; backend <= SECRET_FIELDS_PER_DOCUMENT; backend += 1) markSecret(state, tabFor(), "F", "L", backend);
+    expect(isSecret(state, tabFor(), "F", "L", 0)).toBe(true);
+    expect(isSecret(state, tabFor(), "F", "L", 999_999)).toBe(true);
+    expect(isSecret(state, tabFor("L2"), "F", "L2", 0)).toBe(false);
+  });
+
+  test("a standalone combobox input never counts as its own popup", () => {
+    const self: Record<string, unknown> = { tagName: "INPUT", type: "text", readOnly: false, disabled: false, isContentEditable: false, parentElement: null, getAttribute: (name: string) => (name === "aria-labelledby" ? "picker" : name === "role" ? "combobox" : null) };
+    self["closest"] = () => self;
+    const doc = { activeElement: self, body: {}, getElementById: () => null };
+    const el = { id: "picker", ownerDocument: doc, contains: () => false, getRootNode: () => doc, parentElement: null, closest: () => null, getAttribute: () => null };
+    const probe = new Function(`return ${OVERLAY_INPUT}`)() as (el: unknown) => unknown;
+    expect(probe(el)).toBeNull();
+    const popup = { getAttribute: () => null };
+    const inside = { ...self, parentElement: { closest: () => popup } };
+    expect(probe({ ...el, ownerDocument: { ...doc, activeElement: inside } })).toBe(inside);
+  });
+
+  test("focus moved to another frame counts as moved; an unfocused top-level tab doesn't", () => {
+    const probe = new Function(`return ${HOLDS_FOCUS}`)() as (el: unknown) => boolean;
+    const framed = (parentActive: (owner: unknown) => unknown) => {
+      const owner: Record<string, unknown> = {};
+      const parentDoc = { get activeElement() { return parentActive(owner); } };
+      owner["ownerDocument"] = parentDoc;
+      const top = {};
+      const view = { parent: top, frameElement: owner };
+      (top as Record<string, unknown>)["parent"] = top;
+      const doc: Record<string, unknown> = { defaultView: view, hasFocus: () => false };
+      const el: Record<string, unknown> = { ownerDocument: doc, contains: () => false };
+      doc["activeElement"] = el;
+      return el;
+    };
+    expect(probe(framed((owner) => owner))).toBe(true);
+    expect(probe(framed(() => ({ other: true })))).toBe(false);
+    const topDoc: Record<string, unknown> = { hasFocus: () => false };
+    const topView: Record<string, unknown> = {};
+    topView["parent"] = topView;
+    topDoc["defaultView"] = topView;
+    const topEl: Record<string, unknown> = { ownerDocument: topDoc, contains: () => false };
+    topDoc["activeElement"] = topEl;
+    expect(probe(topEl)).toBe(true);
+  });
+
+  test("a connection lost while a latched dialog's action cleans up is rethrown, not masked", async () => {
+    const page = dialogPage();
+    setTimeout(() => (page.dialog = { type: "confirm", message: "Sure?" }), 20);
+    const run = () => new Promise<never>((_, reject) => setTimeout(() => reject(new ConnectionLost()), 150));
+    const error = await failure(() => raceDialog(page, run, "`click`"));
+    expect(error).toBeInstanceOf(ConnectionLost);
+    expect(refusedRetry("click", error).exitCode).toBe(2);
   });
 });

@@ -29,17 +29,30 @@ export const OVERLAY_INPUT = `(el) => {
     return !!node && (node === active || node.contains(active));
   });
   if (owned) return active;
-  const widget = el.closest && el.closest("[role=combobox]");
-  if (widget && widget !== el && widget.contains(active)) return active;
-  const popup = active.closest("${POPUP_SELECTOR}");
+  const above = (node, selector) => (node.parentElement ? node.parentElement.closest(selector) : null);
+  const widget = above(el, "[role=combobox]");
+  if (widget && widget.contains(active)) return active;
+  const popup = above(active, "${POPUP_SELECTOR}");
   const labelled = !!popup && !!el.id && [active, popup].some((node) => words(node, "aria-labelledby").includes(el.id));
   return labelled ? active : null;
 }`;
 
 export const HOLDS_FOCUS = `(el) => {
-  let holdsFocus = el.ownerDocument.activeElement;
-  while (holdsFocus && holdsFocus.shadowRoot && holdsFocus.shadowRoot.activeElement) holdsFocus = holdsFocus.shadowRoot.activeElement;
-  return !!holdsFocus && (holdsFocus === el || (!!el.contains && el.contains(holdsFocus)) || (!!el.shadowRoot && el.shadowRoot.contains(holdsFocus)));
+  const deepest = (doc) => {
+    let node = doc.activeElement;
+    while (node && node.shadowRoot && node.shadowRoot.activeElement) node = node.shadowRoot.activeElement;
+    return node;
+  };
+  const holdsFocus = deepest(el.ownerDocument);
+  if (!holdsFocus || !(holdsFocus === el || (!!el.contains && el.contains(holdsFocus)) || (!!el.shadowRoot && el.shadowRoot.contains(holdsFocus)))) return false;
+  try {
+    for (let view = el.ownerDocument.defaultView; view && view.parent && view.parent !== view; view = view.parent) {
+      const owner = view.frameElement;
+      if (!owner) break;
+      if (deepest(owner.ownerDocument) !== owner) return false;
+    }
+  } catch (error) {}
+  return true;
 }`;
 
 export const CHECK_STATE = `(el) => {

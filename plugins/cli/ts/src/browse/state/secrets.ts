@@ -4,13 +4,15 @@ export const MASK = "•";
 type Live = { readonly targetId: string; readonly frames: ReadonlyMap<string, { readonly loader: string | null }> };
 type Tabs = { readonly pages?: ReadonlyMap<string, unknown> };
 
-const documents = new WeakMap<object, Map<string, Set<number>>>();
+type Marked = { fields: Set<number>; all: boolean };
+
+const documents = new WeakMap<object, Map<string, Marked>>();
 
 export function documentKey(target: string, frame: string | null, loader: string | null): string {
   return JSON.stringify([target, frame, loader ?? ""]);
 }
 
-function pruned(state: object, page: Live): Map<string, Set<number>> | undefined {
+function pruned(state: object, page: Live): Map<string, Marked> | undefined {
   const kept = documents.get(state);
   if (kept === undefined) return undefined;
   const tabs = (state as Tabs).pages;
@@ -28,15 +30,20 @@ export function markSecret(state: object, page: Live, frame: string | null, load
   let kept = pruned(state, page);
   if (kept === undefined) documents.set(state, (kept = new Map()));
   const key = documentKey(page.targetId, frame, loader);
-  let fields = kept.get(key);
-  if (fields === undefined) kept.set(key, (fields = new Set()));
-  fields.delete(backend);
-  fields.add(backend);
-  while (fields.size > SECRET_FIELDS_PER_DOCUMENT) fields.delete(fields.values().next().value as number);
+  let marked = kept.get(key);
+  if (marked === undefined) kept.set(key, (marked = { fields: new Set(), all: false }));
+  if (marked.all || marked.fields.has(backend)) return;
+  if (marked.fields.size >= SECRET_FIELDS_PER_DOCUMENT) {
+    marked.all = true;
+    marked.fields.clear();
+    return;
+  }
+  marked.fields.add(backend);
 }
 
 export function isSecret(state: object, page: Live, frame: string | null, loader: string | null, backend: number): boolean {
-  return pruned(state, page)?.get(documentKey(page.targetId, frame, loader))?.has(backend) ?? false;
+  const marked = pruned(state, page)?.get(documentKey(page.targetId, frame, loader));
+  return marked !== undefined && (marked.all || marked.fields.has(backend));
 }
 
 export function masked(value: string): string {

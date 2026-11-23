@@ -388,3 +388,50 @@ describe("review round 3: setup and bail order", () => {
     expect(renderPlain({}, result, null)[0]).toBe(2);
   });
 });
+
+class ReactionDialogBrowser extends FormBrowser {
+  opened: (() => void) | null = null;
+
+  override async send(method: string, params: Record<string, unknown> | null = null, options: { signal?: AbortSignal } = {}): Promise<Record<string, unknown>> {
+    const declaration = String(params?.["functionDeclaration"] ?? "");
+    if (method === "Runtime.callFunctionOn" && declaration.includes("api.filterField(field)") && this.opened !== null) {
+      this.sent.push(method);
+      this.opened();
+      this.opened = null;
+      return new Promise((_, reject) => options.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true }));
+    }
+    return super.send(method, params);
+  }
+}
+
+describe("review round 4: reaction setup in the light modes", () => {
+  for (const mode of ["no_changes", "settle_only"]) {
+    test(`a dialog while the reaction watch installs under ${mode} stops the action before it runs`, async () => {
+      const { state } = setup();
+      const browser = new ReactionDialogBrowser();
+      state.browser = browser as never;
+      const outcome = await begin({ argv: ["type"] }, async () => {
+        const page = await state.page("T");
+        browser.opened = () => {
+          page.dialog = { type: "confirm", message: "Stay?" };
+        };
+        let ran = false;
+        const ctx = new Ctx(state, { [mode]: true }, "/", {}, null, "type");
+        const started = performance.now();
+        try {
+          await observe(ctx, page, async () => {
+            ran = true;
+            return 1;
+          }, [null, page.mainFrame]);
+          return { error: null as BrowseError | null, ran, took: performance.now() - started };
+        } catch (error) {
+          return { error: error as BrowseError, ran, took: performance.now() - started };
+        }
+      });
+      expect(outcome.error?.code).toBe("dialog_blocked");
+      expect(outcome.error?.message).toContain("so `type` wasn't sent");
+      expect(outcome.ran).toBe(false);
+      expect(outcome.took).toBeLessThan(5000);
+    });
+  }
+});

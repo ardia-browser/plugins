@@ -1,7 +1,7 @@
 import { headPoints } from "../../pylib/str.ts";
 import { redact } from "../../redact.ts";
 import { currentSignal, later, sleep, withSignal } from "../cdp/cancel.ts";
-import { BrowseError } from "../daemon-errors.ts";
+import { BrowseError, ConnectionLost } from "../daemon-errors.ts";
 import { add, flag } from "../metrics.ts";
 import type { Page } from "../state/page.ts";
 import type { Json } from "../state/records.ts";
@@ -143,13 +143,16 @@ export async function raceDialog<T>(page: Page, run: () => Promise<T>, action: s
   listeners.push(listener);
   const poll = setInterval(() => latch(blocking(page)), DIALOG_POLL * 1000);
   try {
-    const outcome = settle(withSignal(child.signal, run));
+    let ended: Outcome<T> | null = null;
+    const outcome = settle(withSignal(child.signal, run)).then((result) => (ended = result));
     const first = await Promise.race([outcome, tripped]);
     if (latched === null && first !== null) {
       if ("error" in first) throw first.error;
       return first.value;
     }
     if (!(await cleanupWithin(outcome, CLEANUP_WAIT))) flag("dialog_cleanup_unconfirmed", true);
+    const finished = ended as Outcome<T> | null;
+    if (finished !== null && "error" in finished && finished.error instanceof ConnectionLost) throw finished.error;
     noteBlocked();
     throw new DialogBlocked(latched as unknown as Json, action, landed);
   } finally {
