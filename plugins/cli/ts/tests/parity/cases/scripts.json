@@ -6322,6 +6322,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or \"Let the ardia command control Ardia\" is off in Settings.\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts uninstall (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -6345,6 +6485,146 @@
    },
    "stderr": {
     "text": "ardia: Ardia isn't running, or Command Line isn't installed (Settings › Plugins). (ArdiaControl.json must be mode 0600)\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts uninstall (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or \"Let the ardia command control Ardia\" is off in Settings.\n"
    },
    "requests": [],
    "daemon_requests": [],
@@ -6632,6 +6912,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or \"Let the ardia command control Ardia\" is off in Settings.\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts uninstall (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -6787,6 +7207,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or \"Let the ardia command control Ardia\" is off in Settings.\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts uninstall (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -6810,6 +7370,146 @@
    },
    "stderr": {
     "text": "ardia: Ardia isn't running, or Command Line isn't installed (Settings › Plugins). (ArdiaControl.json has no valid port)\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts uninstall (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or \"Let the ardia command control Ardia\" is off in Settings.\n"
    },
    "requests": [],
    "daemon_requests": [],
@@ -7115,6 +7815,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or \"Let the ardia command control Ardia\" is off in Settings.\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts uninstall (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -7138,6 +7978,146 @@
    },
    "stderr": {
     "text": "ardia: Ardia isn't running, or Command Line isn't installed (Settings › Plugins). (ArdiaControl.json has no valid browser path)\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts uninstall (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or \"Let the ardia command control Ardia\" is off in Settings.\n"
    },
    "requests": [],
    "daemon_requests": [],
@@ -7425,6 +8405,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or \"Let the ardia command control Ardia\" is off in Settings.\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts uninstall (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -7448,6 +8568,146 @@
    },
    "stderr": {
     "text": "ardia: Ardia isn't running, or Command Line isn't installed (Settings › Plugins).\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts uninstall (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or \"Let the ardia command control Ardia\" is off in Settings.\n"
    },
    "requests": [],
    "daemon_requests": [],
@@ -7606,6 +8866,146 @@
    },
    "stderr": {
     "text": "ardia: Ardia isn't running, or Command Line isn't installed (Settings › Plugins). (ArdiaControl.json is a symbolic link)\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts uninstall (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or \"Let the ardia command control Ardia\" is off in Settings.\n"
    },
    "requests": [],
    "daemon_requests": [],
@@ -7911,6 +9311,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or \"Let the ardia command control Ardia\" is off in Settings.\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts uninstall (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -7996,6 +9536,146 @@
    "usage": {
     "recent": [
      "scripts uninstall (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or \"Let the ardia command control Ardia\" is off in Settings.\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts uninstall (exit 2)"
     ],
     "tasks": {}
    },
@@ -8283,6 +9963,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or \"Let the ardia command control Ardia\" is off in Settings.\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts uninstall (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -8428,6 +10248,146 @@
     ],
     "data/Scripts/scripts/s/source.js": [
      "removed"
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or \"Let the ardia command control Ardia\" is off in Settings.\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts uninstall (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
     ],
     "data/Telemetry/cli-flush-claim.lock": [
      "written",
@@ -8687,6 +10647,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or \"Let the ardia command control Ardia\" is off in Settings.\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts uninstall (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -8840,6 +10940,146 @@
     ],
     "data/Scripts/scripts/hide-sidebar/source.js": [
      "removed"
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or \"Let the ardia command control Ardia\" is off in Settings.\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts uninstall (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
     ],
     "data/Telemetry/cli-flush-claim.lock": [
      "written",
@@ -9109,6 +11349,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or \"Let the ardia command control Ardia\" is off in Settings.\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--data-dir",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--data-dir",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts uninstall (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -9253,6 +11633,146 @@
     ],
     "data/Scripts/scripts/s/source.js": [
      "removed"
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or \"Let the ardia command control Ardia\" is off in Settings.\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts uninstall (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
     ],
     "data/Telemetry/cli-flush-claim.lock": [
      "written",
@@ -9482,6 +12002,146 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "expected_linux": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or \"Let the ardia command control Ardia\" is off in Settings.\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts uninstall (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
   }
  },
  {
@@ -9558,6 +12218,146 @@
    "usage": {
     "recent": [
      "scripts uninstall (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or \"Let the ardia command control Ardia\" is off in Settings.\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "scripts",
+      "subcommand": "uninstall",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts uninstall (exit 2)"
     ],
     "tasks": {}
    },
@@ -12968,6 +15768,63 @@
    "status": 0,
    "stdout": {
     "text": "no scripts installed\ngeneration 2, not reported by Ardia yet\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts list"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  },
+  "expected_linux": {
+   "status": 0,
+   "stdout": {
+    "text": "no scripts installed\n"
    },
    "stderr": {
     "text": ""
