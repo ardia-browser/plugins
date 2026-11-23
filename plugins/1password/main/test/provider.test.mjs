@@ -151,6 +151,8 @@ describe("sign in through the 1Password app", () => {
     ["with the app not running", fail("[ERROR] 2026/11/22 10:00:00 error initializing client: connecting to desktop app: cannot connect to 1Password app, make sure it is running"), "appUnreachable"],
     ["with the CLI integration off in 1Password's settings", fail("[ERROR] 2026/11/22 10:00:00 You are not currently signed in. Please run `op signin --help` for instructions"), "setupNeeded"],
     ["left waiting past 90 seconds", { finishAfterMs: 120_000 }, "approvalTimedOut"],
+    ["left unanswered until op gives up", fail("[ERROR] 2026/11/23 14:12:32 authorization timeout"), "approvalTimedOut"],
+    ["left unanswered in a test instance", fail('Using configuration at non-standard location "/tmp/data/Password Managers/1password"\n[ERROR] 2026/11/23 14:12:32 authorization timeout'), "approvalTimedOut"],
     ["while offline", fail("[ERROR] 2026/11/22 10:00:00 dial tcp: lookup my.1password.com: no such host"), "offline", { offline: true }],
     ["with the server unreachable", fail("[ERROR] 2026/11/22 10:00:00 dial tcp: lookup my.1password.com: no such host"), "unreachable"],
   ];
@@ -167,6 +169,14 @@ describe("sign in through the 1Password app", () => {
 
   test("an unknown approval error shows op's own first line", async () => {
     const { h } = harness([oneAccount, ["vault list*", fail("[ERROR] 2026/11/22 10:00:00 something odd happened\nmore detail")]], signedOut);
+    const answer = await h.call("signIn", start);
+    assert.equal(answer.result.problem, "failed");
+    assert.match(answer.result.detail, /^something odd happened/);
+  });
+
+  test("an unknown approval error in a test instance skips op's config notice", async () => {
+    const notice = 'Using configuration at non-standard location "/tmp/data/Password Managers/1password"\n';
+    const { h } = harness([oneAccount, ["vault list*", fail(`${notice}[ERROR] 2026/11/23 10:00:00 something odd happened`)]], signedOut);
     const answer = await h.call("signIn", start);
     assert.equal(answer.result.problem, "failed");
     assert.match(answer.result.detail, /^something odd happened/);

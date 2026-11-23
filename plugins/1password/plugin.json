@@ -122,6 +122,9 @@
               "mode": "json"
             },
             "hints": {
+              "approvalTimedOut": [
+                "authorization timeout"
+              ],
               "dismissed": [
                 "dismissed",
                 "denied",

@@ -22,8 +22,12 @@ function accountOf(record: JsonRecord): Account | null {
 
 type Listed = { accounts: Account[]; problem: null } | { accounts: []; problem: ProblemCode; detail?: string };
 
+const CONFIG_NOTICE = /^Using configuration at non-standard location /;
+
 function failureDetail(result: VerbResult, problem: ProblemCode): { detail?: string } {
-  const detail = problem === "failed" ? verbs.firstLine(result) : null;
+  if (problem !== "failed") return {};
+  const stderr = result.stderr.split(/\r?\n/).filter((line) => !CONFIG_NOTICE.test(line.trim())).join("\n");
+  const detail = verbs.firstLine({ ...result, stderr });
   return detail ? { detail } : {};
 }
 
@@ -103,7 +107,7 @@ export async function connect(ctx: CredentialContext, requested: string | undefi
   const result = await ctx.cli.verb("connect", { account: account.reference });
   if (result.cancelled) return SignIn.cancelled("locked");
   if (result.succeeded) return SignIn.done();
-  if (result.timedOut) return SignIn.failed("approvalTimedOut");
+  if (result.timedOut || result.hints.includes("approvalTimedOut")) return SignIn.failed("approvalTimedOut");
   if (result.hints.includes("dismissed")) return SignIn.failed("stayedLocked");
   if (result.hints.includes("appUnreachable")) return SignIn.failed("appUnreachable");
   if (result.hints.includes("setupNeeded")) return SignIn.failed("setupNeeded");
