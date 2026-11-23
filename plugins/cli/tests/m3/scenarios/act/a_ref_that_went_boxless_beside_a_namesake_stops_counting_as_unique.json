@@ -1,0 +1,77 @@
+{
+ "source": "tests/test_browse_act.py ActInChrome.test_a_ref_that_went_boxless_beside_a_namesake_stops_counting_as_unique",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/search-box.html"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.querySelector('#del0').remove(); 'ok'"
+   ],
+   "session": "act",
+   "main_world": true
+  },
+  {
+   "argv": [
+    "snapshot",
+    "-i"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "const b = document.createElement('button'); b.textContent = 'Delete'; b.onclick = () => state.deleted.push('late'); document.querySelector('#dels').append(b); document.querySelector('#del1').setAttribute('style', 'width: 0; padding: 0; border: 0; overflow: hidden'); 'ok'"
+   ],
+   "session": "act",
+   "main_world": true
+  },
+  {
+   "argv": [
+    "snapshot",
+    "-i"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.querySelector('#del1').remove(); 'ok'"
+   ],
+   "session": "act",
+   "main_world": true
+  },
+  {
+   "argv": [
+    "click",
+    "@e21"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "state.deleted.join(',') || 'none'"
+   ],
+   "session": "act",
+   "main_world": true
+  }
+ ]
+}

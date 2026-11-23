@@ -479,6 +479,10 @@ class State:
             ref_id = self.ref_keys[key] = self.next_ref()
         return ref_id
 
+    def known_ref(self, page: Page, frame: str, backend: int) -> Ref | None:
+        ref_id = self.ref_keys.get((self.instance, page.target_id, frame, page.loader(frame) or "", backend))
+        return self.refs.get(ref_id) if ref_id is not None else None
+
     def snapshot_refs(self) -> list[Ref]:
         return [self.refs[ref_id] for ref_id in self.current_refs if ref_id in self.refs]
 

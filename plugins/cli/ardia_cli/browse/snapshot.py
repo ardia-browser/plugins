@@ -40,7 +40,8 @@ BOXLESS = r"""() => {
     }
     return false;
   };
-  const roleOf = (el) => (el.getAttribute("role") || "").trim().split(/\s+/)[0].toLowerCase();
+  const ROLES = new Set("alert alertdialog application article banner blockquote button caption cell checkbox code columnheader combobox complementary contentinfo definition deletion dialog document emphasis feed figure form generic grid gridcell group heading img insertion link list listbox listitem log main mark marquee math menu menubar menuitem menuitemcheckbox menuitemradio meter navigation none note option paragraph presentation progressbar radio radiogroup region row rowgroup rowheader scrollbar search searchbox separator slider spinbutton status strong subscript superscript switch tab table tablist tabpanel term textbox time timer toolbar tooltip tree treegrid treeitem".split(" "));
+  const roleOf = (el) => (el.getAttribute("role") || "").trim().toLowerCase().split(/\s+/).find((token) => ROLES.has(token)) || "";
   const PRESSABLE = /^(button|link|checkbox|radio|switch|tab|menuitem|menuitemcheckbox|menuitemradio|option|treeitem)$/;
   const typed = (el) => (el.isContentEditable && !/^(A|BUTTON|SUMMARY)$/.test(el.tagName) && !PRESSABLE.test(roleOf(el))) || /^(TEXTAREA|SELECT)$/.test(el.tagName)
     || (el.tagName === "INPUT" && !/^(button|submit|reset|image|checkbox|radio)$/.test(el.type))
@@ -550,6 +551,11 @@ def walk_in_context(nodes, context: tuple = ()):
 def refs_of(state, page, nodes: list[Node], whole_page: bool = True) -> list[Ref]:
     placed = [(node, context) for node, context in walk_in_context(nodes) if node.ref and node.backend is not None]
     counts = Counter((node.role, node.name) for node in walk(nodes) if (node.ref or node.boxless) and node.backend is not None)
+    if whole_page:
+        for node in walk(nodes):
+            known = state.known_ref(page, node.frame, node.backend) if node.boxless and node.backend is not None else None
+            if known is not None:
+                known.unique = counts[(node.role, node.name)] == 1
     refs = []
     for node, context in placed:
         if whole_page:

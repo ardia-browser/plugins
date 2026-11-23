@@ -137,6 +137,11 @@ export abstract class Refs {
     return entry[1];
   }
 
+  knownRef(page: Page, frame: string, backend: number): Ref | null {
+    const entry = this.refKeys.get(JSON.stringify([this.instance, page.targetId, frame, page.loader(frame) || "", backend]));
+    return entry === undefined ? null : (this.refs.get(entry[1]) ?? null);
+  }
+
   snapshotRefs(): Ref[] {
     return this.currentRefs.filter((id) => this.refs.has(id)).map((id) => this.refs.get(id) as Ref);
   }

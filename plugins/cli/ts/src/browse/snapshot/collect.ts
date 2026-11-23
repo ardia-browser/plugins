@@ -218,6 +218,12 @@ export function refsOf(state: Refs, page: Page, nodes: readonly Node[], wholePag
   const counts = new Map<string, number>();
   const keyOf = (node: Node) => JSON.stringify([node.role, node.name]);
   for (const node of walk(nodes)) if ((node.ref || node.boxless) && node.backend !== null) counts.set(keyOf(node), (counts.get(keyOf(node)) ?? 0) + 1);
+  if (wholePage) {
+    for (const node of walk(nodes)) {
+      const known = node.boxless && node.backend !== null ? state.knownRef(page, node.frame as string, node.backend) : null;
+      if (known !== null) known.unique = counts.get(keyOf(node)) === 1;
+    }
+  }
   return placed.map(([node, here]) => {
     let unique: boolean;
     let context: readonly unknown[];

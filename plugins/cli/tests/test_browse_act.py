@@ -262,6 +262,7 @@ class ActInChrome(unittest.TestCase):
         self.assertIn('slider "Volume"', listed)
         self.assertNotIn('button "Text only"', listed)
         self.assertNotIn('button "Inline action"', listed)
+        self.assertNotIn('button "Future"', listed)
         shown = re.search(r'button "Search" \[ref=(e\d+)\]', self.browse("fill", "#q", "duck").stdout)
         self.assertIsNotNone(shown)
         self.browse("click", "@" + shown.group(1))
@@ -274,6 +275,18 @@ class ActInChrome(unittest.TestCase):
         self.assertEqual(len(delete), 1, listed)
         self.browse("eval", "document.querySelector('#del1').remove(); const b = document.createElement('button'); b.id = 'del2'; b.textContent = 'Delete'; b.onclick = () => state.deleted.push('del2'); document.querySelector('#dels').prepend(b); 'ok'")
         done = self.browse("click", "@" + delete[0], check=False)
+        self.assertEqual(done.returncode, 1, done.stdout)
+        self.assertEqual(self.value("state.deleted.join(',') || 'none'"), "none")
+
+    def test_a_ref_that_went_boxless_beside_a_namesake_stops_counting_as_unique(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/search-box.html")
+        self.browse("eval", "document.querySelector('#del0').remove(); 'ok'")
+        first = re.findall(r'button "Delete" \[ref=(e\d+)\]', self.browse("snapshot", "-i").stdout)
+        self.assertEqual(len(first), 1)
+        self.browse("eval", "const b = document.createElement('button'); b.textContent = 'Delete'; b.onclick = () => state.deleted.push('late'); document.querySelector('#dels').append(b); document.querySelector('#del1').setAttribute('style', 'width: 0; padding: 0; border: 0; overflow: hidden'); 'ok'")
+        self.browse("snapshot", "-i")
+        self.browse("eval", "document.querySelector('#del1').remove(); 'ok'")
+        done = self.browse("click", "@" + first[0], check=False)
         self.assertEqual(done.returncode, 1, done.stdout)
         self.assertEqual(self.value("state.deleted.join(',') || 'none'"), "none")
 
