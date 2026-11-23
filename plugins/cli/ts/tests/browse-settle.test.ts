@@ -163,3 +163,26 @@ describe("review round 1: what settling must still wait for", () => {
     await watch.stop();
   });
 });
+
+describe("review round 3", () => {
+  test("a collector post that redirects to an ordinary page stays out of the list", async () => {
+    const [watch, page] = watched();
+    await watch.start();
+    sent(watch, page, "1", "Document", "https://shop.example/g/collect", "POST");
+    watch.listener(page, "Network.requestWillBeSent", { requestId: "1", type: "Document", request: { url: "https://shop.example/thanks", method: "GET" }, redirectResponse: { status: 303 } });
+    expect(watch.writes()).toEqual([]);
+    await watch.stop();
+  });
+
+  test("a held line waits for the body of a GET it started, not only its headers", async () => {
+    const [watch, page] = watched();
+    await watch.start();
+    sent(watch, page, "mine", "Fetch", "https://shop.example/api/options");
+    watch.listener(page, "Network.responseReceived", { requestId: "mine", response: { status: 200 } });
+    setTimeout(() => watch.listener(page, "Network.loadingFinished", { requestId: "mine" }), 60);
+    const started = performance.now();
+    expect(await watch.settleLine(0)).toBe(true);
+    expect(performance.now() - started).toBeGreaterThan(50);
+    await watch.stop();
+  });
+});

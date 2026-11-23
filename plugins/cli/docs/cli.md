@@ -1700,7 +1700,10 @@ from a checkout), `$geoip_disable`, `$process_person_profile: false` and `$sessi
   `snapshot_chars`, `network_writes_count` and `unsettled` from the change report,
   `output_chars` and `output_truncated`, `humanize`, `settle_ignored_background` (a change report's settle passed
   over background requests, beacons, analytics, images, favicons and the like, instead of waiting for them; watch
-  `settle_ms` on `open` and the actions, which it should lower, and `unsettled`), `batch_lines_held` (how many lines of
+  `settle_ms` on `open` and the actions, which it should lower, and `unsettled`), `frame_point_unconfirmed` (a click inside a same-origin frame
+  aimed by `DOM.getContentQuads`, because a frame owner is rotated, mirrored or the like, landed somewhere Chromium's
+  own hit test says isn't the element, so it was refused as covered instead of sent; watch `error_code` `covered` on
+  `click`), `batch_lines_held` (how many lines of
   a `batch` ran inside a run of field lines that read the page once before and once after the run; watch `cdp_calls`
   and `total_ms` on `batch`), `dom_snapshot_used` and `dom_snapshot_refused` (a snapshot named 16 or more clickable
   elements it hadn't seen before with one `DOMSnapshot.captureSnapshot` instead of one `DOM.describeNode` each, or the

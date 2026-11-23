@@ -12,8 +12,16 @@ export const FRESH_KEYS = `(limit) => {
   let index = 0;
   for (const el of all) order.set(el, index++);
   if (globalThis.ardiaBrowseOrderWatch) globalThis.ardiaBrowseOrderWatch.disconnect();
-  globalThis.ardiaBrowseOrderWatch = new MutationObserver(() => {});
-  globalThis.ardiaBrowseOrderWatch.observe(document, { childList: true, subtree: true });
+  const watch = new MutationObserver(() => {
+    watch.moved = true;
+  });
+  watch.moved = false;
+  watch.observe(document, { childList: true, subtree: true });
+  globalThis.ardiaBrowseOrderWatch = watch;
+  setTimeout(() => {
+    watch.disconnect();
+    if (globalThis.ardiaBrowseOrderWatch === watch) globalThis.ardiaBrowseOrderWatch = null;
+  }, 5000);
   return { count: all.length, keys: fresh.map((el) => [el && order.has(el) ? order.get(el) : -1, el ? el.nodeName : "", el && el.id ? el.id : ""]) };
 }`;
 
@@ -22,7 +30,7 @@ export const KEEP_BY_INDEX = `(ids, indexes, count) => {
   const watch = globalThis.ardiaBrowseOrderWatch;
   globalThis.ardiaBrowseOrderWatch = null;
   if (!watch) return false;
-  const moved = watch.takeRecords().length > 0;
+  const moved = watch.takeRecords().length > 0 || watch.moved;
   watch.disconnect();
   if (moved) return false;
   const all = document.getElementsByTagName("*");
@@ -78,9 +86,26 @@ function lightElements(snapshot: Record<string, unknown>, frame: string): Light[
   return light;
 }
 
+const DROP_WATCH = "() => { const watch = globalThis.ardiaBrowseOrderWatch; globalThis.ardiaBrowseOrderWatch = null; if (watch) watch.disconnect(); return true; }";
+
 export async function snapshotBackends(page: Page, frame: string, limit: number): Promise<number[] | null> {
   if (refused.has(page.state)) return null;
   const found = record(await page.call(FRESH_KEYS, [limit], { frame, read: true }));
+  let kept = false;
+  try {
+    const ids = await mapped(page, frame, found);
+    if (ids === null) return null;
+    const indexes = (found["keys"] as unknown[]).map((key) => (Array.isArray(key) ? key[0] : -1));
+    kept = Boolean(await page.call(KEEP_BY_INDEX, [ids, indexes, Number(found["count"])], { frame, read: true }));
+    if (!kept) return null;
+    flag("dom_snapshot_used", true);
+    return ids;
+  } finally {
+    if (!kept) await page.call(DROP_WATCH, [], { frame, read: true }).catch(() => {});
+  }
+}
+
+async function mapped(page: Page, frame: string, found: Record<string, unknown>): Promise<number[] | null> {
   const keys = found["keys"];
   const count = Number(found["count"]);
   let snapshot: Record<string, unknown>;
@@ -96,12 +121,8 @@ export async function snapshotBackends(page: Page, frame: string, limit: number)
   if (light === null || !Array.isArray(keys) || light.length !== count) return null;
   const ids = keys.map((key) => {
     const [index, name, id] = Array.isArray(key) ? key : [-1, "", ""];
-    const found = typeof index === "number" && index >= 0 ? light[index] : undefined;
-    return found !== undefined && found.name === name && found.id === id && found.backend > 0 ? found.backend : 0;
+    const match = typeof index === "number" && index >= 0 ? light[index] : undefined;
+    return match !== undefined && match.name === name && match.id === id && match.backend > 0 ? match.backend : 0;
   });
-  if (ids.length === 0 || ids.some((id) => id === 0)) return null;
-  const indexes = keys.map((key) => (Array.isArray(key) ? key[0] : -1));
-  if (!(await page.call(KEEP_BY_INDEX, [ids, indexes, count], { frame, read: true }))) return null;
-  flag("dom_snapshot_used", true);
-  return ids;
+  return ids.length === 0 || ids.some((id) => id === 0) ? null : ids;
 }

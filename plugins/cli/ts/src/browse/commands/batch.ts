@@ -443,8 +443,9 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
     const [result, error] = await runOne(ctx, command, lineOptions);
     observing.defer = false;
     if (observing.flushed !== null) {
-      placeReport(observing.flushed);
+      placeReport(observing.flushed, observing.flushedPartly);
       observing.flushed = null;
+      observing.flushedPartly = false;
     }
     const failed = error === null && Boolean(result?.failed);
     const outcome: Outcome = {

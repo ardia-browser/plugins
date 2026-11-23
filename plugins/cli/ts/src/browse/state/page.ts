@@ -464,6 +464,7 @@ export class Page {
     let session = this.session;
     let tree: Json = {};
     let frames = new Map<string, Frame>();
+    let sessions: Map<string, string> | null = null;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       events = this.frameEvents;
       session = this.session;
@@ -476,10 +477,11 @@ export class Page {
         for (const child of Array.isArray(children) ? children : []) walk(record(child), frame.id);
       };
       walk(tree, null);
-      if (this.oopifs.size > 0) await oopif.childFrames(this, frames, frameOf);
+      sessions = this.oopifs.size > 0 ? await oopif.childFrames(this, frames, frameOf) : null;
       if (events === this.frameEvents && session === this.session) break;
     }
     if ((events !== this.frameEvents || session !== this.session) && this.mainFrame !== null) return this.frames;
+    if (sessions !== null) oopif.useSessions(this, sessions);
     this.frames = frames;
     this.mainFrame = String(record(tree["frame"])["id"]);
     this.url = frames.get(this.mainFrame)?.url ?? "";

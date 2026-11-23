@@ -47,6 +47,7 @@ export const POLL = 0.025;
 export const STOP_TIMEOUT = 2.0;
 export const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 export const LONG_LIVED = new Set(["EventSource", "WebSocket"]);
+export const BODY_TYPES = new Set(["XHR", "Fetch", "Document"]);
 export const WATCH_BUFFER = 1024 * 1024;
 export const MAX_TEXT_MARKS = 200;
 export const MIN_FRAME_TEXT = 200;
@@ -92,6 +93,7 @@ type RequestRecord = {
   failed?: string;
   background: boolean;
   listed: boolean;
+  wrote?: { method: string; url: string };
 };
 
 function dict(value: unknown): Json {
@@ -133,7 +135,10 @@ export class NetworkWatch {
         const hop = String(request["url"] || "");
         const hopMethod = String(request["method"] || entry.method);
         entry.background = background(String(params["type"] || entry.type), hop, hopMethod);
-        entry.listed = entry.listed || !knownCollector(hop, hopMethod);
+        if (!entry.listed && !READ_METHODS.has(hopMethod.toUpperCase()) && !knownCollector(hop, hopMethod)) {
+          entry.listed = true;
+          entry.wrote = { method: hopMethod.toUpperCase(), url: cleanUrl(hop) };
+        }
         if (wasBackground && !entry.background) this.ignored -= 1;
         else if (!wasBackground && entry.background) this.ignored += 1;
       }
@@ -149,7 +154,7 @@ export class NetworkWatch {
           statuses: [],
           done: false,
           background: background(type, raw, String(request["method"] || "GET")),
-          listed: !knownCollector(raw, String(request["method"] || "GET")),
+          listed: !READ_METHODS.has(String(request["method"] || "GET").toUpperCase()) && !knownCollector(raw, String(request["method"] || "GET")),
         };
         this.records.set(requestId, entry);
         this.order.push(requestId);
@@ -212,7 +217,8 @@ export class NetworkWatch {
     const deadline = monotonic() + SETTLE_LIMIT;
     const mine = () => this.order.slice(from).some((id) => {
       const entry = this.records.get(id);
-      return entry !== undefined && !entry.done && !entry.answered && !entry.background && !LONG_LIVED.has(entry.type);
+      if (entry === undefined || entry.done || entry.background || LONG_LIVED.has(entry.type)) return false;
+      return !entry.answered || (entry.method === "GET" && BODY_TYPES.has(entry.type));
     });
     while (mine()) {
       if (monotonic() >= deadline) return false;
@@ -268,8 +274,8 @@ export class NetworkWatch {
     const rows: Write[] = [];
     for (const requestId of this.order) {
       const entry = this.records.get(requestId) as RequestRecord;
-      if (READ_METHODS.has(entry.method) || !entry.listed) continue;
-      const row: Write = { method: entry.method, url: entry.url, type: entry.type, statuses: [...entry.statuses] };
+      if (!entry.listed) continue;
+      const row: Write = { method: entry.wrote?.method ?? entry.method, url: entry.wrote?.url ?? entry.url, type: entry.type, statuses: [...entry.statuses] };
       row["status"] = entry.statuses.length > 0 ? entry.statuses.at(-1) : null;
       if (entry.failed) row["failed"] = entry.failed;
       else if (!entry.done && !entry.answered) row["pending"] = true;
@@ -378,6 +384,7 @@ export class BatchObserve {
   defer = false;
   pending: Group | null = null;
   flushed: Report | null = null;
+  flushedPartly = false;
 
   nextLine(defer: boolean): void {
     this.previous = this.current;
@@ -525,7 +532,19 @@ export async function observe<T>(ctx: Ctx, page: Page, run: () => Promise<T>, re
     return [value, null];
   }
   if (batch !== undefined) batch.pending = null;
-  return [value, await finish(ctx, page, before, watch, navigations, batch, lineStart)];
+  try {
+    return [value, await finish(ctx, page, before, watch, navigations, batch, lineStart)];
+  } catch (error) {
+    if (batch !== undefined && group !== null && error instanceof BrowseError) {
+      await watch.stop();
+      const report = diff(null, errorView(page), watch.writes());
+      report.document = "unknown";
+      report.error = error.message;
+      batch.flushed = report;
+      batch.flushedPartly = true;
+    }
+    throw error;
+  }
 }
 
 export async function settled<T>(page: Page, run: () => Promise<T>): Promise<T> {

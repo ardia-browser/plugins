@@ -285,7 +285,8 @@ export const PREPARE_ACTION = `(el, fx, fy, scroll, watch) => {
         top = null;
         break;
       }
-      for (let node = owner; node && top; node = node.parentElement) {
+      const up = (node) => node.assignedSlot || node.parentElement || (node.parentNode && node.parentNode.host) || null;
+      for (let node = owner; node && top; node = up(node)) {
         const style = getComputedStyle(node);
         if ((style.rotate && style.rotate !== "none") || (style.scale && style.scale !== "none")) {
           top = null;
@@ -363,6 +364,31 @@ function outsideMain([x, y]: [number, number], vp: Viewport): boolean {
   return x < 0 || y < 0 || x > vp.width || y > vp.height;
 }
 
+const HOLDS_HIT = "(el, hit) => el === hit || el.contains(hit) || (!!el.labels && Array.from(el.labels).some((label) => label === hit || label.contains(hit)))";
+
+async function outsideItsFrame(page: Page, element: Element, x: number, y: number): Promise<string | null> {
+  if (page.sessionFor(element.frame) !== page.session) return null;
+  let hit: Record<string, unknown>;
+  try {
+    hit = await page.send("DOM.getNodeForLocation", { x: Math.round(x), y: Math.round(y), includeUserAgentShadowDOM: false, ignorePointerEventsNone: true });
+  } catch (error) {
+    if (error instanceof CdpError || error instanceof Gated) return null;
+    throw error;
+  }
+  const where = `the point ${Math.round(x)},${Math.round(y)}, which isn't on it in the page around its frame`;
+  const frame = hit["frameId"];
+  const backend = hit["backendNodeId"];
+  if (typeof frame === "string" && frame && frame !== element.frame) {
+    flag("frame_point_unconfirmed", true);
+    return where;
+  }
+  if (typeof backend !== "number" || backend === element.backendId) return null;
+  const node = await page.resolveBackend(backend, element.frame, "the node at the click point");
+  if (node === null || (await page.call(HOLDS_HIT, [element, node], { frame: element.frame, read: true }))) return null;
+  flag("frame_point_unconfirmed", true);
+  return where;
+}
+
 export async function targetPoint(page: Page, element: Element, humanize: boolean, checkCover = true, waitForEnabled = false): Promise<Point> {
   let fx = humanize ? 0.5 + rng().uniform(-0.2, 0.2) : 0.5;
   let fy = humanize ? 0.5 + rng().uniform(-0.2, 0.2) : 0.5;
@@ -422,6 +448,7 @@ export async function targetPoint(page: Page, element: Element, humanize: boolea
       [[cx, cy], box] = await aimAt(page, element, box, facts, fx, fy);
       cover = facts.cover ?? null;
     }
+    if (!cover && !inMain && directPoint(facts) === null) cover = await outsideItsFrame(page, element, cx, cy);
     if (!cover) break;
     const [hx, hy] = [facts.x ?? 0, facts.y ?? 0];
     if (!tried.has(`consent ${cover}`) && !cover.startsWith("nothing")) {
