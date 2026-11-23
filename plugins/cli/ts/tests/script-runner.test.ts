@@ -1,5 +1,6 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { BUILT_LIBC } from "./libc-loaded.ts";
@@ -125,34 +126,63 @@ describe("the script runner", () => {
 
   test("a confined process can't read files, write files, connect, signal others or run programs", async () => {
     if (process.platform !== "darwin") return;
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ardia-confine-"));
+    const readable = path.join(scratch, "readable.txt");
+    fs.writeFileSync(readable, "x");
+    const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response("reached") });
     const probe = `
       import { loadLibc, confineProcess } from ${JSON.stringify(path.resolve(import.meta.dir, "..", "src", "libc.ts"))};
       import fs from "node:fs";
       loadLibc(${JSON.stringify(BUILT_LIBC)});
-      const confined = confineProcess();
-      const tries = { confined };
+      const tries = { confined: process.env.ARDIA_PROBE_CONFINE === "1" ? confineProcess() : 0 };
       for (const [name, run] of Object.entries({
-        readHome: () => fs.readFileSync(${JSON.stringify(path.join(os.homedir(), ".zshrc"))}),
+        read: () => fs.readFileSync(process.env.ARDIA_PROBE_READ),
         readEtc: () => fs.readFileSync("/etc/hosts"),
-        write: () => fs.writeFileSync(${JSON.stringify(path.join(os.tmpdir(), `ardia-confined-${process.pid}`))}, "x"),
-        spawn: () => Bun.spawnSync(["/bin/echo", "hi"]),
+        write: () => fs.writeFileSync(process.env.ARDIA_PROBE_WRITE, "x"),
+        spawn: () => { if (Bun.spawnSync(["/bin/echo", "hi"]).exitCode !== 0) throw new Error("no"); },
         signal: () => process.kill(Number(process.env.ARDIA_SIGNAL_TARGET), "SIGTERM"),
       })) { try { run(); tries[name] = "allowed"; } catch (e) { tries[name] = "denied"; } }
-      try { await fetch("http://127.0.0.1:9/"); tries.connect = "allowed"; } catch (e) { tries.connect = "denied"; }
+      try { const answer = await fetch(process.env.ARDIA_PROBE_URL); tries.connect = (await answer.text()) === "reached" ? "allowed" : "denied"; } catch (e) { tries.connect = "denied"; }
       console.log(JSON.stringify(tries));
     `;
-    const target = Bun.spawn(["/bin/sleep", "30"], { stdio: ["ignore", "ignore", "ignore"] });
-    const done = spawnSync(process.execPath, ["-e", probe], { encoding: "utf8", timeout: 20_000, env: { ...process.env, ARDIA_SIGNAL_TARGET: String(target.pid) } });
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    let targetAlive = true;
+    const run = async (confine: boolean) => {
+      const target = Bun.spawn(["/bin/sleep", "30"], { stdio: ["ignore", "ignore", "ignore"] });
+      const child = Bun.spawn([process.execPath, "-e", probe], {
+        stdout: "pipe",
+        stderr: "ignore",
+        timeout: 20_000,
+        env: {
+          ...process.env,
+          ARDIA_PROBE_CONFINE: confine ? "1" : "0",
+          ARDIA_PROBE_READ: readable,
+          ARDIA_PROBE_WRITE: path.join(scratch, confine ? "confined-write" : "open-write"),
+          ARDIA_PROBE_URL: `http://127.0.0.1:${server.port}/`,
+          ARDIA_SIGNAL_TARGET: String(target.pid),
+        },
+      });
+      const out = await new Response(child.stdout).text();
+      await child.exited;
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      let targetAlive = true;
+      try {
+        process.kill(target.pid, 0);
+      } catch {
+        targetAlive = false;
+      }
+      target.kill("SIGKILL");
+      return { tries: JSON.parse(out.trim().split("\n").at(-1) as string) as Record<string, unknown>, targetAlive };
+    };
     try {
-      process.kill(target.pid, 0);
-    } catch {
-      targetAlive = false;
+      const open = await run(false);
+      expect(open.tries).toEqual({ confined: 0, read: "allowed", readEtc: "allowed", write: "allowed", spawn: "allowed", signal: "allowed", connect: "allowed" });
+      expect(open.targetAlive).toBe(false);
+      const confined = await run(true);
+      expect(confined.tries).toEqual({ confined: 1, read: "denied", readEtc: "denied", write: "denied", spawn: "denied", signal: "denied", connect: "denied" });
+      expect(confined.targetAlive).toBe(true);
+    } finally {
+      server.stop(true);
+      fs.rmSync(scratch, { recursive: true, force: true });
     }
-    target.kill("SIGKILL");
-    expect(targetAlive).toBe(true);
-    expect(JSON.parse(done.stdout.trim().split("\n").at(-1) as string)).toEqual({ confined: 1, readHome: "denied", readEtc: "denied", write: "denied", spawn: "denied", signal: "denied", connect: "denied" });
   });
 
   test("errors carry the script's own line numbers", async () => {
