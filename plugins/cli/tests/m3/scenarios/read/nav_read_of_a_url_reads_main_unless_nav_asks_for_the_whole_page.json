@@ -1,0 +1,24 @@
+{
+ "source": "tests/test_browse_read.py ReadNavigationInChrome.test_read_of_a_url_reads_main_unless_nav_asks_for_the_whole_page",
+ "window": [
+  1200,
+  800
+ ],
+ "steps": [
+  {
+   "argv": [
+    "read",
+    "{fixture}/nav-megamenu.html"
+   ],
+   "session": "nav"
+  },
+  {
+   "argv": [
+    "read",
+    "{fixture}/nav-megamenu.html",
+    "--nav"
+   ],
+   "session": "nav"
+  }
+ ]
+}

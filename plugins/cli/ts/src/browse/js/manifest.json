@@ -1,7 +1,7 @@
 {
   "js.library.js.txt": {
     "python": "ardia_cli.browse.js.LIBRARY",
-    "sha256": "b017349219e21b1b6325eeb3520a1b2462117ca99198fe5b989d10d32722676c"
+    "sha256": "ddec45ae942baa033282335a03c7bdb85a5d27d3510ceb66c3a4564871b8c646"
   },
   "actions.disabled-state.js.txt": {
     "python": "ardia_cli.browse.actions.DISABLED_STATE",
@@ -153,7 +153,7 @@
   },
   "readpages.extract.js.txt": {
     "python": "ardia_cli.browse.readpages.EXTRACT",
-    "sha256": "7ffe6ba44aa154872d60614fc0b387b412041bd5429f5a7f3763f45a8cdbcd97"
+    "sha256": "90245a8e876e3010d96ff2c24d059af9341719ce43f3282ad901810d09ddd3da"
   },
   "readpages.settle-probe.js.txt": {
     "python": "ardia_cli.browse.readpages.SETTLE_PROBE",

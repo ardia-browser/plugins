@@ -11,7 +11,7 @@ export const DURATIONS = new Set([
 ]);
 export const COUNTS = new Set([
   "cdp_calls", "read_data_blocks", "snapshot_nodes", "snapshot_chars", "output_chars", "network_writes_count", "batch_steps", "read_rows", "read_pages",
-  "batch_lines_compacted", "read_tabs_reopened", "skills_installed", "skills_skipped", "failed_step_index",
+  "batch_lines_compacted", "read_tabs_reopened", "skills_installed", "skills_skipped", "failed_step_index", "read_nav_hidden", "read_nav_chars_hidden",
   "script_calls", "script_concurrent_peak", "script_receipts_skipped",
 ]);
 export const READ_FLAGS = new Set([
