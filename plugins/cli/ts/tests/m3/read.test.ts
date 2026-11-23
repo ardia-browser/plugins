@@ -11,6 +11,7 @@ import { BrowseError, Usage } from "../../src/browse/daemon-errors.ts";
 import { OUTPUT_CAP, render as renderAnswer } from "../../src/browse/daemon/render.ts";
 import { begin } from "../../src/browse/metrics.ts";
 import { browseDir, closeFd } from "../../src/browse/paths.ts";
+import { content } from "../../src/browse/outfile.ts";
 import * as pages from "../../src/browse/read/pages.ts";
 import { extractHtml, postProcess } from "../../src/browse/read/readurl.ts";
 import * as scroll from "../../src/browse/read/scroll.ts";
@@ -480,6 +481,18 @@ describe("ReadingTabs", () => {
     } finally {
       pages.readers.linksIn = previous;
       run.restore();
+    }
+  });
+
+  test("test_links_from_urls_name_failed_listings_in_the_saved_output (plugins#74 review)", async () => {
+    const data = new Map<string, unknown>([
+      ["pages", [new Map<string, unknown>([["url", "http://s/p/1"], ["title", "One"], ["text", "body"]])]],
+      ["failedListings", [new Map<string, unknown>([["url", "http://s/down"], ["error", "couldn't load it: net::ERR_CONNECTION_REFUSED"]])]],
+    ]);
+    for (const path of ["out.txt", "out.json"]) {
+      const [text, summary] = content("read", data as never, path);
+      expect(summary).toContain("[couldn't list the links on http://s/down: couldn't load it: net::ERR_CONNECTION_REFUSED]");
+      if (path.endsWith(".txt")) expect(text).toContain("couldn't list the links on http://s/down");
     }
   });
 

@@ -138,6 +138,11 @@ function get(data: JsonObject, key: string): Value | undefined {
   return data.get(key);
 }
 
+function listingFailureLines(value: Value | undefined): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((failure) => (failure instanceof Map ? [`[couldn't list the links on ${pyStr(failure.get("url"))}: ${pyStr(failure.get("error"))}]`] : []));
+}
+
 export function content(command: string, data: JsonObject, path: string): [string, string] {
   const ext = suffix(path);
   if (command === "read" && (data.has("blocks") || data.has("block"))) {
@@ -168,6 +173,8 @@ export function content(command: string, data: JsonObject, path: string): [strin
       if (page.get("note")) lines.push(`  (${pyStr(page.get("note"))})`);
     }
     if (pages.length > EXCERPT_PAGES) lines.push(`- and ${pages.length - EXCERPT_PAGES} more pages in the file`);
+    const listingFailures = listingFailureLines(get(data, "failedListings"));
+    lines.push(...listingFailures);
     const summary = lines.join("\n");
     if (ext === ".json") return [indented(pages), summary];
     const blocks = pages.map((page) => {
@@ -176,7 +183,7 @@ export function content(command: string, data: JsonObject, path: string): [strin
       const body = page.get("text") ? pyStr(page.get("text")) : page.get("error") ? pyStr(page.get("error")) : "";
       return `=== ${title}\n${where}\n\n${body}`;
     });
-    return [`${blocks.join("\n")}\n`, summary];
+    return [`${[...blocks, ...listingFailures].join("\n")}\n`, summary];
   }
   const value = (command === "script" ? get(data, "value") : get(data, "result")) ?? null;
   if (typeof value === "string") return [value, `text starting ${line(head(value, PREVIEW))}`];

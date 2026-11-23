@@ -31,6 +31,7 @@ export const MAX_LIMIT = 100;
 export const PAGE_TIMEOUT_MS = 20000;
 export const LOAD_GRACE = 5.0;
 export const MIN_USEFUL = 120;
+export const LINK_CALL_FLOOR = 1.0;
 export const THIN_WAIT = 5.0;
 export const THIN_POLL = 0.5;
 export const CUT_MARK = 24;
@@ -300,8 +301,8 @@ export async function collectLinks(ctx: Ctx, pattern: string): Promise<[string, 
   return [page.url, links, pickLinks(links, pattern, page.url)];
 }
 
-async function linksOn(page: Page, frame: string): Promise<string[]> {
-  const got = await page.call(READPAGES_LINKS, [], { frame, read: true });
+async function linksOn(page: Page, frame: string, until: number): Promise<string[]> {
+  const got = await page.call(READPAGES_LINKS, [], { frame, read: true, timeout: Math.max(LINK_CALL_FLOOR, until - monotonic()) });
   return distinctLinks(Array.isArray(got) ? got.map(String) : []);
 }
 
@@ -313,18 +314,23 @@ function retryable(error: unknown): error is BrowseError {
 
 async function linksNow(page: Page, until: number): Promise<string[] | BrowseError> {
   try {
-    return await linksOn(page, page.mainFrame as string);
+    return await linksOn(page, page.mainFrame as string, until);
   } catch (error) {
+    if (unanswered(error)) return error;
     if (!retryable(error)) throw error;
     await settle(page, Math.min(until, monotonic() + SETTLE_LIMIT));
     await page.refreshFrames();
     try {
-      return await linksOn(page, page.mainFrame as string);
+      return await linksOn(page, page.mainFrame as string, until);
     } catch (again) {
-      if (!retryable(again)) throw again;
-      return again;
+      if (unanswered(again) || retryable(again)) return again;
+      throw again;
     }
   }
+}
+
+function unanswered(error: unknown): error is BrowseError {
+  return error instanceof OutcomeUnknown || (error instanceof BrowseError && !(error instanceof ConnectionLost) && error.code === "timeout");
 }
 
 function sameUrlKey(url: string): string {
@@ -349,7 +355,10 @@ export async function linksIn(page: Page, listing: string, pattern: string, time
     if ((scanned !== null && wanted(scanned, page.url || listing)) || monotonic() + THIN_POLL >= deadline) break;
     await sleep(THIN_POLL);
   }
-  if (scanned === null) throw failed ?? new BrowseError(`couldn't read the links on ${listing}`, null, "document_changed");
+  if (scanned === null) {
+    if (failed instanceof OutcomeUnknown) throw new BrowseError(failed.text, null, "timeout");
+    throw failed ?? new BrowseError(`couldn't read the links on ${listing}`, null, "document_changed");
+  }
   return scanned;
 }
 
