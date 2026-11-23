@@ -325,3 +325,28 @@ describe("JSON-aware masking round 4 (Codex r4 on #79)", () => {
     expect(performance.now() - started).toBeLessThan(1000);
   });
 });
+
+describe("JSON-aware masking round 5 (Codex r5 on #79)", () => {
+  function masked(secrets: string[], text: string): string {
+    const held = new Secrets();
+    for (const secret of secrets) held.add(secret);
+    return held.redact(text);
+  }
+
+  test("a plain-text secret ending in a line break leaves the next JSON record whole", () => {
+    expect(masked(["session-note\n"], 'session-note\n{"k":1}\n')).toBe('***\n{"k":1}\n');
+  });
+
+  test("a match on already-masked text doesn't stop a later secret being masked", () => {
+    const out = masked(["\n***", "session-note\n123456789"], '"\\"***\\""\n***\nsession-note\n123456789\n');
+    expect(out.includes("session-note\n123456789")).toBe(false);
+    expect(out.includes("session-note")).toBe(false);
+  });
+
+  test("many cross-line matches mask in linear time", () => {
+    const started = performance.now();
+    const out = masked(["}\n{"], '{"n":1}\n'.repeat(32_000));
+    expect(out.includes("}\n{")).toBe(false);
+    expect(performance.now() - started).toBeLessThan(3000);
+  });
+});

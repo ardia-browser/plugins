@@ -274,6 +274,11 @@ function maskedHitLines(text: string, longestFirst: readonly string[]): string {
   return out + text.slice(copied);
 }
 
+function maskedPlain(block: string, longestFirst: readonly string[]): string {
+  const end = block.endsWith("\n") ? block.length - 1 : block.length;
+  return replaceSecrets(block.slice(0, end), longestFirst) + block.slice(end);
+}
+
 function maskSecrets(text: string, longestFirst: readonly string[]): string {
   if (longestFirst.length === 0 || untouched(text, longestFirst)) return text;
   if (parsesAsJson(text)) return maskedDocument(text, longestFirst);
@@ -286,38 +291,58 @@ function maskSecrets(text: string, longestFirst: readonly string[]): string {
       plain += line;
       continue;
     }
-    out += replaceSecrets(plain, longestFirst) + maskedDocument(line, longestFirst);
+    out += maskedPlain(plain, longestFirst) + maskedDocument(line, longestFirst);
     plain = "";
   }
-  out += replaceSecrets(plain, longestFirst);
+  out += maskedPlain(plain, longestFirst);
   return maskedAcrossLines(out, longestFirst);
+}
+
+function maskedLineText(line: string): string {
+  const body = line.endsWith("\r") ? line.slice(0, -1) : line;
+  if (body.trim() === "" || body === MASK || body === QUOTED_MASK) return line;
+  return (parsesAsJson(body) ? QUOTED_MASK : MASK) + line.slice(body.length);
+}
+
+function lineIndex(starts: readonly number[], at: number): number {
+  let low = 0;
+  let high = starts.length - 1;
+  while (low < high) {
+    const middle = (low + high + 1) >> 1;
+    if ((starts[middle] as number) <= at) low = middle;
+    else high = middle - 1;
+  }
+  return low;
 }
 
 function maskedAcrossLines(text: string, longestFirst: readonly string[]): string {
   const spanning = longestFirst.filter((secret) => secret.includes("\n") && secret.trim() !== "");
   let out = text;
-  for (let round = 0; round <= out.length; round += 1) {
-    let found = -1;
-    let size = 0;
+  for (let pass = 0; spanning.length > 0; pass += 1) {
+    const lines = out.split("\n");
+    if (pass > lines.length) return out;
+    const starts: number[] = [];
+    let offset = 0;
+    for (const line of lines) {
+      starts.push(offset);
+      offset += line.length + 1;
+    }
+    const done = lines.map((line) => maskedLineText(line) === line);
+    const marked = new Uint8Array(lines.length);
+    let fresh = false;
     for (const secret of spanning) {
-      const at = out.indexOf(secret);
-      if (at >= 0 && (found < 0 || at < found)) {
-        found = at;
-        size = secret.length;
+      for (let at = out.indexOf(secret); at >= 0; at = out.indexOf(secret, at + 1)) {
+        const first = lineIndex(starts, at);
+        const last = lineIndex(starts, at + secret.length - 1);
+        for (let line = first; line <= last; line += 1) {
+          if (done[line] || marked[line]) continue;
+          marked[line] = 1;
+          fresh = true;
+        }
       }
     }
-    if (found < 0) return out;
-    const first = out.lastIndexOf("\n", found - 1) + 1;
-    const last = out.indexOf("\n", found + size - 1);
-    const stop = last < 0 ? out.length : last;
-    const lines = out.slice(first, stop).split("\n").map((line) => {
-      const body = line.replace(/\r$/u, "");
-      const masked = body.trim() === "" ? body : parsesAsJson(body) ? QUOTED_MASK : MASK;
-      return masked + line.slice(body.length);
-    });
-    const replaced = out.slice(0, first) + lines.join("\n") + out.slice(stop);
-    if (replaced === out) return out;
-    out = replaced;
+    if (!fresh) return out;
+    out = lines.map((line, index) => (marked[index] ? maskedLineText(line) : line)).join("\n");
   }
   return out;
 }
