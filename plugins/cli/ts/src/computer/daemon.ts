@@ -25,8 +25,7 @@ export function defaultSocket(): string {
 }
 
 export function explicitSocket(argv: readonly string[]): boolean {
-  const end = argv.indexOf("--");
-  return (end < 0 ? argv : argv.slice(0, end)).some((word) => word === "--socket" || word.startsWith("--socket="));
+  return argv.some((word) => word === "--socket" || word.startsWith("--socket="));
 }
 
 export function daemonListening(socket: string = defaultSocket()): Promise<boolean> {

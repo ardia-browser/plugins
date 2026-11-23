@@ -1970,8 +1970,11 @@ on PATH: with neither, setup and `mcp-config` refuse and say why.
 
 `ardia computer <args>` runs the driver with the arguments unchanged: `/Applications/CuaDriver.app`'s binary when
 it's there, otherwise the bundled copy (fetched on demand). `mcp` and `serve` hand over with `execve`, since they're
-long-lived stdio servers; every other command runs as a child, with its output passed straight through, so ardia
-sees its exit and gives the failure an `error_code` (below) before exiting with the driver's own status. Either is verified before every run (`codesign --verify
+long-lived stdio servers; every other command runs as a child, with its output passed straight through (written
+asynchronously, so a reader that stops reading never blocks ardia), so ardia sees its exit and gives the failure an
+`error_code` (below) before exiting with the driver's own status. SIGINT, SIGTERM and SIGHUP sent to ardia are passed
+to the driver; once it has gone, output still unread after 200 ms is dropped. A stdout that closes early exits 141
+with `stdout_closed`, as everywhere else in the CLI. Either is verified before every run (`codesign --verify
 --deep --strict` against Cua's designated requirement, about 0.1 s); an app in `/Applications` that fails, ardia's or
 not, is refused with a line saying to move it away and run setup. The check runs right before every launch; the
 window that remains between it and the exec needs the user's own write access to the app (macOS has no `fexecve`),
@@ -1987,12 +1990,14 @@ rest) are refused.
 
 `call` needs cua-driver's background service (`serve`), which must run as CuaDriver.app so macOS checks CuaDriver's
 own Accessibility and Screen Recording grants, not the terminal's. When nothing listens on its socket
-(`~/Library/Caches/cua-driver/cua-driver.sock`, a connect taking well under a millisecond), `call` starts it the way
-cua-driver's own `mcp` does, through LaunchServices (`open -g -a /Applications/CuaDriver.app --args serve`), waits up
+(`~/Library/Caches/cua-driver/cua-driver.sock`, a connect taking well under a millisecond), `call` first runs the same
+command against a socket that doesn't exist, with stdin closed, so cua-driver checks the arguments and can't reach any
+service; a malformed JSON argument (exit 2) fails right there, never opening the app. Then it starts the service the
+way cua-driver's own `mcp` does, through LaunchServices (`open -g -a /Applications/CuaDriver.app --args serve`), waits up
 to 15 s for the socket (`ts/src/computer/daemon.ts`), then reads `permissions status --json` once. A missing grant
 stops the call before it reaches the driver. Before, the first call of a session failed with cua-driver's `Start it
-first with: cua-driver serve`, which would have tied the grants to the terminal. A `call` given `--socket` is never
-started for: that endpoint belongs to whoever chose it. A running service costs nothing extra.
+first with: cua-driver serve`, which would have tied the grants to the terminal. A `call` given `--socket` anywhere,
+after `--` too (cua-driver reads it there), is never started for: that endpoint belongs to whoever chose it. A running service costs nothing extra.
 
 After a failed `call` or `permissions` (not bad arguments or a signal), ardia reads `permissions status --json` again
 so a grant revoked since the service started is named too. `permissions status` keeps the driver's exit 0 and adds
@@ -2011,10 +2016,13 @@ The `error_code` of a failed `ardia computer` run is one of a fixed list (`COMPU
 - the service: `daemon_start_failed` (`open` failed), `daemon_timeout` (no socket within 15 s; the message says
   macOS may be showing CuaDriver's permission prompts), `daemon_not_running` (cua-driver's `daemon is not running`);
 - permissions: `permission_accessibility_missing`, `permission_screen_recording_missing`, `permission_both_missing`,
-  from the driver's `permissions status --json` or its `… not granted` lines;
+  from the driver's `permissions status --json` or its own `… not granted` lines on stderr;
 - the driver's exit: `bad_arguments` (exit 2, cua-driver's argument errors, or 64, an unknown tool or command),
   `tool_failed` (`call` exit 1: the tool ran and failed), `doctor_probe_failed` (`doctor` or `diagnose`),
-  `driver_signal` (killed by a signal), `driver_exit_<n>` for 1–15 and 64–78, and `driver_exit_other`.
+  `driver_signal` (killed by a signal, told apart from a plain exit 143), `driver_exit_<n>` for 1–15 and 64–78,
+  and `driver_exit_other`. Exits 2 and 64 are argument errors whatever the text says. Only stderr is read, never the
+  tool's output, and only cua-driver's own line shapes at the start of a line, stopping at a `received:` line that
+  echoes the input.
 
 Only the code, `exit_code` and the subcommand's name are sent; never the tool, its JSON, an app, a window or text.
 Before this, every command handed over to the driver recorded exit 0 whatever the driver did, so its failures were

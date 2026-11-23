@@ -11,11 +11,14 @@ import { shellJoin, shellQuote } from "../pystrings.ts";
 import type { CommandIo } from "../cmdio.ts";
 import { DRIVER_COMMANDS, label } from "./label.ts";
 import { ardiaCommand, CalledProcessError, linkCommand, needsRecovery, placeApp, quietlyOurs, recover, runDriverQuietly, signedByCua, staleNotice, withApplicationsLock, installedByArdia } from "./apps.ts";
-import { APP_BINARY, appVersion, driverEnv, ensureDriver, Inconclusive, installedApp, isDirectory, lexists, Refused, tools, verifyApp, VERSION } from "./driver.ts";
-import { classifyDriverExit, type Grants, missingGrantsIn, permissionCode } from "./codes.ts";
+import { APP_BINARY, appVersion, driverEnv, ensureDriver, Inconclusive, installedApp, isDirectory, lexists, Refused, runTool, tools, verifyApp, VERSION } from "./driver.ts";
+import { classifyDriverExit, daemonDownIn, type Grants, missingGrantsIn, permissionCode } from "./codes.ts";
 import { DaemonFailure, daemonListening, explicitSocket, readGrants, startDaemon } from "./daemon.ts";
 import { daemonDownLines, daemonLines, notInstalledLine, permissionLines } from "./guidance.ts";
-import { supervise } from "./supervise.ts";
+import { forward, supervise } from "./supervise.ts";
+import { tmpdir } from "node:os";
+import { randomBytes } from "node:crypto";
+import { join } from "../paths.ts";
 
 const SERVER_NAME = "cua-driver";
 const DAEMON_COMMANDS = ["mcp", "call", "serve", "permissions"];
@@ -188,8 +191,28 @@ async function resolveBinary(io: CommandIo, argv: readonly string[]): Promise<{ 
   }
 }
 
-async function ensureDaemon(io: CommandIo, binary: string): Promise<number | undefined> {
+const ARGUMENT_CHECK_TIMEOUT_S = 30;
+
+async function argumentsRefused(io: CommandIo, binary: string, argv: readonly string[]): Promise<number | undefined> {
+  const nowhere = join(tmpdir(), `ardia-cua-check-${process.pid}-${randomBytes(6).toString("hex")}.sock`);
+  let checked;
+  try {
+    checked = await runTool([binary, ...argv, "--socket", nowhere], ARGUMENT_CHECK_TIMEOUT_S, driverEnv());
+  } catch {
+    return undefined;
+  }
+  if (checked.code === 0 || (checked.code === 1 && daemonDownIn(checked.stderr))) return undefined;
+  io.flush();
+  await forward(1, checked.stdout);
+  await forward(2, checked.stderr);
+  io.errorCode = classifyDriverExit(argv[0] ?? "", checked.code, checked.stderr);
+  return checked.code;
+}
+
+async function ensureDaemon(io: CommandIo, binary: string, argv: readonly string[]): Promise<number | undefined> {
   if (await daemonListening()) return undefined;
+  const refused = await argumentsRefused(io, binary, argv);
+  if (refused !== undefined) return refused;
   try {
     await startDaemon(installedApp());
   } catch (error) {
@@ -215,21 +238,22 @@ async function runSupervised(io: CommandIo, binary: string, installed: boolean, 
   const guided = installed && (command === "call" || command === "permissions");
   const ownSocket = explicitSocket(argv);
   if (installed && command === "call" && !ownSocket && !argv.some((word) => word === "-h" || word === "--help")) {
-    const refused = await ensureDaemon(io, binary);
+    const refused = await ensureDaemon(io, binary, argv);
     if (refused !== undefined) return refused;
   }
   io.flush();
   const ran = await supervise(binary, [binary, ...argv], driverEnv());
   if (ran.spawnErrno !== undefined) return fail(io, "driver_spawn_failed", [`${pythonOsError(ran.spawnErrno)}: [Errno ${ran.spawnErrno}] ${strerror(ran.spawnErrno)}: '${binary}'`]);
-  if (ran.status === 0) {
+  if (ran.stdoutClosed) return fail(io, "stdout_closed", [], 141);
+  if (ran.status === 0 && ran.signal === undefined) {
     if (guided && permissionsStatus(argv)) {
       const report = await readGrants(binary);
       if (report?.running && permissionCode(report.grants) !== undefined) for (const line of permissionLines(installedApp(), report.grants)) io.err(line);
     }
     return 0;
   }
-  let code = classifyDriverExit(command, ran.status, ran.tail);
-  let grants = missingGrantsIn(ran.tail);
+  let code = classifyDriverExit(command, ran.status, ran.stderr, ran.signal);
+  let grants = ran.signal === undefined && code !== "bad_arguments" ? missingGrantsIn(ran.stderr) : undefined;
   if (guided && !ownSocket && grants === undefined && code !== "bad_arguments" && code !== "driver_signal") {
     const found = await grantsAfterFailure(binary);
     if (found !== undefined) {

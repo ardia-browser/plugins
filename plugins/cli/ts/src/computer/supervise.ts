@@ -1,22 +1,34 @@
 import { spawn } from "node:child_process";
+import { write } from "node:fs";
 import { constants } from "node:os";
-import { writeWhole } from "../libc.ts";
-import { errnoOf } from "../paths.ts";
+import { abandonWork } from "../printable.ts";
 
 const TAIL_BYTES = 64 * 1024;
-const FORWARDED_SIGNALS = ["SIGTERM", "SIGHUP"] as const;
+const FORWARDED_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
+const STOPPED_DRAIN_MS = 200;
 
-export type Supervised = { status: number; tail: string; spawnErrno?: number };
+export type Supervised = { status: number; signal?: NodeJS.Signals; stderr: string; stdoutClosed: boolean; spawnErrno?: number };
+
+function writeAll(fd: 1 | 2, bytes: Uint8Array, done: (error?: unknown) => void, at = 0): void {
+  if (at >= bytes.length) {
+    done();
+    return;
+  }
+  write(fd, bytes, at, bytes.length - at, null, (error, written) => {
+    if (error) done(error);
+    else writeAll(fd, bytes, done, at + written);
+  });
+}
 
 export const driverOutput = {
-  write(fd: 1 | 2, bytes: Uint8Array): void {
-    writeWhole(fd, bytes);
+  write(fd: 1 | 2, bytes: Uint8Array, done: (error?: unknown) => void): void {
+    writeAll(fd, bytes, done);
   },
 };
 
-function signalNumber(signal: NodeJS.Signals | null): number {
-  if (signal === null) return 1;
-  return (constants.signals as Record<string, number | undefined>)[signal] ?? 1;
+export function forward(fd: 1 | 2, text: string): Promise<boolean> {
+  if (text === "") return Promise.resolve(true);
+  return new Promise((resolve) => driverOutput.write(fd, Buffer.from(text, "utf8"), (error) => resolve(error === undefined)));
 }
 
 class Tail {
@@ -35,52 +47,85 @@ class Tail {
   }
 }
 
+function signalNumber(signal: NodeJS.Signals): number {
+  return (constants.signals as Record<string, number | undefined>)[signal] ?? 1;
+}
+
 export function supervise(binary: string, argv: readonly string[], env: Record<string, string>): Promise<Supervised> {
   return new Promise((resolve) => {
-    const tail = new Tail();
-    let stdoutOpen = true;
+    const stderrTail = new Tail();
+    let stdoutClosed = false;
+    let stopped = false;
+    let pending = 0;
+    let exited: { code: number | null; signal: NodeJS.Signals | null } | undefined;
+    let settled = false;
+    let drainTimer: ReturnType<typeof setTimeout> | undefined;
     const child = spawn(binary, argv.slice(1), { argv0: argv[0], env, stdio: ["inherit", "pipe", "pipe"] });
-    const forward = (signal: NodeJS.Signals) => {
+    const relay = (signal: NodeJS.Signals) => {
+      stopped = true;
       try {
         child.kill(signal);
       } catch {}
+      if (exited !== undefined) scheduleDrain();
     };
-    const handlers = FORWARDED_SIGNALS.map((signal) => [signal, () => forward(signal)] as const);
-    const ignoreInterrupt = () => {};
+    const handlers = FORWARDED_SIGNALS.map((signal) => [signal, () => relay(signal)] as const);
     for (const [signal, handler] of handlers) process.on(signal, handler);
-    process.on("SIGINT", ignoreInterrupt);
-    const release = () => {
-      for (const [signal, handler] of handlers) process.off(signal, handler);
-      process.off("SIGINT", ignoreInterrupt);
-    };
-    child.stdout?.on("data", (chunk: Buffer) => {
-      tail.add(chunk);
-      if (!stdoutOpen) return;
-      try {
-        driverOutput.write(1, chunk);
-      } catch {
-        stdoutOpen = false;
-        child.stdout?.destroy();
-      }
-    });
-    child.stderr?.on("data", (chunk: Buffer) => {
-      tail.add(chunk);
-      try {
-        driverOutput.write(2, chunk);
-      } catch {}
-    });
-    let settled = false;
-    child.on("error", (error) => {
+    const finish = (result: Supervised) => {
       if (settled) return;
       settled = true;
-      release();
-      resolve({ status: 1, tail: "", spawnErrno: errnoOf(error) || constants.errno.ENOENT });
+      clearTimeout(drainTimer);
+      for (const [signal, handler] of handlers) process.off(signal, handler);
+      if (pending > 0) abandonWork();
+      resolve(result);
+    };
+    const outcome = (): Supervised => {
+      const signal = exited?.signal ?? undefined;
+      const status = exited?.code ?? (signal === undefined ? 1 : 128 + signalNumber(signal));
+      return { status, ...(signal === undefined ? {} : { signal }), stderr: stderrTail.text(), stdoutClosed };
+    };
+    const scheduleDrain = () => {
+      if (!stopped || drainTimer !== undefined) return;
+      drainTimer = setTimeout(() => {
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+        finish(outcome());
+      }, STOPPED_DRAIN_MS);
+    };
+    const pipe = (stream: NodeJS.ReadableStream | null, fd: 1 | 2) => {
+      if (stream === null) return;
+      let forwarding = true;
+      stream.on("data", (chunk: Buffer) => {
+        if (fd === 2) stderrTail.add(chunk);
+        if (!forwarding) return;
+        pending += 1;
+        stream.pause();
+        driverOutput.write(fd, chunk, (error) => {
+          pending -= 1;
+          if (error !== undefined) {
+            forwarding = false;
+            if (fd === 1) {
+              stdoutClosed = true;
+              child.stdout?.destroy();
+              return;
+            }
+          }
+          stream.resume();
+        });
+      });
+    };
+    pipe(child.stdout, 1);
+    pipe(child.stderr, 2);
+    child.on("error", (error) => {
+      const errno = Math.abs((error as NodeJS.ErrnoException).errno ?? 0) || constants.errno.ENOENT;
+      finish({ status: 1, stderr: "", stdoutClosed: false, spawnErrno: errno });
+    });
+    child.on("exit", (code, signal) => {
+      exited = { code, signal };
+      scheduleDrain();
     });
     child.on("close", (code, signal) => {
-      if (settled) return;
-      settled = true;
-      release();
-      resolve({ status: code ?? 128 + signalNumber(signal), tail: tail.text() });
+      exited ??= { code, signal };
+      finish(outcome());
     });
   });
 }

@@ -10,6 +10,7 @@ import { computerMain } from "../src/computer/cli.ts";
 import { classifyDriverExit, COMPUTER_ERROR_CODES, driverExitCode, EXACT_EXITS, grantsOf, missingGrantsIn, permissionCode } from "../src/computer/codes.ts";
 import { daemonTiming, explicitSocket } from "../src/computer/daemon.ts";
 import { driverOutput } from "../src/computer/supervise.ts";
+import { spawn } from "node:child_process";
 import { cleanEvent, TELEMETRY_ERROR_CODES } from "../src/telemetry-schema.ts";
 import { object, type Value } from "../src/json.ts";
 
@@ -34,6 +35,21 @@ echo "$*" >> "$here/driver.log"
 if [ "$1 $2 $3" = "permissions status --json" ]; then
   if [ -n "\${STUB_GRANTS:-}" ]; then printf '%s\\n' "$STUB_GRANTS"; else printf '%s\\n' '{"accessibility":true,"screen_recording":true}'; fi
   exit \${STUB_GRANTS_EXIT:-0}
+fi
+if [ "$1" = "call" ]; then
+  socket=""; previous=""
+  for word in "$@"; do
+    if [ "$word" = "{" ]; then
+      printf "error: positional JSON arg to 'cua-driver call' did not parse: EOF while parsing an object at line 1 column 1\\n       received: {\\n" >&2
+      exit 2
+    fi
+    [ "$previous" = "--socket" ] && socket="$word"
+    previous="$word"
+  done
+  if [ -n "$socket" ] && ! [ -S "$socket" ]; then
+    printf 'Cua Driver daemon is not running on %s.\\nStart it first with: cua-driver serve --socket %s\\n' "$socket" "$socket" >&2
+    exit 1
+  fi
 fi
 [ -n "\${STUB_STDOUT:-}" ] && printf '%s\\n' "$STUB_STDOUT"
 [ -n "\${STUB_STDERR:-}" ] && printf '%s\\n' "$STUB_STDERR" >&2
@@ -97,7 +113,7 @@ function box(options: { installed?: boolean; open?: "fails" | "opens" } = {}): B
   const io = new CommandIo(false, (stream, text) => (stream === 1 ? out : err).push(text));
   const log = () => {
     const file = path.join(applications, "driver.log");
-    return fs.existsSync(file) ? fs.readFileSync(file, "utf8").trimEnd().split("\n") : [];
+    return fs.existsSync(file) ? fs.readFileSync(file, "utf8").trimEnd().split("\n").map((line) => line.replace(/\S*ardia-cua-check-[0-9]+-[0-9a-f]+\.sock/, "<check>")) : [];
   };
   return { root, app, socket, out, err, driver: [], io, log };
 }
@@ -118,9 +134,16 @@ function listenOnceOpened(b: Box): void {
   timers.push(timer);
 }
 
-async function run(b: Box, argv: string[]): Promise<number> {
+async function run(b: Box, argv: string[], closedStdout = false): Promise<number> {
   const write = driverOutput.write;
-  driverOutput.write = (fd, bytes) => void b.driver.push(`${fd}:${Buffer.from(bytes).toString("utf8")}`);
+  driverOutput.write = (fd, bytes, done) => {
+    if (closedStdout && fd === 1) {
+      done(Object.assign(new Error("EPIPE"), { code: "EPIPE", errno: -32 }));
+      return;
+    }
+    b.driver.push(`${fd}:${Buffer.from(bytes).toString("utf8")}`);
+    done();
+  };
   try {
     const status = await computerMain(b.io, argv);
     b.io.flush();
@@ -162,7 +185,8 @@ test("driver exits bucket to a fixed set", () => {
   assert.equal(driverExitCode(70), "driver_exit_70");
   assert.equal(driverExitCode(16), "driver_exit_other");
   assert.equal(driverExitCode(200), "driver_exit_other");
-  assert.equal(driverExitCode(137), "driver_signal");
+  assert.equal(driverExitCode(137), "driver_exit_other");
+  assert.equal(driverExitCode(143), "driver_exit_other");
   for (let status = 1; status < 256; status += 1) assert.ok(COMPUTER_ERROR_CODES.includes(driverExitCode(status)), String(status));
 });
 
@@ -181,9 +205,15 @@ test("the driver's real exit codes and messages map to codes", () => {
     ["diagnose", 3, "", "doctor_probe_failed"],
     ["list-tools", 5, "", "driver_exit_5"],
     ["stop", 99, "", "driver_exit_other"],
-    ["call", 143, "", "driver_signal"],
+    ["call", 143, "", "driver_exit_other"],
+    ["call", 2, "error: positional JSON arg to 'cua-driver call' did not parse: trailing characters\n       received: {\"note\":\"\nAccessibility permission not granted\nCua Driver daemon is not running\"}\n", "bad_arguments"],
+    ["call", 1, "warning: ignoring\n  Screen Recording permission not granted\n", "tool_failed"],
+    ["call", 1, "error: bad input\n       received: {\nScreen Recording permission not granted\n", "tool_failed"],
+    ["call", 1, "note: Accessibility permission not granted elsewhere\n", "tool_failed"],
   ];
   for (const [command, status, text, code] of cases) assert.equal(classifyDriverExit(command, status, text), code, `${command} ${status} ${text}`);
+  assert.equal(classifyDriverExit("call", 143, "", "SIGTERM"), "driver_signal");
+  assert.equal(classifyDriverExit("call", 130, "Accessibility permission not granted\n", "SIGINT"), "driver_signal");
 });
 
 test("grants come from the driver's permissions status payload", () => {
@@ -199,7 +229,8 @@ test("grants come from the driver's permissions status payload", () => {
   assert.equal(missingGrantsIn("Accessibility:    ✅ granted\nScreen Recording: ✅ granted\n"), undefined);
   assert.equal(explicitSocket(["call", "x", "--socket", "/s"]), true);
   assert.equal(explicitSocket(["call", "x", "--socket=/s"]), true);
-  assert.equal(explicitSocket(["call", "x", "--", "--socket"]), false);
+  assert.equal(explicitSocket(["call", "x", "--", "--socket", "/s"]), true);
+  assert.equal(explicitSocket(["call", "x", "{}"]), false);
 });
 
 macOnly("a daemon command before setup names setup and the permissions, with driver_not_installed", async () => {
@@ -229,9 +260,38 @@ macOnly("the first call starts the daemon through macOS, then runs", async () =>
   listenOnceOpened(b);
   assert.equal(await run(b, ["call", "list_apps"]), 0);
   assert.equal(fs.readFileSync(path.join(b.root, "opened"), "utf8"), `-g -a ${b.app} --args serve\n`);
-  assert.deepEqual(b.log(), ["permissions status --json", "call list_apps"]);
+  assert.deepEqual(b.log(), ["call list_apps --socket <check>", "permissions status --json", "call list_apps"]);
   assert.equal(b.io.errorCode, undefined);
   assert.equal(errText(b), "");
+});
+
+macOnly("a malformed call with no service running fails at once as bad_arguments, without opening CuaDriver.app", async () => {
+  const b = box({ open: "fails" });
+  const started = performance.now();
+  assert.equal(await run(b, ["call", "get_screen_size", "{"]), 2);
+  assert.ok(performance.now() - started < 5000);
+  assert.equal(b.io.errorCode, "bad_arguments");
+  assert.ok(!fs.existsSync(path.join(b.root, "opened")));
+  assert.deepEqual(b.driver, ["2:error: positional JSON arg to 'cua-driver call' did not parse: EOF while parsing an object at line 1 column 1\n       received: {\n"]);
+  assert.equal(errText(b), "");
+  assert.deepEqual(b.log(), ["call get_screen_size { --socket <check>"]);
+});
+
+macOnly("a socket after -- is the caller's, so nothing is started for it", async () => {
+  const b = box();
+  const other = path.join(b.root, "other.sock");
+  assert.equal(await run(b, ["call", "list_apps", "--", "--socket", other]), 1);
+  assert.equal(b.io.errorCode, "daemon_not_running");
+  assert.ok(!fs.existsSync(path.join(b.root, "opened")));
+  assert.deepEqual(b.log(), [`call list_apps -- --socket ${other}`]);
+});
+
+macOnly("a closed stdout is stdout_closed and 141, not the driver's exit 0", async () => {
+  const b = box();
+  await listen(b.socket);
+  process.env.STUB_STDOUT = "x".repeat(1000);
+  assert.equal(await run(b, ["call", "list_apps"], true), 141);
+  assert.equal(b.io.errorCode, "stdout_closed");
 });
 
 macOnly("a running daemon is used as is, with no extra driver runs", async () => {
@@ -255,7 +315,7 @@ macOnly("macOS refusing to open CuaDriver.app is daemon_start_failed", async () 
       "",
     ].join("\n"),
   );
-  assert.deepEqual(b.log(), []);
+  assert.deepEqual(b.log(), ["call list_apps --socket <check>"]);
 });
 
 macOnly("a daemon that never listens is daemon_timeout and mentions the permission prompts", async () => {
@@ -296,7 +356,7 @@ macOnly("missing permissions after starting the daemon stop the call with the ex
     assert.equal(text.includes("Privacy_Accessibility"), panes.includes("Accessibility"));
     assert.equal(text.includes("Privacy_ScreenCapture"), panes.includes("Screen & System Audio Recording"));
     assert.ok(!text.includes("844"));
-    assert.deepEqual(b.log(), ["permissions status --json"]);
+    assert.deepEqual(b.log(), ['call click {"pid":844,"x":1,"y":2} --socket <check>', "permissions status --json"]);
   }
 });
 
@@ -320,26 +380,25 @@ macOnly("a failed call with a running daemon is classified after the fact", asyn
 });
 
 macOnly("bad arguments, unknown tools and signals skip the follow-up check", async () => {
-  const cases: [Record<string, string>, number, string][] = [
-    [{ STUB_EXIT: "64", STUB_STDERR: "Unknown tool: nonexistent_tool" }, 64, "bad_arguments"],
-    [{ STUB_EXIT: "2", STUB_STDERR: "error: positional JSON arg to 'cua-driver call' did not parse" }, 2, "bad_arguments"],
-    [{ STUB_SIGNAL: "TERM" }, 143, "driver_signal"],
+  const cases: [Record<string, string>, number, string, number][] = [
+    [{ STUB_EXIT: "64", STUB_STDERR: "Unknown tool: nonexistent_tool" }, 64, "bad_arguments", 1],
+    [{ STUB_EXIT: "2", STUB_STDERR: "error: positional JSON arg to 'cua-driver call' did not parse" }, 2, "bad_arguments", 1],
+    [{ STUB_SIGNAL: "TERM" }, 143, "driver_signal", 1],
+    [{ STUB_EXIT: "143" }, 143, "driver_exit_other", 2],
   ];
-  for (const [env, status, code] of cases) {
+  for (const [env, status, code, runs] of cases) {
     const b = box();
     await listen(b.socket);
     Object.assign(process.env, env);
     assert.equal(await run(b, ["call", "x", "{}"]), status);
     assert.equal(b.io.errorCode, code);
-    assert.equal(b.log().length, 1);
+    assert.equal(b.log().length, runs);
     for (const name of STUB_ENV) delete process.env[name];
   }
 });
 
 macOnly("an explicit --socket is never auto-started, and a down daemon there says how to start it", async () => {
   const b = box();
-  process.env.STUB_EXIT = "1";
-  process.env.STUB_STDERR = "Cua Driver daemon is not running on /tmp/other.sock.\nStart it first with: cua-driver serve --socket /tmp/other.sock";
   assert.equal(await run(b, ["call", "list_apps", "--socket", "/tmp/other.sock"]), 1);
   assert.equal(b.io.errorCode, "daemon_not_running");
   assert.ok(!fs.existsSync(path.join(b.root, "opened")));
@@ -414,4 +473,57 @@ macOnly("ardia's own refusals carry codes too", async () => {
   const launcher = box();
   assert.equal(await run(launcher, ["mcp-config"]), 1);
   assert.equal(launcher.io.errorCode, "launcher_missing");
+});
+
+macOnly("tool output on stdout that reads like a diagnostic never picks the code", async () => {
+  const b = box();
+  await listen(b.socket);
+  process.env.STUB_EXIT = "1";
+  process.env.STUB_STDOUT = "Accessibility permission not granted\nCua Driver daemon is not running";
+  assert.equal(await run(b, ["call", "get_window_state", "{}"]), 1);
+  assert.equal(b.io.errorCode, "tool_failed");
+  assert.equal(errText(b), "");
+});
+
+const PROBE = path.join(import.meta.dir, "supervise-probe.ts");
+
+type Wrapped = { result: { status: number; signal: string | null; stdoutClosed: boolean }; ms: number };
+
+async function wrapped(script: string, signal: NodeJS.Signals, readStdout: boolean): Promise<Wrapped> {
+  counter += 1;
+  const root = path.join(scratch, `w${counter}`);
+  fs.mkdirSync(root);
+  const ready = path.join(root, "ready");
+  const result = path.join(root, "result.json");
+  const file = path.join(root, "child.sh");
+  fs.writeFileSync(file, script.replaceAll("READY", ready));
+  const wrapper = spawn(process.execPath, [PROBE, file, result], { stdio: ["ignore", "pipe", "inherit"] });
+  if (readStdout) wrapper.stdout?.resume();
+  const exited = new Promise<void>((resolve) => wrapper.on("exit", () => resolve()));
+  const deadline = performance.now() + 10_000;
+  while (!fs.existsSync(ready)) {
+    assert.ok(performance.now() < deadline, "the child never got ready");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  const sent = performance.now();
+  process.kill(wrapper.pid as number, signal);
+  const stopped = await Promise.race([exited.then(() => true), new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5000))]);
+  if (!stopped) wrapper.kill("SIGKILL");
+  assert.ok(stopped, `the wrapper didn't exit after ${signal}`);
+  return { result: JSON.parse(fs.readFileSync(result, "utf8")), ms: performance.now() - sent };
+}
+
+macOnly("SIGTERM and SIGINT sent to the wrapper alone reach the driver", async () => {
+  for (const [signal, status] of [["SIGTERM", 143], ["SIGINT", 130]] as const) {
+    const { result } = await wrapped("touch READY\nexec sleep 30\n", signal, true);
+    assert.deepEqual(result, { status, signal, stdoutClosed: false });
+  }
+});
+
+macOnly("a stdout nobody reads doesn't stop the wrapper from relaying a signal", async () => {
+  const { result, ms } = await wrapped("touch READY\nhead -c 8000000 /dev/zero\nexec sleep 30\n", "SIGTERM", false);
+  assert.equal(result.signal, "SIGTERM");
+  assert.equal(result.status, 143);
+  assert.ok(ms < 3000, `took ${ms} ms`);
 });

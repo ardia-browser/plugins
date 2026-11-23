@@ -164,7 +164,10 @@ macOnly("the driver runs only once verified, and a tampered one is refused", asy
   box.io.exec = undefined;
   const driverOut: string[] = [];
   const write = driverOutput.write;
-  driverOutput.write = (fd, bytes) => void driverOut.push(`${fd}:${Buffer.from(bytes).toString("utf8")}`);
+  driverOutput.write = (fd, bytes, done) => {
+    driverOut.push(`${fd}:${Buffer.from(bytes).toString("utf8")}`);
+    done();
+  };
   try {
     assert.equal(await run(box, ["list-tools"]), 0);
     assert.equal(await run(box, ["help", "x"]), 0);

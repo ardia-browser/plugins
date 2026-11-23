@@ -29,7 +29,6 @@ export const COMPUTER_ERROR_CODES: readonly string[] = [
 export type Grants = { accessibility: boolean; screenRecording: boolean };
 
 export function driverExitCode(status: number): string {
-  if (status > 128 && status < 160) return "driver_signal";
   return EXACT_EXITS.includes(status) ? `driver_exit_${status}` : "driver_exit_other";
 }
 
@@ -40,22 +39,37 @@ export function permissionCode(grants: Grants): string | undefined {
   return undefined;
 }
 
-const ACCESSIBILITY_MISSING = /\baccessibility\b[^\n]{0,40}?\bnot granted\b/i;
-const SCREEN_RECORDING_MISSING = /\bscreen recording\b[^\n]{0,40}?\bnot granted\b/i;
-const DAEMON_DOWN = /\bdaemon is not running\b/i;
+const ACCESSIBILITY_MISSING = [/^Accessibility permission not granted\b/, /^Accessibility is NOT granted for this process\b/];
+const SCREEN_RECORDING_MISSING = [/^Screen Recording permission not granted\b/, /^Screen Recording is NOT granted for this process\b/];
+const DAEMON_DOWN = /^Cua Driver daemon is not running\b/;
+const ECHOED_INPUT = /^\s*received:/;
 
-export function missingGrantsIn(text: string): Grants | undefined {
-  const accessibility = !ACCESSIBILITY_MISSING.test(text);
-  const screenRecording = !SCREEN_RECORDING_MISSING.test(text);
+export function diagnosticLines(stderr: string): string[] {
+  const lines: string[] = [];
+  for (const line of stderr.split("\n")) {
+    if (ECHOED_INPUT.test(line)) break;
+    if (line !== "" && !/^\s/.test(line)) lines.push(line.replace(/\r$/, ""));
+  }
+  return lines;
+}
+
+export function missingGrantsIn(stderr: string): Grants | undefined {
+  const lines = diagnosticLines(stderr);
+  const accessibility = !lines.some((line) => ACCESSIBILITY_MISSING.some((shape) => shape.test(line)));
+  const screenRecording = !lines.some((line) => SCREEN_RECORDING_MISSING.some((shape) => shape.test(line)));
   return accessibility && screenRecording ? undefined : { accessibility, screenRecording };
 }
 
-export function classifyDriverExit(command: string, status: number, text: string): string {
-  if (status > 128 && status < 160) return "driver_signal";
-  const grants = missingGrantsIn(text);
-  if (grants !== undefined) return permissionCode(grants) as string;
-  if (DAEMON_DOWN.test(text)) return "daemon_not_running";
+export function daemonDownIn(stderr: string): boolean {
+  return diagnosticLines(stderr).some((line) => DAEMON_DOWN.test(line));
+}
+
+export function classifyDriverExit(command: string, status: number, stderr: string, signal?: string): string {
+  if (signal !== undefined) return "driver_signal";
   if (status === 2 || status === 64) return "bad_arguments";
+  const grants = missingGrantsIn(stderr);
+  if (grants !== undefined) return permissionCode(grants) as string;
+  if (daemonDownIn(stderr)) return "daemon_not_running";
   if (command === "call" && status === 1) return "tool_failed";
   if (command === "doctor" || command === "diagnose") return "doctor_probe_failed";
   return driverExitCode(status);
