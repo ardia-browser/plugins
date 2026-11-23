@@ -1,5 +1,6 @@
 import { Cancelled, sleep } from "../../src/browse/cdp/cancel.ts";
 import { BrowseError, CdpError, Gated } from "../../src/browse/daemon-errors.ts";
+import { PREPARE_ACTION } from "../../src/browse/act/pointer.ts";
 import { Input } from "../../src/browse/input/input.ts";
 import { Element, type Page } from "../../src/browse/state/page.ts";
 
@@ -87,6 +88,12 @@ export class FakeRenderer {
   }
 
   async call(fn: string, args: unknown[] = []): Promise<unknown> {
+    if (fn === PREPARE_ACTION) {
+      const quad = QUADS[(args[0] as Element).backendId] as number[];
+      const x = (quad[0] as number) + Number(args[1]) * ((quad[2] as number) - (quad[0] as number));
+      const y = (quad[1] as number) + Number(args[2]) * ((quad[5] as number) - (quad[1] as number));
+      return { connected: true, width: 1280, height: 800, box: true, moved: false, animating: false, cover: null, x, y, top: [x, y], counts: { ...this.counts, activeFrame: false } };
+    }
     if (fn.includes("maxTouchPoints")) return this.touch;
     if (fn.includes("inputWatch")) return { ...this.counts, activeFrame: false };
     if (fn.includes("draggable")) return this.draggable;

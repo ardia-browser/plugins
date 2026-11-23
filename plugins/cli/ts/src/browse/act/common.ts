@@ -75,12 +75,20 @@ export async function focusInOtherFrame(page: Page, frame: string): Promise<bool
 
 export type Needs = Record<string, number>;
 
-export async function expectInput<T>(page: Page, given: string | null, run: () => Promise<T>, needs: Needs, action: string, element: Element | null = null): Promise<T> {
+export async function expectInput<T>(
+  page: Page,
+  given: string | null,
+  run: () => Promise<T>,
+  needs: Needs,
+  action: string,
+  element: Element | null = null,
+  primed: Counts | null = null,
+): Promise<T> {
   const frame = given || page.mainFrame;
   const loader = page.loader(frame);
   let before: Counts;
   try {
-    before = await inputCounts(page, frame);
+    before = primed ?? (await inputCounts(page, frame));
   } catch (error) {
     if (error instanceof ConnectionLost || !(error instanceof BrowseError)) throw error;
     throw new BrowseError(`Couldn't watch this frame for input, so ${action.toLowerCase()} wasn't sent (${error.message})`, null, "input_unconfirmable");

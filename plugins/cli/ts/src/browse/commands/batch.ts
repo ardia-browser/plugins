@@ -15,6 +15,10 @@ import { Ctx } from "./ctx.ts";
 import { ALIASES, dispatch, hooks, register } from "./index.ts";
 import { parse } from "./parse.ts";
 import { commitShown } from "../snapshot/since.ts";
+import { attach, beginBatch, endBatch, flushBatch, hasPendingReaction } from "../changes/observe.ts";
+import type { Report } from "../changes/report.ts";
+import { parseRef } from "../state/refs.ts";
+import type { State } from "../state/state.ts";
 
 export const BATCH_DEFAULT_CAP = OUTPUT_CAP;
 const NESTED_BATCH = "batch can't run inside batch";
@@ -42,6 +46,8 @@ const LINE_OPTIONS: Readonly<Record<string, string>> = {
 const VALUE_ONLY_LINE = /^~ .*\(was .*\)$|^~ option .*\(was (\[selected\]|plain)\)$/u;
 const NOTHING_ELSE = "→ Nothing else on the page changed yet.";
 const COMPACTED_COMMANDS = new Set(["fill", "select", "check", "uncheck", "type"]);
+const HELD_FLAGS = new Set(["--no-humanize"]);
+const PARTLY_FAILED = "\n(this report also holds what the failed line after it did before it failed)";
 const PLAIN_WORD = /^[\p{L}\p{N}_@#.:/=+,-]+$/u;
 
 function truthy(value: string): boolean {
@@ -241,6 +247,39 @@ function compactBatchLines(outcomes: Outcome[]): void {
   if (compacted) add("batch_lines_compacted", compacted);
 }
 
+export function fieldTarget(command: readonly string[]): string | null {
+  const name = command.length > 0 ? (ALIASES[command[0] as string] ?? (command[0] as string)) : "";
+  if (!COMPACTED_COMMANDS.has(name)) return null;
+  for (let index = 1; index < command.length; index += 1) {
+    const word = command[index] as string;
+    if (word === "-s" || word === "--selector") return command[index + 1] ?? null;
+    if (word.startsWith("--selector=")) return word.slice("--selector=".length) || null;
+    if (word === "--" || !word.startsWith("-")) return word === "--" ? (command[index + 1] ?? null) : word;
+    if (!HELD_FLAGS.has(word)) return null;
+  }
+  return null;
+}
+
+function heldLine(state: State, item: readonly string[] | undefined, needsKnownRef: boolean): boolean {
+  if (item === undefined) return false;
+  let command: string[];
+  let lineOptions: Record<string, unknown>;
+  try {
+    const name = item.length > 0 ? (ALIASES[item[0] as string] ?? (item[0] as string)) : "";
+    const [taken, saving] = takeOut([...item], name);
+    if (saving) return false;
+    [command, lineOptions] = batchLineOptions(taken);
+  } catch (error) {
+    if (error instanceof Usage) return false;
+    throw error;
+  }
+  if (lineOptions["no_changes"] || lineOptions["full"] || lineOptions["max_output"] !== undefined) return false;
+  const target = fieldTarget(command);
+  if (target === null) return false;
+  const ref = parseRef(target);
+  return !needsKnownRef || ref === null || state.refs.has(ref);
+}
+
 export type BatchExtras = { closeAfterBatch: boolean };
 const batchState = new WeakMap<object, BatchExtras>();
 
@@ -337,11 +376,23 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
     failedStep(index, stepName(outcome.command), outcome.code);
   };
   let running = -1;
+  const observing = beginBatch(ctx.state);
+  let held: { outcome: Outcome; result: Result } | null = null;
+  const placeReport = (report: Report | null, partly = false) => {
+    if (report === null || held === null) return;
+    const attached = attach(held.result, report);
+    held.outcome.text = partly ? `${attached.text}${PARTLY_FAILED}` : attached.text;
+    held.outcome.result = partly ? { ...(attached.data as Record<string, unknown>), partlyFailedNext: true } : attached.data;
+    held = null;
+  };
   try {
     await runLines();
+    placeReport(await flushBatch(ctx, observing));
   } catch (error) {
     if (!noted && running >= 0) failedStep(running, stepName(runs[running]), error instanceof BrowseError ? error.code : null, true);
     throw error;
+  } finally {
+    await endBatch(ctx.state, observing);
   }
 
   async function runLines(): Promise<void> {
@@ -386,7 +437,15 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
       ctx.options["max_output"] = current === 0 || wider === 0 ? 0 : Math.max(current, wider);
     }
     const staged = saving && ctx.state.pendingShown !== null ? new Map(ctx.state.pendingShown) : null;
+    const holding = !ctx.options["no_changes"] && heldLine(ctx.state, item, false) && heldLine(ctx.state, runs[index + 1], true);
+    if (hasPendingReaction(ctx.state)) observing.current = null;
+    observing.nextLine(holding);
     const [result, error] = await runOne(ctx, command, lineOptions);
+    observing.defer = false;
+    if (observing.flushed !== null) {
+      placeReport(observing.flushed);
+      observing.flushed = null;
+    }
     const failed = error === null && Boolean(result?.failed);
     const outcome: Outcome = {
       command: item,
@@ -411,6 +470,11 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
       for (const [target, entry] of staged) ctx.state.pendingShown.set(target, entry);
     }
     if (!wrote && result?.notice) notices.push(result.notice);
+    if (holding && outcome.success && result && observing.pending !== null) {
+      if (!outcome.text || outcome.text === "✓ Done") outcome.text = `✓ ${command.map(quoteWord).join(" ")}`;
+      held = { outcome, result };
+      add("batch_lines_held");
+    } else if (observing.pending !== null) placeReport(await flushBatch(ctx, observing), !outcome.success);
     settle(outcome, index);
     if (error instanceof OutcomeUnknown || error instanceof ConnectionLost) {
       for (const rest of runs.slice(index + 1)) {

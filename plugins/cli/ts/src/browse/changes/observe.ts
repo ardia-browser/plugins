@@ -8,17 +8,18 @@ import { Result } from "../daemon/render.ts";
 import { CHANGES_TEXT_JS } from "../js/index.ts";
 import { clock, count, flag, spent } from "../metrics.ts";
 import { type Node, walk } from "../snapshot/tree.ts";
-import type { Element, Page } from "../state/page.ts";
+import { Element, type Page } from "../state/page.ts";
 import type { Json } from "../state/records.ts";
 import { Refs } from "../state/refs.ts";
 import type { Listener, State } from "../state/state.ts";
 import { monotonic } from "../state/wait.ts";
 import { tokenHex } from "../tokens.ts";
-import "../snapshot/collect.ts";
-import { capture } from "../flows/flowlog.ts";
+import { backendsOf } from "../snapshot/collect.ts";
+import { capture, type WatchLike } from "../flows/flowlog.ts";
 import { hint } from "../flows/flows.ts";
 import { noteHeader } from "../../notes-files.ts";
 import { pageSite } from "../../notes.ts";
+import { background } from "./background.ts";
 import { cleanUrl } from "./urls.ts";
 import { diff, freshRows, moved, NAVIGATED_TEXT, OPENED_TEXT, type Report, type TextBlock, type View, type Write } from "./report.ts";
 import { addsText, asData, openedAnchors, renderReport } from "./text.ts";
@@ -53,7 +54,7 @@ const MARKER = /\x01([0-9]+)\x01/gu;
 
 export type ObserveHooks = {
   arrivalNotes: (state: State, before: View | null, after: View) => string | null;
-  capture: (page: Page, watch: NetworkWatch) => Promise<void>;
+  capture: (page: Page, watch: WatchLike) => Promise<void>;
 };
 
 export function siteNotes(state: State, before: View | null, after: View): string | null {
@@ -89,6 +90,7 @@ type RequestRecord = {
   answered?: boolean;
   mime?: string;
   failed?: string;
+  background: boolean;
 };
 
 function dict(value: unknown): Json {
@@ -102,6 +104,7 @@ export class NetworkWatch {
   readonly order: string[] = [];
   lastEvent = 0;
   counting = false;
+  ignored = 0;
   readonly earlier = new Set<string>();
   readonly listener: Listener = (eventPage, method, params) => this.onEvent(eventPage, method, params);
 
@@ -116,29 +119,44 @@ export class NetworkWatch {
       flag("earlier_requests_ignored", true);
       return;
     }
-    this.lastEvent = monotonic();
     if (method === "Network.requestWillBeSent") {
       let entry = this.records.get(requestId);
       const request = dict(params["request"]);
+      if (entry === undefined && params["redirectResponse"]) {
+        this.earlier.add(requestId);
+        flag("earlier_requests_ignored", true);
+        return;
+      }
+      if (entry !== undefined && params["redirectResponse"]) {
+        const wasBackground = entry.background;
+        entry.background = background(String(params["type"] || entry.type), String(request["url"] || ""), String(request["method"] || entry.method));
+        if (wasBackground && !entry.background) this.ignored -= 1;
+        else if (!wasBackground && entry.background) this.ignored += 1;
+      }
       if (entry === undefined) {
         const raw = String(request["url"] || "");
+        const type = String(params["type"] || "Other");
         entry = {
           method: String(request["method"] || "GET").toUpperCase(),
           url: cleanUrl(raw),
           raw,
           headers: request["headers"] || {},
-          type: String(params["type"] || "Other"),
+          type,
           statuses: [],
           done: false,
+          background: background(type, raw, String(request["method"] || "GET")),
         };
         this.records.set(requestId, entry);
         this.order.push(requestId);
+        if (entry.background) this.ignored += 1;
       }
+      if (!entry.background) this.lastEvent = monotonic();
       const redirect = dict(params["redirectResponse"]);
       if (params["redirectResponse"] && redirect["status"] !== undefined && redirect["status"] !== null) entry.statuses.push(redirect["status"]);
     } else {
       const entry = this.records.get(requestId);
       if (entry === undefined) return;
+      if (!entry.background) this.lastEvent = monotonic();
       if (method === "Network.responseReceived") {
         const response = dict(params["response"]);
         if (response["status"] !== undefined && response["status"] !== null) entry.statuses.push(response["status"]);
@@ -156,14 +174,19 @@ export class NetworkWatch {
     this.page.state.listeners.push(this.listener);
     this.watching = true;
     this.lastEvent = monotonic();
-    if (this.page.networkOn) {
+    if (this.page.networkOn || this.page.networkWatched) {
       this.counting = true;
       return;
     }
     this.enabledHere = true;
     try {
+      const session = this.page.session;
       await this.page.send("Network.enable", { maxTotalBufferSize: WATCH_BUFFER, maxResourceBufferSize: WATCH_BUFFER });
       this.counting = true;
+      if (typeof session === "string" && session === this.page.session) {
+        this.page.networkWatched = true;
+        this.enabledHere = false;
+      }
     } catch (error) {
       if (error instanceof CdpError || error instanceof Gated) this.enabledHere = false;
       await this.stop();
@@ -173,7 +196,11 @@ export class NetworkWatch {
   }
 
   busy(): boolean {
-    return [...this.records.values()].some((entry) => !entry.done && !entry.answered && !LONG_LIVED.has(entry.type));
+    return [...this.records.values()].some((entry) => !entry.done && !entry.answered && !entry.background && !LONG_LIVED.has(entry.type));
+  }
+
+  foreground(): boolean {
+    return [...this.records.values()].some((entry) => !entry.background);
   }
 
   async settle(pageBusy: (() => Promise<boolean>) | null = null): Promise<boolean> {
@@ -181,10 +208,13 @@ export class NetworkWatch {
     const deadline = started + SETTLE_LIMIT;
     for (;;) {
       const now = monotonic();
-      const quiet = this.records.size > 0 ? QUIET : FIRST_QUIET;
+      const quiet = this.foreground() || this.ignored > 0 ? QUIET : FIRST_QUIET;
       let waiting = this.watching && (this.busy() || now - Math.max(this.lastEvent, started) < quiet);
       if (!waiting && pageBusy !== null) waiting = await pageBusy();
-      if (!waiting) return true;
+      if (!waiting) {
+        if (this.ignored > 0) flag("settle_ignored_background", true);
+        return true;
+      }
       if (now >= deadline) return false;
       await sleep(POLL);
     }
@@ -220,7 +250,7 @@ export class NetworkWatch {
     const rows: Write[] = [];
     for (const requestId of this.order) {
       const entry = this.records.get(requestId) as RequestRecord;
-      if (READ_METHODS.has(entry.method)) continue;
+      if (READ_METHODS.has(entry.method) || entry.background) continue;
       const row: Write = { method: entry.method, url: entry.url, type: entry.type, statuses: [...entry.statuses] };
       row["status"] = entry.statuses.length > 0 ? entry.statuses.at(-1) : null;
       if (entry.failed) row["failed"] = entry.failed;
@@ -321,31 +351,96 @@ function errorView(page: Page): View {
   return { target: page.targetId, loader: "", url: page.url, title: "", entries: [], containers: new Set() };
 }
 
-export async function observe<T>(ctx: Ctx, page: Page, run: () => Promise<T>, react: Reaction | null = null): Promise<[T, Report | null]> {
-  const state = ctx.state;
-  if (ctx.options["no_changes"]) {
-    if (react !== null) await watchReaction(state, page, react);
-    return [await run(), null];
+type Seen = { page: Page; view: View; frame: string; loader: string | null; navigations: number };
+type Group = { page: Page; session: string | null; before: View | null; watch: NetworkWatch; navigations: number };
+
+export class BatchObserve {
+  previous: Seen | null = null;
+  current: Seen | null = null;
+  defer = false;
+  pending: Group | null = null;
+  flushed: Report | null = null;
+
+  nextLine(defer: boolean): void {
+    this.previous = this.current;
+    this.current = null;
+    this.defer = defer;
   }
-  let before: View | null;
+}
+
+const batches = new WeakMap<State, BatchObserve>();
+
+export function beginBatch(state: State): BatchObserve {
+  const batch = new BatchObserve();
+  batches.set(state, batch);
+  return batch;
+}
+
+export async function endBatch(state: State, batch: BatchObserve): Promise<void> {
+  if (batches.get(state) === batch) batches.delete(state);
+  const group = batch.pending;
+  batch.pending = null;
+  if (group !== null) await group.watch.stop();
+}
+
+export function deferring(state: State): boolean {
+  return Boolean(batches.get(state)?.defer);
+}
+
+function reusable(state: State, page: Page, seen: Seen | null): View | null {
+  if (seen === null || seen.page !== page || seen.navigations !== page.navigations) return null;
+  const frame = viewFrame(state, page);
+  return frame === seen.frame && page.loader(frame) === seen.loader ? seen.view : null;
+}
+
+async function viewBefore(state: State, page: Page): Promise<View | null> {
   try {
-    before = await view(state, page);
+    return await view(state, page);
   } catch (error) {
     if (error instanceof ConnectionLost || !(error instanceof BrowseError)) throw error;
-    before = null;
+    return null;
   }
-  const watch = new NetworkWatch(page);
-  const navigations = page.navigations;
-  let value: T;
+}
+
+export async function flushBatch(ctx: Ctx, batch: BatchObserve): Promise<Report | null> {
+  const group = batch.pending;
+  batch.pending = null;
+  if (group === null) return null;
+  if (group.session !== group.page.session) {
+    await group.watch.stop();
+    const report = diff(null, errorView(group.page), group.watch.writes());
+    report.document = "unknown";
+    report.error = "Ardia detached the tab during these lines, so their changes couldn't be followed";
+    return report;
+  }
+  try {
+    return await finish(ctx, group.page, group.before, group.watch, group.navigations, batch, null);
+  } catch (error) {
+    if (!(error instanceof BrowseError)) throw error;
+    return null;
+  }
+}
+
+function lineOf(watch: NetworkWatch, from: number): WatchLike {
+  return { records: watch.records, order: watch.order.slice(from) };
+}
+
+async function finish(
+  ctx: Ctx,
+  page: Page,
+  before: View | null,
+  watch: NetworkWatch,
+  navigations: number,
+  batch: BatchObserve | undefined,
+  captureFrom: number | null,
+): Promise<Report> {
+  const state = ctx.state;
   let settledNow: boolean;
   try {
-    await watch.start();
-    if (react !== null) await watchReaction(state, page, react);
-    value = await run();
     const settling = clock();
     settledNow = await watch.settle(() => navigationBusy(page, navigations));
     spent("settle_ms", settling);
-    await observeHooks.capture(page, watch);
+    if (captureFrom !== null) await observeHooks.capture(page, lineOf(watch, captureFrom));
   } finally {
     await watch.stop();
   }
@@ -353,7 +448,6 @@ export async function observe<T>(ctx: Ctx, page: Page, run: () => Promise<T>, re
   let after: View;
   try {
     await state.reattach(page);
-    await page.refreshFrames();
     nodes = await collect(state, page);
     adoptRefs(state, page, nodes);
     after = await remember(state, page, nodes);
@@ -362,7 +456,11 @@ export async function observe<T>(ctx: Ctx, page: Page, run: () => Promise<T>, re
     const report = diff(null, errorView(page), watch.writes());
     report.document = "unknown";
     report.error = error.message;
-    return [value, report];
+    return report;
+  }
+  if (batch !== undefined) {
+    const frame = viewFrame(state, page);
+    batch.current = { page, view: after, frame, loader: page.loader(frame), navigations: page.navigations };
   }
   const report = diff(before, after, watch.writes());
   report.notes = report.document === "new" ? arrivalNotes(state, before, after) : null;
@@ -370,7 +468,44 @@ export async function observe<T>(ctx: Ctx, page: Page, run: () => Promise<T>, re
   if (!settledNow) report.unsettled = true;
   if (before === null) report.document = "unknown";
   await addText(ctx, page, nodes, report, before);
-  return [value, report];
+  return report;
+}
+
+export async function observe<T>(ctx: Ctx, page: Page, run: () => Promise<T>, react: Reaction | null = null): Promise<[T, Report | null]> {
+  const state = ctx.state;
+  const batch = batches.get(state);
+  if (batch?.pending && (batch.pending.page !== page || batch.pending.session !== page.session)) batch.flushed = await flushBatch(ctx, batch);
+  if (ctx.options["no_changes"]) {
+    if (batch?.pending) batch.flushed = await flushBatch(ctx, batch);
+    if (react !== null) await watchReaction(state, page, react);
+    return [await run(), null];
+  }
+  const group = batch?.pending ?? null;
+  const reused = group === null && batch !== undefined ? reusable(state, page, batch.previous) : null;
+  const before = group !== null ? group.before : (reused ?? (await viewBefore(state, page)));
+  const watch = group !== null ? group.watch : new NetworkWatch(page);
+  const navigations = group !== null ? group.navigations : page.navigations;
+  const holding = batch !== undefined && batch.defer;
+  const session = group !== null ? group.session : page.session;
+  let lineStart = 0;
+  let value: T;
+  try {
+    if (group === null) await watch.start();
+    lineStart = watch.order.length;
+    if (react !== null) await watchReaction(state, page, react);
+    value = await run();
+  } catch (error) {
+    if (batch !== undefined && (group !== null || holding)) batch.pending = { page, session, before, watch, navigations };
+    else await watch.stop();
+    throw error;
+  }
+  if (holding) {
+    batch.pending = { page, session, before, watch, navigations };
+    await observeHooks.capture(page, lineOf(watch, lineStart));
+    return [value, null];
+  }
+  if (batch !== undefined) batch.pending = null;
+  return [value, await finish(ctx, page, before, watch, navigations, batch, lineStart)];
 }
 
 export async function settled<T>(page: Page, run: () => Promise<T>): Promise<T> {
@@ -401,6 +536,11 @@ export async function arrival(ctx: Ctx, page: Page, cameFrom: string): Promise<R
   } catch (error) {
     if (error instanceof ConnectionLost || !(error instanceof BrowseError)) throw error;
     return null;
+  }
+  const batch = batches.get(state);
+  if (batch !== undefined) {
+    const frame = viewFrame(state, page);
+    batch.current = { page, view: after, frame, loader: page.loader(frame), navigations: page.navigations };
   }
   const report = diff(null, after);
   report.notes = arrivalNotes(state, { ...errorView(page), url: cameFrom }, after);
@@ -455,8 +595,9 @@ async function pageText(state: State, page: Page, frame: string, budget: number,
   const names = Array.isArray(found["names"]) ? (found["names"] as unknown[]) : [];
   let marked: Element[] = [];
   if (kinds.length > 0) {
-    const remote = await page.call("() => globalThis.ardiaBrowseTextEls", [], { frame, byValue: false, read: true });
-    marked = await page.elementsFrom(remote, frame, "text", MAX_TEXT_MARKS);
+    const ids = await backendsOf(page, frame, "ardiaBrowseTextEls", MAX_TEXT_MARKS);
+    const usable = ids.indexOf(0);
+    marked = (usable < 0 ? ids : ids.slice(0, usable)).map((id) => new Element(frame, "", id, "text"));
   }
   const inline = new Set<string>();
   const inner = new Map<number, string>();
