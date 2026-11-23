@@ -9,7 +9,7 @@ import { PROGRAM } from "./daemon-helpers.ts";
 setDefaultTimeout(60_000);
 
 const CHROME = process.env["ARDIA_M3_CHROME"];
-const PORT = Number(process.env["ARDIA_M3_PORT_BASE"] ?? "9400") + 18;
+const PORT = Number(process.env["ARDIA_M3_PORT_BASE"] ?? "9400") + 9;
 const BOARD = `<!doctype html><meta charset="utf-8"><title>Task board</title><button id="b0">Item 0</button><button id="b1">Item 1</button><button id="b2">Item 2</button><button id="b3">Item 3</button><button id="b4">Item 4</button><button id="b5">Item 5</button><button id="b6">Item 6</button><button id="b7">Item 7</button><button id="b8">Item 8</button><button id="b9">Item 9</button><button id="b10">Item 10</button><button id="b11">Item 11</button><button id="add" onclick="const b=document.createElement('button');b.textContent='Fresh task';document.body.append(b);document.getElementById('b3').textContent='Item 3 done'">Add</button>`;
 const CARDS = `<!doctype html><meta charset="utf-8"><title>Cards</title><div><span id="ha">Card Alpha</span><button>Delete</button></div>${["Beta", "Delta", "Echo", "Foxtrot", "Golf"].map((name) => `<div><span>Card ${name}</span><button>Delete</button></div>`).join("")}`;
 const MENU = `<!doctype html><meta charset="utf-8"><title>Menu</title><menu><li><button>Cut</button></li><li><button>Paste</button></li></menu>`;

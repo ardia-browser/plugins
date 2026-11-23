@@ -2,7 +2,14 @@ name: Command Line release
 
 on:
   pull_request:
-    paths: ["plugins/cli/**", ".github/workflows/cli-release.yml", ".github/release/sign-macos.sh"]
+    paths:
+      - ".github/workflows/cli-release.yml"
+      - ".github/release/**"
+      - "plugins/cli/build.sh"
+      - "plugins/cli/scripts/**"
+      - "plugins/cli/ts/scripts/**"
+      - "plugins/cli/plugin.json"
+      - "plugins/cli/install.sh"
   push:
     tags: ["cli-v*"]
   workflow_dispatch:
@@ -83,18 +90,7 @@ jobs:
       - name: Build
         run: ARDIA_PLUGIN_VERSION="$VERSION" plugins/cli/build.sh "$RUNNER_TEMP/out"
       - name: Check
-        run: |
-          set -euo pipefail
-          out="$RUNNER_TEMP/out"
-          test "$("$out/cli/bin/ardia" --version)" = "ardia $VERSION"
-          test -f "$out/cli/bin/ardia-libc.so"
-          test "$("$out/cli/libexec/esbuild" --version)" = 0.28.2
-          ! test -e "$out/cli/python"
-          grep -q "\"version\": \"$VERSION\"" "$out/cli/plugin.json"
-          (cd "$out" && { command -v sha256sum >/dev/null && sha256sum -c ./*.sha256 || shasum -a 256 -c ./*.sha256; })
-          links=$(tar -tvzf "$out/cli-plugin-$VERSION-${{ matrix.platform }}.tar.gz" | grep -c '^l' || true)
-          [ "$links" = 0 ] || { echo "::error::the plugin folder has $links links: Ardia refuses them"; exit 1; }
-          echo "- ${{ matrix.platform }}: $(du -sh "$out/cli" | cut -f1) folder, bin/ardia $(wc -c < "$out/cli/bin/ardia") bytes, plugin tarball $(wc -c < "$out/cli-plugin-$VERSION-${{ matrix.platform }}.tar.gz") bytes" >> "$GITHUB_STEP_SUMMARY"
+        run: .github/release/check-build.sh "$RUNNER_TEMP/out" "$VERSION"
       - uses: actions/upload-artifact@v4
         with:
           name: cli-${{ matrix.platform }}
