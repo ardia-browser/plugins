@@ -932,8 +932,9 @@ CDP hop per call). Read-only calls (`get`, `is`, `read`, `page.evaluate`, `page.
 for the calls before it and runs alone, in the order the script made them. Calls still queued when the script returns
 never run. When it returns or fails, actions and `evaluate` calls it didn't await that were already sent finish (still
 within its `--timeout`), while reads and sleeps still running are stopped; the result says how many never ran and how
-many were stopped. A timeout or interrupt cancels everything still running. Either way every call's promise is
-awaited before the command answers. A CDP reply that arrives later (a temporary tab created past its deadline) is
+many were stopped. A timeout or interrupt stops waiting on everything still running; code an action or
+`evaluate` already started in the page can still finish there, since CDP has no way to stop it midway. Either way
+every call's promise is awaited before the command answers. A CDP reply that arrives later (a temporary tab created past its deadline) is
 still cleaned up when it lands, as for any command.
 `page.evaluate` counts as a read: an `evaluate` that changes the page should be awaited on its own, not inside
 `Promise.all`. A script has exactly the authority of the `ardia browse` commands it calls, no more: `screenshot` and
