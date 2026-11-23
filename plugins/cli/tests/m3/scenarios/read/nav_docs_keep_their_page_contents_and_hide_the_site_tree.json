@@ -1,0 +1,17 @@
+{
+ "source": "tests/test_browse_read.py ReadNavigationInChrome.test_docs_keep_their_page_contents_and_hide_the_site_tree",
+ "window": [
+  1200,
+  800
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/nav-docs.html",
+    "--read"
+   ],
+   "session": "nav"
+  }
+ ]
+}

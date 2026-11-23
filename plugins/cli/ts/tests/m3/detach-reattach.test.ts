@@ -3,6 +3,7 @@ import { Cancelled } from "../../src/browse/cdp/cancel.ts";
 import { dispatch } from "../../src/browse/commands/all.ts";
 import { Ctx } from "../../src/browse/commands/ctx.ts";
 import { BrowseError, CdpError, ConnectionLost, Gated } from "../../src/browse/daemon-errors.ts";
+import { PREPARE_ACTION } from "../../src/browse/act/pointer.ts";
 import { READPAGES_EXTRACT, READPAGES_SETTLE_PROBE } from "../../src/browse/js/index.ts";
 import { begin, type Metrics } from "../../src/browse/metrics.ts";
 import { goto, readers } from "../../src/browse/read/pages.ts";
@@ -103,6 +104,7 @@ class DetachingBrowser {
     if (source === READPAGES_SETTLE_PROBE) return { value: ["complete", "fingerprint", false] };
     if (source === READPAGES_EXTRACT) return { value: { title: `Title of ${this.urlOf(session)}`, text: `The text of ${this.urlOf(session)} `.repeat(20), status: 200, matched: true } };
     if (source.includes("ardiaBrowse.query")) return { type: "object", subtype: "node", objectId: "BUTTON" };
+    if (source === PREPARE_ACTION) return { value: { connected: true, width: 1280, height: 800, box: true, cover: null, x: 60, y: 25 } };
     if (source.includes("ardiaBrowse.info")) return { value: { connected: true } };
     if (source.includes("ardiaBrowse.viewport")) return { value: { width: 1280, height: 800, scrollX: 0, scrollY: 0, docWidth: 1280, docHeight: 800 } };
     if (source.includes("document.contentType")) return { value: "text/html" };

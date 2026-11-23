@@ -93,6 +93,10 @@ class StaleWorld extends BrowseError {
   }
 }
 
+const FRAMES_FRESH = 0.75;
+const SHOWN_FRESH = 0.25;
+const FRAME_EVENTS = new Set(["Page.frameAttached", "Page.frameNavigated", "Page.navigatedWithinDocument", "Page.frameDetached", "Target.attachedToTarget", "Target.detachedFromTarget", "Inspector.targetCrashed", "Inspector.targetReloadedAfterCrash"]);
+
 function frameOf(frame: Json, parent: string | null): Frame {
   return {
     id: String(frame["id"]),
@@ -122,6 +126,8 @@ export class Page {
   readonly network = new NetworkLog();
   runtimeOn = false;
   networkOn = false;
+  networkWatched = false;
+  shownAt = 0;
   readonly input: PageInput;
   navigations = 0;
   readonly initScripts = new Map<string, string>();
@@ -138,6 +144,8 @@ export class Page {
   needsEnable = false;
   awake = false;
   unansweredAt = 0;
+  private framesFreshUntil = 0;
+  private frameEvents = 0;
   private readonly calls = new Set<AbortController>();
   private restoring: { session: string; done: Set<string> } | null = null;
   private readonly creating = new Map<string, { loader: string | null; made: Promise<World> }>();
@@ -386,6 +394,9 @@ export class Page {
   }
 
   detach(): void {
+    this.framesChanged();
+    this.networkWatched = false;
+    this.shownAt = 0;
     if (this.sessionId) this.state.sessions.delete(this.sessionId);
     if (this.attaching) this.state.sessions.delete(this.attaching);
     this.sessionId = null;
@@ -443,20 +454,39 @@ export class Page {
     }
   }
 
-  async refreshFrames(): Promise<Map<string, Frame>> {
-    const tree = record((await this.send("Page.getFrameTree"))["frameTree"]);
-    const frames = new Map<string, Frame>();
-    const walk = (node: Json, parent: string | null) => {
-      const frame = frameOf(record(node["frame"]), parent);
-      frames.set(frame.id, frame);
-      const children = node["childFrames"];
-      for (const child of Array.isArray(children) ? children : []) walk(record(child), frame.id);
-    };
-    walk(tree, null);
-    if (this.oopifs.size > 0) await oopif.childFrames(this, frames, frameOf);
+  framesChanged(): void {
+    this.frameEvents += 1;
+    this.framesFreshUntil = 0;
+  }
+
+  async refreshFrames(force = false): Promise<Map<string, Frame>> {
+    if (!force && monotonic() < this.framesFreshUntil && this.mainFrame !== null) return this.frames;
+    let events = this.frameEvents;
+    let session = this.session;
+    let tree: Json = {};
+    let frames = new Map<string, Frame>();
+    let sessions: Map<string, string> | null = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      events = this.frameEvents;
+      session = this.session;
+      tree = record((await this.send("Page.getFrameTree"))["frameTree"]);
+      frames = new Map<string, Frame>();
+      const walk = (node: Json, parent: string | null) => {
+        const frame = frameOf(record(node["frame"]), parent);
+        frames.set(frame.id, frame);
+        const children = node["childFrames"];
+        for (const child of Array.isArray(children) ? children : []) walk(record(child), frame.id);
+      };
+      walk(tree, null);
+      sessions = this.oopifs.size > 0 ? await oopif.childFrames(this, frames, frameOf) : null;
+      if (events === this.frameEvents && session === this.session) break;
+    }
+    if ((events !== this.frameEvents || session !== this.session) && this.mainFrame !== null) return this.frames;
+    if (sessions !== null) oopif.useSessions(this, sessions);
     this.frames = frames;
     this.mainFrame = String(record(tree["frame"])["id"]);
     this.url = frames.get(this.mainFrame)?.url ?? "";
+    if (events === this.frameEvents && session === this.session) this.framesFreshUntil = monotonic() + FRAMES_FRESH;
     return frames;
   }
 
@@ -515,7 +545,7 @@ export class Page {
       const handle = record(record((await this.send("Runtime.evaluate", { expression: WORLD_HANDLE, contextId: context, returnByValue: false }, { session, guard }))["result"]))["objectId"];
       guard();
       if (typeof handle !== "string" || !handle) throw new StaleWorld();
-      await this.refreshFrames();
+      await this.refreshFrames(true);
       guard();
       this.worlds.set(frame, [loader, context, handle]);
       return { frame, loader, context, handle };
@@ -640,6 +670,7 @@ export class Page {
   }
 
   async hidden(): Promise<boolean> {
+    if (this.shownAt > 0 && monotonic() - this.shownAt < SHOWN_FRESH) return false;
     try {
       return Boolean(await this.call("() => document.visibilityState === 'hidden'", [], { frame: this.mainFrame, read: true }));
     } catch (error) {
@@ -701,10 +732,12 @@ export class Page {
   }
 
   onChildEvent(session: string, method: string, params: Json): void {
+    if (FRAME_EVENTS.has(method)) this.framesChanged();
     oopif.childEvent(this, session, method, params);
   }
 
   onEvent(method: string, params: Json): void {
+    if (FRAME_EVENTS.has(method)) this.framesChanged();
     if (method === "Target.attachedToTarget" || method === "Target.detachedFromTarget") {
       if (this.session !== null) oopif.childEvent(this, this.session, method, params);
     } else if (method === "Page.lifecycleEvent") {

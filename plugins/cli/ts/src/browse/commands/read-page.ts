@@ -102,9 +102,11 @@ export async function cmdRead(ctx: Ctx, argv: string[]): Promise<Result> {
   let content: string;
   if (selector) [content, emptyNote] = await readScoped(page, frame, selector);
   else {
-    const read = await page.call("() => ardiaBrowse.readable()", [], { frame, read: true });
-    content = typeof read === "string" ? read : read === null || read === undefined ? "" : String(read);
-    const framed = await oopifText(page, frame);
+    const nav = Boolean(options["nav"]);
+    const read = record(await page.call("(nav) => ardiaBrowse.readPage(nav)", [nav], { frame, read: true }));
+    content = String(read["text"] ?? "");
+    pages.noteNav(read);
+    const framed = await oopifText(page, frame, nav);
     if (framed) content = content ? `${content}\n\n${framed}` : framed;
   }
   content = postProcess(content, options);

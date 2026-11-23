@@ -8,10 +8,62 @@ import * as pierce from "../state/pierce.ts";
 import { record } from "../state/records.ts";
 import { parseRef, type Ref, Refs, type Snapshots } from "../state/refs.ts";
 import type { State } from "../state/state.ts";
+import { SNAPSHOT_FROM, snapshotBackends, snapshotRefused } from "./domsnapshot.ts";
 import { buildTree, clipped, INTERACTIVE, isAxList, MAX_SCOPES, type Node, REF_ROLES, walk, walkInContext } from "./tree.ts";
 
-const CLICKABLES = "() => { const r = ardiaBrowse.clickables(); globalThis.ardiaBrowseHints = r.hints; return r.elements; }";
-const CLICKABLE_HINTS = "() => globalThis.ardiaBrowseHints";
+export const CLICKABLES = `() => {
+  if (!globalThis.ardiaBrowseBackends) Object.defineProperty(globalThis, "ardiaBrowseBackends", { value: new WeakMap() });
+  const backends = globalThis.ardiaBrowseBackends;
+  const found = ardiaBrowse.clickables();
+  const known = [];
+  const fresh = [];
+  const hints = [];
+  found.elements.forEach((el, index) => {
+    const backend = backends.get(el);
+    if (backend) known.push([backend, found.hints[index]]);
+    else {
+      fresh.push(el);
+      hints.push(found.hints[index]);
+    }
+  });
+  globalThis.ardiaBrowseFresh = fresh;
+  return { known, hints, fresh: fresh.length, title: document.title };
+}`;
+const FRESH_ELEMENTS = "() => globalThis.ardiaBrowseFresh || []";
+const KEEP_BACKENDS = "(ids, ...els) => { els.forEach((el, index) => globalThis.ardiaBrowseBackends.set(el, ids[index])); globalThis.ardiaBrowseFresh = null; return els.length; }";
+const BACKENDS_OF = `(name, limit) => {
+  if (!globalThis.ardiaBrowseBackends) Object.defineProperty(globalThis, "ardiaBrowseBackends", { value: new WeakMap() });
+  const backends = globalThis.ardiaBrowseBackends;
+  const fresh = [];
+  const ids = Array.from(globalThis[name] || []).slice(0, limit).map((el) => {
+    const backend = (el && backends.get(el)) || 0;
+    if (!backend) fresh.push(el);
+    return backend;
+  });
+  globalThis.ardiaBrowseFresh = fresh;
+  return ids;
+}`;
+
+async function freshBackends(page: Page, frame: string, limit: number, count: number): Promise<number[]> {
+  if (count >= SNAPSHOT_FROM && !snapshotRefused(page)) {
+    const ids = await snapshotBackends(page, frame, limit);
+    if (ids !== null) return ids;
+  }
+  const remote = await page.call(FRESH_ELEMENTS, [], { frame, byValue: false, read: true });
+  const elements = await page.elementsFrom(remote, frame, "element", limit);
+  if (elements.length > 0) await page.call(KEEP_BACKENDS, [elements.map((element) => element.backendId), ...elements], { frame, read: true });
+  return elements.map((element) => element.backendId);
+}
+
+export async function backendsOf(page: Page, frame: string, name: string, limit: number): Promise<number[]> {
+  const found = await page.call(BACKENDS_OF, [name, limit], { frame, read: true });
+  const ids = (Array.isArray(found) ? found : []).map((id) => (typeof id === "number" && id > 0 ? id : 0));
+  const missing = ids.filter((id) => id === 0).length;
+  if (missing === 0) return ids;
+  const fresh = await freshBackends(page, frame, limit, missing);
+  let at = 0;
+  return ids.map((id) => (id > 0 ? id : (fresh[at++] ?? 0)));
+}
 const INNER_TEXT = "(el) => (el.innerText || el.textContent || '').replace(/\\s+/g, ' ').trim()";
 
 export async function settledAll(work: Promise<unknown>[]): Promise<void> {
@@ -19,22 +71,28 @@ export async function settledAll(work: Promise<unknown>[]): Promise<void> {
   checkCancelled();
 }
 
+export const collectedTitles = new WeakMap<Node[], string>();
+const frameTitles = new WeakMap<Map<number, string[]>, string>();
+
 export async function clickableMap(page: Page, frame: string): Promise<Map<number, string[]>> {
-  let elements: Element[];
-  let hints: unknown;
+  const out = new Map<number, string[]>();
   try {
-    const remote = await page.call(CLICKABLES, [], { frame, byValue: false, read: true });
-    hints = await page.call(CLICKABLE_HINTS, [], { frame, read: true });
-    elements = await page.elementsFrom(remote, frame, "clickable");
+    const found = record(await page.call(CLICKABLES, [], { frame, read: true }));
+    if (typeof found["title"] === "string") frameTitles.set(out, found["title"]);
+    for (const pair of Array.isArray(found["known"]) ? found["known"] : []) {
+      if (Array.isArray(pair) && typeof pair[0] === "number" && Array.isArray(pair[1])) out.set(pair[0], pair[1] as string[]);
+    }
+    const hints = Array.isArray(found["hints"]) ? found["hints"] : [];
+    if (Number(found["fresh"]) > 0) {
+      const ids = await freshBackends(page, frame, 300, Number(found["fresh"]));
+      ids.forEach((id, index) => {
+        if (id > 0 && index < hints.length) out.set(id, hints[index] as string[]);
+      });
+    }
   } catch (error) {
-    if (quiet(error)) return new Map();
+    if (quiet(error)) return out;
     throw error;
   }
-  const list = Array.isArray(hints) ? hints : [];
-  const out = new Map<number, string[]>();
-  elements.forEach((element, index) => {
-    if (index < list.length) out.set(element.backendId, list[index] as string[]);
-  });
   return out;
 }
 
@@ -171,6 +229,8 @@ async function collectInto(state: State, page: Page, selector: string | null, cu
   const clickable = new Map<string, Map<number, string[]>>();
   if (cursor) for (const used of framesUsed) clickable.set(used, await clickableMap(page, used));
   sameDocuments(page, loaders);
+  const mainHints = page.mainFrame === null ? undefined : clickable.get(page.mainFrame);
+  const mainTitle = mainHints === undefined ? undefined : frameTitles.get(mainHints);
   for (const node of walk(nodes)) {
     const hints = node.backend === null ? undefined : clickable.get(node.frame as string)?.get(node.backend);
     if (hints && hints.length && !INTERACTIVE.has(node.role)) {
@@ -193,6 +253,7 @@ async function collectInto(state: State, page: Page, selector: string | null, cu
       node.ref = state.refForNode(page, node.frame as string, node.backend);
     }
   }
+  if (mainTitle !== undefined) collectedTitles.set(nodes, mainTitle);
   return nodes;
 }
 

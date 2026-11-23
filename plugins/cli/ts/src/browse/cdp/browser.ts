@@ -31,6 +31,7 @@ export const EVENTS: readonly string[] = [
   "Inspector.targetCrashed",
   "Inspector.targetReloadedAfterCrash",
   "Page.lifecycleEvent",
+  "Page.frameAttached",
   "Page.frameNavigated",
   "Page.navigatedWithinDocument",
   "Page.loadEventFired",
