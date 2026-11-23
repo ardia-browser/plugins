@@ -260,7 +260,11 @@ class ReadNavigationInChrome(unittest.TestCase):
         finally:
             for process in (cls.chrome, cls.server):
                 process.terminate()
-                process.wait(10)
+                try:
+                    process.wait(10)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(10)
             shutil.rmtree(cls.scratch, ignore_errors=True)
 
     @classmethod
@@ -345,3 +349,8 @@ class ReadNavigationInChrome(unittest.TestCase):
         self.assertIn("[navigation hidden, 2 sections, 25 links, a search box: Hiddenframe item 0", out)
         self.assertNotIn("Hiddenframe item 11", out)
         self.assertNotIn("Finder item 11", out)
+        for kept in ("Correction: an earlier version misstated the date.", "Directory item 13", "Regional item 13", "Installation instructions",
+                     "Upgrade instructions", "Docsmenu item 13", "In stock only", "Stockmenu item 13"):
+            self.assertIn(kept, out)
+        self.assertIn("14 links, a search box: Shadowsearch item 0", out)
+        self.assertNotIn("Shadowsearch item 13", out)

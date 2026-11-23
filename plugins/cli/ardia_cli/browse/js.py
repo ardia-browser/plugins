@@ -385,12 +385,13 @@ LIBRARY = r"""
     readable(root, hidden) {
       root = root || document.body || document.documentElement;
       const lines = [];
-      const IN_CONTENT = "main, [role=main], article";
+      const IN_CONTENT = "main, article, [role~=main i], [role~=article i]";
       const CONTROLS = "a[href], button, [role=link], [role=button], [role=menuitem], [role=tab]";
       const FACETS = "input[type=checkbox], input[type=radio], input[type=range], [role=checkbox], [role=radio], [role=slider], [role=switch]";
       const SEARCH = "search, input[type=search], [role=search], [role=searchbox], input[name=q], input[name=query], input[name=search]";
       const KEPT_PARTS = "[class*=bread i], [id*=bread i], [aria-label*=bread i], [class*=paginat i], [id*=paginat i], [aria-label*=paginat i], [class*=pager i], " +
-        "a[rel=next], a[rel=prev], [itemtype*=BreadcrumbList], [class*=facet i], [aria-label*=filter i], [aria-label*=facet i]";
+        "a[rel=next], a[rel=prev], [itemtype*=BreadcrumbList], [class*=facet i], [aria-label*=filter i], [aria-label*=facet i], [class~=toc i], [id~=toc i], " +
+        "[class*=table-of-contents i], [aria-label*=contents i]";
       const KEPT_NAMES = /bread[\s_-]?crumb|paginat|(^|[\s_-])pager([\s_-]|$)|paging|table[\s_-]of[\s_-]contents|(^|[\s_-])toc([\s_-]|$)|on this page|in this (article|page|section)|filter|facet|refine/i;
       const PAGE_STEP = /^(\d+|next|prev(ious)?|older|newer|first|last|[‹›«»<>←→…]+)$|^(page \d+|(go|jump|skip) to\b.*\bpage\b.*|(next|prev(ious)?|first|last) page\b.*)$/i;
       const SWITCHER = /lang|locale|version|theme|appearance|region|country|currency/i;
@@ -411,6 +412,13 @@ LIBRARY = r"""
           return null;
         }
       };
+      const pointsHere = (a) => {
+        const here = a.ownerDocument.location;
+        if (a.hash.length < 2 || a.pathname !== here.pathname || a.host !== here.host) return false;
+        let id = a.hash.slice(1);
+        try { id = decodeURIComponent(id); } catch (error) {}
+        return !!a.ownerDocument.getElementById(id) || !!a.ownerDocument.getElementsByName(id).length;
+      };
       const inContent = (el) => {
         for (let node = el; node; node = crossing(node)) if (node.nodeType === 1 && node.matches(IN_CONTENT)) return true;
         return false;
@@ -425,13 +433,12 @@ LIBRARY = r"""
         const labelledBy = (el.getAttribute("aria-labelledby") || "").split(/\s+/).filter(Boolean)
           .map((id) => { const ref = el.ownerDocument.getElementById(id); return ref ? ref.textContent || "" : ""; }).join(" ");
         const names = [el.getAttribute("aria-label") || "", labelledBy, el.id || "", typeof el.className === "string" ? el.className : "", heading ? (heading.textContent || "").slice(0, 80) : ""].join(" ");
-        if (KEPT_NAMES.test(names) || Array.from(el.querySelectorAll(FACETS)).filter(opaque).length >= 2) return true;
+        if (KEPT_NAMES.test(names) || Array.from(el.querySelectorAll(FACETS)).some(opaque)) return true;
         const pickers = Array.from(el.querySelectorAll("select")).filter(opaque);
         if (pickers.some((select) => !SWITCHER.test([select.name, select.id, select.getAttribute("aria-label") || "", typeof select.className === "string" ? select.className : "", ...api.labelText(select)].join(" ")))) return true;
         const controls = Array.from(el.querySelectorAll(CONTROLS)).filter(shownOnPage);
         const links = controls.filter((control) => control.tagName === "A");
-        const here = el.ownerDocument.location;
-        const local = links.filter((a) => a.hash.length > 1 && a.pathname === here.pathname && a.host === here.host);
+        const local = links.filter(pointsHere);
         if (links.length >= 2 && local.length >= links.length * 0.6) return true;
         const named = controls.map(fullName).filter(Boolean);
         return named.length >= 2 && named.filter((name) => PAGE_STEP.test(name)).length >= named.length * 0.6;
@@ -440,20 +447,25 @@ LIBRARY = r"""
         const tag = el.tagName, role = roleOf(el);
         const label = tag === "NAV" || role === "navigation" ? "navigation" : tag === "FOOTER" || role === "contentinfo" ? "footer" : "";
         if (!label || inContent(el) || keeps(el)) return null;
+        let search = false, anchors = 0;
         for (const inner of deep(el)) {
           if (inner.matches(IN_CONTENT) || (inner.matches(KEPT_PARTS) && shownOnPage(inner))) return null;
+          if (inner.matches(FACETS) && opaque(inner)) return null;
           if (/^(IFRAME|FRAME)$/.test(inner.tagName) && shownOnPage(inner)) {
             const box = inner.getBoundingClientRect();
             if (box.width >= 120 && box.height >= 80) return null;
           }
           if ((inner.tagName === "NAV" || roleOf(inner) === "navigation") && keeps(inner)) return null;
+          if (inner.tagName === "A" && pointsHere(inner) && shownOnPage(inner)) anchors += 1;
+          if (anchors >= 2) return null;
+          if (!search && inner.matches(SEARCH)) search = true;
         }
         const controls = Array.from(el.querySelectorAll(CONTROLS)).filter(shownOnPage);
         if (!controls.length) return null;
         const text = norm(el.innerText || "").length;
         const linkText = controls.reduce((total, control) => total + fullName(control).length, 0);
         if (linkText < text * 0.5) return null;
-        return { label, controls: controls.length, names: controls.map(controlName).filter(Boolean), search: !!el.querySelector(SEARCH) };
+        return { label, controls: controls.length, names: controls.map(controlName).filter(Boolean), search };
       };
       let hiding = false;
       let summary = null;
