@@ -359,4 +359,9 @@ class ReadNavigationInChrome(unittest.TestCase):
         for kept in ("Turn off power before opening the panel.", "Pagedmenu item 13", "Previous 1 2 Next"):
             self.assertIn(kept, out)
         self.assertIn("14 links, a search box: Shadowsearch item 0", out)
+        for collapsed in ("Blockspan", "Xmenu", "Autocomplete"):
+            self.assertIn(f"14 links", out[out.index(f"{collapsed} item 0") - 80:out.index(f"{collapsed} item 0")])
+            self.assertNotIn(f"{collapsed} item 13", out)
+        for kept in ("Sorted item 13", "Most liked", "Shadowselect item 13", "Shadowpages item 13"):
+            self.assertIn(kept, out)
         self.assertNotIn("Shadowsearch item 13", out)

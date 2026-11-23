@@ -412,6 +412,9 @@
           return null;
         }
       };
+      const PICKERS = "select, [role=combobox], [role=listbox]";
+      const picks = (picker) => opaque(picker) && !/^(INPUT|TEXTAREA)$/.test(picker.tagName) && !picker.matches(SEARCH) && !picker.closest("search, [role=search]") && !SWITCHER.test([picker.name || "", picker.id, picker.getAttribute("aria-label") || "",
+        typeof picker.className === "string" ? picker.className : "", ...api.labelText(picker), picker.tagName === "SELECT" ? "" : norm(picker.innerText || "").slice(0, 80)].join(" "));
       const pointsHere = (a) => {
         const here = a.ownerDocument.location;
         if (a.hash.length < 2 || a.pathname !== here.pathname || a.host !== here.host) return false;
@@ -434,8 +437,7 @@
           .map((id) => { const ref = el.ownerDocument.getElementById(id); return ref ? ref.textContent || "" : ""; }).join(" ");
         const names = [el.getAttribute("aria-label") || "", labelledBy, el.id || "", typeof el.className === "string" ? el.className : "", heading ? (heading.textContent || "").slice(0, 80) : ""].join(" ");
         if (KEPT_NAMES.test(names) || Array.from(el.querySelectorAll(FACETS)).some(opaque)) return true;
-        const pickers = Array.from(el.querySelectorAll("select")).filter(opaque);
-        if (pickers.some((select) => !SWITCHER.test([select.name, select.id, select.getAttribute("aria-label") || "", typeof select.className === "string" ? select.className : "", ...api.labelText(select)].join(" ")))) return true;
+        if (Array.from(el.querySelectorAll(PICKERS)).some(picks)) return true;
         const controls = Array.from(el.querySelectorAll(CONTROLS)).filter(shownOnPage);
         const links = controls.filter((control) => control.tagName === "A");
         const local = links.filter(pointsHere);
@@ -447,8 +449,10 @@
         const tag = el.tagName, role = roleOf(el);
         const label = tag === "NAV" || role === "navigation" ? "navigation" : tag === "FOOTER" || role === "contentinfo" ? "footer" : "";
         if (!label || inContent(el) || keeps(el)) return null;
-        let search = false, anchors = 0;
+        let search = false, anchors = 0, steps = 0;
         for (const inner of [...(el.shadowRoot ? deep(el.shadowRoot) : []), ...deep(el)]) {
+          if (inner.matches(PICKERS) && picks(inner)) return null;
+          if (inner.matches(CONTROLS) && PAGE_STEP.test(fullName(inner)) && shownOnPage(inner) && ++steps >= 3) return null;
           if (inner.matches(IN_CONTENT) || (inner.matches(KEPT_PARTS) && shownOnPage(inner))) return null;
           if (inner.matches(FACETS) && opaque(inner)) return null;
           if (/^(IFRAME|FRAME)$/.test(inner.tagName) && shownOnPage(inner)) {
@@ -461,7 +465,7 @@
           if (!search && inner.matches(SEARCH)) search = true;
         }
         const controls = Array.from(el.querySelectorAll(CONTROLS)).filter(shownOnPage);
-        if (!controls.length || controls.filter((control) => PAGE_STEP.test(fullName(control))).length >= 3) return null;
+        if (!controls.length) return null;
         const text = norm(el.innerText || "").length;
         const linkText = controls.reduce((total, control) => total + fullName(control).length, 0);
         if (linkText < text * 0.5) return null;
@@ -638,7 +642,8 @@
           flush();
           return;
         }
-        if (hidden && !hiding && node !== root && /^(NAV|FOOTER|ASIDE|SECTION|DIV|UL|OL|HEADER|MENU)$/.test(tag)) {
+        const landmarkRole = /^(navigation|contentinfo)$/.test(roleOf(node)) && (style.display !== "inline" || norm(node.innerText || "").length >= 100);
+        if (hidden && !hiding && node !== root && (/^(NAV|FOOTER|ASIDE|SECTION|DIV|UL|OL|HEADER|MENU)$/.test(tag) || landmarkRole)) {
           const chrome = chromeOf(node);
           if (chrome) { hideChrome(node, chrome); return; }
         }
