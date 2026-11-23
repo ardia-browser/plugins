@@ -1,7 +1,7 @@
 {
   "js.library.js.txt": {
     "python": "ardia_cli.browse.js.LIBRARY",
-    "sha256": "c56b994f64b7d660416a2a2fe3a0e7591ef6c72252287ca79ef6cfd5aae33cf0"
+    "sha256": "7decf8855de27c88da1866cbd9ef43839ad6c2af614e039a8989ae8b2012e530"
   },
   "actions.disabled-state.js.txt": {
     "python": "ardia_cli.browse.actions.DISABLED_STATE",

@@ -1,0 +1,24 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Tricky menus</title></head>
+<body>
+  <p>Outside copy that keeps this page from reading as mostly navigation. Outside copy that keeps this page from reading as mostly navigation. Outside copy that keeps this page from reading as mostly navigation. Outside copy that keeps this page from reading as mostly navigation. Outside copy that keeps this page from reading as mostly navigation. Outside copy that keeps this page from reading as mostly navigation. Outside copy that keeps this page from reading as mostly navigation. Outside copy that keeps this page from reading as mostly navigation. </p>
+  <div role="navigation"><a href="/">Home</a>
+    <main><h1>Wrapped article</h1><p>The article inside a navigation wrapper is the main content and must stay. The article inside a navigation wrapper is the main content and must stay. The article inside a navigation wrapper is the main content and must stay. The article inside a navigation wrapper is the main content and must stay. </p>
+      <shadow-menu></shadow-menu>
+      <iframe srcdoc="<nav><a href=&quot;/framed/0&quot;>Framed item 0</a> <a href=&quot;/framed/1&quot;>Framed item 1</a> <a href=&quot;/framed/2&quot;>Framed item 2</a> <a href=&quot;/framed/3&quot;>Framed item 3</a> <a href=&quot;/framed/4&quot;>Framed item 4</a> <a href=&quot;/framed/5&quot;>Framed item 5</a> <a href=&quot;/framed/6&quot;>Framed item 6</a> <a href=&quot;/framed/7&quot;>Framed item 7</a> <a href=&quot;/framed/8&quot;>Framed item 8</a> <a href=&quot;/framed/9&quot;>Framed item 9</a></nav><p>Framed copy.</p>" width="600" height="200" title="inner"></iframe>
+    </main>
+  </div>
+  <aside><nav aria-label="Site"><a href="/site/0">Site item 0</a> <a href="/site/1">Site item 1</a> <a href="/site/2">Site item 2</a> <a href="/site/3">Site item 3</a> <a href="/site/4">Site item 4</a> <a href="/site/5">Site item 5</a> <a href="/site/6">Site item 6</a> <a href="/site/7">Site item 7</a> <a href="/site/8">Site item 8</a> <a href="/site/9">Site item 9</a> <a href="/site/10">Site item 10</a> <a href="/site/11">Site item 11</a><nav aria-label="Breadcrumb"><a href="/">Home</a> <a href="/tv">TVs</a></nav></nav></aside>
+  <nav aria-label="Shop"><a href="/shop/0">Shop item 0</a> <a href="/shop/1">Shop item 1</a> <a href="/shop/2">Shop item 2</a> <a href="/shop/3">Shop item 3</a> <a href="/shop/4">Shop item 4</a> <a href="/shop/5">Shop item 5</a> <a href="/shop/6">Shop item 6</a> <a href="/shop/7">Shop item 7</a> <a href="/shop/8">Shop item 8</a> <a href="/shop/9">Shop item 9</a> <a href="/shop/10">Shop item 10</a> <a href="/shop/11">Shop item 11</a><label>Screen size <select><option>55 in</option><option>65 in</option></select></label></nav>
+  <nav class="results-nav"><button>Jump to page 1</button> <button>Jump to page 2</button> <button>Jump to page 3</button> <button>Go to next page of results</button></nav>
+  <nav aria-label="Brands"><a href="/brand/0">Brand item 0</a> <a href="/brand/1">Brand item 1</a> <a href="/brand/2">Brand item 2</a> <a href="/brand/3">Brand item 3</a> <a href="/brand/4">Brand item 4</a> <a href="/brand/5">Brand item 5</a> <a href="/brand/6">Brand item 6</a> <a href="/brand/7">Brand item 7</a> <a href="/brand/8">Brand item 8</a> <a href="/brand/9">Brand item 9</a> <a href="/brand/10">Brand item 10</a> <a href="/brand/11">Brand item 11</a></nav>
+  <aside aria-label="Related products"><nav><a href="/r/1">Kettle</a> <a href="/r/2">Toaster</a></nav></aside>
+  <script>
+    customElements.define("shadow-menu", class extends HTMLElement {
+      connectedCallback() {
+        const root = this.attachShadow({ mode: "open" });
+        root.innerHTML = '<nav>' + Array.from({ length: 10 }, (_, j) => '<a href="/shadow/' + j + '">Shadow item ' + j + '</a>').join(" ") + '</nav>';
+      }
+    });
+  </script>
+</body></html>

@@ -331,3 +331,11 @@ class ReadNavigationInChrome(unittest.TestCase):
         out = self.browse("open", self.url("nav-sitemap.html"), "--read").stdout
         self.assertIn("- Section number 19", out)
         self.assertNotIn("hidden,", out)
+
+    def test_menus_that_hold_content_or_controls_stay(self):
+        out = self.browse("open", self.url("nav-tricky.html"), "--read").stdout
+        for kept in ("# Wrapped article", "must stay.", "Shadow item 9", "Framed item 9", "Framed copy.", "TVs", "Screen size", "Shop item 11",
+                     "Site item 11", "Go to next page of results", "[Related products: not the main content]\nKettle Toaster"):
+            self.assertIn(kept, out)
+        self.assertIn("[navigation hidden, 12 links: Brand item 0", out)
+        self.assertNotIn("Brand item 11", out)

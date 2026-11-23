@@ -390,38 +390,56 @@ LIBRARY = r"""
       const FACETS = "input[type=checkbox], input[type=radio], input[type=range], [role=checkbox], [role=radio], [role=slider], [role=switch]";
       const SEARCH = "input[type=search], [role=search], [role=searchbox], input[name=q], input[name=query], input[name=search]";
       const KEPT_NAMES = /bread[\s_-]?crumb|paginat|(^|[\s_-])pager([\s_-]|$)|paging|table[\s_-]of[\s_-]contents|(^|[\s_-])toc([\s_-]|$)|on this page|in this (article|page|section)|filter|facet|refine/i;
-      const PAGE_STEP = /^(\d+|next|prev(ious)?|older|newer|first|last|[‹›«»<>←→…]+)$/i;
+      const PAGE_STEP = /^(\d+|next|prev(ious)?|older|newer|first|last|[‹›«»<>←→…]+)$|^(page \d+|(go|jump|skip) to\b.*\bpage\b.*|(next|prev(ious)?|first|last) page\b.*)$/i;
+      const SWITCHER = /lang|locale|version|theme|appearance|region|country|currency/i;
       const shownOnPage = (el) => typeof el.checkVisibility !== "function" || el.checkVisibility({ visibilityProperty: true, checkVisibilityCSS: true });
       const opaque = (el) => typeof el.checkVisibility !== "function" || el.checkVisibility({ visibilityProperty: true, opacityProperty: true });
+      const fullName = (el) => norm(el.innerText || "") || norm(el.getAttribute("aria-label") || "");
       const controlName = (el) => {
-        const name = norm(el.innerText || "") || norm(el.getAttribute("aria-label") || "");
+        const name = fullName(el);
         return name.length > 30 ? name.slice(0, 29) + "…" : name;
       };
-      const chromeOf = (el) => {
-        if (el.closest(IN_CONTENT)) return null;
-        const tag = el.tagName, role = roleOf(el);
-        const sidebar = (tag === "ASIDE" || role === "complementary") && !!el.querySelector("nav, [role=navigation]");
-        const label = tag === "NAV" || role === "navigation" || sidebar ? "navigation" : tag === "FOOTER" || role === "contentinfo" ? "footer" : "";
-        if (!label) return null;
+      const crossing = (node) => {
+        if (node.parentNode) return node.parentNode.nodeType === 11 ? node.parentNode.host : node.parentNode;
+        try {
+          const view = node.nodeType === 9 ? node.defaultView : null;
+          return view && view.frameElement ? view.frameElement : null;
+        } catch (error) {
+          return null;
+        }
+      };
+      const inContent = (el) => {
+        for (let node = el; node; node = crossing(node)) if (node.nodeType === 1 && node.matches(IN_CONTENT)) return true;
+        return false;
+      };
+      const keeps = (el) => {
         const heading = el.querySelector("h1, h2, h3, h4, h5, h6");
         const labelledBy = (el.getAttribute("aria-labelledby") || "").split(/\s+/).filter(Boolean)
           .map((id) => { const ref = el.ownerDocument.getElementById(id); return ref ? ref.textContent || "" : ""; }).join(" ");
         const names = [el.getAttribute("aria-label") || "", labelledBy, el.id || "", typeof el.className === "string" ? el.className : "", heading ? (heading.textContent || "").slice(0, 80) : ""].join(" ");
-        if (KEPT_NAMES.test(names) || Array.from(el.querySelectorAll(FACETS)).filter(opaque).length >= 2) return null;
+        if (KEPT_NAMES.test(names) || Array.from(el.querySelectorAll(FACETS)).filter(opaque).length >= 2) return true;
+        const pickers = Array.from(el.querySelectorAll("select")).filter(opaque);
+        if (pickers.some((select) => !SWITCHER.test([select.name, select.id, select.getAttribute("aria-label") || "", typeof select.className === "string" ? select.className : "", ...api.labelText(select)].join(" ")))) return true;
         const controls = Array.from(el.querySelectorAll(CONTROLS)).filter(shownOnPage);
-        if (!controls.length) return null;
         const links = controls.filter((control) => control.tagName === "A");
         const here = el.ownerDocument.location;
         const local = links.filter((a) => a.hash.length > 1 && a.pathname === here.pathname && a.host === here.host);
-        if (links.length >= 2 && local.length >= links.length * 0.6) return null;
-        const named = controls.map(controlName).filter(Boolean);
-        if (named.length >= 2 && named.filter((name) => PAGE_STEP.test(name)).length >= named.length * 0.6) return null;
-        if (label === "footer" || sidebar) {
-          const text = norm(el.innerText || "").length;
-          const linkText = named.reduce((total, name) => total + name.length, 0);
-          if (linkText < text * 0.5) return null;
-        }
-        return { label, controls: controls.length, names: named, search: !!el.querySelector(SEARCH) };
+        if (links.length >= 2 && local.length >= links.length * 0.6) return true;
+        const named = controls.map(fullName).filter(Boolean);
+        return named.length >= 2 && named.filter((name) => PAGE_STEP.test(name)).length >= named.length * 0.6;
+      };
+      const chromeOf = (el) => {
+        const tag = el.tagName, role = roleOf(el);
+        const label = tag === "NAV" || role === "navigation" ? "navigation" : tag === "FOOTER" || role === "contentinfo" ? "footer" : "";
+        if (!label || inContent(el) || el.querySelector(IN_CONTENT)) return null;
+        if (Array.from(el.querySelectorAll("iframe, frame")).some((frame) => { const box = frame.getBoundingClientRect(); return box.width >= 120 && box.height >= 80; })) return null;
+        if (keeps(el) || Array.from(el.querySelectorAll("nav, [role=navigation]")).some(keeps)) return null;
+        const controls = Array.from(el.querySelectorAll(CONTROLS)).filter(shownOnPage);
+        if (!controls.length) return null;
+        const text = norm(el.innerText || "").length;
+        const linkText = controls.reduce((total, control) => total + fullName(control).length, 0);
+        if (linkText < text * 0.5) return null;
+        return { label, controls: controls.length, names: controls.map(controlName).filter(Boolean), search: !!el.querySelector(SEARCH) };
       };
       let hiding = false;
       let summary = null;
@@ -458,7 +476,7 @@ LIBRARY = r"""
         const chars = removed.reduce((total, line) => total + line.length + (line ? 1 : 0), 0);
         if (!chars) return;
         if (chars < 100) {
-          if (chrome.label === "navigation") lines.push("", "[navigation: not the main content]", ...removed, "[end of navigation]", "");
+          if (chrome.label === "navigation" && !wasAside) lines.push("", "[navigation: not the main content]", ...removed, "[end of navigation]", "");
           else lines.push(...removed);
           return;
         }
@@ -594,7 +612,7 @@ LIBRARY = r"""
           flush();
           return;
         }
-        if (hidden && !hiding && node !== root && (tag === "NAV" || tag === "ASIDE" || tag === "FOOTER" || node.hasAttribute("role"))) {
+        if (hidden && !hiding && node !== root && (tag === "NAV" || tag === "FOOTER" || node.hasAttribute("role"))) {
           const chrome = chromeOf(node);
           if (chrome) { hideChrome(node, chrome); return; }
         }
