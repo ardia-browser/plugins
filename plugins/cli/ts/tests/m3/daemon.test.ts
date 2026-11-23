@@ -126,6 +126,7 @@ describe("the session folder", () => {
     fs.mkdirSync(found.browse, { mode: 0o700 });
     const key = keyOf("stale");
     staleSocket(socketFile(found.data, key));
+    fs.linkSync(socketFile(found.data, key), path.join(found.root, "stale-socket-kept"));
     const before = fs.lstatSync(socketFile(found.data, key)).ino;
     const { pid } = await start(found.data, "stale");
     pids.push(pid);
