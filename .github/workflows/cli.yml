@@ -2,7 +2,6 @@ name: Command Line plugin
 
 on:
   pull_request:
-    paths: ["plugins/cli/**", ".github/workflows/cli.yml", ".github/release/check-build.sh"]
   push:
     branches: [main]
     paths: ["plugins/cli/**", ".github/workflows/cli.yml", ".github/release/check-build.sh"]
@@ -39,11 +38,11 @@ jobs:
           if [ "$EVENT" = pull_request ]; then
             git diff --no-renames --name-only -z HEAD^1 HEAD > "$RUNNER_TEMP/changed"
             cli=false
-            reason="only docs and the bench changed"
+            reason="no CLI code changed"
             while IFS= read -r -d '' path; do
               case $path in
                 plugins/cli/README.md|plugins/cli/docs/*|plugins/cli/bench/*) ;;
-                *) cli=true; reason="$path changed"; break ;;
+                plugins/cli/*|.github/workflows/cli.yml|.github/release/check-build.sh) cli=true; reason="$path changed"; break ;;
               esac
             done < "$RUNNER_TEMP/changed"
           fi

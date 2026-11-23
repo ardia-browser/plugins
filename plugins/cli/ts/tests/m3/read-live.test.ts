@@ -13,7 +13,7 @@ import { monotonic } from "../../src/browse/state/wait.ts";
 import { BrowseError } from "../../src/browse/daemon-errors.ts";
 
 const CHROME = process.env["ARDIA_M3_CHROME"];
-const PORT = Number(process.env["ARDIA_D4_CHROME_PORT"] ?? "9437");
+const PORT = Number(process.env["ARDIA_D4_CHROME_PORT"] ?? String(Number(process.env["ARDIA_M3_PORT_BASE"] ?? "9400") + 8));
 const PAGE = `<!doctype html><title>shadows</title><p>outside</p><div id="host"></div><script>
 const outer = document.getElementById("host").attachShadow({ mode: "closed" });
 outer.innerHTML = '<p class="x" id="outer-p">outer text</p><div id="inner"></div>';
