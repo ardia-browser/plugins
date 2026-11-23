@@ -7,10 +7,11 @@ import { shlexSplit } from "../../pylib/shlex.ts";
 import { codeLine } from "./batch-line.ts";
 import { redact } from "../../redact.ts";
 import { BrowseError, ConnectionLost, OutcomeUnknown, Usage } from "../daemon-errors.ts";
+import type { JsonObject } from "../../json.ts";
 import { OUTPUT_CAP, pyValue, Result } from "../daemon/render.ts";
-import { content } from "../outfile.ts";
+import { content, savedBodyLine } from "../outfile.ts";
 import { add, failedStep, flag } from "../metrics.ts";
-import { wellFormed } from "../paths.ts";
+import { wellFormed, writeAllFd } from "../paths.ts";
 import { Ctx } from "./ctx.ts";
 import { ALIASES, dispatch, hooks, register } from "./index.ts";
 import { parse } from "./parse.ts";
@@ -140,7 +141,7 @@ export function takeOut(argv: string[], command: string): [string[], string | nu
   return [argv, null];
 }
 
-export function saveText(given: string, text: string): string {
+export function saveText(given: string, text: string | Uint8Array): string {
   const target = given.startsWith("~/") ? path.join(process.env["HOME"] ?? "~", given.slice(2)) : given;
   let isDir = false;
   try {
@@ -150,7 +151,12 @@ export function saveText(given: string, text: string): string {
   fs.mkdirSync(path.dirname(target), { recursive: true });
   const temporary = path.join(path.dirname(target), `.${path.basename(target)}.${process.pid}.${Date.now()}.part`);
   try {
-    fs.writeFileSync(temporary, wellFormed(redact(text)), { encoding: "utf8", flag: "wx", mode: 0o666 });
+    const fd = fs.openSync(temporary, "wx", 0o666);
+    try {
+      writeAllFd(fd, typeof text === "string" ? Buffer.from(wellFormed(redact(text)), "utf8") : text);
+    } finally {
+      fs.closeSync(fd);
+    }
     try {
       fs.chmodSync(temporary, fs.statSync(target).mode & 0o777);
     } catch {}
@@ -177,7 +183,25 @@ function writeFailure(error: unknown): string {
   return (code && reasons[code]) || (error instanceof Error ? error.message : String(error));
 }
 
+function saveBatchBody(ctx: Ctx, target: string, body: Uint8Array, data: JsonObject): [string, boolean] {
+  let saved: string;
+  try {
+    saved = saveText(ctx.path(target), body);
+  } catch (error) {
+    if (!(error instanceof Usage) && !(error instanceof Error && "code" in error)) throw error;
+    return [`✗ Couldn't write ${target}: ${writeFailure(error)}`, false];
+  }
+  flag("saved_to_file", true);
+  flag("batch_line_saved", true);
+  flag("read_binary_saved", true);
+  return [savedBodyLine(saved, body, data).trimEnd(), true];
+}
+
 function saveBatchLine(ctx: Ctx, name: string, result: Result, target: string): [string, boolean] {
+  if (name === "read" && result.body) {
+    const data = pyValue(result.data ?? {});
+    return saveBatchBody(ctx, target, result.body, data instanceof Map ? data : new Map());
+  }
   let text = result.text ?? "";
   let summary = "its text";
   if (name === "snapshot") {
@@ -436,6 +460,7 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
       const current = given === undefined || given === null ? BATCH_DEFAULT_CAP : Number(given);
       ctx.options["max_output"] = current === 0 || wider === 0 ? 0 : Math.max(current, wider);
     }
+    if (saving && ran === "read") lineOptions["out_body"] = true;
     const staged = saving && ctx.state.pendingShown !== null ? new Map(ctx.state.pendingShown) : null;
     const holding = !ctx.options["no_changes"] && heldLine(ctx.state, item, false) && heldLine(ctx.state, runs[index + 1], true);
     if (hasPendingReaction(ctx.state)) observing.current = null;

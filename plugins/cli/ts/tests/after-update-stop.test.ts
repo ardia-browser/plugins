@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -248,4 +248,69 @@ test.skipIf(process.platform !== "darwin")("skills install --auto started with S
   await new Promise((resolve) => setTimeout(resolve, 300));
   assert.ok(alive(launched.child), "SIGTERM wasn't blocked, so this test proves nothing");
   await stopAndCheck(b, launched, "parent dies");
+}, 30_000);
+
+let raisingAddon: string | undefined;
+let raisingFolder: string | undefined;
+afterAll(() => {
+  if (raisingFolder !== undefined) fs.rmSync(raisingFolder, { recursive: true, force: true });
+});
+
+function addonThatRaisesMidWrite(): string {
+  if (raisingAddon !== undefined) return raisingAddon;
+  raisingFolder = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "ardia-libc-raising-")));
+  const built = path.join(raisingFolder, "ardia-libc.so");
+  const [program, ...words] = process.platform === "darwin" ? ["/usr/bin/xcrun", "clang", "-bundle", "-undefined", "dynamic_lookup"] : ["cc", "-shared", "-fPIC", "-D_GNU_SOURCE", "-pthread"];
+  execFileSync(program as string, [...words, "-std=c11", "-DARDIA_WRITE_RAISES_SIGINT", "-o", built, path.join(TS, "native", "ardia-libc.c")], { stdio: ["ignore", "ignore", "inherit"] });
+  raisingAddon = built;
+  return built;
+}
+
+const RAISING_WRITER = `
+const fs = require("node:fs");
+const [libc, control, after, addon, guarded, staged, ready] = process.argv.slice(1);
+const { loadLibc, writeWhole, interruptsIgnored } = require(libc);
+const { catchInterrupts } = require(control);
+const { armAfterUpdateGuard, rollbackOnStop } = require(after);
+loadLibc(addon);
+if (!interruptsIgnored()) catchInterrupts();
+if (guarded === "guarded") {
+  armAfterUpdateGuard();
+  fs.mkdirSync(staged);
+  rollbackOnStop(() => fs.rmSync(staged, { recursive: true, force: true }));
+}
+writeWhole(2, Buffer.from("step download\\n"));
+fs.writeFileSync(ready, "1");
+setInterval(() => {}, 1000);
+`;
+
+async function interruptMidWrite(guarded: boolean): Promise<{ outcome: unknown; staged: string; logged: string }> {
+  const b = box();
+  const logPath = path.join(b.home, "tmp", "stderr.log");
+  const log = fs.openSync(logPath, "w");
+  try {
+    const staged = path.join(b.home, ".skills-staged");
+    const ready = path.join(b.home, "tmp", "ready");
+    const src = path.join(TS, "src");
+    const child = spawn(process.execPath, ["-e", RAISING_WRITER, path.join(src, "libc.ts"), path.join(src, "control.ts"), path.join(src, "after-update.ts"), addonThatRaisesMidWrite(), guarded ? "guarded" : "plain", staged, ready], { stdio: ["ignore", "ignore", log] });
+    started.push(child.pid as number);
+    const exited = new Promise<NodeJS.Signals | number | null>((resolve) => child.once("exit", (code, signal) => resolve(signal ?? code)));
+    const outcome = await Promise.race([exited, new Promise((resolve) => setTimeout(() => resolve(fs.existsSync(ready) ? "kept running after its write" : "still running"), 10_000))]);
+    return { outcome, staged, logged: fs.readFileSync(logPath, "utf8") };
+  } finally {
+    fs.closeSync(log);
+  }
+}
+
+test("a SIGINT during an after-update write to its log lets the write finish, then rolls back what was staged", async () => {
+  const { outcome, staged, logged } = await interruptMidWrite(true);
+  assert.equal(outcome, "SIGINT");
+  assert.equal(logged, "step download\n");
+  assert.equal(fs.existsSync(staged), false, "the staged folder outlived the SIGINT");
+}, 30_000);
+
+test("outside after-update, a SIGINT during a write to a file still ends the command before it writes", async () => {
+  const { outcome, logged } = await interruptMidWrite(false);
+  assert.equal(outcome, "SIGINT");
+  assert.equal(logged, "");
 }, 30_000);

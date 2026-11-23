@@ -151,6 +151,10 @@ TS_HELP_ADDITIONS = (
      "  | permission geolocation|notifications|camera|microphone|clipboard [more …]\n\n"
      "set permission grants those permissions to the tab's site ahead of any prompt (Browser.setPermission, which no\n"
      "released Ardia allows yet: it fails with policy_refused).\n"),
+    ("read", "--links <pattern> reads every link on the session's tab whose URL contains the\npattern (* matches anything), in page order; --list only prints those links.",
+     "--links <pattern> reads every link whose URL contains the pattern (* matches\nanything), in page order, from each URL you name (opened in a background tab, not read itself), else from the session's\ntab; --list only prints those links."),
+    ("read", "Every URL you name is read (up to 100);\n--links finds at mos",
+     "Without --links, every URL you name is read (up to 100);\n--links finds at mos"),
     ("script", "It runs in a\nblank background page of its own, outside the page it drives (no document or window: DOM code goes in\n"
                "page.evaluate), and every page action is one of ardia browse's commands on this session (the same tab,\n"
                "refs, rules and change reports), so nothing a command refuses works here either.",
