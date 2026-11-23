@@ -221,7 +221,7 @@
     isVisible: (selector) => browse("is", "visible", selector).then(data("visible")),
     goBack: () => browse("back").then(data("url")),
     goForward: () => browse("forward").then(data("url")),
-    waitForSelector: (selector, options) => browse("wait", String(selector), ...flags(options, { timeout: "--timeout" })).then(text),
+    waitForSelector: (selector, options) => browse("wait", String(selector), ...flags(options, { state: "--state", timeout: "--timeout" })).then(text),
     waitForURL: (url, options) => browse("wait", "--url", String(url), ...flags(options, { timeout: "--timeout" })).then(text),
     waitForLoadState: (state, options) => browse("wait", "--load", String(state || "load"), ...flags(options, { timeout: "--timeout" })).then(text),
   };

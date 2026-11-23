@@ -207,6 +207,11 @@ describe("the script runner", () => {
     ]);
   });
 
+  test("waitForSelector passes its state and timeout to wait", async () => {
+    const { requests } = await runScript("await page.waitForSelector('#spinner', { state: 'hidden', timeout: '5s' }); await page.waitForSelector('#ready');");
+    expect(requests.map((request) => request["argv"])).toEqual([["wait", "#spinner", "--state", "hidden", "--timeout", "5s"], ["wait", "#ready"]]);
+  });
+
   test("a page method that doesn't exist says what to use instead", async () => {
     const { result } = await runScript("await page.locator('.row').first().click();");
     expect(result).toMatchObject({ kind: "error", name: "TypeError", code: "usage", line: 1 });
