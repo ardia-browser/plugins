@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/ardia-browser/plugins/plugins/cli/tests/m3/protocol.schema.json",
+  "$id": "https://github.com/ardia-browser/plugins/plugins/cli/ts/tests/m3/protocol.schema.json",
   "title": "ardia browse daemon protocol",
   "description": "The machine form of docs/browse-daemon-protocol.md. Fields are only ever added; a reader ignores fields it doesn't know.",
   "$defs": {

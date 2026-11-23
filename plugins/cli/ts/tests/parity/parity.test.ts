@@ -2,16 +2,17 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "bun:test";
 import { type Case, loadCases, PARITY, SERVED_TABLE } from "./cases.ts";
-import { runEngineDetached } from "./detached.ts";
 import type { EngineResult } from "./engine.ts";
-import { passed, programPath, report } from "./run.ts";
 
 const PER_CASE_MS = 1000;
 const SWITCH_ROWS = new Set(["browse-daemon"]);
 const GROUP_ROWS = new Set(["browse"]);
 const ARGPARSE_ROW = "argparse";
-const ARGPARSE_CASES = "argparse.json";
-const program = programPath();
+
+async function routesThroughArgparse(argv: string[]): Promise<boolean> {
+  const [{ route, withArgparse }, { parseCommand }] = await Promise.all([import("../../src/route.ts"), import("../../src/commands.ts")]);
+  return (await withArgparse(route(argv, undefined, parseCommand), argv)).kind === "argparse";
+}
 
 function servedRows(): string[] {
   return readFileSync(SERVED_TABLE, "utf8")
@@ -31,7 +32,12 @@ function servedRow(command: string, served: Set<string>): string | null {
 
 const capture = JSON.parse(readFileSync(join(PARITY, "capture.json"), "utf8")) as { base: string; platforms: Record<string, unknown> };
 
-if (!(process.platform in capture.platforms)) {
+const supported = process.platform in capture.platforms;
+const { runEngineDetached } = supported ? await import("./detached.ts") : { runEngineDetached: null };
+const { passed, programPath, report } = supported ? await import("./run.ts") : { passed: null, programPath: null, report: null };
+const program = programPath?.() ?? "";
+
+if (!supported || runEngineDetached === null || passed === null || report === null) {
   test(`the expected outcomes were captured on ${process.platform}`, () => {
     throw new Error(`capture.json has expectations for ${Object.keys(capture.platforms).join(" and ")} only (captured from ${capture.base}); this runner can't judge ${process.platform}`);
   }, PER_CASE_MS);
@@ -63,7 +69,7 @@ if (!(process.platform in capture.platforms)) {
     const repeated = seen.filter((id, index) => seen[index - 1] === id);
     if (missing.length || repeated.length) throw new Error(`cases without a result: ${missing.join(", ") || "none"}; cases run twice: ${repeated.join(", ") || "none"}`);
   }, PER_CASE_MS);
-  test("every command served.txt lists has at least one passing case", () => {
+  test("every command served.txt lists has at least one passing case", async () => {
     const served = new Set(servedRows().filter((name) => !SWITCH_ROWS.has(name)));
     const commandOf = new Map(cases.map((kase) => [kase.id, kase.command]));
     const proven = new Set<string>();
@@ -72,7 +78,7 @@ if (!(process.platform in capture.platforms)) {
       const row = command === undefined ? null : servedRow(command, served);
       if (!passed(outcome)) continue;
       if (row !== null) proven.add(row);
-      if (outcome.source === ARGPARSE_CASES && served.has(ARGPARSE_ROW)) proven.add(ARGPARSE_ROW);
+      if (served.has(ARGPARSE_ROW) && !proven.has(ARGPARSE_ROW) && (await routesThroughArgparse(outcome.argv))) proven.add(ARGPARSE_ROW);
     }
     const unproven = [...served].filter((name) => !proven.has(name));
     if (unproven.length) throw new Error(`served.txt lists commands with no passing parity case: ${unproven.join(", ")}`);

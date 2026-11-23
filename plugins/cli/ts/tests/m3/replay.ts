@@ -75,6 +75,7 @@ export class ReplayConn {
     const outstanding = new Map<string, Set<number>>();
     const byId = new Map<number, Recorded>();
     let lastOut = -1;
+    let daemonClosed = false;
     let previousT = entries[0]?.t ?? 0;
     entries.forEach((entry, index) => {
       const t = entry.t ?? previousT;
@@ -104,7 +105,9 @@ export class ReplayConn {
         const item: Outgoing = { kind: "message", text, respondsTo, after: lastOut, delay: gap, code: 0, sent: false };
         if (respondsTo) respondsTo.response = item;
         this.outgoing.push(item);
-      } else if (entry.k === "close" && entry.by === "browser") {
+      } else if (entry.k === "close" && entry.by !== "browser") {
+        daemonClosed = true;
+      } else if (entry.k === "close" && entry.by === "browser" && !daemonClosed) {
         this.outgoing.push({ kind: "close", text: "", respondsTo: null, after: lastOut, delay: gap, code: entry.code ?? 1006, sent: false });
       }
     });

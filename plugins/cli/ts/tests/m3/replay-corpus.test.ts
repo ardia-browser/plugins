@@ -192,15 +192,19 @@ describe("the recorded protocol", () => {
     for (const relative of [...new Bun.Glob("**/*.result.json.gz").scanSync({ cwd: TRANSCRIPTS })].sort()) {
       files += 1;
       const raw = pyLoads(gunzipSync(readFileSync(path.join(TRANSCRIPTS, relative))).toString("utf8"));
-      const steps = isRecord(raw) && Array.isArray(raw["steps"]) ? raw["steps"] : [];
-      for (const step of steps) {
-        for (const item of isRecord(step) && Array.isArray(step["answers"]) ? step["answers"] : []) {
-          if (!isRecord(item)) continue;
+      expect(isRecord(raw) && Array.isArray(raw["steps"]), `${relative}: the result has no steps list`).toBe(true);
+      const steps = (isRecord(raw) ? raw["steps"] : []) as unknown[];
+      steps.forEach((step, index) => {
+        expect(isRecord(step) && Array.isArray(step["answers"]), `${relative}: step ${index} has no answers list`).toBe(true);
+        const answers = (isRecord(step) ? step["answers"] : []) as unknown[];
+        answers.forEach((item, position) => {
+          expect(isRecord(item) && "answer" in item, `${relative}: step ${index} answer ${position} isn't an object with an answer`).toBe(true);
+          if (!isRecord(item)) return;
           const found = [...check("answer", item["answer"]), ...("wire" in item ? check("request", item["wire"]) : [])];
-          expect(found, `${relative}: ${found.join("; ")}`).toEqual([]);
+          expect(found, `${relative}: step ${index} answer ${position}: ${found.join("; ")}`).toEqual([]);
           checked += 1;
-        }
-      }
+        });
+      });
     }
     expect(files).toBeGreaterThanOrEqual(70);
     expect(checked).toBeGreaterThan(MINIMUM_ANSWERS);
