@@ -2,7 +2,7 @@ import { read, write, writeSync } from "node:fs";
 import { catchInterrupts } from "./control.ts";
 import type { NotesArgv } from "./browse/route.ts";
 import { interruptsIgnored, LIBC_UNAVAILABLE, LibcUnavailable, loadLibc, watchLifeline, writeWhole } from "./libc.ts";
-import { FLUSH_ARGUMENT, HISTORY_ARGUMENT } from "./flush-argument.ts";
+import { FLUSH_ARGUMENT, HISTORY_ARGUMENT, SCRIPT_RUNNER_ARGUMENT } from "./flush-argument.ts";
 import { bundledPython, installRoot } from "./install.ts";
 import { abandonedOutput, settleStderr } from "./printable.ts";
 import { HAND_BACK, takeMarker } from "./routed.ts";
@@ -123,6 +123,7 @@ async function main(words: string[]): Promise<number> {
   if (words[0] === "daemon") process.exit(await (await import("./browse/daemon/main.ts")).daemonMain(words.slice(1)));
   if (words.length === 1 && words[0] === FLUSH_ARGUMENT) return runFlusher();
   if (words.length === 1 && words[0] === HISTORY_ARGUMENT) return (await import("./browsing.ts")).historyChild();
+  if (words.length === 2 && words[0] === SCRIPT_RUNNER_ARGUMENT) return (await import("./browse/script/runner.ts")).runnerMain(words[1] as string);
   const routed = takeMarker(words);
   const argv = routed?.argv ?? words;
   try {
