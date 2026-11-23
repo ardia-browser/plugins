@@ -1,0 +1,32 @@
+const PENDING_SINCE_92 = "the TypeScript daemon keeps Network on per session and reuses a frame tree and visibility probe it read in the last 0.75 s and 0.25 s (plugins#92), so this Python recording no longer describes its requests; it comes back once it is recorded from TypeScript (plugins#108)";
+
+export const PENDING: Record<string, string> = Object.fromEntries(
+  [
+    "act/a_closed_aria_modal_slid_off_screen_does_not_hold_back_a_dom_click",
+    "act/a_closed_drawer_at_the_scrollbar_edge_does_not_hold_back_a_dom_click",
+    "act/a_closed_max_height_0_menu_with_links_does_not_hold_back_a_dom_click",
+    "act/a_closed_zero_size_overflow_hidden_aria_modal_holding_a_button_does_not_hold_back_a_dom_click",
+    "act/a_dialog_still_fading_out_after_its_close_gets_out_of_the_way_of_the_next_click",
+    "act/a_zero_height_aria_modal_wrapper_whose_children_faded_out_does_not_hold_back_a_dom_click",
+    "act/an_aria_modal_faded_by_filter_opacity_0_does_not_hold_back_a_dom_click",
+    "act/an_aria_modal_hidden_by_clip_path_does_not_hold_back_a_dom_click",
+    "act/an_inert_aria_modal_does_not_hold_back_a_dom_click",
+    "act/an_off_page_slide_gets_a_dom_click_beside_a_non_modal_dialog_in_an_app_shell",
+    "act/an_off_page_slide_in_a_modal_dialog_over_another_modal_gets_a_dom_click",
+    "act/an_off_page_slide_in_a_shadow_root_inside_the_open_modal_dialog_gets_a_dom_click",
+    "act/an_off_page_slide_inside_the_open_modal_dialog_gets_a_dom_click",
+    "act/d5_batch",
+    "act/d5_changes",
+    "act/d5_fields",
+    "act/d5_keys",
+    "act/drag_takes_the_target_place_and_names_it",
+    "act/grid_cells_are_edited_in_one_batch",
+    "act/html5_drag_into_a_redrawn_list_names_the_place",
+    "core/open_title",
+    "read/grid_reads_as_rows_with_the_virtualized_note",
+    "read/nav_a_scoped_read_keeps_the_menu_it_was_pointed_at",
+    "read/nav_nav_prints_every_menu",
+    "stacked/history_stale_refs",
+    "tabs/frames",
+  ].map((name) => [name, PENDING_SINCE_92]),
+);

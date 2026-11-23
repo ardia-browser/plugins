@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { PENDING } from "./pending.ts";
 import { LinkHarness, linkReplayable, load as loadLink, names as linkNames } from "./linkrun.ts";
 import { Harness, load, type Outcome, scenarioPaths } from "./runner.ts";
 
@@ -46,7 +47,7 @@ async function main(argv: string[]): Promise<number> {
   if (command === "list") {
     for (const file of scenarioPaths(rest)) {
       const scenario = load(file);
-      process.stdout.write(`${scenario.name}  ${scenario.steps.length} steps${scenario.live_only ? "  live-only" : ""}\n`);
+      process.stdout.write(`${scenario.name}  ${scenario.steps.length} steps${scenario.live_only ? "  live-only" : ""}${scenario.name in PENDING ? "  pending" : ""}\n`);
     }
     return 0;
   }
@@ -63,7 +64,15 @@ async function main(argv: string[]): Promise<number> {
       process.stderr.write("no scenarios matched\n");
       return 2;
     }
-    const scenarios = paths.map(load);
+    const named = new Set(rest);
+    const loaded = paths.map(load);
+    const skipped = loaded.filter((scenario) => scenario.name in PENDING && !named.has(scenario.name));
+    const scenarios = loaded.filter((scenario) => !skipped.includes(scenario));
+    for (const scenario of skipped) process.stderr.write(`skipped ${scenario.name}: pending (${PENDING[scenario.name]})\n`);
+    if (scenarios.length === 0) {
+      process.stderr.write("every matched scenario is pending; name one exactly to replay it anyway\n");
+      return 2;
+    }
     const pace = flags.get("--pace");
     if (typeof pace === "string") for (const scenario of scenarios) scenario.pace = pace;
     const harness = await new Harness(scratch, keep).open();
@@ -75,6 +84,10 @@ async function main(argv: string[]): Promise<number> {
   }
   if (command === "link-replay") {
     const chosen = rest.length > 0 ? linkNames(rest) : linkReplayable();
+    if (chosen.length === 0) {
+      process.stderr.write("no link scenarios matched\n");
+      return 2;
+    }
     const harness = await new LinkHarness(scratch, keep).open();
     try {
       const results: Outcome[] = [];

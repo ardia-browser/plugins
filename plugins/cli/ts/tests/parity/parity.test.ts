@@ -9,9 +9,15 @@ const SWITCH_ROWS = new Set(["browse-daemon"]);
 const GROUP_ROWS = new Set(["browse"]);
 const ARGPARSE_ROW = "argparse";
 
-async function routesThroughArgparse(argv: string[]): Promise<boolean> {
-  const [{ route, withArgparse }, { parseCommand }] = await Promise.all([import("../../src/route.ts"), import("../../src/commands.ts")]);
-  return (await withArgparse(route(argv, undefined, parseCommand), argv)).kind === "argparse";
+async function servedByArgparse(kase: Case): Promise<boolean> {
+  if (kase.env.get("ARDIA_BROWSE_FOR_PLUGIN")) return false;
+  const [{ invokesBrowse, notesArgv }, { route, withArgparse }, { parseCommand }] = await Promise.all([
+    import("../../src/browse/route.ts"),
+    import("../../src/route.ts"),
+    import("../../src/commands.ts"),
+  ]);
+  if (invokesBrowse(kase.argv) || notesArgv(kase.argv) !== undefined) return false;
+  return (await withArgparse(route(kase.argv, undefined, parseCommand), kase.argv)).kind === "argparse";
 }
 
 function servedRows(): string[] {
@@ -71,14 +77,14 @@ if (!supported || runEngineDetached === null || passed === null || report === nu
   }, PER_CASE_MS);
   test("every command served.txt lists has at least one passing case", async () => {
     const served = new Set(servedRows().filter((name) => !SWITCH_ROWS.has(name)));
-    const commandOf = new Map(cases.map((kase) => [kase.id, kase.command]));
+    const caseOf = new Map(cases.map((kase) => [kase.id, kase]));
     const proven = new Set<string>();
     for (const outcome of result?.outcomes ?? []) {
-      const command = commandOf.get(outcome.id);
-      const row = command === undefined ? null : servedRow(command, served);
+      const kase = caseOf.get(outcome.id);
+      const row = kase === undefined ? null : servedRow(kase.command, served);
       if (!passed(outcome)) continue;
       if (row !== null) proven.add(row);
-      if (served.has(ARGPARSE_ROW) && !proven.has(ARGPARSE_ROW) && (await routesThroughArgparse(outcome.argv))) proven.add(ARGPARSE_ROW);
+      if (kase !== undefined && served.has(ARGPARSE_ROW) && !proven.has(ARGPARSE_ROW) && (await servedByArgparse(kase))) proven.add(ARGPARSE_ROW);
     }
     const unproven = [...served].filter((name) => !proven.has(name));
     if (unproven.length) throw new Error(`served.txt lists commands with no passing parity case: ${unproven.join(", ")}`);
