@@ -204,6 +204,44 @@ class DevtoolsEndpoint(unittest.TestCase):
         with self.assertRaises(socket.timeout):
             server.accept()
 
+    def test_a_cancel_racing_connect_never_leaves_a_connection_for_a_gone_command(self):
+        path = self.root / "ArdiaControl.sock"
+        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        server.bind(str(path))
+        server.listen(8)
+        self.addCleanup(server.close)
+        for _ in range(20):
+            sink = endpoint.SocketSink()
+            mark = endpoint.OPEN_SOCKETS.set(sink)
+            outcome = []
+
+            def ask():
+                try:
+                    outcome.append(endpoint.ask_socket(path, timeout=2))
+                except SocketRefused as error:
+                    outcome.append(error.code)
+
+            worker = threading.Thread(target=ask)
+            worker.start()
+            sink.cancel()
+            worker.join(5)
+            endpoint.OPEN_SOCKETS.reset(mark)
+            self.assertFalse(worker.is_alive())
+            if outcome == ["cancelled"]:
+                continue
+            server.settimeout(1)
+            connection, _ = server.accept()
+            connection.settimeout(1)
+            while connection.recv(65536):
+                pass
+            connection.close()
+
+    def test_a_peer_that_closes_after_hello_is_unreachable_not_a_raw_error(self):
+        path = self.serve(lambda request: [{"id": request["id"], "result": {"app": "Ardia", "protocol": 4}}] if request["method"] == "hello" else [])
+        with self.assertRaises(SocketRefused) as caught:
+            endpoint.ask_socket(path, timeout=1)
+        self.assertIn(caught.exception.code, ("unreachable", "timeout"))
+
     def test_a_different_port_is_another_server(self):
         path = write_control(self.root)
         with self.assertRaisesRegex(EndpointError, "restarted its DevTools connection"):
