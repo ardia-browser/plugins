@@ -1,0 +1,61 @@
+{
+ "source": "tests/test_browse_act.py ActInChrome.test_a_zero_width_search_button_gets_no_ref_until_it_shows",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/search-box.html"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "snapshot",
+    "-i"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "fill",
+    "#q",
+    "duck"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "snapshot",
+    "-i"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "click",
+    "@e16"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.querySelector('#out').textContent"
+   ],
+   "session": "act",
+   "main_world": true
+  }
+ ]
+}

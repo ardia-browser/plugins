@@ -15,7 +15,7 @@ ACT_FLAGS = frozenset({"waited_for_enabled", "fill_picked_option", "fill_inserte
                        "select_opened_list", "press_targeted", "consent_dismissed", "popup_dismissed", "click_recentered", "dom_click_fallback",
                        "dom_click_behind_modal", "dom_click_waited_for_modal", "input_in_inner_frame", "menu_closed_for_click", "modal_dismissed"})
 ACT_COUNTS = frozenset({"cell_edits"})
-CHANGE_FLAGS = frozenset({"change_text", "change_run_choices", "open_report", "open_moved_tab", "snapshot_disabled_folded", "snapshot_repeat_labels", "names_clipped",
+CHANGE_FLAGS = frozenset({"change_text", "change_run_choices", "open_report", "open_moved_tab", "snapshot_disabled_folded", "snapshot_repeat_labels", "names_clipped", "snapshot_boxless_skipped",
                           "waited_for_reaction"})
 CHANGE_COUNTS = frozenset({"change_text_chars"})
 FLOW_FLAGS = frozenset({"flow_saved", "flow_hint_shown", "flow_run_page", "flow_drifted", "flow_shaped"})

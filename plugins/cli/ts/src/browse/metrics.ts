@@ -25,7 +25,7 @@ export const ACT_FLAGS = new Set([
 ]);
 export const ACT_COUNTS = new Set(["cell_edits"]);
 export const CHANGE_FLAGS = new Set([
-  "change_text", "change_run_choices", "open_report", "open_moved_tab", "snapshot_disabled_folded", "snapshot_repeat_labels", "names_clipped",
+  "change_text", "change_run_choices", "open_report", "open_moved_tab", "snapshot_disabled_folded", "snapshot_repeat_labels", "names_clipped", "snapshot_boxless_skipped",
   "waited_for_reaction",
 ]);
 export const CHANGE_COUNTS = new Set(["change_text_chars"]);

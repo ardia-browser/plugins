@@ -40,6 +40,7 @@ import READPAGES_SCROLL_STEP from "./readpages.scroll-step.js.txt" with { type: 
 import SCRIPT_CONTROLLER from "./script.controller.js.txt" with { type: "text" };
 import SCRIPT_WORKER from "./script.worker.js.txt" with { type: "text" };
 import SNAPSHOT_FIELD_VALUE from "./snapshot.field-value.js.txt" with { type: "text" };
+import SNAPSHOT_BOXLESS from "./snapshot.boxless.js.txt" with { type: "text" };
 
 export {
   LIBRARY,
@@ -84,4 +85,5 @@ export {
   SCRIPT_CONTROLLER,
   SCRIPT_WORKER,
   SNAPSHOT_FIELD_VALUE,
+  SNAPSHOT_BOXLESS,
 };

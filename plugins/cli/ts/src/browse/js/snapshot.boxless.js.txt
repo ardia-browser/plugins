@@ -1,0 +1,35 @@
+() => {
+  const found = [];
+  const shown = (node) => {
+    const rect = node.getBoundingClientRect();
+    return rect.width >= 2 && rect.height >= 2 && (!node.checkVisibility || node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }));
+  };
+  const boxed = (el) => [...el.getClientRects()].some((rect) => rect.width * rect.height > 1);
+  const standIn = (el) => {
+    if (el instanceof HTMLInputElement && /^(checkbox|radio)$/.test(el.type)) {
+      const labels = [...(el.labels || [])];
+      const wrapping = el.closest("label");
+      if (wrapping) labels.push(wrapping);
+      if (labels.some(shown)) return true;
+    }
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_ELEMENT);
+    for (let node = walker.nextNode(), seen = 0; node && seen < 400; node = walker.nextNode(), seen++) {
+      if (shown(node)) return true;
+    }
+    return false;
+  };
+  const CONTROLS = 'a[href], button, input:not([type="hidden"]), select, textarea, summary, [role], [tabindex], [contenteditable]';
+  const visit = (root) => {
+    for (const el of root.querySelectorAll(CONTROLS)) {
+      if (found.length >= 200) return;
+      if (/^(IFRAME|FRAME|OPTION)$/.test(el.tagName) || el.closest('[aria-hidden="true"], [inert]')) continue;
+      if (el.checkVisibility && !el.checkVisibility({ checkVisibilityCSS: true })) continue;
+      if (!boxed(el) && !standIn(el)) found.push(el);
+    }
+    for (const host of root.querySelectorAll("*")) {
+      if (host.shadowRoot) visit(host.shadowRoot);
+    }
+  };
+  visit(document);
+  return found;
+}

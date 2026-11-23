@@ -20,6 +20,41 @@ MIN_DISABLED = 3
 VALUE_FIELDS = {"Date": "date", "DateTime": "datetime-local", "InputTime": "time", "ColorWell": "color"}
 ROLE_NAMES = {"DisclosureTriangle": "button"}
 MAX_SCOPES = 20
+BOXLESS = r"""() => {
+  const found = [];
+  const shown = (node) => {
+    const rect = node.getBoundingClientRect();
+    return rect.width >= 2 && rect.height >= 2 && (!node.checkVisibility || node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }));
+  };
+  const boxed = (el) => [...el.getClientRects()].some((rect) => rect.width * rect.height > 1);
+  const standIn = (el) => {
+    if (el instanceof HTMLInputElement && /^(checkbox|radio)$/.test(el.type)) {
+      const labels = [...(el.labels || [])];
+      const wrapping = el.closest("label");
+      if (wrapping) labels.push(wrapping);
+      if (labels.some(shown)) return true;
+    }
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_ELEMENT);
+    for (let node = walker.nextNode(), seen = 0; node && seen < 400; node = walker.nextNode(), seen++) {
+      if (shown(node)) return true;
+    }
+    return false;
+  };
+  const CONTROLS = 'a[href], button, input:not([type="hidden"]), select, textarea, summary, [role], [tabindex], [contenteditable]';
+  const visit = (root) => {
+    for (const el of root.querySelectorAll(CONTROLS)) {
+      if (found.length >= 200) return;
+      if (/^(IFRAME|FRAME|OPTION)$/.test(el.tagName) || el.closest('[aria-hidden="true"], [inert]')) continue;
+      if (el.checkVisibility && !el.checkVisibility({ checkVisibilityCSS: true })) continue;
+      if (!boxed(el) && !standIn(el)) found.push(el);
+    }
+    for (const host of root.querySelectorAll("*")) {
+      if (host.shadowRoot) visit(host.shadowRoot);
+    }
+  };
+  visit(document);
+  return found;
+}"""
 FIELD_VALUE = "(el) => ({ type: el.type || null, value: 'value' in el ? String(el.value) : null, required: el.required === true })"
 
 
@@ -349,6 +384,15 @@ async def clickable_map(page, frame: str) -> dict[int, list]:
     return {element.backend_id: hints[index] for index, element in enumerate(elements) if index < len(hints or [])}
 
 
+async def boxless(page, frame: str) -> set[int]:
+    try:
+        remote = await page.call(BOXLESS, frame=frame, by_value=False, read=True)
+        elements = await page.elements_from(remote, frame, "control")
+    except BrowseError:
+        return set()
+    return {element.backend_id for element in elements}
+
+
 async def link_urls(page, nodes: list[Node], frame: str):
     links = [node for node in walk(nodes) if node.role == "link" and node.backend is not None]
 
@@ -443,6 +487,7 @@ async def collect(state, page, selector=None, cursor=True) -> list[Node]:
     if cursor:
         for used in frames_used:
             clickable[used] = await clickable_map(page, used)
+    unclickable = {used: await boxless(page, used) for used in frames_used}
     for node in walk(nodes):
         hints = clickable.get(node.frame, {}).get(node.backend)
         if hints and node.role not in INTERACTIVE:
@@ -456,6 +501,9 @@ async def collect(state, page, selector=None, cursor=True) -> list[Node]:
     for node in walk(nodes):
         if node.role in REF_ROLES or node.hints:
             if node.role == "heading" and not node.name or node.backend is None:
+                continue
+            if node.role != "heading" and node.backend in unclickable.get(node.frame, ()):
+                command_metrics.flag("snapshot_boxless_skipped", True)
                 continue
             node.ref = state.ref_for_node(page, node.frame, node.backend)
     return nodes

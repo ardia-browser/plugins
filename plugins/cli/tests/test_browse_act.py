@@ -246,6 +246,20 @@ class ActInChrome(unittest.TestCase):
         self.assertEqual(self.value("document.querySelector('#g-count').textContent"), "5")
         self.assertEqual(self.value("String(document.querySelectorAll('#grid .editor').length)"), "0")
 
+    def test_a_zero_width_search_button_gets_no_ref_until_it_shows(self):
+        opened = self.browse("open", f"http://127.0.0.1:{self.http_port}/search-box.html").stdout
+        self.assertNotIn('button "Search"', opened)
+        listed = self.browse("snapshot", "-i").stdout
+        self.assertNotIn('button "Search"', listed)
+        self.assertNotIn("Skip to content", listed)
+        self.assertIn('checkbox "Safe search"', listed)
+        self.assertIn('button "More options"', listed)
+        self.browse("fill", "#q", "duck")
+        shown = re.search(r'button "Search" \[ref=(e\d+)\]', self.browse("snapshot", "-i").stdout)
+        self.assertIsNotNone(shown)
+        self.browse("click", "@" + shown.group(1))
+        self.assertEqual(self.value("document.querySelector('#out').textContent"), "searched duck")
+
     def test_dependent_fields_wait_for_their_target(self):
         out = self.browse("batch", "fill #from Beta", "select #to Yankee", "click #later", "get text #out").stdout
         self.assertIn("later clicked", out)

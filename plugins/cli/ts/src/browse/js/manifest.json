@@ -166,5 +166,9 @@
   "snapshot.field-value.js.txt": {
     "python": "ardia_cli.browse.snapshot.FIELD_VALUE",
     "sha256": "1c815a00a3db2340e64795321cccf6096f522bd657bd50fc832f316ebda2598c"
+  },
+  "snapshot.boxless.js.txt": {
+    "python": "ardia_cli.browse.snapshot.BOXLESS",
+    "sha256": "a076d30380c79cf7a4ab6e5439692968867930784d9ae5a5f143f9e2d417f842"
   }
 }

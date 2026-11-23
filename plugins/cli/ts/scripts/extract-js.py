@@ -25,7 +25,7 @@ CONSTANTS = {
     "react": ["HOOK"],
     "readpages": ["MAIN_LIST", "LINKS", "EXTRACT", "SETTLE_PROBE", "SCROLL_STEP"],
     "script": ["CONTROLLER", "WORKER"],
-    "snapshot": ["FIELD_VALUE"],
+    "snapshot": ["FIELD_VALUE", "BOXLESS"],
 }
 
 

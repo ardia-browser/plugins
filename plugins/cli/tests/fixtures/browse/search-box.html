@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>search box</title>
+<style>
+  body { font: 14px sans-serif; margin: 20px; }
+  form { display: flex; align-items: center; width: 420px; border: 1px solid #999; }
+  #q { flex: 1; border: 0; padding: 8px; }
+  #submit { width: 0; padding: 0; border: 0; opacity: 0; overflow: hidden; height: 32px; }
+  form.typed #submit { width: 60px; opacity: 1; }
+  .switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .switch span { display: inline-block; padding: 4px 10px; border: 1px solid #666; }
+  .skip { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .wrap { display: contents; }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<form id="search" action="javascript:void 0">
+  <input id="q" aria-label="Search the web" autocomplete="off">
+  <button id="submit" type="submit" aria-label="Search">Go</button>
+</form>
+<label class="switch"><input type="checkbox" id="safe"><span>Safe search</span></label>
+<button class="wrap" id="more"><span style="display:inline-block;padding:4px 10px;border:1px solid #666">More options</span></button>
+<p id="out"></p>
+<script>
+  const form = document.getElementById("search");
+  const q = document.getElementById("q");
+  q.addEventListener("input", () => form.classList.toggle("typed", q.value !== ""));
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    document.getElementById("out").textContent = "searched " + q.value;
+  });
+</script>
+</body>
+</html>
