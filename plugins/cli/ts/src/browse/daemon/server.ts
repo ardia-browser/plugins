@@ -28,6 +28,8 @@ import { parseText } from "../../json.ts";
 import { dispatch, hooks } from "../commands/all.ts";
 import { Ctx } from "../commands/ctx.ts";
 import { State } from "../state/state.ts";
+import { appCall, appTabMap } from "../state/apptabs.ts";
+import { ACTIVE_FOR, RENEW_EVERY, TabHolds } from "./holds.ts";
 import { reportException } from "../../telemetry.ts";
 import { buildStamp, cliVersion } from "../../version.ts";
 
@@ -75,6 +77,8 @@ export class Daemon {
   pending = 0;
   last = monotonic();
   stopping = false;
+  private readonly holds = new TabHolds((method, params) => appCall(this.state, method, params));
+  private mappedAt = Number.NEGATIVE_INFINITY;
   closing = 0;
   running: Running | null = null;
   closeAfterBatch = false;
@@ -317,6 +321,7 @@ export class Daemon {
   }
 
   private async cleanupInner(): Promise<void> {
+    await this.holds.releaseAll();
     await temptabs.drain(this.state);
     if (this.state.connected) {
       for (const page of [...this.state.pages.values()]) if (page.sessionId && page.input.releaseAll) await page.input.releaseAll();
@@ -364,6 +369,20 @@ export class Daemon {
       }
       if (endpoint.instance !== this.state.instance) this.stopNow();
     }
+    await this.renewHolds();
+  }
+
+  private async renewHolds(): Promise<void> {
+    const now = monotonic();
+    const active = !this.stopping && (this.pending > 0 || now - this.last < ACTIVE_FOR);
+    const current = this.state.current;
+    if (active && current !== null && !this.state.appTabs.has(current) && this.state.connected && now - this.mappedAt >= RENEW_EVERY) {
+      this.mappedAt = now;
+      await appTabMap(this.state).catch(() => undefined);
+    }
+    const targets = new Set([...(current !== null ? [current] : []), ...this.state.pages.keys()]);
+    const wanted = [...new Set([...targets].flatMap((target) => this.state.appTabs.get(target) ?? []))];
+    await this.holds.tick(wanted, now, active);
   }
 
   async handle(socket: net.Socket): Promise<void> {
