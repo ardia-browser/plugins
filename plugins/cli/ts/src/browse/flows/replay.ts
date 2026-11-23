@@ -2,6 +2,7 @@ import { codePoints } from "../../pystr.ts";
 import { redact } from "../../redact.ts";
 import { ConnectionLost, BrowseError, OutcomeUnknown, Usage } from "../daemon-errors.ts";
 import { type Action, candidateArgv, fingerprintArgv, isElementAction, pageArgv, unfilled } from "./actions.ts";
+import { type Candidate, selectorOf } from "./locators.ts";
 
 export const FATAL = new Set([
   "outcome_unknown", "policy_refused", "tab_gone", "tab_detached", "session_busy", "page_busy", "navigation_failed", "connection_lost", "fetch_interrupted",
@@ -29,12 +30,25 @@ export type Episode = {
   fatal?: string;
   snapshot?: string;
   values?: Record<string, string>;
+  matched?: Candidate | null;
 };
+
+export function scrubbed<T>(value: T, secrets: readonly string[]): T {
+  if (typeof value === "string") {
+    let text = redact(value);
+    for (const secret of secrets) if (secret) text = text.replaceAll(secret, REDACTED);
+    return text as T;
+  }
+  if (Array.isArray(value)) return value.map((item) => scrubbed(item, secrets)) as T;
+  if (value !== null && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, scrubbed(item, secrets)])) as T;
+  return value;
+}
 
 export interface Driver {
   run(argv: string[]): Promise<void>;
   snapshot(): Promise<string>;
   url(): string;
+  count(selector: string): Promise<number>;
 }
 
 export type ReplayStep = { seq: number; action: Action | null; command?: string[] | null };
@@ -69,6 +83,16 @@ async function attempt(driver: Driver, tier: Tier, argv: string[], secrets: read
   }
 }
 
+async function countOf(driver: Driver, selector: string): Promise<number> {
+  try {
+    return await driver.count(selector);
+  } catch (error) {
+    if (error instanceof ConnectionLost || error instanceof OutcomeUnknown) throw new Fatal(error);
+    if (!(error instanceof BrowseError)) throw error;
+    return 0;
+  }
+}
+
 function same(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((part, index) => part === b[index]);
 }
@@ -96,18 +120,30 @@ export async function replayStep(driver: Driver, step: ReplayStep, values: Reado
     const ladder = action.candidates.map((candidate) => candidateArgv(action, candidate, values));
     const missing = unfilled(ladder.flat());
     if (missing.length > 0) return outcome(false, null, null, { fatal: `it needs ${missing.map((name) => `--param ${name}=…`).join(" ")}` });
-    for (const [index, argv] of ladder.entries()) {
-      if (await attempt(driver, index === 0 ? "selector" : "candidate", argv, secrets, tried)) return outcome(true, index === 0 ? "selector" : "candidate", index);
+    const tryCandidate = async (tier: Tier, index: number): Promise<boolean> => {
+      const candidate = action.candidates[index] as Candidate;
+      const argv = ladder[index] as string[];
+      if (candidate.by !== "role") {
+        const matches = await countOf(driver, selectorOf(candidate));
+        if (matches !== 1) {
+          tried.push({ tier, argv: shown(argv, secrets), ok: false, code: matches === 0 ? "not_found" : "ambiguous", error: `${matches} elements match ${clip(selectorOf(candidate), 120)}; a replay acts only on exactly one` });
+          return false;
+        }
+      }
+      return attempt(driver, tier, argv, secrets, tried);
+    };
+    for (const index of ladder.keys()) {
+      if (await tryCandidate(index === 0 ? "selector" : "candidate", index)) return outcome(true, index === 0 ? "selector" : "candidate", index);
     }
     if (ladder.length > 0) {
       try {
         await driver.run(["press", "Escape"]);
       } catch (error) {
-        if (error instanceof ConnectionLost) throw new Fatal(error);
+        if (error instanceof ConnectionLost || error instanceof OutcomeUnknown) throw new Fatal(error);
         if (!(error instanceof BrowseError)) throw error;
       }
-      for (const [index, argv] of ladder.entries()) {
-        if (await attempt(driver, "escape", argv, secrets, tried)) return outcome(true, "escape", index);
+      for (const index of ladder.keys()) {
+        if (await tryCandidate("escape", index)) return outcome(true, "escape", index);
       }
     }
     const byFingerprint = fingerprintArgv(action, action.fingerprint, values);
@@ -151,6 +187,7 @@ export async function replay(
       url,
       tier: kept.tier,
       candidate,
+      matched: candidate !== null && action ? (action.candidates[candidate] ?? null) : null,
       fingerprint: action?.fingerprint ?? null,
       tried: kept.attempts,
     };
@@ -165,8 +202,8 @@ export async function replay(
       }
       for (const secret of secrets) if (secret) snapshot = snapshot.replaceAll(secret, REDACTED);
       episodes.push({ kind: "fallback", ...base, ...(kept.fatal ? { fatal: kept.fatal } : {}), snapshot });
-      return { ok: false, outcomes, episodes };
+      return { ok: false, outcomes: scrubbed(outcomes, secrets), episodes: scrubbed(episodes, secrets) };
     }
   }
-  return { ok: true, outcomes, episodes };
+  return { ok: true, outcomes: scrubbed(outcomes, secrets), episodes: scrubbed(episodes, secrets) };
 }

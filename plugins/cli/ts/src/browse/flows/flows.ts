@@ -517,7 +517,7 @@ export function buildFlow(
   };
   if (actionMode) {
     flow["kind"] = requests.length > 0 ? "requests" : "actions";
-    flow["writes"] = unkept.length > 0;
+    flow["writes"] = true;
   }
   const report: Json = {
     requests: requests.map((request) => ({ id: request["id"], method: request["method"], url: request["url"], kind: request["kind"], list: request["expect"]["list"] })),
@@ -844,7 +844,7 @@ function showText(flow: Json): string {
     const example = param["example"] ? ` (recorded: ${param["example"]})` : " (required)";
     lines.push(`param ${param["name"]} [${pyStr(param["source"])}]${example}`);
   }
-  if (flow["kind"] === "actions") lines.push(`replays ${flow["steps"].length} steps in the page${flow["writes"] ? "; it sends forms, so runs need --yes" : ""}`);
+  if (flow["kind"] === "actions") lines.push(`replays ${flow["steps"].length} steps in the page${flow["writes"] ? "; its clicks and forms may change things, so runs need --yes" : ""}`);
   for (const step of flow["steps"]) {
     const command = step["command"] ? step["command"].join(" ") : "(a step with no command)";
     lines.push(`[${step["seq"]}] ${command}`);
@@ -928,7 +928,7 @@ function heal(root: string, args: string[], pageUrl: string | null): Result {
     const role = options["role"] as string | undefined;
     const roleName = options["name"] as string | undefined;
     if (!options["selector"] && !(role && roleName)) throw new Usage("flow heal --step n needs --selector <sel> or --role <role> --name <name>");
-    patch = { steps: [{ seq, ...(options["selector"] ? { selector: options["selector"] as string } : {}), ...(role && roleName ? { fingerprint: { role, name: roleName } } : {}) }] };
+    patch = parsePatch({ steps: [{ seq, ...(options["selector"] ? { selector: options["selector"] as string } : {}), ...(role && roleName ? { fingerprint: { role, name: roleName } } : {}) }] });
   }
   if (patch !== null) {
     const { flow: next, changes, rejected } = applyPatch(flow, patch, episodes);

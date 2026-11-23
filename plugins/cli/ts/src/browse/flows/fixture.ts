@@ -239,23 +239,62 @@ export function fixtureFiles(flow: Json, request: Json, text: string, secrets: r
   };
 }
 
+function failure(dir: string, why: string, code = "fixture_failed"): BrowseError {
+  return new BrowseError(`Couldn't write the fixture to ${dir}: ${why}`, null, code);
+}
+
+function codeOf(error: unknown): string {
+  return typeof error === "object" && error !== null ? String((error as { code?: unknown }).code ?? "") : "";
+}
+
 export function writeFixture(dir: string, files: FixtureFiles): string[] {
+  let info: fs.Stats | null = null;
   try {
-    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-    const written: string[] = [];
+    info = fs.lstatSync(dir);
+  } catch (error) {
+    if (codeOf(error) !== "ENOENT") throw failure(dir, error instanceof Error ? error.message : String(error));
+  }
+  if (info === null) {
+    try {
+      fs.mkdirSync(path.dirname(dir), { recursive: true, mode: 0o700 });
+      fs.mkdirSync(dir, { mode: 0o700 });
+      info = fs.lstatSync(dir);
+    } catch (error) {
+      throw failure(dir, error instanceof Error ? error.message : String(error));
+    }
+  }
+  if (info.isSymbolicLink() || !info.isDirectory()) throw failure(dir, "it's a link or not a folder; pick a real, empty folder", "fixture_unsafe");
+  if (typeof process.getuid === "function" && info.uid !== process.getuid()) throw failure(dir, "the folder belongs to another user", "fixture_unsafe");
+  const targets = Object.keys(files).map((name) => {
+    if (name !== path.basename(name) || name.startsWith(".")) throw failure(dir, `${name} isn't a plain file name`);
+    return path.join(dir, name);
+  });
+  const taken = targets.filter((target) => {
+    try {
+      fs.lstatSync(target);
+      return true;
+    } catch (error) {
+      if (codeOf(error) === "ENOENT") return false;
+      throw failure(dir, error instanceof Error ? error.message : String(error));
+    }
+  });
+  if (taken.length > 0) throw failure(dir, `${taken.map((target) => path.basename(target)).join(", ")} already there; nothing was written. Pick an empty folder`, "fixture_exists");
+  const written: string[] = [];
+  try {
     for (const [name, content] of Object.entries(files)) {
       const target = path.join(dir, name);
-      try {
-        if (fs.lstatSync(target).isSymbolicLink()) throw new BrowseError(`${target} is a link; pick an empty folder for --fixture`, null, "fixture_unsafe");
-      } catch (error) {
-        if (error instanceof BrowseError) throw error;
-      }
-      fs.writeFileSync(target, content, { mode: 0o600 });
+      const fd = fs.openSync(target, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);
       written.push(target);
+      try {
+        fs.fchmodSync(fd, 0o600);
+        fs.writeSync(fd, content);
+      } finally {
+        fs.closeSync(fd);
+      }
     }
-    return written;
   } catch (error) {
-    if (error instanceof BrowseError) throw error;
-    throw new BrowseError(`Couldn't write the fixture to ${dir}: ${error instanceof Error ? error.message : String(error)}`, null, "fixture_failed");
+    for (const target of written) fs.rmSync(target, { force: true });
+    throw failure(dir, error instanceof Error ? error.message : String(error));
   }
+  return written;
 }

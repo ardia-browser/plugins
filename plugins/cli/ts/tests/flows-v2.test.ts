@@ -52,6 +52,10 @@ class FakeDriver implements Driver {
   url(): string {
     return this.page;
   }
+  matches = 1;
+  async count(): Promise<number> {
+    return this.matches;
+  }
 }
 
 const missing = () => new BrowseError("Nothing matches", null, "not_found");
@@ -360,7 +364,7 @@ describe("flow heal", () => {
   test("a later candidate that matched is moved first", () => {
     const [, flow] = saved();
     flow["steps"][2]["action"]["candidates"] = [{ by: "css", value: "form > button.go" }, { by: "text", value: "Find" }];
-    const changes = proposals(flow, [{ kind: "healed", at: "t", flow: "find", site: "example.com", seq: 3, type: "click", intent: "x", url: "", tier: "candidate", candidate: 1, fingerprint: null, tried: [] }]);
+    const changes = proposals(flow, [{ kind: "healed", at: "t", flow: "find", site: "example.com", seq: 3, type: "click", intent: "x", url: "", tier: "candidate", candidate: 1, matched: { by: "text", value: "Find" }, fingerprint: null, tried: [] }]);
     expect(changes[0]!.candidates.map((candidate) => candidate.by)).toEqual(["text", "css"]);
   });
 

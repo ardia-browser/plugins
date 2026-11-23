@@ -226,6 +226,12 @@ function liveDriver(ctx: Ctx): Driver {
       const page = ctx.state.current ? (ctx.state.pages.get(ctx.state.current) ?? null) : null;
       return page ? flowurl.mask(page.url) : "";
     },
+    count: async (selector) => {
+      const handler = handlerOf("get");
+      if (handler === undefined) return 0;
+      const answer = (await handler(quiet("get"), ["count", selector])).data as Record<string, unknown>;
+      return Number(answer["count"]) || 0;
+    },
   };
 }
 
@@ -271,7 +277,7 @@ export async function run(ctx: Ctx, root: string, flow: Json, options: Record<st
   const replaying = flow["kind"] === "actions" || Boolean(options["replay"]);
   const values = resolveParams(flow, parseParams(options["param"] as string[] | undefined), replaying);
   if (replaying && flow["writes"] && !options["yes"]) {
-    throw new BrowseError(`${flow["name"]} sends a form or other write to ${flow["site"]}; nothing was run. Run it again with --yes once the user wants that done`, null, "flow_writes");
+    throw new BrowseError(`${flow["name"]} replays clicks and forms on ${flow["site"]}, which may change things there; nothing was run. Run it again with --yes once the user wants that done`, null, "flow_writes");
   }
   if (replaying) {
     if (options["replay"] && !flow["steps"].some((step: Json) => step["action"])) throw new Usage(`${flow["name"]} keeps no page actions to replay; save it again with \`flow save --actions\``);

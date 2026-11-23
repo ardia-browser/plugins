@@ -8,7 +8,8 @@ import { BrowseError } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
 import { normalizeUrl } from "../commands/parse.ts";
 import { decode } from "./charset.ts";
-import { type FastResult, fastRead } from "./fastpath.ts";
+import { type FastResult, fastRead, type Probe } from "./fastpath.ts";
+import type { HopGuard } from "./netguard.ts";
 import { textFromBytes } from "./pdftext.ts";
 import { extractHtml, llmsCandidates, llmsHrefs, llmsLinks, MARKDOWN_TYPES, MAX_BODY, postProcess, sameDocument } from "./readurl.ts";
 
@@ -152,7 +153,13 @@ export function requestUrl(url: string): string {
   }
 }
 
-export async function fetchUrl(url: string, timeout: number, accept = ACCEPT, binary: BinaryMode = "refuse"): Promise<Fetched> {
+export class UnsafeAddress extends BrowseError {
+  constructor(url: string) {
+    super(`Didn't fetch ${url}: it's on a private, local or link-local address the page doesn't share an origin with`, null, "unsafe_address");
+  }
+}
+
+export async function fetchUrl(url: string, timeout: number, accept = ACCEPT, binary: BinaryMode = "refuse", guard: HopGuard | null = null): Promise<Fetched> {
   const parts = urlsplit(url);
   if (parts.scheme !== "http" && parts.scheme !== "https") throw new BrowseError(`read fetches http(s) URLs only, not ${url}`);
   const requested = requestUrl(url);
@@ -174,6 +181,7 @@ export async function fetchUrl(url: string, timeout: number, accept = ACCEPT, bi
       let target = requested;
       let landed = url;
       for (let hop = 0; ; hop += 1) {
+        if (guard !== null && !(await untilCancelled(guard(target)))) throw new UnsafeAddress(target);
         response = await untilCancelled(
           fetch(target, {
             headers: { Accept: accept, "User-Agent": USER_AGENT },
@@ -205,6 +213,7 @@ export async function fetchUrl(url: string, timeout: number, accept = ACCEPT, bi
       body = await readBody(response, MAX_BODY + 1, arm);
       Object.defineProperty(response, "finalUrl", { value: landed });
     } catch (error) {
+      if (error instanceof UnsafeAddress) throw error;
       if (error instanceof Cancelled || controller.signal.reason instanceof Cancelled) throw new Cancelled();
       if (controller.signal.reason instanceof FetchTimeout) throw new BrowseError(`Couldn't fetch ${url}: timed out`);
       throw new BrowseError(`Couldn't fetch ${url}: ${reasonOf(error)}`);
@@ -267,9 +276,12 @@ export async function run(given: string, options: ReadOptions, globalOptions: Re
   const timeout = Number(options["timeout"] || 10000) / 1000;
   const filter = (options["filter"] as string | undefined) ?? null;
   if (options["fast"]) {
-    const found = await fastRead(url, timeout, fetchUrl, { outline: options["outline"], filter });
-    if (found === null) throw new BrowseError(`Couldn't read ${url}: it sent no Markdown, llms.txt, ard.json or HTML`, null, "navigation_failed");
-    return fastResult(url, found);
+    const probe: Probe = { tried: [], binary: null };
+    const found = await fastRead(url, timeout, fetchUrl, { outline: options["outline"], filter }, true, probe);
+    if (found !== null) return fastResult(url, found);
+    if (probe.binary === null) throw new BrowseError(`Couldn't read ${url}: it sent no Markdown, llms.txt, ard.json or HTML`, null, "navigation_failed");
+    const { fast, ...plain } = options;
+    return run(given, plain, globalOptions);
   }
   if (options["llms"]) {
     const mode = options["llms"];

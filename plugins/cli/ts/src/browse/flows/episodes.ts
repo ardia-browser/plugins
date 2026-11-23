@@ -6,7 +6,7 @@ import { BrowseError, Usage } from "../daemon-errors.ts";
 import { pyValue } from "../daemon/render.ts";
 import { closeFd, O_CREAT, O_TRUNC, O_WRONLY, openPrivate, openPrivateFile, PathError, readPrivateJson, writeAllFd } from "../paths.ts";
 import { type Action, candidatesFromSelector, ELEMENT_ACTIONS, paramsIn } from "./actions.ts";
-import { type Candidate, candidateProblem, type Fingerprint, MAX_CANDIDATES, sortCandidates } from "./locators.ts";
+import { type Candidate, CANDIDATE_KINDS, candidateProblem, type Fingerprint, MAX_CANDIDATES, selectorOf, sortCandidates } from "./locators.ts";
 import type { Episode } from "./replay.ts";
 
 export const EPISODE_LIMIT = 20;
@@ -97,20 +97,23 @@ export function proposals(flow: Json, episodes: readonly Episode[]): Change[] {
     const action = step?.["action"] as Action | undefined;
     if (!action) continue;
     const current = changes.get(episode.seq)?.candidates ?? action.candidates;
-    if (episode.tier === "fingerprint" && action.fingerprint) {
-      const role: Candidate = { by: "role", value: action.fingerprint.role, name: action.fingerprint.name };
-      const rest = current.filter((candidate) => !same(candidate, role));
+    if (episode.tier === "fingerprint") {
+      const fingerprint = episode.fingerprint;
+      if (!fingerprint || !action.fingerprint || fingerprint.role !== action.fingerprint.role || fingerprint.name !== action.fingerprint.name) continue;
+      const role: Candidate = { by: "role", value: fingerprint.role, name: fingerprint.name };
+      if (current[0] && same(current[0], role)) continue;
       changes.set(episode.seq, {
         seq: episode.seq,
-        candidates: [role, ...rest].slice(0, MAX_CANDIDATES),
-        why: `its selectors stopped matching and the ${action.fingerprint.role} named "${action.fingerprint.name}" was found by role and name`,
+        candidates: [role, ...current.filter((candidate) => !same(candidate, role))].slice(0, MAX_CANDIDATES),
+        why: `its selectors stopped matching and the ${fingerprint.role} named "${fingerprint.name}" was found by role and name`,
       });
-    } else if (episode.tier === "candidate" && episode.candidate !== null && episode.candidate > 0 && episode.candidate < current.length) {
-      const winner = current[episode.candidate] as Candidate;
+    } else if ((episode.tier === "candidate" || episode.tier === "escape") && episode.matched) {
+      const winner = current.find((candidate) => same(candidate, episode.matched as Candidate));
+      if (!winner || same(current[0] as Candidate, winner)) continue;
       changes.set(episode.seq, {
         seq: episode.seq,
         candidates: [winner, ...current.filter((candidate) => !same(candidate, winner))],
-        why: `candidate ${episode.candidate + 1} matched where the first one no longer did`,
+        why: `${selectorOf(winner)} matched where the first locator no longer did`,
       });
     }
   }
@@ -130,10 +133,41 @@ export function runValues(flow: Json, episodes: readonly Episode[] = []): string
 
 export type Patch = { steps: { seq: number; candidates?: Candidate[]; selector?: string; fingerprint?: Fingerprint | null; intent?: string }[] };
 
+const PATCH_STEP_FIELDS = new Set(["seq", "candidates", "selector", "fingerprint", "intent"]);
+const PATCH_SHAPE = 'A heal patch is {"steps": [{"seq": n, "candidates": [{"by": "aria-label", "value": "…"}], "fingerprint": {"role": "…", "name": "…"}, "intent": "…"}]}';
+
+function plainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 export function parsePatch(raw: unknown): Patch {
-  if (raw === null || typeof raw !== "object" || !Array.isArray((raw as Json)["steps"])) throw new Usage('A heal patch is {"steps": [{"seq": n, "candidates": [{"by": "aria-label", "value": "…"}], "fingerprint": {"role": "…", "name": "…"}}]}');
-  for (const step of (raw as Json)["steps"]) {
-    if (step === null || typeof step !== "object" || typeof step["seq"] !== "number") throw new Usage("Each step of a heal patch names its seq (a number from `flow show`)");
+  if (!plainObject(raw) || !Array.isArray(raw["steps"]) || raw["steps"].length === 0 || Object.keys(raw).some((key) => key !== "steps")) throw new Usage(PATCH_SHAPE);
+  const seen = new Set<number>();
+  for (const [index, step] of raw["steps"].entries()) {
+    const where = `heal patch step ${index + 1}`;
+    if (!plainObject(step)) throw new Usage(`${where} isn't an object. ${PATCH_SHAPE}`);
+    const unknown = Object.keys(step).filter((key) => !PATCH_STEP_FIELDS.has(key));
+    if (unknown.length > 0) throw new Usage(`${where} has fields a patch doesn't have: ${unknown.join(", ")}`);
+    if (!Number.isInteger(step["seq"]) || (step["seq"] as number) < 1) throw new Usage(`${where} needs "seq", a step number from \`flow show\``);
+    if (seen.has(step["seq"] as number)) throw new Usage(`${where} repeats step ${step["seq"]}`);
+    seen.add(step["seq"] as number);
+    if (step["selector"] !== undefined && (typeof step["selector"] !== "string" || !step["selector"].trim())) throw new Usage(`${where} has a "selector" that isn't text`);
+    if (step["candidates"] !== undefined) {
+      if (!Array.isArray(step["candidates"]) || step["candidates"].length > MAX_CANDIDATES) throw new Usage(`${where} has "candidates" that aren't a list of up to ${MAX_CANDIDATES}`);
+      for (const candidate of step["candidates"]) {
+        if (!plainObject(candidate) || typeof candidate["by"] !== "string" || typeof candidate["value"] !== "string" || Object.keys(candidate).some((key) => !["by", "value", "tag", "name"].includes(key))) {
+          throw new Usage(`${where} has a candidate that isn't {"by": kind, "value": text}`);
+        }
+        if (!(CANDIDATE_KINDS as readonly string[]).includes(candidate["by"])) throw new Usage(`${where} has a candidate of kind ${candidate["by"]}; kinds are ${CANDIDATE_KINDS.join(", ")}`);
+        if ((candidate["tag"] !== undefined && typeof candidate["tag"] !== "string") || (candidate["name"] !== undefined && typeof candidate["name"] !== "string")) throw new Usage(`${where} has a candidate whose tag or name isn't text`);
+      }
+    }
+    const fingerprint = step["fingerprint"];
+    if (fingerprint !== undefined && fingerprint !== null && (!plainObject(fingerprint) || typeof fingerprint["role"] !== "string" || typeof fingerprint["name"] !== "string")) {
+      throw new Usage(`${where} has a "fingerprint" that isn't {"role": text, "name": text}`);
+    }
+    if (step["intent"] !== undefined && typeof step["intent"] !== "string") throw new Usage(`${where} has an "intent" that isn't text`);
+    if (step["selector"] === undefined && step["candidates"] === undefined && fingerprint === undefined && step["intent"] === undefined) throw new Usage(`${where} changes nothing`);
   }
   return raw as Patch;
 }

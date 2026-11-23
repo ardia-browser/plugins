@@ -6,7 +6,7 @@ import { Result } from "../daemon/render.ts";
 import { COMMANDS_READ_SCOPED } from "../js/index.ts";
 import { flag } from "../metrics.ts";
 import { fastResult, fetchUrl, run as fetchRun } from "../read/fetch.ts";
-import { BODY_TEXT, fastRead, pickReadable } from "../read/fastpath.ts";
+import { BODY_TEXT, fastRead, pickReadable, type Probe } from "../read/fastpath.ts";
 import { oopifText } from "../read/frames.ts";
 import * as pagedata from "../read/pagedata.ts";
 import * as pages from "../read/pages.ts";
@@ -89,7 +89,10 @@ export async function cmdRead(ctx: Ctx, argv: string[]): Promise<Result> {
     return fetchRun(urljoin(page.url, given), options, ctx.options);
   }
   if (pages.wantsPages(options, args)) return pages.run(ctx, options, args);
-  if (options["fast"] && !options["selector"]) return readFast(ctx, options);
+  if (options["fast"] && !options["selector"]) {
+    const fast = await readFast(ctx, options);
+    if (fast !== null) return fast;
+  }
   if (options["llms"] || options["require_md"] || options["http"]) {
     const page = await ctx.state.page();
     return fetchRun(page.url, options, ctx.options);
@@ -127,26 +130,29 @@ export async function cmdRead(ctx: Ctx, argv: string[]): Promise<Result> {
 
 export const FAST_PROBE_SECONDS = 4;
 
-async function readFast(ctx: Ctx, options: Record<string, unknown>): Promise<Result> {
+async function readFast(ctx: Ctx, options: Record<string, unknown>): Promise<Result | null> {
   const page = await ctx.state.page();
   await page.refreshFrames();
   const filter = (options["filter"] as string | undefined) ?? null;
-  const probe = Math.min(Number(options["timeout"] || 10000) / 1000, FAST_PROBE_SECONDS);
-  const found = /^https?:/iu.test(page.url) ? await fastRead(page.url, probe, fetchUrl, { outline: options["outline"], filter }, false) : null;
+  const seconds = Math.min(Number(options["timeout"] || 10000) / 1000, FAST_PROBE_SECONDS);
+  const probe: Probe = { tried: [], binary: null };
+  const found = /^https?:/iu.test(page.url) ? await fastRead(page.url, seconds, fetchUrl, { outline: options["outline"], filter }, false, probe) : null;
   if (found !== null) {
     flag("read_fast_doc", true);
     return fastResult(page.url, found);
   }
+  if (probe.binary !== null || (await pageIsPdf(page))) return null;
   const frame = frameOrMain(ctx, page);
   const nav = Boolean(options["nav"]);
   const read = record(await page.call("(nav) => ardiaBrowse.readPage(nav)", [nav], { frame, read: true }));
   const visible = String((await page.call(BODY_TEXT, [], { frame, read: true })) ?? "");
   const picked = pickReadable(String(read["text"] ?? ""), visible);
   if (picked.method === "raw") flag("read_fast_raw", true);
+  const tried = [...probe.tried, "readability", ...(picked.method === "raw" ? ["raw"] : [])];
   const content = postProcess(picked.content, options);
   const note = `[read via ${picked.method} from the tab, ${Math.round(picked.kept * 100)}% of the visible text kept by the reader]`;
   return new Result(
-    { content, contentType: "text/html", finalUrl: page.url, method: picked.method, source: "active-tab-html", retained: Math.round(picked.kept * 1000) / 1000, truncated: false, url: page.url },
+    { content, contentType: "text/html", finalUrl: page.url, method: picked.method, source: "active-tab-html", tried, retained: Math.round(picked.kept * 1000) / 1000, truncated: false, url: page.url },
     content ? `${content}\n${note}` : note,
     true,
   );

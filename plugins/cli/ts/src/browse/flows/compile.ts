@@ -1,4 +1,5 @@
 import { codePoints } from "../../pystr.ts";
+import { literalOk } from "../flowurl.ts";
 import { type Action, candidateArgv, fingerprintArgv } from "./actions.ts";
 import { type Descriptor, fingerprintOf, intentOf, rankCandidates } from "./locators.ts";
 
@@ -101,7 +102,7 @@ export function compileEvents(given: readonly RecEvent[], startUrl: string): Com
     let name = hint;
     let number = 2;
     while (taken.has(name)) name = `${hint.slice(0, 21)}_${number++}`;
-    params.push({ name, example: secret ? null : value, source: secret ? "secret" : "typed" });
+    params.push({ name, example: secret || !literalOk(value) ? null : value, source: secret ? "secret" : "typed" });
     return `{{${name}}}`;
   };
   const enterFrame = (event: RecEvent) => {
@@ -188,5 +189,6 @@ export function compileEvents(given: readonly RecEvent[], startUrl: string): Com
     }
   }
   if (frame !== null) push({ type: "frame", intent: "go back to the main page", candidates: [], fingerprint: null, argv: ["frame", "main"] });
+  if (steps.some((step) => step.action.type !== "open" && step.action.type !== "frame")) writes = true;
   return { steps, params, writes, skipped, hosts: [...hosts].sort() };
 }

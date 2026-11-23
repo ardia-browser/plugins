@@ -2,6 +2,7 @@ import { HTMLParser } from "../../pylib/htmlparser.ts";
 import { pyStrip } from "../../pylib/str.ts";
 import { urljoin, urlsplit, urlunsplit } from "../../pylib/urllib.ts";
 import { BrowseError } from "../daemon-errors.ts";
+import { type HopGuard, hopGuard, type Resolver } from "./netguard.ts";
 import { collapseSpaces, extractHtml, llmsCandidates, llmsHrefs, llmsLinks, MARKDOWN_TYPES, postProcess, sameDocument } from "./readurl.ts";
 
 export const ARD_PATH = "/.well-known/ard.json";
@@ -11,7 +12,7 @@ export const MIN_VISIBLE = 200;
 export const ARD_ENTRIES = 200;
 export type Method = "markdown" | "llms_txt" | "ard" | "readability" | "raw";
 export type Fetched = [number, string, string, string, Uint8Array?];
-export type Fetcher = (url: string, timeout: number, accept: string, binary: "refuse" | "keep" | "skip") => Promise<Fetched>;
+export type Fetcher = (url: string, timeout: number, accept: string, binary: "refuse" | "keep" | "skip", guard: HopGuard | null) => Promise<Fetched>;
 export type FastResult = { content: string; method: Method; source: string; finalUrl: string; title: string; tried: string[]; contentType: string };
 
 const RAW_SKIP = new Set(["script", "style", "noscript", "template", "svg", "head"]);
@@ -56,6 +57,7 @@ export function retention(readable: string, visible: string): number {
 
 export function pickReadable(readable: string, visible: string): { content: string; method: "readability" | "raw"; kept: number } {
   const kept = retention(readable, visible);
+  if (visibleLength(readable) === 0 && visibleLength(visible) > 0) return { content: visible, method: "raw", kept };
   if (visibleLength(visible) >= MIN_VISIBLE && kept < RETENTION_FLOOR) return { content: visible, method: "raw", kept };
   return { content: readable, method: "readability", kept };
 }
@@ -147,9 +149,26 @@ export function ardEntryFor(doc: ArdDocument, page: string): ArdEntry | null {
   return doc.entries.find((entry) => canonical(entry.url) === wanted && entry.markdown !== null) ?? null;
 }
 
-async function quiet(fetcher: Fetcher, url: string, timeout: number, accept: string): Promise<Fetched | null> {
+export function markdownSibling(url: string): string | null {
+  let parsed: URL;
   try {
-    const got = await fetcher(url, timeout, accept, "skip");
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+  if (parsed.pathname.endsWith(".md")) return null;
+  parsed.search = "";
+  parsed.hash = "";
+  parsed.pathname = parsed.pathname.endsWith("/") ? `${parsed.pathname}index.md` : `${parsed.pathname}.md`;
+  return parsed.href;
+}
+
+export type Probe = { tried: string[]; binary: string | null };
+
+async function quiet(fetcher: Fetcher, url: string, timeout: number, accept: string, guard: HopGuard): Promise<Fetched | null> {
+  try {
+    const got = await fetcher(url, timeout, accept, "skip", guard);
     return got[0] === 200 && got[4] === undefined ? got : null;
   } catch (error) {
     if (error instanceof BrowseError) return null;
@@ -163,23 +182,42 @@ function done(result: Omit<FastResult, "content"> & { content: string }, options
   return { ...result, content: postProcess(result.content, { outline: options.outline, filter: options.filter ?? null }) };
 }
 
-export async function fastRead(url: string, timeout: number, fetcher: Fetcher, options: FastOptions = {}, htmlFallback = true): Promise<FastResult | null> {
-  const tried: string[] = [];
+export async function fastRead(
+  url: string,
+  timeout: number,
+  fetcher: Fetcher,
+  options: FastOptions = {},
+  htmlFallback = true,
+  probe: Probe = { tried: [], binary: null },
+  resolve?: Resolver,
+): Promise<FastResult | null> {
+  const tried = probe.tried;
+  const guard = hopGuard(url, resolve);
   tried.push("markdown");
-  const first = await quiet(fetcher, url, timeout, MARKDOWN_ACCEPT);
+  let first: Fetched | null = null;
+  try {
+    const got = await fetcher(url, timeout, MARKDOWN_ACCEPT, "skip", guard);
+    if (got[0] === 200 && got[4] !== undefined) {
+      probe.binary = got[1] || "application/octet-stream";
+      return null;
+    }
+    first = got[0] === 200 ? got : null;
+  } catch (error) {
+    if (!(error instanceof BrowseError)) throw error;
+  }
   if (first && isMarkdown(first[1], first[2])) {
     return done({ content: first[2], method: "markdown", source: first[3], finalUrl: first[3], title: "", tried, contentType: first[1] || "text/markdown" }, options);
   }
   const final = first ? first[3] : url;
-  if (!urlsplit(final).path.endsWith(".md")) {
-    const sibling = `${final.replace(/[?#].*$/u, "").replace(/\/+$/u, "")}.md`;
-    const md = await quiet(fetcher, sibling, timeout, MARKDOWN_ACCEPT);
+  const sibling = markdownSibling(final);
+  if (sibling !== null) {
+    const md = await quiet(fetcher, sibling, timeout, MARKDOWN_ACCEPT, guard);
     if (md && isMarkdown(md[1], md[2])) return done({ content: md[2], method: "markdown", source: md[3], finalUrl: final, title: "", tried, contentType: "text/markdown" }, options);
   }
   tried.push("llms_txt");
   let llms: [string, string] | null = null;
   for (const candidate of llmsCandidates(final)) {
-    const got = await quiet(fetcher, candidate, timeout, "text/plain, text/markdown");
+    const got = await quiet(fetcher, candidate, timeout, "text/plain, text/markdown", guard);
     if (got && got[2] && !got[2].slice(0, 500).toLowerCase().includes("<html")) {
       llms = [got[3], got[2]];
       break;
@@ -190,8 +228,8 @@ export async function fastRead(url: string, timeout: number, fetcher: Fetcher, o
     for (const href of llmsHrefs(body)) {
       const target = urljoin(source, href);
       if (!sameDocument(target, final)) continue;
-      const md = await quiet(fetcher, target, timeout, MARKDOWN_ACCEPT);
-      if (md && md[2]) return done({ content: md[2], method: "llms_txt", source: md[3], finalUrl: final, title: "", tried, contentType: "text/markdown" }, options);
+      const md = await quiet(fetcher, target, timeout, MARKDOWN_ACCEPT, guard);
+      if (md && md[2] && isMarkdown(md[1] || "text/markdown", md[2])) return done({ content: md[2], method: "llms_txt", source: md[3], finalUrl: final, title: "", tried, contentType: "text/markdown" }, options);
     }
     if (atRoot(final)) {
       const content = options.outline ? body : llmsLinks(body, source, options.filter ?? null).join("\n") || body;
@@ -200,25 +238,25 @@ export async function fastRead(url: string, timeout: number, fetcher: Fetcher, o
   }
   tried.push("ard");
   const ardUrl = `${rootOf(final)}${ARD_PATH}`;
-  const ard = await quiet(fetcher, ardUrl, timeout, "application/json");
+  const ard = await quiet(fetcher, ardUrl, timeout, "application/json", guard);
   const doc = ard ? parseArd(ard[2], ard[3]) : null;
   if (doc !== null) {
     const entry = ardEntryFor(doc, final);
     if (entry?.markdown) {
-      const md = await quiet(fetcher, entry.markdown, timeout, MARKDOWN_ACCEPT);
-      if (md && md[2]) return done({ content: md[2], method: "ard", source: md[3], finalUrl: final, title: entry.title, tried, contentType: "text/markdown" }, options);
+      const md = await quiet(fetcher, entry.markdown, timeout, MARKDOWN_ACCEPT, guard);
+      if (md && md[2] && isMarkdown(md[1] || "text/markdown", md[2])) return done({ content: md[2], method: "ard", source: md[3], finalUrl: final, title: entry.title, tried, contentType: "text/markdown" }, options);
     }
     if (atRoot(final) && (doc.entries.length > 0 || doc.description)) {
       if (doc.markdown) {
-        const md = await quiet(fetcher, doc.markdown, timeout, MARKDOWN_ACCEPT);
-        if (md && md[2]) return done({ content: md[2], method: "ard", source: md[3], finalUrl: final, title: doc.name, tried, contentType: "text/markdown" }, options);
+        const md = await quiet(fetcher, doc.markdown, timeout, MARKDOWN_ACCEPT, guard);
+        if (md && md[2] && isMarkdown(md[1] || "text/markdown", md[2])) return done({ content: md[2], method: "ard", source: md[3], finalUrl: final, title: doc.name, tried, contentType: "text/markdown" }, options);
       }
       return done({ content: ardIndex(doc), method: "ard", source: ard?.[3] ?? ardUrl, finalUrl: final, title: doc.name, tried, contentType: "text/markdown" }, options);
     }
   }
   if (!htmlFallback) return null;
   tried.push("readability");
-  const page = first ?? (await quiet(fetcher, url, timeout, "text/html, */*;q=0.5"));
+  const page = first ?? (await quiet(fetcher, url, timeout, "text/html, */*;q=0.5", guard));
   if (page === null) return null;
   if (page[1] !== "text/html" && page[1] !== "application/xhtml+xml") {
     return done({ content: page[2], method: "raw", source: page[3], finalUrl: page[3], title: "", tried, contentType: page[1] }, options);

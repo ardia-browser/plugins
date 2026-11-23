@@ -12,7 +12,8 @@ import { checkArgs, invokeExpression, isConsequential, listingText, normalizeToo
 
 function site(pages: Record<string, { type: string; body: string } | undefined>): { fetcher: Fetcher; asked: string[] } {
   const asked: string[] = [];
-  const fetcher: Fetcher = async (url, _timeout, accept) => {
+  const fetcher: Fetcher = async (url, _timeout, accept, _binary, guard) => {
+    if (guard && !(await guard(url))) throw new BrowseError(`refused ${url}`, null, "unsafe_address");
     asked.push(`${url} ${accept.split(",")[0]}`);
     const page = pages[`${url} ${accept.split(",")[0]}`] ?? pages[url];
     if (!page) return [404, "", "", url] as Fetched;
@@ -44,7 +45,7 @@ describe("documentation fast path", () => {
         mdCalls += 1;
         return mdCalls === 1 ? ([404, "", "", url] as Fetched) : ([200, "text/markdown", "# Guide from llms", url] as Fetched);
       }
-      return viaLlms.fetcher(url, timeout, accept, binary);
+      return viaLlms.fetcher(url, timeout, accept, binary, null);
     };
     const found = await fastRead("https://docs.example.com/guide", 2, fetcher, { filter: "guide" });
     expect(found?.method).toBe("llms_txt");
@@ -121,10 +122,12 @@ describe("site tools", () => {
     const tools = normalizeTools(raw);
     expect(tools.map((tool) => tool.name)).toEqual(["search_products", "delete_cart_item", "add_note"]);
     expect(tools.map((tool) => tool.consequential)).toEqual([false, true, true]);
-    expect(signatureOf(tools[0]!)).toBe("search_products(query: string, limit?: integer) [read-only]");
+    expect(signatureOf(tools[0]!)).toBe("search_products(query: string, limit?: integer) [page says read-only]");
     expect(signatureOf(tools[1]!)).toBe("delete_cart_item(id: string) [CONSEQUENTIAL]");
     expect(isConsequential("checkout", null)).toBe(true);
-    expect(isConsequential("checkout", { readOnlyHint: true })).toBe(false);
+    expect(isConsequential("checkout", { readOnlyHint: true })).toBe(true);
+    expect(isConsequential("delete_account", { readOnlyHint: true })).toBe(true);
+    expect(isConsequential("lookup", { readOnlyHint: true })).toBe(false);
     expect(isConsequential("lookup", null)).toBe(false);
     expect(isConsequential("emptyCart", null)).toBe(true);
     expect(isConsequential("settings_lookup", null)).toBe(false);
@@ -169,10 +172,11 @@ describe("site tools", () => {
     const probed = await vm.runInContext(PROBE, context);
     expect(normalizeTools(probed).map((tool) => tool.name)).toEqual(["lookup"]);
     expect(calls).toEqual([]);
-    const answer = await vm.runInContext(invokeExpression("lookup", { q: "x" }), context);
+    const [tool] = normalizeTools(probed);
+    const answer = await vm.runInContext(invokeExpression("lookup", { q: "x" }, tool!.source, tool!.fingerprint), context);
     expect(answer).toEqual({ via: "document.modelContext", result: { content: [{ type: "text", text: "found" }] } });
     expect(calls).toEqual([{ q: "x" }]);
-    expect(await vm.runInContext(invokeExpression("missing", {}), context)).toEqual({ missing: true });
+    expect(await vm.runInContext(invokeExpression("missing", {}, tool!.source, tool!.fingerprint), context)).toEqual({ missing: true });
   });
 
   test("the testing API is preferred when the browser has it", async () => {
@@ -187,9 +191,36 @@ describe("site tools", () => {
       },
     };
     const context = vm.createContext({ document: { querySelectorAll: () => [] }, navigator, setTimeout, Promise, JSON, Map, Array, Object });
-    expect(normalizeTools(await vm.runInContext(PROBE, context))[0]?.source).toBe("navigator.modelContextTesting");
-    expect(await vm.runInContext(invokeExpression("t1", { a: 1 }), context)).toEqual({ via: "navigator.modelContextTesting", result: { content: [{ type: "text", text: "ok" }] } });
+    const [tool] = normalizeTools(await vm.runInContext(PROBE, context));
+    expect(tool?.source).toBe("navigator.modelContextTesting");
+    expect(await vm.runInContext(invokeExpression("t1", { a: 1 }, tool!.source, tool!.fingerprint), context)).toEqual({ via: "navigator.modelContextTesting", result: { content: [{ type: "text", text: "ok" }] } });
     expect(executed).toEqual([["t1", '{"a":1}']]);
+  });
+
+  test("a call goes only through the provider that was approved, and refuses a tool that changed since", async () => {
+    const calls: string[] = [];
+    const document = {
+      modelContext: { tools: new Map<string, unknown>([["lookup", { description: "page copy", execute: async () => { calls.push("document"); return "from document"; } }]]) },
+      querySelectorAll: () => [],
+    };
+    const navigator = {
+      modelContextTesting: {
+        listTools: async () => [{ name: "lookup", description: "browser copy" }],
+        executeTool: async () => {
+          calls.push("testing");
+          return "from testing";
+        },
+      },
+    };
+    const context = vm.createContext({ document, navigator, setTimeout, Promise, JSON, Map, Array, Object });
+    const [listed] = normalizeTools(await vm.runInContext(PROBE, context));
+    expect(listed?.source).toBe("navigator.modelContextTesting");
+    const approvedDocument = JSON.stringify(["lookup", "page copy", null, null, "document.modelContext"]);
+    expect(await vm.runInContext(invokeExpression("lookup", {}, "document.modelContext", approvedDocument), context)).toEqual({ via: "document.modelContext", result: "from document" });
+    expect(calls).toEqual(["document"]);
+    (document.modelContext.tools.get("lookup") as { description: string }).description = "now deletes everything";
+    expect(await vm.runInContext(invokeExpression("lookup", {}, "document.modelContext", approvedDocument), context)).toEqual({ changed: true });
+    expect(calls).toEqual(["document"]);
   });
 });
 
@@ -218,7 +249,7 @@ describe("record", () => {
     const dupes = rankCandidates({ tag: "input", fieldName: "stock", css: 'input[name="stock"]' });
     expect(dupes).toEqual([{ by: "name", value: "stock", tag: "input" }]);
     expect(JSON.stringify(compiled)).not.toMatch(/@e[0-9]/u);
-    expect(compiled.writes).toBe(false);
+    expect(compiled.writes).toBe(true);
   });
 
   test("a password is a param with no value, a POST form marks the flow as writing, and an uncaused navigation is an open", () => {
@@ -297,6 +328,6 @@ describe("record", () => {
     vm.runInContext("var globalThis = this;", context);
     vm.runInContext(RECORDER_SOURCE, context);
     vm.runInContext(RECORDER_SOURCE, context);
-    expect(listeners).toEqual(["input", "change", "click", "keydown", "submit"]);
+    expect(listeners).toEqual(["focusin", "input", "change", "click", "keydown", "submit"]);
   });
 });

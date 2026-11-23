@@ -1,4 +1,4 @@
-import { sleep } from "../cdp/cancel.ts";
+import { sleep, withSignal } from "../cdp/cancel.ts";
 import { BrowseError, ConnectionLost, Usage } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
 import { pyValue } from "../daemon/render.ts";
@@ -25,6 +25,7 @@ export const DEFAULT_IDLE = 20;
 export const MAX_EVENTS = 500;
 export const MAX_PAYLOAD = 16 * 1024;
 const POLL = 0.2;
+export const FLUSH_GRACE = 0.15;
 export const FLAGS = { "--save": "value", "--timeout": "value", "--idle": "value", "--here": "bool", "--description": "value" } as const;
 
 export const RECORDER_SOURCE = `(() => {
@@ -112,7 +113,14 @@ export const RECORDER_SOURCE = `(() => {
       return { css: null, url: location.href };
     }
   };
-  const secret = (el) => el.localName === "input" && (el.type === "password" || /one-time-code|cc-|password/.test(el.autocomplete || ""));
+  const sensitive = new WeakSet();
+  const secret = (el) => {
+    if (sensitive.has(el)) return true;
+    const hint = [el.getAttribute("autocomplete"), el.getAttribute("name"), el.id, el.getAttribute("aria-label"), el.getAttribute("placeholder")].join(" ");
+    const hidden = (el.localName === "input" && el.type === "password") || /one-time-code|cc-|password|passcode|\\bpin\\b|otp|cvv|cvc|card.?num|ssn|secret|token/i.test(hint);
+    if (hidden) sensitive.add(el);
+    return hidden;
+  };
   const textual = (el) => (el.localName === "input" && !["checkbox", "radio", "submit", "button", "reset", "image", "file", "range", "color"].includes(el.type)) || el.localName === "textarea" || Boolean(el.isContentEditable);
   const emit = (event) => { try { send(JSON.stringify({ ...event, at: Date.now(), frame: frameInfo() })); } catch {} };
   const pending = new Set();
@@ -123,7 +131,8 @@ export const RECORDER_SOURCE = `(() => {
     emit({ kind: "fill", target: describe(el), value: hidden ? "" : String(el.isContentEditable ? el.innerText : el.value ?? "").slice(0, 2000), secret: hidden });
   };
   const flushAll = () => { for (const el of [...pending]) flush(el); };
-  const onInput = (event) => { if (!event.isTrusted) return; const el = targetOf(event); if (el && textual(el)) pending.add(el); };
+  const onInput = (event) => { if (!event.isTrusted) return; const el = targetOf(event); if (el && textual(el)) { secret(el); pending.add(el); } };
+  const onFocus = (event) => { const el = targetOf(event); if (el && textual(el)) secret(el); };
   const onChange = (event) => {
     if (!event.isTrusted) return;
     const el = event.target;
@@ -154,7 +163,7 @@ export const RECORDER_SOURCE = `(() => {
     emit({ kind: "submit", target: form && form.nodeType === 1 ? describe(form) : null, method: form && form.getAttribute ? (form.getAttribute("method") || "get").toLowerCase() : "get" });
   };
   const options = { capture: true, passive: true };
-  const listeners = [["input", onInput], ["change", onChange], ["click", onClick], ["keydown", onKey], ["submit", onSubmit]];
+  const listeners = [["focusin", onFocus], ["input", onInput], ["change", onChange], ["click", onClick], ["keydown", onKey], ["submit", onSubmit]];
   for (const [name, listener] of listeners) addEventListener(name, listener, options);
   globalThis.__ardiaRecorderStop = () => {
     flushAll();
@@ -259,23 +268,41 @@ async function installIn(page: Page, frame: string): Promise<number> {
   return context;
 }
 
+export type Teardown = { identifier: string | null; binding: boolean; contexts: Set<number>; closed: boolean };
+
+export async function teardown(page: Page, installed: Teardown, settle: () => Promise<void> = async () => {}): Promise<void> {
+  if (installed.closed) return;
+  await withSignal(null, async () => {
+    const quietly = async (method: string, params: Record<string, unknown>) => {
+      try {
+        await page.send(method, params);
+      } catch {
+        return;
+      }
+    };
+    for (const context of installed.contexts) await quietly("Runtime.evaluate", { expression: STOP_SOURCE, contextId: context, returnByValue: true });
+    await settle();
+    if (installed.identifier !== null) await quietly("Page.removeScriptToEvaluateOnNewDocument", { identifier: installed.identifier });
+    if (installed.binding) await quietly("Runtime.removeBinding", { name: BINDING });
+  });
+}
+
 export async function capture(ctx: Ctx, page: Page, timeout: number, idle: number): Promise<{ events: RecEvent[]; startUrl: string; stoppedBy: string }> {
   const state = ctx.state;
   const startUrl = page.url;
   const events: RecEvent[] = [];
   let lastAt = monotonic();
-  let closed = false;
-  const contexts = new Set<number>();
+  const installed: Teardown = { identifier: null, binding: false, contexts: new Set<number>(), closed: false };
   const listener: Listener = (source, method, params) => {
     if (source !== page) {
-      if (source === null && method === "Target.targetDestroyed" && params["targetId"] === page.targetId) closed = true;
+      if (source === null && method === "Target.targetDestroyed" && params["targetId"] === page.targetId) installed.closed = true;
       return;
     }
     if (method === "Runtime.executionContextCreated") {
       const context = params["context"] as Record<string, unknown> | undefined;
-      if (context && context["name"] === RECORD_WORLD && typeof context["id"] === "number") contexts.add(context["id"]);
+      if (context && context["name"] === RECORD_WORLD && typeof context["id"] === "number") installed.contexts.add(context["id"]);
     } else if (method === "Runtime.bindingCalled" && params["name"] === BINDING) {
-      if (typeof params["executionContextId"] === "number") contexts.add(params["executionContextId"]);
+      if (typeof params["executionContextId"] === "number") installed.contexts.add(params["executionContextId"]);
       const event = parseEvent(params["payload"]);
       if (event !== null && events.length < MAX_EVENTS) {
         events.push(event);
@@ -284,26 +311,28 @@ export async function capture(ctx: Ctx, page: Page, timeout: number, idle: numbe
     } else if (method === "Page.frameNavigated") {
       const frame = params["frame"] as Record<string, unknown> | undefined;
       if (frame && !frame["parentId"] && typeof frame["url"] === "string" && events.length < MAX_EVENTS) events.push({ kind: "navigate", at: Date.now(), url: frame["url"] });
-    } else if (method === "Inspector.detached" || method === "Inspector.targetCrashed") closed = true;
+    } else if (method === "Inspector.detached" || method === "Inspector.targetCrashed") installed.closed = true;
   };
-  await page.enableRuntime();
-  await page.send("Runtime.addBinding", { name: BINDING, executionContextName: RECORD_WORLD });
-  const added = await page.send("Page.addScriptToEvaluateOnNewDocument", { source: RECORDER_SOURCE, worldName: RECORD_WORLD });
-  const identifier = typeof added["identifier"] === "string" ? added["identifier"] : null;
   state.listeners.push(listener);
   let stoppedBy = "timeout";
   try {
+    await page.enableRuntime();
+    await page.send("Runtime.addBinding", { name: BINDING, executionContextName: RECORD_WORLD });
+    installed.binding = true;
+    const added = await page.send("Page.addScriptToEvaluateOnNewDocument", { source: RECORDER_SOURCE, worldName: RECORD_WORLD });
+    installed.identifier = typeof added["identifier"] === "string" ? added["identifier"] : null;
     await page.refreshFrames();
     for (const frame of page.frames.keys()) {
       try {
-        contexts.add(await installIn(page, frame));
+        installed.contexts.add(await installIn(page, frame));
       } catch (error) {
         if (error instanceof ConnectionLost) throw error;
       }
     }
     const deadline = monotonic() + timeout;
     for (;;) {
-      if (closed) {
+      if (installed.closed || page.crashed) {
+        installed.closed = true;
         stoppedBy = "the tab closed";
         break;
       }
@@ -316,27 +345,11 @@ export async function capture(ctx: Ctx, page: Page, timeout: number, idle: numbe
       await sleep(POLL);
     }
   } finally {
-    const at = state.listeners.indexOf(listener);
-    if (at >= 0) state.listeners.splice(at, 1);
-    if (!closed) {
-      for (const [method, params] of [
-        ["Page.removeScriptToEvaluateOnNewDocument", identifier ? { identifier } : null],
-        ["Runtime.removeBinding", { name: BINDING }],
-      ] as const) {
-        if (params === null) continue;
-        try {
-          await page.send(method, params as Record<string, unknown>);
-        } catch (error) {
-          if (error instanceof ConnectionLost) throw error;
-        }
-      }
-      for (const context of contexts) {
-        try {
-          await page.send("Runtime.evaluate", { expression: STOP_SOURCE, contextId: context, returnByValue: true });
-        } catch (error) {
-          if (error instanceof ConnectionLost) throw error;
-        }
-      }
+    try {
+      await teardown(page, installed, () => withSignal(null, () => sleep(FLUSH_GRACE, null)));
+    } finally {
+      const at = state.listeners.indexOf(listener);
+      if (at >= 0) state.listeners.splice(at, 1);
     }
   }
   return { events, startUrl, stoppedBy };

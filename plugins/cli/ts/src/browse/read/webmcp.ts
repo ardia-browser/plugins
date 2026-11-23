@@ -14,7 +14,16 @@ const CONSEQUENTIAL_WORDS = new Set([
 const TYPES = new Set(["string", "number", "integer", "boolean", "object", "array", "null"]);
 
 export type ToolParam = { name: string; type: string; required: boolean; description: string };
-export type SiteTool = { name: string; description: string; params: ToolParam[]; readOnly: boolean; consequential: boolean; source: string; schema: Record<string, unknown> | null };
+export type SiteTool = {
+  name: string;
+  description: string;
+  params: ToolParam[];
+  readOnly: boolean;
+  consequential: boolean;
+  source: string;
+  schema: Record<string, unknown> | null;
+  fingerprint: string;
+};
 
 function clip(text: unknown, limit: number): string {
   if (typeof text !== "string") return "";
@@ -61,10 +70,7 @@ export function paramsOf(schema: Record<string, unknown> | null): ToolParam[] {
 }
 
 export function isConsequential(name: string, annotations: Record<string, unknown> | null): boolean {
-  if (annotations !== null) {
-    if (annotations["destructiveHint"] === true || annotations["consequential"] === true || annotations["requiresUserConfirmation"] === true) return true;
-    if (annotations["readOnlyHint"] === true) return false;
-  }
+  if (annotations !== null && (annotations["destructiveHint"] === true || annotations["consequential"] === true || annotations["requiresUserConfirmation"] === true)) return true;
   return wordsOf(name).some((word) => CONSEQUENTIAL_WORDS.has(word));
 }
 
@@ -96,6 +102,7 @@ export function normalizeTools(raw: unknown): SiteTool[] {
       consequential: isConsequential(name, annotations),
       source: clip(tool["source"], 40) || "page",
       schema,
+      fingerprint: typeof tool["fingerprint"] === "string" ? (tool["fingerprint"] as string) : "",
     });
     if (out.length >= MAX_TOOLS) break;
   }
@@ -104,7 +111,7 @@ export function normalizeTools(raw: unknown): SiteTool[] {
 
 export function signatureOf(tool: SiteTool): string {
   const params = tool.params.map((param) => `${param.name}${param.required ? "" : "?"}: ${param.type}`).join(", ");
-  const marks = [tool.consequential ? "[CONSEQUENTIAL]" : "", tool.readOnly ? "[read-only]" : ""].filter((mark) => mark).join(" ");
+  const marks = [tool.consequential ? "[CONSEQUENTIAL]" : "", tool.readOnly ? "[page says read-only]" : ""].filter((mark) => mark).join(" ");
   return `${tool.name}(${params})${marks ? ` ${marks}` : ""}`;
 }
 
@@ -122,7 +129,7 @@ export function listingText(tools: readonly SiteTool[], origin: string): string 
     lines.push(`${signatureOf(tool)}${tool.description ? `\n    ${tool.description}` : ""}`);
     for (const param of tool.params) if (param.description) lines.push(`    ${param.name}: ${param.description}`);
   }
-  lines.push("→ ardia browse tool <name> '{\"arg\": \"value\"}' (a [CONSEQUENTIAL] tool also needs --yes)");
+  lines.push("→ ardia browse tool <name> '{\"arg\": \"value\"}' --yes (every call runs the page's own code, so it needs --yes; ask the user first for a [CONSEQUENTIAL] one)");
   return lines.join("\n");
 }
 
@@ -185,102 +192,100 @@ export function failedOutput(value: unknown): boolean {
   return record(value)?.["isError"] === true;
 }
 
-export const PROBE = `(async () => {
-  const out = { api: [], tools: [] };
+export const COLLECT = `async (only) => {
+  const found = [];
   const seen = new Set();
   const plain = (value) => { try { return value === undefined || value === null ? null : JSON.parse(JSON.stringify(value)); } catch { return null; } };
-  const add = (tool, source) => {
-    if (!tool || typeof tool !== "object" || out.tools.length >= ${MAX_TOOLS}) return;
+  const within = (promise) => Promise.race([promise, new Promise((done) => setTimeout(() => done(null), 1500))]);
+  const add = (tool, source, call) => {
+    if (!tool || typeof tool !== "object" || found.length >= ${MAX_TOOLS}) return;
     const name = typeof tool.name === "string" ? tool.name : "";
     if (!name || seen.has(name)) return;
     seen.add(name);
-    out.tools.push({ name, description: typeof tool.description === "string" ? tool.description.slice(0, 600) : "", inputSchema: plain(tool.inputSchema ?? tool.input_schema ?? tool.parameters ?? null), annotations: plain(tool.annotations ?? null), source });
+    const entry = { name, description: typeof tool.description === "string" ? tool.description.slice(0, 600) : "", inputSchema: plain(tool.inputSchema ?? tool.input_schema ?? tool.parameters ?? null), annotations: plain(tool.annotations ?? null), source };
+    entry.fingerprint = JSON.stringify([entry.name, entry.description, entry.inputSchema, entry.annotations, entry.source]);
+    found.push({ entry, call });
   };
-  const within = (promise) => Promise.race([promise, new Promise((done) => setTimeout(() => done(null), 1500))]);
-  const list = async (holder, label) => {
-    if (!holder || (typeof holder !== "object" && typeof holder !== "function")) return;
-    out.api.push(label);
+  const itemsOf = async (holder) => {
     for (const key of ["listTools", "getTools"]) {
       if (typeof holder[key] !== "function") continue;
-      try {
-        const got = await within(holder[key]());
-        const items = Array.isArray(got) ? got : got && Array.isArray(got.tools) ? got.tools : [];
-        for (const item of items) add(item, label);
-      } catch {}
-      return;
+      const got = await within(holder[key]());
+      return Array.isArray(got) ? got : got && Array.isArray(got.tools) ? got.tools : [];
     }
     const tools = holder.tools ?? holder.registeredTools;
-    if (tools instanceof Map) for (const [key, item] of tools) add(item && typeof item === "object" && !item.name ? { ...item, name: String(key) } : item, label);
-    else if (Array.isArray(tools)) for (const item of tools) add(item, label);
-    else if (tools && typeof tools === "object") for (const [key, item] of Object.entries(tools)) add(item && typeof item === "object" && !item.name ? { ...item, name: key } : item, label);
+    if (tools instanceof Map) return [...tools].map(([key, item]) => (item && typeof item === "object" && !item.name ? { ...item, name: String(key) } : item));
+    if (Array.isArray(tools)) return tools;
+    if (tools && typeof tools === "object") return Object.entries(tools).map(([key, item]) => (item && typeof item === "object" && !item.name ? { ...item, name: key } : item));
+    return [];
   };
-  let nav = null;
-  try { nav = navigator; } catch {}
-  try { await list(nav && nav.modelContextTesting, "navigator.modelContextTesting"); } catch {}
-  try { await list(document.modelContext, "document.modelContext"); } catch {}
-  try { await list(nav && nav.modelContext, "navigator.modelContext"); } catch {}
-  try {
-    for (const form of document.querySelectorAll("form[toolname]")) {
-      const properties = {};
-      const required = [];
-      for (const field of form.elements) {
-        if (!field.name || ["submit", "button", "reset", "hidden", "file", "password"].includes(field.type)) continue;
-        const type = field.type === "number" || field.type === "range" ? "number" : field.type === "checkbox" ? "boolean" : "string";
-        properties[field.name] = { type, description: field.getAttribute("toolparamdescription") || field.getAttribute("aria-label") || field.placeholder || "" };
-        if (field.required) required.push(field.name);
-      }
-      add({ name: form.getAttribute("toolname"), description: form.getAttribute("tooldescription") || "", inputSchema: { type: "object", properties, required }, annotations: { readOnlyHint: (form.getAttribute("method") || "get").toLowerCase() === "get" } }, "form");
-    }
-  } catch {}
-  return out;
-})()`;
-
-export function invokeExpression(name: string, args: unknown): string {
-  return `(async (name, args) => {
-  const plain = (value) => { try { return value === undefined ? null : JSON.parse(JSON.stringify(value)); } catch { return String(value); } };
   let nav = null;
   try { nav = navigator; } catch {}
   const testing = nav && nav.modelContextTesting;
-  if (testing && typeof testing.executeTool === "function") {
-    const result = await testing.executeTool(name, JSON.stringify(args));
-    let value = result;
-    if (typeof result === "string") { try { value = JSON.parse(result); } catch {} }
-    return { via: "navigator.modelContextTesting", result: plain(value) };
-  }
-  const holders = [["document.modelContext", document.modelContext], ["navigator.modelContext", nav && nav.modelContext]];
-  for (const [label, holder] of holders) {
-    if (!holder) continue;
-    for (const key of ["executeTool", "callTool", "invokeTool"]) {
-      if (typeof holder[key] === "function") return { via: label, result: plain(await holder[key](name, args)) };
-    }
-    let items = [];
+  if (testing && (!only || only === "navigator.modelContextTesting")) {
     try {
-      if (typeof holder.listTools === "function") items = await holder.listTools();
-      else if (typeof holder.getTools === "function") items = await holder.getTools();
-      else if (holder.tools instanceof Map) items = [...holder.tools].map(([key, item]) => (item && !item.name ? { ...item, name: String(key) } : item));
-      else if (Array.isArray(holder.tools)) items = holder.tools;
-      else if (holder.tools && typeof holder.tools === "object") items = Object.entries(holder.tools).map(([key, item]) => (item && !item.name ? { ...item, name: key } : item));
+      for (const item of await itemsOf(testing)) {
+        add(item, "navigator.modelContextTesting", async (name, args) => {
+          const result = await testing.executeTool(name, JSON.stringify(args));
+          if (typeof result !== "string") return result;
+          try { return JSON.parse(result); } catch { return result; }
+        });
+      }
     } catch {}
-    const tool = (Array.isArray(items) ? items : []).find((item) => item && item.name === name);
-    if (tool && typeof tool.execute === "function") {
-      const client = { requestUserInteraction: async () => { throw new Error("this tool asked for user interaction, which the ardia command doesn't give"); } };
-      return { via: label, result: plain(await tool.execute(args, client)) };
-    }
   }
-  const form = [...document.querySelectorAll("form[toolname]")].find((item) => item.getAttribute("toolname") === name);
-  if (form) {
-    for (const [key, value] of Object.entries(args || {})) {
-      const field = form.elements.namedItem(key);
-      if (!field || field.type === "file" || field.type === "password") continue;
-      if (field.type === "checkbox") field.checked = Boolean(value);
-      else field.value = String(value);
-      field.dispatchEvent(new Event("input", { bubbles: true }));
-      field.dispatchEvent(new Event("change", { bubbles: true }));
-    }
-    if (typeof form.requestSubmit === "function") form.requestSubmit();
-    else form.submit();
-    return { via: "form", result: { content: [{ type: "text", text: "The form was submitted" }] } };
+  for (const [label, holder] of [["document.modelContext", document.modelContext], ["navigator.modelContext", nav && nav.modelContext]]) {
+    if (!holder || (typeof holder !== "object" && typeof holder !== "function") || (only && only !== label)) continue;
+    try {
+      for (const item of await itemsOf(holder)) {
+        add(item, label, async (name, args) => {
+          if (item && typeof item.execute === "function") {
+            const client = { requestUserInteraction: async () => { throw new Error("this tool asked for user interaction, which the ardia command doesn't give"); } };
+            return item.execute(args, client);
+          }
+          for (const key of ["executeTool", "callTool", "invokeTool"]) if (typeof holder[key] === "function") return holder[key](name, args);
+          throw new Error("the page registered this tool with nothing to call");
+        });
+      }
+    } catch {}
   }
-  return { missing: true };
-})(${JSON.stringify(name)}, ${JSON.stringify(args ?? {})})`;
+  if (!only || only === "form") {
+    try {
+      for (const form of document.querySelectorAll("form[toolname]")) {
+        const properties = {};
+        const required = [];
+        for (const field of form.elements) {
+          if (!field.name || ["submit", "button", "reset", "hidden", "file", "password"].includes(field.type)) continue;
+          const type = field.type === "number" || field.type === "range" ? "number" : field.type === "checkbox" ? "boolean" : "string";
+          properties[field.name] = { type, description: field.getAttribute("toolparamdescription") || field.getAttribute("aria-label") || field.placeholder || "" };
+          if (field.required) required.push(field.name);
+        }
+        const tool = { name: form.getAttribute("toolname"), description: form.getAttribute("tooldescription") || "", inputSchema: { type: "object", properties, required }, annotations: { readOnlyHint: (form.getAttribute("method") || "get").toLowerCase() === "get" } };
+        add(tool, "form", async (name, args) => {
+          for (const [key, value] of Object.entries(args || {})) {
+            const field = form.elements.namedItem(key);
+            if (!field || field.type === "file" || field.type === "password") continue;
+            if (field.type === "checkbox") field.checked = Boolean(value);
+            else field.value = String(value);
+            field.dispatchEvent(new Event("input", { bubbles: true }));
+            field.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+          if (typeof form.requestSubmit === "function") form.requestSubmit();
+          else form.submit();
+          return { content: [{ type: "text", text: "The form was submitted" }] };
+        });
+      }
+    } catch {}
+  }
+  return found;
+}`;
+
+export const PROBE = `(async () => ({ tools: (await (${COLLECT})(null)).map((item) => item.entry) }))()`;
+
+export function invokeExpression(name: string, args: unknown, source: string, fingerprint: string): string {
+  return `(async (name, args, source, fingerprint) => {
+  const plain = (value) => { try { return value === undefined ? null : JSON.parse(JSON.stringify(value)); } catch { return String(value); } };
+  const found = (await (${COLLECT})(source)).find((item) => item.entry.name === name);
+  if (!found) return { missing: true };
+  if (found.entry.fingerprint !== fingerprint) return { changed: true };
+  return { via: source, result: plain(await found.call(name, args)) };
+})(${JSON.stringify(name)}, ${JSON.stringify(args ?? {})}, ${JSON.stringify(source)}, ${JSON.stringify(fingerprint)})`;
 }
