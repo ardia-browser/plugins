@@ -12,6 +12,7 @@ Install the `ardia` command: in Ardia, open **Settings**, search for **command l
 | Plugin | What it does | Needs |
 |---|---|---|
 | [`cli`](plugins/cli) | The `ardia` command: drive Ardia, read pages and run its commands from your terminal or an agent. Built into Ardia: install it in one click from **Settings › Plugins**. | Ardia on macOS |
+| [`bitwarden`](plugins/bitwarden) | Fills and saves logins, one-time codes and passkeys from Bitwarden, including EU and self-hosted servers. A source in Ardia's password manager: install it from **Settings › Passwords**. | Ardia on macOS and the Bitwarden CLI (`bw`) |
 | [`compact-command-bar`](plugins/compact-command-bar/plugin.json) | ⌘T stops listing your pinned tabs and Top Apps, and shows at most 5 open tabs before you type. Typing still finds every tab. | Ardia 0.2.46-nightly.4 |
 
 ## Install
