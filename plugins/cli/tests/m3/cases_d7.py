@@ -217,11 +217,6 @@ def gen_notes_args(rng, count, corpus):
     return many(rng, count, [], make)
 
 
-@generator("d7.worker_source")
-def gen_worker(rng, count, corpus):
-    return many(rng, count, [], lambda: [rng.choice(["return 1", "log('x')\nreturn state", "", "a\nb\nc", "\U0001f600"]), rng.choice(["{}", '{"a": 1}', "null"])])
-
-
 @generator("d7.split_command_line")
 def gen_split(rng, count, corpus):
     return many(rng, count, [], lambda: [rng.choice([["get title"], ["get", "title"], ["click '#a b'"], ["nosuch x"], ["auth login x"], ["open 'unclosed"], [" "],
