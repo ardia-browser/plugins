@@ -12,6 +12,7 @@ export const SPARE_IDLE_MS = 5 * 60 * 1000;
 export const READ_CONCURRENCY = 8;
 export const MEMORY_LIMIT = 1024 * 1024 * 1024;
 export const MEMORY_POLL_MS = 200;
+export const QUEUED_BYTES = 128 * 1024 * 1024;
 const KEPT_ENV = ["TZ", "LANG", "LC_ALL", "LC_CTYPE", "LC_TIME", "LC_NUMERIC"];
 
 export type Exit = { type: "exit"; code: number | null; signal: string | null };
@@ -64,6 +65,8 @@ export class Runner {
   private failedToStart: ((error: Error) => void) | null = null;
   private memoryWatch: ReturnType<typeof setInterval> | null = null;
   overMemory = false;
+  overBudget = false;
+  private queuedBytes = 0;
 
   constructor(command: string[] = runnerCommand()) {
     this.ready = new Promise<number>((resolve, reject) => {
@@ -94,6 +97,14 @@ export class Runner {
       this.confined?.(confined);
       this.confined = null;
       return;
+    }
+    if (given.type === "request" && typeof given.request === "string") {
+      this.queuedBytes += given.request.length;
+      if (this.queuedBytes > QUEUED_BYTES) {
+        this.overBudget = true;
+        this.kill();
+        return;
+      }
     }
     this.push(given);
   }
@@ -132,7 +143,10 @@ export class Runner {
   async next(): Promise<RunnerEvent> {
     for (;;) {
       const event = this.events.shift();
-      if (event !== undefined) return event;
+      if (event !== undefined) {
+        if (event.type === "request" && typeof event.request === "string") this.queuedBytes -= event.request.length;
+        return event;
+      }
       if (this.exit !== null) return this.exit;
       await new Promise<void>((resolve) => {
         this.wake = resolve;

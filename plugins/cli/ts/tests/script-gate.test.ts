@@ -125,6 +125,11 @@ describe("page calls a script makes", () => {
     expect(evaluateExpression({ op: "evaluate", fn: "document.title", isFunction: false, args: [] })).toBe("document.title");
   });
 
+  test("arguments arrive as JSON, own __proto__ keys included", () => {
+    const args = JSON.parse('[{"__proto__": {"x": 1}, "y": 2}]') as unknown[];
+    expect(evaluateWith(evaluateExpression({ op: "evaluate", fn: "(o) => [Object.keys(o).sort(), o.y]", isFunction: true, args }), DOCUMENT)).toEqual([["__proto__", "y"], 2]);
+  });
+
   test("$eval hands over the element and fails clearly when nothing matches", () => {
     expect(evaluateWith(selectorExpression({ op: "$eval", selector: "h1", fn: "(h, suffix) => h.textContent + suffix", args: ["!"] }), DOCUMENT)).toBe("Models!");
     expect(() => evaluateWith(selectorExpression({ op: "$eval", selector: "h2", fn: "(h) => h", args: [] }), DOCUMENT)).toThrow("page.$eval: no element matches h2");

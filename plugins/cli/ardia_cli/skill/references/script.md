@@ -16,8 +16,9 @@ return await page.evaluate((min, column) => [...document.querySelectorAll('tr')]
 
 `page.$$eval(sel, fn, ...args)` hands `fn` every match, `page.$eval(sel, fn, ...args)` the first one. Reads (`page.text`,
 `page.attr`, `page.evaluate`, `page.$eval`, `page.$$eval`, `read`) run together under `Promise.all`; actions run one at a
-time, in order. `page.click/fill/select/press/…` wait for the page to settle but print no change report; add
-`{ receipt: true }` as the last argument when you need it.
+time, in order; an `evaluate` that changes the page counts as a read, so await it on its own.
+`page.click/fill/select/press/…` wait for the page to settle but print no change report; add `{ receipt: true }` as
+the last argument when you need it.
 
 ## Every row of a list in one call
 

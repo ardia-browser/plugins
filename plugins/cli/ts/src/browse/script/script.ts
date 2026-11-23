@@ -6,7 +6,7 @@ import { codePoints } from "../../pystr.ts";
 import { formatG, groupThousands } from "../../pylib/format.ts";
 import { shlexQuote, shlexSplit } from "../../pylib/shlex.ts";
 import { PyException, pyLen } from "../../pylib/str.ts";
-import { Cancelled, currentSignal, later, shield, sleep, untilCancelled, withSignal } from "../cdp/cancel.ts";
+import { Cancelled, currentSignal, later, sleep, untilCancelled, withSignal } from "../cdp/cancel.ts";
 import { Ctx } from "../commands/ctx.ts";
 import { canonical, dispatch, OWNERS, register, SKIPPED } from "../commands/index.ts";
 import { parse } from "../commands/parse.ts";
@@ -40,7 +40,7 @@ export const MAX_PENDING = 1000;
 export const MAX_CALLS = 200_000;
 export const RESULT_LIMIT = 64 * 1024 * 1024;
 export const REQUEST_LIMIT = 16 * 1024 * 1024 + 64 * 1024;
-export const DRAIN_SECONDS = 5;
+export const IN_FLIGHT_BYTES = 64 * 1024 * 1024;
 export const LIGHT_CALLS: ReadonlySet<string> = new Set(["click", "dblclick", "fill", "type", "press", "keyboard", "select", "check", "uncheck", "hover", "focus", "scroll"]);
 const PY_WHITESPACE = new RegExp(`[${PY_SPACE_CLASS}]+`, "u");
 const PAGE_GLOBAL = /\b(document|window|localStorage|sessionStorage|getComputedStyle) is not defined/u;
@@ -239,7 +239,9 @@ class ScriptRun {
   logsDropped = 0;
   stateText: string | null = null;
   receiptsSkipped = 0;
+  inflightBytes = 0;
   error: Error | null = null;
+  readonly stop = new AbortController();
   private settling: Promise<void> | null = null;
 
   constructor(readonly ctx: Ctx, readonly runner: Runner) {}
@@ -248,16 +250,23 @@ class ScriptRun {
     if (this.error !== null) return;
     this.error = error;
     this.gate.close();
+    this.stop.abort(new Cancelled());
     this.runner.inject({ type: "fatal", error });
   }
 
-  async drain(seconds = DRAIN_SECONDS): Promise<void> {
+  async drain(): Promise<void> {
     this.gate.close();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    await Promise.race([Promise.allSettled([...this.running]), new Promise<void>((resolve) => {
-      timer = setTimeout(resolve, seconds * 1000);
-    })]);
-    clearTimeout(timer);
+    if (this.running.size > 0) this.stop.abort(new Cancelled());
+    await Promise.allSettled([...this.running]);
+  }
+
+  async admitted<T>(work: () => Promise<T>): Promise<T> {
+    try {
+      return await work();
+    } catch (error) {
+      if (error instanceof Error && !(error instanceof Dropped) && !(error instanceof Cancelled)) this.fail(error);
+      throw error;
+    }
   }
 
   keep(line: string): void {
@@ -314,7 +323,7 @@ function parseRequest(text: unknown): Request | null {
 
 async function serveCall(run: ScriptRun, request: Request): Promise<Answer> {
   const given = request["argv"];
-  run.calls.push(Array.isArray(given) ? [...(given as unknown[])] : []);
+  run.calls.push([commandName(given)]);
   const index = run.calls.length;
   const argv = Array.isArray(given) && given.every((word) => typeof word === "string") ? splitCommandLine(given as string[]) : given;
   run.inflight.set(request.id, { argv, call: index, line: request["line"], type: "call" });
@@ -323,14 +332,14 @@ async function serveCall(run: ScriptRun, request: Request): Promise<Answer> {
   const words = argv as string[];
   const name = canonical(words[0] as string);
   if (request["via"] === "page.eval") flag("script_eval_alias", true);
-  const exclusive = !CONCURRENT_CALLS.has(name) || words.includes("--scroll");
+  const exclusive = !CONCURRENT_CALLS.has(name) || words.some((word) => word === "--scroll" || word.startsWith("--scroll="));
   const light = request["light"] === true && request["receipt"] !== true && LIGHT_CALLS.has(name);
   if (light) run.receiptsSkipped += 1;
   try {
-    const answer = await run.gate.run(exclusive, async () => {
+    const answer = await run.gate.run(exclusive, () => run.admitted(async () => {
       if (!exclusive) await run.settle(name, words.slice(1));
       return answerCall(run.ctx, words, index, light);
-    });
+    }));
     return answer.ok ? answer : { ...answer, call: index };
   } finally {
     run.done.push(commandName(given));
@@ -347,7 +356,7 @@ async function servePage(run: ScriptRun, request: Request): Promise<Answer> {
   if (request["via"] === "page.eval") flag("script_eval_alias", true);
   const frame = typeof request["frame"] === "string" && request["frame"] ? request["frame"] : null;
   try {
-    return await run.gate.run(false, async () => {
+    return await run.gate.run(false, () => run.admitted(async () => {
       await run.settle("eval", []);
       if (op === "frames") {
         flag("script_frames_listed", true);
@@ -369,7 +378,7 @@ async function servePage(run: ScriptRun, request: Request): Promise<Answer> {
       const expression = op === "evaluate" ? evaluateExpression(request) : selectorExpression(request);
       const answer = await answerCall(run.ctx, ["eval", expression], index, false);
       return answer.ok ? answer : { ...answer, call: index };
-    });
+    }));
   } finally {
     run.done.push("eval");
   }
@@ -392,6 +401,7 @@ async function serve(run: ScriptRun, request: Request): Promise<void> {
     return;
   } finally {
     run.inflight.delete(request.id);
+    run.inflightBytes -= Number(request["bytes"]) || 0;
   }
   run.reply(request.id, answer);
 }
@@ -427,6 +437,8 @@ async function drive(run: ScriptRun, source: string): Promise<Message> {
   runner.watchMemory();
   if (!runner.send({ type: "start", source, state: run.ctx.state.scriptState, readBatch: READ_BATCH, stateLimit: STATE_LIMIT })) return crashed({ type: "exit", code: null, signal: null });
   const seen = new Set<number>();
+  const outer = currentSignal();
+  const signal = outer === null ? run.stop.signal : AbortSignal.any([outer, run.stop.signal]);
   for (;;) {
     const event = await untilCancelled(runner.next());
     if (event.type === "fatal") throw event.error;
@@ -439,11 +451,17 @@ async function drive(run: ScriptRun, source: string): Promise<Message> {
         run.fail(tooBusy(`The script made more than ${MAX_CALLS.toLocaleString("en-US")} calls; do less per run and keep results in \`state\``));
         continue;
       }
+      request["bytes"] = event.request.length;
+      run.inflightBytes += event.request.length;
+      if (run.inflightBytes > IN_FLIGHT_BYTES) {
+        run.fail(tooBusy(`The script's waiting calls carried more than ${IN_FLIGHT_BYTES / 1024 / 1024} MB of arguments; send less at once`));
+        continue;
+      }
       if (run.running.size >= MAX_PENDING) {
         run.fail(tooBusy(`The script had more than ${MAX_PENDING.toLocaleString("en-US")} calls waiting at once; await them in smaller groups (Promise.all over a few dozen at a time)`));
         continue;
       }
-      const work = serve(run, request);
+      const work = withSignal(signal, () => serve(run, request));
       run.running.add(work);
       void work.finally(() => run.running.delete(work));
     } else if (event.type === "log") {
@@ -467,6 +485,7 @@ async function drive(run: ScriptRun, source: string): Promise<Message> {
       run.gate.close();
       await untilCancelled(Promise.allSettled([...run.running]));
       if (run.error !== null) throw run.error;
+      if (runner.overBudget) throw tooBusy("The script sent more than 128 MB of calls faster than they were served; send less at once");
       return { ...crashed(event, runner.overMemory), logs: run.logs, logsDropped: run.logsDropped, state: run.stateText };
     }
   }
@@ -580,12 +599,13 @@ export async function run(ctx: Ctx, source: string, seconds: number): Promise<Re
     message = outcome.value;
   } finally {
     runner.kill();
-    if (script !== null) await shield(() => (script as ScriptRun).drain());
+    if (script !== null) await (script as ScriptRun).drain();
     if (script !== null) {
       count("script_concurrent_peak", script.gate.peak);
       count("script_receipts_skipped", script.receiptsSkipped);
     }
   }
+  if (script !== null && script.error !== null) throw script.error;
   keepState(state, message["state"]);
   const logs = Array.isArray(message["logs"]) ? message["logs"].map(String) : [];
   if (message["logsDropped"]) logs.push(`[${String(message["logsDropped"])} more log lines dropped past ${Math.floor(LOG_LIMIT / 1024)} KB]`);

@@ -8,6 +8,10 @@ function argsOf(request: PageRequest): unknown[] {
   return Array.isArray(request["args"]) ? (request["args"] as unknown[]) : [];
 }
 
+function jsonArgs(request: PageRequest): string {
+  return `JSON.parse(${JSON.stringify(JSON.stringify(argsOf(request)))})`;
+}
+
 function fnOf(request: PageRequest): string {
   return String(request["fn"] ?? "");
 }
@@ -27,12 +31,12 @@ export function validEvaluate(request: PageRequest): string | null {
 
 export function evaluateExpression(request: PageRequest): string {
   if (request["isFunction"] !== true) return fnOf(request);
-  return `(${fnOf(request)})(...${JSON.stringify(argsOf(request))})`;
+  return `(${fnOf(request)})(...${jsonArgs(request)})`;
 }
 
 export function selectorExpression(request: PageRequest): string {
   const selector = JSON.stringify(String(request["selector"]));
-  const args = JSON.stringify(argsOf(request));
+  const args = jsonArgs(request);
   if (request["op"] === "$$eval") {
     return `((elements, fn, args) => fn(elements, ...args))(Array.from(document.querySelectorAll(${selector})), (${fnOf(request)}), ${args})`;
   }
