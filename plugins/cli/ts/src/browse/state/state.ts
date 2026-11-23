@@ -422,7 +422,7 @@ export class State extends Refs implements temptabs.TempTabState {
   noteAppTabs(paired: ReadonlyMap<string, string>, present: ReadonlySet<string> | null = null): void {
     try {
       const run = this.run;
-      if (run === "") return;
+      const known = run !== "";
       const owned = this.registry.sessionTabs();
       const put = new Map<string, { run: string; target: string }>();
       let readopted = false;
@@ -430,15 +430,20 @@ export class State extends Refs implements temptabs.TempTabState {
         const entry = owned.get(app);
         if (this.opened.has(target)) {
           const ours = this.created.has(target) || entry?.target === target;
-          if (ours && (entry === undefined || entry.target !== target || entry.run !== run)) put.set(app, { run, target });
-          else if (ours) this.persisted.add(target);
-        } else if (entry !== undefined && (entry.target === target || entry.run !== run)) {
+          if (ours && known && (entry === undefined || entry.target !== target || entry.run !== run)) put.set(app, { run, target });
+          else if (ours && entry?.target === target) this.persisted.add(target);
+        } else if (entry !== undefined && (entry.target === target || (known && entry.run !== run))) {
           this.opened.add(target);
           this.created.add(target);
           this.registry.noteOpened(this.instance, target);
-          put.set(app, { run, target });
+          if (known) put.set(app, { run, target });
+          else this.persisted.add(target);
           readopted = true;
         }
+      }
+      if (!known) {
+        if (readopted) flag("tab_readopted_after_restart", true);
+        return;
       }
       const stale = owned.size + put.size >= MAX_SESSION_TABS ? Number.POSITIVE_INFINITY : wallSeconds() - TOUCH_AFTER;
       const touch = present === null ? [] : [...owned].filter(([app, entry]) => present.has(app) && !put.has(app) && entry.at < stale).map(([app]) => app);
@@ -447,6 +452,7 @@ export class State extends Refs implements temptabs.TempTabState {
       if (readopted) flag("tab_readopted_after_restart", true);
     } catch {}
   }
+
 
   appTabOf(targetId: string): string | undefined {
     return this.appTabs.get(targetId);
