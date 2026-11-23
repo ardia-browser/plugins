@@ -58,6 +58,7 @@ export function supervise(binary: string, argv: readonly string[], env: Record<s
     let stopped = false;
     let pending = 0;
     let exited: { code: number | null; signal: NodeJS.Signals | null } | undefined;
+    let closed = false;
     let settled = false;
     let drainTimer: ReturnType<typeof setTimeout> | undefined;
     const child = spawn(binary, argv.slice(1), { argv0: argv[0], env, stdio: ["inherit", "pipe", "pipe"] });
@@ -77,6 +78,9 @@ export function supervise(binary: string, argv: readonly string[], env: Record<s
       for (const [signal, handler] of handlers) process.off(signal, handler);
       if (pending > 0) abandonWork();
       resolve(result);
+    };
+    const settleIfDone = () => {
+      if (closed && (pending === 0 || stopped)) finish(outcome());
     };
     const outcome = (): Supervised => {
       const signal = exited?.signal ?? undefined;
@@ -106,10 +110,10 @@ export function supervise(binary: string, argv: readonly string[], env: Record<s
             if (fd === 1) {
               stdoutClosed = true;
               child.stdout?.destroy();
-              return;
             }
           }
-          stream.resume();
+          if (fd === 2 || error === undefined) stream.resume();
+          settleIfDone();
         });
       });
     };
@@ -125,7 +129,8 @@ export function supervise(binary: string, argv: readonly string[], env: Record<s
     });
     child.on("close", (code, signal) => {
       exited ??= { code, signal };
-      finish(outcome());
+      closed = true;
+      settleIfDone();
     });
   });
 }

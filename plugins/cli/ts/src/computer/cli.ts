@@ -13,7 +13,9 @@ import { DRIVER_COMMANDS, label } from "./label.ts";
 import { ardiaCommand, CalledProcessError, linkCommand, needsRecovery, placeApp, quietlyOurs, recover, runDriverQuietly, signedByCua, staleNotice, withApplicationsLock, installedByArdia } from "./apps.ts";
 import { APP_BINARY, appVersion, driverEnv, ensureDriver, Inconclusive, installedApp, isDirectory, lexists, Refused, runTool, tools, verifyApp, VERSION } from "./driver.ts";
 import { classifyDriverExit, daemonDownIn, type Grants, missingGrantsIn, permissionCode } from "./codes.ts";
-import { DaemonFailure, daemonListening, explicitSocket, readGrants, startDaemon } from "./daemon.ts";
+import { DaemonFailure, daemonListening, explicitSocket, readGrants, startDaemon, Stopped } from "./daemon.ts";
+import { interrupted } from "../control.ts";
+import { RunCancelled } from "../proc/group.ts";
 import { daemonDownLines, daemonLines, notInstalledLine, permissionLines } from "./guidance.ts";
 import { forward, supervise } from "./supervise.ts";
 import { tmpdir } from "node:os";
@@ -193,12 +195,39 @@ async function resolveBinary(io: CommandIo, argv: readonly string[]): Promise<{ 
 
 const ARGUMENT_CHECK_TIMEOUT_S = 30;
 
-async function argumentsRefused(io: CommandIo, binary: string, argv: readonly string[]): Promise<number | undefined> {
+type Preflight = { signal: AbortSignal; status: () => number; release: () => void };
+
+function preflight(): Preflight {
+  const controller = new AbortController();
+  let status = 130;
+  const onInterrupt = () => {
+    status = 130;
+    controller.abort();
+  };
+  const onTerminate = () => {
+    status = 143;
+    controller.abort();
+  };
+  if (interrupted()) controller.abort();
+  process.on("SIGINT", onInterrupt);
+  process.on("SIGTERM", onTerminate);
+  return {
+    signal: controller.signal,
+    status: () => status,
+    release: () => {
+      process.off("SIGINT", onInterrupt);
+      process.off("SIGTERM", onTerminate);
+    },
+  };
+}
+
+async function argumentsRefused(io: CommandIo, binary: string, argv: readonly string[], signal: AbortSignal): Promise<number | undefined> {
   const nowhere = join(tmpdir(), `ardia-cua-check-${process.pid}-${randomBytes(6).toString("hex")}.sock`);
   let checked;
   try {
-    checked = await runTool([binary, ...argv, "--socket", nowhere], ARGUMENT_CHECK_TIMEOUT_S, driverEnv());
-  } catch {
+    checked = await runTool([binary, ...argv, "--socket", nowhere], ARGUMENT_CHECK_TIMEOUT_S, driverEnv(), signal);
+  } catch (error) {
+    if (error instanceof RunCancelled) throw new Stopped();
     return undefined;
   }
   if (checked.code === 0 || (checked.code === 1 && daemonDownIn(checked.stderr))) return undefined;
@@ -209,17 +238,18 @@ async function argumentsRefused(io: CommandIo, binary: string, argv: readonly st
   return checked.code;
 }
 
-async function ensureDaemon(io: CommandIo, binary: string, argv: readonly string[]): Promise<number | undefined> {
+async function ensureDaemon(io: CommandIo, binary: string, argv: readonly string[], signal: AbortSignal): Promise<number | undefined> {
+  if (signal.aborted) throw new Stopped();
   if (await daemonListening()) return undefined;
-  const refused = await argumentsRefused(io, binary, argv);
+  const refused = await argumentsRefused(io, binary, argv, signal);
   if (refused !== undefined) return refused;
   try {
-    await startDaemon(installedApp());
+    await startDaemon(installedApp(), signal);
   } catch (error) {
     if (!(error instanceof DaemonFailure)) throw error;
     return fail(io, error.code, daemonLines(error.message, error.code));
   }
-  const report = await readGrants(binary);
+  const report = await readGrants(binary, signal);
   const code = report?.running ? permissionCode(report.grants) : undefined;
   if (report?.running && code !== undefined) return fail(io, code, permissionLines(installedApp(), report.grants));
   return undefined;
@@ -238,8 +268,16 @@ async function runSupervised(io: CommandIo, binary: string, installed: boolean, 
   const guided = installed && (command === "call" || command === "permissions");
   const ownSocket = explicitSocket(argv);
   if (installed && command === "call" && !ownSocket && !argv.some((word) => word === "-h" || word === "--help")) {
-    const refused = await ensureDaemon(io, binary, argv);
-    if (refused !== undefined) return refused;
+    const stop = preflight();
+    try {
+      const refused = await ensureDaemon(io, binary, argv, stop.signal);
+      if (refused !== undefined) return refused;
+    } catch (error) {
+      if (!(error instanceof Stopped)) throw error;
+      return fail(io, "interrupted", [], stop.status());
+    } finally {
+      stop.release();
+    }
   }
   io.flush();
   const ran = await supervise(binary, [binary, ...argv], driverEnv());

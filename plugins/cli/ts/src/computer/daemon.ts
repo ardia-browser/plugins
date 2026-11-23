@@ -1,6 +1,6 @@
 import { createConnection } from "node:net";
 import { home, join } from "../paths.ts";
-import { RunTimedOut } from "../proc/group.ts";
+import { RunCancelled, RunTimedOut } from "../proc/group.ts";
 import { APP_NAME, driverEnv, runTool, tools } from "./driver.ts";
 import { type Grants, grantsOf } from "./codes.ts";
 
@@ -18,6 +18,20 @@ export class DaemonFailure extends Error {
   ) {
     super(message);
   }
+}
+
+export class Stopped extends Error {}
+
+function pause(ms: number, signal: AbortSignal | undefined): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(done, ms);
+    function done() {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", done);
+      resolve();
+    }
+    signal?.addEventListener("abort", done, { once: true });
+  });
 }
 
 export function defaultSocket(): string {
@@ -48,12 +62,14 @@ function firstLine(text: string): string {
   return text.split("\n").map((line) => line.trim()).find((line) => line !== "") ?? "";
 }
 
-export async function startDaemon(app: string): Promise<void> {
+export async function startDaemon(app: string, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) throw new Stopped();
   const argv = [tools.open, "-g", "-a", app, "--args", "serve"];
   let opened;
   try {
-    opened = await runTool(argv, OPEN_TIMEOUT_S);
+    opened = await runTool(argv, OPEN_TIMEOUT_S, undefined, signal);
   } catch (error) {
+    if (error instanceof RunCancelled) throw new Stopped();
     if (error instanceof RunTimedOut) throw new DaemonFailure(`macOS didn't open ${APP_NAME} within ${OPEN_TIMEOUT_S} s`, "daemon_timeout");
     throw new DaemonFailure(`couldn't ask macOS to open ${APP_NAME}`, "daemon_start_failed");
   }
@@ -63,19 +79,22 @@ export async function startDaemon(app: string): Promise<void> {
   }
   const deadline = performance.now() + daemonTiming.startTimeoutMs;
   while (performance.now() < deadline) {
+    if (signal?.aborted) throw new Stopped();
     if (await daemonListening()) return;
-    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+    await pause(POLL_MS, signal);
   }
+  if (signal?.aborted) throw new Stopped();
   throw new DaemonFailure(`Cua Driver's background service didn't start within ${Math.ceil(daemonTiming.startTimeoutMs / 1000)} s`, "daemon_timeout");
 }
 
 export type GrantReport = { running: false } | { running: true; grants: Grants } | undefined;
 
-export async function readGrants(binary: string): Promise<GrantReport> {
+export async function readGrants(binary: string, signal?: AbortSignal): Promise<GrantReport> {
   let result;
   try {
-    result = await runTool([binary, "permissions", "status", "--json"], STATUS_TIMEOUT_S, driverEnv());
-  } catch {
+    result = await runTool([binary, "permissions", "status", "--json"], STATUS_TIMEOUT_S, driverEnv(), signal);
+  } catch (error) {
+    if (error instanceof RunCancelled) throw new Stopped();
     return undefined;
   }
   if (result.code !== 0) return undefined;

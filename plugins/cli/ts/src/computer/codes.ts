@@ -22,6 +22,7 @@ export const COMPUTER_ERROR_CODES: readonly string[] = [
   "tool_failed",
   "doctor_probe_failed",
   "driver_signal",
+  "interrupted",
   "driver_exit_other",
   ...EXACT_EXITS.map((code) => `driver_exit_${code}`),
 ];

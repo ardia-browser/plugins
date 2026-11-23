@@ -18,7 +18,7 @@ const macOnly = process.platform === "darwin" ? test : test.skip;
 const scratch = fs.realpathSync(fs.mkdtempSync(path.join("/tmp", "cerr-")));
 process.on("exit", () => fs.rmSync(scratch, { recursive: true, force: true }));
 let counter = 0;
-const STUB_ENV = ["STUB_EXIT", "STUB_STDERR", "STUB_STDOUT", "STUB_SIGNAL", "STUB_GRANTS", "STUB_GRANTS_EXIT"];
+const STUB_ENV = ["STUB_EXIT", "STUB_STDERR", "STUB_STDOUT", "STUB_SIGNAL", "STUB_GRANTS", "STUB_GRANTS_EXIT", "STUB_CHECK_SLEEP"];
 const servers: net.Server[] = [];
 const timers: ReturnType<typeof setInterval>[] = [];
 
@@ -46,6 +46,7 @@ if [ "$1" = "call" ]; then
     [ "$previous" = "--socket" ] && socket="$word"
     previous="$word"
   done
+  if [ -n "$socket" ] && [ -n "\${STUB_CHECK_SLEEP:-}" ]; then sleep "$STUB_CHECK_SLEEP"; fi
   if [ -n "$socket" ] && ! [ -S "$socket" ]; then
     printf 'Cua Driver daemon is not running on %s.\\nStart it first with: cua-driver serve --socket %s\\n' "$socket" "$socket" >&2
     exit 1
@@ -489,6 +490,16 @@ const PROBE = path.join(import.meta.dir, "supervise-probe.ts");
 
 type Wrapped = { result: { status: number; signal: string | null; stdoutClosed: boolean }; ms: number };
 
+function probeFiles(script: string): { root: string; ready: string; result: string; file: string } {
+  counter += 1;
+  const root = path.join(scratch, `w${counter}`);
+  fs.mkdirSync(root);
+  const ready = path.join(root, "ready");
+  const file = path.join(root, "child.sh");
+  fs.writeFileSync(file, script.replaceAll("READY", ready));
+  return { root, ready, result: path.join(root, "result.json"), file };
+}
+
 async function wrapped(script: string, signal: NodeJS.Signals, readStdout: boolean): Promise<Wrapped> {
   counter += 1;
   const root = path.join(scratch, `w${counter}`);
@@ -526,4 +537,71 @@ macOnly("a stdout nobody reads doesn't stop the wrapper from relaying a signal",
   assert.equal(result.signal, "SIGTERM");
   assert.equal(result.status, 143);
   assert.ok(ms < 3000, `took ${ms} ms`);
+});
+
+const BIG = 128 * 1024;
+
+function pipeline(command: string): Promise<number | null> {
+  return new Promise((resolve) => spawn("/bin/sh", ["-c", command], { stdio: "inherit" }).on("close", (code) => resolve(code)));
+}
+
+function quoted(text: string): string {
+  return `'${text.replaceAll("'", "'\\''")}'`;
+}
+
+macOnly("a reader that waits gets all of the driver's output after a normal exit", async () => {
+  const files = probeFiles(`head -c ${BIG} /dev/zero | tr '\\0' x\n`);
+  const count = path.join(files.root, "count");
+  const probe = [process.execPath, PROBE, files.file, files.result].map(quoted).join(" ");
+  assert.equal(await pipeline(`${probe} | (sleep 0.6; tr -d x | wc -c > ${quoted(`${count}.other`)}; ) ; true`), 0);
+  assert.equal(Number(fs.readFileSync(`${count}.other`, "utf8").trim()), 0);
+  assert.equal(await pipeline(`${probe} | (sleep 0.6; wc -c > ${quoted(count)})`), 0);
+  assert.equal(Number(fs.readFileSync(count, "utf8").trim()), BIG);
+  assert.deepEqual(JSON.parse(fs.readFileSync(files.result, "utf8")), { status: 0, signal: null, stdoutClosed: false });
+});
+
+macOnly("a reader that closes its end is stdout_closed every time", async () => {
+  for (let round = 0; round < 3; round += 1) {
+    const files = probeFiles(`sleep 0.3\nhead -c ${BIG} /dev/zero | tr '\\0' x\n`);
+    const probe = [process.execPath, PROBE, files.file, files.result].map(quoted).join(" ");
+    await pipeline(`${probe} | true`);
+    assert.equal(JSON.parse(fs.readFileSync(files.result, "utf8")).stdoutClosed, true);
+  }
+});
+
+macOnly("Ctrl-C while ardia checks the arguments stops before CuaDriver.app is opened", async () => {
+  const b = box();
+  process.env.STUB_CHECK_SLEEP = "5";
+  const timer = setTimeout(() => process.emit("SIGINT"), 300);
+  const started = performance.now();
+  try {
+    assert.equal(await run(b, ["call", "list_apps"]), 130);
+  } finally {
+    clearTimeout(timer);
+  }
+  assert.ok(performance.now() - started < 3000);
+  assert.equal(b.io.errorCode, "interrupted");
+  assert.ok(!fs.existsSync(path.join(b.root, "opened")));
+  assert.equal(errText(b), "");
+});
+
+macOnly("SIGTERM while waiting for the service stops at once with 143", async () => {
+  const b = box();
+  const marker = path.join(b.root, "opened");
+  let sentAt = 0;
+  const timer = setInterval(() => {
+    if (!fs.existsSync(marker)) return;
+    clearInterval(timer);
+    sentAt = performance.now();
+    process.emit("SIGTERM");
+  }, 20);
+  try {
+    assert.equal(await run(b, ["call", "list_apps"]), 143);
+  } finally {
+    clearInterval(timer);
+  }
+  assert.ok(sentAt > 0 && performance.now() - sentAt < 2000);
+  assert.ok(fs.existsSync(path.join(b.root, "opened")));
+  assert.equal(b.io.errorCode, "interrupted");
+  assert.deepEqual(b.log(), ["call list_apps --socket <check>"]);
 });

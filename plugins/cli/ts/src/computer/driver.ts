@@ -274,8 +274,8 @@ function pyStr(value: string | null): string {
 
 export type Tool = { code: number; stdout: string; stderr: string };
 
-export async function runTool(argv: readonly string[], timeout: number, env?: Record<string, string>): Promise<Tool> {
-  const ran = await run(argv, { timeout, ...(env === undefined ? {} : { env }) });
+export async function runTool(argv: readonly string[], timeout: number, env?: Record<string, string>, signal?: AbortSignal): Promise<Tool> {
+  const ran = await run(argv, { timeout, ...(env === undefined ? {} : { env }), ...(signal === undefined ? {} : { signal }) });
   return { code: ran.code, stdout: ran.stdout.toString("utf8"), stderr: ran.stderr.toString("utf8") };
 }
 
