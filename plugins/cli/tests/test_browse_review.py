@@ -106,7 +106,7 @@ class SnapshotPage:
 
 
 def take(state, page):
-    with mock.patch.object(snapshot, "clickable_map", mock.AsyncMock(return_value={})):
+    with mock.patch.object(snapshot, "clickable_map", mock.AsyncMock(return_value={})), mock.patch.object(snapshot, "boxless", mock.AsyncMock(return_value=set())):
         return run(snapshot.take(state, page, interactive=True))
 
 
