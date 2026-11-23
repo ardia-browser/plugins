@@ -430,10 +430,12 @@ export class State extends Refs implements temptabs.TempTabState {
         return;
       }
       if (method === "Inspector.targetCrashed") {
+        page.framesChanged();
         page.markCrashed();
         return;
       }
       if (method === "Inspector.targetReloadedAfterCrash") {
+        page.framesChanged();
         page.crashed = false;
         return;
       }

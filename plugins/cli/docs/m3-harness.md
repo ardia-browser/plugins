@@ -56,7 +56,9 @@ dir. A failed replay prints the tap's report: the request the daemon sent and th
 - **Requests.** Requests are compared per step, per connection and per CDP session. Browser-issued IDs become
   `<id#n>`, `<node#n>`, `<backend#n>` or `<context#n>`, numbered by first appearance in that step's own requests (browser
   events cross step boundaries by timing), and the message `id` is dropped. Live mode compares each step's requests as a **set** of distinct forms (and ignores the
-  `() => document.readyState` probe). Chromium's load timing decides how often Python polls and whether the load event
+  `() => document.readyState` probe, and `Page.getFrameTree` and the `document.visibilityState` probe, which the TS
+  daemon skips when it read them in the last 0.75 s and 0.25 s; those two are left out before the set's IDs are numbered,
+  rule `cached-probes`). Chromium's load timing decides how often Python polls and whether the load event
   beats its readiness check, so two live Pythons never agree on order or counts. Order is checked in replay instead.
 - **Sources.** Every `expression`, `functionDeclaration` and `source` is hashed per step, so JS drift between `js.py`
   and `browse/js/*.js` fails even when the results agree.
@@ -219,7 +221,7 @@ commands from their own files and import them in `all.ts`; a name registered twi
 | Designed divergences | `tests/m3/divergences.py`: each entry names its ardia#2812 row; a scenario lists the ones it needs in `divergences`, and only the named request form is rewritten, on both sides. `drop` and `stop` fault runs add `busy-probe-isolated`, since an unanswered call is what sends the probe. Every TS run (live, replay, fault) also fails on `Runtime.enable`, `Debugger.enable` or `Console.enable` on a page session and on a main-world busy probe |
 | Racy steps | `racy_steps` in a scenario: only the exit status is compared, for a step where Chromium decides which of two errors one request gets |
 | Main-world steps | `"main_world": true` on a step: the TS side runs its `eval` (or each `eval` line of a `batch`) as `eval --main-world`, which sends the same `Runtime.evaluate` Python does. The act scenarios read the fixtures' own globals (`state`, `reveal()`), which the isolated `eval` can't see by design (`eval-isolated`) |
-| Designed scenarios | `"designed": "<why>"`: live mode runs the TS daemon on both sides, for a scenario whose Python answer is a known bug the TS daemon fixes (`tabs/dialog_on_busy_page`) |
+| Designed scenarios | `"designed": "<why>"`: live mode runs the TS daemon on both sides, for a scenario whose Python answer is a known bug the TS daemon fixes (`tabs/dialog_on_busy_page`), or whose requests the TS daemon cuts on purpose (plugins#92: `act/d5_drag_scroll`, `act/d5_pointer`, `d4/diff_vitals`, `d4/snapshot_get_is`, `d4/read_page`, `core/frames_worlds`, `core/show`, `daemon/minimum_set`, `daemon/waits`, which also carry `live_only`, since a Python recording can't answer the TS daemon's page calls) |
 | Unstable steps | `unstable_steps`: live mode compares only exit and stderr, and none of the step's requests (`js/script_runs` step 11, an unawaited call) |
 | TS-only metrics | the metrics key set leaves out the flags and counts only the TS daemon registers (`normalize.ts_only_metrics()`) |
 | Human tier | `python -m tests.m3.human_core --pages <plugins#13 tests/human> --chrome <Chrome for Testing> [--impl ts\|python]`: rows 7 to 13 through `ardia browse`, with a full Chrome for Testing in `--headless=new` (chrome-headless-shell is old-mode headless and sets `navigator.webdriver`). Clicks D5 doesn't serve yet are made by the tier and named in the row's notes |

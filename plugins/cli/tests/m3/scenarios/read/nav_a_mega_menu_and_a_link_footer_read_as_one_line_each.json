@@ -1,0 +1,17 @@
+{
+ "source": "tests/test_browse_read.py ReadNavigationInChrome.test_a_mega_menu_and_a_link_footer_read_as_one_line_each",
+ "window": [
+  1200,
+  800
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/nav-megamenu.html",
+    "--read"
+   ],
+   "session": "nav"
+  }
+ ]
+}

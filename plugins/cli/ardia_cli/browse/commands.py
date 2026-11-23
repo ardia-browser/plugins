@@ -192,7 +192,14 @@ def failed_navigation(ctx: Ctx, url: str, error_text: str) -> BrowseError:
         message += f". {host} has no address: check the spelling, or search for the site's current address"
     elif https_only_block(url, error_text):
         message += f". {HTTPS_ONLY_NOTE}"
+    elif "ERR_BLOCKED_BY_CLIENT" in error_text or "ERR_ABORTED" in error_text:
+        message += f". {AD_BLOCKER_NOTE}"
     return BrowseError(message, code="navigation_failed")
+
+
+AD_BLOCKER_NOTE = ("If Ardia's ad blocker stopped it (the tab shows uBlock Origin's \"Page blocked\" page, which names the blocked "
+                   "host), `ardia call sites.allowAds -p site=<that host>` trusts the site, where Ardia offers that method "
+                   "(`ardia methods` lists it); then open the page again")
 
 
 HTTPS_ONLY_NOTE = ("Ardia loads http:// addresses over https and blocks the page when the site has no working https, which is what this "
@@ -2105,7 +2112,9 @@ async def cmd_read(ctx: Ctx, argv):
     if selector:
         content, empty_note = await read_scoped(page, frame, selector)
     else:
-        content = await page.call("() => ardiaBrowse.readable()", frame=frame, read=True)
+        got = await page.call("(nav) => ardiaBrowse.readPage(nav)", bool(options.get("nav")), frame=frame, read=True)
+        content = got.get("text") or ""
+        readpages.note_nav(got)
     content = readurl.post_process(content, options)
     readpages.note_virtualized(content)
     scope = "" if options.get("selector") else await page_scope(page, frame)

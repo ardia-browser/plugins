@@ -75,6 +75,14 @@ not the command: it gives the reason (`data.reason`) and, for a tab, what Ardia 
 such limit. Pick another tab or `open` a web page. Not here at all: `connect`, `install`, `upgrade`, `doctor`, `dashboard`, `chat`, `mcp`, `profiles`,
 `confirm`/`deny`, iOS, cloud providers and launch flags (`--headed`, `--profile`, `--proxy`, …).
 
+A site Ardia's built-in ad blocker blocks opens as uBlock Origin's "Page blocked" page, which `ardia browse` can't
+attach to, and `open` fails with `net::ERR_BLOCKED_BY_CLIENT` or `net::ERR_ABORTED`. When the user wants that site,
+`ardia call sites.allowAds -p site=<host>` trusts it (a site, not a public suffix like `co.uk`; it covers its
+subdomains in every profile), then `open` it again; `sites.adBlocker` lists the trusted sites and `sites.blockAds`
+takes one out. An Ardia without these methods answers `unknown_method`, and one that lists them but can't make the
+change yet (Linux before its engine update) answers `refused`: either way, ask the user to turn off Block Ads & Trackers
+in Site Controls for that site.
+
 ## Tabs and sessions
 
 - A session never takes the user's tab on its own: until it opens one (`open`, `tab new`) or picks one (`tab active`,

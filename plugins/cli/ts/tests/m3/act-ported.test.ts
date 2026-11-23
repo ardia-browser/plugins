@@ -457,6 +457,19 @@ describe("NetworkWatchTest", () => {
     expect(watch.writes().map((write) => [write["method"], write["url"]])).toEqual([["PUT", "http://x/mine"]]);
   });
 
+  test("a session keeps the watch's capture on, so the next watch doesn't enable it again", async () => {
+    const page = new WatchPage();
+    Object.assign(page, { session: "S" });
+    const first = new NetworkWatch(page.page);
+    await first.start();
+    await first.stop();
+    const second = new NetworkWatch(page.page);
+    await second.start();
+    await second.stop();
+    expect(page.sent).toEqual(["Network.enable"]);
+    expect(page.state.listeners).toEqual([]);
+  });
+
   test("capture already on is left on", async () => {
     const page = new WatchPage(true);
     const watch = new NetworkWatch(page.page);
