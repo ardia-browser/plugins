@@ -5,7 +5,7 @@ import { BadConfig, parseConfig } from "../../src/browse/daemon/config.ts";
 import { browseDir, closeFd } from "../../src/browse/paths.ts";
 import { sessionKey, sessionOwner } from "../../src/browse/request.ts";
 import { MAX_SESSION_TABS, Registry, SESSION_TABS } from "../../src/browse/state/registry.ts";
-import { State } from "../../src/browse/state/state.ts";
+import { processStart, State } from "../../src/browse/state/state.ts";
 import { type Scratch, scratch } from "./daemon-helpers.ts";
 
 const made: Scratch[] = [];
@@ -23,8 +23,9 @@ const RUN_1 = "4101:1:/devtools/browser/one";
 const RUN_1_CONTROL_AGAIN = "4101:2:/devtools/browser/one";
 const RUN_2 = "4202:1:/devtools/browser/two";
 
-function daemon(dir: number, key: string, session: string, instance: string, owner = sessionOwner("", "token:/data", session)): State {
+function daemon(dir: number, key: string, session: string, instance: string, owner = sessionOwner("", "token:/data", session), started = "Mon Nov 23 05:00:00 2026"): State {
   const state = new State({ session, key: key.repeat(24), owner, browseFd: dir, noAutoDialog: false, pinTab: false }, () => Promise.reject(new Error("unused")));
+  state.startOf = () => started;
   state.instance = instance;
   return state;
 }
@@ -79,7 +80,7 @@ describe("the tabs a session opened outlive its daemon and Ardia's restart", () 
       const after = daemon(dir, "b", "rl", RUN_2);
       after.noteAppTabs(new Map([["TARGET-AFTER", "tab-run1-4"], ["TARGET-USER-AFTER", "tab-run1-1"]]));
       expect([...after.opened]).toEqual(["TARGET-AFTER"]);
-      expect(after.registry.sessionTabs().get("tab-run1-4")).toMatchObject({ run: "pid:4202", target: "TARGET-AFTER" });
+      expect(after.registry.sessionTabs().get("tab-run1-4")).toMatchObject({ run: "pid:4202@Mon Nov 23 05:00:00 2026", target: "TARGET-AFTER" });
     } finally {
       closeFd(dir);
     }
@@ -97,6 +98,25 @@ describe("the tabs a session opened outlive its daemon and Ardia's restart", () 
     } finally {
       closeFd(dir);
     }
+  });
+
+  test("an Ardia that comes back with the same pid is still a new run, told apart by when its process started", () => {
+    const { dir } = folder();
+    try {
+      const first = daemon(dir, "a", "rl", RUN_1, undefined, "Mon Nov 23 05:00:00 2026");
+      opens(first, "TARGET-BEFORE");
+      first.noteAppTabs(new Map([["TARGET-BEFORE", "tab-run1-4"]]));
+      const samePid = daemon(dir, "b", "rl", RUN_1, undefined, "Mon Nov 23 06:30:00 2026");
+      samePid.noteAppTabs(new Map([["TARGET-RESTORED", "tab-run1-4"]]));
+      expect([...samePid.opened]).toEqual(["TARGET-RESTORED"]);
+    } finally {
+      closeFd(dir);
+    }
+  });
+
+  test("Ardia's own process start time is read from ps, and a pid with no process gives none", () => {
+    expect(processStart(process.pid)).toMatch(/[0-9]{4}$/u);
+    expect(processStart(2 ** 22 + 12345)).toBe("");
   });
 
   test("a page the user opens in the session's tab later in the same run (a pin closed and clicked again) stays the user's", () => {

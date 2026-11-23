@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import http from "node:http";
 import { formatG } from "../../pylib/format.ts";
 import { Browser } from "../cdp/browser.ts";
@@ -155,6 +156,15 @@ async function gate<T>(work: (() => Promise<T>)[], width: number): Promise<T[]> 
   };
   await Promise.all(Array.from({ length: Math.min(width, work.length) }, lane));
   return results;
+}
+
+export function processStart(pid: number): string {
+  try {
+    const found = spawnSync("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8", timeout: 2000, env: { ...process.env, LC_ALL: "C" } });
+    return found.status === 0 ? found.stdout.trim() : "";
+  } catch {
+    return "";
+  }
 }
 
 export class State extends Refs implements temptabs.TempTabState {
@@ -393,10 +403,15 @@ export class State extends Refs implements temptabs.TempTabState {
     this.appGenerations.delete(targetId);
   }
 
+  startOf: (pid: number) => string = processStart;
+  private runOf: { instance: string; run: string } | null = null;
+
   get run(): string {
     const instance = this.instance ?? "";
     const pid = /^([0-9]+):/u.exec(instance);
-    return pid ? `pid:${pid[1]}` : instance;
+    if (!pid) return instance;
+    if (this.runOf?.instance !== instance) this.runOf = { instance, run: `pid:${pid[1]}@${this.startOf(Number(pid[1]))}` };
+    return this.runOf.run;
   }
 
   noteAppTabs(paired: ReadonlyMap<string, string>, present: ReadonlySet<string> | null = null): void {
