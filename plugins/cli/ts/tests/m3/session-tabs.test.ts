@@ -33,6 +33,11 @@ function ids(state: State): string[] {
   return [...state.registry.sessionTabs().keys()].sort();
 }
 
+function opens(state: State, target: string): void {
+  state.opened.add(target);
+  state.created.add(target);
+}
+
 function page(state: State, target: string, app: string): void {
   state.targetInfos.set(target, { targetId: target, url: "https://example.com/", title: "", type: "page" });
   state.appTabs.set(target, app);
@@ -67,7 +72,7 @@ describe("the tabs a session opened outlive its daemon and Ardia's restart", () 
     const { dir } = folder();
     try {
       const before = daemon(dir, "a", "rl", RUN_1);
-      before.opened.add("TARGET-BEFORE");
+      opens(before, "TARGET-BEFORE");
       before.noteAppTabs(new Map([["TARGET-BEFORE", "tab-run1-4"], ["TARGET-USER-BEFORE", "tab-run1-1"]]));
       expect(ids(before)).toEqual(["tab-run1-4"]);
 
@@ -84,7 +89,7 @@ describe("the tabs a session opened outlive its daemon and Ardia's restart", () 
     const { dir } = folder();
     try {
       const first = daemon(dir, "a", "rl", RUN_1);
-      first.opened.add("TARGET");
+      opens(first, "TARGET");
       first.noteAppTabs(new Map([["TARGET", "tab-run1-4"]]));
       const next = daemon(dir, "b", "rl", RUN_1_CONTROL_AGAIN);
       next.noteAppTabs(new Map([["TARGET", "tab-run1-4"]]));
@@ -98,7 +103,7 @@ describe("the tabs a session opened outlive its daemon and Ardia's restart", () 
     const { dir } = folder();
     try {
       const first = daemon(dir, "a", "rl", RUN_1);
-      first.opened.add("TARGET-SESSION");
+      opens(first, "TARGET-SESSION");
       first.noteAppTabs(new Map([["TARGET-SESSION", "tab-run1-4"]]));
       const next = daemon(dir, "b", "rl", RUN_1);
       next.noteAppTabs(new Map([["TARGET-USER-REOPENED", "tab-run1-4"]]));
@@ -114,11 +119,46 @@ describe("the tabs a session opened outlive its daemon and Ardia's restart", () 
     }
   });
 
+  test("a page the session only followed into its tab (a pin the user reopened) is never written down as the session's", () => {
+    const { dir } = folder();
+    try {
+      const first = daemon(dir, "a", "rl", RUN_1);
+      opens(first, "TARGET-SESSION");
+      first.noteAppTabs(new Map([["TARGET-SESSION", "tab-run1-4"]]));
+      first.forgetTarget("TARGET-SESSION");
+      first.opened.add("TARGET-FOLLOWED");
+      first.noteAppTabs(new Map([["TARGET-FOLLOWED", "tab-run1-4"]]));
+      expect(first.registry.sessionTabs().get("tab-run1-4")?.target).toBe("TARGET-SESSION");
+      expect(first.needsPairingBeforeClose()).toBe(true);
+      const next = daemon(dir, "b", "rl", RUN_1);
+      next.noteAppTabs(new Map([["TARGET-FOLLOWED", "tab-run1-4"]]));
+      expect(next.opened.size).toBe(0);
+    } finally {
+      closeFd(dir);
+    }
+  });
+
+  test("the deferred closer can read a tab's Ardia id and drop it once the close goes through", () => {
+    const { dir } = folder();
+    try {
+      const state = daemon(dir, "a", "rl", RUN_1);
+      opens(state, "TARGET");
+      page(state, "TARGET", "tab-run1-4");
+      state.noteAppTabs(new Map([["TARGET", "tab-run1-4"]]));
+      const app = state.appTabOf("TARGET");
+      state.forgetTarget("TARGET");
+      state.dropRecorded(app);
+      expect(state.registry.sessionTabs().size).toBe(0);
+    } finally {
+      closeFd(dir);
+    }
+  });
+
   test("a session in another namespace never owns the tab, even when it picks it by its Ardia id", () => {
     const { dir } = folder();
     try {
       const first = daemon(dir, "a", "default", RUN_1, sessionOwner("agent-a", "token:/data", "default"));
-      first.opened.add("TARGET");
+      opens(first, "TARGET");
       first.noteAppTabs(new Map([["TARGET", "tab-run1-4"]]));
       const second = daemon(dir, "b", "default", RUN_2, sessionOwner("agent-b", "token:/data", "default"));
       second.noteAppTabs(new Map([["TARGET-AFTER", "tab-run1-4"]]));
@@ -132,8 +172,8 @@ describe("the tabs a session opened outlive its daemon and Ardia's restart", () 
     const { dir } = folder();
     try {
       const state = daemon(dir, "a", "rl", RUN_1);
-      state.opened.add("TARGET-A");
-      state.opened.add("TARGET-B");
+      opens(state, "TARGET-A");
+      opens(state, "TARGET-B");
       state.noteAppTabs(new Map([["TARGET-A", "tab-run1-4"], ["TARGET-B", "tab-run1-5"]]));
       state.noteAppTabs(new Map(), new Set(["tab-run1-1"]));
       expect(ids(state)).toEqual(["tab-run1-4", "tab-run1-5"]);
@@ -150,7 +190,7 @@ describe("the tabs a session opened outlive its daemon and Ardia's restart", () 
     const { dir, browse } = folder();
     try {
       const state = daemon(dir, "a", "rl", RUN_1);
-      state.opened.add("TARGET-LIVE");
+      opens(state, "TARGET-LIVE");
       state.noteAppTabs(new Map([["TARGET-LIVE", "tab-live-1"]]));
       const file = path.join(browse, SESSION_TABS);
       const written = JSON.parse(fs.readFileSync(file, "utf8"));
@@ -158,7 +198,7 @@ describe("the tabs a session opened outlive its daemon and Ardia's restart", () 
       written.sessions[owner]["tab-live-1"].at = Date.now() / 1000 - 2 * 24 * 3600;
       fs.writeFileSync(file, JSON.stringify(written));
       for (let n = 0; n < MAX_SESSION_TABS + 10; n += 1) {
-        state.opened.add(`TARGET-${n}`);
+        opens(state, `TARGET-${n}`);
         state.noteAppTabs(new Map([[`TARGET-${n}`, `tab-closed-${n}`]]), new Set(["tab-live-1", `tab-closed-${n}`]));
         state.opened.delete(`TARGET-${n}`);
       }
@@ -175,7 +215,7 @@ describe("the tabs a session opened outlive its daemon and Ardia's restart", () 
       const state = daemon(dir, "a", "rl", RUN_1);
       expect(state.needsPairingBeforeClose()).toBe(false);
       page(state, "TARGET", "tab-run1-4");
-      state.opened.add("TARGET");
+      opens(state, "TARGET");
       expect(state.needsPairingBeforeClose()).toBe(true);
       state.noteAppTabs(new Map([["TARGET", "tab-run1-4"]]));
       expect(state.needsPairingBeforeClose()).toBe(false);
@@ -192,7 +232,7 @@ describe("the tabs a session opened outlive its daemon and Ardia's restart", () 
       const blocker = path.join(browse, SESSION_TABS);
       fs.mkdirSync(blocker);
       const state = daemon(dir, "a", "rl", RUN_1);
-      state.opened.add("TARGET");
+      opens(state, "TARGET");
       page(state, "TARGET", "tab-run1-4");
       state.noteAppTabs(new Map([["TARGET", "tab-run1-4"]]));
       expect(state.recorded("TARGET")).toBe(false);
@@ -235,7 +275,7 @@ describe("the tabs a session opened outlive its daemon and Ardia's restart", () 
     try {
       fs.mkdirSync(path.join(browse, SESSION_TABS));
       const state = daemon(dir, "a", "rl", RUN_1);
-      state.opened.add("TARGET");
+      opens(state, "TARGET");
       expect(() => state.noteAppTabs(new Map([["TARGET", "tab-run1-4"], ["OTHER", "tab-run1-1"]]), new Set(["tab-run1-1", "tab-run1-4"]))).not.toThrow();
       expect(state.ownsSessionTabs()).toBe(false);
       expect([...state.opened]).toEqual(["TARGET"]);

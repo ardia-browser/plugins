@@ -276,6 +276,7 @@ export async function newTab(
   const targetId = String(result["targetId"]);
   created?.(targetId);
   state.opened.add(targetId);
+  state.created.add(targetId);
   state.registry.noteOpened(state.instance, targetId);
   if (!state.targetInfos.has(targetId)) state.targetInfos.set(targetId, { targetId, url: "about:blank", title: "", type: "page" });
   state.pairOpenedLater(targetId);

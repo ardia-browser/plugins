@@ -21,6 +21,8 @@ export type TempTabState = {
   readonly reservedCloses?: Set<string>;
   mustCloseTask: { done: boolean; stop: AbortController; finished: Promise<void> } | null;
   forgetTarget(targetId: string): void;
+  appTabOf?(targetId: string): string | undefined;
+  dropRecorded?(app: string | undefined): void;
 };
 
 export const SHIELD_DEADLINE = 10.0;
@@ -135,8 +137,10 @@ export async function closeReserved(state: TempTabState, targetId: string): Prom
 }
 
 async function closeQueued(state: TempTabState, targetId: string): Promise<boolean> {
-  if (state.reservedCloses?.has(targetId)) return (await closeReserved(state, targetId)).closed;
-  return closeUntracked(state, targetId);
+  const app = state.appTabOf?.(targetId);
+  const closed = state.reservedCloses?.has(targetId) ? (await closeReserved(state, targetId)).closed : await closeUntracked(state, targetId);
+  if (closed) state.dropRecorded?.(app);
+  return closed;
 }
 
 export function mustClose(state: TempTabState, targetId: string, reserved = false): void {
@@ -248,6 +252,7 @@ export async function gone(state: TempTabState, targetId: string): Promise<boole
 
 export async function closeOne(state: TempTabState, targetId: string): Promise<void> {
   const registry = state.registry;
+  const app = state.appTabOf?.(targetId);
   if (registry.reserveClose(state.instance, targetId)) {
     let closed = false;
     try {
@@ -262,6 +267,7 @@ export async function closeOne(state: TempTabState, targetId: string): Promise<v
       if (closed) registry.finishClose(state.instance, targetId);
       else registry.releaseClose(state.instance, targetId);
     }
+    if (closed) state.dropRecorded?.(app);
   }
   state.forgetTarget(targetId);
 }

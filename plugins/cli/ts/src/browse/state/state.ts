@@ -174,6 +174,7 @@ export class State extends Refs implements temptabs.TempTabState {
   readonly usedAt = new Map<string, number>();
   readonly appGenerations = new Map<string, unknown>();
   readonly opened = new Set<string>();
+  readonly created = new Set<string>();
   readonly frames = new Map<string, string>();
   readonly leases = new Set<string>();
   readonly claims = new ClaimSet();
@@ -369,6 +370,7 @@ export class State extends Refs implements temptabs.TempTabState {
     page?.detach();
     const wasOpened = this.opened.has(targetId);
     this.opened.delete(targetId);
+    this.created.delete(targetId);
     this.frames.delete(targetId);
     this.targetInfos.delete(targetId);
     this.views.delete(targetId);
@@ -406,9 +408,11 @@ export class State extends Refs implements temptabs.TempTabState {
       for (const [target, app] of paired) {
         const entry = owned.get(app);
         if (this.opened.has(target)) {
-          if (entry === undefined || entry.target !== target || entry.run !== run) put.set(app, { run, target });
+          const ours = this.created.has(target) || entry?.target === target;
+          if (ours && (entry === undefined || entry.target !== target || entry.run !== run)) put.set(app, { run, target });
         } else if (entry !== undefined && run !== "" && (entry.target === target || entry.run !== run)) {
           this.opened.add(target);
+          this.created.add(target);
           this.registry.noteOpened(this.instance, target);
           put.set(app, { run, target });
           readopted = true;
@@ -419,6 +423,10 @@ export class State extends Refs implements temptabs.TempTabState {
       this.registry.updateSessionTabs(put, [], touch);
       if (readopted) flag("tab_readopted_after_restart", true);
     } catch {}
+  }
+
+  appTabOf(targetId: string): string | undefined {
+    return this.appTabs.get(targetId);
   }
 
   dropRecorded(app: string | undefined): void {
@@ -450,7 +458,7 @@ export class State extends Refs implements temptabs.TempTabState {
       void (async () => {
         for (let attempt = 0; attempt < PAIR_TRIES; attempt += 1) {
           if (attempt > 0) await sleep(PAIR_WAIT);
-          if (!this.opened.has(targetId) || this.endpoint === null || this.recorded(targetId)) return;
+          if (!this.created.has(targetId) || this.endpoint === null || this.recorded(targetId)) return;
           await appTabMap(this).catch(() => undefined);
         }
       })().catch(() => {});
@@ -460,7 +468,7 @@ export class State extends Refs implements temptabs.TempTabState {
   needsPairingBeforeClose(): boolean {
     const owned = this.recordedTabs() ?? new Map<string, SessionTab>();
     const liveApps = new Set([...this.appTabs].filter(([target]) => this.targetInfos.has(target)).map(([, app]) => app));
-    const unrecorded = [...this.opened].some((target) => this.targetInfos.has(target) && owned.get(this.appTabs.get(target) ?? "")?.target !== target);
+    const unrecorded = [...this.created].some((target) => this.opened.has(target) && this.targetInfos.has(target) && owned.get(this.appTabs.get(target) ?? "")?.target !== target);
     return unrecorded || [...owned.keys()].some((app) => !liveApps.has(app));
   }
 

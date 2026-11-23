@@ -239,9 +239,11 @@ mouse position, so a humanized path starts where the last one ended. `ardia brow
   refuse). A recorded tab counts as opened by this session again when it is the same page (a new daemon, or control
   turned off and on), or when Ardia has restarted since (`tab_readopted_after_restart`; the record then names the
   restored page), so after a crash and restore `tab close` and `close` still close the session's tabs. A page the user
-  opens in that tab later in the same run (a pin closed and clicked again) stays the user's. `close` looks Ardia's
-  tabs up first only when a live tab isn't recorded or a recorded one isn't paired, and gives that lookup 2 s of its
-  deadline. An id leaves the record only when the session closes that tab (or takes it off-screen, where Ardia drops
+  opens in that tab later in the same run (a pin closed and clicked again) stays the user's, and only a page the
+  session created, or the very page already recorded, is ever written down: a replacement page the daemon follows into
+  its current tab stays the session's in memory only. `close` looks Ardia's tabs up first only when a live tab isn't
+  recorded or a recorded one isn't paired, and gives that lookup 2 s of its deadline. An id leaves the record only
+  when the session closes that tab (also a close finished later, after a Ctrl-C), or takes it off-screen (Ardia drops
   it), or after 3 days: a listing can't prove a tab is gone (Ardia leaves a parked pin out of `windows` until one of
   its profile's windows opens again), so a tab `close` couldn't reach stays the session's for a retry. Each owner
   keeps its newest 64 ids and the file its 32 most recent owners; a listing refreshes the ids it shows (hourly, or
