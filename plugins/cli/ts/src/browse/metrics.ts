@@ -22,6 +22,7 @@ export const ACT_FLAGS = new Set([
   "waited_for_enabled", "fill_picked_option", "fill_inserted_text", "drag_side_given", "drag_list_position", "select_opened_list", "press_targeted",
   "consent_dismissed", "popup_dismissed", "click_recentered", "dom_click_fallback", "dom_click_behind_modal", "dom_click_waited_for_modal",
   "input_in_inner_frame", "menu_closed_for_click", "modal_dismissed",
+  "input_mouse_events_cancelled", "input_confirmed_by_text", "input_lost_pointer", "input_lost_keys", "input_lost_text", "input_lost_wheel", "input_lost_drag",
 ]);
 export const ACT_COUNTS = new Set(["cell_edits"]);
 export const CHANGE_FLAGS = new Set([

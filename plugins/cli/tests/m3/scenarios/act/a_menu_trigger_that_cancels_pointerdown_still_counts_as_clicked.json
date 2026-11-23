@@ -1,0 +1,39 @@
+{
+ "source": "tests/test_browse_act.py ActInChrome.test_a_menu_trigger_that_cancels_pointerdown_still_counts_as_clicked",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/input-probes.html"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "click",
+    "#menu-trigger"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "String(state.opened) + ' ' + document.querySelectorAll('[role=menuitem]').length"
+   ],
+   "session": "act",
+   "main_world": true
+  }
+ ]
+}

@@ -88,7 +88,7 @@ export class FakeRenderer {
 
   async call(fn: string, args: unknown[] = []): Promise<unknown> {
     if (fn.includes("maxTouchPoints")) return this.touch;
-    if (fn.includes("inputWatch")) return { ...this.counts, activeFrame: false };
+    if (fn.includes("inputWatch") || fn.includes("ardiaBrowseInputWatch")) return { ...this.counts, activeFrame: false };
     if (fn.includes("draggable")) return this.draggable;
     if (fn.includes("ardiaBrowse.info")) return { connected: true };
     if (fn.includes("ardiaBrowse.rect")) {

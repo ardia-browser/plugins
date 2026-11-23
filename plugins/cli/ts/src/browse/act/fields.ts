@@ -20,7 +20,7 @@ import {
 import { add, flag } from "../metrics.ts";
 import { Element, type Page } from "../state/page.ts";
 import { monotonic } from "../state/wait.ts";
-import { asRecord, expectInput, poll } from "./common.ts";
+import { asRecord, expectInput, poll, textInserted } from "./common.ts";
 import { click, scrollIntoView, targetPoint, waitEnabled } from "./pointer.ts";
 
 export const SUGGESTION_TIMEOUT = 4.0;
@@ -261,6 +261,7 @@ export async function insertText(page: Page, element: Element, text: string): Pr
     { "beforeinput|input": 1 },
     "The text insert",
     element,
+    textInserted(page, element.frame || page.mainFrame, text),
   );
 }
 

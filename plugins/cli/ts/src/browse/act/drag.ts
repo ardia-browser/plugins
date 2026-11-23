@@ -3,7 +3,7 @@ import { TimedOut, within } from "../changes/observe.ts";
 import { BrowseError, Gated, OutcomeUnknown } from "../daemon-errors.ts";
 import { inputOf } from "../input/input.ts";
 import { roundCoordinate } from "../input/human.ts";
-import { ACTIONS_LIST_AFTER, ACTIONS_LIST_BEFORE } from "../js/index.ts";
+import { ACTIONS_INPUT_WATCH, ACTIONS_LIST_AFTER, ACTIONS_LIST_BEFORE } from "../js/index.ts";
 import { flag } from "../metrics.ts";
 import type { Element, Page } from "../state/page.ts";
 import { asRecord, type Counts, expectInput, inputCounts } from "./common.ts";
@@ -85,7 +85,7 @@ export class DragInterception {
   async pageStartedDrag(): Promise<boolean> {
     let now: Record<string, unknown>;
     try {
-      now = asRecord(await this.page.call("() => ardiaBrowse.inputWatch()", [], { frame: this.sourceFrame, timeout: CLEANUP_TIMEOUT }));
+      now = asRecord(await this.page.call(ACTIONS_INPUT_WATCH, [], { frame: this.sourceFrame, timeout: CLEANUP_TIMEOUT }));
     } catch (error) {
       if (error instanceof BrowseError) return false;
       throw error;

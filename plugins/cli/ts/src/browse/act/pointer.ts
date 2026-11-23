@@ -500,7 +500,7 @@ export async function click(page: Page, element: Element, humanize: boolean, cou
     }
     for (let number = 1; number <= count; number += 1) await mouse.click(x, y, which, number, false);
   };
-  await expectInput(page, element.frame, () => input.gesture("click", press), { mousedown: count, mouseup: count }, "The click", element);
+  await expectInput(page, element.frame, () => input.gesture("click", press), { "mousedown|pointerdown": count, "mouseup|pointerup": count }, "The click", element);
 }
 
 export async function hover(page: Page, element: Element, humanize: boolean): Promise<void> {

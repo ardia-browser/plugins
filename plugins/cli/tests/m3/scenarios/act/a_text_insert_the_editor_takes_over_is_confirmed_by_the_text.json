@@ -1,0 +1,48 @@
+{
+ "live_only": "Python's wait loops (dialog fade, disabled waits, lazy scroll, load settle) count against the daemon's own clock, so replay sends a different number of checks; here the 1.5 s input-delivery wait polls until its deadline",
+ "source": "tests/test_browse_act.py ActInChrome.test_a_text_insert_the_editor_takes_over_is_confirmed_by_the_text",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/input-probes.html"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "click",
+    "#slides"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "keyboard",
+    "inserttext",
+    "Room bottlenecks"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.querySelector('#slides').textContent"
+   ],
+   "session": "act",
+   "main_world": true
+  }
+ ]
+}

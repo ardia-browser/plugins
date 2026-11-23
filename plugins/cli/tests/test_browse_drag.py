@@ -44,7 +44,7 @@ class FakeRenderer:
         return None
 
     async def call(self, function, *args, frame=None, **kwargs):
-        if "inputWatch" in function:
+        if "inputWatch" in function or "ardiaBrowseInputWatch" in function:
             return dict(self.counts, activeFrame=False)
         if "draggable" in function:
             return self.draggable

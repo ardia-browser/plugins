@@ -246,6 +246,30 @@ class ActInChrome(unittest.TestCase):
         self.assertEqual(self.value("document.querySelector('#g-count').textContent"), "5")
         self.assertEqual(self.value("String(document.querySelectorAll('#grid .editor').length)"), "0")
 
+    def test_a_menu_trigger_that_cancels_pointerdown_still_counts_as_clicked(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/input-probes.html")
+        self.browse("click", "#menu-trigger")
+        self.assertEqual(self.value("String(state.opened) + ' ' + document.querySelectorAll('[role=menuitem]').length"), "1 2")
+
+    def test_a_text_insert_the_editor_takes_over_is_confirmed_by_the_text(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/input-probes.html")
+        self.browse("click", "#slides")
+        self.browse("keyboard", "inserttext", "Room bottlenecks")
+        self.assertEqual(self.value("document.querySelector('#slides').textContent"), "Room bottlenecks")
+
+    def test_a_text_insert_with_no_field_focused_is_still_not_delivered_beside_page_churn(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/input-probes.html?churn")
+        done = self.browse("keyboard", "inserttext", "lost words", check=False)
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("received none of its beforeinput/input events", done.stderr + done.stdout)
+
+    def test_a_click_with_no_events_and_no_effect_is_still_not_delivered(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/input-probes.html")
+        done = self.browse("click", "#dead", check=False)
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("received none of its", done.stderr + done.stdout)
+        self.assertEqual(self.value("String(state.dead)"), "1")
+
     def test_dependent_fields_wait_for_their_target(self):
         out = self.browse("batch", "fill #from Beta", "select #to Yankee", "click #later", "get text #out").stdout
         self.assertIn("later clicked", out)

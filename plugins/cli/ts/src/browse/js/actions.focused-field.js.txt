@@ -1,0 +1,25 @@
+() => {
+  if (!globalThis.ardiaBrowseFieldIds) Object.defineProperty(globalThis, "ardiaBrowseFieldIds", { value: { ids: new WeakMap(), next: 1 }, enumerable: false });
+  const registry = globalThis.ardiaBrowseFieldIds;
+  let node = document.activeElement;
+  for (let hops = 0; node && hops < 16; hops++) {
+    let next = node.shadowRoot && node.shadowRoot.activeElement;
+    if (!next) {
+      try { next = node.contentDocument && node.contentDocument.activeElement; } catch (error) { next = null; }
+    }
+    if (!next || next === node) break;
+    node = next;
+  }
+  if (!node) return null;
+  const field = /^(INPUT|TEXTAREA)$/.test(node.tagName) && typeof node.value === "string";
+  if (!field && !node.isContentEditable) return null;
+  if (!registry.ids.has(node)) registry.ids.set(node, registry.next++);
+  let collapsed = false;
+  if (field) {
+    try { collapsed = node.selectionStart === node.selectionEnd; } catch (error) { collapsed = false; }
+  } else {
+    const picked = node.ownerDocument.getSelection();
+    collapsed = !!picked && picked.rangeCount > 0 && picked.isCollapsed;
+  }
+  return { id: registry.ids.get(node), length: field ? node.value.length : (node.textContent || "").length, collapsed };
+}

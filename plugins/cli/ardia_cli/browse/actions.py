@@ -198,21 +198,111 @@ async def focus_in_other_frame(page, frame) -> bool:
     return False
 
 
+INPUT_WATCH = """() => {
+  if (!globalThis.ardiaBrowseInputWatch) {
+    const counts = { mousedown: 0, mouseup: 0, pointerdown: 0, pointerup: 0, click: 0, mousemove: 0, keydown: 0, keyup: 0, wheel: 0, beforeinput: 0, input: 0 };
+    for (const type of Object.keys(counts)) {
+      addEventListener(type, (event) => { if (event.isTrusted) counts[type] += 1; }, { capture: true, passive: true });
+    }
+    Object.defineProperty(globalThis, "ardiaBrowseInputWatch", { value: counts, enumerable: false });
+  }
+  if (!globalThis.ardiaBrowseDragStarts) {
+    const drags = { accepted: 0, dragend: 0, drop: 0, dispatched: [] };
+    for (const type of ["dragstart", "dragend", "drop"]) {
+      addEventListener(type, (event) => {
+        if (!event.isTrusted) return;
+        if (type === "dragstart") drags.dispatched.push(event);
+        else drags[type] += 1;
+      }, { capture: true, passive: true });
+    }
+    Object.defineProperty(globalThis, "ardiaBrowseDragStarts", { value: drags, enumerable: false });
+  }
+  const drags = globalThis.ardiaBrowseDragStarts;
+  drags.accepted += drags.dispatched.filter((event) => !event.defaultPrevented).length;
+  drags.dispatched.length = 0;
+  let active = document.activeElement;
+  while (active && active.shadowRoot && active.shadowRoot.activeElement) active = active.shadowRoot.activeElement;
+  return Object.assign({ activeFrame: !!active && ["IFRAME", "FRAME", "EMBED", "OBJECT"].includes(active.tagName) }, globalThis.ardiaBrowseInputWatch, {
+    dragstart: drags.accepted,
+    dragend: drags.dragend,
+    drop: drags.drop,
+  });
+}"""
+FOCUSED_FIELD = """() => {
+  if (!globalThis.ardiaBrowseFieldIds) Object.defineProperty(globalThis, "ardiaBrowseFieldIds", { value: { ids: new WeakMap(), next: 1 }, enumerable: false });
+  const registry = globalThis.ardiaBrowseFieldIds;
+  let node = document.activeElement;
+  for (let hops = 0; node && hops < 16; hops++) {
+    let next = node.shadowRoot && node.shadowRoot.activeElement;
+    if (!next) {
+      try { next = node.contentDocument && node.contentDocument.activeElement; } catch (error) { next = null; }
+    }
+    if (!next || next === node) break;
+    node = next;
+  }
+  if (!node) return null;
+  const field = /^(INPUT|TEXTAREA)$/.test(node.tagName) && typeof node.value === "string";
+  if (!field && !node.isContentEditable) return null;
+  if (!registry.ids.has(node)) registry.ids.set(node, registry.next++);
+  let collapsed = false;
+  if (field) {
+    try { collapsed = node.selectionStart === node.selectionEnd; } catch (error) { collapsed = false; }
+  } else {
+    const picked = node.ownerDocument.getSelection();
+    collapsed = !!picked && picked.rangeCount > 0 && picked.isCollapsed;
+  }
+  return { id: registry.ids.get(node), length: field ? node.value.length : (node.textContent || "").length, collapsed };
+}"""
+LOST_KINDS = (("pointer", ("mousedown", "mouseup", "pointerdown", "pointerup", "click", "mousemove")), ("keys", ("keydown", "keyup")),
+              ("text", ("beforeinput", "input")), ("wheel", ("wheel",)), ("drag", ("dragstart", "dragend", "drop")))
+
+
 async def input_counts(page, frame):
-    return await page.call("() => ardiaBrowse.inputWatch()", frame=frame)
+    return await page.call(INPUT_WATCH, frame=frame)
+
+
+class TextInserted:
+    def __init__(self, page, frame, text: str):
+        self.page, self.frame, self.length, self.before = page, frame, len(text.encode("utf-16-le")) // 2, None
+
+    async def prepare(self):
+        self.before = await self.page.call(FOCUSED_FIELD, frame=self.frame, read=True)
+
+    async def landed(self) -> bool:
+        before = self.before
+        if not before or not before.get("collapsed") or not self.length:
+            return False
+        from ardia_cli.browse.errors import ConnectionLost
+
+        try:
+            now = await self.page.call(FOCUSED_FIELD, frame=self.frame, read=True)
+        except ConnectionLost:
+            raise
+        except BrowseError:
+            return False
+        return bool(now) and now.get("id") == before.get("id") and now.get("length", 0) - before.get("length", 0) == self.length
+
+
+def flag_lost(needs: dict):
+    parts = {part for name in needs for part in name.split("|")}
+    for kind, events in LOST_KINDS:
+        if parts.intersection(events):
+            command_metrics.flag(f"input_lost_{kind}", True)
 
 
 def delivered(now: dict, before: dict, name: str) -> int:
-    return sum(now.get(part, 0) - before.get(part, 0) for part in name.split("|"))
+    return max(now.get(part, 0) - before.get(part, 0) for part in name.split("|"))
 
 
-async def expect_input(page, frame, run, needs: dict, action: str, element=None):
+async def expect_input(page, frame, run, needs: dict, action: str, element=None, postcondition=None):
     from ardia_cli.browse.errors import ConnectionLost, OutcomeUnknown
 
     frame = frame or page.main_frame
     loader = page.loader(frame)
     try:
         before = await input_counts(page, frame)
+        if postcondition is not None:
+            await postcondition.prepare()
     except ConnectionLost:
         raise
     except BrowseError as error:
@@ -236,14 +326,20 @@ async def expect_input(page, frame, run, needs: dict, action: str, element=None)
             raise OutcomeUnknown(action.lower(), f"it was sent, but confirming it reached the page failed ({error.message})") from None
         missing = [name for name, count in needs.items() if delivered(now, before, name) < count]
         if not missing:
+            if now.get("mousedown", 0) - before.get("mousedown", 0) < now.get("pointerdown", 0) - before.get("pointerdown", 0):
+                command_metrics.flag("input_mouse_events_cancelled", True)
             return result
         if loop.time() >= deadline:
             names = " or ".join(part for name in missing for part in name.split("|"))
             if all(delivered(now, before, name) == 0 for name in needs):
                 if any(key in name for name in needs for key in KEY_EVENTS) and await focus_in_other_frame(page, frame):
                     return result
+                if postcondition is not None and await postcondition.landed():
+                    command_metrics.flag("input_confirmed_by_text", True)
+                    return result
                 if element is not None and not await still_attached(page, element):
                     raise BrowseError(TARGET_REPLACED.format(action=action, target=element.label), code="target_replaced")
+                flag_lost(needs)
                 raise BrowseError(NOT_DELIVERED.format(action=action, missing="/".join(needs).replace("|", "/")), data={"missing": missing}, code="input_not_delivered")
             raise OutcomeUnknown(action.lower(), PARTLY_DELIVERED.format(missing=names))
         await asyncio.sleep(0.05)
@@ -624,7 +720,7 @@ async def click(page, element, humanize: bool, count: int = 1, button: str = "le
         for number in range(1, count + 1):
             await mouse.click(x, y, button=which, click_count=number, humanize=False)
 
-    await expect_input(page, element.frame, lambda: page.input.gesture("click", press), {"mousedown": count, "mouseup": count}, "The click", element)
+    await expect_input(page, element.frame, lambda: page.input.gesture("click", press), {"mousedown|pointerdown": count, "mouseup|pointerup": count}, "The click", element)
 
 
 async def visible_label(page, element):
@@ -1037,7 +1133,7 @@ async def fill_cell(page, element, cell, text: str, humanize: bool) -> dict | No
 async def insert_text(page, element, text: str):
     command_metrics.flag("fill_inserted_text", True)
     await expect_input(page, element.frame, lambda: page.input.gesture("fill", lambda: page.send("Input.insertText", {"text": text}, input_event=True)),
-                       {"beforeinput|input": 1}, "The text insert", element)
+                       {"beforeinput|input": 1}, "The text insert", element, TextInserted(page, element.frame or page.main_frame, text))
 
 
 async def set_value(page, element, kind: str, text: str) -> str:
@@ -1289,7 +1385,7 @@ class DragInterception:
 
     async def page_started_drag(self) -> bool:
         try:
-            now = await self.page.call("() => ardiaBrowse.inputWatch()", frame=self.source_frame, timeout=CLEANUP_TIMEOUT)
+            now = await self.page.call(INPUT_WATCH, frame=self.source_frame, timeout=CLEANUP_TIMEOUT)
         except BrowseError:
             return False
         return now.get("dragstart", 0) > self.before_source.get("dragstart", 0)

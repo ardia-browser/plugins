@@ -887,7 +887,7 @@ async def cmd_keyboard(ctx: Ctx, argv):
         await page.require_visible()
         _, report = await changes.observe(ctx, page, lambda: actions.expect_input(
             page, frame, lambda: page.input.gesture("keyboard inserttext", lambda: page.send("Input.insertText", {"text": text}, input_event=True)),
-            {"beforeinput|input": 1} if text else {}, "The text insert"), (None, frame))
+            {"beforeinput|input": 1} if text else {}, "The text insert", postcondition=actions.TextInserted(page, frame, text)), (None, frame))
         return changes.attach(Result({"inserted": True}), report)
     if args[0] != "type":
         raise Usage(f"Unknown keyboard subcommand: {args[0]} (type or inserttext)")
@@ -1041,7 +1041,7 @@ async def cmd_mouse(ctx: Ctx, argv):
         x, y = mouse._position
         over = await actions.over_frame(page, x, y)
         await actions.expect_input(page, page.main_frame, lambda: page.input.gesture(f"mouse {action}", run, keep_held=True),
-                                   {} if over else {"mousedown" if action == "down" else "mouseup": 1}, f"The mouse {action}")
+                                   {} if over else {"mousedown|pointerdown" if action == "down" else "mouseup|pointerup": 1}, f"The mouse {action}")
         return Result({action: True})
     if action == "wheel":
         need(args, 2, "mouse wheel <dy> [dx]")
