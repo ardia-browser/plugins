@@ -307,18 +307,22 @@ async function linksOn(page: Page, frame: string): Promise<string[]> {
 
 const RETRY_CODES = ["document_changed", "page_navigated", "frame_gone"];
 
-async function linksNow(page: Page, until: number): Promise<string[]> {
+function retryable(error: unknown): error is BrowseError {
+  return error instanceof BrowseError && !(error instanceof ConnectionLost) && RETRY_CODES.includes(error.code ?? "");
+}
+
+async function linksNow(page: Page, until: number): Promise<string[] | BrowseError> {
   try {
     return await linksOn(page, page.mainFrame as string);
   } catch (error) {
-    if (!(error instanceof BrowseError) || error instanceof ConnectionLost || !RETRY_CODES.includes(error.code ?? "")) throw error;
+    if (!retryable(error)) throw error;
     await settle(page, Math.min(until, monotonic() + SETTLE_LIMIT));
     await page.refreshFrames();
     try {
       return await linksOn(page, page.mainFrame as string);
     } catch (again) {
-      if (!(again instanceof BrowseError) || again instanceof ConnectionLost || !RETRY_CODES.includes(again.code ?? "")) throw again;
-      return [];
+      if (!retryable(again)) throw again;
+      return again;
     }
   }
 }
@@ -334,12 +338,17 @@ function sameUrlKey(url: string): string {
 export async function linksIn(page: Page, listing: string, pattern: string, timeout: number, wanted: (found: string[], landed: string) => boolean): Promise<string[]> {
   await goto(page, listing, timeout, true);
   const deadline = monotonic() + Math.min(THIN_WAIT, timeout);
-  let found = await linksNow(page, deadline);
-  while (!wanted(found, page.url || listing) && monotonic() + THIN_POLL < deadline) {
+  let scanned: string[] | null = null;
+  let failed: BrowseError | null = null;
+  for (;;) {
+    const now = await linksNow(page, deadline);
+    if (now instanceof BrowseError) failed = now;
+    else scanned = now;
+    if ((scanned !== null && wanted(scanned, page.url || listing)) || monotonic() + THIN_POLL >= deadline) break;
     await sleep(THIN_POLL);
-    found = await linksNow(page, deadline);
   }
-  return found;
+  if (scanned === null) throw failed ?? new BrowseError(`couldn't read the links on ${listing}`, null, "document_changed");
+  return scanned;
 }
 
 export type ListingFailure = { url: string; error: string };
@@ -369,6 +378,7 @@ export async function collectLinksFrom(ctx: Ctx, listings: readonly string[], pa
       } catch (error) {
         if (!quiet(error) || error instanceof ConnectionLost || (error instanceof OutcomeUnknown && page !== null && state.targetInfos.has(page.targetId))) throw error;
         failures.push({ url: listing, error: (error as BrowseError).text });
+        page = null;
         continue;
       }
       const landed = page.url || listing;

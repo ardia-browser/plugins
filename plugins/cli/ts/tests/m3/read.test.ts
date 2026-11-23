@@ -462,6 +462,27 @@ describe("ReadingTabs", () => {
     }
   });
 
+  test("test_links_from_urls_retire_a_reader_whose_listing_failed (plugins#74)", async () => {
+    const run = scene();
+    const previous = pages.readers.linksIn;
+    const readers: string[] = [];
+    pages.readers.linksIn = async (page, listing) => {
+      readers.push(page.targetId);
+      if (listing.endsWith("/b")) throw new BrowseError("The site didn't answer Page.navigate", null, "timeout");
+      return [`${listing}/item`];
+    };
+    try {
+      const listing = await pages.run(run.ctx, { links: "/item", list: true }, ["http://s/a", "http://s/b", "http://s/c"]);
+      expect((listing.data as Record<string, unknown>)["links"]).toEqual(["http://s/a/item", "http://s/c/item"]);
+      expect(readers[0]).toBe(readers[1]);
+      expect(readers[2]).not.toBe(readers[1]);
+      expect([...run.closed].sort()).toEqual([...run.created].sort());
+    } finally {
+      pages.readers.linksIn = previous;
+      run.restore();
+    }
+  });
+
   test("test_links_from_urls_read_twenty_by_default_whatever_the_listing_count (plugins#74)", async () => {
     const run = scene();
     const previous = pages.readers.linksIn;
