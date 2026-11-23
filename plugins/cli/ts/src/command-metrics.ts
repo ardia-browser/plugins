@@ -33,6 +33,7 @@ export const TS_ONLY_FLAGS: readonly string[] = [
   "snapshot_oopif_frames",
   "stale_ref_after_open",
   "tab_close_interrupted",
+  "tab_readopted_after_restart",
 ];
 
 export const TS_ONLY_COUNTS: readonly string[] = ["failed_step_index", "script_calls", "script_concurrent_peak", "script_receipts_skipped"];

@@ -9,11 +9,12 @@ import { release as releaseClaims } from "../daemon/claims.ts";
 import { type Endpoint, unreachableMessage } from "../endpoint.ts";
 import { clock, flag, spent } from "../metrics.ts";
 import { wallSeconds } from "../tokens.ts";
-import { APP_TAB, appTabError, appTabTarget } from "./apptabs.ts";
+import { APP_TAB, appTabError, appTabMap, appTabTarget } from "./apptabs.ts";
 import { detachedError, type Element, Page, quiet, WORLD_NAME } from "./page.ts";
 import * as pierce from "./pierce.ts";
 import { type Json, record } from "./records.ts";
 import { isBareRef, parseRef, Refs } from "./refs.ts";
+import { PathError } from "../paths.ts";
 import { Registry } from "./registry.ts";
 import * as temptabs from "./temptabs.ts";
 import { monotonic } from "./wait.ts";
@@ -384,6 +385,49 @@ export class State extends Refs implements temptabs.TempTabState {
     }
     this.appTabs.delete(targetId);
     this.appGenerations.delete(targetId);
+  }
+
+  noteAppTabs(paired: ReadonlyMap<string, string>, present: ReadonlySet<string> | null): void {
+    try {
+      const owned = this.registry.sessionTabs();
+      const add: string[] = [];
+      let readopted = false;
+      for (const [target, app] of paired) {
+        if (this.opened.has(target)) {
+          if (!owned.has(app)) add.push(app);
+        } else if (owned.has(app)) {
+          this.opened.add(target);
+          this.registry.noteOpened(this.instance, target);
+          readopted = true;
+        }
+      }
+      const drop = present === null ? [] : [...owned].filter((app) => !present.has(app));
+      this.registry.updateSessionTabs(add, drop);
+      if (readopted) flag("tab_readopted_after_restart", true);
+    } catch (error) {
+      if (!(error instanceof PathError) && !(error instanceof BrowseError)) throw error;
+    }
+  }
+
+  ownsSessionTabs(): boolean {
+    try {
+      return this.registry.sessionTabs().size > 0;
+    } catch (error) {
+      if (error instanceof PathError || error instanceof BrowseError) return false;
+      throw error;
+    }
+  }
+
+  async readoptOpenedTabs(): Promise<void> {
+    if (this.ownsSessionTabs()) await appTabMap(this).catch(() => undefined);
+  }
+
+  forgetSessionTabs(): void {
+    try {
+      this.registry.updateSessionTabs([], [], true);
+    } catch (error) {
+      if (!(error instanceof PathError) && !(error instanceof BrowseError)) throw error;
+    }
   }
 
   setOffscreen(targetId: string, offscreen: boolean): void {

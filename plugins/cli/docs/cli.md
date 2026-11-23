@@ -229,6 +229,14 @@ mouse position, so a humanized path starts where the last one ended. `ardia brow
   `[A-Za-z0-9][A-Za-z0-9._-]{0,63}`: `<key>.lock`, `<key>.sock`, `<key>.json` (session name, pid) and `<key>.log`
   (the daemon's redacted stderr). The socket is bound and connected by a relative name after `fchdir` into the
   folder, so a long data dir never hits the 104-byte `sun_path` limit.
+- Which tabs a session opened outlives its daemon and Ardia itself. DevTools target ids change on every relaunch, so
+  `session-tabs.json` (0600, under `tabs.lock`) keeps each session name's opened tabs by Ardia's own tab id (`tab-…`,
+  which session restore keeps). Whenever the daemon pairs targets with Ardia's tabs (its hold scan a few seconds
+  after a tab is used, `tab list`, a `tab close` it would refuse, `close`), a target whose tab id is listed counts as
+  opened by this session again (`tab_readopted_after_restart`), so after a crash and restore `tab close` and `close`
+  still close the session's tabs, and the user's stay the user's. An id Ardia no longer lists is dropped, entries
+  lapse after 3 days, each session keeps its newest 256 and the file its 64 most recent sessions; `close` forgets the
+  session's entries. TypeScript only.
 - The daemon holds an exclusive `flock` on `<key>.lock` for its whole life. Only with that lock held does it treat
   an existing `<key>.sock` as stale and unlink it; it binds with umask 0177 so the socket is 0600 from the start,
   records the socket's inode, and at exit unlinks it only if it's still that inode. Both ends check the other's
@@ -2531,7 +2539,8 @@ Its page core (slice D3: `browse/state/page.ts`, `state.ts`, `refs.ts`, `apptabs
   after a Ctrl-C for closing, as `set viewport` does; Python leaves it open.
 - `tab new` and `window new` with global page setup (`--enable`, `--init-script`, `--capture-console`) answer
   `unsupported` until the init-script slice lands, as `open` does.
-- Two more TypeScript-only metric flags, `tab_close_interrupted` and `dialog_dismissed_after_failure`, follow the rule
+- Three more TypeScript-only metric flags, `tab_close_interrupted`, `dialog_dismissed_after_failure` and
+  `tab_readopted_after_restart`, follow the rule
   for `offscreen_handoff_rolled_back` above.
 - The caller counts as announced to Ardia's control socket only after the handshake finished, so a cancelled one is
   tried again by the next command; Python records it before. A cancelled active-tab lookup (`tab active`) ends its HTTP

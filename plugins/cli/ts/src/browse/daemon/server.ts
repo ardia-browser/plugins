@@ -619,6 +619,7 @@ export class Daemon {
         if (!(error instanceof Cancelled)) log.exception("closing the session's tabs failed", error);
       } finally {
         clearTimeout(timer);
+        state.forgetSessionTabs();
       }
     } finally {
       this.lock.release();
@@ -632,10 +633,11 @@ export class Daemon {
   private async closeTabs(tally: { closed: number; kept: string[] }): Promise<void> {
     const state = this.state;
     const leftovers = state.instance !== null && state.registry.temporaries(state.instance).length > 0;
-    if ((state.opened.size === 0 && !leftovers) || state.lost) return;
+    if ((state.opened.size === 0 && !leftovers && !state.ownsSessionTabs()) || state.lost) return;
     try {
       await state.connect();
       await state.refreshTargets();
+      await state.readoptOpenedTabs();
       await temptabs.sweep(state);
       const registry = state.registry;
       const instance = state.instance;
