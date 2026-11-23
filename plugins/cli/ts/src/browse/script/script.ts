@@ -17,7 +17,7 @@ import { Result } from "../daemon/render.ts";
 import { add, count, flag } from "../metrics.ts";
 import { record } from "../state/records.ts";
 import type { State } from "../state/state.ts";
-import { Dropped, Gate, MEMORY_LIMIT, type Runner, type RunnerEvent, takeRunner, whenReady } from "./host.ts";
+import { Dropped, Gate, SharedWait, MEMORY_LIMIT, type Runner, type RunnerEvent, takeRunner, whenReady } from "./host.ts";
 import { ArgumentsTooDeep, evaluateExpression, frameFunction, framesAnswer, selectorExpression, validEvaluate } from "./page-calls.ts";
 import { renderJson } from "./render.ts";
 import { overBytes } from "./runner.ts";
@@ -257,7 +257,8 @@ class ScriptRun {
   readonly mutating = new Set<number>();
   readonly started = new Set<number>();
   private ended = false;
-  private settling: Promise<void> | null = null;
+  signal: AbortSignal | null = null;
+  private readonly reactions = new SharedWait(() => this.signal);
 
   constructor(readonly ctx: Ctx, readonly runner: Runner) {}
 
@@ -317,15 +318,8 @@ class ScriptRun {
   }
 
   async settle(name: string, args: readonly string[]): Promise<void> {
-    if (this.settling !== null) {
-      await this.settling;
-      return;
-    }
-    if (!hasPendingReaction(this.ctx.state) || !reactionWaits(name, args)) return;
-    this.settling ??= settleReaction(this.ctx.state, name, args).finally(() => {
-      this.settling = null;
-    });
-    await this.settling;
+    if (!this.reactions.active && (!hasPendingReaction(this.ctx.state) || !reactionWaits(name, args))) return;
+    await this.reactions.join(() => settleReaction(this.ctx.state, name, args));
   }
 
   reply(id: number, answer: Answer): void {
@@ -474,6 +468,7 @@ async function drive(run: ScriptRun, source: string): Promise<Message> {
   const seen = new Set<number>();
   const outer = currentSignal();
   const signal = outer === null ? run.stop.signal : AbortSignal.any([outer, run.stop.signal]);
+  run.signal = signal;
   for (;;) {
     const event = await untilCancelled(runner.next());
     if (event.type === "fatal") throw event.error;

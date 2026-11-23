@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { Subprocess } from "bun";
 import { SCRIPT_RUNNER_ARGUMENT } from "../../flush-argument.ts";
 import { footprint, libcBeside, libcFile } from "../../libc.ts";
+import { untilCancelled, withSignal } from "../cdp/cancel.ts";
 import { BrowseError } from "../daemon-errors.ts";
 import type { RunnerInbound, RunnerOutbound } from "./runner.ts";
 
@@ -232,6 +233,32 @@ export async function whenReady(runner: Runner, timeoutMs = READY_TIMEOUT_MS): P
 }
 
 export class Dropped extends Error {}
+
+export class SharedWait {
+  private pending: Promise<void> | null = null;
+
+  constructor(private readonly signal: () => AbortSignal | null) {}
+
+  get active(): boolean {
+    return this.pending !== null;
+  }
+
+  async join(start: () => Promise<void>): Promise<void> {
+    if (this.pending === null) {
+      const work = withSignal(this.signal(), start);
+      this.pending = work;
+      work.then(
+        () => {
+          if (this.pending === work) this.pending = null;
+        },
+        () => {
+          if (this.pending === work) this.pending = null;
+        },
+      );
+    }
+    await untilCancelled(this.pending);
+  }
+}
 
 type Waiter = { exclusive: boolean; resolve: () => void; reject: (error: Error) => void };
 

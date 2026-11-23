@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { overBytes } from "../src/browse/script/runner.ts";
-import { Dropped, Gate } from "../src/browse/script/host.ts";
+import { Cancelled, currentSignal, sleep, untilCancelled, withSignal } from "../src/browse/cdp/cancel.ts";
+import { Dropped, Gate, SharedWait } from "../src/browse/script/host.ts";
 import { ArgumentsTooDeep, evaluateExpression, frameFunction, literal, selectorExpression, validEvaluate } from "../src/browse/script/page-calls.ts";
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
@@ -86,6 +87,43 @@ describe("the script's call gate", () => {
     await busy;
     await expect(queued).rejects.toBeInstanceOf(Dropped);
     expect(ran).toEqual(["first"]);
+  });
+});
+
+describe("a shared wait", () => {
+  test("one caller giving up doesn't cancel the wait for the others", async () => {
+    const run = new AbortController();
+    const shared = new SharedWait(() => run.signal);
+    const release = deferred();
+    let starts = 0;
+    const seen: (AbortSignal | null)[] = [];
+    const start = async () => {
+      starts += 1;
+      seen.push(currentSignal());
+      await untilCancelled(release.promise);
+    };
+    const reader = new AbortController();
+    const read = withSignal(reader.signal, () => shared.join(start));
+    const evaluate = shared.join(start);
+    await tick();
+    reader.abort(new Cancelled());
+    await expect(read).rejects.toBeInstanceOf(Cancelled);
+    expect(shared.active).toBe(true);
+    release.resolve();
+    await evaluate;
+    expect(starts).toBe(1);
+    expect(seen).toEqual([run.signal]);
+    expect(shared.active).toBe(false);
+  });
+
+  test("the run's own cancellation still ends the wait for everyone", async () => {
+    const run = new AbortController();
+    const shared = new SharedWait(() => run.signal);
+    const waits = [shared.join(() => sleep(5)), shared.join(async () => {})];
+    await tick();
+    run.abort(new Cancelled());
+    const settled = await Promise.allSettled(waits);
+    expect(settled.map((result) => result.status === "rejected" && result.reason instanceof Cancelled)).toEqual([true, true]);
   });
 });
 
