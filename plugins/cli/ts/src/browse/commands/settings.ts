@@ -65,6 +65,7 @@ async function goOffscreen(ctx: Ctx, page: Page): Promise<boolean> {
   }
   state.setOffscreen(page.targetId, true);
   state.appTabs.delete(page.targetId);
+  state.dropRecorded(appTab);
   return true;
 }
 

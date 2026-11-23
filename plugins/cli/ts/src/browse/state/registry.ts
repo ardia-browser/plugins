@@ -16,7 +16,7 @@ export const FILE_BUDGET = 1024 * 1024;
 export const CLOSE_HOLD = 30.0;
 export const HOLD_MARK = "#";
 export const SESSION_TABS = "session-tabs.json";
-export const SESSION_TABS_VERSION = 1n;
+export const SESSION_TABS_VERSION = 2n;
 export const MAX_SESSION_TABS = 64;
 export const MAX_SESSIONS = 32;
 
@@ -84,7 +84,7 @@ function wellShaped(data: Value | undefined, instance: Instance): data is Data {
 function sessionTabsShaped(data: Value | undefined): data is Data {
   if (!(data instanceof Map) || data.get("version") !== SESSION_TABS_VERSION) return false;
   const sessions = data.get("sessions");
-  return sessions instanceof Map && [...sessions.values()].every((tabs) => tabs instanceof Map);
+  return sessions instanceof Map && [...sessions.values()].every((tabs) => tabs instanceof Map && [...tabs.values()].every((entry) => entry instanceof Map));
 }
 
 function newest<T>(entries: Iterable<[string, T]>, at: (value: T) => number, keep: number): [string, T][] {
@@ -92,8 +92,10 @@ function newest<T>(entries: Iterable<[string, T]>, at: (value: T) => number, kee
 }
 
 function latest(tabs: Value): number {
-  return Math.max(0, ...[...map(tabs).values()].map(num));
+  return Math.max(0, ...[...map(tabs).values()].map((entry) => num(map(entry).get("at"))));
 }
+
+export type SessionTab = { run: string; target: string; at: number };
 
 export class Registry {
   readonly run: string;
@@ -286,18 +288,29 @@ export class Registry {
     });
   }
 
-  sessionTabs(): Set<string> {
-    if (this.browseFd === null) return new Set();
-    return this.withSessionTabs((sessions) => new Set(map(sessions.get(this.owner)).keys()));
+  sessionTabs(): Map<string, SessionTab> {
+    if (this.browseFd === null) return new Map();
+    return this.withSessionTabs((sessions) => {
+      const found = new Map<string, SessionTab>();
+      for (const [app, entry] of map(sessions.get(this.owner))) {
+        const fields = map(entry);
+        found.set(app, { run: text(fields.get("run")), target: text(fields.get("target")), at: num(fields.get("at")) });
+      }
+      return found;
+    });
   }
 
-  updateSessionTabs(add: readonly string[], drop: readonly string[]): void {
-    if (this.browseFd === null || (add.length === 0 && drop.length === 0)) return;
+  updateSessionTabs(put: ReadonlyMap<string, { run: string; target: string }>, drop: readonly string[], touch: readonly string[] = []): void {
+    if (this.browseFd === null || (put.size === 0 && drop.length === 0 && touch.length === 0)) return;
     this.withSessionTabs((sessions) => {
       const tabs = new Map(map(sessions.get(this.owner)));
       for (const app of drop) tabs.delete(app);
-      for (const app of add) tabs.set(app, now());
-      const kept = new Map(newest(tabs, num, MAX_SESSION_TABS));
+      for (const [app, entry] of put) tabs.set(app, new Map<string, Value>([["run", entry.run], ["target", entry.target], ["at", now()]]));
+      for (const app of touch) {
+        const entry = tabs.get(app);
+        if (entry instanceof Map) tabs.set(app, new Map([...entry, ["at", now()]]));
+      }
+      const kept = new Map(newest(tabs, (entry) => num(map(entry).get("at")), MAX_SESSION_TABS));
       if (kept.size > 0) sessions.set(this.owner, kept);
       else sessions.delete(this.owner);
       const capped = newest(sessions, latest, MAX_SESSIONS);
@@ -323,7 +336,7 @@ export class Registry {
       const before = dumps(data, "compact");
       const cutoff = wallSeconds() - STALE_FILE_SECONDS;
       for (const [session, tabs] of [...sessions]) {
-        const fresh = [...map(tabs)].filter(([, at]) => num(at) >= cutoff);
+        const fresh = [...map(tabs)].filter(([, entry]) => num(map(entry).get("at")) >= cutoff);
         if (fresh.length > 0) sessions.set(session, new Map(fresh));
         else sessions.delete(session);
       }

@@ -244,6 +244,7 @@ export async function newTab(
   window = false,
   show = false,
   abandoned: ((targetId: string) => void) | null = null,
+  created: ((targetId: string) => void) | null = null,
 ): Promise<Page> {
   const state = ctx.state;
   await state.connect();
@@ -273,6 +274,7 @@ export async function newTab(
     throw error;
   }
   const targetId = String(result["targetId"]);
+  created?.(targetId);
   state.opened.add(targetId);
   state.registry.noteOpened(state.instance, targetId);
   if (!state.targetInfos.has(targetId)) state.targetInfos.set(targetId, { targetId, url: "about:blank", title: "", type: "page" });
@@ -315,15 +317,15 @@ export async function leaveOffscreen(ctx: Ctx, page: Page): Promise<Page> {
   const url = known && !known.startsWith("about:") ? known : null;
   const label = [...state.labels].find(([, owner]) => owner === old)?.[0] ?? null;
   if (label) state.labels.delete(label);
-  const openedBefore = new Set(state.opened);
+  const made: string[] = [];
   const pinned = state.pinnedTarget;
   let fresh: Page;
   try {
-    fresh = await newTab(ctx, null, label, false, false, (late) => temptabs.mustClose(state, late, true));
+    fresh = await newTab(ctx, null, label, false, false, (late) => temptabs.mustClose(state, late, true), (created) => made.push(created));
     if (url) await navigate(ctx, fresh, normalizeUrl(url));
   } catch (error) {
     try {
-      await shield(() => putBack(state, old, label, pinned, [...state.opened].filter((target) => !openedBefore.has(target))));
+      await shield(() => putBack(state, old, label, pinned, made));
     } catch (closing) {
       if (error instanceof Error && error.cause === undefined) Object.defineProperty(error, "cause", { value: closing, configurable: true, writable: true });
     }
@@ -331,9 +333,10 @@ export async function leaveOffscreen(ctx: Ctx, page: Page): Promise<Page> {
   }
   state.setOffscreen(old, false);
   if (state.registry.reserveClose(state.instance, old)) {
+    const app = state.appTabs.get(old);
     try {
       await (state.browser as Browser).send("Target.closeTarget", { targetId: old });
-      state.closedOpenedTab(old);
+      state.dropRecorded(app);
     } catch (error) {
       if (!quiet(error)) throw error;
     } finally {
@@ -352,8 +355,10 @@ async function putBack(state: State, old: string, label: string | null, pinned: 
   let closedAll = true;
   let failure: unknown = null;
   for (const target of made) {
+    const app = state.appTabs.get(target);
     const outcome = await temptabs.closeReserved(state, target);
     if (outcome.closed) {
+      state.dropRecorded(app);
       state.forgetTarget(target);
       continue;
     }

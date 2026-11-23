@@ -231,18 +231,22 @@ mouse position, so a humanized path starts where the last one ended. `ardia brow
   folder, so a long data dir never hits the 104-byte `sun_path` limit.
 - Which tabs a session opened outlives its daemon and Ardia itself. DevTools target ids change on every relaunch, so
   `session-tabs.json` (0600, under `tabs.lock`) keeps the session's opened tabs by Ardia's own tab id (`tab-…`, which
-  session restore keeps, and which Ardia never reuses), under an owner that is the session key without its build
-  stamp: the same namespace, endpoint, plugin mode and session name, so another namespace's `default` never owns them.
-  A tab is recorded within a few seconds of its creation (retried until its id is on disk, even if `open` then fails),
-  before `close` lets go of any, and whenever the daemon pairs targets with Ardia's tabs (its hold scan, `tab list`, a
-  `tab close` it would refuse); a target whose tab id is listed counts as opened by this session again
-  (`tab_readopted_after_restart`), so after a crash and restore `tab close` and `close` still close the session's
-  tabs, and the user's stay the user's. `close` looks Ardia's tabs up first only when a live tab isn't recorded or a
-  recorded one isn't paired, and gives that lookup 2 s of its deadline. An id leaves the record only when the session
-  closes that tab, or after 3 days: a listing can't prove a tab is gone (Ardia leaves a parked pin out of `windows`
-  until one of its profile's windows opens again), so a tab `close` couldn't reach, asleep or with Ardia gone, stays
-  the session's for a retry. Each owner keeps its newest 64 ids and the file its 32 most recent owners; a record that
-  can't be read or written never fails the command. TypeScript only.
+  session restore keeps, and which Ardia never reuses), each with the page's target id and Ardia's run (its pid; the
+  WebSocket path for a port), under an owner that is the session key without its build stamp: the same namespace,
+  endpoint, plugin mode and session name, so another namespace's `default` never owns them. A tab is recorded within a
+  few seconds of its creation (retried until its page is on disk, even if `open` then fails), before `close` lets go
+  of any, and whenever the daemon pairs targets with Ardia's tabs (its hold scan, `tab list`, a `tab close` it would
+  refuse). A recorded tab counts as opened by this session again when it is the same page (a new daemon, or control
+  turned off and on), or when Ardia has restarted since (`tab_readopted_after_restart`; the record then names the
+  restored page), so after a crash and restore `tab close` and `close` still close the session's tabs. A page the user
+  opens in that tab later in the same run (a pin closed and clicked again) stays the user's. `close` looks Ardia's
+  tabs up first only when a live tab isn't recorded or a recorded one isn't paired, and gives that lookup 2 s of its
+  deadline. An id leaves the record only when the session closes that tab (or takes it off-screen, where Ardia drops
+  it), or after 3 days: a listing can't prove a tab is gone (Ardia leaves a parked pin out of `windows` until one of
+  its profile's windows opens again), so a tab `close` couldn't reach stays the session's for a retry. Each owner
+  keeps its newest 64 ids and the file its 32 most recent owners; a listing refreshes the ids it shows (hourly, or
+  every time near the cap), so tabs that are gone go first. A record that can't be read or written never fails the
+  command. TypeScript only.
 - The daemon holds an exclusive `flock` on `<key>.lock` for its whole life. Only with that lock held does it treat
   an existing `<key>.sock` as stale and unlink it; it binds with umask 0177 so the socket is 0600 from the start,
   records the socket's inode, and at exit unlinks it only if it's still that inode. Both ends check the other's

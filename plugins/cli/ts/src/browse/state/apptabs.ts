@@ -21,7 +21,7 @@ export type AppTabState = {
   readonly targetInfos: ReadonlyMap<string, Record<string, unknown>>;
   readonly appTabs: Map<string, string>;
   readonly appGenerations: Map<string, unknown>;
-  noteAppTabs?(paired: ReadonlyMap<string, string>): void;
+  noteAppTabs?(paired: ReadonlyMap<string, string>, present?: ReadonlySet<string> | null): void;
 };
 
 export type AppRow = Record<string, unknown> & { id: string };
@@ -226,13 +226,14 @@ export async function whereAppHas(state: AppTabState, targetId: string): Promise
 export async function appTabMap(state: AppTabState, timeout = WINDOWS_TIMEOUT * 2): Promise<Map<string, string>> {
   const windows = await appWindows(state, timeout);
   if (windows === null) return new Map();
-  const paired = pairByTarget(appTabRows(windows), state.targetInfos);
+  const rows = appTabRows(windows);
+  const paired = pairByTarget(rows, state.targetInfos);
   for (const [target, entry] of paired) {
     state.appTabs.set(target, entry.app);
     state.appGenerations.set(target, entry.generation);
   }
   const apps = new Map([...paired].map(([target, entry]) => [target, entry.app]));
-  state.noteAppTabs?.(apps);
+  state.noteAppTabs?.(apps, new Set(rows.map((row) => row.id)));
   return apps;
 }
 

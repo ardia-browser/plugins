@@ -14,7 +14,7 @@ import { detachedError, type Element, Page, quiet, WORLD_NAME } from "./page.ts"
 import * as pierce from "./pierce.ts";
 import { type Json, record } from "./records.ts";
 import { isBareRef, parseRef, Refs } from "./refs.ts";
-import { Registry } from "./registry.ts";
+import { MAX_SESSION_TABS, Registry, type SessionTab } from "./registry.ts";
 import * as temptabs from "./temptabs.ts";
 import { monotonic } from "./wait.ts";
 
@@ -31,6 +31,7 @@ export const REATTACH_TRIES = 3;
 export const PAIR_TRIES = 5;
 export const PAIR_WAIT = 1.0;
 export const CLOSE_PAIR_TIMEOUT = 2.0;
+export const TOUCH_AFTER = 3600;
 const ENDED_SESSIONS_KEPT = 64;
 
 function rememberEnded(ended: Set<string>, session: string): void {
@@ -390,34 +391,44 @@ export class State extends Refs implements temptabs.TempTabState {
     this.appGenerations.delete(targetId);
   }
 
-  noteAppTabs(paired: ReadonlyMap<string, string>): void {
+  get run(): string {
+    const instance = this.instance ?? "";
+    const pid = /^([0-9]+):/u.exec(instance);
+    return pid ? `pid:${pid[1]}` : instance;
+  }
+
+  noteAppTabs(paired: ReadonlyMap<string, string>, present: ReadonlySet<string> | null = null): void {
     try {
+      const run = this.run;
       const owned = this.registry.sessionTabs();
-      const add: string[] = [];
+      const put = new Map<string, { run: string; target: string }>();
       let readopted = false;
       for (const [target, app] of paired) {
+        const entry = owned.get(app);
         if (this.opened.has(target)) {
-          if (!owned.has(app)) add.push(app);
-        } else if (owned.has(app)) {
+          if (entry === undefined || entry.target !== target || entry.run !== run) put.set(app, { run, target });
+        } else if (entry !== undefined && run !== "" && (entry.target === target || entry.run !== run)) {
           this.opened.add(target);
           this.registry.noteOpened(this.instance, target);
+          put.set(app, { run, target });
           readopted = true;
         }
       }
-      this.registry.updateSessionTabs(add, []);
+      const stale = owned.size + put.size >= MAX_SESSION_TABS ? Number.POSITIVE_INFINITY : wallSeconds() - TOUCH_AFTER;
+      const touch = present === null ? [] : [...owned].filter(([app, entry]) => present.has(app) && !put.has(app) && entry.at < stale).map(([app]) => app);
+      this.registry.updateSessionTabs(put, [], touch);
       if (readopted) flag("tab_readopted_after_restart", true);
     } catch {}
   }
 
-  closedOpenedTab(targetId: string): void {
-    const app = this.appTabs.get(targetId);
+  dropRecorded(app: string | undefined): void {
     if (app === undefined) return;
     try {
-      this.registry.updateSessionTabs([], [app]);
+      this.registry.updateSessionTabs(new Map(), [app]);
     } catch {}
   }
 
-  private recordedTabs(): Set<string> | null {
+  private recordedTabs(): Map<string, SessionTab> | null {
     try {
       return this.registry.sessionTabs();
     } catch {
@@ -431,7 +442,7 @@ export class State extends Refs implements temptabs.TempTabState {
 
   recorded(targetId: string): boolean {
     const app = this.appTabs.get(targetId);
-    return app !== undefined && (this.recordedTabs()?.has(app) ?? false);
+    return app !== undefined && this.recordedTabs()?.get(app)?.target === targetId;
   }
 
   pairOpenedLater(targetId: string): void {
@@ -447,10 +458,10 @@ export class State extends Refs implements temptabs.TempTabState {
   }
 
   needsPairingBeforeClose(): boolean {
-    const owned = this.recordedTabs() ?? new Set<string>();
+    const owned = this.recordedTabs() ?? new Map<string, SessionTab>();
     const liveApps = new Set([...this.appTabs].filter(([target]) => this.targetInfos.has(target)).map(([, app]) => app));
-    const unrecorded = [...this.opened].some((target) => this.targetInfos.has(target) && !owned.has(this.appTabs.get(target) ?? ""));
-    return unrecorded || [...owned].some((app) => !liveApps.has(app));
+    const unrecorded = [...this.opened].some((target) => this.targetInfos.has(target) && owned.get(this.appTabs.get(target) ?? "")?.target !== target);
+    return unrecorded || [...owned.keys()].some((app) => !liveApps.has(app));
   }
 
   async pairBeforeClosing(): Promise<void> {

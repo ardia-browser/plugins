@@ -651,10 +651,11 @@ export class Daemon {
           state.forgetTarget(targetId);
           continue;
         }
+        const app = state.appTabs.get(targetId);
         try {
           await state.browser?.send("Target.closeTarget", { targetId });
           tally.closed += 1;
-          state.closedOpenedTab(targetId);
+          state.dropRecorded(app);
         } finally {
           registry.finishClose(instance, targetId);
         }

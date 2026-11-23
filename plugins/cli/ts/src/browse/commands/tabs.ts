@@ -48,6 +48,7 @@ async function closeTab(ctx: Ctx, which: string | undefined): Promise<Result> {
     throw new BrowseError(`Tab [${state.tabId(targetId)}] is in use by session ${named.join(", ")}, so it stays open`, null, "tab_in_use");
   }
   const tab = state.tabId(targetId);
+  const app = state.appTabs.get(targetId);
   try {
     await (state.browser as Browser).send("Target.closeTarget", { targetId });
   } catch (error) {
@@ -60,7 +61,7 @@ async function closeTab(ctx: Ctx, which: string | undefined): Promise<Result> {
     throw error;
   }
   state.registry.finishClose(state.instance, targetId);
-  state.closedOpenedTab(targetId);
+  state.dropRecorded(app);
   state.forgetTarget(targetId);
   return new Result({ closed: tab, targetId }, `✓ Tab [${tab}] closed`);
 }
