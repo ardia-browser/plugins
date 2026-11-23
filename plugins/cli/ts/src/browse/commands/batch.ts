@@ -510,16 +510,16 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
       add("batch_lines_held");
     } else if (observing.pending !== null) placeReport(await flushBatch(ctx, observing), !outcome.success);
     settle(outcome, index);
-    if (options["bail"] && (outcome.code === "dialog_blocked" || openDialog(ctx.state) !== null)) {
-      flag("batch_bailed_on_dialog", true);
-      for (const rest of runs.slice(index + 1)) outcomes.push({ command: rest, success: false, result: null, error: DIALOG_BAIL, code: "not_run", text: null });
-      break;
-    }
     if (error instanceof ConnectionLost) lost = error;
     if (error instanceof OutcomeUnknown || error instanceof ConnectionLost) {
       for (const rest of runs.slice(index + 1)) {
         outcomes.push({ command: rest, success: false, result: null, error: "not run: an earlier command's outcome is unknown", code: "not_run", text: null });
       }
+      break;
+    }
+    if (options["bail"] && (outcome.code === "dialog_blocked" || openDialog(ctx.state) !== null)) {
+      flag("batch_bailed_on_dialog", true);
+      for (const rest of runs.slice(index + 1)) outcomes.push({ command: rest, success: false, result: null, error: DIALOG_BAIL, code: "not_run", text: null });
       break;
     }
     if (!outcome.success && options["bail"]) break;

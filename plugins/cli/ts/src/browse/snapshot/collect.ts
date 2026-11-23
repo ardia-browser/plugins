@@ -7,7 +7,7 @@ import { quiet } from "../state/page.ts";
 import * as pierce from "../state/pierce.ts";
 import { record } from "../state/records.ts";
 import { parseRef, type Ref, Refs, type Snapshots } from "../state/refs.ts";
-import { isSecret, masked, secretKey } from "../state/secrets.ts";
+import { isSecret, masked } from "../state/secrets.ts";
 import type { State } from "../state/state.ts";
 import { SNAPSHOT_FROM, snapshotBackends, snapshotRefused } from "./domsnapshot.ts";
 import { buildTree, clipped, INTERACTIVE, isAxList, MAX_SCOPES, type Node, REF_ROLES, walk, walkInContext } from "./tree.ts";
@@ -211,9 +211,9 @@ function sameDocuments(page: Page, loaders: ReadonlyMap<string, string | null>):
   }
 }
 
-export function maskSecretValues(state: object, page: Pick<Page, "targetId" | "loader">, nodes: readonly Node[]): void {
+export function maskSecretValues(state: object, page: Pick<Page, "targetId" | "loader" | "frames">, nodes: readonly Node[]): void {
   for (const node of walk(nodes)) {
-    if (node.backend !== null && node.value && isSecret(state, secretKey(page.targetId, node.frame, page.loader(node.frame), node.backend))) node.value = masked(node.value);
+    if (node.backend !== null && node.value && isSecret(state, page, node.frame, page.loader(node.frame), node.backend)) node.value = masked(node.value);
   }
 }
 

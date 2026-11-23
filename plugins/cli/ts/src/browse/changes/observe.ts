@@ -663,12 +663,17 @@ export async function observe<T>(ctx: Ctx, page: Page, run: () => Promise<T>, re
   let lineStart = 0;
   let value: T;
   try {
-    if (group === null) {
-      receipts.start();
-      await watch.start();
-    }
-    lineStart = watch.order.length;
-    if (react !== null) await watchReaction(state, page, react);
+    if (group === null) receipts.start();
+    await raceDialog(
+      page,
+      async () => {
+        if (group === null) await watch.start();
+        lineStart = watch.order.length;
+        if (react !== null) await watchReaction(state, page, react);
+      },
+      actionName(ctx),
+      false,
+    );
     value = await guarded(ctx, page, run);
   } catch (error) {
     if (batch !== undefined && (group !== null || holding)) batch.pending = { page, session, before, watch, navigations, receipts };

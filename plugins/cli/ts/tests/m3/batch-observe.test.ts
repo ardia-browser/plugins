@@ -325,3 +325,66 @@ describe("a dialog in the settle-only path", () => {
     expect(outcome.report?.dialogs).toEqual([{ type: "confirm", message: "Leave?", handled: "open" }]);
   });
 });
+
+class SetupDialogBrowser extends FormBrowser {
+  opened: (() => void) | null = null;
+
+  override async send(method: string, params: Record<string, unknown> | null = null, options: { signal?: AbortSignal } = {}): Promise<Record<string, unknown>> {
+    if (method === "Network.enable" && this.opened !== null) {
+      this.sent.push(method);
+      this.opened();
+      this.opened = null;
+      return new Promise((_, reject) => options.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true }));
+    }
+    return super.send(method, params);
+  }
+}
+
+class LostUnderDialogBrowser extends FormBrowser {
+  opened: (() => void) | null = null;
+
+  override async send(method: string, params: Record<string, unknown> | null = null): Promise<Record<string, unknown>> {
+    if (method === "Input.dispatchMouseEvent" && params?.["type"] === "mousePressed") {
+      this.opened?.();
+      throw new ConnectionLost();
+    }
+    return super.send(method, params);
+  }
+}
+
+describe("review round 3: setup and bail order", () => {
+  test("a dialog that opens while the action sets up stops it before any input", async () => {
+    const { state } = setup();
+    const browser = new SetupDialogBrowser();
+    state.browser = browser as never;
+    browser.opened = () => {
+      const page = state.pages.get("T");
+      if (page) page.dialog = { type: "confirm", message: "Stay?" };
+    };
+    const started = performance.now();
+    const { results } = await batch(state, ["click #go"]);
+    expect(performance.now() - started).toBeLessThan(8000);
+    expect((results[0] as { code?: string }).code).toBe("dialog_blocked");
+    expect((results[0] as { error?: string }).error).toContain("so `click` wasn't sent");
+    expect(browser.count("Input.dispatchMouseEvent")).toBe(0);
+  });
+
+  test("a connection lost with a dialog open under --bail still exits 2", async () => {
+    const { state } = setup();
+    const browser = new LostUnderDialogBrowser();
+    state.browser = browser as never;
+    browser.opened = () => {
+      const page = state.pages.get("T");
+      if (page) page.dialog = { type: "confirm", message: "Stay?" };
+    };
+    const result = await begin({ argv: ["batch"] }, async () => {
+      await state.page("T");
+      return dispatch(new Ctx(state, {}, "/", {}, null, "batch"), "batch", ["--bail", "click #go", "fill #a one"]);
+    });
+    const rows = (result.data as { results: { code?: string; error?: string }[] }).results;
+    expect(rows.map((row) => row.code ?? null)).toEqual(["outcome_unknown", "not_run"]);
+    expect(rows[1]?.error).toBe("not run: an earlier command's outcome is unknown");
+    expect(result.lost).toBeInstanceOf(ConnectionLost);
+    expect(renderPlain({}, result, null)[0]).toBe(2);
+  });
+});

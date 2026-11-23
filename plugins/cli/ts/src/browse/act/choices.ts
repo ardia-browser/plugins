@@ -32,7 +32,7 @@ export const OVERLAY_INPUT = `(el) => {
   const widget = el.closest && el.closest("[role=combobox]");
   if (widget && widget !== el && widget.contains(active)) return active;
   const popup = active.closest("${POPUP_SELECTOR}");
-  const labelled = !!el.id && [active, popup].some((node) => words(node, "aria-labelledby").includes(el.id));
+  const labelled = !!popup && !!el.id && [active, popup].some((node) => words(node, "aria-labelledby").includes(el.id));
   return labelled ? active : null;
 }`;
 

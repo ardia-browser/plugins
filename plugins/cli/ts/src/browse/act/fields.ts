@@ -312,12 +312,19 @@ export async function refuseMovedFocus(page: Page, element: Element, typed: stri
   }
   if (held === true) return;
   flag("fill_focus_moved", true);
-  const lead = typed
-    ? `The text up to its last character went into ${element.label}, but focus moved off it before the last keystroke, so that keystroke`
-    : `Focus moved off ${element.label} before the keystroke, so it`;
+  if (!typed) {
+    throw new BrowseError(
+      `Focus moved off ${element.label} before any text was sent, so nothing was typed (it would have landed in another field). ` +
+        "Snapshot to see where focus went, then fill it again",
+      { sent: 0 },
+      "focus_moved",
+    );
+  }
   throw new BrowseError(
-    `${lead} wasn't sent (it would have landed in another field). Snapshot to see where focus went, then finish the field with \`type\``,
-    { typed: Array.from(typed).length },
+    `Focus had moved off ${element.label} by the last keystroke, so that keystroke wasn't sent (it would have landed in another field). ` +
+      `The text before it was sent while ${element.label} held focus, but focus may have moved while it went in, so check what ` +
+      `${element.label} holds (get value) and where focus went (snapshot) before going on`,
+    { sent: Array.from(typed).length },
     "focus_moved",
   );
 }
@@ -325,11 +332,11 @@ export async function refuseMovedFocus(page: Page, element: Element, typed: stri
 export async function insertThenFinalKey(page: Page, element: Element, text: string): Promise<void> {
   const split = splitFinal(text);
   if (split === null) {
-    await insertText(page, element, text);
+    await insertText(page, element, text, true);
     return;
   }
   const [head, last] = split;
-  if (head) await insertText(page, element, head);
+  if (head) await insertText(page, element, head, true);
   flag("fill_final_key", true);
   const input = inputOf(page);
   const keyboard = input.keyboard();
@@ -349,13 +356,17 @@ export async function insertThenFinalKey(page: Page, element: Element, text: str
   );
 }
 
-export async function insertText(page: Page, element: Element, text: string): Promise<void> {
+export async function insertText(page: Page, element: Element, text: string, holdsFocus = false): Promise<void> {
   flag("fill_inserted_text", true);
   const input = inputOf(page);
+  const send = async () => {
+    if (holdsFocus) await refuseMovedFocus(page, element, "");
+    return page.send("Input.insertText", { text }, { inputEvent: true });
+  };
   await expectInput(
     page,
     element.frame,
-    () => input.gesture("fill", () => page.send("Input.insertText", { text }, { inputEvent: true })),
+    () => input.gesture("fill", send),
     { "beforeinput|input": 1 },
     "The text insert",
     element,

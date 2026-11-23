@@ -8,6 +8,7 @@ import { BLOCKER_AT, blockerPhrase, classify, findBlocker } from "../../src/brow
 import { PRECISION_COUNTS, PRECISION_FLAGS } from "../../src/browse/act/precision-metrics.ts";
 import { fieldKind, type FieldRead, fieldRead, judgeReadback, latchSecret, READ_FIELD, readbackNote, SECRET_PROBE, secretField } from "../../src/browse/act/readback.ts";
 import { maskSecretValues } from "../../src/browse/snapshot/collect.ts";
+import { isSecret, markSecret } from "../../src/browse/state/secrets.ts";
 import { Node } from "../../src/browse/snapshot/tree.ts";
 import { entriesOf } from "../../src/browse/changes/report.ts";
 import { Result, renderPlain } from "../../src/browse/daemon/render.ts";
@@ -883,10 +884,12 @@ describe("review round 1", () => {
     for (const code of ["dialog_blocked", "ref_drifted", "outcome_unknown", "focus_moved", "covered"]) expect(safeCode(code)).toBe(code);
   });
 
-  test("the last keystroke isn't sent when focus moved off the field", async () => {
+  test("the last keystroke isn't sent when focus moved off the field, and the message doesn't claim where the rest went", async () => {
     class MovedRenderer extends FakeRenderer {
+      checks = 0;
+
       override async call(fn: string, args: unknown[] = []): Promise<unknown> {
-        if (fn === HOLDS_FOCUS) return false;
+        if (fn === HOLDS_FOCUS) return ++this.checks === 1;
         return super.call(fn, args);
       }
 
@@ -898,8 +901,10 @@ describe("review round 1", () => {
     const page = new MovedRenderer();
     const [error, values] = await measured(() => failure(() => insertThenFinalKey(page.page, new Element("F", "O", 1, "@e1"), "Lond")));
     expect(error.code).toBe("focus_moved");
-    expect(error.message).toContain("The text up to its last character went into @e1, but focus moved off it before the last keystroke");
-    expect(error.data).toEqual({ typed: 3 });
+    expect(error.message).toContain("Focus had moved off @e1 by the last keystroke, so that keystroke wasn't sent");
+    expect(error.message).toContain("focus may have moved while it went in, so check what @e1 holds");
+    expect(error.message).not.toContain("went into");
+    expect(error.data).toEqual({ sent: 3 });
     expect(page.params.filter(([method]) => method === "Input.dispatchKeyEvent")).toEqual([]);
     expect(values.get("fill_focus_moved")).toBe(true);
   });
@@ -1148,6 +1153,7 @@ describe("review round 2", () => {
     const page = {
       targetId: "T",
       loader: () => "L",
+      frames: new Map([["F", { loader: "L" }]]),
       state,
       call: async () => true,
     } as unknown as Page;
@@ -1177,9 +1183,9 @@ describe("review round 2", () => {
   });
 
   test("container roles are one class, so a scoped snapshot's group matches a generic reading", () => {
-    expect(sameRole("group", "generic")).toBe(true);
-    expect(sameRole("Section", "group")).toBe(true);
-    expect(sameRole("generic", "button")).toBe(false);
+    expect(sameRole({ role: "group", name: "" }, { role: "generic", name: "" })).toBe(true);
+    expect(sameRole({ role: "Section", name: "" }, { role: "group", name: "" })).toBe(true);
+    expect(sameRole({ role: "generic", name: "" }, { role: "button", name: "" })).toBe(false);
     expect(driftBetween({ role: "group", name: "" }, { role: "generic", name: "" })).toBeNull();
     expect(driftBetween({ role: "group", name: "" }, { role: "link", name: "" })?.field).toBe("role");
   });
@@ -1236,5 +1242,68 @@ describe("a cell commit waits a fixed number of checks", () => {
     let early = 0;
     expect(await pollTimes(async () => (++early === 3 ? "closed" : null), COMMIT_CHECKS)).toBe("closed");
     expect(early).toBe(3);
+  });
+});
+
+describe("review round 3", () => {
+  function tab(targetId: string, loader = "L") {
+    return { targetId, frames: new Map([["F", { loader }]]), loader: () => loader };
+  }
+
+  test("a field remembered as secret stays secret on the next fill even after its type is toggled", async () => {
+    const state = { pages: new Map([["T", {}]]) };
+    let probes = 0;
+    const page = { ...tab("T"), state, call: async () => (probes++, false) } as unknown as Page;
+    const field = new Element("F", "O", 21, "@e4");
+    markSecret(state, tab("T"), "F", "L", 21);
+    expect(await latchSecret(page, field, false)).toBe(true);
+    expect(probes).toBe(0);
+    const read = fieldRead({ tag: "input", type: "text", value: null, length: 7, secret: true });
+    expect(judgeReadback(read, "hunter22").reason).toBe("it holds 7 characters, not 8");
+  });
+
+  test("secret markers belong to their document: navigation and closing the tab clear them, other tabs never evict them", () => {
+    const state = { pages: new Map<string, unknown>([["A", {}], ["B", {}]]) };
+    markSecret(state, tab("A"), "F", "L", 1);
+    for (let backend = 0; backend < 2000; backend += 1) markSecret(state, tab("B"), "F", "L", backend);
+    expect(isSecret(state, tab("A"), "F", "L", 1)).toBe(true);
+    expect(isSecret(state, tab("A", "L2"), "F", "L2", 1)).toBe(false);
+    expect(isSecret(state, tab("A"), "F", "L", 1)).toBe(false);
+    markSecret(state, tab("A"), "F", "L", 1);
+    state.pages.delete("A");
+    expect(isSecret(state, tab("B"), "F", "L", 1999)).toBe(true);
+    expect(isSecret(state, tab("A"), "F", "L", 1)).toBe(false);
+  });
+
+  test("focus is checked before the insert too, and nothing is sent when it already moved", async () => {
+    class GoneRenderer extends FakeRenderer {
+      override async call(fn: string, args: unknown[] = []): Promise<unknown> {
+        if (fn === HOLDS_FOCUS) return false;
+        return super.call(fn, args);
+      }
+    }
+    const page = new GoneRenderer();
+    const error = await failure(() => insertThenFinalKey(page.page, new Element("F", "O", 1, "@e1"), "Lond"));
+    expect(error.code).toBe("focus_moved");
+    expect(error.message).toContain("Focus moved off @e1 before any text was sent, so nothing was typed");
+    expect(error.data).toEqual({ sent: 0 });
+    expect(page.params.filter(([method]) => method.startsWith("Input."))).toEqual([]);
+  });
+
+  test("a field labelled by the opener is followed only when it sits inside a popup", () => {
+    const active = { tagName: "INPUT", type: "text", readOnly: false, disabled: false, isContentEditable: false, closest: () => null, getAttribute: (name: string) => (name === "aria-labelledby" ? "picker" : null) };
+    const doc = { activeElement: active, body: {}, getElementById: () => null };
+    const el = { id: "picker", ownerDocument: doc, contains: () => false, getRootNode: () => doc, closest: () => null, getAttribute: () => null };
+    const probe = new Function(`return ${OVERLAY_INPUT}`)() as (el: unknown) => unknown;
+    expect(probe(el)).toBeNull();
+    const popup = { getAttribute: () => null };
+    expect(probe({ ...el, ownerDocument: { ...doc, activeElement: { ...active, closest: () => popup } } })).not.toBeNull();
+  });
+
+  test("a named container changing role drifts; unnamed ones stay interchangeable", () => {
+    expect(driftBetween({ role: "group", name: "Shipping" }, { role: "region", name: "Shipping" })?.field).toBe("role");
+    expect(driftBetween({ role: "group", name: "Shipping" }, { role: "generic", name: "Shipping" })?.field).toBe("role");
+    expect(driftBetween({ role: "group", name: "" }, { role: "generic", name: "" })).toBeNull();
+    expect(sameRole({ role: "group", name: "x" }, { role: "group", name: "x" })).toBe(true);
   });
 });

@@ -17,14 +17,16 @@ function squash(text: string): string {
 
 export const CONTAINER_ROLES: ReadonlySet<string> = new Set(["generic", ...LIFTED]);
 
-export function sameRole(was: string, now: string): boolean {
-  return was === now || (CONTAINER_ROLES.has(was) && CONTAINER_ROLES.has(now));
+export function sameRole(was: Identity, now: Identity): boolean {
+  if (was.role === now.role) return true;
+  const unnamed = !squash(was.name) && !squash(now.name);
+  return unnamed && CONTAINER_ROLES.has(was.role) && CONTAINER_ROLES.has(now.role);
 }
 
 export function driftBetween(was: Identity, now: Seen): Drift | null {
   if (now === null || !was.role) return null;
   if (now === "ignored") return { field: "hidden", was, now: null };
-  const roleChanged = !sameRole(was.role, now.role);
+  const roleChanged = !sameRole(was, now);
   const nameChanged = squash(was.name) !== squash(now.name);
   if (!roleChanged && !nameChanged) return null;
   return { field: roleChanged && nameChanged ? "both" : roleChanged ? "role" : "name", was, now };

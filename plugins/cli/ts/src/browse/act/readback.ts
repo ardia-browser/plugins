@@ -3,7 +3,7 @@ import { redact } from "../../redact.ts";
 import { BrowseError, ConnectionLost } from "../daemon-errors.ts";
 import { flag } from "../metrics.ts";
 import type { Element, Page } from "../state/page.ts";
-import { markSecret, secretKey } from "../state/secrets.ts";
+import { isSecret, markSecret } from "../state/secrets.ts";
 import { asRecord } from "./common.ts";
 
 export type ReadbackStatus = "ok" | "did_not_commit" | "unverified";
@@ -151,7 +151,8 @@ export function judgeReadback(read: FieldRead, wanted: string): Readback {
 }
 
 export async function latchSecret(page: Page, element: Element, known: boolean): Promise<boolean> {
-  let secret = known;
+  const loader = page.loader(element.frame);
+  let secret = known || isSecret(page.state, page, element.frame, loader, element.backendId);
   if (!secret) {
     try {
       secret = (await page.call(SECRET_PROBE, [element], { frame: element.frame, read: true })) === true;
@@ -159,7 +160,7 @@ export async function latchSecret(page: Page, element: Element, known: boolean):
       if (!(error instanceof BrowseError) || error instanceof ConnectionLost) throw error;
     }
   }
-  if (secret) markSecret(page.state, secretKey(page.targetId, element.frame, page.loader(element.frame), element.backendId));
+  if (secret) markSecret(page.state, page, element.frame, loader, element.backendId);
   return secret;
 }
 
