@@ -17,6 +17,7 @@
 <div id="dead" role="button" style="display:inline-block;padding:6px 12px;border:1px solid #999;user-select:none">Dead button</div>
 <div id="slides" class="editor" contenteditable="true" role="textbox" aria-label="Slide text"></div>
 <div id="placeholder" class="editor" contenteditable="true" role="textbox" aria-label="Placeholder"><p><br></p></div>
+<div id="commented" class="editor" contenteditable="true" role="textbox" aria-label="Commented"><p><br></p></div>
 <div id="chipped" class="editor" contenteditable="true" role="textbox" aria-label="Chipped">A<span id="chip" contenteditable="false">B</span></div>
 <div id="menus"></div>
 <script>
@@ -68,6 +69,13 @@
     event.stopImmediatePropagation();
     event.preventDefault();
     placeholder.querySelector("p").textContent = event.data;
+  }, true);
+  const commented = document.getElementById("commented");
+  addEventListener("beforeinput", (event) => {
+    if (event.target !== commented && !commented.contains(event.target)) return;
+    event.stopImmediatePropagation();
+    event.preventDefault();
+    setTimeout(() => { const br = commented.querySelector("br"); br.after(document.createComment("rendered")); }, 100);
   }, true);
   const chipped = document.getElementById("chipped");
   addEventListener("beforeinput", (event) => {

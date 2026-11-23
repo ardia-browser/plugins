@@ -14,6 +14,18 @@
   const editable = !field && !!host && host.isContentEditable;
   const BLOCK = /^(P|DIV|LI|UL|OL|H[1-6]|BLOCKQUOTE|PRE|TR|TD|TH|TABLE|SECTION|ARTICLE|HEADER|FOOTER)$/;
   let flattened = "";
+  const silent = (node) => node.nodeType === Node.COMMENT_NODE || node.nodeType === Node.PROCESSING_INSTRUCTION_NODE || (node.nodeType === Node.TEXT_NODE && node.data === "")
+    || (node.nodeType === Node.ELEMENT_NODE && /^(STYLE|SCRIPT|TEMPLATE)$/.test(node.tagName));
+  const trailing = (br) => {
+    for (let node = br; node && node !== host; node = node.parentElement) {
+      let next = node.nextSibling;
+      while (next && silent(next)) next = next.nextSibling;
+      if (next) return false;
+      const parent = node.parentElement;
+      if (!parent || parent === host || !getComputedStyle(parent).display.startsWith("inline")) return true;
+    }
+    return true;
+  };
   const walk = (parent, mark) => {
     const children = parent.childNodes;
     for (let i = 0; i <= children.length; i++) {
@@ -25,9 +37,7 @@
         flattened += child.data;
       } else if (child.nodeType === Node.ELEMENT_NODE && !/^(STYLE|SCRIPT|TEMPLATE)$/.test(child.tagName)) {
         if (child.tagName === "BR") {
-          let next = child.nextSibling;
-          while (next && next.nodeType === Node.TEXT_NODE && next.data === "") next = next.nextSibling;
-          if (next) flattened += "\n";
+          if (!trailing(child)) flattened += "\n";
         }
         else if (!child.isContentEditable) flattened += "\ufffc";
         else {

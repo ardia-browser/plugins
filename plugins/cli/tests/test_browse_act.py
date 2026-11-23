@@ -286,6 +286,14 @@ class ActInChrome(unittest.TestCase):
         self.browse("keyboard", "inserttext", "Hi")
         self.assertEqual(self.value("document.querySelector('#placeholder').innerHTML"), "<p>Hi</p>")
 
+    def test_a_dropped_line_break_is_not_confirmed_by_a_comment_the_page_adds_after_the_placeholder(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/input-probes.html")
+        self.browse("click", "#commented")
+        done = self.browse("keyboard", "inserttext", "\n", check=False)
+        self.assertEqual(done.returncode, 1, done.stdout)
+        self.assertIn("received none of its beforeinput/input events", done.stderr + done.stdout)
+        self.assertEqual(self.value("document.querySelector('#commented').innerHTML"), "<p><br><!--rendered--></p>")
+
     def test_a_click_with_no_events_and_no_effect_is_still_not_delivered(self):
         self.browse("open", f"http://127.0.0.1:{self.http_port}/input-probes.html")
         done = self.browse("click", "#dead", check=False)

@@ -1,0 +1,48 @@
+{
+ "live_only": "Python's wait loops (dialog fade, disabled waits, lazy scroll, load settle) count against the daemon's own clock, so replay sends a different number of checks; here the 1.5 s input-delivery wait polls until its deadline",
+ "source": "tests/test_browse_act.py ActInChrome.test_a_dropped_line_break_is_not_confirmed_by_a_comment_the_page_adds_after_the_placeholder",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/input-probes.html"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "click",
+    "#commented"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "keyboard",
+    "inserttext",
+    "\n"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.querySelector('#commented').innerHTML"
+   ],
+   "session": "act",
+   "main_world": true
+  }
+ ]
+}
