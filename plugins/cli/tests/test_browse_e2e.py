@@ -1435,14 +1435,16 @@ REFUSALS = """
 import asyncio, json, sys
 from ardia_cli import endpoint
 from ardia_cli.browse.connection import Browser
-from ardia_cli.browse.errors import Gated
+from ardia_cli.browse.errors import CdpError, Gated
 
 
 async def refused(browser, method, params):
     try:
         await browser.send(method, params)
     except Gated as error:
-        return {"reason": error.reason, "message": error.message}
+        return {"gated": True, "reason": error.reason, "message": error.message}
+    except CdpError as error:
+        return {"gated": False, "reason": "", "message": error.message}
     return None
 
 
@@ -1459,7 +1461,7 @@ async def main(data_dir):
             if gone:
                 break
             await asyncio.sleep(0.1)
-        print(json.dumps({"attached": attached, "gone": gone, "unlisted": await refused(browser, "Network.getCookies", {})}))
+        print(json.dumps({"attached": attached, "gone": gone, "unlisted": await refused(browser, "Storage.getCookies", {})}))
     finally:
         await browser.close()
 
@@ -1598,12 +1600,23 @@ class BrowseTokenPath(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         said = json.loads(done.stdout)
         self.assertTrue(said["attached"])
-        self.assertEqual(said["gone"]["reason"], "to that target")
-        self.assertIn("Ardia allows for the ardia command, but not to that target", said["gone"]["message"])
-        self.assertIn("Target.attachToTarget to that target isn't allowed for the ardia command", said["gone"]["message"])
+        expect = os.environ.get("ARDIA_BROWSE_E2E_ENGINE", "")
+        if expect == "full":
+            self.assertFalse(said["gone"]["gated"], said["gone"])
+            self.assertIsNone(said["unlisted"])
+        elif expect == "legacy":
+            self.assertTrue(said["gone"]["gated"], said["gone"])
+            self.assertTrue(said["unlisted"] and said["unlisted"]["gated"], said["unlisted"])
+        if said["gone"]["gated"]:
+            self.assertEqual(said["gone"]["reason"], "to that target")
+            self.assertIn("Ardia allows for the ardia command, but not to that target", said["gone"]["message"])
+            self.assertIn("Target.attachToTarget to that target isn't allowed for the ardia command", said["gone"]["message"])
+        else:
+            self.assertNotIn("isn't allowed for the ardia command", said["gone"]["message"])
         if said["unlisted"]:
+            self.assertTrue(said["unlisted"]["gated"], said["unlisted"])
             self.assertEqual(said["unlisted"]["reason"], "")
-            self.assertIn("isn't available yet", said["unlisted"]["message"])
+            self.assertIn("Ardia 0.2.49 or later", said["unlisted"]["message"])
 
     def test_probe_over_the_token_policy(self):
         session = "token-probe"
@@ -1995,7 +2008,7 @@ class BrowseTokenPath(unittest.TestCase):
                 continue
             self.assertEqual(done.returncode, 1, args)
             self.assertIn(f"({method} isn't allowed for the ardia command)", done.stderr)
-            self.assertIn("deliberate safety limit", done.stderr)
+            self.assertIn("Ardia 0.2.49 or later", done.stderr)
         self.browse("network", "unroute", session=session, check=False)
         self.browse("open", self.url("upload.html"), session=session)
         files = (FIXTURES / "login.html", FIXTURES / "upload.html")
@@ -2006,7 +2019,7 @@ class BrowseTokenPath(unittest.TestCase):
                              ",".join(f"{path.name}:{path.stat().st_size}" for path in files))
         else:
             self.assertEqual(done.returncode, 1)
-            self.assertIn("`upload` isn't available yet (DOM.setFileInputFiles isn't allowed for the ardia command)", done.stderr)
+            self.assertIn("`upload` needs Ardia 0.2.49 or later (DOM.setFileInputFiles isn't allowed for the ardia command)", done.stderr)
             self.assertIn("ask the user to choose the file", done.stderr)
         data = json.loads(self.browse("cookies", "--json", session=session, check=False).stdout)
         if not data["success"]:

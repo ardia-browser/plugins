@@ -27,6 +27,10 @@ export function answerOf(options: Record<string, unknown>, result: Result | null
     ["err", redact(err)],
   ]);
   if (error !== null && error.code) answer.set("code", error.code);
+  if (result?.body) {
+    answer.set("body", Buffer.from(result.body).toString("base64"));
+    answer.set("body_bytes", BigInt(result.body.length));
+  }
   CLIENT_SIDE.add(answer);
   return answer;
 }

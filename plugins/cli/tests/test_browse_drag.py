@@ -44,7 +44,7 @@ class FakeRenderer:
         return None
 
     async def call(self, function, *args, frame=None, **kwargs):
-        if "inputWatch" in function:
+        if "inputWatch" in function or "ardiaBrowseInputWatch" in function:
             return dict(self.counts, activeFrame=False)
         if "draggable" in function:
             return self.draggable
@@ -261,7 +261,7 @@ const context = { addEventListener: (type, listener) => (listeners[type] = liste
 context.globalThis = context;
 vm.createContext(context);
 vm.runInContext(process.argv[1], context);
-const watch = () => vm.runInContext("ardiaBrowse.inputWatch().dragstart", context);
+const watch = () => vm.runInContext("(" + process.argv[2] + ")().dragstart", context);
 const start = (prevented) => {
   const event = { isTrusted: true, defaultPrevented: false };
   listeners.dragstart.forEach((listener) => listener(event));
@@ -276,7 +276,7 @@ console.log(JSON.stringify(seen));
 @unittest.skipUnless(shutil.which("node"), "needs node to run the isolated-world library")
 class DragStartCountTest(unittest.TestCase):
     def test_only_starts_the_page_let_through_count(self):
-        done = subprocess.run(["node", "-e", WATCH_UNDER_NODE, js.LIBRARY], capture_output=True, text=True, timeout=30)
+        done = subprocess.run(["node", "-e", WATCH_UNDER_NODE, js.LIBRARY, actions.INPUT_WATCH], capture_output=True, text=True, timeout=30)
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertEqual(json.loads(done.stdout), [0, 0, 0, 1, 1, 2])
 

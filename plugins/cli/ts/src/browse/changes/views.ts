@@ -1,5 +1,5 @@
 import { BrowseError, ConnectionLost } from "../daemon-errors.ts";
-import { collect } from "../snapshot/collect.ts";
+import { collect, collectedTitles } from "../snapshot/collect.ts";
 import type { Node } from "../snapshot/tree.ts";
 import type { Page } from "../state/page.ts";
 import { quiet } from "../state/page.ts";
@@ -38,7 +38,7 @@ export async function view(state: State, page: Page, nodes: Node[] | null = null
     target: page.targetId,
     loader: page.loader(viewFrame(state, page)) || "",
     url: page.url,
-    title: await titleOf(page),
+    title: collectedTitles.get(seen) ?? (await titleOf(page)),
     entries: entriesOf(seen),
     containers: containersOf(seen),
   };

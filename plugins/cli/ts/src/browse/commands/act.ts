@@ -7,11 +7,11 @@ import { joinedWords, pyFloat, pyLen } from "../../pylib/str.ts";
 import { shlexQuote } from "../../pylib/shlex.ts";
 import { click, hover, tap, TOUCH_OFF } from "../act/pointer.ts";
 import { drag, listAfter, listBefore } from "../act/drag.ts";
-import { choose, comboKind, fill, plain, select, settledSuggestions, SUGGESTION_HINT_WAIT, setChecked, type Item, typeText, uniqueMatch, unwatchSuggestions, watchSuggestions } from "../act/fields.ts";
-import { asRecord, expectInput, mouseButton, overFrame } from "../act/common.ts";
+import { choose, comboKind, fieldFacts, fill, plain, select, settledSuggestions, SUGGESTION_HINT_WAIT, setChecked, type Item, typeText, uniqueMatch, unwatchSuggestions, watchSuggestions } from "../act/fields.ts";
+import { asRecord, expectInput, mouseButton, overFrame, textInserted } from "../act/common.ts";
 import { scroll, SCROLL_DEFAULT } from "../act/scroll.ts";
 import { scrollIntoView } from "../act/pointer.ts";
-import { attach, observe, type Reaction, TimedOut, within } from "../changes/observe.ts";
+import { attach, deferring, observe, type Reaction, TimedOut, within } from "../changes/observe.ts";
 import { type Report } from "../changes/report.ts";
 import { BrowseError, Gated, Usage } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
@@ -161,18 +161,19 @@ async function cmdFill(ctx: Ctx, argv: string[]): Promise<Result> {
   const [page, element] = await resolve(ctx, selector);
   const text = args.slice(1).join(" ");
   const humanize = humanizing(ctx, options);
-  const typeahead = (await comboKind(page, element)) === "typeahead";
+  const facts = await fieldFacts(page, element);
+  const typeahead = facts["kind"] === "typeahead";
   const run = async (): Promise<[[boolean, unknown], Item[]]> => {
-    if (!(typeahead && text)) return [await fill(page, element, text, humanize), []];
+    if (!(typeahead && text)) return [await fill(page, element, text, humanize, null, facts), []];
     await watchSuggestions(page, element);
     try {
-      const filled = await fill(page, element, text, humanize);
+      const filled = await fill(page, element, text, humanize, null, facts);
       return [filled, (await settledSuggestions(page, element, SUGGESTION_HINT_WAIT))[1]];
     } finally {
       await unwatchSuggestions(page, element);
     }
   };
-  const textBefore = await pageTextMark(page, element);
+  const textBefore = deferring(ctx.state) ? null : await pageTextMark(page, element);
   const react: Reaction | null = typeahead ? null : [element, null];
   const [[[retargeted, stored], found], report] = await observe(ctx, page, run, react);
   let result = filledResult("filled", selector, retargeted, text, stored);
@@ -274,6 +275,9 @@ async function cmdKeyboard(ctx: Ctx, argv: string[]): Promise<Result> {
           () => input.gesture("keyboard inserttext", () => page.send("Input.insertText", { text }, { inputEvent: true })),
           text ? { "beforeinput|input": 1 } : {},
           "The text insert",
+          null,
+          null,
+          text ? textInserted(page, frame, text) : null,
         ),
       [null, frame],
     );
@@ -423,7 +427,7 @@ async function cmdMouse(ctx: Ctx, argv: string[]): Promise<Result> {
     const run = action === "down" ? () => mouse.down(button) : () => mouse.up(button);
     const [x, y] = mouse.position;
     const over = await overFrame(page, x, y);
-    await expectInput(page, page.mainFrame, () => input.gesture(`mouse ${action}`, run, { keepHeld: true }), over ? {} : { [action === "down" ? "mousedown" : "mouseup"]: 1 }, `The mouse ${action}`);
+    await expectInput(page, page.mainFrame, () => input.gesture(`mouse ${action}`, run, { keepHeld: true }), over ? {} : { [action === "down" ? "mousedown|pointerdown" : "mouseup|pointerup"]: 1 }, `The mouse ${action}`);
     return new Result({ [action]: true });
   }
   if (action === "wheel") {

@@ -59,6 +59,7 @@ SCREENSHOTS_INSTEAD = "take a `screenshot` at each moment that matters"
 SIGN_IN_INSTEAD = "ask the user to sign in in the tab, then work there"
 TIMINGS_INSTEAD = "`eval` can read the page's own `performance` timings"
 OTHER_WAY = "do this step another way, or ask the user to do it"
+FULL_CONTROL_ARDIA = "0.2.49"
 NOT_YET_REASONS = frozenset({"with those editing commands"})
 NOT_YET = {
     "upload": "ask the user to choose the file in the page, then carry on",
@@ -98,10 +99,11 @@ def known_limit(command: str | None) -> bool:
 def not_yet_message(command: str | None, method: str, refusal: str) -> str:
     what = f"`{command}`" if command else method
     if not known_limit(command):
-        return f"{what} isn't allowed on this Ardia ({refusal}). Updating Ardia may help; if it doesn't, {OTHER_WAY}"
-    return (f"{what} isn't available yet ({refusal}). No released Ardia lets the ardia command do this: it's a deliberate safety limit, not a bug, "
-            "so retrying or updating Ardia won't help today. A later Ardia adds it behind its full-control setting. "
-            f"Instead: {instead_for(command)}")
+        return (f"{what} isn't allowed on this Ardia ({refusal}). Its engine keeps the ardia command to a short list of DevTools "
+                f"methods, and Ardia {FULL_CONTROL_ARDIA} or later allows them all: update Ardia, or {OTHER_WAY}")
+    return (f"{what} needs Ardia {FULL_CONTROL_ARDIA} or later ({refusal}). This Ardia's engine keeps the ardia command to a short "
+            f"list of DevTools methods; {FULL_CONTROL_ARDIA} lets it use them all, so update Ardia and run it again. "
+            f"Until then: {instead_for(command)}")
 
 
 class Gated(BrowseError):
@@ -114,7 +116,8 @@ class Gated(BrowseError):
             message = not_yet_message(command, method, self.refusal)
         elif self.reason:
             hint = REFUSAL_HINTS.get(self.reason)
-            message = f"{what}, which Ardia allows for the ardia command, but not {self.reason} ({self.refusal})" + (f": {hint}" if hint else "")
+            message = (f"{what}, which this Ardia allows for the ardia command, but not {self.reason} ({self.refusal})" + (f": {hint}" if hint else "")
+                       + f". Ardia {FULL_CONTROL_ARDIA} or later has no such limit")
         else:
             message = not_yet_message(command, method, self.refusal)
         super().__init__(message + (f" ({detail})" if detail else ""), data={"method": method, "reason": self.reason}, code="policy_refused")

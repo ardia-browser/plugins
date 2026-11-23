@@ -17,6 +17,8 @@ import ACTIONS_CENTER from "./actions.center.js.txt" with { type: "text" };
 import ACTIONS_VISIBLE_LABEL from "./actions.visible-label.js.txt" with { type: "text" };
 import ACTIONS_VISIBLE_CONTENT from "./actions.visible-content.js.txt" with { type: "text" };
 import ACTIONS_HOLDS_TEXT from "./actions.holds-text.js.txt" with { type: "text" };
+import ACTIONS_INPUT_WATCH from "./actions.input-watch.js.txt" with { type: "text" };
+import ACTIONS_FOCUSED_FIELD from "./actions.focused-field.js.txt" with { type: "text" };
 import ACTIONS_SCROLL_LOCK from "./actions.scroll-lock.js.txt" with { type: "text" };
 import ACTIONS_DOM_CLICK from "./actions.dom-click.js.txt" with { type: "text" };
 import ACTIONS_REPLACEMENT from "./actions.replacement.js.txt" with { type: "text" };
@@ -62,6 +64,8 @@ export {
   ACTIONS_VISIBLE_LABEL,
   ACTIONS_VISIBLE_CONTENT,
   ACTIONS_HOLDS_TEXT,
+  ACTIONS_INPUT_WATCH,
+  ACTIONS_FOCUSED_FIELD,
   ACTIONS_SCROLL_LOCK,
   ACTIONS_DOM_CLICK,
   ACTIONS_REPLACEMENT,

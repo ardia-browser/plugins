@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage="usage: token-smoke.sh <Ardia.app> <ardia command> [metro host:port]
-Runs ardia browse read, open and a refused command against a hidden instance of <Ardia.app> over the real token
+Runs ardia browse read, open and cookies (read from 0.2.49, refused by name before) against a hidden instance of <Ardia.app> over the real token
 connection (no DevTools port), with the given ardia command. A Debug build needs its Metro as the third argument.
 Needs an ardia checkout for its instance helpers: \$ARDIA_REPO, else the checkout this plugins repo is a submodule of."
 case "${1:-}" in -h | --help | "") echo "$usage"; [ -n "${1:-}" ] && exit 0 || exit 64 ;; esac
@@ -70,7 +70,11 @@ else
   [ "$(field code <<<"$viewport")" = viewport_needs_hidden_tab ] && [ "$(field data.result <<<"$sized")" != 390x844 ] && ok=1 || ok=0
   check "ardia browse set viewport is refused on a tab Ardia has shown" $ok "$(head -c 300 <<<"$viewport")"
 fi
-refused="$(browse cookies --json)"
-[ "$(field code <<<"$refused")" = policy_refused ] && [ "$(field data.method <<<"$refused")" = Network.getCookies ] && ok=1 || ok=0
-check "a method off the policy's list is refused by name" $ok "$(head -c 300 <<<"$refused")"
+cookies="$(browse cookies --json)"
+if [ "$(field success <<<"$cookies")" = true ]; then
+  check "ardia browse cookies reads cookies (Ardia 0.2.49 or later)" 1
+else
+  [ "$(field code <<<"$cookies")" = policy_refused ] && [ "$(field data.method <<<"$cookies")" = Network.getCookies ] && grep -q "needs Ardia 0.2.49 or later" <<<"$(field error <<<"$cookies")" && ok=1 || ok=0
+  check "an older Ardia refuses cookies by name and says which Ardia allows it" $ok "$(head -c 300 <<<"$cookies")"
+fi
 exit $status

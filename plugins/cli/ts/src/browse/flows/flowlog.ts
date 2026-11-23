@@ -462,7 +462,7 @@ export type WatchRecord = {
 };
 export type WatchLike = { records: ReadonlyMap<string, WatchRecord>; order: readonly string[] };
 
-function readableType(record: WatchRecord): string | null {
+export function readableType(record: Pick<WatchRecord, "type" | "mime">): string | null {
   const mime = (record.mime || "").toLowerCase();
   if (record.type === "Document") return mime.includes("html") ? "document" : null;
   if (mime.includes("json") || mime.startsWith("text/plain") || !mime) return "json";

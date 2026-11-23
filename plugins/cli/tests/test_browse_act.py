@@ -274,6 +274,60 @@ class ActInChrome(unittest.TestCase):
             done = self.browse("fill", field, "", check=False)
             self.assertEqual(done.returncode, 1, field)
             self.assertIn("still holds text", done.stderr + done.stdout)
+    def test_a_menu_trigger_that_cancels_pointerdown_still_counts_as_clicked(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/input-probes.html")
+        self.browse("click", "#menu-trigger")
+        self.assertEqual(self.value("String(state.opened) + ' ' + document.querySelectorAll('[role=menuitem]').length"), "1 2")
+
+    def test_a_text_insert_the_editor_takes_over_is_confirmed_by_the_text(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/input-probes.html")
+        self.browse("click", "#slides")
+        self.browse("keyboard", "inserttext", "Room bottlenecks")
+        self.assertEqual(self.value("document.querySelector('#slides').textContent"), "Room bottlenecks")
+
+    def test_a_text_insert_with_no_field_focused_is_still_not_delivered_beside_page_churn(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/input-probes.html?churn")
+        done = self.browse("keyboard", "inserttext", "lost words", check=False)
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("received none of its beforeinput/input events", done.stderr + done.stdout)
+
+    def test_a_dropped_text_insert_is_not_confirmed_by_the_page_editing_the_same_field(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/input-probes.html")
+        self.browse("click", "#echo")
+        self.browse("press", "End")
+        done = self.browse("keyboard", "inserttext", "xyz", check=False)
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("received none of its beforeinput/input events", done.stderr + done.stdout)
+        self.assertEqual(self.value("document.querySelector('#echo').value"), "startabc")
+
+    def test_a_dropped_text_insert_is_not_confirmed_by_text_appearing_in_a_non_editable_chip(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/input-probes.html")
+        self.browse("eval", "const r = document.createRange(); r.setStart(document.querySelector('#chipped').firstChild, 1); r.collapse(true); document.querySelector('#chipped').focus(); getSelection().removeAllRanges(); getSelection().addRange(r); 'ok'")
+        done = self.browse("keyboard", "inserttext", "x", check=False)
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("received none of its beforeinput/input events", done.stderr + done.stdout)
+        self.assertEqual(self.value("document.querySelector('#chipped').textContent"), "AxB")
+
+    def test_a_text_insert_that_replaces_an_empty_paragraph_placeholder_is_confirmed(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/input-probes.html")
+        self.browse("click", "#placeholder")
+        self.browse("keyboard", "inserttext", "Hi")
+        self.assertEqual(self.value("document.querySelector('#placeholder').innerHTML"), "<p>Hi</p>")
+
+    def test_a_dropped_line_break_is_not_confirmed_by_a_comment_the_page_adds_after_the_placeholder(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/input-probes.html")
+        self.browse("click", "#commented")
+        done = self.browse("keyboard", "inserttext", "\n", check=False)
+        self.assertEqual(done.returncode, 1, done.stdout)
+        self.assertIn("received none of its beforeinput/input events", done.stderr + done.stdout)
+        self.assertEqual(self.value("document.querySelector('#commented').innerHTML"), "<p><br><!--rendered--></p>")
+
+    def test_a_click_with_no_events_and_no_effect_is_still_not_delivered(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/input-probes.html")
+        done = self.browse("click", "#dead", check=False)
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("received none of its", done.stderr + done.stdout)
+        self.assertEqual(self.value("String(state.dead)"), "1")
 
     def test_dependent_fields_wait_for_their_target(self):
         out = self.browse("batch", "fill #from Beta", "select #to Yankee", "click #later", "get text #out").stdout

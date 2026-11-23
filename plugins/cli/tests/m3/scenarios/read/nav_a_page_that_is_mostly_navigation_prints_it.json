@@ -1,0 +1,17 @@
+{
+ "source": "tests/test_browse_read.py ReadNavigationInChrome.test_a_page_that_is_mostly_navigation_prints_it",
+ "window": [
+  1200,
+  800
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/nav-sitemap.html",
+    "--read"
+   ],
+   "session": "nav"
+  }
+ ]
+}

@@ -846,7 +846,7 @@ class RenderTest(unittest.TestCase):
 
     def test_gate_message_names_the_method(self):
         error = Gated("Fetch.enable", "network route")
-        self.assertIn("`network route` isn't available yet (Fetch.enable isn't allowed", error.message)
+        self.assertIn("`network route` needs Ardia 0.2.49 or later (Fetch.enable isn't allowed", error.message)
         self.assertIn("isn't allowed for the ardia command", error.message)
         self.assertEqual(error.code, "policy_refused")
 
@@ -859,12 +859,13 @@ class RenderTest(unittest.TestCase):
         self.assertEqual(refusal_reason("ardia: Target.getTargetInfo on that target isn't allowed for the ardia command", "Target.getTargetInfo"),
                          "on that target")
         error = Gated("Target.attachToTarget", reason="to that target")
-        self.assertIn("which Ardia allows for the ardia command, but not to that target", error.message)
+        self.assertIn("which this Ardia allows for the ardia command, but not to that target", error.message)
+        self.assertIn("Ardia 0.2.49 or later has no such limit", error.message)
         self.assertIn("(Target.attachToTarget to that target isn't allowed for the ardia command)", error.message)
         self.assertNotIn("once the engine's token policy allows it", error.message)
         self.assertEqual((error.code, error.data), ("policy_refused", {"method": "Target.attachToTarget", "reason": "to that target"}))
         named = error.during("open", "Ardia has it open as tab-1 at chrome://settings/")
-        self.assertTrue(named.message.startswith("`open` needs Target.attachToTarget, which Ardia allows"))
+        self.assertTrue(named.message.startswith("`open` needs Target.attachToTarget, which this Ardia allows"))
         self.assertTrue(named.message.endswith("(Ardia has it open as tab-1 at chrome://settings/)"))
         self.assertEqual(named.reason, "to that target")
         self.assertEqual(Gated("Fetch.enable").data, {"method": "Fetch.enable", "reason": ""})
@@ -877,7 +878,8 @@ class RenderTest(unittest.TestCase):
         reason = refusal_reason(said, method)
         self.assertEqual(reason, "on a tab the ardia command didn't open")
         error = Gated(method, reason=reason).during("set viewport")
-        self.assertTrue(error.message.startswith("`set viewport` needs Emulation.setDeviceMetricsOverride, which Ardia allows"))
+        self.assertTrue(error.message.startswith("`set viewport` needs Emulation.setDeviceMetricsOverride, which this Ardia allows"))
+        self.assertTrue(error.message.endswith("Ardia 0.2.49 or later has no such limit"))
         self.assertIn("only on a tab this command opened: `ardia browse open <url>`", error.message)
         taken = Gated(method, reason="on a tab that isn't off-screen").during("set viewport")
         self.assertIn("only on a tab it has taken off-screen", taken.message)

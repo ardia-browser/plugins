@@ -198,21 +198,190 @@ async def focus_in_other_frame(page, frame) -> bool:
     return False
 
 
+INPUT_WATCH = """() => {
+  if (!globalThis.ardiaBrowseInputWatch) {
+    const counts = { mousedown: 0, mouseup: 0, pointerdown: 0, pointerup: 0, click: 0, mousemove: 0, keydown: 0, keyup: 0, wheel: 0, beforeinput: 0, input: 0 };
+    for (const type of Object.keys(counts)) {
+      addEventListener(type, (event) => { if (event.isTrusted) counts[type] += 1; }, { capture: true, passive: true });
+    }
+    Object.defineProperty(globalThis, "ardiaBrowseInputWatch", { value: counts, enumerable: false });
+  }
+  if (!globalThis.ardiaBrowseDragStarts) {
+    const drags = { accepted: 0, dragend: 0, drop: 0, dispatched: [] };
+    for (const type of ["dragstart", "dragend", "drop"]) {
+      addEventListener(type, (event) => {
+        if (!event.isTrusted) return;
+        if (type === "dragstart") drags.dispatched.push(event);
+        else drags[type] += 1;
+      }, { capture: true, passive: true });
+    }
+    Object.defineProperty(globalThis, "ardiaBrowseDragStarts", { value: drags, enumerable: false });
+  }
+  const drags = globalThis.ardiaBrowseDragStarts;
+  drags.accepted += drags.dispatched.filter((event) => !event.defaultPrevented).length;
+  drags.dispatched.length = 0;
+  let active = document.activeElement;
+  while (active && active.shadowRoot && active.shadowRoot.activeElement) active = active.shadowRoot.activeElement;
+  return Object.assign({ activeFrame: !!active && ["IFRAME", "FRAME", "EMBED", "OBJECT"].includes(active.tagName) }, globalThis.ardiaBrowseInputWatch, {
+    dragstart: drags.accepted,
+    dragend: drags.dragend,
+    drop: drags.drop,
+  });
+}"""
+FOCUSED_FIELD = r"""(text, after) => {
+  let node = document.activeElement;
+  for (let hops = 0; node && hops < 16; hops++) {
+    let next = node.shadowRoot && node.shadowRoot.activeElement;
+    if (!next) {
+      try { next = node.contentDocument && node.contentDocument.activeElement; } catch (error) { next = null; }
+    }
+    if (!next || next === node) break;
+    node = next;
+  }
+  const field = !!node && /^(INPUT|TEXTAREA)$/.test(node.tagName) && typeof node.value === "string";
+  let host = node;
+  while (host && host.isContentEditable && host.parentElement && host.parentElement.isContentEditable) host = host.parentElement;
+  const editable = !field && !!host && host.isContentEditable;
+  const BLOCK = /^(P|DIV|LI|UL|OL|H[1-6]|BLOCKQUOTE|PRE|TR|TD|TH|TABLE|SECTION|ARTICLE|HEADER|FOOTER)$/;
+  let flattened = "";
+  const silent = (node) => node.nodeType === Node.COMMENT_NODE || node.nodeType === Node.PROCESSING_INSTRUCTION_NODE || (node.nodeType === Node.TEXT_NODE && node.data === "")
+    || (node.nodeType === Node.ELEMENT_NODE && /^(STYLE|SCRIPT|TEMPLATE)$/.test(node.tagName));
+  const trailing = (br) => {
+    for (let node = br; node && node !== host; node = node.parentElement) {
+      let next = node.nextSibling;
+      while (next && silent(next)) next = next.nextSibling;
+      if (next) return false;
+      const parent = node.parentElement;
+      if (!parent || parent === host || !getComputedStyle(parent).display.startsWith("inline")) return true;
+    }
+    return true;
+  };
+  const walk = (parent, mark) => {
+    const children = parent.childNodes;
+    for (let i = 0; i <= children.length; i++) {
+      if (mark && parent === mark.node && i === mark.offset) mark.at = flattened.length;
+      if (i === children.length) break;
+      const child = children[i];
+      if (child.nodeType === Node.TEXT_NODE) {
+        if (mark && child === mark.node) mark.at = flattened.length + mark.offset;
+        flattened += child.data;
+      } else if (child.nodeType === Node.ELEMENT_NODE && !/^(STYLE|SCRIPT|TEMPLATE)$/.test(child.tagName)) {
+        if (child.tagName === "BR") {
+          if (!trailing(child)) flattened += "\n";
+        }
+        else if (!child.isContentEditable) flattened += "\ufffc";
+        else {
+          const block = BLOCK.test(child.tagName);
+          if (block) flattened += "\n";
+          walk(child, mark);
+          if (block) flattened += "\n";
+        }
+      }
+    }
+  };
+  const serialize = (mark) => {
+    flattened = "";
+    walk(host, mark);
+    return flattened;
+  };
+  const contents = () => (field ? node.value : serialize(null));
+  const digest = (value) => {
+    let a = 0xdeadbeef ^ value.length;
+    let b = 0x41c6ce57 ^ value.length;
+    for (let i = 0; i < value.length; i++) {
+      const code = value.charCodeAt(i);
+      a = Math.imul(a ^ code, 2654435761);
+      b = Math.imul(b ^ code, 1597334677);
+    }
+    a = Math.imul(a ^ (a >>> 16), 2246822507) ^ Math.imul(b ^ (b >>> 13), 3266489909);
+    b = Math.imul(b ^ (b >>> 16), 2246822507) ^ Math.imul(a ^ (a >>> 13), 3266489909);
+    return (b >>> 0).toString(16) + ":" + (a >>> 0).toString(16);
+  };
+  if (!globalThis.ardiaBrowseInsertWatch) Object.defineProperty(globalThis, "ardiaBrowseInsertWatch", { value: { expected: null, timer: 0 }, enumerable: false });
+  const watch = globalThis.ardiaBrowseInsertWatch;
+  if (after) {
+    const expected = watch.expected;
+    watch.expected = null;
+    if (!expected || expected.node.deref() !== (field ? node : host)) return false;
+    return digest(contents()) === expected.digest;
+  }
+  watch.expected = null;
+  clearTimeout(watch.timer);
+  if (!field && !editable) return false;
+  if (field && node.type === "password") return false;
+  let caret = null;
+  if (field) {
+    try { if (node.selectionStart === node.selectionEnd) caret = node.selectionStart; } catch (error) { caret = null; }
+  } else {
+    const root = host.getRootNode();
+    const picked = root.getSelection ? root.getSelection() : host.ownerDocument.getSelection();
+    if (picked && picked.rangeCount > 0 && picked.isCollapsed && host.contains(picked.anchorNode)) {
+      const mark = { node: picked.anchorNode, offset: picked.anchorOffset, at: null };
+      serialize(mark);
+      caret = mark.at;
+    }
+  }
+  if (caret === null) return false;
+  const before = contents();
+  watch.expected = { node: new WeakRef(field ? node : host), digest: digest(before.slice(0, caret) + text + before.slice(caret)) };
+  watch.timer = setTimeout(Reflect.set, 10000, watch, "expected", null);
+  return true;
+}"""
+LOST_KINDS = (("pointer", ("mousedown", "mouseup", "pointerdown", "pointerup", "click", "mousemove")), ("keys", ("keydown", "keyup")),
+              ("text", ("beforeinput", "input")), ("wheel", ("wheel",)), ("drag", ("dragstart", "dragend", "drop")))
+
+
 async def input_counts(page, frame):
-    return await page.call("() => ardiaBrowse.inputWatch()", frame=frame)
+    return await page.call(INPUT_WATCH, frame=frame)
+
+
+class TextInserted:
+    def __init__(self, page, frame, text: str):
+        self.page, self.frame, self.text, self.ready = page, frame, text, False
+
+    async def prepare(self):
+        from ardia_cli.browse.errors import ConnectionLost
+
+        try:
+            self.ready = bool(await self.page.call(FOCUSED_FIELD, self.text, False, frame=self.frame, read=True))
+        except ConnectionLost:
+            raise
+        except BrowseError:
+            self.ready = False
+
+    async def landed(self) -> bool:
+        from ardia_cli.browse.errors import ConnectionLost
+
+        if not self.ready:
+            return False
+        try:
+            return bool(await self.page.call(FOCUSED_FIELD, self.text, True, frame=self.frame, read=True))
+        except ConnectionLost:
+            raise
+        except BrowseError:
+            return False
+
+
+def flag_lost(needs: dict):
+    parts = {part for name in needs for part in name.split("|")}
+    for kind, events in LOST_KINDS:
+        if parts.intersection(events):
+            command_metrics.flag(f"input_lost_{kind}", True)
 
 
 def delivered(now: dict, before: dict, name: str) -> int:
-    return sum(now.get(part, 0) - before.get(part, 0) for part in name.split("|"))
+    return max(now.get(part, 0) - before.get(part, 0) for part in name.split("|"))
 
 
-async def expect_input(page, frame, run, needs: dict, action: str, element=None):
+async def expect_input(page, frame, run, needs: dict, action: str, element=None, postcondition=None):
     from ardia_cli.browse.errors import ConnectionLost, OutcomeUnknown
 
     frame = frame or page.main_frame
     loader = page.loader(frame)
     try:
         before = await input_counts(page, frame)
+        if postcondition is not None:
+            await postcondition.prepare()
     except ConnectionLost:
         raise
     except BrowseError as error:
@@ -236,14 +405,20 @@ async def expect_input(page, frame, run, needs: dict, action: str, element=None)
             raise OutcomeUnknown(action.lower(), f"it was sent, but confirming it reached the page failed ({error.message})") from None
         missing = [name for name, count in needs.items() if delivered(now, before, name) < count]
         if not missing:
+            if now.get("mousedown", 0) - before.get("mousedown", 0) < now.get("pointerdown", 0) - before.get("pointerdown", 0):
+                command_metrics.flag("input_mouse_events_cancelled", True)
             return result
         if loop.time() >= deadline:
             names = " or ".join(part for name in missing for part in name.split("|"))
             if all(delivered(now, before, name) == 0 for name in needs):
                 if any(key in name for name in needs for key in KEY_EVENTS) and await focus_in_other_frame(page, frame):
                     return result
+                if postcondition is not None and await postcondition.landed():
+                    command_metrics.flag("input_confirmed_by_text", True)
+                    return result
                 if element is not None and not await still_attached(page, element):
                     raise BrowseError(TARGET_REPLACED.format(action=action, target=element.label), code="target_replaced")
+                flag_lost(needs)
                 raise BrowseError(NOT_DELIVERED.format(action=action, missing="/".join(needs).replace("|", "/")), data={"missing": missing}, code="input_not_delivered")
             raise OutcomeUnknown(action.lower(), PARTLY_DELIVERED.format(missing=names))
         await asyncio.sleep(0.05)
@@ -624,7 +799,7 @@ async def click(page, element, humanize: bool, count: int = 1, button: str = "le
         for number in range(1, count + 1):
             await mouse.click(x, y, button=which, click_count=number, humanize=False)
 
-    await expect_input(page, element.frame, lambda: page.input.gesture("click", press), {"mousedown": count, "mouseup": count}, "The click", element)
+    await expect_input(page, element.frame, lambda: page.input.gesture("click", press), {"mousedown|pointerdown": count, "mouseup|pointerup": count}, "The click", element)
 
 
 async def visible_label(page, element):
@@ -1095,7 +1270,7 @@ async def fill_cell(page, element, cell, text: str, humanize: bool) -> dict | No
 async def insert_text(page, element, text: str):
     command_metrics.flag("fill_inserted_text", True)
     await expect_input(page, element.frame, lambda: page.input.gesture("fill", lambda: page.send("Input.insertText", {"text": text}, input_event=True)),
-                       {"beforeinput|input": 1}, "The text insert", element)
+                       {"beforeinput|input": 1}, "The text insert", element, TextInserted(page, element.frame or page.main_frame, text))
 
 
 async def set_value(page, element, kind: str, text: str) -> str:
@@ -1347,7 +1522,7 @@ class DragInterception:
 
     async def page_started_drag(self) -> bool:
         try:
-            now = await self.page.call("() => ardiaBrowse.inputWatch()", frame=self.source_frame, timeout=CLEANUP_TIMEOUT)
+            now = await self.page.call(INPUT_WATCH, frame=self.source_frame, timeout=CLEANUP_TIMEOUT)
         except BrowseError:
             return False
         return now.get("dragstart", 0) > self.before_source.get("dragstart", 0)

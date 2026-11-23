@@ -211,7 +211,7 @@ describe("network", () => {
     emit(state, page, "Network.loadingFinished", { requestId: "R", timestamp: 10.5, encodedDataLength: 6 });
     const out = path.join(ctx.cwd, "x.har");
     const result = await cmdNetwork(ctx, ["har", "stop", "x.har"]);
-    expect(result.text).toBe("✓ HAR saved to x.har (1 entries)");
+    expect(result.text).toBe("✓ HAR saved to x.har (1 entries) (cookie and authorization headers are left out)");
     const text = fs.readFileSync(out, "utf8");
     expect(text.startsWith('{"log": {"version": "1.2", "creator": {"name": "ardia browse", "version": "1"}, "pages": [], "entries": [{"startedDateTime": "2023-11-14T22:13:20.250Z", "time": 500.0, ')).toBe(true);
     expect(text).toContain('"bodySize": 2, "postData": {"mimeType": "text/plain", "text": "hé"}}');

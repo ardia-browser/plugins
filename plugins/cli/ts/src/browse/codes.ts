@@ -1,5 +1,5 @@
 export const CODES: ReadonlySet<string> = new Set([
-  "ambiguous", "answer_too_large", "attaches_unanswered", "auth_expired", "bad_init_script", "bad_site", "bad_value", "blocked", "borrowed_tab",
+  "ambiguous", "answer_too_large", "attaches_unanswered", "auth_expired", "bad_init_script", "bad_site", "bad_value", "binary_body", "blocked", "borrowed_tab",
   "browser_restarted", "command_timeout", "connection_lost", "covered", "credential_not_sendable", "credential_provider_failed", "cross_process_frame",
   "disabled", "document_changed", "download_remote", "drifted", "element_replaced", "failed", "fetch_failed", "fetch_interrupted", "flow_invalid",
   "flow_not_get", "flow_too_large", "frame_gone", "http_error", "input_not_delivered", "input_unconfirmable", "lock_busy", "navigation_failed", "no_data",

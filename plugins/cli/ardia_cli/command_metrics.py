@@ -9,11 +9,13 @@ DURATIONS = frozenset({
     "settle_ms", "cdp_ms_total",
 })
 COUNTS = frozenset({"cdp_calls", "read_data_blocks", "snapshot_nodes", "snapshot_chars", "output_chars", "network_writes_count", "batch_steps",
-                    "read_rows", "read_pages", "batch_lines_compacted", "read_tabs_reopened", "skills_installed", "skills_skipped"})
-READ_FLAGS = frozenset({"read_data", "read_data_shaped", "read_scrolled", "read_matched", "read_virtualized_grid", "read_pdf", "read_waited_for_content", "read_beside_busy", "read_bot_check", "read_scroll_guessed", "read_scope_shown", "read_scope_empty", "read_waited_for_requests", "read_partial_page", "read_frame_text", "read_scroll_waited_at_end"})
+                    "read_rows", "read_pages", "batch_lines_compacted", "read_tabs_reopened", "skills_installed", "skills_skipped",
+                    "read_nav_hidden", "read_nav_chars_hidden"})
+READ_FLAGS = frozenset({"read_data", "read_data_shaped", "read_scrolled", "read_matched", "read_virtualized_grid", "read_pdf", "read_waited_for_content", "read_beside_busy", "read_bot_check", "read_scroll_guessed", "read_scope_shown", "read_scope_empty", "read_waited_for_requests", "read_partial_page", "read_frame_text", "read_scroll_waited_at_end", "read_links_from_url", "read_binary_saved"})
 ACT_FLAGS = frozenset({"waited_for_enabled", "fill_picked_option", "fill_inserted_text", "drag_side_given", "drag_list_position",
                        "select_opened_list", "press_targeted", "consent_dismissed", "popup_dismissed", "click_recentered", "dom_click_fallback",
                        "dom_click_behind_modal", "dom_click_waited_for_modal", "input_in_inner_frame", "menu_closed_for_click", "modal_dismissed",
+                       "input_mouse_events_cancelled", "input_confirmed_by_text", "input_lost_pointer", "input_lost_keys", "input_lost_text", "input_lost_wheel", "input_lost_drag",
                        "fill_cleared_beside_chrome"})
 ACT_COUNTS = frozenset({"cell_edits"})
 CHANGE_FLAGS = frozenset({"change_text", "change_run_choices", "open_report", "open_moved_tab", "snapshot_disabled_folded", "snapshot_repeat_labels", "names_clipped",
