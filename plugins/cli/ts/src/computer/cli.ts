@@ -197,7 +197,7 @@ const ARGUMENT_CHECK_TIMEOUT_S = 30;
 
 type Stoppable = { signal: AbortSignal; status: () => number; release: () => void };
 
-function stoppable(): Stoppable {
+function stoppable(honorPriorInterrupt = true): Stoppable {
   const controller = new AbortController();
   let status = 130;
   const onInterrupt = () => {
@@ -208,7 +208,7 @@ function stoppable(): Stoppable {
     status = 143;
     controller.abort();
   };
-  if (interrupted()) controller.abort();
+  if (honorPriorInterrupt && interrupted()) controller.abort();
   process.on("SIGINT", onInterrupt);
   process.on("SIGTERM", onTerminate);
   return {
@@ -252,7 +252,7 @@ async function argumentsRefused(io: CommandIo, binary: string, argv: readonly st
   io.flush();
   const shown = await forward(1, checked.stdout, signal);
   if (shown === "stopped") throw new Stopped();
-  if (shown === "failed") throw new OutputClosed();
+  if (shown === "closed") throw new OutputClosed();
   if ((await forward(2, checked.stderr, signal)) === "stopped") throw new Stopped();
   if (checked.code === 0) return 0;
   const killedBy = checked.code < 0 ? (signalName(-checked.code) ?? `signal ${-checked.code}`) : undefined;
@@ -286,8 +286,8 @@ async function grantsAfterFailure(binary: string, signal: AbortSignal): Promise<
   return code === undefined ? undefined : { code, grants: report.grants };
 }
 
-async function stoppably(io: CommandIo, work: (signal: AbortSignal) => Promise<number | undefined>): Promise<number | undefined> {
-  const stop = stoppable();
+async function stoppably(io: CommandIo, work: (signal: AbortSignal) => Promise<number | undefined>, honorPriorInterrupt = true): Promise<number | undefined> {
+  const stop = stoppable(honorPriorInterrupt);
   try {
     const status = await work(stop.signal);
     if (stop.signal.aborted) throw new Stopped();
@@ -342,7 +342,7 @@ async function runSupervised(io: CommandIo, binary: string, installed: boolean, 
     io.errorCode = classifyDriverExit(command, ran.status, ran.stderr, ran.signal);
     return ran.status;
   }
-  return (await stoppably(io, (signal) => guidance(io, binary, argv, ran, ownSocket, signal))) as number;
+  return (await stoppably(io, (signal) => guidance(io, binary, argv, ran, ownSocket, signal), false)) as number;
 }
 
 async function runDriver(io: CommandIo, argv: readonly string[]): Promise<number> {

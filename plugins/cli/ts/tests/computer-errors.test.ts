@@ -732,3 +732,89 @@ macOnly("Ctrl-C while ardia looks for a running service is never lost", async ()
   assert.equal(b.io.errorCode, "interrupted");
   assert.deepEqual(b.log(), []);
 });
+
+macOnly("SIGINT during supervision keeps the driver exit and driver_signal with catchInterrupts active", async () => {
+  const cliDir = path.resolve(import.meta.dir, "..");
+  for (const mode of ["catch7", "die"] as const) {
+    const b = box();
+    await listen(b.socket);
+    const ready = path.join(b.root, "ready");
+    const result = path.join(b.root, "result.json");
+    fs.writeFileSync(
+      path.join(b.app, APP_BINARY),
+      mode === "catch7"
+        ? `#!/bin/sh\nif [ "$1 $2 $3" = "permissions status --json" ]; then printf '{"accessibility":true,"screen_recording":true}\\n'; exit 0; fi\nif [ "$#" -ne 2 ]; then printf 'Cua Driver daemon is not running\\n' >&2; exit 1; fi\nexec ${quoted(process.execPath)} -e 'const fs = require("node:fs"); process.on("SIGINT", () => process.exit(7)); fs.writeFileSync(process.argv[1], "1"); setInterval(() => {}, 1000);' ${quoted(ready)}\n`
+        : `#!/bin/sh\nif [ "$1 $2 $3" = "permissions status --json" ]; then printf '{"accessibility":true,"screen_recording":true}\\n'; exit 0; fi\nif [ "$#" -ne 2 ]; then printf 'Cua Driver daemon is not running\\n' >&2; exit 1; fi\ntouch ${quoted(ready)}\nexec sleep 30\n`,
+      { mode: 0o755 },
+    );
+    const runner = path.join(b.root, "run.ts");
+    fs.writeFileSync(
+      runner,
+      `import fs from "node:fs";
+import ${JSON.stringify(path.join(cliDir, "tests/libc-loaded.ts"))};
+import { catchInterrupts } from ${JSON.stringify(path.join(cliDir, "src/control.ts"))};
+import { CommandIo } from ${JSON.stringify(path.join(cliDir, "src/cmdio.ts"))};
+import { computerMain } from ${JSON.stringify(path.join(cliDir, "src/computer/cli.ts"))};
+import { tools } from ${JSON.stringify(path.join(cliDir, "src/computer/driver.ts"))};
+tools.codesign = ${JSON.stringify(tools.codesign)};
+tools.open = ${JSON.stringify(tools.open)};
+tools.lsregister = "/usr/bin/true";
+tools.applications = ${JSON.stringify(tools.applications)};
+tools.socket = ${JSON.stringify(b.socket)};
+catchInterrupts();
+const io = new CommandIo(false, () => {});
+const status = await computerMain(io, ["call", "list_apps"]);
+fs.writeFileSync(${JSON.stringify(result)}, JSON.stringify({ status, errorCode: io.errorCode ?? null }));
+process.exit(0);
+`,
+    );
+    const child = spawn(process.execPath, [runner], { stdio: ["ignore", "inherit", "inherit"], env: process.env });
+    const exited = new Promise<void>((resolve) => child.on("exit", () => resolve()));
+    const deadline = performance.now() + 10_000;
+    while (!fs.existsSync(ready)) {
+      assert.ok(performance.now() < deadline, "the driver never got ready");
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    process.kill(child.pid as number, "SIGINT");
+    await exited;
+    const got = JSON.parse(fs.readFileSync(result, "utf8")) as { status: number; errorCode: string | null };
+    if (mode === "catch7") {
+      assert.deepEqual(got, { status: 7, errorCode: "driver_exit_7" });
+    } else {
+      assert.deepEqual(got, { status: 130, errorCode: "driver_signal" });
+    }
+  }
+});
+
+macOnly("a non-pipe stdout error like EBADF is not reported as stdout_closed", async () => {
+  const b = box();
+  process.env.STUB_CHECK_STDOUT = "usage: cua-driver call <tool> [json]";
+  const write = driverOutput.write;
+  driverOutput.write = (fd, bytes, done) => {
+    if (fd === 1) {
+      done(Object.assign(new Error("EBADF"), { code: "EBADF", errno: -9 }));
+      return;
+    }
+    b.err.push(Buffer.from(bytes).toString("utf8"));
+    done();
+  };
+  let status: number;
+  try {
+    status = await computerMain(b.io, ["call", "list_apps"]);
+    b.io.flush();
+  } finally {
+    driverOutput.write = write;
+  }
+  assert.equal(status, 2);
+  assert.equal(b.io.errorCode, "bad_arguments");
+
+  const files = probeFiles("echo hello\n");
+  const roFile = path.join(files.root, "ro.txt");
+  fs.writeFileSync(roFile, "");
+  const roFd = fs.openSync(roFile, "r");
+  const wrapper = spawn(process.execPath, [PROBE, files.file, files.result], { stdio: ["ignore", roFd, "inherit"] });
+  fs.closeSync(roFd);
+  await new Promise<void>((resolve) => wrapper.on("exit", () => resolve()));
+  assert.deepEqual(JSON.parse(fs.readFileSync(files.result, "utf8")), { status: 0, signal: null, stdoutClosed: false });
+});

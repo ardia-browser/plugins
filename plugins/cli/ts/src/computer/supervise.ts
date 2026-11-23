@@ -1,11 +1,20 @@
 import { spawn } from "node:child_process";
 import { write } from "node:fs";
 import { constants } from "node:os";
+import { codeOf, errnoOf } from "../paths.ts";
 import { abandonWork } from "../printable.ts";
 
 const TAIL_BYTES = 64 * 1024;
 const FORWARDED_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
 const STOPPED_DRAIN_MS = 200;
+const BROKEN_PIPE = new Set([constants.errno.EPIPE, (constants.errno as Record<string, number>).ESHUTDOWN].filter((code) => code !== undefined));
+
+function isBrokenPipe(error: unknown): boolean {
+  const code = codeOf(error);
+  if (code === "EPIPE" || code === "ESHUTDOWN") return true;
+  const errno = errnoOf(error);
+  return errno !== 0 && BROKEN_PIPE.has(errno);
+}
 
 export type Supervised = { status: number; signal?: NodeJS.Signals; stderr: string; stdoutClosed: boolean; spawnErrno?: number };
 
@@ -26,7 +35,7 @@ export const driverOutput = {
   },
 };
 
-export function forward(fd: 1 | 2, text: string, signal?: AbortSignal): Promise<"written" | "failed" | "stopped"> {
+export function forward(fd: 1 | 2, text: string, signal?: AbortSignal): Promise<"written" | "closed" | "failed" | "stopped"> {
   if (signal?.aborted) return Promise.resolve("stopped");
   if (text === "") return Promise.resolve("written");
   return new Promise((resolve) => {
@@ -42,7 +51,7 @@ export function forward(fd: 1 | 2, text: string, signal?: AbortSignal): Promise<
       signal?.removeEventListener("abort", stop);
       if (done) return;
       done = true;
-      resolve(error === undefined ? "written" : "failed");
+      resolve(error === undefined ? "written" : isBrokenPipe(error) ? "closed" : "failed");
     });
   });
 }
@@ -132,7 +141,7 @@ export function supervise(binary: string, argv: readonly string[], env: Record<s
             forwarding = false;
             pending -= queue.length;
             if (fd === 1) {
-              stdoutClosed = true;
+              if (isBrokenPipe(error)) stdoutClosed = true;
               child.stdout?.destroy();
             }
           }
