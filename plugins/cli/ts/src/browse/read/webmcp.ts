@@ -200,6 +200,7 @@ export function failedOutput(value: unknown): boolean {
 }
 
 export const COLLECT = `async (only) => {
+  const apply = Reflect.apply;
   const found = [];
   const errors = [];
   found.errors = errors;
@@ -239,7 +240,7 @@ export const COLLECT = `async (only) => {
         const executeTool = typeof testing.executeTool === "function" ? testing.executeTool : null;
         add(given, item, "navigator.modelContextTesting", executeTool, testing, "name", async (name, args) => {
           if (!executeTool) throw new Error("the browser registered this tool with nothing to call");
-          const result = await executeTool.call(testing, name, JSON.stringify(args));
+          const result = await apply(executeTool, testing, [name, JSON.stringify(args)]);
           if (typeof result !== "string") return result;
           try { return JSON.parse(result); } catch { return result; }
         });
@@ -258,9 +259,9 @@ export const COLLECT = `async (only) => {
         add(given, item, label, execute || provider, execute ? item : holder, execute ? "handler" : "name", async (name, args) => {
           if (execute) {
             const client = { requestUserInteraction: async () => { throw new Error("this tool asked for user interaction, which the ardia command doesn't give"); } };
-            return execute.call(item, args, client);
+            return apply(execute, item, [args, client]);
           }
-          if (provider) return provider.call(holder, name, args);
+          if (provider) return apply(provider, holder, [name, args]);
           throw new Error("the page registered this tool with nothing to call");
         });
       }
@@ -310,7 +311,9 @@ export const INVOKE_BOUND = `async function (name, args, fingerprint) {
   const approved = this.find((item) => item.entry.name === name);
   if (!approved) return { missing: true };
   if (approved.entry.fingerprint !== fingerprint) return { changed: true };
-  const fresh = (await (${COLLECT})(approved.entry.source)).find((item) => item.entry.name === name);
+  const recheck = await (${COLLECT})(approved.entry.source);
+  const fresh = recheck.find((item) => item.entry.name === name);
+  if (!fresh && Array.isArray(recheck.errors) && recheck.errors.length > 0) return { failed: recheck.errors.slice(0, 10) };
   if (!fresh || fresh.entry.fingerprint !== fingerprint || !approved.handler || fresh.handler !== approved.handler || fresh.receiver !== approved.receiver || fresh.entry.binding !== approved.entry.binding) return { changed: true };
   return { via: approved.entry.source, binding: approved.entry.binding, result: plain(await approved.call(name, args)) };
 }`;

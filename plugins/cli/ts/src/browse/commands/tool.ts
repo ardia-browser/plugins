@@ -170,6 +170,7 @@ async function cmdTool(ctx: Ctx, argv: string[]): Promise<Result> {
     if (thrown !== null) throw new BrowseError(`${name} failed in the page: ${thrown}`, { tool: name }, "page_script_error");
     const answer = (((called["result"] ?? {}) as Record<string, unknown>)["value"] ?? null) as Record<string, unknown> | null;
     if (answer === null || answer["missing"]) throw new BrowseError(`${name} went away before it could be called; nothing was called`, null, "no_site_tool");
+    if (Array.isArray(answer["failed"])) throw discoveryFailed(discoveryErrors({ errors: answer["failed"] }), origin);
     if (answer["changed"]) throw new BrowseError(`${name} changed between being found and being called (its description, arguments or provider); nothing was called. Run \`ardia browse tools\` and check it again`, null, "site_tool_changed");
     const result = answer["result"];
     const marks = ["[UNTRUSTED]", tool.consequential ? "[CONSEQUENTIAL]" : ""].filter((mark) => mark).join(" ");

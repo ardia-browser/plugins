@@ -50,7 +50,6 @@ export type World = { frame: string; loader: string | null; context: number; han
 export type Frame = { id: string; url: string; loader: string | null; parent: string | null; name: string; origin: string };
 export type Lifecycle = { loader: string | null; names: Set<string> };
 export type Viewport = [number, number] | null;
-export const RECORD_MARK = "\u2063ardia-record\u2063";
 export type SendOptions = { timeout?: number; mutation?: boolean; inputEvent?: boolean; guard?: () => void; session?: string | null };
 export type CallOptions = { frame?: string | null; byValue?: boolean; awaitPromise?: boolean; timeout?: number; read?: boolean };
 
@@ -735,17 +734,25 @@ export class Page {
   onChildEvent(session: string, method: string, params: Json): void {
     if (FRAME_EVENTS.has(method)) this.framesChanged();
     oopif.childEvent(this, session, method, params);
+    this.runtimeContextEvent(session, method, params);
+    if (method === "Runtime.bindingCalled") this.state.onPageEvent(this, method, params, session);
   }
 
-  ownWorld(context: unknown): boolean {
-    return typeof context === "number" && [...this.worlds.values()].some((world) => world[1] === context);
+  ownWorld(session: string | null | undefined, context: unknown): boolean {
+    if (typeof context !== "number" || typeof session !== "string") return false;
+    return [...this.worlds].some(([frame, world]) => world[1] === context && this.sessionFor(frame) === session);
   }
 
-  recorderMessage(params: Json): string | null {
-    const first = Array.isArray(params["args"]) ? (params["args"][0] as Json | undefined) : undefined;
-    const value = first && first["type"] === "string" ? first["value"] : null;
-    if (typeof value !== "string" || !value.startsWith(RECORD_MARK) || !this.ownWorld(params["executionContextId"])) return null;
-    return value.slice(RECORD_MARK.length);
+  forgetWorlds(session: string | null, context: number | null = null): void {
+    for (const [frame, world] of [...this.worlds]) {
+      if (this.sessionFor(frame) !== session) continue;
+      if (context === null || world[1] === context) this.worlds.delete(frame);
+    }
+  }
+
+  private runtimeContextEvent(session: string | null, method: string, params: Json): void {
+    if (method === "Runtime.executionContextsCleared") this.forgetWorlds(session);
+    else if (method === "Runtime.executionContextDestroyed" && typeof params["executionContextId"] === "number") this.forgetWorlds(session, params["executionContextId"]);
   }
 
   onEvent(method: string, params: Json): void {
@@ -798,12 +805,13 @@ export class Page {
       this.dragIntercepted = null;
       waiter?.(record(params["data"]));
     } else if (method === "Runtime.consoleAPICalled") {
-      if (!this.recorderMessage(params)) this.console.add(consoleEntry(params));
+      this.console.add(consoleEntry(params));
     } else if (method === "Runtime.exceptionThrown") {
       this.errors.add(errorEntry(params));
     } else if (method.startsWith("Network.") && this.networkOn) {
       this.network.onEvent(method, params);
     }
-    this.state.onPageEvent(this, method, params);
+    this.runtimeContextEvent(this.session, method, params);
+    this.state.onPageEvent(this, method, params, this.session);
   }
 }

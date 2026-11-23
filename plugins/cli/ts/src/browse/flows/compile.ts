@@ -11,7 +11,7 @@ const PARAM_NAME = /^[a-z][a-z0-9_]{0,23}$/u;
 
 export type RecEvent = {
   kind: "click" | "confirm" | "fill" | "select" | "press" | "submit" | "navigate";
-  pointer?: number;
+  pointer?: string;
   at: number;
   target?: Descriptor | null;
   value?: string | null;
@@ -82,13 +82,13 @@ function submitsWrite(event: RecEvent): boolean {
 }
 
 export function settledClicks(given: readonly RecEvent[]): RecEvent[] {
-  const confirmed = new Map<number, boolean | null>();
-  for (const event of given) if (event.kind === "confirm" && typeof event.pointer === "number") confirmed.set(event.pointer, event.checked ?? null);
+  const confirmed = new Map<string, boolean | null>();
+  for (const event of given) if (event.kind === "confirm" && typeof event.pointer === "string") confirmed.set(event.pointer, event.checked ?? null);
   const navigations = given.filter((event) => event.kind === "navigate").map((event) => event.at);
   const out: RecEvent[] = [];
   for (const event of given) {
     if (event.kind === "confirm") continue;
-    if (event.kind === "click" && typeof event.pointer === "number") {
+    if (event.kind === "click" && typeof event.pointer === "string") {
       if (confirmed.has(event.pointer)) {
         const checked = confirmed.get(event.pointer);
         out.push(checked === null || checked === undefined ? event : { ...event, checked });

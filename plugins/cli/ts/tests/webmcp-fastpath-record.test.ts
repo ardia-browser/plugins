@@ -325,7 +325,7 @@ describe("record", () => {
     const sent: string[] = [];
     const listeners: string[] = [];
     const context = vm.createContext({
-      console: { debug: (line: string) => sent.push(line) },
+      __ardiaRecordQueue: sent,
       addEventListener: (name: string) => listeners.push(name),
       removeEventListener: () => {},
       CSS: { escape: (text: string) => text },

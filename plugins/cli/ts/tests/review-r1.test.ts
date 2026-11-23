@@ -1,5 +1,4 @@
 import "./libc-loaded.ts";
-import { RECORD_MARK } from "../src/browse/state/page.ts";
 import { afterAll, describe, expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
@@ -178,7 +177,7 @@ describe("recording drains a queue in ardia's own page world", () => {
       calls,
       frames: () => ["main", "child"],
       call: async (fn, frame) => {
-        const kind = fn === STOP_DRAIN ? "stop" : fn === DRAIN ? "drain" : "?";
+        const kind = fn === STOP_DRAIN ? "stop" : fn.startsWith("() => { (() => {") ? "drain" : "?";
         calls.push(`${kind} ${frame}`);
         if (frame === "child" && kind === "drain") throw new Error("frame gone");
         return script[kind]?.shift() ?? [];
@@ -187,6 +186,12 @@ describe("recording drains a queue in ardia's own page world", () => {
       refresh: async () => {
         calls.push("refresh");
       },
+      sessions: () => ["S"],
+      bind: async () => {
+        throw new Error("refused");
+      },
+      unbind: async () => {},
+      ownWorld: () => true,
     };
   }
 
@@ -249,7 +254,7 @@ describe("recorder privacy", () => {
     const handlers: Record<string, (event: unknown) => void> = {};
     const sent: Record<string, unknown>[] = [];
     const context = vm.createContext({
-      console: { debug: (line: string) => sent.push(JSON.parse(line.slice(RECORD_MARK.length))) },
+      __ardiaRecordQueue: { get length() { return sent.length; }, push: (payload: string) => sent.push(JSON.parse(payload)) },
       addEventListener: (name: string, handler: (event: unknown) => void) => {
         handlers[name] = handler;
       },

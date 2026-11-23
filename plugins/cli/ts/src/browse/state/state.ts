@@ -64,7 +64,7 @@ export type StateConfig = {
 };
 
 export type LostTab = { target: string; app: string | undefined; tab: string | undefined; generation: unknown; opened: boolean; borrowed: boolean };
-export type Listener = (page: Page | null, method: string, params: Json) => void;
+export type Listener = (page: Page | null, method: string, params: Json, session?: string | null) => void;
 export type Probe = [boolean, boolean];
 export type TabRow = Record<string, unknown> & { tabId: string };
 
@@ -583,8 +583,8 @@ export class State extends Refs implements temptabs.TempTabState {
     for (const listener of [...this.listeners]) listener(null, method, params);
   }
 
-  onPageEvent(page: Page, method: string, params: Json): void {
-    for (const listener of [...this.listeners]) listener(page, method, params);
+  onPageEvent(page: Page, method: string, params: Json, session: string | null = null): void {
+    for (const listener of [...this.listeners]) listener(page, method, params, session);
   }
 
   noteUsed(targetId: string): void {

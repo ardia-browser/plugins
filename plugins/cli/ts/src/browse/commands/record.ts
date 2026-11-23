@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { sleep, withSignal } from "../cdp/cancel.ts";
 import { BrowseError, ConnectionLost, Usage } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
@@ -10,7 +11,7 @@ import { ACTIONS_VERSION, checkName, originAllowed, save, siteOf, validate, type
 import { selectorOf } from "../flows/locators.ts";
 import { secondsOf } from "../limits.ts";
 import { count, flag } from "../metrics.ts";
-import { type Page, RECORD_MARK } from "../state/page.ts";
+import { type Page, WORLD_NAME } from "../state/page.ts";
 import type { Listener } from "../state/state.ts";
 import { monotonic } from "../state/wait.ts";
 import { cliVersion } from "../../version.ts";
@@ -24,16 +25,34 @@ export const DEFAULT_IDLE = 20;
 export const MAX_EVENTS = 500;
 export const MAX_PAYLOAD = 16 * 1024;
 export const POLL = 0.05;
+export const FALLBACK_POLL = 0.025;
+export const QUEUE = "__ardiaRecordQueue";
 export const FLAGS = { "--save": "value", "--timeout": "value", "--idle": "value", "--here": "bool", "--description": "value" } as const;
 
-export const RECORDER_SOURCE = `(() => {
+export function recorderSource(binding: string | null): string {
+  return `(() => {
   if (globalThis.__ardiaRecorderStop) return;
+  const binding = ${JSON.stringify(binding)};
+  const queue = globalThis[${JSON.stringify(QUEUE)}] || (globalThis[${JSON.stringify(QUEUE)}] = []);
   let sent = 0;
   const send = (payload) => {
     if (sent >= ${QUEUE_LIMIT}) return;
     sent += 1;
-    try { console.debug(${JSON.stringify(RECORD_MARK)} + payload); } catch {}
+    const deliver = binding ? globalThis[binding] : null;
+    if (typeof deliver === "function") {
+      try { deliver(payload); return; } catch {}
+    }
+    queue.push(payload);
   };
+  const installId = (() => {
+    try {
+      const bytes = new Uint8Array(8);
+      crypto.getRandomValues(bytes);
+      return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+    } catch {
+      return Math.random().toString(16).slice(2) + Date.now().toString(16);
+    }
+  })();
   const INPUT_ROLES = { button: "button", submit: "button", reset: "button", image: "button", checkbox: "checkbox", radio: "radio", range: "slider", number: "spinbutton", search: "searchbox" };
   const TAG_ROLES = { button: "button", summary: "button", textarea: "textbox", option: "option", h1: "heading", h2: "heading", h3: "heading", h4: "heading", h5: "heading", h6: "heading", nav: "navigation", main: "main", dialog: "dialog" };
   const short = (text, limit = 100) => String(text || "").replace(/\\s+/g, " ").trim().slice(0, limit);
@@ -163,9 +182,10 @@ export const RECORDER_SOURCE = `(() => {
     if (!el) return;
     flushAll();
     pointerSeq += 1;
-    pressed.set(el, pointerSeq);
+    const pointer = installId + ":" + pointerSeq;
+    pressed.set(el, pointer);
     const toggle = el.localName === "input" && (el.type === "checkbox" || el.type === "radio");
-    emit({ kind: "click", pointer: pointerSeq, target: describe(el), checked: toggle ? el.type === "radio" || !el.checked : stateOf(el), method: formMethod(el) });
+    emit({ kind: "click", pointer, target: describe(el), checked: toggle ? el.type === "radio" || !el.checked : stateOf(el), method: formMethod(el) });
   };
   const onClick = (event) => {
     if (!event.isTrusted || event.button !== 0) return;
@@ -203,9 +223,16 @@ export const RECORDER_SOURCE = `(() => {
   for (const [name, listener] of listeners) addEventListener(name, listener, options);
   globalThis.__ardiaRecorderStop = detach;
 })()`;
+}
 
-export const DRAIN = `() => { ${RECORDER_SOURCE}; return []; }`;
-export const STOP_DRAIN = "() => { if (globalThis.__ardiaRecorderStop) globalThis.__ardiaRecorderStop(); return []; }";
+export const RECORDER_SOURCE = recorderSource(null);
+
+export function drainSource(binding: string | null): string {
+  return `() => { ${recorderSource(binding)}; return (globalThis[${JSON.stringify(QUEUE)}] || []).splice(0); }`;
+}
+
+export const DRAIN = drainSource(null);
+export const STOP_DRAIN = `() => { if (globalThis.__ardiaRecorderStop) globalThis.__ardiaRecorderStop(); return (globalThis[${JSON.stringify(QUEUE)}] || []).splice(0); }`;
 
 export function parseEvent(payload: unknown): RecEvent | null {
   if (typeof payload !== "string" || payload.length > MAX_PAYLOAD) return null;
@@ -218,7 +245,8 @@ export function parseEvent(payload: unknown): RecEvent | null {
   if (raw === null || typeof raw !== "object") return null;
   const event = raw as Record<string, unknown>;
   if (!["click", "confirm", "fill", "select", "press", "submit"].includes(String(event["kind"]))) return null;
-  if (event["kind"] === "confirm" && typeof event["pointer"] !== "number") return null;
+  if (event["kind"] === "confirm" && typeof event["pointer"] !== "string") return null;
+  if (event["pointer"] !== undefined && (typeof event["pointer"] !== "string" || event["pointer"].length > 80)) return null;
   if (typeof event["at"] !== "number") return null;
   return event as unknown as RecEvent;
 }
@@ -295,7 +323,16 @@ export function recordedFlow(name: string, events: readonly RecEvent[], startUrl
   return { flow, skipped };
 }
 
-export type Pages = { frames(): string[]; call(fn: string, frame: string): Promise<unknown>; closed(): boolean; refresh(): Promise<void> };
+export type Pages = {
+  frames(): string[];
+  call(fn: string, frame: string): Promise<unknown>;
+  closed(): boolean;
+  refresh(): Promise<void>;
+  sessions(): string[];
+  bind(session: string, binding: string): Promise<void>;
+  unbind(session: string, binding: string): Promise<void>;
+  ownWorld(session: string | null | undefined, context: unknown): boolean;
+};
 
 export function livePages(page: Page): Pages {
   return {
@@ -305,6 +342,16 @@ export function livePages(page: Page): Pages {
     refresh: async () => {
       await page.refreshFrames(true);
     },
+    sessions: () => [page.session, ...page.oopifs.keys()].filter((session): session is string => typeof session === "string"),
+    bind: async (session, binding) => {
+      if (session === page.session) await page.enableRuntime();
+      else await page.send("Runtime.enable", null, { session });
+      await page.send("Runtime.addBinding", { name: binding, executionContextName: WORLD_NAME }, { session });
+    },
+    unbind: async (session, binding) => {
+      await page.send("Runtime.removeBinding", { name: binding }, { session });
+    },
+    ownWorld: (session, context) => page.ownWorld(session, context),
   };
 }
 
@@ -345,26 +392,60 @@ export async function finalDrain(pages: Pages, into: RecEvent[]): Promise<void> 
   });
 }
 
+export function bindingName(): string {
+  return `__ardiaRecord${randomBytes(8).toString("hex")}`;
+}
+
+export async function bindSessions(pages: Pages, binding: string, bound: Set<string>, refused: Set<string>): Promise<void> {
+  for (const session of pages.sessions()) {
+    if (bound.has(session) || refused.has(session)) continue;
+    try {
+      await pages.bind(session, binding);
+      bound.add(session);
+    } catch (error) {
+      if (error instanceof ConnectionLost) throw error;
+      refused.add(session);
+    }
+  }
+}
+
+export async function unbindSessions(pages: Pages, binding: string, bound: Set<string>): Promise<void> {
+  await withSignal(null, async () => {
+    for (const session of [...bound]) {
+      try {
+        await pages.unbind(session, binding);
+      } catch {
+        continue;
+      } finally {
+        bound.delete(session);
+      }
+    }
+  });
+}
+
 export async function capture(
   ctx: Ctx,
   page: Page,
   timeout: number,
   idle: number,
   pages: Pages = livePages(page),
-): Promise<{ events: RecEvent[]; startUrl: string; stoppedBy: string }> {
+  binding: string = bindingName(),
+): Promise<{ events: RecEvent[]; startUrl: string; stoppedBy: string; transport: "binding" | "poll" }> {
   const state = ctx.state;
   const startUrl = page.url;
   const events: RecEvent[] = [];
   let lastAt = monotonic();
   let closed = false;
-  const listener: Listener = (source, method, params) => {
+  const bound = new Set<string>();
+  const refused = new Set<string>();
+  const listener: Listener = (source, method, params, session) => {
     if (source !== page) {
       if (source === null && method === "Target.targetDestroyed" && params["targetId"] === page.targetId) closed = true;
       return;
     }
-    if (method === "Runtime.consoleAPICalled") {
-      const payload = page.recorderMessage(params);
-      const event = payload === null ? null : parseEvent(payload);
+    if (method === "Runtime.bindingCalled") {
+      if (params["name"] !== binding || !bound.has(String(session)) || !pages.ownWorld(session, params["executionContextId"])) return;
+      const event = parseEvent(params["payload"]);
       if (event !== null && events.length < MAX_EVENTS) {
         events.push(event);
         lastAt = monotonic();
@@ -376,9 +457,12 @@ export async function capture(
   };
   state.listeners.push(listener);
   let stoppedBy = "timeout";
+  let transport: "binding" | "poll" = "poll";
   try {
-    await page.enableRuntime();
-    await page.refreshFrames();
+    await pages.refresh();
+    await bindSessions(pages, binding, bound, refused);
+    transport = bound.size > 0 ? "binding" : "poll";
+    const drain = drainSource(bound.size > 0 ? binding : null);
     const deadline = monotonic() + timeout;
     for (;;) {
       if (closed || pages.closed()) {
@@ -386,25 +470,27 @@ export async function capture(
         stoppedBy = "the tab closed";
         break;
       }
-      if ((await drainFrames(pages, DRAIN, events)) > 0) lastAt = monotonic();
+      if (bound.size > 0) await bindSessions(pages, binding, bound, refused);
+      if ((await drainFrames(pages, drain, events)) > 0) lastAt = monotonic();
       const now = monotonic();
       if (now >= deadline) break;
       if (events.some((event) => event.kind !== "navigate") && now - lastAt >= idle) {
         stoppedBy = "idle";
         break;
       }
-      await sleep(POLL);
+      await sleep(bound.size > 0 && refused.size === 0 ? POLL : FALLBACK_POLL);
     }
   } finally {
     try {
       if (!closed) await finalDrain(pages, events);
+      if (!closed) await unbindSessions(pages, binding, bound);
     } finally {
       const at = state.listeners.indexOf(listener);
       if (at >= 0) state.listeners.splice(at, 1);
     }
   }
   events.sort((a, b) => a.at - b.at);
-  return { events, startUrl, stoppedBy };
+  return { events, startUrl, stoppedBy, transport };
 }
 
 function stepLines(flow: Json): string[] {
@@ -425,7 +511,7 @@ export async function recordInteractions(ctx: Ctx, argv: string[]): Promise<Resu
   if (timeout === undefined || timeout <= 0 || idle === undefined || idle <= 0) throw new Usage("--timeout and --idle take 30s, 2m or milliseconds");
   const state = ctx.state;
   const page = options["here"] ? await state.page() : await state.page(await state.takeActive());
-  const { events, startUrl, stoppedBy } = await capture(ctx, page, Math.min(timeout, MAX_TIMEOUT), idle);
+  const { events, startUrl, stoppedBy, transport } = await capture(ctx, page, Math.min(timeout, MAX_TIMEOUT), idle);
   const { flow, skipped } = recordedFlow(name, events, startUrl, (options["description"] as string | undefined) ?? null, cliVersion());
   count("flow_recorded_steps", flow["steps"].length);
   const actions = flow["steps"].filter((step: Json) => (step["action"] as Action).type !== "open");
@@ -436,7 +522,7 @@ export async function recordInteractions(ctx: Ctx, argv: string[]): Promise<Resu
   const lines = [`Recorded ${actions.length} actions on ${flow["site"]} (stopped: ${stoppedBy})`, ...stepLines(flow)];
   for (const item of skipped.slice(0, 5)) lines.push(`  left out ${item.why}`);
   const usage = flow["params"].map((param: Json) => `--param ${param["name"]}=…`).join(" ");
-  const data: Json = { flow, skipped, stoppedBy };
+  const data: Json = { flow, skipped, stoppedBy, transport };
   if (options["save"]) {
     const root = state.dataRoot;
     if (root === null) throw new BrowseError("This session has no data folder for flows");
