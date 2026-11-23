@@ -226,3 +226,41 @@ describe("masking known secrets keeps JSON whole (plugins#72)", () => {
     }
   });
 });
+
+describe("JSON-aware masking round 2 (Codex r2 on #79)", () => {
+  function masked(secrets: string[], text: string): string {
+    const held = new Secrets();
+    for (const secret of secrets) held.add(secret);
+    return held.redact(text);
+  }
+
+  test("a secret spanning tokens masks the smallest enclosing value, keeping escape-aware masks", () => {
+    const out = masked(["12345,67890", "café"], '[12345,67890,"caf\\u00e9"]');
+    expect(JSON.parse(out)).toBe("***");
+    expect(JSON.parse(masked(["12345,67890"], '{"keep":2,"x":[12345,67890]}'))).toEqual({ keep: 2, x: "***" });
+    expect(JSON.parse(masked(['foo","bar'], '["foo","bar"]'))).toBe("***");
+  });
+
+  test("a whole credential inside an embedded document never survives", () => {
+    for (const [secret, text] of [["[true]", '{"s":"[true]"}'], ['["private-key"]', JSON.stringify({ s: '["private-key"]' })], ["[123456789]", '{"s":"[123456789]"}']] as const) {
+      const out = masked([secret], text);
+      expect(out.includes(secret)).toBe(false);
+      expect(JSON.parse(out)).toEqual({ s: "***" });
+    }
+  });
+
+  test("serializers that escape / or < > & still get masked", () => {
+    expect(JSON.parse(masked(["a/b<c>&d"], '{"s":"x a\\/b\\u003cc\\u003e\\u0026d y"}'))).toEqual({ s: "x *** y" });
+  });
+
+  test("multi-megabyte inputs stay fast with a known secret", () => {
+    const array = JSON.stringify([...Array.from({ length: 400_000 }, () => "[not json"), "secret"]);
+    const lines = `${Array.from({ length: 400_000 }, () => "[not json").join("\n")}\nsecret\n`;
+    const overlap = JSON.stringify(`${"a".repeat(2 * 65_536 - 1)}b`);
+    const started = performance.now();
+    expect(masked(["secret"], array).endsWith('"***"]')).toBe(true);
+    expect(masked(["secret"], lines).endsWith("\n***\n")).toBe(true);
+    JSON.parse(masked([`${"a".repeat(65_536)}b`, "a".repeat(65_536)], overlap));
+    expect(performance.now() - started).toBeLessThan(3000);
+  });
+});

@@ -91,52 +91,49 @@ function parsesAsJson(text: string): boolean {
   }
 }
 
-const SHORT_ESCAPES: Record<string, string> = { '"': '"', "\\": "\\", "/": "/", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t" };
-const NUMBER = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g;
-const KEYWORDS = /true|false|null/g;
+const QUOTED_MASK = `"${MASK}"`;
+const MAX_WIDENINGS = 16;
+const PLAIN_SECRET = /^[A-Za-z0-9 !#$%'()*+,\-.:;=?@[\]^_`{|}~]*$/u;
 const REENCODED = /[\x7f-\x9f\u061c\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g;
 
-function decodedLiteral(raw: string): { value: string; starts: number[] } {
-  let value = "";
-  const starts: number[] = [];
-  let at = 1;
-  while (at < raw.length - 1) {
-    starts.push(at);
-    if (raw[at] === "\\") {
-      const kind = raw[at + 1] as string;
-      if (kind === "u") {
-        value += String.fromCharCode(Number.parseInt(raw.slice(at + 2, at + 6), 16));
-        at += 6;
-      } else {
-        value += SHORT_ESCAPES[kind] ?? kind;
-        at += 2;
-      }
-    } else {
-      value += raw[at];
-      at += 1;
-    }
-  }
-  starts.push(raw.length - 1);
-  return { value, starts };
-}
+const Kind = { Container: 0, Text: 1, Number: 2, Keyword: 3 } as const;
+type Kind = (typeof Kind)[keyof typeof Kind];
 
-function secretSpans(value: string, longestFirst: readonly string[]): [number, number][] {
-  const covered = new Uint8Array(value.length);
-  const spans: [number, number][] = [];
-  for (const secret of longestFirst) {
-    let at = value.indexOf(secret);
-    while (at >= 0) {
-      const end = at + secret.length;
-      if (covered.subarray(at, end).includes(1)) {
-        at = value.indexOf(secret, at + 1);
-        continue;
-      }
-      covered.fill(1, at, end);
-      spans.push([at, end]);
-      at = value.indexOf(secret, end);
+type JsonNode = { start: number; end: number; parent: number; kind: Kind };
+
+function tokens(text: string): JsonNode[] | null {
+  const nodes: JsonNode[] = [];
+  const open: number[] = [];
+  let at = 0;
+  while (at < text.length) {
+    const unit = text[at] as string;
+    const parent = open.length ? (open[open.length - 1] as number) : -1;
+    if (unit === " " || unit === "\t" || unit === "\n" || unit === "\r" || unit === "," || unit === ":") {
+      at += 1;
+    } else if (unit === "{" || unit === "[") {
+      nodes.push({ start: at, end: -1, parent, kind: Kind.Container });
+      open.push(nodes.length - 1);
+      at += 1;
+    } else if (unit === "}" || unit === "]") {
+      const closed = open.pop();
+      if (closed === undefined) return null;
+      (nodes[closed] as JsonNode).end = at + 1;
+      at += 1;
+    } else if (unit === '"') {
+      let end = at + 1;
+      while (end < text.length && text[end] !== '"') end += text[end] === "\\" ? 2 : 1;
+      if (end >= text.length) return null;
+      nodes.push({ start: at, end: end + 1, parent, kind: Kind.Text });
+      at = end + 1;
+    } else {
+      let end = at;
+      while (end < text.length && /[-+.0-9a-zA-Z]/u.test(text[end] as string)) end += 1;
+      if (end === at) return null;
+      nodes.push({ start: at, end, parent, kind: /[-0-9]/u.test(unit) ? Kind.Number : Kind.Keyword });
+      at = end;
     }
   }
-  return spans.sort((a, b) => a[0] - b[0]);
+  return open.length ? null : nodes;
 }
 
 function unicodeEscape(unit: string): string {
@@ -148,73 +145,126 @@ function encodedLike(raw: string, value: string): string {
   return /^[\x00-\x7f]*$/u.test(raw) ? encoded.replaceAll(/[^\x00-\x7e]/g, unicodeEscape) : encoded.replaceAll(REENCODED, unicodeEscape);
 }
 
-function spansMasked(raw: string, value: string, starts: number[], longestFirst: readonly string[]): string {
-  const spans = secretSpans(value, longestFirst);
-  if (spans.length === 0) return raw;
+function decoded(raw: string): string {
+  return raw.includes("\\") ? (JSON.parse(raw) as string) : raw.slice(1, -1);
+}
+
+function maskedString(raw: string, longestFirst: readonly string[]): string {
+  const value = decoded(raw);
+  if (!longestFirst.some((secret) => value.includes(secret))) return raw;
+  const masked = parsesAsJson(value) ? maskedDocument(value, longestFirst) : replaceSecrets(value, longestFirst);
+  return encodedLike(raw, masked === QUOTED_MASK ? MASK : masked);
+}
+
+function maskedLeaves(text: string, nodes: readonly JsonNode[], longestFirst: readonly string[]): string {
   let out = "";
   let copied = 0;
-  for (const [start, end] of spans) {
-    out += raw.slice(copied, starts[start]) + MASK;
-    copied = starts[end] as number;
+  for (const node of nodes) {
+    if (node.kind === Kind.Container || node.kind === Kind.Keyword) continue;
+    const raw = text.slice(node.start, node.end);
+    const masked = node.kind === Kind.Text ? maskedString(raw, longestFirst) : longestFirst.some((secret) => raw.includes(secret)) ? QUOTED_MASK : raw;
+    if (masked === raw) continue;
+    out += text.slice(copied, node.start) + masked;
+    copied = node.end;
   }
-  return out + raw.slice(copied);
+  return out + text.slice(copied);
 }
 
-function maskedLiteral(raw: string, longestFirst: readonly string[]): string {
-  const { value, starts } = decodedLiteral(raw);
-  if (parsesAsJson(value)) {
-    const inner = maskedDocument(value, longestFirst);
-    if (inner !== null) return inner === value ? raw : encodedLike(raw, inner);
+function lastStartingBy(nodes: readonly JsonNode[], at: number): number {
+  let low = 0;
+  let high = nodes.length - 1;
+  let found = -1;
+  while (low <= high) {
+    const middle = (low + high) >> 1;
+    if ((nodes[middle] as JsonNode).start <= at) {
+      found = middle;
+      low = middle + 1;
+    } else high = middle - 1;
   }
-  return spansMasked(raw, value, starts, longestFirst);
+  return found;
 }
 
-function maskedNumbers(run: string, longestFirst: readonly string[]): string {
-  return run.replaceAll(NUMBER, (number) => (longestFirst.some((secret) => number.includes(secret)) ? `"${MASK}"` : number));
-}
-
-function stringEnd(text: string, at: number): number {
-  let end = at + 1;
-  while (end < text.length && text[end] !== '"') end += text[end] === "\\" ? 2 : 1;
-  return end;
-}
-
-function maskedDocument(text: string, longestFirst: readonly string[]): string | null {
+function widened(text: string, nodes: readonly JsonNode[], longestFirst: readonly string[]): string | null {
+  const targets = new Set<number>();
+  for (const secret of longestFirst) {
+    for (let at = text.indexOf(secret); at >= 0; at = text.indexOf(secret, at + 1)) {
+      const end = at + secret.length;
+      let index = lastStartingBy(nodes, at);
+      const leaf = nodes[index];
+      if (leaf && leaf.kind !== Kind.Container && leaf.start <= at && end <= leaf.end) continue;
+      while (index >= 0 && !((nodes[index] as JsonNode).start <= at && end <= (nodes[index] as JsonNode).end)) index = (nodes[index] as JsonNode).parent;
+      if (index < 0) return null;
+      targets.add(index);
+    }
+  }
+  if (targets.size === 0) return text;
+  const outermost = [...targets].filter((index) => {
+    for (let up = (nodes[index] as JsonNode).parent; up >= 0; up = (nodes[up] as JsonNode).parent) if (targets.has(up)) return false;
+    return true;
+  });
+  outermost.sort((a, b) => (nodes[a] as JsonNode).start - (nodes[b] as JsonNode).start);
   let out = "";
-  let skeleton = "";
   let copied = 0;
-  for (let at = text.indexOf('"'); at >= 0; at = text.indexOf('"', at)) {
-    const end = stringEnd(text, at);
-    if (end >= text.length) return null;
-    const run = maskedNumbers(text.slice(copied, at), longestFirst);
-    out += run + maskedLiteral(text.slice(at, end + 1), longestFirst);
-    skeleton += `${run}""`;
-    copied = end + 1;
-    at = end + 1;
+  for (const index of outermost) {
+    const node = nodes[index] as JsonNode;
+    out += text.slice(copied, node.start) + QUOTED_MASK;
+    copied = node.end;
   }
-  const tail = maskedNumbers(text.slice(copied), longestFirst);
-  out += tail;
-  skeleton = (skeleton + tail).replaceAll(KEYWORDS, " ").replaceAll(`"${MASK}"`, " ");
-  return longestFirst.some((secret) => skeleton.includes(secret)) ? null : out;
+  return out + text.slice(copied);
 }
 
-function maskedJson(text: string, longestFirst: readonly string[]): string {
-  return maskedDocument(text, longestFirst) ?? replaceSecrets(text, longestFirst);
+function maskedDocument(text: string, longestFirst: readonly string[]): string {
+  const nodes = tokens(text);
+  if (nodes === null) return replaceSecrets(text, longestFirst);
+  let out = maskedLeaves(text, nodes, longestFirst);
+  for (let round = 0; round < MAX_WIDENINGS; round += 1) {
+    if (!longestFirst.some((secret) => out.includes(secret))) return out;
+    const current = tokens(out);
+    const next = current === null ? null : widened(out, current, longestFirst);
+    if (next === null) return QUOTED_MASK;
+    if (next === out) return out;
+    out = next;
+  }
+  return QUOTED_MASK;
+}
+
+function untouched(text: string, longestFirst: readonly string[]): boolean {
+  return longestFirst.every((secret) => PLAIN_SECRET.test(secret) && !text.includes(secret));
+}
+
+function maskedLine(line: string, longestFirst: readonly string[]): string {
+  return parsesAsJson(line) ? maskedDocument(line, longestFirst) : replaceSecrets(line, longestFirst);
+}
+
+function maskedHitLines(text: string, longestFirst: readonly string[]): string {
+  const starts = new Set<number>();
+  for (const secret of longestFirst) {
+    for (let at = text.indexOf(secret); at >= 0; at = text.indexOf(secret, at + secret.length)) starts.add(text.lastIndexOf("\n", at - 1) + 1);
+  }
+  let out = "";
+  let copied = 0;
+  for (const start of [...starts].sort((a, b) => a - b)) {
+    const newline = text.indexOf("\n", start);
+    const end = newline < 0 ? text.length : newline + 1;
+    out += text.slice(copied, start) + maskedLine(text.slice(start, end), longestFirst);
+    copied = end;
+  }
+  return out + text.slice(copied);
 }
 
 function maskSecrets(text: string, longestFirst: readonly string[]): string {
-  if (longestFirst.length === 0) return text;
-  if (!text.includes("\\") && !longestFirst.some((secret) => text.includes(secret))) return text;
-  if (parsesAsJson(text)) return maskedJson(text, longestFirst);
+  if (longestFirst.length === 0 || untouched(text, longestFirst)) return text;
+  if (parsesAsJson(text)) return maskedDocument(text, longestFirst);
   if (!text.includes("\n")) return replaceSecrets(text, longestFirst);
+  if (longestFirst.every((secret) => PLAIN_SECRET.test(secret))) return maskedHitLines(text, longestFirst);
   let out = "";
   let plain = "";
   for (const line of text.split(/(?<=\n)/u)) {
-    if (!parsesAsJson(line)) {
+    if (untouched(line, longestFirst) || !parsesAsJson(line)) {
       plain += line;
       continue;
     }
-    out += replaceSecrets(plain, longestFirst) + maskedJson(line, longestFirst);
+    out += replaceSecrets(plain, longestFirst) + maskedDocument(line, longestFirst);
     plain = "";
   }
   out += replaceSecrets(plain, longestFirst);
