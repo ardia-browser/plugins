@@ -3,12 +3,13 @@ import { createHash } from "node:crypto";
 import { closeSync, openSync, readSync, realpathSync, writeSync } from "node:fs";
 import { isatty } from "node:tty";
 import { dumps, type Value } from "../json.ts";
-import { MAX_NOTE, runRequest } from "../notes-files.ts";
+import { MAX_NOTE, refuseApproval, runRequest } from "../notes-files.ts";
+import { untrustedText } from "./untrusted.ts";
 import { parseArgs as parseNotes } from "../notes.ts";
 import { loads } from "../pyjson.ts";
 import { pyStr } from "../pylib/plain.ts";
 import { add as addPlugin, find as findPlugin, pluginRunResult, registry, remove as removePlugin, runPlugin } from "./auth/providers.ts";
-import { listing, loadMeta, publicMeta, remove as removeProfile, save as saveProfile } from "./auth/vault.ts";
+import { listing, loadMeta, publicMeta, remove as removeProfile, save as saveProfile, totpCode } from "./auth/vault.ts";
 import { parse } from "./commands/parse.ts";
 import { Usage } from "./daemon-errors.ts";
 import { Result } from "./daemon/render.ts";
@@ -17,7 +18,7 @@ import { browseDir, checkName, closeFd, listNames, lockHeld, readPrivateJson } f
 import { ALIASES as READ_ALIASES, flags as readFlags, MAX_STDIN, readLocal, readsStdin, runsLocally as readRunsLocally, singleFetch } from "./read/pages.ts";
 import { run as fetchRun } from "./read/fetch.ts";
 
-export const LOCAL_AUTH = ["save", "list", "show", "delete"];
+export const LOCAL_AUTH = ["save", "list", "show", "delete", "totp"];
 const MAX_SCRIPT_SOURCE = 256 * 1024;
 
 export type LiveSession = Record<string, Value> & { key: string; session: string };
@@ -67,7 +68,35 @@ function promptPassword(): Promise<string> {
   }
 }
 
+const TERMINAL_SEQUENCES = /\u001b(?:\[[0-?]*[ -/]*[@-~]|\][^\u0007\u001b]*(?:\u0007|\u001b\\)?|[P^_X][^\u001b]*(?:\u001b\\)?|[@-Z\\-_])|\u009b[0-?]*[ -/]*[@-~]|[\u0090\u009d\u009e\u009f][^\u009c]*\u009c?/gu;
+const TERMINAL_CONTROLS = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu;
+
+export function terminalSafe(text: string): string {
+  return text.replace(/\r\n?/gu, "\n").replace(TERMINAL_SEQUENCES, "").replace(TERMINAL_CONTROLS, "");
+}
+
+export function approveOnTerminal(site: string, text: string): boolean {
+  if (!isatty(0)) refuseApproval();
+  let tty: number;
+  try {
+    tty = openSync("/dev/tty", "r+");
+  } catch {
+    refuseApproval();
+  }
+  try {
+    const shown = terminalSafe(untrustedText(text)).split("\n").map((line) => `  ${line}`).join("\n");
+    writeSync(tty, `Notes for ${site}:\n${shown}\nApprove them as trusted site notes? [y/N] `);
+    const bytes: number[] = [];
+    const one = Buffer.alloc(1);
+    while (readSync(tty, one, 0, 1, null) === 1 && one[0] !== 0x0a) bytes.push(one[0] as number);
+    return /^y(es)?$/iu.test(Buffer.from(bytes).toString("utf8").trim());
+  } finally {
+    closeSync(tty);
+  }
+}
+
 export function notesNeedPage(args: string[]): boolean {
+  if (args.some((arg) => arg === "--tab" || arg.startsWith("--tab="))) return true;
   try {
     const request = parseNotes(args);
     return request.site === null && request.action !== "list";
@@ -187,6 +216,8 @@ async function auth(root: string, args: string[]): Promise<Result> {
       "--username": "value",
       "--password": "value",
       "--password-stdin": "bool",
+      "--totp-stdin": "bool",
+      "--no-totp": "bool",
       "--username-selector": "value",
       "--password-selector": "value",
       "--submit-selector": "value",
@@ -194,7 +225,14 @@ async function auth(root: string, args: string[]): Promise<Result> {
     if (positional.length === 0) throw new Usage("Usage: ardia browse auth save <name> --url <https url> --username <u> [--password-stdin]");
     const name = positional[0] as string;
     const meta = await saveProfile(root, name, parsed, { stdin: () => readStdin(Number.MAX_SAFE_INTEGER), isTTY: () => isatty(0), prompt: promptPassword });
-    return new Result(publicMeta(meta), `✓ Saved ${name} for ${(meta["origins"] as string[]).join(", ")} (password in the login Keychain)`);
+    const kept = meta["totp"] ? "password and TOTP secret" : "password";
+    return new Result(publicMeta(meta), `✓ Saved ${name} for ${(meta["origins"] as string[]).join(", ")} (${kept} in the login Keychain)`);
+  }
+  if (action === "totp") {
+    if (args.length < 2) throw new Usage("Usage: ardia browse auth totp <name>");
+    const name = args[1] as string;
+    const { code, remaining, waited } = await totpCode(root, name);
+    return new Result({ name, code, remaining, waited: waited > 0 }, `${code}  (valid for ${remaining} s)`);
   }
   if (action === "list") {
     const rows = listing(root);
@@ -270,7 +308,7 @@ export async function runLocal(command: string, args: string[], root: string, op
   if (command === "notes") {
     const request = parseNotes(args);
     if (request.text === "-") request.text = readStdinNote();
-    return runRequest(root, request, null);
+    return runRequest(root, request, null, approveOnTerminal);
   }
   if (command === "read") {
     const [parsed, positional] = parse(args, readFlags(), READ_ALIASES);

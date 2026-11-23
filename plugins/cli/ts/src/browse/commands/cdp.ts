@@ -79,7 +79,7 @@ export async function cmdCdp(ctx: Ctx, argv: string[]): Promise<Result> {
     } else if (target) {
       await state.connect();
       await state.refreshTargets();
-      const targetId = await state.findTab(target);
+      const targetId = ctx.boundTarget ?? (await state.findTab(target));
       [result, session] = await state.registry.holding(state.instance, targetId, () => raw.send(state, targetId, method, params, timeout));
       noteRawThrottle(state, targetId, method, params, liveWhile(state, targetId));
       where = state.tabId(targetId);

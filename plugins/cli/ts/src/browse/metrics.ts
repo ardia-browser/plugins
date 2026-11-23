@@ -55,11 +55,14 @@ export const FLAGS = new Set([
   "script_runner_crashed", "script_memory_limit", "script_sandbox_hint",
   "snapshot_budget_trimmed", "snapshot_modal_scoped", "snapshot_hidden_text_dropped", "snapshot_closed_shadow", "snapshot_dom_depth_retry", "snapshot_find", "snapshot_paired", "snapshot_paired_unstable",
 ]);
+export const SAFETY_FLAGS = new Set([
+  "boundary_marker_removed", "notes_promoted", "notes_quarantined_shown", "otp_not_asked", "otp_split_boxes", "otp_typed", "scheduler_parallel", "scheduler_read_lane", "session_auto", "session_reset", "snapshot_masked_fields",
+]);
 export const MAIN_PHASE: Readonly<Record<string, string>> = { snapshot: "snapshot_build_ms", eval: "eval_ms" };
 export const FAILED_WITHOUT_CODE = "command_failed";
 export const OUTPUT_MARKERS = ["\n[output capped at ", "\n[truncated ", "\n[pages cut to fit ", " not shown. Narrow it: "];
 
-const ALL_FLAGS = [FLAGS, READ_FLAGS, ACT_FLAGS, CHANGE_FLAGS, FLOW_FLAGS, PRECISION_FLAGS];
+const ALL_FLAGS = [FLAGS, READ_FLAGS, ACT_FLAGS, CHANGE_FLAGS, FLOW_FLAGS, PRECISION_FLAGS, SAFETY_FLAGS];
 const ALL_NUMBERS = [DURATIONS, COUNTS, ACT_COUNTS, CHANGE_COUNTS, FLOW_COUNTS, PRECISION_COUNTS];
 
 export type MetricValue = boolean | number;

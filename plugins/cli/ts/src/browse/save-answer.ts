@@ -5,7 +5,7 @@ import type { Secrets } from "../redact.ts";
 import type { Call } from "../telemetry.ts";
 import { cleanMetrics, exitOf, outputChars, textOf } from "./answer.ts";
 import { PythonCrash } from "./errors.ts";
-import { AS_TEXT, BodyDamaged, content, save, savedBody, savedBodyLine, savedLine, savedSummary, savesAsCsv, writeFailure } from "./outfile.ts";
+import { AS_TEXT, BodyDamaged, content, isJsonText, save, savedBody, savedBodyLine, savedLine, savedSummary, savesAsCsv, writeFailure } from "./outfile.ts";
 import type { Printer } from "./output.ts";
 
 type Outcome = { status: number | bigint; crash?: PythonCrash | undefined };
@@ -14,6 +14,12 @@ function stream(answer: JsonObject, key: string, secrets: Secrets): string | Pyt
   const text = textOf(answer.get(key), secrets.known());
   if (text instanceof PythonCrash) return text;
   return text === "" ? "" : secrets.redact(text);
+}
+
+export function textForFile(path: string, out: string): string {
+  if (!path.toLowerCase().endsWith(".json")) return out;
+  const body = out.endsWith("\n") ? out.slice(0, -1) : out;
+  return isJsonText(body) ? out : `${JSON.stringify(body)}\n`;
 }
 
 function saveTo(path: string, text: string, printer: Printer): string | null {
@@ -63,7 +69,7 @@ export function saveAnswer(answer: JsonObject, secrets: Secrets, printer: Printe
       printer.out(out);
       return { status: exit };
     }
-    const target = saveTo(path, out, printer);
+    const target = saveTo(path, textForFile(path, out), printer);
     if (target === null) return { status: 1 };
     call.metrics.set("saved_to_file", true);
     printer.out(savedLine(target, out));

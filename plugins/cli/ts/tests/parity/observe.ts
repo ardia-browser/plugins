@@ -20,7 +20,7 @@ export const NOW_SLACK = 2;
 export const SCRATCH_LENGTH = 24;
 export const BOX_DIGITS = 5;
 export const PINNED_ENV: [string, string][] = [["PATH", "/usr/bin:/bin:/usr/sbin:/sbin"], ["LANG", "C.UTF-8"], ["TZ", "UTC"], ["USER", "parity"],
-  ["LOGNAME", "parity"], ["SHELL", "/bin/sh"]];
+  ["LOGNAME", "parity"], ["SHELL", "/bin/sh"], ["ARDIA_BROWSE_AUTO_SESSION", "0"], ["ARDIA_BROWSE_CONTENT_BOUNDARIES", "0"]];
 const HARNESS_FILES = ["helpers.log", "stubs"];
 export const FLUSH_FILE = "data/Telemetry/cli-flush.json";
 const CONTENT_APART = ["data/Telemetry/local", "data/Telemetry/cli-queue.jsonl", FLUSH_FILE, "cli-home/Usage/usage.json"];

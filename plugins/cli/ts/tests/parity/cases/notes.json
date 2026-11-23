@@ -601,6 +601,14 @@
      "dir",
      448
     ],
+    "data/Notes/.example.com.state.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"status\":\"quarantined\",\"digest\":\"aadc1955c030f723e9d89ed9d486b4eef5b0d1c6945be0dd6b7b340d42928ec9\",\"uses\":[],\"approved\":false}"
+     }
+    ],
     "data/Notes/example.com.md": [
      "written",
      "file",
@@ -665,6 +673,19 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "intentional": {
+   "why": "a note written with set or append starts quarantined, so its state file is written beside it",
+   "files": {
+    "data/Notes/.example.com.state.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"status\":\"quarantined\",\"digest\":\"aadc1955c030f723e9d89ed9d486b4eef5b0d1c6945be0dd6b7b340d42928ec9\",\"uses\":[],\"approved\":false}"
+     }
+    ]
+   }
   }
  },
  {
@@ -770,6 +791,14 @@
      "dir",
      448
     ],
+    "data/Notes/.example.com.state.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"status\":\"quarantined\",\"digest\":\"28022cda0ebba997c3ce8cf3b8600dba3da5b61d9d6f0af995345e95ef80537e\",\"uses\":[],\"approved\":false}"
+     }
+    ],
     "data/Notes/example.com.md": [
      "written",
      "file",
@@ -834,6 +863,19 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "intentional": {
+   "why": "a note written with set or append starts quarantined, so its state file is written beside it",
+   "files": {
+    "data/Notes/.example.com.state.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"status\":\"quarantined\",\"digest\":\"28022cda0ebba997c3ce8cf3b8600dba3da5b61d9d6f0af995345e95ef80537e\",\"uses\":[],\"approved\":false}"
+     }
+    ]
+   }
   }
  },
  {
@@ -1288,6 +1330,14 @@
      "dir",
      448
     ],
+    "data/Notes/.example.org.state.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"status\":\"quarantined\",\"digest\":\"812702a1550d251abb2b813409daf5960269f1b9d62fa1c027c319e7baca3ae8\",\"uses\":[],\"approved\":false}"
+     }
+    ],
     "data/Notes/example.org.md": [
      "written",
      "file",
@@ -1352,6 +1402,19 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "intentional": {
+   "why": "a note written with set or append starts quarantined, so its state file is written beside it",
+   "files": {
+    "data/Notes/.example.org.state.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"status\":\"quarantined\",\"digest\":\"812702a1550d251abb2b813409daf5960269f1b9d62fa1c027c319e7baca3ae8\",\"uses\":[],\"approved\":false}"
+     }
+    ]
+   }
   }
  },
  {
@@ -2387,6 +2450,14 @@
      "dir",
      448
     ],
+    "data/Notes/.[::1]:8080.state.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"status\":\"quarantined\",\"digest\":\"efb83f2a277e9f49b38efd505f5cbb93885e721b6bd16b788937c9396174c006\",\"uses\":[],\"approved\":false}"
+     }
+    ],
     "data/Notes/[::1]:8080.md": [
      "written",
      "file",
@@ -2451,6 +2522,19 @@
    },
    "helpers": [],
    "timed_out": false
+  },
+  "intentional": {
+   "why": "a note written with set or append starts quarantined, so its state file is written beside it",
+   "files": {
+    "data/Notes/.[::1]:8080.state.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"status\":\"quarantined\",\"digest\":\"efb83f2a277e9f49b38efd505f5cbb93885e721b6bd16b788937c9396174c006\",\"uses\":[],\"approved\":false}"
+     }
+    ]
+   }
   }
  }
 ]

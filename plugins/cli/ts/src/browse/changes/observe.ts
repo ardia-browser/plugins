@@ -64,10 +64,17 @@ export type ObserveHooks = {
   capture: (page: Page, watch: WatchLike) => Promise<void>;
 };
 
+export function verifiedOrigin(state: State, target: string): string | null {
+  const page = state.pages.get(target);
+  if (page === undefined || page.mainFrame === null) return null;
+  return page.frames.get(page.mainFrame)?.origin || null;
+}
+
 export function siteNotes(state: State, before: View | null, after: View): string | null {
   const root = state.dataRoot;
   if (!root || (before !== null && pageSite(before.url) === pageSite(after.url))) return null;
-  const lines = [noteHeader(root, after.url)[1], hint(state, after.url)];
+  const origin = verifiedOrigin(state, after.target);
+  const lines = [origin === null ? null : noteHeader(root, origin, state.session)[1], hint(state, after.url)];
   return lines.filter((line) => line).join("\n") || null;
 }
 
@@ -865,7 +872,7 @@ export function attach(result: Result, report: Report | null): Result {
   const data = { ...(result.data as Record<string, unknown>), changes: asData(report) };
   let text = renderReport(report, report.document !== "unknown");
   if (report.document === "unknown" && report.added.length > 0) text = text.replace("changes:\n", "changes (no view of the page before, so everything shows as added):\n");
-  const attached = new Result(data, `${result.text !== null ? result.text : "✓ Done"}\n${text}`, result.pageContent || Boolean(report.text));
+  const attached = new Result(data, `${result.text !== null ? result.text : "✓ Done"}\n${text}`, true);
   attached.failed = result.failed;
   attached.batch = result.batch;
   attached.outputCap = result.outputCap;

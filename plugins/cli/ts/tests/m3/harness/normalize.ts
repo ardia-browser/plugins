@@ -28,7 +28,7 @@ const PYTHON_MOVED_TAB = /\n→ \[(t\d+)\] is this session's tab now, a backgrou
 const TEMP_TAB = "about:blank#ardia-temp-";
 const UNCODED_FAILURE = "command_failed";
 export const RECORDED_FIXTURE = 9419;
-const DAEMON_METRIC_SETS = ["FLAGS", "READ_FLAGS", "ACT_FLAGS", "CHANGE_FLAGS", "FLOW_FLAGS", "COUNTS", "ACT_COUNTS", "CHANGE_COUNTS", "FLOW_COUNTS"];
+const DAEMON_METRIC_SETS = ["FLAGS", "READ_FLAGS", "ACT_FLAGS", "CHANGE_FLAGS", "FLOW_FLAGS", "SAFETY_FLAGS", "COUNTS", "ACT_COUNTS", "CHANGE_COUNTS", "FLOW_COUNTS"];
 
 export const RULES: Record<string, string> = {
   "browser-ids": "values of the CDP ID fields in STRING_IDS and INT_IDS become <kind#n>, numbered by first appearance in the step's own requests (browser events cross step marks by timing)",

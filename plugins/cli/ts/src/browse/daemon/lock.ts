@@ -2,7 +2,13 @@ import { Cancelled } from "../cdp/cancel.ts";
 
 type Waiter = { grant: () => void; expire: () => void; settled: boolean; deadline: number };
 
-export class FifoLock {
+export type CommandLock = {
+  readonly locked: boolean;
+  acquire(timeoutSeconds?: number | null, signal?: AbortSignal | null): Promise<boolean>;
+  release(): void;
+};
+
+export class FifoLock implements CommandLock {
   private held = false;
   private readonly waiters: Waiter[] = [];
 

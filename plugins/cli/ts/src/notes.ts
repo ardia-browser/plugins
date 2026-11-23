@@ -5,7 +5,7 @@ import { hostnameOf, portOf, urlsplit } from "./pylib/urllib.ts";
 import { reprText } from "./pylib/str.ts";
 import { BrowseError, Usage } from "./browse/daemon-errors.ts";
 
-export const ACTIONS = ["get", "set", "append", "list", "rm"];
+export const ACTIONS = ["get", "set", "append", "list", "rm", "approve"];
 const LABEL = "[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?";
 export const HOST = new RegExp(`^(?:${LABEL}(?:\\.${LABEL})*|\\[[0-9a-f:.]+\\])(?::[0-9]{1,5})?$`, "u");
 export const DEFAULT_PORTS: Readonly<Record<string, number>> = { http: 80, https: 443 };
@@ -59,6 +59,20 @@ export function pageSite(url: string | null | undefined): string | null {
   }
 }
 
+export const LOOPBACK_NOTE_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+export function trustedSite(originOrUrl: string | null | undefined): string | null {
+  if (!originOrUrl) return null;
+  const match = /^([a-z][a-z0-9+.-]*):\/\//iu.exec(originOrUrl);
+  if (match === null) return null;
+  const scheme = (match[1] as string).toLowerCase();
+  const site = pageSite(originOrUrl);
+  if (site === null) return null;
+  if (scheme === "https") return site;
+  const host = site.startsWith("[") ? site.slice(0, site.indexOf("]") + 1) : (site.split(":")[0] as string);
+  return scheme === "http" && LOOPBACK_NOTE_HOSTS.has(host) ? site : null;
+}
+
 export function looksLikeSite(value: string): boolean {
   if (!value.includes("://") && !/[.:]|^localhost$/u.test(value.split("/")[0] as string)) return false;
   if ([...value].some((char) => isSpace(char))) return false;
@@ -77,6 +91,10 @@ export function parseArgs(args: readonly string[]): NotesRequest {
   if (action === "list") {
     if (positional.length > 0) throw new Usage("Usage: ardia notes list");
     return { action, site: null, text: null };
+  }
+  if (action === "approve") {
+    if (positional.length !== 1) throw new Usage("Usage: ardia notes approve SITE");
+    return { action, site: siteOf(positional[0] as string), text: null };
   }
   if (action === "get" || action === "rm") {
     if (positional.length > 1) throw new Usage(`Usage: ardia notes ${action} [SITE]`);

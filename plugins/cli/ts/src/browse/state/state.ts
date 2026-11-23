@@ -683,6 +683,8 @@ export class State extends Refs implements temptabs.TempTabState {
     }
   }
 
+  tabBusy: (targetId: string) => boolean = () => false;
+
   async followLostTab(): Promise<string> {
     const lost = this.lostTab;
     const gone = lost?.tab ? ` [${lost.tab}]` : "";
@@ -693,6 +695,13 @@ export class State extends Refs implements temptabs.TempTabState {
       const found = await appTabTarget(this, appTab);
       if (found.target) {
         const targetId = found.target;
+        if (this.tabBusy(targetId)) {
+          throw new BrowseError(
+            `This session's tab${gone} was replaced by [${this.tabId(targetId)}], which another command of this session is using right now; try again when it finishes`,
+            { targetId },
+            "session_busy",
+          );
+        }
         this.current = targetId;
         this.appTabs.set(targetId, appTab);
         this.lostTab = null;

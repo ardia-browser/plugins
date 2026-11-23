@@ -16,7 +16,9 @@ import * as temptabs from "../state/temptabs.ts";
 import { wallSeconds } from "../tokens.ts";
 import { release as releaseClaims } from "./claims.ts";
 import { type DaemonConfig } from "./config.ts";
-import { FifoLock } from "./lock.ts";
+import { type Grant, TabScheduler } from "./scheduler.ts";
+import { laneOf, SESSION_LANE } from "./lanes.ts";
+import { EVICT_TOKEN, reservationHolds, withRegistry } from "../session.ts";
 import { bindCommandLock } from "../capture/store.ts";
 import { closeCaptures } from "../capture/close.ts";
 import { type Caller, parseCaller } from "./announce.ts";
@@ -73,7 +75,7 @@ export class Daemon {
   readonly sock: string;
   readonly lockFd: number | null;
   readonly state: State;
-  readonly lock = new FifoLock();
+  readonly lock = new TabScheduler();
   pending = 0;
   last = monotonic();
   stopping = false;
@@ -115,6 +117,7 @@ export class Daemon {
       () => this.resolveEndpoint(),
     );
     bindCommandLock(this.state, this.lock);
+    this.state.tabBusy = (targetId) => this.lock.holds(targetId);
     this.idleLimit = (config.idleTimeoutMs || DEFAULT_DAEMON_IDLE * 1000) / 1000;
     this.stopped = new Promise((resolve) => {
       this.stopNow = resolve;
@@ -476,11 +479,13 @@ export class Daemon {
     if (options["pin_tab"] !== undefined && options["pin_tab"] !== null) this.state.pinTab = Boolean(options["pin_tab"]);
     if (this.stopping) return this.refuseClosing(options, name);
     if (name === "close") return this.close(ctx, caller);
-    if (request["beside_if_busy"] && this.lock.locked) {
+    const words = argv.slice(1).map(String);
+    if (request["beside_if_busy"] && (this.lock.exclusive || this.lock.holds(SESSION_LANE))) {
       request["busy_elsewhere"] = true;
       return render(options, null, this.busyError(false), name);
     }
-    const words = argv.slice(1).map(String);
+    const lane = laneOf(name, words, this.state);
+    if (lane.kind === "read") return this.executeRead(ctx, name, words, options);
     let patience = queueWait(name, words, QUEUE_WAIT, name === "read" && Boolean(request["patient_queue"]));
     if (this.lock.locked && this.running?.name === "script" && patience < BEHIND_SCRIPT_WAIT) {
       patience = BEHIND_SCRIPT_WAIT;
@@ -489,19 +494,26 @@ export class Daemon {
       flag(request["patient_queue"] ? "read_queued_beside" : "script_queued_behind_busy", true);
     }
     const signal = currentSignal();
-    if (!(await this.lock.acquire(patience, signal))) return render(options, null, this.busyError(patience), name);
-    this.state.caller = caller ?? this.state.caller;
+    let grant: Grant | null;
+    if (lane.kind === "exclusive") grant = (await this.lock.acquire(patience, signal)) ? { release: () => this.lock.release(), parallel: false } : null;
+    else grant = await this.lock.enter(lane.keys, patience, signal);
+    if (grant === null) return render(options, null, this.busyError(patience), name);
+    if (grant.parallel) flag("scheduler_parallel", true);
+    if (lane.kind === "tab" && !lane.primary) ctx.boundTarget = lane.bound();
+    const primary = lane.kind === "exclusive" || lane.primary;
+    if (primary) this.state.caller = caller ?? this.state.caller;
     let answer: Answer;
     let closeAfter = false;
     try {
       if (this.stopping || this.closing) return this.refuseClosing(options, name);
       if (this.state.lost) return render(options, null, new ConnectionLost(), name);
+      const limit = commandLimit(name, words, ctx.timeout);
+      if (!primary) return await this.withinLimit(limit, options, name, () => this.answer(ctx, name, words, options));
       this.state.notice = null;
       if (this.state.connected) await this.state.announceCaller(this.state.endpoint);
       this.closeAfterBatch = false;
       this.state.topCommand = name;
       this.running = { name, since: monotonic() };
-      const limit = commandLimit(name, words, ctx.timeout);
       answer = await this.withinLimit(limit, options, name, () => this.answer(ctx, name, words, options));
       if (hooks.afterCommand) await hooks.afterCommand(this.state);
       const notice = this.state.notice;
@@ -511,8 +523,8 @@ export class Daemon {
       closeAfter = (this.closeAfterBatch || batchClose) && name === "batch" && answer[0] === 0;
       this.closeAfterBatch = false;
     } finally {
-      this.running = null;
-      this.lock.release();
+      if (primary) this.running = null;
+      grant.release();
     }
     if (closeAfter) {
       const steps = active()?.values.get("batch_steps");
@@ -521,6 +533,14 @@ export class Daemon {
       return [Math.max(answer[0], closedCode), joinedBatch(answer[1], closedOut, options), answer[2] + closedErr];
     }
     return answer;
+  }
+
+  private async executeRead(ctx: Ctx, name: string, words: string[], options: Options): Promise<Answer> {
+    flag("scheduler_read_lane", true);
+    if (this.stopping || this.closing) return this.refuseClosing(options, name);
+    if (this.state.lost) return render(options, null, new ConnectionLost(), name);
+    const limit = commandLimit(name, words, ctx.timeout);
+    return this.lock.read(() => this.withinLimit(limit, options, name, () => this.answer(ctx, name, words, options)));
   }
 
   private async withinLimit(limit: number, options: Options, name: string, run: () => Promise<Answer>): Promise<Answer> {
@@ -600,6 +620,14 @@ export class Daemon {
     }
   }
 
+  evictionStillReserved(token: unknown): boolean {
+    try {
+      return withRegistry({ fd: this.dirFd }, (registry) => ({ registry: null, value: reservationHolds(registry, this.key, token) }));
+    } catch {
+      return false;
+    }
+  }
+
   async close(ctx: Ctx, caller: Caller | null): Promise<Answer> {
     const state = this.state;
     const tally = { closed: 0, kept: [] as string[] };
@@ -607,6 +635,14 @@ export class Daemon {
     state.caller = caller ?? state.caller;
     try {
       if (this.stopping) return this.refuseClosing(ctx.options, "close");
+      if (Object.hasOwn(ctx.options, EVICT_TOKEN) && !this.evictionStillReserved(ctx.options[EVICT_TOKEN])) {
+        return render(
+          ctx.options,
+          null,
+          new BrowseError(`Session ${state.session} was used again, so it wasn't closed to make room`, null, "session_busy"),
+          "close",
+        );
+      }
       this.enterStopping();
       if (this.watchdogState === "failed") return this.refuseClosing(ctx.options, "close");
       const deadline = new AbortController();

@@ -73,6 +73,8 @@ export class Ctx {
     readonly command = "",
   ) {}
 
+  boundTarget: string | null = null;
+
   get humanize(): boolean {
     return Boolean(this.options["humanize"]);
   }

@@ -4,6 +4,7 @@ import { codePointCount } from "../pystr.ts";
 import { pythonInt } from "./args.ts";
 import { builtinCrash, type PythonCrash } from "./errors.ts";
 import { METRIC_COUNTS, METRIC_DURATIONS, METRIC_FLAGS, METRIC_MAX_COUNT, METRIC_MAX_MS } from "./tables.ts";
+import { SAFETY_FLAGS } from "./metrics.ts";
 
 const LONG_MIN = -(1n << 63n);
 const LONG_MAX = (1n << 63n) - 1n;
@@ -32,7 +33,7 @@ export function cleanMetrics(values: Value | undefined): Map<string, Value> {
   const out = new Map<string, Value>();
   if (!(values instanceof Map)) return out;
   for (const [key, value] of values) {
-    if (METRIC_FLAGS.includes(key) && typeof value === "boolean") {
+    if ((METRIC_FLAGS.includes(key) || SAFETY_FLAGS.has(key)) && typeof value === "boolean") {
       out.set(key, value);
       continue;
     }

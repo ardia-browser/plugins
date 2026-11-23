@@ -1,11 +1,12 @@
 import fs from "node:fs";
+import { neutralize, stripLoneSurrogates } from "../untrusted.ts";
 import path from "node:path";
 import { isSpace, strip } from "../../py.ts";
 import { groupThousands } from "../../pylib/format.ts";
 import { pyLen, splitlines } from "../../pylib/str.ts";
 import { shlexSplit } from "../../pylib/shlex.ts";
 import { codeLine } from "./batch-line.ts";
-import { redact } from "../../redact.ts";
+import { redact, redactJson } from "../../redact.ts";
 import { BrowseError, ConnectionLost, OutcomeUnknown, Usage } from "../daemon-errors.ts";
 import type { JsonObject } from "../../json.ts";
 import { OUTPUT_CAP, pyValue, Result } from "../daemon/render.ts";
@@ -29,7 +30,7 @@ const CLOSE_INSIDE = "close ends this session, so in a batch it only runs as the
 const TAKES_OUT = ["script", "eval", "read", "snapshot", "get"];
 const AS_TEXT = ["snapshot", "get"];
 const VALUE_FLAGS = ["--cdp", "--data-dir", "--enable", "--expect-loader", "--idle-timeout", "--init-script", "--max-output", "--namespace", "--port", "--screenshot-dir", "--screenshot-format", "--screenshot-quality", "--session", "--ws"];
-const BOOL_FLAGS = ["--annotate", "--capture-console", "--content-boundaries", "--debug", "--full", "--humanize", "--json", "--no-auto-dialog", "--no-changes", "--no-humanize", "--no-pin-tab", "--no-text", "--pin-tab", "--show"];
+const BOOL_FLAGS = ["--annotate", "--capture-console", "--content-boundaries", "--debug", "--full", "--humanize", "--json", "--no-auto-dialog", "--no-changes", "--no-content-boundaries", "--no-humanize", "--no-pin-tab", "--no-text", "--pin-tab", "--show"];
 const LAUNCH_ONLY = [
   "--action-policy", "--allow-file-access", "--allowed-domains", "--args", "--auto-connect", "--ca-cert", "--config", "--confirm-actions", "--confirm-interactive", "--engine",
   "--executable-path", "--extension", "--headed", "--hide-scrollbars", "--ignore-https-errors", "--model", "--no-ca-cert", "--profile", "--provider", "--proxy", "--proxy-bypass",
@@ -156,7 +157,8 @@ export function saveText(given: string, text: string | Uint8Array): string {
   try {
     const fd = fs.openSync(temporary, "wx", 0o666);
     try {
-      writeAllFd(fd, typeof text === "string" ? Buffer.from(wellFormed(redact(text)), "utf8") : text);
+      const scrub = target.toLowerCase().endsWith(".json") ? redactJson : redact;
+      writeAllFd(fd, typeof text === "string" ? Buffer.from(wellFormed(neutralize(scrub(stripLoneSurrogates(text)))), "utf8") : text);
     } finally {
       fs.closeSync(fd);
     }
@@ -393,6 +395,7 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
   const state = extras(ctx);
   state.closeAfterBatch = false;
   const outcomes: Outcome[] = [];
+  let fromPage = false;
   const notices: string[] = [];
   const fullListing = Boolean(ctx.options["full"]);
   let noted = false;
@@ -409,6 +412,7 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
   const placeReport = (report: Report | null, partly = false) => {
     if (report === null || held === null) return;
     const attached = attach(held.result, report);
+    if (attached.pageContent) fromPage = true;
     held.outcome.text = partly ? `${attached.text}${PARTLY_FAILED}` : attached.text;
     held.outcome.result = partly ? { ...(attached.data as Record<string, unknown>), partlyFailedNext: true } : attached.data;
     held = null;
@@ -481,6 +485,7 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
       observing.flushedPartly = false;
     }
     const failed = error === null && Boolean(result?.failed);
+    if (result?.pageContent || error !== null) fromPage = true;
     const outcome: Outcome = {
       command: item,
       success: error === null && !failed,
@@ -546,7 +551,7 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
     savedWhole = text.startsWith("✓ Saved the output");
   }
   for (const outcome of outcomes) delete outcome.text;
-  const result = new Result({ results: outcomes }, text);
+  const result = new Result({ results: outcomes }, text, fromPage);
   result.lost = lost;
   if (notices.length > 0) result.notice = notices.join("\n");
   const batchCap = ctx.options["full"] ? 0 : ctx.options["max_output"] === undefined || ctx.options["max_output"] === null ? OUTPUT_CAP : Number(ctx.options["max_output"]);

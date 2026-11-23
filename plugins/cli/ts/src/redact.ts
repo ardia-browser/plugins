@@ -4,6 +4,7 @@ import { PyException } from "./pylib/str.ts";
 export const MASK = "***";
 const TOKEN = "token=";
 const secrets: string[] = [];
+const rawSecrets: string[] = [];
 let ordered: string[] = [];
 let prefixes: string[][] = [];
 
@@ -50,7 +51,89 @@ export function addSecret(secret: string | null | undefined): void {
   remember(quoted);
 }
 
+export const MIN_BASE64_CORE = 6;
+export const BASE64_TOKEN = /[A-Za-z0-9+/_-]{2,}={0,2}/gu;
+
+export function base64Forms(secret: string): string[] {
+  const bytes = utf8(secret);
+  const forms = new Set<string>();
+  const whole = bytes.toString("base64");
+  forms.add(whole);
+  forms.add(whole.replace(/=+$/u, ""));
+  for (let lead = 0; lead < 3; lead += 1) {
+    const shifted = Buffer.concat([Buffer.alloc(lead), bytes]).toString("base64");
+    const first = Math.ceil((lead * 8) / 6);
+    const last = Math.floor(((lead + bytes.length) * 8) / 6);
+    const core = shifted.slice(first, last);
+    if (core.length >= MIN_BASE64_CORE) forms.add(core);
+  }
+  for (const form of [...forms]) forms.add(form.replaceAll("+", "-").replaceAll("/", "_"));
+  return [...forms].filter((form) => form.length >= MIN_BASE64_CORE || form === whole);
+}
+
+export function formEncoded(secret: string): string {
+  return percentEncoded(secret).replaceAll("%20", "+");
+}
+
+export function addVaultSecret(secret: string | null | undefined): void {
+  if (!secret) return;
+  addSecret(secret);
+  if (!rawSecrets.includes(secret)) rawSecrets.push(secret);
+  remember(formEncoded(secret));
+  for (const form of base64Forms(secret)) remember(form);
+}
+
+function decodedToken(token: string): string | null {
+  const body = token.replace(/=+$/u, "").replaceAll("-", "+").replaceAll("_", "/");
+  if (body.length < 2 || body.length % 4 === 1) return null;
+  try {
+    return Buffer.from(body, "base64").toString("latin1");
+  } catch {
+    return null;
+  }
+}
+
+const JSON_WORDS = new Set(["null", "true", "false", "NaN", "Infinity"]);
+const NUMBER_TOKEN = /^-?[0-9]+$/u;
+
+function maskTokensIn(text: string, needles: readonly string[]): string {
+  return text.replace(BASE64_TOKEN, (token) => {
+    if (JSON_WORDS.has(token) || NUMBER_TOKEN.test(token)) return token;
+    const decoded = decodedToken(token);
+    if (decoded === null) return token;
+    return needles.some((needle) => decoded.includes(needle)) ? MASK : token;
+  });
+}
+
+function maskJsonStrings(text: string, needles: readonly string[]): string {
+  const nodes = tokens(text);
+  if (nodes === null) return maskTokensIn(text, needles);
+  let out = "";
+  let copied = 0;
+  for (const node of nodes) {
+    if (node.kind !== Kind.Text) continue;
+    const raw = text.slice(node.start, node.end);
+    const value = decoded(raw);
+    const masked = maskTokensIn(value, needles);
+    if (masked === value) continue;
+    out += text.slice(copied, node.start) + encodedLike(raw, masked);
+    copied = node.end;
+  }
+  return out + text.slice(copied);
+}
+
+function maskEncodedTokens(text: string): string {
+  if (rawSecrets.length === 0) return text;
+  const needles = rawSecrets.map((secret) => utf8(secret).toString("latin1"));
+  if (parsesAsJson(text)) return maskJsonStrings(text, needles);
+  return text
+    .split(/(?<=\n)/u)
+    .map((line) => (parsesAsJson(line) ? maskJsonStrings(line, needles) : maskTokensIn(line, needles)))
+    .join("");
+}
+
 export function clearSecrets(): void {
+  rawSecrets.length = 0;
   secrets.length = 0;
   ordered = [];
   prefixes = [];
@@ -348,8 +431,16 @@ function maskedAcrossLines(text: string, longestFirst: readonly string[]): strin
   return out;
 }
 
+export function redactJson(text: string): string {
+  const core = text.trim();
+  if (core === "" || /^[{["]/u.test(core) || !parsesAsJson(core)) return redact(text);
+  if (/^(?:true|false|null)$/u.test(core) || !ordered.some((secret) => core.includes(secret))) return text;
+  const lead = text.length - text.trimStart().length;
+  return text.slice(0, lead) + QUOTED_MASK + text.slice(lead + core.length);
+}
+
 export function redact(text: string): string {
-  return maskTokenQueries(maskSecrets(text, ordered));
+  return maskTokenQueries(maskSecrets(maskEncodedTokens(text), ordered));
 }
 
 export class Secrets {

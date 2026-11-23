@@ -25,7 +25,25 @@ export class KeyTarget {
   get refocus(): boolean {
     return false;
   }
+
+  async releaseBlind(): Promise<void> {
+    await this.page.send("Input.dispatchKeyEvent", BLIND_KEY_UP, { inputEvent: true });
+    this.held.delete(BLIND_HELD);
+  }
+
+  async pressSecret(down: KeyCommand): Promise<void> {
+    this.held.set(BLIND_HELD, { ...BLIND_KEY_UP, type: "keyDown" });
+    await this.page.send(down.method, down.params, { inputEvent: true });
+  }
+
+  async liftSecret(up: KeyCommand): Promise<void> {
+    await this.page.send(up.method, up.params, { inputEvent: true });
+    this.held.delete(BLIND_HELD);
+  }
 }
+
+export const BLIND_HELD = "\u0000secret";
+export const BLIND_KEY_UP: Readonly<Record<string, string | number>> = { type: "keyUp", key: "Unidentified", code: "", windowsVirtualKeyCode: 0, nativeVirtualKeyCode: 0 };
 
 export class FocusedKeyTarget extends KeyTarget {
   constructor(
@@ -60,6 +78,22 @@ export class Keyboard {
     }
     if (this.target.refocus) await this.target.focus();
     for (const char of text) for (const command of keyEvents(char)) await this.target.execute(command);
+  }
+
+  async typeSecretChar(char: string, hold: number | null, verify: () => Promise<void>, verifyBeforeUp: () => Promise<void> = verify): Promise<void> {
+    await this.target.focus();
+    await verify();
+    const [down, up] = keyEvents(char);
+    try {
+      await this.target.pressSecret(down);
+      const dwell = hold === null ? rng().uniform(TYPING.keyHoldMin, TYPING.keyHoldMax) : hold;
+      if (dwell > 0) await sleep(dwell);
+      await verifyBeforeUp();
+    } catch (error) {
+      await this.target.releaseBlind().catch(() => undefined);
+      throw error;
+    }
+    await this.target.liftSecret(up);
   }
 
   async typeChar(char: string, hold: number | null = null): Promise<void> {

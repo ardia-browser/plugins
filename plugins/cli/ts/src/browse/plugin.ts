@@ -29,7 +29,7 @@ const SESSION_FLAGS = [
   "--session", "--namespace", "--data-dir", "--port", "--ws", "--cdp", "--screenshot-dir", "--screenshot-format",
   "--screenshot-quality", "--idle-timeout", "--init-script", "--enable", "--headers", "--color-scheme", "--download-path",
   "--annotate", "--no-auto-dialog", "--pin-tab", "--no-pin-tab", "--debug", "--capture-console", "--show",
-  "--content-boundaries", "--out", "--stdin",
+  "--content-boundaries", "--no-content-boundaries", "--out", "--stdin",
 ];
 const LOCAL_COMMANDS = ["auth", "notes", "flow", "plugin", "read", "session", "script", "cdp", "clipboard"];
 

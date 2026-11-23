@@ -47,6 +47,15 @@ function listed(found: string[] | undefined, variable: string): Value[] {
 
 export type Options = { entries: JsonObject; timeout: Value };
 
+export function contentBoundaries(found: Found): boolean {
+  const given = env("AGENT_BROWSER_CONTENT_BOUNDARIES") || env("ARDIA_BROWSE_CONTENT_BOUNDARIES");
+  let wanted = given === undefined || given === "" ? true : truthy(given);
+  const flagged = found.flag("content_boundaries");
+  if (flagged !== undefined) wanted = flagged;
+  if (found.flag("no_content_boundaries")) wanted = false;
+  return wanted;
+}
+
 export function optionsFrom(found: Found): Options {
   let humanize = humanizeDefault();
   if (found.flag("no_humanize")) humanize = false;
@@ -71,7 +80,7 @@ export function optionsFrom(found: Found): Options {
     ["full", Boolean(found.flag("full"))],
     ["no_changes", Boolean(found.flag("no_changes"))],
     ["no_text", Boolean(found.flag("no_text"))],
-    ["content_boundaries", either2("content_boundaries", "AGENT_BROWSER_CONTENT_BOUNDARIES")],
+    ["content_boundaries", contentBoundaries(found)],
     ["annotate", either2("annotate", "AGENT_BROWSER_ANNOTATE")],
     ["screenshot_dir", optional(found.value("screenshot_dir"))],
     ["screenshot_format", optional(found.value("screenshot_format"))],

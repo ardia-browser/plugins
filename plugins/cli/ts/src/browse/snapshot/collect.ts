@@ -11,6 +11,7 @@ import { isSecret, masked } from "../state/secrets.ts";
 import type { State } from "../state/state.ts";
 import { SNAPSHOT_FROM, snapshotBackends, snapshotRefused } from "./domsnapshot.ts";
 import { Prober, pruneHidden } from "./probe.ts";
+import { axReader, maskSensitive } from "./mask.ts";
 import { buildTree, clipped, INTERACTIVE, isAxList, MAX_SCOPES, type Node, REF_ROLES, walk, walkInContext } from "./tree.ts";
 
 export const CLICKABLES = `() => {
@@ -336,6 +337,7 @@ async function collectInto(state: State, page: Page, selector: string | null, cu
   }
   sameDocuments(page, loaders);
   await fieldValues(page, nodes);
+  await maskSensitive(nodes, axReader);
   sameDocuments(page, loaders);
   for (const node of walk(nodes)) {
     if (REF_ROLES.has(node.role) || (node.hints && node.hints.length)) {

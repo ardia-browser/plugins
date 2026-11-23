@@ -224,6 +224,7 @@ export class Side {
       ARDIA_M3_SEED: String(this.seed),
       ARDIA_M3_ANSWERS: path.join(this.root, "answers.jsonl"),
       ARDIA_M3_TS_PROGRAM: tsProgram(),
+      ARDIA_BROWSE_CONTENT_BOUNDARIES: "0",
       ...(this.scenario.env ?? {}),
     });
   }

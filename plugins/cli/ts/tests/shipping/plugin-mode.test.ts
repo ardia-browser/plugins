@@ -201,7 +201,7 @@ describe.skipIf(!BUILT)("ardia browse for a plugin", () => {
 
   function plainEnv(): Record<string, string> {
     const env = Object.fromEntries(Object.entries(pluginEnv(9)).filter(([name]) => !name.startsWith("ARDIA_BROWSE") && !name.startsWith("ARDIA_PLUGIN")));
-    return { ...env, ARDIA_BROWSE_BUILD: TEST_BUILD };
+    return { ...env, ARDIA_BROWSE_BUILD: TEST_BUILD, ARDIA_BROWSE_AUTO_SESSION: "0" };
   }
 
   function start(argv: string[], env: Record<string, string>, stdio: StdioOptions = ["ignore", "pipe", "pipe"], program = path.join(root, "bin", "ardia")): ChildProcess {

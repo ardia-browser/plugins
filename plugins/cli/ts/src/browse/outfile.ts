@@ -1,4 +1,5 @@
 import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, renameSync, rmSync, statSync } from "node:fs";
+import { neutralize, stripLoneSurrogates } from "./untrusted.ts";
 import { basename, dirname, join } from "node:path";
 import { dumps, Float, type JsonObject, type Value } from "../json.ts";
 import { expandUser } from "../paths.ts";
@@ -6,7 +7,7 @@ import { repr } from "../py.ts";
 import { codePoints } from "../pystr.ts";
 import { groupThousands } from "../pylib/format.ts";
 import { joinedWords, splitlines } from "../pylib/str.ts";
-import { redact } from "../redact.ts";
+import { redact, redactJson } from "../redact.ts";
 import { Usage } from "./daemon-errors.ts";
 import { wellFormed, writeAllFd } from "./paths.ts";
 
@@ -28,6 +29,16 @@ function head(text: string, count: number): string {
 
 function line(value: Value): string {
   return dumps(value, "spaced");
+}
+
+export function isJsonText(text: string): boolean {
+  if (text.trim() === "") return false;
+  try {
+    JSON.parse(text);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function indented(value: Value): string {
@@ -186,7 +197,7 @@ export function content(command: string, data: JsonObject, path: string): [strin
     return [`${[...blocks, ...listingFailures].join("\n")}\n`, summary];
   }
   const value = (command === "script" ? get(data, "value") : get(data, "result")) ?? null;
-  if (typeof value === "string") return [value, `text starting ${line(head(value, PREVIEW))}`];
+  if (typeof value === "string") return [ext === ".json" && !isJsonText(value) ? `${indented(value)}\n` : value, `text starting ${line(head(value, PREVIEW))}`];
   const table = ext === ".csv" || ext === ".tsv" ? tabular(value) : null;
   if (table !== null) return [asCsv(table, ext === ".tsv" ? "\t" : ","), listDigest(table) + shownRows(table)];
   const text = `${indented(value)}\n`;
@@ -254,7 +265,8 @@ export function save(path: string, text: string | Uint8Array): string {
   try {
     const fd = openSync(temporary, "wx", 0o600);
     try {
-      writeAllFd(fd, typeof text === "string" ? Buffer.from(wellFormed(redact(text)), "utf8") : text);
+      const scrub = target.toLowerCase().endsWith(".json") ? redactJson : redact;
+      writeAllFd(fd, typeof text === "string" ? Buffer.from(wellFormed(neutralize(scrub(stripLoneSurrogates(text)))), "utf8") : text);
     } finally {
       closeSync(fd);
     }

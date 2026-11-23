@@ -11,8 +11,8 @@ import { redact } from "../../redact.ts";
 import { BrowseError, ConnectionLost } from "../daemon-errors.ts";
 import { FAILED_WITHOUT_CODE, flag, rendered } from "../metrics.ts";
 import { closeFd, entryInfo, listNames, unlinkQuietly, wellFormed, writeAllFd } from "../paths.ts";
-import { tokenHex } from "../tokens.ts";
 import { MUTATING } from "./names.ts";
+import { cleanValue, neutralize, safeCutIndex, stripLoneSurrogates, wrapUntrusted } from "../untrusted.ts";
 import { safeCode } from "../codes.ts";
 
 export const MAX_REQUEST = 16 * 1024 * 1024;
@@ -67,54 +67,58 @@ export function pyValue(value: unknown): Value {
 }
 
 export function sanitize(value: Value): Value {
-  if (typeof value === "string") return redact(value);
-  if (value instanceof Map) return new Map([...value].map(([key, item]) => [redact(key), sanitize(item)]));
+  if (typeof value === "string") return redact(stripLoneSurrogates(value));
+  if (value instanceof Map) return new Map([...value].map(([key, item]) => [redact(stripLoneSurrogates(key)), sanitize(item)]));
   if (Array.isArray(value)) return value.map(sanitize);
   return value;
 }
 
-export function compactJson(value: unknown): string {
-  return jsonSafe(dumps(sanitize(pyValue(value)), "compact"));
+export function compactJson(value: unknown, untrusted = false): string {
+  const clean = sanitize(pyValue(value));
+  return jsonSafe(dumps(untrusted ? cleanValue(clean, neutralize) : clean, "compact"));
 }
 
 export function render(options: Options, result: Result | null = null, error: BrowseError | null = null, name = ""): Answer {
   const [code, out, err] = renderPlain(options, result, error, name);
   rendered(name, result as never, error === null ? null : { code: safeCode(error.code), exit: error.exitCode }, out + err);
-  return result?.body ? [code, redact(out), redact(err), result.body] : [code, redact(out), redact(err)];
+  const shownOut = redact(stripLoneSurrogates(out));
+  const shownErr = redact(stripLoneSurrogates(err));
+  return result?.body ? [code, shownOut, shownErr, result.body] : [code, shownOut, shownErr];
 }
 
 export function renderPlain(options: Options, result: Result | null, error: BrowseError | null, name = ""): Answer {
   const asJson = options["json"];
   if (error !== null) {
-    let message = error.text;
+    let message = neutralize(stripLoneSurrogates(error.text));
     if (error instanceof ConnectionLost && MUTATING.has(name)) message += `; the outcome of \`${name}\` is unknown, so it wasn't retried`;
     if (asJson) {
       const payload: Record<string, unknown> = { success: false, data: error.data ?? null, error: message };
       const code = safeCode(error.code);
       if (code) payload["code"] = code;
-      return [error.exitCode, `${compactJson(payload)}\n`, ""];
+      return [error.exitCode, `${compactJson(payload, true)}\n`, ""];
     }
     return [error.exitCode, "", `✗ ${inert(message)}\n`];
   }
   const done = result as Result;
   const code = done.lost !== null ? done.lost.exitCode : done.failed ? 1 : 0;
   if (asJson) {
-    if (done.batch !== undefined && done.batch !== null) return [code, `${compactJson(done.batch)}\n`, ""];
-    return [code, `${compactJson({ success: true, data: done.data, error: null })}\n`, ""];
+    if (done.batch !== undefined && done.batch !== null) return [code, `${compactJson(done.batch, done.pageContent)}\n`, ""];
+    return [code, `${compactJson({ success: true, data: done.data, error: null }, done.pageContent)}\n`, ""];
   }
   if (done.text === null) return [code, "", ""];
-  const plainText = redact(done.text);
+  const scrubbed = redact(stripLoneSurrogates(done.text));
+  const plainText = done.pageContent ? neutralize(scrubbed) : scrubbed;
+  if (plainText !== scrubbed) flag("boundary_marker_removed", true);
   let text = done.whole ? plainText : cap(plainText, options, name, done.outputCap);
   const capped = text !== plainText ? capNotice(text) : "";
   if (capped) text = text.slice(0, text.length - capped.length).replace(/\n$/u, "");
   const notice = [done.notice, capped].filter((part) => part).join("\n");
-  if (done.pageContent && options["content_boundaries"]) text = boundary(text);
+  if (done.pageContent && options["content_boundaries"] && !options["out_only"]) text = boundary(text);
   return [code, `${inert(text)}\n`, notice ? `${inert(notice)}\n` : ""];
 }
 
 export function boundary(text: string): string {
-  const nonce = tokenHex(4);
-  return `<<<PAGE_CONTENT ${nonce}>>>\n${text}\n<<<END_PAGE_CONTENT ${nonce}>>>`;
+  return wrapUntrusted(text);
 }
 
 function limitOf(options: Options, name: string, fallback: number | null): number {
@@ -150,14 +154,15 @@ export function cap(text: string, options: Options, name = "", fallback: number 
   if (limit <= 0 || text.length <= limit) return text;
   const total = pointCount(text);
   if (total <= limit) return text;
-  const limitAt = unitOfPoint(text, limit);
+  const pointAt = unitOfPoint(text, limit);
+  const limitAt = safeCutIndex(text, pointAt);
   const newlineAt = text.lastIndexOf("\n", limitAt);
-  let cut = limit;
+  let cut = limitAt === pointAt ? limit : pointCount(text.slice(0, limitAt));
   let cutAt = limitAt;
   if (newlineAt >= 0) {
     let between = 0;
     for (let at = newlineAt; at < limitAt; at = nextPoint(text, at)) between += 1;
-    const found = limit - between;
+    const found = cut - between;
     if (found >= limit * 0.8) {
       cut = found;
       cutAt = newlineAt;

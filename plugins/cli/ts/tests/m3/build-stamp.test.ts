@@ -44,7 +44,7 @@ async function fakeDaemon(browse: string, key: string): Promise<{ hits: () => nu
 async function client(data: string, build: string): Promise<void> {
   await new Promise<void>((resolve) => {
     const child = Bun.spawn([PROGRAM, "browse", "--port", "1", "get", "title"], {
-      env: { PATH: "/usr/bin:/bin", HOME: data, ARDIA_DATA_DIR: data, ARDIA_TELEMETRY: "0", ARDIA_BROWSE_BUILD: build, ARDIA_TEST_LIBC: BUILT_LIBC },
+      env: { PATH: "/usr/bin:/bin", HOME: data, ARDIA_DATA_DIR: data, ARDIA_TELEMETRY: "0", ARDIA_BROWSE_BUILD: build, ARDIA_BROWSE_AUTO_SESSION: "0", ARDIA_TEST_LIBC: BUILT_LIBC },
       stdout: "ignore",
       stderr: "ignore",
     });

@@ -1,5 +1,5 @@
 import { claim as claimTab, release as releaseTab } from "../daemon/claims.ts";
-import type { FifoLock } from "../daemon/lock.ts";
+import type { CommandLock } from "../daemon/lock.ts";
 import type { Ctx } from "../commands/ctx.ts";
 import type { Page } from "../state/page.ts";
 import type { Listener, State } from "../state/state.ts";
@@ -22,7 +22,7 @@ export type CaptureState = {
 };
 
 const STORES = new WeakMap<State, CaptureState>();
-const LOCKS = new WeakMap<State, FifoLock>();
+const LOCKS = new WeakMap<State, CommandLock>();
 
 export function captureOf(state: State): CaptureState {
   let store = STORES.get(state);
@@ -33,11 +33,11 @@ export function captureOf(state: State): CaptureState {
   return store;
 }
 
-export function bindCommandLock(state: State, lock: FifoLock): void {
+export function bindCommandLock(state: State, lock: CommandLock): void {
   LOCKS.set(state, lock);
 }
 
-export function commandLockOf(state: State): FifoLock | null {
+export function commandLockOf(state: State): CommandLock | null {
   return LOCKS.get(state) ?? null;
 }
 

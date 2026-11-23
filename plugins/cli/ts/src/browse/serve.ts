@@ -14,7 +14,9 @@ import { loadAnswer } from "./pyjson.ts";
 import type { Secrets } from "../redact.ts";
 import { agentEnv, endpointChoice, endpointKey, namespaceName, optionsFrom, rootOf, sessionKey, sessionName, sessionOwner, splitUrl, urlsWithSecrets } from "./request.ts";
 import { closeDir } from "../privatefs.ts";
-import { checkSocket, NoDaemon, openBrowseDir, osFailure } from "./session.ts";
+import { AUTO_SESSION_CAP, checkSocket, deriveAutoSession, EVICT_TOKEN, withoutSession, NoDaemon, openBrowseDir, osFailure, type Reservation, reservationHolds, resetNotice, settleEviction, useAutoSession, withRegistry } from "./session.ts";
+import { lockHeld } from "./paths.ts";
+import { truthy as argTruthy } from "./args.ts";
 import { awaitDaemon, type DaemonChoice, DaemonDidNotStart, spawnDaemon } from "./daemon/spawn.ts";
 import { decodeLocale, decodeStdin, pythonStdioErrors, readStdin, stdinState } from "./stdio.ts";
 import { TAKES_OUT } from "./tables.ts";
@@ -220,22 +222,106 @@ async function closeAll(root: string, options: Record<string, unknown>, timeout:
   return answerOf(options, new Result({ closed }, `✓ Closed ${closed.length} session${closed.length !== 1 ? "s" : ""}`), null);
 }
 
+export function autoSessionsOn(found: Found): boolean {
+  if (found.value("session") || process.env.AGENT_BROWSER_SESSION) return false;
+  if (process.env.ARDIA_BROWSE_FOR_PLUGIN === "1") return false;
+  const given = process.env.ARDIA_BROWSE_AUTO_SESSION;
+  return given === undefined || given === "" || argTruthy(given);
+}
+
+type Auto = { session: string; notice: string | null };
+
+async function evictSession(root: string, victim: Reservation, timeout: Value, call: Call): Promise<boolean> {
+  const socket = await openIfLive(root, victim.id).catch(() => null);
+  if (socket === null) return false;
+  try {
+    const options = new Map<string, Value>([[EVICT_TOKEN, String(victim.token)]]);
+    const answer = await ask(socket, object([["argv", ["close"]], ["options", options], ["cwd", process.cwd()], ["env", new Map()], ["stdin", null]]), ["close"], timeout, call);
+    return answer.get("exit") === 0n;
+  } catch (error) {
+    if (!(error instanceof BrowseError)) throw error;
+    return false;
+  }
+}
+
+function registryIn<T>(root: string, change: Parameters<typeof withRegistry<T>>[1]): T | null {
+  const dir = openBrowseDir(root);
+  try {
+    return withRegistry(dir, change);
+  } catch (error) {
+    if (error instanceof BrowseError) throw error;
+    return null;
+  } finally {
+    closeDir(dir);
+  }
+}
+
+async function autoSession(root: string, namespace: string, keySource: string, timeout: Value, call: Call): Promise<Auto | null> {
+  const id = deriveAutoSession(process.cwd());
+  if (id === null) return null;
+  const daemonKey = sessionKey(namespace, keySource, id);
+  const now = () => Math.trunc(Date.now() / 1000);
+  const dir = openBrowseDir(root);
+  const live = (key: string) => lockHeld(`${key}.lock`, dir.fd);
+  let used: { reset: boolean; evict: Reservation[]; overCap: boolean } | null;
+  try {
+    used = registryIn(root, (registry) => {
+      const next = useAutoSession(registry, daemonKey, now(), live);
+      return { registry: next.registry, value: { reset: next.reset, evict: next.evict, overCap: next.overCap } };
+    });
+  } finally {
+    closeDir(dir);
+  }
+  if (used?.overCap) {
+    throw new BrowseError(
+      `All ${AUTO_SESSION_CAP} automatic sessions are open and none can be closed right now (they're starting or busy); wait a moment, close one with \`ardia browse close\`, or name a session with --session`,
+      1,
+      "session_limit",
+    );
+  }
+  let refused = false;
+  for (const victim of used?.evict ?? []) {
+    const stillReserved = registryIn(root, (registry) => ({ registry: null, value: reservationHolds(registry, victim.id, victim.token, now()) }));
+    const closed = stillReserved === true && (await evictSession(root, victim, timeout, call));
+    if (!closed) refused = true;
+    registryIn(root, (registry) => ({ registry: settleEviction(registry, victim, closed, now()), value: null }));
+  }
+  if (refused) {
+    registryIn(root, (registry) => ({ registry: withoutSession(registry, daemonKey), value: null }));
+    throw new BrowseError(
+      `All ${AUTO_SESSION_CAP} automatic sessions are open and the least recently used one is still busy, so no new session was started; try again, or name a session with --session`,
+      1,
+      "session_busy",
+    );
+  }
+  call.metrics.set("session_auto", true);
+  const reset = used?.reset ?? false;
+  if (reset) call.metrics.set("session_reset", true);
+  return { session: id, notice: reset ? resetNotice(id) : null };
+}
+
 export async function roundTrip(found: Found, rest: string[], secrets: Secrets, call: Call, python: string | null): Promise<JsonObject> {
   const { entries: options, timeout } = optionsFrom(found);
-  const session = sessionName(found);
+  let session = sessionName(found);
   const namespace = namespaceName(found);
   const chosen = endpointChoice(found);
   const endpoint = chosen;
   for (const secret of urlsWithSecrets(endpoint.ws)) secrets.add(secret);
   const root = rootOf(endpoint);
   const keySource = endpointKey(endpoint, root);
-  options.set("_session", session);
   const command = rest[0] as string;
+  const auto = autoSessionsOn(found) && (command === "session" || !servesHere(command, rest.slice(1))) ? await autoSession(root, namespace, keySource, timeout, call) : null;
+  if (auto !== null) session = auto.session;
+  options.set("_session", session);
   const stdinWanted = wantsStdin(command, rest.slice(1));
   const errors = stdinWanted ? pythonStdioErrors() : "strict";
   checkIdle(found);
   const key = sessionKey(namespace, keySource, session, process.env.ARDIA_BROWSE_FOR_PLUGIN === "1");
   const args = rest.slice(1);
+  const withNotice = (answer: JsonObject): JsonObject => {
+    if (auto?.notice) answer.set("err", `${auto.notice}\n${typeof answer.get("err") === "string" ? answer.get("err") : ""}`);
+    return answer;
+  };
   const plainOptions = Object.fromEntries(options) as Record<string, unknown>;
   if (servesHere(command, args)) {
     const local = await localAnswer(() => runLocal(command, args, root, plainOptions, process.cwd()), plainOptions);
@@ -297,5 +383,5 @@ export async function roundTrip(found: Found, rest: string[], secrets: Secrets, 
   const socket = await ensureSession({ root, key, config, python, call });
   let answer = await ask(socket, payload, rest, timeout, call, false, line);
   if (pyTruthy(answer.get("busy_elsewhere"))) answer = await readBeside(payload, rest, { root, namespace, keySource, session, timeout, config, python }, call);
-  return answer;
+  return withNotice(answer);
 }
