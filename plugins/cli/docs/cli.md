@@ -63,8 +63,8 @@ that is CPython 3.13 behaviour the program reproduces on purpose (`ts/src/pylib`
   `automation.md` and `daily-reports.md` read only when a task needs them) into `~/.agents/skills` (general, codex),
   `~/.claude/skills`, `~/.cursor/skills` or `~/.config/opencode/skills`; with `--project`, into `./.agents/skills`,
   `./.claude/skills`, `./.cursor/skills` or `./.opencode/skills`. It writes each file it ships in place (temp file,
-  then rename, so a linked file is replaced, never written through) plus a `.ardia-skill` marker (vendor, version and
-  the files it wrote), removes only files an earlier marker listed that it no longer ships, and leaves every other
+  then rename, so a linked file is replaced, never written through) plus a `.ardia-skill` marker (vendor, version,
+  `hash`, the SHA-256 of every file it wrote (each path, its length and its bytes, in path order), and the files), removes only files an earlier marker listed that it no longer ships, and leaves every other
   file alone. A folder counts as ours only when it isn't a link and its marker is a plain file naming vendor
   `ardia`. `install` also adopts a copy from before the marker, but only when its files, none of them links, have
   exactly the paths and SHA-256 of a version we shipped (`ts/assets/skill-hashes.json`, frozen data: it was
@@ -75,6 +75,19 @@ that is CPython 3.13 behaviour the program reproduces on purpose (`ts/src/pylib`
   `skipped <folder>` for the rest, refuses a linked subfolder, and keeps only our folders in the list. `install.sh` runs it after
   each upgrade, so installed copies follow the CLI. Both also install cua-driver's skill next to ours (see Computer
   use); `--no-cua` skips it.
+- `ardia skills status` says, for every recorded and user- or project-level copy, whether it is `current` (its stamp
+  is this CLI's skill and its files still hash to it), `stale` (an older CLI wrote it, or a copy from before the stamp),
+  `edited` (its files no longer match its own stamp) or `foreign` (not ardia's), and ends with the shipped version and
+  skill hash. It writes nothing; `ardia skills refresh` rewrites the stale and edited copies. It isn't in the argparse
+  spec (that spec is frozen against CPython's output), so `ardia skills --help` doesn't list it yet.
+- The skill's command index (the `## Commands` section of `SKILL.md`), `references/commands.md` and the
+  `## Error codes` table in `references/troubleshooting.md` are generated from the browse help text, the command and
+  flag tables and `src/browse/remedies.ts` by `bun src/skill-gen.ts --write` (in `plugins/cli/ts`); the rest of
+  each file is written by hand. `tests/skill-registry.test.ts` fails when they drift, and runs every `ardia …`
+  example in the skill (fenced lines, inline spans and each line of a `batch` heredoc) through the real parsers:
+  `splitGlobals` and the command and flag tables for `ardia browse`, the argparse front end and the command routes
+  for the rest. Missing positional arguments pass (prose names commands without them); an unknown command, flag
+  or launch option fails.
 - `ardia skills get [--full]` (and `ardia --skill [--full]`, the same command) prints the skill that ships inside
   this CLI to stdout, byte for byte, so an agent reads the version that matches the command it is about to run:
   `SKILL.md` alone, or with `--full` followed by every file under `references/`, each after a `--- references/<name> ---`
@@ -1583,6 +1596,57 @@ A refused `Target.attachToTarget` also says what Ardia's own tab list has for th
 its address, or that no tab holds it. The command used to print the off-the-list sentence for every refusal, which hid
 the reason.
 
+### DevTools commands
+
+`perf`, `styles`, `issues`, `logpoint` and `errors --uncaught` (`ts/src/browse/capture/perf.ts`, `devtools.ts`,
+`logpoints.ts`, `console.ts`, `inspect.ts`, `sourcemaps.ts`) ask Ardia's `devtools.*` control-socket methods
+(ardia#3994, `docs/control-socket.md` › DevTools inspection) first and do the work over CDP themselves when Ardia
+doesn't know the method, has no control socket (`--port`, `--ws`), doesn't list the tab, or answers `failed` with
+"can't open a DevTools inspection session" (the engine before #3993). Over CDP, an Ardia before 0.2.49 refuses the
+domains with `policy_refused`, and a method the engine lacks fails with `ardia_too_old`.
+
+- `perf insight [--reload] [--duration 3s] [--crux]` sends `devtools.perfTrace {tab, durationMs (250–30000),
+  reload, includeFieldData, fieldDataKey}`; `perf insight --trace <file>` sends `devtools.perfInsight {trace}`
+  when the events fit the socket's 1 MiB line; `perf trace` records over CDP (it saves the events, which the socket
+  doesn't return) and has `devtools.perfInsight` analyze them when they fit. The fallback analysis is local: FCP,
+  LCP, CLS, TBT with the web-vitals thresholds, the longest tasks, main-thread time by phase and render-blocking
+  requests. `--reload` goes through the same borrowed-tab check as `reload` (`borrowed_tab`) and, as Ardia does,
+  reloads only a tab this session opened (`not_own_tab`). `--crux` is off unless given and needs `ARDIA_CRUX_API_KEY` (forwarded
+  to the daemon like the `AGENT_BROWSER_*` variables); only the origin is sent. A session on a `--port` or `--ws`
+  endpoint never asks for field data, on either path (nothing there can vouch that a tab isn't in a private window).
+  There the key isn't needed either, and the skip shows in text and in `--json` (`fieldData.skipped`). Otherwise
+  the local path skips it when the trace holds no page load (`navigationStart`), when the page changed origin
+  during the trace, or when a fresh read of Ardia's tab list (never the cached pairing) doesn't list the tab; the
+  request names the traced origin, and the page's origin is checked again after the tab list answers.
+  The fallback trace sends `Tracing.end` even when the command is cancelled, and CLS is the worst session window
+  (shifts under 1 s apart, at most 5 s long). Telemetry: `perf_crux`.
+- `styles <sel>` sends `devtools.styles {tab, selector, properties}`; a ref becomes a unique CSS selector (main
+  frame only). The fallback reads `CSS.getMatchedStylesForNode` and `CSS.getComputedStyleForNode`: per property
+  the winner in rule order with `!important` and the style attribute on top, its selector and `stylesheet:line`,
+  and the computed value.
+- `issues` sends `devtools.issues {tab, waitMs}`; the fallback collects `Audits.issueAdded` (500 kept per tab) and
+  has `devtools.issues {issues}` explain them, else describes them itself. `rawCookieLine` and any cookie value
+  are dropped as each issue arrives, so neither text nor `--json` ever holds one. `--kind` matches either spelling
+  (`mixed` and Ardia's `mixed-content`), and `--clear` remembers what it cleared (2,000 kept), so the next read
+  through Ardia doesn't bring them back.
+- `logpoint` sends `devtools.logpoint`, `devtools.clearLogpoint` on one control connection the daemon keeps open
+  (`state/controllink.ts`), since Ardia ends a connection's logpoints when it closes; it closes with the last
+  socket logpoint or the session, and when `devtools.logpoint` doesn't answer in time it closes the link, so a late
+  answer can't leave a logpoint the list doesn't show; a hello that isn't Ardia's, or an error answer to it, fails
+  the open and closes the socket. Only a logpoint Ardia placed through a source map (`original`) counts as mapped. The fallback is `Debugger.setBreakpointByUrl` with a condition that logs and
+  answers false, with `Debugger.setSkipAllPauses` on so a `debugger` statement never pauses the page. Source paths
+  map only through a script's inline `data:` source map (at most 2 MB each, 16 maps or 16 MB cached per tab);
+  nothing is fetched. The scripts seen are kept in a book of at most 5,000 scripts, 16 inline maps and 16 MB of
+  them, emptied when the main frame navigates. When a tab goes away its logpoints, lease and link go with it, even while
+  `logpoint add` is waiting on Ardia: that add then fails with `tab_gone` and clears what Ardia set.
+  Tabs this session opened only (`not_own_tab`). While any logpoint is set the session holds
+  a `logpoint` lease, so the idle disconnect never drops them; `rm` and `clear` take one off the list only once
+  Ardia or the tab confirms it's gone. Telemetry: `logpoint_source_mapped`.
+- `errors --uncaught` reads each exception's `Error.cause` chain with `devtools.causeChainFunction`'s function (or
+  its own) and sends it with the scripts' inline `data:` maps (read from `Debugger.scriptParsed`, only on a tab this
+  session opened) to `devtools.stackTrace`; the fallback maps the top
+  error's frames itself. Plain `errors` and its `--json` are unchanged.
+
 ### Skipped
 
 `connect` and `inspect` (the endpoint is Ardia's; opening DevTools on the user's tab isn't something the command
@@ -1908,6 +1972,24 @@ The daemon's `vocab_superseded` is a stale ref whose page navigated or changed b
 (see Refs), and `stale_ref` one whose element alone is gone.
 
 Telemetry's `error_code` is the daemon's code; the codes above are for `--json` output only.
+
+### Error tags, remedies and did-you-mean
+
+Every failure names its stable code: text mode ends the `✗` message with ` (<code>)` (the daemon's code, else
+`unknown_command` for `Unknown command: …` and `usage` for `Usage: …` and `Unknown flag: …`; the generic
+`command_failed` gets no tag), and when one command fixes it, the next line is `  remedy: <command>`. `--json` adds a
+`remedy` key next to `code` (the code itself is unchanged). The codes, what they mean and their remedies live in
+`ERROR_CODES` (`ts/src/browse/remedies.ts`), which also generates the skill's `## Error codes` table; a remedy with
+`{command}` names the failing command (`usage` → `ardia browse <command> --help`). `tests/skill-registry.test.ts`
+runs every remedy, for every command `{command}` can be, through the same example checker as the skill, so a remedy
+the CLI wouldn't take fails CI. Telemetry: `remedy_shown` (a flag) when a failure printed one, next to the
+existing `error_code`.
+
+A mistyped command or flag says the closest one (`Unknown command: clik. Did you mean \`ardia browse click\`?`,
+`Unknown flag: --clera. Did you mean --clear?`): a Damerau-Levenshtein distance of 1 for names up to 3 letters, 2
+up to 6 and 3 beyond, or else the only name it starts. Telemetry: `did_you_mean`. Aliases that run the same
+command: `goto`, `navigate` and `visit` (open), `refresh` (reload), `evaluate` and `js` (eval), `snap` (snapshot),
+`shot` (screenshot), `key` (press), `scrollinto` (scrollintoview), `quit` and `exit` (close).
 
 ### Testing it
 
@@ -2652,6 +2734,19 @@ names the commit the outcomes were captured at (on macOS and Linux, CPython 3.13
 differs. Python is gone, so the outcomes are frozen. A case may only name paths inside its sandbox and can't touch the
 sandbox's own variables; `rules.test.ts` checks the runner refuses one that tries, and `tamper.test.ts` that it
 catches a tampered outcome in each field it compares.
+
+The captured outcomes predate a few designed changes, which `ts/tests/parity/divergences.ts` folds out of what the
+program printed and sent before comparing (the frozen outcomes are never edited): `error-remedy` drops the `(code)`
+tag, the `remedy:` lines, a `--json` failure's `remedy` key and the `remedy_shown` and `did_you_mean` flags;
+`skill-docs` reads the shipped skill's current `SKILL.md` and `references/troubleshooting.md` as their captured
+text (`ts/tests/parity/fixtures/frozen`), drops `references/commands.md` and the marker's `hash`, and moves
+`output_chars` by the difference; `help-text` does the same for the browse overview and changed help entries.
+Each rule is scoped to what it names: a `remedy` key only on a parsed top-level failure envelope or a failed `batch`
+row (`success: false` or `ok: false`), never inside `data` or a successful object (`ts/tests/remedy-strip.ts`, shared
+with the m3 corpus normalizer), and the skill paths only inside an `ardia` skill folder an install target
+uses; `ts/tests/parity/divergences.test.ts` checks both. `skills status` is TypeScript-only, so the served-commands
+check exempts it; `tests/devtools-socket.test.ts` covers
+it.
 
 `bun run test:parity` (in `ts`) runs every case against the built program (`ts/dist/ardia-ts` or `ARDIA_TS_CLI`), six
 at a time (`ARDIA_PARITY_JOBS`), each in a throwaway HOME, CLI home and data dir with helpers stubbed on PATH, under

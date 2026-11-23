@@ -6,12 +6,19 @@ export const ALIASES: Readonly<Record<string, string>> = {
   quit: "close",
   exit: "close",
   geolocation: "geo",
+  visit: "open",
+  refresh: "reload",
+  evaluate: "eval",
+  js: "eval",
+  snap: "snapshot",
+  shot: "screenshot",
 };
 
 export const MUTATING: ReadonlySet<string> = new Set([
   "open", "click", "dblclick", "type", "fill", "press", "keyboard", "keydown", "keyup", "hover", "check", "uncheck",
   "select", "drag", "upload", "download", "scroll", "scrollintoview", "mouse", "back", "forward", "reload", "tab",
   "find", "auth", "pushstate", "eval", "dialog", "batch", "storage", "cookies", "set", "state", "clipboard", "close", "script", "flow", "cdp", "tool",
+  "logpoint",
 ]);
 
 export const SKIPPED: Readonly<Record<string, string>> = {

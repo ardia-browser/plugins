@@ -246,5 +246,34 @@ export function errorEntry(params: Json): Json {
     line: details["lineNumber"] ?? null,
     column: details["columnNumber"] ?? null,
     timestamp: params["timestamp"] ?? null,
+    [ERROR_DETAIL]: errorDetail(details, exception),
   };
+}
+
+export const ERROR_DETAIL = Symbol("errorDetail");
+export const STACK_FRAMES_KEPT = 12;
+
+export type StackFrame = { functionName: string; url: string; line: number; column: number };
+export type ErrorDetail = { stack: StackFrame[]; exceptionId: string | null; details: Json };
+
+function errorDetail(details: Json, exception: Json): ErrorDetail {
+  const frames = record(details["stackTrace"])["callFrames"];
+  const stack = (Array.isArray(frames) ? frames : []).slice(0, STACK_FRAMES_KEPT).map((raw) => {
+    const frame = record(raw);
+    return {
+      functionName: typeof frame["functionName"] === "string" ? (clip(frame["functionName"], 200) as string) : "",
+      url: typeof frame["url"] === "string" ? (clip(frame["url"], 4096) as string) : "",
+      line: Number(frame["lineNumber"] ?? 0),
+      column: Number(frame["columnNumber"] ?? 0),
+    };
+  });
+  const trimmed: Json = {
+    text: clip(details["text"] ?? "", 4096),
+    lineNumber: details["lineNumber"] ?? null,
+    columnNumber: details["columnNumber"] ?? null,
+    url: clip(details["url"] ?? null, 4096),
+    exception: { className: clip(exception["className"] ?? null, 200), description: clip(exception["description"] ?? null, 4096) },
+    stackTrace: { callFrames: stack.map((frame) => ({ functionName: frame.functionName, url: frame.url, lineNumber: frame.line, columnNumber: frame.column })) },
+  };
+  return { stack, exceptionId: typeof exception["objectId"] === "string" ? exception["objectId"] : null, details: trimmed };
 }

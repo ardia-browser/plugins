@@ -99,6 +99,10 @@ export const NOT_YET: ReadonlyMap<string, string> = new Map([
   ["clipboard", "`fill` or `type` puts text in, and `get value` (a field) or `get text` reads it out"],
   ["trace", TIMINGS_INSTEAD],
   ["profiler", TIMINGS_INSTEAD],
+  ["perf", TIMINGS_INSTEAD],
+  ["styles", "`get styles <sel>` prints the element's computed values"],
+  ["issues", "`console` and `network requests` show most of the same problems"],
+  ["logpoint", "`eval` reads a value at the moment you run it"],
 ]);
 
 function insteadFor(command: string | null | undefined): string {

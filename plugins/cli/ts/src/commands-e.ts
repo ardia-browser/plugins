@@ -112,6 +112,20 @@ ENTRIES.push(
     },
   },
   {
+    path: ["skills", "status"],
+    spec: {
+      options: [
+        { name: "--help", dest: "help", kind: "flag" },
+        { name: "-h", dest: "help", kind: "flag" },
+      ],
+    },
+    run: async (parsed, call) => {
+      const skills = await import("./skills.ts");
+      if (parsed.get("help") === true) return { status: 0, out: [...skills.SKILLS_STATUS_HELP], err: [] };
+      return skillsSaid(skills.skillStatus(), call);
+    },
+  },
+  {
     path: ["skills", "list"],
     spec: { options: [] },
     run: async (_parsed, call) => skillsSaid((await import("./skills.ts")).listSkills(), call),

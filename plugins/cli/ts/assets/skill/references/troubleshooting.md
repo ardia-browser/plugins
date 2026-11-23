@@ -127,3 +127,52 @@ stops if the page navigates, the frame changes or focus leaves the field. Never 
 0 done; 1 the command failed (a stale ref, a refused command, an action whose outcome is unknown); 2 Ardia isn't
 reachable or closed the connection (Stop was pressed or control was turned off: the session ends, and an interrupted
 action is reported as unknown, never retried); 130 interrupted.
+
+## Error codes
+
+A failure's last word is its code in brackets, `(stale_ref)`; `--json` puts it in `code`. When one command fixes it, the
+next line is `remedy: <command>` (`--json`: `remedy`): run it. Other codes are the page's or the site's: read the message.
+
+| code | means | remedy |
+| --- | --- | --- |
+| `ambiguous` | several elements match; the message lists them with refs | `ardia browse snapshot -i` |
+| `ardia_too_old` | this Ardia's engine lacks a DevTools method the command needs; update Ardia | `ardia methods` |
+| `borrowed_tab` | the session works in your tab (`tab active`) and won't do this there without naming it | `ardia browse tab list` |
+| `covered` | another element sits on top of the target | `ardia browse screenshot --annotate` |
+| `daemon_timeout` | the session's daemon didn't answer in time | `ardia browse session list` |
+| `daemon_unreachable` | Ardia or the session's daemon can't be reached (exit 2) | `ardia browse session list` |
+| `dialog_blocked` | a JavaScript dialog froze the page; answer it first | `ardia browse dialog status` |
+| `disabled` | the target stayed disabled | `ardia browse snapshot -i` |
+| `document_changed` | the page changed document while the command ran | `ardia browse snapshot -i` |
+| `element_replaced` | the page redrew the element | `ardia browse snapshot -i` |
+| `focus_moved` | focus left the field mid-typing, so the rest wasn't sent | `ardia browse snapshot -i` |
+| `frame_gone` | the frame the session acts in went away | `ardia browse frame main` |
+| `keychain_refused` | the macOS Keychain refused the change; the profile was kept |  |
+| `navigation_failed` | the page didn't load; the message says why |  |
+| `no_match` | nothing matches the selector or name | `ardia browse snapshot -i` |
+| `no_session_tab` | the session has no tab yet: open one or pick the user's | `ardia browse tab active` |
+| `no_tab` | that tab isn't there | `ardia browse tab list` |
+| `not_found` | the element, flow or item isn't there | `ardia browse snapshot -i` |
+| `not_own_tab` | the command works only on tabs this session opened | `ardia browse tab list` |
+| `not_visible` | the element has no box on screen | `ardia browse screenshot --annotate` |
+| `outcome_unknown` | the connection dropped mid-action; check the page before retrying | `ardia browse snapshot -i` |
+| `outside_viewport` | the element is outside the visible page | `ardia browse screenshot --annotate` |
+| `page_busy` | the page's script kept the tab busy | `ardia browse screenshot` |
+| `policy_refused` | this Ardia keeps the ardia command away from a DevTools method; Ardia 0.2.49 or later allows it |  |
+| `profile_busy` | another command is saving or deleting that profile; try again when it's done |  |
+| `ref_drifted` | the ref now points at an element with another role or name, so nothing was done | `ardia browse snapshot -i` |
+| `session_busy` | another command holds the session | `ardia browse session list` |
+| `session_limit` | every automatic session is open and busy; close one or name a session | `ardia browse session list` |
+| `stale_ref` | the ref belongs to an older snapshot or page | `ardia browse snapshot -i` |
+| `tab_crashed` | the tab's page crashed | `ardia browse reload` |
+| `tab_detached` | Ardia detached the tab | `ardia browse tab list` |
+| `tab_gone` | the session's tab closed | `ardia browse tab list` |
+| `tab_in_use` | another session uses that tab | `ardia browse tab list` |
+| `tab_not_found` | no tab has that id or label | `ardia browse tab list` |
+| `timeout` | the page or site didn't answer in time |  |
+| `unknown_command` | ardia browse has no such command; the message names the closest | `ardia browse --help` |
+| `unknown_ref` | no element has that ref | `ardia browse snapshot -i` |
+| `unsupported` | ardia browse doesn't do this; the message says what to use instead |  |
+| `usage` | the command's words or flags are wrong; the message names the closest flag | `ardia browse <command> --help` |
+| `usage_error` | an option before the command is wrong | `ardia browse --help` |
+| `vocab_superseded` | the ref comes from a snapshot a newer one replaced | `ardia browse snapshot -i` |

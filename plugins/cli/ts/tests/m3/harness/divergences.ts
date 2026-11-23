@@ -82,6 +82,14 @@ export const DIVERGENCES: Record<string, Divergence> = {
     ts: 'stdout: {"success":false,"data":null,"error":"No dialog is currently open","code":"command_failed"}',
     why: "an agent reading --json output can branch on the code of every failure; compared through the normalize rule `json-error-code`, never as a request rewrite",
   },
+  "error-remedy": {
+    row: null,
+    decision: "docs/cli.md, errors: every failure ends with its `(code)` and, when one command fixes it, a `  remedy: <command>` line (`\"remedy\"` in --json), from src/browse/remedies.ts",
+    commands: "any command that fails with a code",
+    python: "stderr: ✗ Usage: ardia browse pushstate <url>",
+    ts: "stderr: ✗ Usage: ardia browse pushstate <url> (usage)\\n  remedy: ardia browse pushstate --help",
+    why: "an agent sees the stable code and the next command to run without looking either up; compared through the normalize rule `error-remedy`, never as a request rewrite",
+  },
   "open-moved-tab": {
     row: null,
     decision: "docs/cli.md, `tab active`: in the TypeScript CLI the answer's first line says open made its own background tab and left the picked tab unchanged",

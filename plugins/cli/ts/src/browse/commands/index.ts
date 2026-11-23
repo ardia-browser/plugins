@@ -2,6 +2,8 @@ import { BrowseError, Usage } from "../daemon-errors.ts";
 import { ALIASES, canonical, MUTATING, SKIPPED } from "../daemon/names.ts";
 import type { Result } from "../daemon/render.ts";
 import type { Ctx, Handler } from "./ctx.ts";
+import { flag } from "../metrics.ts";
+import { closest } from "../suggest.ts";
 
 export { ALIASES, canonical, MUTATING, SKIPPED };
 
@@ -74,6 +76,10 @@ export const OWNERS: Readonly<Record<string, string>> = {
   pdf: "D6",
   auth: "D7",
   cdp: "D7",
+  perf: "D8",
+  styles: "D8",
+  issues: "D8",
+  logpoint: "D8",
 };
 
 export type Step = unknown;
@@ -108,6 +114,13 @@ export function handlerOf(name: string): Handler | undefined {
   return COMMANDS.get(name);
 }
 
+export function unknownCommand(name: string): Usage {
+  const guess = closest(name, [...Object.keys(OWNERS), ...Object.keys(ALIASES)].filter((known) => !Object.hasOwn(SKIPPED, known)));
+  if (guess === undefined) return new Usage(`Unknown command: ${name}. Run \`ardia browse --help\``);
+  flag("did_you_mean", true);
+  return new Usage(`Unknown command: ${name}. Did you mean \`ardia browse ${guess}\`? Run \`ardia browse --help\` for the rest`);
+}
+
 export async function dispatch(ctx: Ctx, name: string, argv: string[]): Promise<Result> {
   if (name === "auth") {
     if (argv[0] !== "login") throw new Usage("auth save|list|show|delete run without the daemon");
@@ -115,7 +128,7 @@ export async function dispatch(ctx: Ctx, name: string, argv: string[]): Promise<
   }
   if (Object.hasOwn(SKIPPED, name)) throw new BrowseError(`\`${name}\` isn't part of ardia browse: ${SKIPPED[name]}`, null, "unsupported");
   const handler = COMMANDS.get(name);
-  if (handler === undefined) throw new Usage(`Unknown command: ${name}. Run \`ardia browse --help\``);
+  if (handler === undefined) throw unknownCommand(name);
   if (ctx.state && name !== "batch" && (ctx.state.topCommand !== "script" || name === "script")) ctx.state.commandsRun += 1;
   if (ctx.state) ctx.state.leftOffscreen = null;
   if (name !== "batch" && hooks.before) await hooks.before(ctx, name, argv);

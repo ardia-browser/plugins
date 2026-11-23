@@ -158,6 +158,7 @@ replays in any block.
 | `fixture-dir` | the checkout's own fixture folder becomes `{fixture_dir}`, so a recording replays from any clone |
 | `temp-tab-nonce` | `about:blank#ardia-temp-<nonce>` in `Target.createTarget` compares as the recorded `about:blank` |
 | `uncoded-failure` | `code: "command_failed"` on an exit-1 answer, and an exit-1 `batch` answer's lifted line code, compare as the recorded answer without one |
+| `error-remedy` | the client's `(code)` tag after a `✗` failure, the `  remedy: …` line after it and a `--json` failure's `"remedy"` key are dropped |
 | `json-error-code` | a `--json` failure envelope's trailing `"code":"command_failed"` or `"unknown_command"` is dropped |
 | `open-moved-tab` | the recorded `open` notice on a tab taken with `tab active` reads as the current one |
 | `divergences` | the designed differences rewrite only the request fields they name, on both sides, before IDs are numbered |
@@ -167,7 +168,7 @@ replays in any block.
 `DIVERGENCES` in `harness/divergences.ts` lists each place the daemon deliberately sends something other than what was
 recorded, with the recorded form, the current one, why, and its ardia#2812 row or decision. `world-handle`,
 `oopif-auto-attach`, `temp-tab-marker` and `shadow-pierce` always apply; the rest (`busy-probe-isolated`,
-`console-detectable`, `eval-isolated`, `script-isolated`, `permission-overrides`, `json-error-code`, `open-moved-tab`,
+`console-detectable`, `eval-isolated`, `script-isolated`, `permission-overrides`, `error-remedy`, `json-error-code`, `open-moved-tab`,
 `editing-commands`) only when a scenario names them in `divergences`, and `busy-probe-isolated` also in a `drop` or
 `stop` fault run. An unknown name fails the run.
 

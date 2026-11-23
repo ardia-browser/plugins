@@ -150,7 +150,7 @@ describe("normalize", () => {
 
   test("every rule is named", () => {
     for (const rule of ["browser-ids", "message-id", "concurrency", "scratch", "ports", "ids-in-answers", "session-key", "tabs-file", "file-times", "read-stamp", "metrics", "racy-steps",
-      "request-rows", "divergences", "secrets", "json-error-code", "open-moved-tab"]) {
+      "request-rows", "divergences", "secrets", "error-remedy", "json-error-code", "open-moved-tab"]) {
       expect(Object.keys(RULES)).toContain(rule);
     }
   });

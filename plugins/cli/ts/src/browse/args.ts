@@ -1,7 +1,7 @@
 import { opaqueSlot } from "./opaque.ts";
 import { decimalDigit } from "../pystr.ts";
 import { isNumberSpace, isSpace, strip } from "../py.ts";
-import { BOOL_FLAGS, COMMAND_FLAGS, COMMAND_NAME, COMMAND_OWNS, LAUNCH_HINTS, LAUNCH_ONLY, VALUE_FLAGS } from "./tables.ts";
+import { ALIASES, BOOL_FLAGS, COMMAND_FLAGS, COMMAND_NAME, COMMAND_OWNS, LAUNCH_HINTS, LAUNCH_ONLY, VALUE_FLAGS } from "./tables.ts";
 
 const SHARED_VALUE_FLAGS = ["--port", "--ws", "--data-dir", "--timeout"];
 const BROWSE_SHARED_FLAGS = ["--port", "--ws", "--data-dir", "--json"];
@@ -103,7 +103,7 @@ export function splitGlobals(argv: readonly string[]): { found: Found; rest: str
     if (LAUNCH_ONLY.includes(name)) {
       throw new Usage(`${name} doesn't apply to Ardia: ardia browse drives the browser you're running, so launch options have no effect`, found);
     }
-    if (command === undefined && !token.startsWith("-")) command = token;
+    if (command === undefined && !token.startsWith("-")) command = ALIASES[token] ?? token;
     else if (command !== undefined && !token.startsWith("-")) positionals.push(token);
     rest.push(token);
   }

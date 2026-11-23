@@ -5,7 +5,9 @@ import { knownBatchStep } from "../telemetry-names.ts";
 import { cliVersion } from "../version.ts";
 import { cleanMetrics, exitOf, outputChars, processStatus, textOf } from "./answer.ts";
 import { allowedFlags, commandName, hoist, hoistFailure, jsonIntent, jsonIntentOfArgv, plainJsonIntent, refusalJsonIntent, splitGlobals, truthy, Usage } from "./args.ts";
-import { codeJsonAnswer } from "./answer-codes.ts";
+import { codeJsonAnswer, decorateFailure } from "./answer-codes.ts";
+import { inferredCode, remedyFor } from "./remedies.ts";
+import { ALIASES } from "./tables.ts";
 import { BrowseError, PythonCrash } from "./errors.ts";
 import { Interrupted } from "./exchange.ts";
 import { Printer } from "./output.ts";
@@ -39,6 +41,7 @@ function handBackReason(error: unknown): string | undefined {
 
 function printError(error: BrowseError, asJson: boolean, secrets: Secrets, printer: Printer, call: Call): number {
   call.noteErrorCode(error.code);
+  if (remedyFor(inferredCode(error.code || error.fallback, error.text)) !== undefined) call.metrics.set("remedy_shown", true);
   const { out, err } = renderError(error, asJson, secrets);
   printer.out(out);
   printer.err(err);
@@ -73,6 +76,7 @@ function printAnswer(answer: Map<string, Value>, secrets: Secrets, printer: Prin
     return { status: 1, crash: invalid };
   }
   if (asJson) codeJsonAnswer(answer, command);
+  if (decorateFailure(answer, command)) call.metrics.set("remedy_shown", true);
   noteAnswerCodes(answer, call);
   if (!answeredHere(answer)) {
     for (const [key, value] of cleanMetrics(answer.get("metrics"))) call.metrics.set(key, value);
@@ -139,7 +143,7 @@ async function run(browse: string[], printer: Printer, call: Call, plugin: boole
   if (plugin) return { status: printError(new BrowseError(message(UNAVAILABLE_WHY), REFUSED, UNAVAILABLE), asJson, secrets, printer, call) };
   try {
     if (outPath !== null) {
-      const command = rest[0] as string;
+      const command = ALIASES[rest[0] as string] ?? (rest[0] as string);
       const again = splitGlobals(AS_TEXT.includes(command) ? [...stripped, "--max-output", "0"] : ["--json", ...stripped]);
       again.found.flags.set("out_only", true);
       if (command === "read") again.found.flags.set("out_body", true);

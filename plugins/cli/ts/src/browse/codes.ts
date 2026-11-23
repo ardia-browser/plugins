@@ -1,10 +1,10 @@
 export const CODES: ReadonlySet<string> = new Set([
-  "ambiguous", "answer_too_large", "attaches_unanswered", "auth_expired", "bad_init_script", "bad_site", "bad_value", "binary_body", "blocked", "borrowed_tab",
+  "ambiguous", "answer_too_large", "ardia_too_old", "attaches_unanswered", "auth_expired", "bad_init_script", "bad_site", "bad_value", "binary_body", "blocked", "borrowed_tab",
   "browser_restarted", "command_timeout", "connection_lost", "covered", "credential_not_sendable", "credential_provider_failed", "cross_process_frame", "dialog_blocked",
   "disabled", "document_changed", "download_remote", "drifted", "element_replaced", "failed", "fetch_failed", "fetch_interrupted", "flow_invalid",
   "flow_not_get", "flow_too_large", "focus_moved", "frame_gone", "http_error", "input_not_delivered", "input_unconfirmable", "keychain_refused", "lock_busy", "navigation_failed", "no_data",
   "no_flow", "no_fresh_suggestions", "no_links", "no_list", "no_match", "no_session_tab", "no_steps", "no_tab", "no_viewport", "not_a_web_page",
-  "not_editable", "not_focusable", "not_found", "not_run", "not_selectable", "not_visible", "notes_too_large", "nothing_to_save", "off_site",
+  "not_editable", "not_focusable", "not_found", "not_own_tab", "not_run", "not_selectable", "not_visible", "notes_too_large", "nothing_to_save", "off_site",
   "outcome_unknown", "outside_viewport", "page_busy", "page_navigated", "page_script_error", "pdf_unreadable", "policy_refused", "profile_busy", "rate_limited",
   "redirected", "ref_drifted", "registry_full", "rejected", "result_too_large", "script_failed", "script_syntax", "session_busy", "session_closing", "session_limit", "setup_lost",
   "stale_ref", "tab_asleep", "tab_closing", "tab_crashed", "tab_detached", "tab_gone", "tab_hidden", "tab_in_use", "tab_not_found", "tab_owned",

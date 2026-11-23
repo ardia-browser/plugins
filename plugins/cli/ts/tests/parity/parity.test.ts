@@ -6,6 +6,7 @@ import type { EngineResult } from "./engine.ts";
 
 const PER_CASE_MS = 1000;
 const SWITCH_ROWS = new Set(["browse-daemon"]);
+const TYPESCRIPT_ONLY_ROWS = new Set(["skills status"]);
 const GROUP_ROWS = new Set(["browse"]);
 const ARGPARSE_ROW = "argparse";
 
@@ -76,7 +77,7 @@ if (!supported || runEngineDetached === null || passed === null || report === nu
     if (missing.length || repeated.length) throw new Error(`cases without a result: ${missing.join(", ") || "none"}; cases run twice: ${repeated.join(", ") || "none"}`);
   }, PER_CASE_MS);
   test("every command served.txt lists has at least one passing case", async () => {
-    const served = new Set(servedRows().filter((name) => !SWITCH_ROWS.has(name)));
+    const served = new Set(servedRows().filter((name) => !SWITCH_ROWS.has(name) && !TYPESCRIPT_ONLY_ROWS.has(name)));
     const caseOf = new Map(cases.map((kase) => [kase.id, kase]));
     const proven = new Set<string>();
     for (const outcome of result?.outcomes ?? []) {

@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { designed } from "./divergences.ts";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { type Case, TS_ROOT, UnsafeCase } from "./cases.ts";
@@ -81,7 +82,7 @@ export async function checkCase(install: Install, kase: Case, spawner?: Spawner)
     const lastServed = observed.served_by[observed.served_by.length - 1];
     if (observed.served_by.length && lastServed !== observed.route) outcome.problems.push(`telemetry says ${String(lastServed)} served it, but ${observed.route} did`);
     if (!observed.transcript_complete) outcome.problems.push("the ts side left a control connection open past the drain deadline, so its transcript may be cut short");
-    outcome.mismatches = compare(comparable(observed, new Marks(box, install.scratch)), decodeExpected(row), kase.fallback);
+    outcome.mismatches = compare(designed(comparable(observed, new Marks(box, install.scratch))), decodeExpected(row), kase.fallback);
   } catch (error) {
     if (error instanceof SideDidNotStart || error instanceof UnsafeCase) outcome.problems.push(error.message);
     else outcome.problems.push(`the runner failed: ${(error as Error).stack ?? String(error)}`);

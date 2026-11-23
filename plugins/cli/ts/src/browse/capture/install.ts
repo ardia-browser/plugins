@@ -5,3 +5,6 @@ import "./record.ts";
 import "./stream.ts";
 import "./audit.ts";
 import "../media/commands.ts";
+import "./devtools.ts";
+import "./logpoints.ts";
+import "./perf.ts";

@@ -186,10 +186,12 @@ export function sessionOwner(namespace: string, endpointKey: string, session: st
   return createHash("sha256").update(raw, "utf8").digest("hex").slice(0, 24);
 }
 
+export const FORWARDED_ENV: readonly string[] = ["ARDIA_CRUX_API_KEY"];
+
 export function agentEnv(): JsonObject {
   const entries: JsonObject = new Map();
   for (const [name, value] of Object.entries(process.env)) {
-    if (name.startsWith("AGENT_BROWSER_") && value !== undefined) entries.set(name, value);
+    if ((name.startsWith("AGENT_BROWSER_") || FORWARDED_ENV.includes(name)) && value !== undefined) entries.set(name, value);
   }
   return entries;
 }

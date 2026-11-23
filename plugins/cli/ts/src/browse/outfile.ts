@@ -9,6 +9,7 @@ import { groupThousands } from "../pylib/format.ts";
 import { joinedWords, splitlines } from "../pylib/str.ts";
 import { redact, redactJson } from "../redact.ts";
 import { Usage } from "./daemon-errors.ts";
+import { ALIASES } from "./tables.ts";
 import { wellFormed, writeAllFd } from "./paths.ts";
 
 export const TAKES_OUT = ["script", "eval", "read", "snapshot", "get"];
@@ -55,8 +56,10 @@ function isRows(value: Value | undefined): value is JsonObject[] {
 }
 
 export function takeOut(argv: readonly string[], command: string | undefined): [string[], string | null] {
-  if (command === undefined || !TAKES_OUT.includes(command) || !argv.includes(command)) return [[...argv], null];
-  const start = argv.indexOf(command) + 1;
+  const name = command === undefined ? undefined : (ALIASES[command] ?? command);
+  const at = name === undefined ? -1 : argv.findIndex((token) => (ALIASES[token] ?? token) === name);
+  if (name === undefined || !TAKES_OUT.includes(name) || at < 0) return [[...argv], null];
+  const start = at + 1;
   for (let index = start; index < argv.length; index += 1) {
     const token = argv[index] as string;
     if (token === "--") break;

@@ -2,6 +2,7 @@ import { flag } from "../metrics.ts";
 import { isSpace, strip } from "../../py.ts";
 import { decimalValue } from "../../pylib/unicode.ts";
 import { Usage } from "../daemon-errors.ts";
+import { closest } from "../suggest.ts";
 
 export type Kind = "bool" | "value" | "multi";
 export type Flags = Readonly<Record<string, Kind>>;
@@ -103,10 +104,17 @@ export function parse(
       }
       continue;
     }
-    if (token.startsWith("-") && token.length > 1 && !pyDigit([...token.slice(1, 3)][0])) throw new Usage(`Unknown flag: ${name}`);
+    if (token.startsWith("-") && token.length > 1 && !pyDigit([...token.slice(1, 3)][0])) throw unknownFlag(name, [...Object.keys(flags), ...Object.keys(aliases)]);
     positionals.push(token);
   }
   return [options, positionals];
+}
+
+export function unknownFlag(name: string, known: readonly string[]): Usage {
+  const guess = closest(name, known.filter((flagName) => flagName.startsWith("-")));
+  if (guess === undefined) return new Usage(`Unknown flag: ${name}`);
+  flag("did_you_mean", true);
+  return new Usage(`Unknown flag: ${name}. Did you mean ${guess}?`);
 }
 
 export function need(positionals: readonly string[], count: number, usage: string): void {

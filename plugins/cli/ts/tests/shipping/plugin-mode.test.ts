@@ -18,7 +18,7 @@ const READY_FD = 5;
 const LONG_DATA_DIR = 94;
 const MAX_REQUEST = 16 * 1024 * 1024;
 const TEST_BUILD = "plugin-mode-test";
-const OVERSIZED = "✗ the ardia browse daemon closed the connection before taking the command (see the session log)\n";
+const OVERSIZED = "✗ the ardia browse daemon closed the connection before taking the command (see the session log) (daemon_unreachable)\n  remedy: ardia browse session list\n";
 const INSTALL_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b";
 
 type Ran = { status: number | null; signal: NodeJS.Signals | null; stdout: Buffer; stderr: Buffer };

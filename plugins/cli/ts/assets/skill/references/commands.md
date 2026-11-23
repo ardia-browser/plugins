@@ -1,0 +1,78 @@
+# ardia browse commands
+
+Every command and its forms, from the ardia command's own help: `ardia browse <command> --help` prints the whole
+entry. Generated from that help and the command table by `bun src/skill-gen.ts --write` in plugins/cli/ts.
+
+- **a11y**: `ardia browse a11y [url] [--tags t1,t2] [--selector css]`
+- **addinitscript**: `ardia browse addinitscript <js> [--stdin]`
+- **auth**: `ardia browse auth save <name> --url <https url> [--origin <url>]... --username <u> [--password-stdin]` · `[--username-selector s] [--password-selector s] [--submit-selector s]` · `ardia browse auth login <name> | list | show <name> | delete <name>`
+- **back**: `ardia browse back | forward`
+- **batch**: `ardia browse batch [--bail] [--out <file>] ["cmd args" | '["cmd","arg"]' ...]`
+- **cdp**: `ardia browse cdp <Domain.method> [--params <json>|-] [--param k=v]... [--param k:=json]... [--target browser|<tab>]` · `[--timeout 30s]`
+- **check**: `ardia browse check <sel> | uncheck <sel> [--humanize] [--no-changes]`
+- **click**: `ardia browse click <sel> [--new-tab] [--button left|right|middle] [--touch] [--humanize] [--no-changes] [--no-text]`
+- **clipboard**: `ardia browse clipboard read | write <text> | copy | paste`
+- **close** (also exit, quit): `ardia browse close [--all]`
+- **console**: `ardia browse console [--clear]`
+- **cookies**: `ardia browse cookies [get] | set <name> <value> [--url u] [--domain d] [--path p] [--httpOnly] [--secure]` · `[--sameSite Strict|Lax|None] [--expires epoch] | set --curl <file> | clear`
+- **dblclick**: `ardia browse dblclick <sel> [--humanize] [--no-changes]`
+- **dialog**: `ardia browse dialog status | accept [text] | dismiss`
+- **diff**: `ardia browse diff snapshot [-b baseline] [-s sel] [-i] [-c] [-d n] | screenshot --baseline <png> | url <u1> <u2>`
+- **download**: `ardia browse download <sel> <path>`
+- **drag**: `ardia browse drag <src> <dst> [--before|--after] [--humanize] [--no-changes]`
+- **errors**: `ardia browse errors [--clear] [--uncaught]`
+- **eval** (also evaluate, js): `ardia browse eval <js> | -b <base64> | --stdin [--timeout 2m] [--out <file>] [--isolated]`
+- **fill**: `ardia browse fill <sel> <text> [--humanize] [--no-changes]`
+- **find**: `ardia browse find <role|text|label|placeholder|alt|title|testid|first|last|nth> <value> [action] [text] [--name n] [--exact|--partial]`
+- **flow**: `ardia browse flow steps [--all]` · `ardia browse flow save <name> [--from n] [--to n] [--param k=v]... [--output s2r1] [--description text]` · `ardia browse flow run <name> [--param k=v]... [--fields a,b.c] [--where field=value]... [--limit n]` · `[--site s] [--timeout 60s]` · `ardia browse flow list [site] | show <name> [--site s] | rm <name> [--site s]`
+- **focus**: `ardia browse focus <sel>`
+- **forward**: `ardia browse forward | back`
+- **frame**: `ardia browse frame <sel|@ref|name|url> | frame main`
+- **get**: `ardia browse get text|html|value|title|url|count|box|styles <sel> | attr <sel> <name>`
+- **highlight**: `ardia browse highlight <sel>`
+- **hover**: `ardia browse hover <sel> [--humanize] [--no-changes]`
+- **is**: `ardia browse is visible|enabled|checked <sel>`
+- **issues**: `ardia browse issues [--kind cookie,cors,csp,mixed] [--clear]`
+- **keyboard**: `ardia browse keyboard type <text> | inserttext <text>`
+- **keydown**: `ardia browse keydown <key> | keyup <key>`
+- **keyup**: `ardia browse keyup <key>`
+- **links**: `ardia browse links [pattern] [--limit n]`
+- **logpoint**: `ardia browse logpoint add <file:line[:column]> <expression> [--condition <js>] [--column n]` · `ardia browse logpoint list | rm <id>... | clear | scripts`
+- **mouse**: `ardia browse mouse move <x> <y> | down [left|right|middle] | up [button] | wheel <dy> [dx] [--humanize]`
+- **network**: `ardia browse network requests [--reload] [--filter p] [--type t] [--method m] [--status 2xx] [--clear] | request <id>` · `--reload starts recording and reloads the page, so its own loads are listed (--type xhr,fetch: its data calls)` · `| har start [--content text|all|none] | har stop [path] | route <url> [--abort|--body json] | unroute [url]`
+- **notes**: `ardia browse notes [get|set|append|list|rm] [site] [text|-]  (also `ardia notes`)`
+- **open** (also goto, navigate, visit): `ardia browse open [url] [--read] [--enable react-devtools] [--init-script <path>] [--capture-console] [--label name] [--here]`
+- **pdf**: `ardia browse pdf <path> [--landscape]`
+- **perf**: `ardia browse perf trace [--duration 5s] [--reload] [--out <file.json>]` · `ardia browse perf insight [--reload] [--duration 3s] [--crux]` · `ardia browse perf insight --trace <file.json>`
+- **plugin**: `ardia browse plugin add <npm-name[@version] | owner/repo[#ref]> [--name n] [--capability c]... | list | show <name>` · `| remove <name> | run <name> <type> [--payload json]`
+- **press** (also key): `ardia browse press [<sel>] <key> [--no-humanize]`
+- **profiler**: `ardia browse profiler start [--categories c1,c2] | stop [path]`
+- **pushstate**: `ardia browse pushstate <url>`
+- **react**: `ardia browse react tree | inspect <id> | renders start | renders stop | suspense [--only-dynamic]`
+- **read**: `ardia browse read [url] --fast [--outline] [--filter <pattern>]` · `ardia browse read [url...] [--links <pattern>] [-s <selector>] [--stdin] [--limit n] [--timeout ms] [--http] [--list] [--out <file>] [--nav]` · `ardia browse read [-s <list>] --scroll [--limit rows] [--match <text>] [--timeout ms]` · `ardia browse read --data [--block n|id] [--fields a,b.c] [--where field=value] [--limit n]`
+- **record**: `ardia browse record start <path.webm> [url] | stop | restart <path.webm> [url]`
+- **reload** (also refresh): `ardia browse reload`
+- **removeinitscript**: `ardia browse removeinitscript <id>`
+- **screenshot** (also shot): `ardia browse screenshot [sel] [path | --out path] [--full] [--annotate] [--screenshot-format png|jpeg] [--screenshot-quality n] [--if-changed [--threshold pct]] [--with-snapshot]`
+- **script**: `ardia browse script [file.js | '<code>'] [--timeout 90s] [--out <file>]   (or the script on stdin)`
+- **scroll**: `ardia browse scroll [up|down|left|right] [px] [-s <sel>] [--no-humanize]`
+- **scrollintoview** (also scrollinto): `ardia browse scrollintoview <sel> [--humanize]`
+- **select**: `ardia browse select <sel> <value...> [--humanize] [--no-changes]`
+- **session**: `ardia browse session | info | list | id [--scope cwd|worktree] [--prefix p]`
+- **set**: `ardia browse set viewport <w> <h> [scale] | viewport reset | device <name> | geo <lat> <lng> | offline [on|off] | headers <json>` · `| credentials <user> <pass> | media [dark|light|no-preference] [reduced-motion]` · `| permission geolocation|notifications|camera|microphone|clipboard [more …]`
+- **snapshot** (also snap): `ardia browse snapshot [-i] [-c] [-d <n>] [-s <sel>] [-u] [--diff | --diff-new] [--all] [--with-screenshot <png>]` · `ardia browse snapshot find <query | /pattern/> [-i] [-s <sel>] [--all]`
+- **state**: `ardia browse state save|load <path>`
+- **storage**: `ardia browse storage local|session [get [key] | set <key> <value> | remove <key> | clear]`
+- **stream**: `ardia browse stream enable [--port n] [--input] | disable | status`
+- **styles**: `ardia browse styles <sel> [--property color,margin-top] [--all]`
+- **tab**: `ardia browse tab [list] | new [--label name] [url] | <t1|tab-…|label|targetId> | active | close [tab] [--show]`
+- **text**: `ardia browse text [selector]`
+- **tool**: `ardia browse tool <name> ['{json args}' | -] --yes [--timeout 60s]`
+- **tools**: `ardia browse tools`
+- **trace**: `ardia browse trace start [--categories c1,c2] | stop [path]`
+- **type**: `ardia browse type <sel> <text> [--no-humanize]`
+- **uncheck**: `ardia browse uncheck <sel> [--humanize] [--no-changes]`
+- **upload**: `ardia browse upload <sel> <files...>`
+- **vitals**: `ardia browse vitals [url]`
+- **wait**: `ardia browse wait <sel|ms> [--state visible|hidden|attached|detached] | --text <t> | --url <glob> |` · `--load load|domcontentloaded|networkidle | --fn <js> [--timeout ms]`
+- **window**: `ardia browse window new [url]`

@@ -16,6 +16,7 @@ import { wellFormed, writeAllFd } from "../paths.ts";
 import { Ctx } from "./ctx.ts";
 import { ALIASES, dispatch, hooks, register } from "./index.ts";
 import { parse } from "./parse.ts";
+import { inferredCode, remedyFor, remedyLine, tagged } from "../remedies.ts";
 import { commitShown } from "../snapshot/since.ts";
 import { attach, beginBatch, endBatch, flushBatch, hasPendingReaction } from "../changes/observe.ts";
 import type { Report } from "../changes/report.ts";
@@ -102,7 +103,7 @@ export function splitGlobals(argv: readonly string[]): [Map<string, unknown>, st
     const hint = LAUNCH_HINTS[name];
     if (hint !== undefined) throw new Usage(`${name} is a launch option agent-browser applies when it starts its own browser; ${hint}`);
     if (LAUNCH_ONLY.includes(name)) throw new Usage(`${name} doesn't apply to Ardia: ardia browse drives the browser you're running, so launch options have no effect`);
-    if (command === null && !token.startsWith("-")) command = token;
+    if (command === null && !token.startsWith("-")) command = ALIASES[token] ?? token;
     rest.push(token);
   }
   return [found, rest];
@@ -132,8 +133,10 @@ function checkedOut(target: string): string {
 }
 
 export function takeOut(argv: string[], command: string): [string[], string | null] {
-  if (!TAKES_OUT.includes(command) || !argv.includes(command)) return [argv, null];
-  for (let index = argv.indexOf(command) + 1; index < argv.length; index += 1) {
+  const name = ALIASES[command] ?? command;
+  const at = argv.findIndex((token) => (ALIASES[token] ?? token) === name);
+  if (!TAKES_OUT.includes(name) || at < 0) return [argv, null];
+  for (let index = at + 1; index < argv.length; index += 1) {
     const token = argv[index] as string;
     if (token === "--") break;
     if (token.startsWith("--out=")) return [[...argv.slice(0, index), ...argv.slice(index + 1)], checkedOut(token.slice(token.indexOf("=") + 1))];
@@ -230,10 +233,35 @@ function saveBatchLine(ctx: Ctx, name: string, result: Result, target: string): 
   return [`✓ Saved to ${saved} (${groupThousands(String(pyLen(text)))} characters): ${summary}`, true];
 }
 
-type Outcome = { command: unknown; success: boolean; result: unknown; error: string | null; code?: string | null; text?: string | null };
+type Outcome = { command: unknown; success: boolean; result: unknown; error: string | null; code?: string | null; text?: string | null; remedy?: string };
+
+export function failureMeta(outcome: Outcome): { code: string | undefined; remedy: string | undefined } {
+  const code = inferredCode(outcome.code ?? undefined, outcome.error ?? "");
+  const words = Array.isArray(outcome.command) ? (outcome.command as unknown[]) : [];
+  const remedy = remedyFor(code, typeof words[0] === "string" ? words[0] : undefined);
+  if (code !== undefined && !outcome.code) outcome.code = code;
+  if (remedy !== undefined) outcome.remedy = remedy;
+  return { code, remedy };
+}
+
+export function failureLine(outcome: Outcome): string {
+  const { code, remedy } = failureMeta(outcome);
+  return `✗ ${tagged(outcome.error ?? "", code)}${remedy === undefined ? "" : `\n${remedyLine(remedy)}`}`;
+}
+
+export function failedText(outcome: Outcome): string {
+  if (!outcome.text) return failureLine(outcome);
+  const { remedy } = failureMeta(outcome);
+  return remedy === undefined || outcome.text.includes(remedyLine(remedy)) ? outcome.text : `${outcome.text}\n${remedyLine(remedy)}`;
+}
+
+function failedSummary(outcome: Outcome): string {
+  const { code, remedy } = failureMeta(outcome);
+  return `✗ ${(outcome.command as string[]).join(" ")}: ${tagged(outcome.error ?? "", code)}${remedy === undefined ? "" : `\n${remedyLine(remedy)}`}`;
+}
 
 function saveBatch(ctx: Ctx, target: string, text: string, outcomes: Outcome[]): string {
-  const failed = outcomes.filter((outcome) => !outcome.success).map((outcome) => `✗ ${(outcome.command as string[]).join(" ")}: ${outcome.error}`);
+  const failed = outcomes.filter((outcome) => !outcome.success).map(failedSummary);
   if (!strip(text, isSpace)) return [`✗ The batch printed nothing, so ${target} wasn't written`, ...failed].join("\n");
   let saved: string;
   try {
@@ -244,7 +272,7 @@ function saveBatch(ctx: Ctx, target: string, text: string, outcomes: Outcome[]):
   }
   flag("saved_to_file", true);
   flag("batch_saved", true);
-  const lines = outcomes.length - failed.length;
+  const lines = outcomes.filter((outcome) => outcome.success).length;
   return [`✓ Saved the output of ${lines} of ${outcomes.length} lines to ${saved} (${groupThousands(String(pyLen(text)))} characters)`, ...failed].join("\n");
 }
 
@@ -544,7 +572,7 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
     }
   }
   compactBatchLines(outcomes);
-  let text = outcomes.map((outcome) => (outcome.success || outcome.text ? outcome.text : `✗ ${outcome.error}`) || "").join("\n\n");
+  let text = outcomes.map((outcome) => (outcome.success ? outcome.text : failedText(outcome)) || "").join("\n\n");
   let savedWhole = false;
   if (options["out"]) {
     text = saveBatch(ctx, options["out"] as string, text, outcomes);

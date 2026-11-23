@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { chmodSync, closeSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, constants as fsConstants, fstatSync, lstatSync, mkdirSync, openSync, readdirSync, readSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { dumps, type JsonObject, object, parseText, type Value } from "./json.ts";
 import { errnoOf, home, join, strerror } from "./paths.ts";
 import { reprStr } from "./py.ts";
@@ -88,6 +88,22 @@ export function destination(target: string, project: boolean): string {
   return join(base, SKILL_NAME);
 }
 
+export function contentHash(files: Iterable<readonly [string, Buffer]>): string {
+  const digest = createHash("sha256");
+  for (const [name, bytes] of [...files].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+    digest.update(name);
+    digest.update("\0");
+    digest.update(String(bytes.length));
+    digest.update("\0");
+    digest.update(bytes);
+  }
+  return digest.digest("hex");
+}
+
+export function packHash(): string {
+  return contentHash(shipped());
+}
+
 function shipped(): Map<string, Buffer> {
   return new Map(SKILL_FILES.map(([name, text]) => [name, utf8(text)]));
 }
@@ -147,13 +163,41 @@ function safeRelative(name: Value): name is string {
   return parts.every((part) => part !== "" && part !== "." && part !== "..") && parts[0] !== MARKER;
 }
 
-function readMarker(folder: string, skill = SKILL_NAME): JsonObject | undefined {
-  recoverFolder(folder);
+export const MARKER_MAX_BYTES = 1024 * 1024;
+
+export function plainBytes(path: string, limit: number): Buffer | undefined {
+  let fd: number;
+  try {
+    fd = openSync(path, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK);
+  } catch {
+    return undefined;
+  }
+  try {
+    const info = fstatSync(fd);
+    if (!info.isFile() || info.size > limit) return undefined;
+    const bytes = Buffer.alloc(info.size);
+    let read = 0;
+    while (read < bytes.length) {
+      const got = readSync(fd, bytes, read, bytes.length - read, read);
+      if (got === 0) break;
+      read += got;
+    }
+    return read === bytes.length ? bytes : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    closeSync(fd);
+  }
+}
+
+function readMarker(folder: string, skill = SKILL_NAME, recover = true): JsonObject | undefined {
+  if (recover) recoverFolder(folder);
   const marker = join(folder, MARKER);
   if (isLink(marker) || !isFile(marker)) return undefined;
   let data: Value | undefined;
   try {
-    const raw = readFileSync(marker);
+    const raw = plainBytes(marker, MARKER_MAX_BYTES);
+    if (raw === undefined) return undefined;
     data = parseText(new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(raw).replace(/\r\n?/g, "\n"));
   } catch {
     return undefined;
@@ -206,16 +250,21 @@ function recoverFolder(folder: string): void {
   } catch {}
 }
 
-function ownedFiles(folder: string, adopt = false): string[] | undefined {
-  recoverFolder(folder);
+function ownedFiles(folder: string, adopt = false, recover = true): string[] | undefined {
+  if (recover) recoverFolder(folder);
   if (!chainIsSafe(folder, SKILL_DIRS) || isLink(folder) || !isDir(folder)) return undefined;
-  const marked = markedFiles(folder);
+  const marker = recover ? undefined : readMarker(folder, SKILL_NAME, false);
+  const marked = recover ? markedFiles(folder) : marker === undefined ? undefined : (marker.get("files") as Value[]).filter(safeRelative);
   if (marked !== undefined || !adopt) return marked;
   const files = plainFiles(folder);
   if (files === undefined) return undefined;
   const hashes = new Map<string, string>();
   try {
-    for (const name of files) hashes.set(name, createHash("sha256").update(readFileSync(join(folder, name))).digest("hex"));
+    for (const name of files) {
+      const bytes = plainBytes(join(folder, name), STATUS_MAX_BYTES);
+      if (bytes === undefined) return undefined;
+      hashes.set(name, createHash("sha256").update(bytes).digest("hex"));
+    }
   } catch {
     return undefined;
   }
@@ -247,6 +296,7 @@ function installInto(folder: string, companions: Value | undefined, adopt = fals
   const marker: JsonObject = object([
     ["vendor", "ardia"],
     ["version", cliVersion()],
+    ["hash", packHash()],
   ]);
   if (Array.isArray(chosen)) marker.set("companions", chosen.filter((name) => typeof name === "string" && COMPANIONS.includes(name)));
   writePack(folder, previous, shipped(), marker);
@@ -302,7 +352,9 @@ function isAbsolute(path: string): boolean {
 function recordedFolders(): string[] {
   let folders: Value | undefined;
   try {
-    const parsed = parseText(new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(readFileSync(recordPath())));
+    const raw = plainBytes(recordPath(), MARKER_MAX_BYTES);
+    if (raw === undefined) return [];
+    const parsed = parseText(new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(raw));
     if (!(parsed instanceof Map)) return [];
     folders = parsed.has("folders") ? parsed.get("folders") : [];
   } catch {
@@ -449,4 +501,78 @@ export async function refresh(): Promise<Lines> {
   await stepBoundary();
   saveRecord(kept);
   return { status, out };
+}
+
+export type CopyState = "current" | "stale" | "edited" | "unstamped" | "foreign";
+
+export const STATUS_MAX_FILES = 256;
+export const STATUS_MAX_BYTES = 4 * 1024 * 1024;
+
+function plainFileBytes(folder: string, relative: string): Buffer | undefined {
+  const parts = relative.split("/");
+  let here = folder;
+  for (const part of parts.slice(0, -1)) {
+    here = join(here, part);
+    try {
+      const info = lstatSync(here);
+      if (info.isSymbolicLink() || !info.isDirectory()) return undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return plainBytes(join(folder, relative), STATUS_MAX_BYTES);
+}
+
+export const SKILLS_STATUS_HELP = [
+  "usage: ardia skills status [-h]",
+  "",
+  "Say which installed copies of the ardia skill are current, stale (an older ardia wrote them), edited (changed",
+  "since ardia wrote them) or foreign (not ardia's). Writes nothing; ardia skills refresh rewrites stale and edited",
+  "copies.",
+  "",
+  "options:",
+  "  -h, --help  show this help message and exit",
+];
+
+export function copyState(folder: string): { state: CopyState; version?: string | undefined } {
+  if (!chainIsSafe(folder, SKILL_DIRS) || isLink(folder) || !isDir(folder)) return { state: "foreign" };
+  const marker = readMarker(folder, SKILL_NAME, false);
+  if (marker === undefined) return { state: ownedFiles(folder, true, false) === undefined ? "foreign" : "unstamped" };
+  const version = typeof marker.get("version") === "string" ? (marker.get("version") as string) : undefined;
+  const files = (marker.get("files") as Value[]).filter(safeRelative);
+  const stamped = marker.get("hash");
+  const contents = files.length <= STATUS_MAX_FILES ? files.map((name) => [name, plainFileBytes(folder, name)] as const) : [];
+  if (files.length > STATUS_MAX_FILES || contents.some(([, bytes]) => bytes === undefined)) return { state: "edited", version };
+  const onDisk = contentHash(contents as [string, Buffer][]);
+  if (typeof stamped !== "string") return { state: "unstamped", version };
+  if (onDisk !== stamped) return { state: "edited", version };
+  return { state: stamped === packHash() ? "current" : "stale", version };
+}
+
+const STATE_WORDS: Readonly<Record<CopyState, string>> = {
+  current: "current",
+  stale: "stale",
+  edited: "edited",
+  unstamped: "stale",
+  foreign: "foreign",
+};
+
+export function skillStatus(): Lines {
+  const folders = new Set([...recordedFolders(), ...Object.keys(TARGETS).flatMap((target) => [destination(target, false), destination(target, true)]).map(absolute)]);
+  const out: string[] = [];
+  let behind = 0;
+  for (const folder of [...folders].sort()) {
+    if (!present(folder)) continue;
+    const { state, version } = copyState(folder);
+    const by = version === undefined ? "" : ` (ardia ${version})`;
+    if (state === "current") out.push(`current  ${folder}${by}`);
+    else if (state === "stale" || state === "unstamped") {
+      behind += 1;
+      out.push(`stale    ${folder}${by}: \`ardia skills refresh\` rewrites it with ardia ${cliVersion()}'s skill`);
+    } else if (state === "edited") out.push(`edited   ${folder}${by}: changed since ardia installed it; \`ardia skills refresh\` puts the shipped copy back`);
+    else out.push(`${STATE_WORDS[state]}  ${folder}: not installed by ardia, left alone`);
+  }
+  if (out.length === 0) out.push("No installed copies of the ardia skill; `ardia skills install` installs one");
+  out.push(`shipped  ardia ${cliVersion()}, skill ${packHash().slice(0, 12)}${behind > 0 ? `; ${behind} stale` : ""}`);
+  return { status: 0, out };
 }

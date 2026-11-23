@@ -73,4 +73,5 @@ skills get ts
 skills list ts
 skills install ts
 skills refresh ts
+skills status ts
 argparse ts

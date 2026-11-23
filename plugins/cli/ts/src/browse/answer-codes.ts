@@ -3,6 +3,7 @@ import { exitOf } from "./answer.ts";
 import { ALIASES } from "./tables.ts";
 import { PythonCrash } from "./errors.ts";
 import { ANSWER_JSON_DEPTH } from "./serve.ts";
+import { inferredCode, remedyFor, remedyLine, tagged } from "./remedies.ts";
 
 const INTERNAL_ERROR = "internal_error";
 const TEXT_ERROR = "✗ ";
@@ -80,4 +81,34 @@ export function codeJsonAnswer(answer: Map<string, Value>, command: string): voi
     return;
   }
   answer.set("out", errorLine(`the ardia browse daemon answered with exit status ${status} and no output`));
+}
+
+export function decorateFailure(answer: Map<string, Value>, command: string): boolean {
+  const status = exitOf(answer.get("exit"));
+  if (status instanceof PythonCrash || status === 0n) return false;
+  const given = answer.get("code");
+  const answerCode = typeof given === "string" ? given : undefined;
+  const outGiven = answer.get("out");
+  const out = typeof outGiven === "string" ? outGiven : "";
+  const parsed = parsedLine(out);
+  if (parsed !== undefined) {
+    if (!(parsed instanceof Map) || parsed.get("success") !== false || parsed.has("remedy")) return false;
+    const code = parsed.get("code");
+    const error = parsed.get("error");
+    const remedy = remedyFor(inferredCode(typeof code === "string" ? code : answerCode, typeof error === "string" ? error : ""), command);
+    if (remedy === undefined) return false;
+    parsed.set("remedy", remedy);
+    answer.set("out", `${dumps(parsed, "compact")}\n`);
+    return true;
+  }
+  const errGiven = answer.get("err");
+  const err = typeof errGiven === "string" ? errGiven : "";
+  const at = err.startsWith(TEXT_ERROR) ? 0 : err.lastIndexOf(`\n${TEXT_ERROR}`) + 1;
+  if (at < 0 || !err.startsWith(TEXT_ERROR, at)) return false;
+  const failure = err.slice(at);
+  const code = inferredCode(answerCode, failure);
+  const remedy = remedyFor(code, command);
+  const ended = failure.endsWith("\n") ? "" : "\n";
+  answer.set("err", `${err.slice(0, at)}${tagged(failure, code)}${remedy === undefined ? "" : `${ended}${remedyLine(remedy)}\n`}`);
+  return remedy !== undefined;
 }

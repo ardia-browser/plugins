@@ -374,10 +374,13 @@ export class State extends Refs implements temptabs.TempTabState {
     return pages;
   }
 
+  readonly onForget: ((targetId: string, page: Page | undefined) => void)[] = [];
+
   forgetTarget(targetId: string): void {
     this.usedAt.delete(targetId);
     const page = this.pages.get(targetId);
     this.pages.delete(targetId);
+    for (const forget of this.onForget) forget(targetId, page);
     page?.detach();
     const wasOpened = this.opened.has(targetId);
     this.opened.delete(targetId);

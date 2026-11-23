@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import { canonical, redactSecrets, type Entry, type Message } from "../canon.ts";
 import { DAEMON_METRICS, PYTHON_COMMAND_METRICS } from "./paths.ts";
+import { TAGGED_CODES } from "../../../src/browse/remedies.ts";
+import { stripEnvelopeRemedies } from "../../remedy-strip.ts";
 import { isPyInt, isRecord, type Json, type JsonRecord, PyFloat } from "./pyvalues.ts";
 
 export const STRING_IDS = new Set(["targetId", "frameId", "parentFrameId", "loaderId", "sessionId", "openerId", "openerFrameId", "browserContextId", "objectId",
@@ -26,6 +28,8 @@ const REQUEST_ROW = /^\[\d+\.\d+\](?= [A-Z]+ \S+ \()/gm;
 const JSON_ERROR_CODE = /^(\{"success":false,.*),"code":"(?:command_failed|unknown_command)"\}$/gm;
 const PYTHON_MOVED_TAB = /\n→ \[(t\d+)\] is this session's tab now, a background tab of its own, since this session uses your tab \[(t\d+)\] and won't navigate it; `tab \2` goes back; (?:it takes input without being shown|(this Ardia doesn't deliver input there\. use: [^\n]*))/;
 const TEMP_TAB = "about:blank#ardia-temp-";
+const ERROR_TAG = /^(✗ [^\n]*(?:\n(?!✗ |  remedy: )[^\n]*)*?) \(([a-z][a-z0-9_]*)\)(?:\n  remedy: [^\n]*)?(?=\n|$)/gm;
+const REMEDY_LINE = /\n {2}remedy: ardia [^\n]*(?=\n|$)/gu;
 const UNCODED_FAILURE = "command_failed";
 export const RECORDED_FIXTURE = 9419;
 const DAEMON_METRIC_SETS = ["FLAGS", "READ_FLAGS", "ACT_FLAGS", "CHANGE_FLAGS", "FLOW_FLAGS", "SAFETY_FLAGS", "COUNTS", "ACT_COUNTS", "CHANGE_COUNTS", "FLOW_COUNTS"];
@@ -58,6 +62,7 @@ export const RULES: Record<string, string> = {
   "fixture-dir": "the checkout's own fixture folder (recorded in subs) becomes {fixture_dir} in answers and requests, so a recording replays from any clone",
   "temp-tab-nonce": "a temporary tab's `Target.createTarget` URL `about:blank#ardia-temp-<nonce>` (the TS daemon marks the tabs it opens only to read, so a sweep can find one a crashed daemon left) becomes `about:blank`, Python's URL",
   "uncoded-failure": "an answer's `code` `command_failed`, which the TypeScript daemon gives a failure that has no code of its own (a batch line, a `wait` or `is` that reported one) where Python's daemon sent none, compares as no code on an exit-1 answer only; so does the code of an exit-1 `batch` answer that names a `failed_step_command` other than `close`: the first failed line's code, which Python's daemon didn't lift to the batch (a failed trailing close keeps its code, as Python's did)",
+  "error-remedy": "the `(code)` tag the TypeScript client adds at the end of a `✗` failure, the `  remedy: <command>` line after it and the `\"remedy\"` key of a `--json` failure (src/browse/remedies.ts; designed divergence `error-remedy`) are dropped, since Python's client printed neither",
   "json-error-code": "a `--json` failure envelope's trailing `\"code\":\"command_failed\"` or `\"code\":\"unknown_command\"`, which the TypeScript client adds to a daemon error line that has no code (docs/cli.md, the error code table; designed divergence `json-error-code`) and Python's client printed without, is dropped",
   "open-moved-tab": "Python's `open` notice on a tab taken with `tab active` (`→ [t3] is this session's tab now, … goes back; …` after the title) reads as the TypeScript one, `→ Opened in a new background tab [t3]; the tab you picked with `tab active` [t2] is unchanged (…)` before the title (docs/cli.md, `tab active`; designed divergence `open-moved-tab`)",
   divergences: "designed TS differences from divergences.ts (`world-handle` always, the rest when a scenario names them) rewrite only the request fields they name, on both sides, before IDs are numbered",
@@ -307,7 +312,11 @@ export function typescriptMovedTab(text: string): string {
 }
 
 export function withoutClientErrorCode(text: string): string {
-  return text.replace(JSON_ERROR_CODE, "$1}");
+  return withoutRemedy(text).replace(JSON_ERROR_CODE, "$1}");
+}
+
+export function withoutRemedy(text: string): string {
+  return stripEnvelopeRemedies(text).replace(ERROR_TAG, (whole, message: string, code: string) => (TAGGED_CODES.has(code) ? message : whole)).replace(REMEDY_LINE, "");
 }
 
 export function answer(step: Step, subs: Subs, ids: Ids, keys: Map<string, string>): JsonRecord {
