@@ -1600,6 +1600,13 @@ class BrowseTokenPath(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         said = json.loads(done.stdout)
         self.assertTrue(said["attached"])
+        expect = os.environ.get("ARDIA_BROWSE_E2E_ENGINE", "")
+        if expect == "full":
+            self.assertFalse(said["gone"]["gated"], said["gone"])
+            self.assertIsNone(said["unlisted"])
+        elif expect == "legacy":
+            self.assertTrue(said["gone"]["gated"], said["gone"])
+            self.assertTrue(said["unlisted"] and said["unlisted"]["gated"], said["unlisted"])
         if said["gone"]["gated"]:
             self.assertEqual(said["gone"]["reason"], "to that target")
             self.assertIn("Ardia allows for the ardia command, but not to that target", said["gone"]["message"])

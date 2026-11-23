@@ -1446,7 +1446,8 @@ instance on the token connection, then `read <url>`, `open <url>`, `read` and a 
 test runs it with the release's own CLI tarball against the release candidate, since nothing else runs the command
 against a real token connection.
 
-It serves `tests/fixtures/browse` on 127.0.0.1, launches one hidden instance with a DevTools port (`ac launch
+`ARDIA_BROWSE_E2E_ENGINE=full` (Ardia 0.2.49 or later) or `legacy` (0.2.48 and earlier) makes the refusal test require
+that engine's behaviour; unset, it accepts either. It serves `tests/fixtures/browse` on 127.0.0.1, launches one hidden instance with a DevTools port (`ac launch
 --no-wait`) and one on the token path (`open -g -n`, `ARDIA_BACKGROUND=1`, control on in `session.json`), both under
 `~/ardia-scratch/browse-impl/e2e` (`ARDIA_BROWSE_E2E_DIR`), runs the core loop, the probe (humanized with
 `--humanize`), instant input by default, the hidden-tab refusal, refs across an idle disconnect, `fill` on every typed
