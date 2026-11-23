@@ -155,6 +155,22 @@ TS_HELP_ADDITIONS = (
      "--links <pattern> reads every link whose URL contains the pattern (* matches\nanything), in page order, from each URL you name (opened in a background tab, not read itself), else from the session's\ntab; --list only prints those links."),
     ("read", "Every URL you name is read (up to 100);\n--links finds at mos",
      "Without --links, every URL you name is read (up to 100);\n--links finds at mos"),
+    ("script", "It runs in a\nblank background page of its own, outside the page it drives (no document or window: DOM code goes in\n"
+               "page.evaluate), and every page action is one of ardia browse's commands on this session (the same tab,\n"
+               "refs, rules and change reports), so nothing a command refuses works here either.",
+     "It runs in a\nsandbox of its own (no files, modules or network), outside the page it drives (no document or window:\n"
+     "DOM code goes in page.evaluate), and every page action is one of ardia browse's commands on this session (the\n"
+     "same tab, refs and rules), so nothing a command refuses works here either."),
+    ("script", "  page.evaluate(fn, arg) or page.eval(fn, arg)   (fn runs in the page's main world, like eval; pass\n"
+               "    the script's values as arg, since fn can't see them)\n",
+     "  page.evaluate(fn, ...args) or page.eval(fn, ...args)   (fn runs in the page's main world, like eval; pass\n"
+     "    the script's values as args, JSON, since fn can't see them)\n"
+     "  page.$eval(sel, fn, ...args)  page.$$eval(sel, fn, ...args)   (fn gets the first match / every match)\n"
+     "  page.frames()  -> [{id, url, name, main, crossProcess}], each with evaluate, $eval and $$eval\n"),
+    ("script", "Actions return their answer text with what changed.",
+     "Reads (text, attr, evaluate, $eval, $$eval, read) run together under Promise.all; actions run one at a\n"
+     "time and wait for the page to settle, and their answer skips what changed unless the last argument is\n"
+     "{receipt: true}."),
 )
 
 
