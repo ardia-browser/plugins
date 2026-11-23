@@ -354,7 +354,10 @@ export async function collectLinksFrom(ctx: Ctx, listings: readonly string[], pa
   const sources: string[] = [];
   const failures: ListingFailure[] = [];
   const skipped = new Set(listings.map(sameUrlKey));
-  const keep = (found: readonly string[], landed: string) => pickLinks(found, pattern, landed).filter((url) => !skipped.has(sameUrlKey(url)));
+  const keep = (found: readonly string[], landed: string) => {
+    const here = sameUrlKey(landed);
+    return pickLinks(found, pattern, landed).filter((url) => !skipped.has(sameUrlKey(url)) && sameUrlKey(url) !== here);
+  };
   try {
     let page: Page | null = null;
     for (const listing of listings) {
@@ -362,7 +365,7 @@ export async function collectLinksFrom(ctx: Ctx, listings: readonly string[], pa
       try {
         if (page === null || page.sessionId === null) page = await openReader(ctx, opened);
         const reader: Page = page;
-        found = await readers.linksIn(reader, listing, pattern, timeout, (now, landed) => keep(now, landed).length > 0);
+        found = await readers.linksIn(reader, listing, pattern, timeout, (now, landed) => keep(now, landed).some((url) => !picked.includes(url)));
       } catch (error) {
         if (!quiet(error) || error instanceof ConnectionLost || (error instanceof OutcomeUnknown && page !== null && state.targetInfos.has(page.targetId))) throw error;
         failures.push({ url: listing, error: (error as BrowseError).text });
@@ -685,7 +688,7 @@ export async function run(ctx: Ctx, options: Options, positional: string[]): Pro
     if (listed && options["limit"] === undefined) named = 0;
     urls = picked;
     if (options["list"]) {
-      const shown = options["limit"] !== undefined ? picked.slice(0, limit) : picked;
+      const shown = options["limit"] !== undefined || listed ? picked.slice(0, limit) : picked;
       const text = [shown.join("\n") + (shown.length < picked.length ? `\n${limitNote(picked.length, limit, "--limit")}` : ""), failed].filter((part) => part).join("\n");
       const listing = new Result({ links: shown, matched: picked.length, listing: source, ...(failures.length ? { failedListings: failures } : {}) }, text, true);
       listing.failed = failures.length > 0;

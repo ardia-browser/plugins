@@ -443,6 +443,25 @@ describe("ReadingTabs", () => {
     }
   });
 
+  test("test_links_from_urls_keep_polling_past_links_already_picked_and_cap_list_at_twenty (plugins#74)", async () => {
+    const run = scene();
+    const previous = pages.readers.linksIn;
+    const answers: boolean[] = [];
+    pages.readers.linksIn = async (_page, listing, _pattern, _timeout, wanted) => {
+      if (listing.endsWith("/b")) answers.push(wanted(["http://s/p/1"], "http://S:80/b"), wanted(["http://s/b", "http://s/p/2"], "http://S:80/b"));
+      return listing.endsWith("/a") ? ["http://s/p/1"] : Array.from({ length: 26 }, (_, n) => `http://s/p/${n}`);
+    };
+    try {
+      const listing = await pages.run(run.ctx, { links: "*", list: true }, ["http://s/a", "http://s/b"]);
+      expect(answers).toEqual([false, true]);
+      expect(((listing.data as Record<string, unknown>)["links"] as string[]).length).toBe(20);
+      expect(((listing.data as Record<string, unknown>)["matched"])).toBe(26);
+    } finally {
+      pages.readers.linksIn = previous;
+      run.restore();
+    }
+  });
+
   test("test_links_from_urls_read_twenty_by_default_whatever_the_listing_count (plugins#74)", async () => {
     const run = scene();
     const previous = pages.readers.linksIn;
