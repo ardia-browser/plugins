@@ -74,10 +74,114 @@ export function maskTokenQueries(text: string): string {
   return out + text.slice(copied);
 }
 
-export function redact(text: string): string {
+function replaceSecrets(text: string, longestFirst: readonly string[]): string {
   let out = text;
-  for (const secret of ordered) if (out.includes(secret)) out = out.replaceAll(secret, MASK);
-  return maskTokenQueries(out);
+  for (const secret of longestFirst) if (out.includes(secret)) out = out.replaceAll(secret, MASK);
+  return out;
+}
+
+function parsesAsJson(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed === "" || !'{["'.includes(trimmed[0] as string)) return false;
+  try {
+    JSON.parse(trimmed);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const MAX_NESTING = 8;
+const SHORT_ESCAPES: Record<string, string> = { '"': '"', "\\": "\\", "/": "/", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t" };
+
+function decodedLiteral(raw: string): { value: string; starts: number[] } {
+  let value = "";
+  const starts: number[] = [];
+  let at = 1;
+  while (at < raw.length - 1) {
+    starts.push(at);
+    if (raw[at] === "\\") {
+      const kind = raw[at + 1] as string;
+      if (kind === "u") {
+        value += String.fromCharCode(Number.parseInt(raw.slice(at + 2, at + 6), 16));
+        at += 6;
+      } else {
+        value += SHORT_ESCAPES[kind] ?? kind;
+        at += 2;
+      }
+    } else {
+      value += raw[at];
+      at += 1;
+    }
+  }
+  starts.push(raw.length - 1);
+  return { value, starts };
+}
+
+function secretSpans(value: string, longestFirst: readonly string[]): [number, number][] {
+  const spans: [number, number][] = [];
+  for (const secret of longestFirst) {
+    for (let at = value.indexOf(secret); at >= 0; at = value.indexOf(secret, at + 1)) {
+      const end = at + secret.length;
+      if (spans.every(([start, stop]) => end <= start || at >= stop)) spans.push([at, end]);
+    }
+  }
+  return spans.sort((a, b) => a[0] - b[0]);
+}
+
+function unicodeEscape(unit: string): string {
+  return `\\u${unit.charCodeAt(0).toString(16).padStart(4, "0")}`;
+}
+
+function encodedLike(raw: string, value: string): string {
+  const encoded = JSON.stringify(value);
+  return /^[\x00-\x7f]*$/u.test(raw) ? encoded.replaceAll(/[^\x00-\x7e]/g, unicodeEscape) : encoded.replaceAll(/[\x7f-\x9f]/g, unicodeEscape);
+}
+
+function maskedLiteral(raw: string, longestFirst: readonly string[], depth: number): string {
+  const { value, starts } = decodedLiteral(raw);
+  if (depth < MAX_NESTING && parsesAsJson(value)) {
+    const inner = maskJsonStrings(value, longestFirst, depth + 1);
+    return inner === value ? raw : encodedLike(raw, inner);
+  }
+  const spans = secretSpans(value, longestFirst);
+  if (spans.length === 0) return raw;
+  let out = "";
+  let copied = 0;
+  for (const [start, end] of spans) {
+    out += raw.slice(copied, starts[start]) + MASK;
+    copied = starts[end] as number;
+  }
+  return out + raw.slice(copied);
+}
+
+function maskJsonStrings(text: string, longestFirst: readonly string[], depth = 0): string {
+  let out = "";
+  let copied = 0;
+  for (let at = text.indexOf('"'); at >= 0; at = text.indexOf('"', at)) {
+    let end = at + 1;
+    while (end < text.length && text[end] !== '"') end += text[end] === "\\" ? 2 : 1;
+    if (end >= text.length) return replaceSecrets(text, longestFirst);
+    out += text.slice(copied, at) + maskedLiteral(text.slice(at, end + 1), longestFirst, depth);
+    copied = end + 1;
+    at = end + 1;
+  }
+  return out + text.slice(copied);
+}
+
+function maskSecrets(text: string, longestFirst: readonly string[]): string {
+  if (longestFirst.length === 0) return text;
+  if (!text.includes("\\") && !longestFirst.some((secret) => text.includes(secret))) return text;
+  if (parsesAsJson(text)) return maskJsonStrings(text, longestFirst);
+  if (!text.includes("\n")) return replaceSecrets(text, longestFirst);
+  return text
+    .split(/(?<=\n)/u)
+    .map((line) => (parsesAsJson(line) ? maskJsonStrings(line, longestFirst) : replaceSecrets(line, longestFirst)))
+    .join("");
+}
+
+export function redact(text: string): string {
+  return maskTokenQueries(maskSecrets(text, ordered));
 }
 
 export class Secrets {
@@ -93,10 +197,8 @@ export class Secrets {
   }
 
   redact(text: string): string {
-    const ordered = [...this.held].sort((a, b) => codePoints(b).length - codePoints(a).length);
-    let out = text;
-    for (const secret of ordered) out = out.replaceAll(secret, MASK);
-    return maskTokenQueries(out);
+    const longestFirst = [...this.held].sort((a, b) => codePoints(b).length - codePoints(a).length);
+    return maskTokenQueries(maskSecrets(text, longestFirst));
   }
 }
 
