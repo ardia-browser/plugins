@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "bun:test";
-import { ACTIVE_FOR, HOLD_SECONDS, heldAppTabs, MAX_HELD, RENEW_EVERY, recentlyUsed, TabHolds } from "../src/browse/daemon/holds.ts";
+import { ACTIVE_FOR, HOLD_SECONDS, heldAppTabs, keepRunningCommandsTargets, MAP_RETRY, MAX_HELD, RENEW_EVERY, recentlyUsed, shouldScan, TabHolds } from "../src/browse/daemon/holds.ts";
 import { ControlRefused } from "../src/browse/state/apptabs.ts";
 
 type Call = [string, Record<string, unknown>];
@@ -116,4 +116,27 @@ test("when Ardia has no room for another session, the daemon says so and asks ag
   await holds.tick(["tab-c"], RENEW_EVERY);
   assert.equal(calls.length, 2);
   assert.deepEqual(holds.holding, []);
+});
+
+test("a tab a still-running command used stays recent however long the command runs, and goes stale once it ends", () => {
+  const used = new Map<string, number>([["evaluating", 10], ["earlier", 5]]);
+  keepRunningCommandsTargets(used, [10], 10 + ACTIVE_FOR + 100);
+  assert.deepEqual(recentlyUsed(used, 10 + ACTIVE_FOR + 100), ["evaluating"]);
+  keepRunningCommandsTargets(used, [], 10 + 2 * ACTIVE_FOR + 200);
+  assert.deepEqual(recentlyUsed(used, 10 + 2 * ACTIVE_FOR + 200), []);
+});
+
+test("Ardia's windows are read at most every few seconds for new tabs, and once a minute for tabs that stay unmapped", () => {
+  const used = new Map<string, number>([["new", 100], ["stuck", 10]]);
+  assert.equal(shouldScan([], used, 0, 100), false);
+  assert.equal(shouldScan(["new"], used, 99, 100), false, "not twice within the retry window");
+  assert.equal(shouldScan(["new"], used, 99 - MAP_RETRY, 100), true, "a tab used since the last read is looked up soon");
+  assert.equal(shouldScan(["stuck"], used, 20, 20 + MAP_RETRY + 1), false, "a tab still unmapped after a read waits");
+  assert.equal(shouldScan(["stuck"], used, 20, 20 + RENEW_EVERY), true);
+});
+
+test("the tabs Ardia answered as gone are reported, so the daemon stops asking for them", async () => {
+  const { holds } = recorder(() => ({ held: ["tab-a"], gone: ["tab-closed"] }));
+  await holds.tick(["tab-a", "tab-closed"], 0);
+  assert.deepEqual(holds.gone, ["tab-closed"]);
 });

@@ -16,6 +16,17 @@ export function recentlyUsed(usedAt: ReadonlyMap<string, number>, now: number): 
     .map(([tab]) => tab);
 }
 
+export function keepRunningCommandsTargets(usedAt: Map<string, number>, runningSince: readonly number[], now: number): void {
+  if (runningSince.length === 0) return;
+  const oldest = Math.min(...runningSince);
+  for (const [target, at] of usedAt) if (at >= oldest) usedAt.set(target, now);
+}
+
+export function shouldScan(unmapped: readonly string[], usedAt: ReadonlyMap<string, number>, scannedAt: number, now: number): boolean {
+  if (unmapped.length === 0 || now - scannedAt < MAP_RETRY) return false;
+  return now - scannedAt >= RENEW_EVERY || unmapped.some((target) => (usedAt.get(target) ?? Number.NEGATIVE_INFINITY) > scannedAt);
+}
+
 export function heldAppTabs(recent: readonly string[], live: (target: string) => boolean, appTab: (target: string) => string | undefined): string[] {
   const tabs: string[] = [];
   for (const target of recent) {
@@ -30,6 +41,7 @@ const REFUSED = Symbol("refused");
 
 export class TabHolds {
   private held: string[] = [];
+  private goneLast: string[] = [];
   private asked: string[] = [];
   private mayHold = false;
   private renewedAt = Number.NEGATIVE_INFINITY;
@@ -46,6 +58,10 @@ export class TabHolds {
 
   get holding(): readonly string[] {
     return this.held;
+  }
+
+  get gone(): readonly string[] {
+    return this.goneLast;
   }
 
   tick(wanted: readonly string[], now: number): Promise<void> {
@@ -78,6 +94,8 @@ export class TabHolds {
     }
     if (reply === null) return;
     const held = (reply as { held?: unknown }).held;
+    const gone = (reply as { gone?: unknown }).gone;
+    this.goneLast = Array.isArray(gone) ? gone.filter((tab): tab is string => typeof tab === "string") : [];
     this.held = Array.isArray(held) ? held.filter((tab): tab is string => typeof tab === "string") : want;
     this.asked = want;
     this.renewedAt = now;

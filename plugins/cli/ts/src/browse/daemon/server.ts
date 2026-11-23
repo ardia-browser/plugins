@@ -29,7 +29,7 @@ import { dispatch, hooks } from "../commands/all.ts";
 import { Ctx } from "../commands/ctx.ts";
 import { State } from "../state/state.ts";
 import { appCall, appTabMap } from "../state/apptabs.ts";
-import { heldAppTabs, MAP_RETRY, recentlyUsed, TabHolds } from "./holds.ts";
+import { heldAppTabs, keepRunningCommandsTargets, recentlyUsed, shouldScan, TabHolds } from "./holds.ts";
 import { reportException } from "../../telemetry.ts";
 import { buildStamp, cliVersion } from "../../version.ts";
 
@@ -78,11 +78,11 @@ export class Daemon {
   last = monotonic();
   stopping = false;
   private holdsOf: TabHolds | null = null;
-  private readonly mapTriedAt = new Map<string, number>();
+  private scannedAt = Number.NEGATIVE_INFINITY;
   closing = 0;
   running: Running | null = null;
   closeAfterBatch = false;
-  readonly active = new Set<{ done: Promise<unknown>; stop: AbortController }>();
+  readonly active = new Set<{ done: Promise<unknown>; stop: AbortController; startedAt: number }>();
   sockId: SocketId | null = null;
   readonly idleLimit: number;
   connectedIdle = CONNECTED_IDLE;
@@ -384,17 +384,20 @@ export class Daemon {
   private async renewHolds(): Promise<void> {
     if (this.stopping) return;
     const now = monotonic();
+    keepRunningCommandsTargets(this.state.usedAt, [...this.active].map((task) => task.startedAt), now);
     const recent = recentlyUsed(this.state.usedAt, now);
     for (const target of this.state.usedAt.keys()) if (!recent.includes(target)) this.state.usedAt.delete(target);
-    for (const target of this.mapTriedAt.keys()) if (!recent.includes(target)) this.mapTriedAt.delete(target);
     const live = (target: string) => this.state.targetInfos.has(target);
-    const unmapped = recent.filter((target) => live(target) && !this.state.appTabs.has(target) && now - (this.mapTriedAt.get(target) ?? Number.NEGATIVE_INFINITY) >= MAP_RETRY);
-    if (unmapped.length > 0 && this.state.connected) {
-      for (const target of unmapped) this.mapTriedAt.set(target, now);
+    const unmapped = recent.filter((target) => live(target) && !this.state.appTabs.has(target));
+    if (this.state.connected && shouldScan(unmapped, this.state.usedAt, this.scannedAt, now)) {
+      this.scannedAt = now;
       await appTabMap(this.state).catch(() => undefined);
     }
     await this.holds.tick(heldAppTabs(recent, live, (target) => this.state.appTabs.get(target)), now);
+    const gone = new Set(this.holds.gone);
+    for (const [target, app] of this.state.appTabs) if (gone.has(app)) this.state.usedAt.delete(target);
   }
+
 
 
 
@@ -424,7 +427,7 @@ export class Daemon {
           return this.execute(request);
         }),
       );
-      const task = { done: execute.catch(() => undefined), stop };
+      const task = { done: execute.catch(() => undefined), stop, startedAt: monotonic() };
       this.active.add(task);
       task.done.finally(() => this.active.delete(task));
       const outcome = await Promise.race([execute.then((answer) => ({ answer }), (error: unknown) => ({ error })), reading.gone.then(() => ({ gone: true }))]);
