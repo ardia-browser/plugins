@@ -1,7 +1,7 @@
 {
   "repository": "https://github.com/ardia-browser/ardia",
   "path": "packages/plugin-sdk/src",
-  "commit": "e82c39dbfa8d350b34203167541ee9066ec6088d",
+  "commit": "e2f530e01885931571e7cacfceeecde25eeb0936",
   "sha256": {
     "api.ts": "8178d054adec1dd75a60f06800d6b6260167ff746afeb3f5780f866019a22f8e",
     "componentProps.ts": "aceaf3b68a6e950a959bb4758c4cb4cb87fdf5053a6f2b0f3762d1f8cbd66604",
@@ -22,7 +22,7 @@
     "credentialRuntime.ts": "bfe9168a618032f4e61093c797df4bad75ec345ab63b59541beef3039c72d6c5",
     "credentialSignInManifest.ts": "04d7063bd7c8e5188d58d8fc52492dc83cb1c98030f7d25533d7ab99a29d955d",
     "credentialTesting.ts": "c1805bdd3b41dac0dc1643fed34e0d285b8d72a5fb51337db270f1a7b20cdfea",
-    "credentialTypes.ts": "258e7692ab9018eed2b4a8952bf801664e9f7744fd1446eb150a9b0eb7f761c6",
+    "credentialTypes.ts": "f9a6b9f35ba2adca0e0f0d6ba60a64451d6202ef5c05aa7acd632191defc0c01",
     "credentialVerbManifest.ts": "1b9ca51264dc9f7e154a3354e4afb7ce544dc70123807eceefa5076ac5c2aa85",
     "credentials.ts": "d558101d25a80bc2f78f56c9b1ec77988f971963846eed44cdd542a8921b3bf9",
     "deniedCommands.ts": "b2262ea724e1d36553a56ca4221fcc6f2f8337218b3581a1cf1e5429e6e08a25",
