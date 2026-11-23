@@ -95,7 +95,7 @@ class StaleWorld extends BrowseError {
 
 const FRAMES_FRESH = 0.75;
 const SHOWN_FRESH = 0.25;
-const FRAME_EVENTS = new Set(["Page.frameNavigated", "Page.navigatedWithinDocument", "Page.frameDetached", "Target.attachedToTarget", "Target.detachedFromTarget", "Inspector.targetCrashed", "Inspector.targetReloadedAfterCrash"]);
+const FRAME_EVENTS = new Set(["Page.frameAttached", "Page.frameNavigated", "Page.navigatedWithinDocument", "Page.frameDetached", "Target.attachedToTarget", "Target.detachedFromTarget", "Inspector.targetCrashed", "Inspector.targetReloadedAfterCrash"]);
 
 function frameOf(frame: Json, parent: string | null): Frame {
   return {
@@ -670,7 +670,7 @@ export class Page {
   }
 
   async hidden(): Promise<boolean> {
-    if (monotonic() - this.shownAt < SHOWN_FRESH) return false;
+    if (this.shownAt > 0 && monotonic() - this.shownAt < SHOWN_FRESH) return false;
     try {
       return Boolean(await this.call("() => document.visibilityState === 'hidden'", [], { frame: this.mainFrame, read: true }));
     } catch (error) {

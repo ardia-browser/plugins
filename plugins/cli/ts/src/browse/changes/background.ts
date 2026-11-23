@@ -1,3 +1,5 @@
+import { baseDomain, hostOf } from "../flows/flowlog.ts";
+
 export const BACKGROUND_TYPES = new Set([
   "Ping", "CSPViolationReport", "Image", "Media", "Font", "Prefetch", "Manifest", "TextTrack", "SignedExchange", "FedCM", "EventSource", "WebSocket",
 ]);
@@ -34,15 +36,21 @@ function parts(url: string): [string, string] | null {
   return [host, path];
 }
 
-export function backgroundPath(url: string, method = "GET"): boolean {
+export function backgroundPath(url: string, method = "GET", type = "Other"): boolean {
   const path = parts(url)?.[1];
   if (path === undefined) return false;
   const trimmed = path.length > 1 ? path.replace(/\/+$/u, "") : path;
-  return PATHS.has(trimmed.toLowerCase()) || (method === "GET" && ICON.test(trimmed));
+  return PATHS.has(trimmed.toLowerCase()) || (method === "GET" && (type === "Other" || type === "Image") && ICON.test(trimmed));
 }
 
-export function backgroundHost(url: string): boolean {
+function sameSite(host: string, pageUrl: string): boolean {
+  const page = hostOf(pageUrl);
+  return Boolean(page) && baseDomain(page) === baseDomain(host);
+}
+
+export function backgroundHost(url: string, pageUrl = ""): boolean {
   let at = parts(url)?.[0] ?? null;
+  if (at && pageUrl && sameSite(at, pageUrl)) return false;
   while (at) {
     if (HOSTS.has(at)) return true;
     const dot = at.indexOf(".");
@@ -52,10 +60,10 @@ export function backgroundHost(url: string): boolean {
   return false;
 }
 
-export function knownCollector(url: string, method = "GET"): boolean {
-  return backgroundHost(url) || backgroundPath(url, method.toUpperCase());
+export function knownCollector(url: string, method = "GET", pageUrl = ""): boolean {
+  return backgroundHost(url, pageUrl) || backgroundPath(url, method.toUpperCase(), "Fetch");
 }
 
-export function background(type: string, url: string, method = "GET"): boolean {
-  return BACKGROUND_TYPES.has(type) || backgroundHost(url) || backgroundPath(url, method.toUpperCase());
+export function background(type: string, url: string, method = "GET", pageUrl = ""): boolean {
+  return BACKGROUND_TYPES.has(type) || backgroundHost(url, pageUrl) || backgroundPath(url, method.toUpperCase(), type);
 }

@@ -134,8 +134,8 @@ export class NetworkWatch {
         const wasBackground = entry.background;
         const hop = String(request["url"] || "");
         const hopMethod = String(request["method"] || entry.method);
-        entry.background = background(String(params["type"] || entry.type), hop, hopMethod);
-        if (!entry.listed && !READ_METHODS.has(hopMethod.toUpperCase()) && !knownCollector(hop, hopMethod)) {
+        entry.background = background(String(params["type"] || entry.type), hop, hopMethod, this.page.url);
+        if (!entry.listed && !READ_METHODS.has(hopMethod.toUpperCase()) && !knownCollector(hop, hopMethod, this.page.url)) {
           entry.listed = true;
           entry.wrote = { method: hopMethod.toUpperCase(), url: cleanUrl(hop) };
         }
@@ -153,8 +153,8 @@ export class NetworkWatch {
           type,
           statuses: [],
           done: false,
-          background: background(type, raw, String(request["method"] || "GET")),
-          listed: !READ_METHODS.has(String(request["method"] || "GET").toUpperCase()) && !knownCollector(raw, String(request["method"] || "GET")),
+          background: background(type, raw, String(request["method"] || "GET"), this.page.url),
+          listed: !READ_METHODS.has(String(request["method"] || "GET").toUpperCase()) && !knownCollector(raw, String(request["method"] || "GET"), this.page.url),
         };
         this.records.set(requestId, entry);
         this.order.push(requestId);
@@ -378,7 +378,7 @@ function errorView(page: Page): View {
   return { target: page.targetId, loader: "", url: page.url, title: "", entries: [], containers: new Set() };
 }
 
-type Seen = { page: Page; view: View; frame: string; loader: string | null; navigations: number };
+export type Seen = { page: Page; view: View; frame: string; loader: string | null; navigations: number };
 type Group = { page: Page; session: string | null; before: View | null; watch: NetworkWatch; navigations: number };
 
 export class BatchObserve {
@@ -415,10 +415,11 @@ export function deferring(state: State): boolean {
   return Boolean(batches.get(state)?.defer);
 }
 
-function reusable(state: State, page: Page, seen: Seen | null): View | null {
+export function reusable(state: State, page: Page, seen: Seen | null): View | null {
   if (seen === null || seen.page !== page || seen.navigations !== page.navigations) return null;
   const frame = viewFrame(state, page);
-  return frame === seen.frame && page.loader(frame) === seen.loader ? seen.view : null;
+  const loader = page.loader(frame);
+  return frame === seen.frame && loader === seen.loader && (loader || "") === seen.view.loader ? seen.view : null;
 }
 
 async function viewBefore(state: State, page: Page): Promise<View | null> {

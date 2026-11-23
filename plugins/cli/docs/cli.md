@@ -745,7 +745,8 @@ POST http://127.0.0.1:8792/api/events → 200
   the action navigated, at most 1.5 s; past that it says the page was still busy. Background requests neither hold it
   up nor restart the quiet window: pings and beacons, CSP reports, images, media, fonts, prefetches,
   manifests, event streams and WebSockets, requests to known analytics, tag-manager, ad and video-QoS hosts
-  (`browse/changes/background.ts`), favicon `GET`s, and Google Analytics' and Cloudflare's collector paths on any host
+  (`browse/changes/background.ts`) from a page on another site (on the vendor's own site they are its app's
+  traffic), favicon `GET`s, and Google Analytics' and Cloudflare's collector paths on any host
   (`/g/collect`, `/j/collect`, `/r/collect`, `/cdn-cgi/rum`); a redirect is judged again by where it goes, and a
   redirect of a request that began before the action isn't the action's. Documents, scripts, stylesheets, fetches and
   XHRs to anything else are still waited for (`settle_ignored_background` marks a settle that passed some by), and

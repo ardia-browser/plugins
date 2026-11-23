@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { background } from "../src/browse/changes/background.ts";
-import { NetworkWatch } from "../src/browse/changes/observe.ts";
-import type { Page } from "../src/browse/state/page.ts";
+import { NetworkWatch, reusable } from "../src/browse/changes/observe.ts";
+import type { View } from "../src/browse/changes/report.ts";
+import { Page } from "../src/browse/state/page.ts";
+import type { State } from "../src/browse/state/state.ts";
 
 const CASES: [string, string, boolean][] = [
   ["Fetch", "https://www.google-analytics.com/g/collect?v=2", true],
@@ -206,5 +208,40 @@ describe("review round 3", () => {
     expect(await watch.settleLine(0)).toBe(true);
     expect(performance.now() - started).toBeGreaterThan(50);
     await watch.stop();
+  });
+});
+
+describe("review: CodeRabbit on #92", () => {
+  test("a vendor's own app traffic is waited for and listed; its collector seen from another site isn't", async () => {
+    expect(background("Fetch", "https://api.mixpanel.com/projects/1", "POST", "https://app.mixpanel.com/home")).toBe(false);
+    expect(background("Fetch", "https://api.mixpanel.com/track", "POST", "https://shop.example/")).toBe(true);
+    const page = { state: { listeners: [] as unknown[] }, networkOn: true, networkWatched: false, url: "https://app.mixpanel.com/home" } as unknown as Page;
+    const watch = new NetworkWatch(page);
+    await watch.start();
+    sent(watch, page, "1", "Fetch", "https://api.mixpanel.com/projects/1", "POST");
+    expect(watch.busy()).toBe(true);
+    expect(watch.writes().map((write) => write.url)).toEqual(["https://api.mixpanel.com/projects/1"]);
+    await watch.stop();
+  });
+
+  test("a script named like a favicon is waited for", () => {
+    expect(background("Script", "https://shop.example/favicon-loader.js")).toBe(false);
+    expect(background("Other", "https://shop.example/favicon.ico")).toBe(true);
+  });
+
+  test("a batch never reuses a view whose own document isn't the frame's current one", () => {
+    const state = { frameFor: () => null } as unknown as State;
+    const page = { mainFrame: "F", navigations: 2, loader: () => "L2" } as unknown as Page;
+    const stale = { loader: "L1" } as unknown as View;
+    const fresh = { loader: "L2" } as unknown as View;
+    expect(reusable(state, page, { page, view: stale, frame: "F", loader: "L2", navigations: 2 })).toBeNull();
+    expect(reusable(state, page, { page, view: fresh, frame: "F", loader: "L2", navigations: 2 })).toBe(fresh);
+  });
+
+  test("an attached frame expires the cached frame tree", () => {
+    const page = Object.create(Page.prototype) as Page;
+    Object.assign(page, { framesFreshUntil: Number.MAX_SAFE_INTEGER, frameEvents: 0, state: { onPageEvent: () => {} } });
+    page.onEvent("Page.frameAttached", { frameId: "child", parentFrameId: "F" });
+    expect((page as unknown as { framesFreshUntil: number }).framesFreshUntil).toBe(0);
   });
 });

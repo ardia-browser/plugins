@@ -656,9 +656,10 @@ export async function click(page: Page, element: Element, humanize: boolean, cou
   let y: number;
   let primed: Counts | null;
   try {
+    const loader = page.loader(element.frame);
     let facts: Record<string, unknown>;
     [x, y, facts] = await targetPoint(page, element, humanize, true, true);
-    primed = (facts["counts"] as Counts | null | undefined) ?? null;
+    primed = page.loader(element.frame) === loader ? ((facts["counts"] as Counts | null | undefined) ?? null) : null;
   } catch (error) {
     if (!(error instanceof BrowseError)) throw error;
     if (error.code === "not_visible") {
