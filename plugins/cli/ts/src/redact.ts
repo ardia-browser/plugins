@@ -174,44 +174,36 @@ function maskedLeaves(text: string, nodes: readonly JsonNode[], longestFirst: re
   return out + text.slice(copied);
 }
 
-function lastStartingBy(nodes: readonly JsonNode[], at: number): number {
-  let low = 0;
-  let high = nodes.length - 1;
-  let found = -1;
-  while (low <= high) {
-    const middle = (low + high) >> 1;
-    if ((nodes[middle] as JsonNode).start <= at) {
-      found = middle;
-      low = middle + 1;
-    } else high = middle - 1;
-  }
-  return found;
-}
-
 function widened(text: string, nodes: readonly JsonNode[], longestFirst: readonly string[]): string | null {
-  const targets = new Set<number>();
+  const matches: [number, number][] = [];
   for (const secret of longestFirst) {
-    for (let at = text.indexOf(secret); at >= 0; at = text.indexOf(secret, at + 1)) {
-      const end = at + secret.length;
-      let index = lastStartingBy(nodes, at);
-      const leaf = nodes[index];
-      if (leaf && leaf.kind === Kind.Keyword && leaf.start <= at && end <= leaf.end) continue;
-      if (leaf && leaf.kind === Kind.Text && leaf.start < at && end < leaf.end) continue;
-      while (index >= 0 && !((nodes[index] as JsonNode).start <= at && end <= (nodes[index] as JsonNode).end)) index = (nodes[index] as JsonNode).parent;
-      if (index < 0) return null;
-      targets.add(index);
-    }
+    for (let at = text.indexOf(secret); at >= 0; at = text.indexOf(secret, at + 1)) matches.push([at, at + secret.length]);
   }
-  if (targets.size === 0) return text;
-  const outermost = [...targets].filter((index) => {
-    for (let up = (nodes[index] as JsonNode).parent; up >= 0; up = (nodes[up] as JsonNode).parent) if (targets.has(up)) return false;
-    return true;
-  });
-  outermost.sort((a, b) => (nodes[a] as JsonNode).start - (nodes[b] as JsonNode).start);
+  matches.sort((x, y) => x[0] - y[0] || y[1] - x[1]);
+  const open: number[] = [];
+  const targets: number[] = [];
+  let next = 0;
+  for (const [at, end] of matches) {
+    while (next < nodes.length && (nodes[next] as JsonNode).start <= at) {
+      while (open.length && (nodes[open[open.length - 1] as number] as JsonNode).end <= (nodes[next] as JsonNode).start) open.pop();
+      open.push(next);
+      next += 1;
+    }
+    while (open.length && (nodes[open[open.length - 1] as number] as JsonNode).end <= at) open.pop();
+    const inner = open.length ? (nodes[open[open.length - 1] as number] as JsonNode) : undefined;
+    if (inner && inner.kind === Kind.Keyword && end <= inner.end) continue;
+    if (inner && inner.kind === Kind.Text && inner.start < at && end < inner.end) continue;
+    let depth = open.length - 1;
+    while (depth >= 0 && (nodes[open[depth] as number] as JsonNode).end < end) depth -= 1;
+    if (depth < 0) return null;
+    targets.push(open[depth] as number);
+  }
+  if (targets.length === 0) return text;
+  const spans = [...new Set(targets)].map((index) => nodes[index] as JsonNode).sort((x, y) => x.start - y.start || y.end - x.end);
   let out = "";
   let copied = 0;
-  for (const index of outermost) {
-    const node = nodes[index] as JsonNode;
+  for (const node of spans) {
+    if (node.start < copied) continue;
     out += text.slice(copied, node.start) + QUOTED_MASK;
     copied = node.end;
   }
@@ -221,7 +213,18 @@ function widened(text: string, nodes: readonly JsonNode[], longestFirst: readonl
 function maskedDocument(whole: string, longestFirst: readonly string[]): string {
   const lead = whole.length - whole.trimStart().length;
   const core = whole.trim();
-  return whole.slice(0, lead) + maskedCore(core, longestFirst) + whole.slice(lead + core.length);
+  const before = whole.slice(0, lead);
+  const after = whole.slice(lead + core.length);
+  const out = before + maskedCore(core, longestFirst) + after;
+  const straddles = longestFirst.some((secret) => {
+    for (let at = out.indexOf(secret); at >= 0; at = out.indexOf(secret, at + 1)) {
+      const end = at + secret.length;
+      const coreEnd = out.length - after.length;
+      if ((at < before.length && end > before.length) || (at < coreEnd && end > coreEnd)) return true;
+    }
+    return false;
+  });
+  return straddles ? before + QUOTED_MASK + after : out;
 }
 
 function maskedCore(text: string, longestFirst: readonly string[]): string {
@@ -287,7 +290,36 @@ function maskSecrets(text: string, longestFirst: readonly string[]): string {
     plain = "";
   }
   out += replaceSecrets(plain, longestFirst);
-  return longestFirst.some((secret) => secret.includes("\n") && out.includes(secret)) ? replaceSecrets(text, longestFirst) : out;
+  return maskedAcrossLines(out, longestFirst);
+}
+
+function maskedAcrossLines(text: string, longestFirst: readonly string[]): string {
+  const spanning = longestFirst.filter((secret) => secret.includes("\n") && secret.trim() !== "");
+  let out = text;
+  for (let round = 0; round <= out.length; round += 1) {
+    let found = -1;
+    let size = 0;
+    for (const secret of spanning) {
+      const at = out.indexOf(secret);
+      if (at >= 0 && (found < 0 || at < found)) {
+        found = at;
+        size = secret.length;
+      }
+    }
+    if (found < 0) return out;
+    const first = out.lastIndexOf("\n", found - 1) + 1;
+    const last = out.indexOf("\n", found + size - 1);
+    const stop = last < 0 ? out.length : last;
+    const lines = out.slice(first, stop).split("\n").map((line) => {
+      const body = line.replace(/\r$/u, "");
+      const masked = body.trim() === "" ? body : parsesAsJson(body) ? QUOTED_MASK : MASK;
+      return masked + line.slice(body.length);
+    });
+    const replaced = out.slice(0, first) + lines.join("\n") + out.slice(stop);
+    if (replaced === out) return out;
+    out = replaced;
+  }
+  return out;
 }
 
 export function redact(text: string): string {

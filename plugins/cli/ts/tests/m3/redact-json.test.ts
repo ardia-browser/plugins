@@ -299,3 +299,29 @@ describe("JSON-aware masking round 3 (Codex r3 on #79)", () => {
     expect(performance.now() - started).toBeLessThan(2000);
   });
 });
+
+describe("JSON-aware masking round 4 (Codex r4 on #79)", () => {
+  function masked(secrets: string[], text: string): string {
+    const held = new Secrets();
+    for (const secret of secrets) held.add(secret);
+    return held.redact(text);
+  }
+
+  test("a secret spanning a document's leading whitespace and its content masks the document", () => {
+    const out = masked([' {"credential":7}'], ' {"credential":7}');
+    expect(out).toBe(' "***"');
+  });
+
+  test("a secret across JSON lines masks just those lines and keeps the others' masks", () => {
+    const out = masked(["}\n{", "sample-secret"], '{"a":1}\n{"b":2}\n {"v":"\\u0073ample-secret"}\n');
+    const records = out.split("\n").filter((line) => line.trim()).map((line) => JSON.parse(line));
+    expect(records).toEqual(["***", "***", { v: "***" }]);
+  });
+
+  test("closing delimiters in deep nesting mask in linear time", () => {
+    const deep = `${"[".repeat(40_000)}0${"]".repeat(40_000)}`;
+    const started = performance.now();
+    expect(masked(["]"], deep)).toBe('"***"');
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+});
