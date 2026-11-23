@@ -7,7 +7,7 @@ import { sleep } from "../cdp/cancel.ts";
 import { BrowseError, Usage } from "../daemon-errors.ts";
 import { pyValue, Result } from "../daemon/render.ts";
 import { MAX_GIVEN, plainNumber } from "../limits.ts";
-import { parseRef } from "../state/refs.ts";
+import { isBareRef, parseRef } from "../state/refs.ts";
 import type { Element, Page } from "../state/page.ts";
 import { waitUntil } from "../state/wait.ts";
 import { waitDownload } from "./act.ts";
@@ -91,7 +91,7 @@ async function selectorState(ctx: Ctx, page: Page, selector: string, wanted: str
   const ref = parseRef(selector);
   let found: [Page, Element];
   try {
-    found = ref ? await ctx.state.resolveRef(ref) : await ctx.state.locate(selector, page);
+    found = ref && !isBareRef(selector) ? await ctx.state.resolveRef(ref) : await ctx.state.locate(selector, page);
   } catch (error) {
     if (error instanceof BrowseError && (error.code === "not_found" || error.code === "stale_ref")) return wanted === "hidden" || wanted === "detached";
     throw error;

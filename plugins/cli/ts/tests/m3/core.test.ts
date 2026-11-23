@@ -342,11 +342,35 @@ describe("the active tab (plugins#11's probe rules)", () => {
 });
 
 describe("refs", () => {
-  test("parseRef takes @eN, ref=eN and [ref=eN] only", () => {
+  test("parseRef takes @eN, ref=eN, [ref=eN] and a bare eN (plugins#114)", () => {
     expect(parseRef("@e12")).toBe("e12");
     expect(parseRef("ref=e3")).toBe("e3");
     expect(parseRef("[ref=e7]")).toBe("e7");
-    for (const text of ["@e", "e1", "@x1", "@e1a", "[ref=e1", "ref=e", "@e١"]) expect(parseRef(text)).toBeNull();
+    expect(parseRef("e92")).toBe("e92");
+    for (const text of ["@e", "e", "@x1", "@e1a", "[ref=e1", "ref=e", "@e١", "e1a", "E1", "e-1", "em", "#e3", ".e3", "e 1", "e١"]) expect(parseRef(text)).toBeNull();
+  });
+
+  test("a bare eN no snapshot gave fails at once with the @eN hint; @eN keeps its message (plugins#114)", async () => {
+    const browser = new FakeBrowser();
+    const state = stateWith(browser);
+    await state.page("TARGET");
+    const started = performance.now();
+    await expect(state.locate("e92", null, 3)).rejects.toMatchObject({ code: "unknown_ref", text: expect.stringContaining("use an @eN ref from the latest `ardia browse snapshot -i`") });
+    expect(performance.now() - started).toBeLessThan(500);
+    await expect(state.locate("@e92", null, 3)).rejects.toMatchObject({ code: "unknown_ref", text: "Unknown ref: e92" });
+  });
+
+  test("a bare eN a snapshot gave resolves like @eN (plugins#114)", async () => {
+    const browser = new FakeBrowser();
+    const state = stateWith(browser);
+    const page = await state.page("TARGET");
+    const element = new Element(MAIN, "OBJ", 5, "x");
+    const id = state.addRef(page, element, "button", "Go");
+    state.setRefs([state.refs.get(id) as never], "snap", page);
+    const outcome = (selector: string) => state.locate(selector).then(() => "found", (error: { code?: string; text?: string }) => `${error.code}: ${error.text}`);
+    const bare = await outcome(id);
+    expect(bare).toBe(await outcome(`@${id}`));
+    expect(bare).not.toContain("Element not found");
   });
 
   test("refs are never reused, and a navigation turns them stale", async () => {

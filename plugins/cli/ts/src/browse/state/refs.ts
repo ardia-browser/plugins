@@ -49,7 +49,12 @@ export function parseRef(selector: string): string | null {
   if (selector.startsWith("@") && selector.slice(1, 2) === "e" && digits(selector.slice(2))) return selector.slice(1);
   if (selector.startsWith("ref=") && selector.slice(4, 5) === "e" && digits(selector.slice(5))) return selector.slice(4);
   if (selector.startsWith("[ref=") && selector.endsWith("]") && selector.slice(5, 6) === "e" && digits(selector.slice(6, -1))) return selector.slice(5, -1);
+  if (isBareRef(selector)) return selector;
   return null;
+}
+
+export function isBareRef(selector: string): boolean {
+  return selector.slice(0, 1) === "e" && digits(selector.slice(1));
 }
 
 export abstract class Refs {

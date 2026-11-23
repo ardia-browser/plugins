@@ -13,7 +13,7 @@ import { APP_TAB, appTabError, appTabTarget } from "./apptabs.ts";
 import { detachedError, type Element, Page, quiet, WORLD_NAME } from "./page.ts";
 import * as pierce from "./pierce.ts";
 import { type Json, record } from "./records.ts";
-import { parseRef, Refs } from "./refs.ts";
+import { isBareRef, parseRef, Refs } from "./refs.ts";
 import { Registry } from "./registry.ts";
 import * as temptabs from "./temptabs.ts";
 import { monotonic } from "./wait.ts";
@@ -699,9 +699,22 @@ export class State extends Refs implements temptabs.TempTabState {
     return frame ?? null;
   }
 
+  async resolveBareRef(ref: string): Promise<[Page, Element]> {
+    try {
+      return await this.resolveRef(ref);
+    } catch (error) {
+      if (!(error instanceof BrowseError) || error.code !== "unknown_ref") throw error;
+      throw new BrowseError(
+        `Unknown ref: ${ref}. A bare ${ref} is read as the ref @${ref}, and no snapshot in this session gave it; use an @eN ref from the latest \`ardia browse snapshot -i\``,
+        null,
+        "unknown_ref",
+      );
+    }
+  }
+
   async locate(selector: string, page: Page | null = null, wait = 0): Promise<[Page, Element]> {
     const ref = parseRef(selector);
-    if (ref) return this.resolveRef(ref);
+    if (ref) return isBareRef(selector) ? this.resolveBareRef(ref) : this.resolveRef(ref);
     const here = page ?? (await this.page());
     if (NTH_SUFFIX.test(selector)) flag("selector_nth", true);
     const deadline = monotonic() + wait;

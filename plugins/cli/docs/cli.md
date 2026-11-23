@@ -352,7 +352,7 @@ is the only one now; both sit in the same frame; and both have the same chain of
 in `snapshot.py`: dialog, row, form, region names, the page title left out). So a row's "Delete" that had siblings,
 or a dialog reopened for another item, never resolves to the wrong element. Otherwise the error names the new ref.
 
-Selectors are CSS, `@eN`, `xpath=…` (or `//…`), `text=Save` (substring, case-insensitive; `text="Save"` exact),
+Selectors are CSS, `@eN` (a bare `eN`, as a snapshot prints it in `[ref=eN]`, is the same ref, since no element is named `eN`; one no snapshot in the session gave fails at once with `unknown_ref` and points at `@eN` from the latest `snapshot -i`, where it used to wait 3 s and fail as `Element not found`), `xpath=…` (or `//…`), `text=Save` (substring, case-insensitive; `text="Save"` exact),
 `role=button[name="Save"]`, and `:has-text("…")` (`:text("…")` too) or `:text-is("…")` (whole text, exact) anywhere
 in a CSS selector (`[role=row]:has-text("FAS-1") td`). `A >> B` finds B inside each A, and `>> nth=N` keeps the Nth
 match from 0 (`-1` the last): `main >> text=Save`, `[role=option] >> nth=3`.
