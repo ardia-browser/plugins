@@ -412,13 +412,17 @@ export class State extends Refs implements temptabs.TempTabState {
     const instance = this.instance ?? "";
     const pid = /^([0-9]+):/u.exec(instance);
     if (!pid) return instance;
-    if (this.runOf?.instance !== instance) this.runOf = { instance, run: `pid:${pid[1]}@${this.startOf(Number(pid[1]))}` };
+    if (this.runOf?.instance === instance) return this.runOf.run;
+    const started = this.startOf(Number(pid[1]));
+    if (!started) return "";
+    this.runOf = { instance, run: `pid:${pid[1]}@${started}` };
     return this.runOf.run;
   }
 
   noteAppTabs(paired: ReadonlyMap<string, string>, present: ReadonlySet<string> | null = null): void {
     try {
       const run = this.run;
+      if (run === "") return;
       const owned = this.registry.sessionTabs();
       const put = new Map<string, { run: string; target: string }>();
       let readopted = false;
@@ -428,7 +432,7 @@ export class State extends Refs implements temptabs.TempTabState {
           const ours = this.created.has(target) || entry?.target === target;
           if (ours && (entry === undefined || entry.target !== target || entry.run !== run)) put.set(app, { run, target });
           else if (ours) this.persisted.add(target);
-        } else if (entry !== undefined && run !== "" && (entry.target === target || entry.run !== run)) {
+        } else if (entry !== undefined && (entry.target === target || entry.run !== run)) {
           this.opened.add(target);
           this.created.add(target);
           this.registry.noteOpened(this.instance, target);

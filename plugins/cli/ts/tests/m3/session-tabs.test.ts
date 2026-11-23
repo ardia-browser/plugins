@@ -114,6 +114,39 @@ describe("the tabs a session opened outlive its daemon and Ardia's restart", () 
     }
   });
 
+  test("when Ardia's start time can't be read there is no run: nothing is written down or taken back, and the next lookup tries again", () => {
+    const { dir } = folder();
+    try {
+      const first = daemon(dir, "a", "rl", RUN_1, undefined, "Mon Nov 23 05:00:00 2026");
+      opens(first, "TARGET-SESSION");
+      first.noteAppTabs(new Map([["TARGET-SESSION", "tab-run1-4"]]));
+      const blind = daemon(dir, "b", "rl", RUN_1, undefined, "");
+      let lookups = 0;
+      let answer = "";
+      blind.startOf = () => {
+        lookups += 1;
+        return answer;
+      };
+      expect(blind.run).toBe("");
+      blind.noteAppTabs(new Map([["TARGET-USER-REOPENED", "tab-run1-4"]]));
+      expect(blind.opened.size).toBe(0);
+      opens(blind, "TARGET-NEW");
+      blind.noteAppTabs(new Map([["TARGET-NEW", "tab-run1-7"]]));
+      expect(blind.registry.sessionTabs().has("tab-run1-7")).toBe(false);
+      expect(blind.registry.sessionTabs().get("tab-run1-4")?.target).toBe("TARGET-SESSION");
+      answer = "Mon Nov 23 05:00:00 2026";
+      expect(blind.run).toBe("pid:4101@Mon Nov 23 05:00:00 2026");
+      expect(lookups).toBe(4);
+      expect(blind.run).toBe("pid:4101@Mon Nov 23 05:00:00 2026");
+      expect(lookups).toBe(4);
+      blind.noteAppTabs(new Map([["TARGET-USER-REOPENED", "tab-run1-4"], ["TARGET-NEW", "tab-run1-7"]]));
+      expect([...blind.opened].sort()).toEqual(["TARGET-NEW"]);
+      expect(blind.registry.sessionTabs().has("tab-run1-7")).toBe(true);
+    } finally {
+      closeFd(dir);
+    }
+  });
+
   test("Ardia's own process start time is read from ps, and a pid with no process gives none", () => {
     expect(processStart(process.pid)).toMatch(/[0-9]{4}$/u);
     expect(processStart(2 ** 22 + 12345)).toBe("");
