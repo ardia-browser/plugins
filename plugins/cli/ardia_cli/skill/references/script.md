@@ -1,17 +1,66 @@
 # `ardia browse script` recipes
 
-A script is one call that does what would otherwise be a command per item. It runs in a blank background page of
-its own, outside the page it drives: there's no `document` or `window`. Every `page.*` call is an `ardia browse`
-command on this session, with the same tab, refs, rules and change reports. `ardia browse script --help` lists every
+A script is one call that does what would otherwise be a command per item. It runs in a sandbox of its own,
+outside the page it drives: there's no `document`, `window`, files, modules or network. Every `page.*` call is an
+`ardia browse` command on this session, with the same tab, refs and rules. `ardia browse script --help` lists every
 call. Selectors are CSS, `@eN`, `text=…` or `xpath=…`.
 
-DOM code goes in `page.evaluate(fn, arg)` (or `page.eval`), which runs `fn` in the page like `ardia browse eval`.
-`fn` can't see the script's variables; pass what it needs as `arg`:
+DOM code goes in `page.evaluate(fn, ...args)` (or `page.eval`), which runs `fn` in the page like `ardia browse eval`.
+`fn` can't see the script's variables; pass what it needs as arguments (JSON values):
 
 ```js
-const min = 100;
-return await page.evaluate((min) => [...document.querySelectorAll('tr')]
-  .filter((row) => Number(row.cells[2]?.textContent) > min).map((row) => row.cells[0].textContent), min);
+const min = 100, column = 2;
+return await page.evaluate((min, column) => [...document.querySelectorAll('tr')]
+  .filter((row) => Number(row.cells[column]?.textContent) > min).map((row) => row.cells[0].textContent), min, column);
+```
+
+`page.$$eval(sel, fn, ...args)` hands `fn` every match, `page.$eval(sel, fn, ...args)` the first one. Reads (`page.text`,
+`page.attr`, `page.evaluate`, `page.$eval`, `page.$$eval`, `read`) run together under `Promise.all`; actions run one at a
+time, in order; an `evaluate` that changes the page counts as a read, so await it on its own.
+`page.click/fill/select/press/…` wait for the page to settle but print no change report; add `{ receipt: true }` as
+the last argument when you need it.
+
+## Every row of a list in one call
+
+```sh
+ardia browse script <<'EOF'
+return await page.$$eval('article', (cards) => cards.map((c) => ({
+  name: c.querySelector('h4')?.textContent.trim(),
+  link: c.querySelector('a')?.href,
+})));
+EOF
+```
+
+## One filter after another
+
+```sh
+ardia browse script <<'EOF'
+const out = {};
+for (const tag of ['Text Generation', 'Text-to-Image', 'Translation']) {
+  await page.click(`button[data-filter="${tag}"]`);
+  out[tag] = await page.$$eval('article:not(.hidden) h4', (hs) => hs.map((h) => h.textContent.trim()));
+}
+return out;
+EOF
+```
+
+## Many small reads at once
+
+```sh
+ardia browse script <<'EOF'
+const n = await page.count('tr.result');
+return await Promise.all(Array.from({ length: n }, (_, i) =>
+  page.text(`tr.result >> nth=${i}`)));
+EOF
+```
+
+## Inside an iframe
+
+`page.frames()` lists frames (`url`, `name`, `main`, `crossProcess`); each has `evaluate`, `$eval` and `$$eval`:
+
+```js
+const frame = (await page.frames()).find((f) => f.url.includes('/embed/'));
+return await frame.$$eval('li', (items) => items.map((li) => li.textContent));
 ```
 
 Return only the fields you need: the return value prints as JSON and counts toward the output cap. It stops at
@@ -107,4 +156,5 @@ shows you; internal `/api` calls don't count (script the UI). Creating a key cha
 
 `browse('tab', 'list')` runs any other command and returns `{text, data}`. `page.snapshot('-i -s main')` returns a
 snapshot to search for refs. `page.wait({ text: 'Saved' })` waits for text, a URL, a load state or a function.
-`page.dblclick(sel)`, `page.focus(sel)` and `page.keyboard(text)` cover cells and fields that only take typing.
+`page.dblclick(sel)`, `page.focus(sel)` and `page.keyboard(text)` (`.press(key)`) cover cells and fields that only
+take typing. There are no element handles or locators: read with `$$eval`, act with a selector.

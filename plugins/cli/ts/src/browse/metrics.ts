@@ -12,6 +12,7 @@ export const DURATIONS = new Set([
 export const COUNTS = new Set([
   "cdp_calls", "read_data_blocks", "snapshot_nodes", "snapshot_chars", "output_chars", "network_writes_count", "batch_steps", "read_rows", "read_pages",
   "batch_lines_compacted", "read_tabs_reopened", "skills_installed", "skills_skipped", "failed_step_index",
+  "script_calls", "script_concurrent_peak", "script_receipts_skipped",
 ]);
 export const READ_FLAGS = new Set([
   "read_data", "read_data_shaped", "read_scrolled", "read_matched", "read_virtualized_grid", "read_pdf", "read_waited_for_content", "read_beside_busy",
@@ -44,6 +45,8 @@ export const FLAGS = new Set([
   "script_state_kept_on_interrupt", "find_closest_names", "batch_saved", "read_empty_page", "network_reloaded", "fill_no_reaction_hint",
   "eval_selectors_quoted", "queued_behind_script", "followed_ref_after_reload", "clicked_visible_content", "element_rehomed",
   "eval_main_world", "eval_isolated_reference_error", "permission_granted", "guessed_syntax", "find_closest_ref", "select_retyped", "select_word_match", "open_here", "stale_ref_after_open", "snapshot_diff", "snapshot_diff_full",
+  "script_eval_args", "script_selector_eval", "script_frames_listed", "script_frame_eval", "script_missing_api", "script_runner_warm", "script_runner_unconfined",
+  "script_runner_crashed", "script_memory_limit", "script_sandbox_hint",
 ]);
 export const MAIN_PHASE: Readonly<Record<string, string>> = { snapshot: "snapshot_build_ms", eval: "eval_ms" };
 export const FAILED_WITHOUT_CODE = "command_failed";
