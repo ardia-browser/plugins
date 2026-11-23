@@ -237,7 +237,7 @@ class Discovery(Base):
     def test_missing_socket(self):
         status, _, err = self.run_cli("windows")
         self.assertEqual(status, 2)
-        self.assertEqual(err.strip(), f"ardia: {endpoint.NOT_REACHABLE}")
+        self.assertEqual(err.strip(), f"ardia: {endpoint.NOT_REACHABLE} (no {self.socket.name} in {self.socket.parent})")
 
     def test_regular_file_is_not_a_socket(self):
         self.socket.write_text("")
@@ -292,7 +292,7 @@ class Discovery(Base):
         sock.close()
         status, _, err = self.run_cli("windows")
         self.assertEqual(status, 2)
-        self.assertEqual(err.strip(), f"ardia: {endpoint.NOT_REACHABLE}")
+        self.assertEqual(err.strip(), f"ardia: {endpoint.NOT_REACHABLE} (nothing accepts on {self.socket})")
 
     def test_installed_data_dir_without_env(self):
         with mock.patch.dict(os.environ, {"ARDIA_DATA_DIR": ""}):

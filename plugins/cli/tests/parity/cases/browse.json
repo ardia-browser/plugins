@@ -1,0 +1,1005 @@
+[
+ {
+  "id": "browse--get-title",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "Example Domain\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--get-url-json",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--json",
+   "get",
+   "url"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\": true, \"data\": {\"url\": \"https://example.com/\"}}\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--json-after",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "url",
+   "--json"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\": true}\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--snapshot",
+  "command": "browse snapshot",
+  "argv": [
+   "browse",
+   "snapshot",
+   "-i"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "- heading \"Example\" [ref=e1]\n- link \"More\" [ref=e2]\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--not-found",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "click",
+   "@e9"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "✗ no element @e9 in the last snapshot\n",
+     "exit": 1,
+     "code": "not_found"
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--exit-code-string",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "x\n",
+     "err": "",
+     "exit": "2"
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "a non-int exit"
+ },
+ {
+  "id": "browse--exit-missing",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "x\n"
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--control-chars",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "text",
+   "body"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "a\u001b[31mred\u0007 2J é 日本\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--metrics",
+  "command": "browse snapshot",
+  "argv": [
+   "browse",
+   "snapshot"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "- x\n",
+     "err": "",
+     "exit": 0,
+     "metrics": {
+      "refs": 3,
+      "chars": 120,
+      "bogus": "text"
+     }
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--token-query-masked",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "url"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "ws://127.0.0.1:9/devtools/browser/abc?token=sekrit-value-123456&x=1\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--ws-secret-masked",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--ws",
+   "ws://127.0.0.1:9/devtools/browser/abc?k=SECRETVALUE0123456789",
+   "get",
+   "url"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "got SECRETVALUE0123456789 and SECRETVALUE0123456789%2F\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "ws": "ws://127.0.0.1:9/devtools/browser/abc?k=SECRETVALUE0123456789"
+   },
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--closed-read",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    "close"
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "the daemon hangs up on a read-only command"
+ },
+ {
+  "id": "browse--closed-mutating",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "click",
+   "@e1"
+  ],
+  "daemon": {
+   "replies": [
+    "close"
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "the daemon hangs up after taking a click: outcome unknown"
+ },
+ {
+  "id": "browse--raw-no-newline",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "raw": "{\"out\": \"x\"}"
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--raw-not-json",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "raw": "nope\n"
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--session-flag",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "work",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "W\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "work",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--session-env",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "E\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "envs",
+   "namespace": ""
+  },
+  "env": {
+   "AGENT_BROWSER_SESSION": "envs"
+  }
+ },
+ {
+  "id": "browse--namespace",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--namespace",
+   "proj",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "N\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": "proj"
+  }
+ },
+ {
+  "id": "browse--bad-session",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "bad name",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--port-flag",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--port",
+   "9333",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "P\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "port": 9333
+   },
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--port-hoisted",
+  "command": "browse get",
+  "argv": [
+   "--port",
+   "9333",
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "P\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "port": 9333
+   },
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--port-env",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "P\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "port": 9444
+   },
+   "session": "default",
+   "namespace": ""
+  },
+  "env": {
+   "ARDIA_PORT": "9444"
+  }
+ },
+ {
+  "id": "browse--port-not-number",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--port",
+   "abc",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "intentional": {
+   "why": "a usage error never repeats an option's value, which may be a secret typed in the wrong place (docs/cli.md)",
+   "stderr": {
+    "text": "✗ --port takes a number\n"
+   }
+  }
+ },
+ {
+  "id": "browse--cdp-env-number",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "C\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "port": 9555
+   },
+   "session": "default",
+   "namespace": ""
+  },
+  "env": {
+   "AGENT_BROWSER_CDP": "9555"
+  }
+ },
+ {
+  "id": "browse--max-output-bad",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--max-output",
+   "abc",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "intentional": {
+   "why": "a usage error never repeats an option's value, which may be a secret typed in the wrong place (docs/cli.md)",
+   "stderr": {
+    "text": "✗ --max-output takes a number of characters\n"
+   }
+  }
+ },
+ {
+  "id": "browse--max-output",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--max-output",
+   "5",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "abcdefghij\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--launch-only",
+  "command": "browse other",
+  "argv": [
+   "browse",
+   "--headed",
+   "open",
+   "https://example.com"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--value-missing",
+  "command": "browse other",
+  "argv": [
+   "browse",
+   "get",
+   "title",
+   "--session"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--help",
+  "command": "browse help",
+  "argv": [
+   "browse",
+   "--help"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "intentional": {
+   "why": "the help lists what this build ships and Python's doesn't: eval --isolated (with --main-world the default), click --touch and set permission",
+   "stdout": {
+    "text": "ardia browse - agent-browser's commands, driving the Ardia you're running\n\nUsage: ardia browse <command> [args] [options]\n\nSame commands, flags and output (text and --json) as agent-browser, so an agent that\nknows `agent-browser <args>` can type `ardia browse <args>`. It drives the running Ardia\nover the ardia command's control connection (Settings > \"Let the ardia command control\nArdia\"), with a small CDP client of its own. Input is instant unless --humanize. Actions print what they changed\n(nodes with refs, URL, title, the POSTs they caused), a session works in background tabs of its\nown (`tab active` picks the user's tab), and text output stops at about 12,000 characters (narrow it\nwith snapshot -i or -s <css>).\n\nCore Commands:\n  open [url]                 Open url in a new background tab of this session (later opens reuse it)\n  read [url...]              Read pages' text in background tabs (--links <pattern>: every matching link; -s sel)\n  links [pattern]            List the session tab's links whose URL contains pattern (read --links … --list)\n  click <sel>                Click element (or @ref) [--new-tab] [--touch]\n  dblclick <sel>             Double-click element\n  type <sel> <text>          Type into element\n  fill <sel> <text>          Clear, then type (date/time/color/range inputs: set the value; a <select>: pick;\n                             a grid cell: open its editor, set, Enter)\n  press [sel] <key>          Press key (Enter, Tab, Control+a, Meta+a), in <sel> if given\n  keydown <key> / keyup <key>  Hold or release a key\n  keyboard type <text>       Type at the current focus (humanized keystrokes)\n  keyboard inserttext <text> Insert text without key events\n  hover <sel>                Hover element\n  focus <sel>                Focus element\n  check <sel> / uncheck <sel>  Set a checkbox\n  select <sel> <val...>      Pick option(s): a <select>, or a combobox/typeahead (types, picks the match)\n  drag <src> <dst>           Drag onto dst's far half, taking its place [--before|--after]\n  upload <sel> <files...>    Set a file input's files\n  download <sel> <path>      Click element, save the download it starts to path\n  scroll [dir] [px]          Scroll (up/down/left/right, default down 300) [-s <sel>]\n  scrollintoview <sel>       Scroll element into view\n  wait <sel|ms>              Wait for element or time; --text, --url, --load, --fn, --state\n  screenshot [sel] [path]    Screenshot [--full] [--annotate]\n  pdf <path>                 Save as PDF\n  snapshot                   Accessibility tree with refs [-i] [-c] [-d n] [-s sel] [-u] [--diff]\n  eval <js>                  Run JavaScript in the page [-b base64] [--stdin] [--timeout 2m] [--isolated]\n  close [--all]              Close the tabs this session opened and end the session\n\nSelectors:   CSS, @e3, text=Save (text=\"Save\" exact), role=button[name=\"Save\"], li:has-text(\"Ana\"), li >> nth=2 (third match; -1 last), main >> text=Save, li:text-is(\"Ana\"), xpath=//a;\n             [role=main] also matches <main> and the other implicit roles\nNavigation:  back, forward, reload, pushstate <url>\nGet Info:    get text|html|value|title|url|count|box|styles <sel> | attr <sel> <name> (or -s <sel>)\nCheck State: is visible|enabled|checked <sel>\nFind:        find role|text|label|placeholder|alt|title|testid|first|last|nth <value> [action] [text]\n             actions: click (default), fill, type, check, uncheck, select, hover, focus, dblclick, text\n             find role <role> <action> --name <name>: exact name first, several matches list refs\n             --nth <n> picks match n of several (from 0)\nMouse:       mouse move <x> <y> | down [btn] | up [btn] | wheel <dy> [dx]\nSettings:    set viewport <w> <h> [scale] | reset                 (this session's own hidden tab, off-screen)\n             set device|geo|offline|headers|credentials|media|permission\nNetwork:     network requests [--reload --filter --type --method --status --clear] | request <id>\n             network har start [--content text|all|none] | har stop [path]\n             network route <url> [--abort|--body <json>] | unroute [url]\nStorage:     storage local|session [get [key] | set <k> <v> | clear]\n             cookies [get|set|clear]\n             state save|load <path>\nTabs:        tab [list] | tab new [--label name] [url] | tab <t1|tab-…|label|targetId> | tab active\n             tab close [tab] (only tabs this session opened) | window new [url]\n             (t1 ids are the same in every session; tab-… ids are the ones `ardia windows` prints)\nFrames:      frame <sel|@ref|name|url> | frame main\nDialogs:     dialog status | accept [text] | dismiss\nDiff:        diff snapshot [--baseline f] | diff screenshot --baseline f | diff url <u1> <u2>\nDebug:       console [--clear], errors [--clear]   (turn on Runtime for the tab on first use)\n             highlight <sel>, clipboard read|write|copy|paste\n             trace start|stop [path], profiler start|stop [path]\n             record start <path.webm> [url] | stop | restart             (needs ffmpeg)\nStreaming:   stream enable [--port n] [--input] | disable | status\nRaw CDP:     cdp <Domain.method> [--params json|-] [--param k=v|k:=json] [--target browser|<tab>]\nReact:       react tree | inspect <id> | renders start|stop | suspense [--only-dynamic]\n             (needs `open --enable react-devtools <url>`)\nPerformance: vitals [url]\nAudit:       a11y [url] [--tags t1,t2] [--selector css]\nInit:        addinitscript <js> | removeinitscript <id>   (page main world, by request)\nBatch:       batch [--bail] [--out <file>] [\"cmd args\" | '[\"cmd\",\"arg\"]' ...]  (or one command per stdin line; # comments)\nScript:      script [file.js] [--timeout 90s]   (JS on stdin: loops over pages with page.goto/click/text, read())\nNotes:       notes [get|set|append|list|rm] [site] [text|-]   (plain per-site notes, shown atop snapshot)\nFlows:       flow steps | save <name> [--param k=v] | run <name> [--param k=v] [--fields a,b] [--where f=v] [--limit n]\n             flow list [site] | show <name> | rm <name>   (do a task once, then rerun it as one request)\nAuth Vault:  auth save <name> --url <https url> --username <u> [--password-stdin]\n             auth login <name> [--username-selector s] [--password-selector s] [--submit-selector s]\n             auth login <name> --credential-provider <plugin> [--item ref] [--url url]\n             auth list | show <name> | delete <name>\nPlugins:     plugin add <npm-name[@version] | owner/repo[#ref]> [--name n] [--capability c]\n             plugin list | show <name> | remove <name> | run <name> <type> [--payload json]\nSessions:    session | session info | session list | session id [--scope cwd|worktree] [--prefix p]\n\nOptions:\n  --session <name>        Command-state namespace: its own tabs, refs and captures (AGENT_BROWSER_SESSION)\n  --namespace <name>      Separate set of sessions (AGENT_BROWSER_NAMESPACE)\n  --json                  JSON output (AGENT_BROWSER_JSON)\n  --humanize              Humanized mouse, scroll and typing (AGENT_BROWSER_HUMANIZE=1 for all)\n  --no-humanize           Instant input (the default; AGENT_BROWSER_NO_HUMANIZE=1 forces it)\n  --no-changes            Don't report what an action changed (skips its snapshots and network watch)\n  --no-text               Leave the page text (`text:` lines) out of an action's change report\n  --data-dir <dir>        Ardia data dir to find (default $ARDIA_DATA_DIR, else the installed app's)\n  --port <n>, --cdp <n>   A plain DevTools test server on 127.0.0.1:n (testing only)\n  --ws <url>              A browser WebSocket URL\n  --capture-console       With open: start console and error capture before the page loads\n  --enable react-devtools With open: install the React DevTools hook before page JS\n  --init-script <path>    With open: register a page init script (repeatable)\n  --annotate              Screenshot: draw numbered labels for the refs\n  --screenshot-dir/-format/-quality   Screenshot defaults (AGENT_BROWSER_SCREENSHOT_*)\n  --max-output <chars>    Cap text output (default 12000, 20000 for script, 0 for none; AGENT_BROWSER_MAX_OUTPUT)\n  --full                  Don't cap text output\n  --content-boundaries    Wrap page output in markers (AGENT_BROWSER_CONTENT_BOUNDARIES)\n  --no-auto-dialog        Don't accept alert/beforeunload dialogs (AGENT_BROWSER_NO_AUTO_DIALOG)\n  --pin-tab, --no-pin-tab Fail with tab_gone instead of falling back when the session's tab closes\n  --idle-timeout <time>   End an idle session after 10s, 3m, 1h or raw ms (default 1h)\n\nNot available yet: cookies, state save (and state load of a file with cookies), set device|geo|offline|\nheaders|credentials|media|permission, network route, upload, download, highlight, clipboard, trace, profiler, record\nand stream enable. No released Ardia lets the ardia command use the DevTools methods they need: it's a\ndeliberate limit, so they fail with policy_refused naming the method, say what to do instead, and updating\nwon't help yet. A later Ardia adds them behind its full-control setting. A `cdp` method off Ardia's list\nfails the same way, but an older Ardia also refuses some methods a current one allows, so there updating\nmay help. set viewport works on a tab this session opened and never showed.\n\nNot here: connect, inspect, install, upgrade, doctor, dashboard, chat (no AI), mcp, profiles,\nconfirm/deny, iOS (-p ios, swipe, tap), cloud providers, and launch options (--headed,\n--profile, --proxy, --extension, --args, ...), since Ardia is the browser you're running.\n\nExit status: 0 done, 1 the command failed, 2 Ardia can't be reached or closed the connection\n(the outcome of an interrupted action is reported as unknown), 130 interrupted.\n\nExamples:\n  ardia browse open example.com\n  ardia browse snapshot -i\n  ardia browse click @e2\n  ardia browse fill @e3 \"user@example.com\"\n  ardia browse fill @e7 2026-11-09\n  ardia browse batch <<'EOF'\n  click @e10\n  fill #name \"Ana Ruiz\"\n  click #save\n  EOF\n  ardia browse find role button click --name Submit\n  ardia browse read --links /p/ -s table.specs\n  ardia browse script <<'EOF'\n  const out = [];\n  for (const url of await page.links(\"/p/\")) { await page.goto(url); out.push({ name: await page.text(\"h1\") }); }\n  return out;\n  EOF\n  ardia browse screenshot --annotate page.png\n\n"
+   }
+  }
+ },
+ {
+  "id": "browse--help-bare",
+  "command": "browse help",
+  "argv": [
+   "browse"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "intentional": {
+   "why": "the help lists what this build ships and Python's doesn't: eval --isolated (with --main-world the default), click --touch and set permission",
+   "stdout": {
+    "text": "ardia browse - agent-browser's commands, driving the Ardia you're running\n\nUsage: ardia browse <command> [args] [options]\n\nSame commands, flags and output (text and --json) as agent-browser, so an agent that\nknows `agent-browser <args>` can type `ardia browse <args>`. It drives the running Ardia\nover the ardia command's control connection (Settings > \"Let the ardia command control\nArdia\"), with a small CDP client of its own. Input is instant unless --humanize. Actions print what they changed\n(nodes with refs, URL, title, the POSTs they caused), a session works in background tabs of its\nown (`tab active` picks the user's tab), and text output stops at about 12,000 characters (narrow it\nwith snapshot -i or -s <css>).\n\nCore Commands:\n  open [url]                 Open url in a new background tab of this session (later opens reuse it)\n  read [url...]              Read pages' text in background tabs (--links <pattern>: every matching link; -s sel)\n  links [pattern]            List the session tab's links whose URL contains pattern (read --links … --list)\n  click <sel>                Click element (or @ref) [--new-tab] [--touch]\n  dblclick <sel>             Double-click element\n  type <sel> <text>          Type into element\n  fill <sel> <text>          Clear, then type (date/time/color/range inputs: set the value; a <select>: pick;\n                             a grid cell: open its editor, set, Enter)\n  press [sel] <key>          Press key (Enter, Tab, Control+a, Meta+a), in <sel> if given\n  keydown <key> / keyup <key>  Hold or release a key\n  keyboard type <text>       Type at the current focus (humanized keystrokes)\n  keyboard inserttext <text> Insert text without key events\n  hover <sel>                Hover element\n  focus <sel>                Focus element\n  check <sel> / uncheck <sel>  Set a checkbox\n  select <sel> <val...>      Pick option(s): a <select>, or a combobox/typeahead (types, picks the match)\n  drag <src> <dst>           Drag onto dst's far half, taking its place [--before|--after]\n  upload <sel> <files...>    Set a file input's files\n  download <sel> <path>      Click element, save the download it starts to path\n  scroll [dir] [px]          Scroll (up/down/left/right, default down 300) [-s <sel>]\n  scrollintoview <sel>       Scroll element into view\n  wait <sel|ms>              Wait for element or time; --text, --url, --load, --fn, --state\n  screenshot [sel] [path]    Screenshot [--full] [--annotate]\n  pdf <path>                 Save as PDF\n  snapshot                   Accessibility tree with refs [-i] [-c] [-d n] [-s sel] [-u] [--diff]\n  eval <js>                  Run JavaScript in the page [-b base64] [--stdin] [--timeout 2m] [--isolated]\n  close [--all]              Close the tabs this session opened and end the session\n\nSelectors:   CSS, @e3, text=Save (text=\"Save\" exact), role=button[name=\"Save\"], li:has-text(\"Ana\"), li >> nth=2 (third match; -1 last), main >> text=Save, li:text-is(\"Ana\"), xpath=//a;\n             [role=main] also matches <main> and the other implicit roles\nNavigation:  back, forward, reload, pushstate <url>\nGet Info:    get text|html|value|title|url|count|box|styles <sel> | attr <sel> <name> (or -s <sel>)\nCheck State: is visible|enabled|checked <sel>\nFind:        find role|text|label|placeholder|alt|title|testid|first|last|nth <value> [action] [text]\n             actions: click (default), fill, type, check, uncheck, select, hover, focus, dblclick, text\n             find role <role> <action> --name <name>: exact name first, several matches list refs\n             --nth <n> picks match n of several (from 0)\nMouse:       mouse move <x> <y> | down [btn] | up [btn] | wheel <dy> [dx]\nSettings:    set viewport <w> <h> [scale] | reset                 (this session's own hidden tab, off-screen)\n             set device|geo|offline|headers|credentials|media|permission\nNetwork:     network requests [--reload --filter --type --method --status --clear] | request <id>\n             network har start [--content text|all|none] | har stop [path]\n             network route <url> [--abort|--body <json>] | unroute [url]\nStorage:     storage local|session [get [key] | set <k> <v> | clear]\n             cookies [get|set|clear]\n             state save|load <path>\nTabs:        tab [list] | tab new [--label name] [url] | tab <t1|tab-…|label|targetId> | tab active\n             tab close [tab] (only tabs this session opened) | window new [url]\n             (t1 ids are the same in every session; tab-… ids are the ones `ardia windows` prints)\nFrames:      frame <sel|@ref|name|url> | frame main\nDialogs:     dialog status | accept [text] | dismiss\nDiff:        diff snapshot [--baseline f] | diff screenshot --baseline f | diff url <u1> <u2>\nDebug:       console [--clear], errors [--clear]   (turn on Runtime for the tab on first use)\n             highlight <sel>, clipboard read|write|copy|paste\n             trace start|stop [path], profiler start|stop [path]\n             record start <path.webm> [url] | stop | restart             (needs ffmpeg)\nStreaming:   stream enable [--port n] [--input] | disable | status\nRaw CDP:     cdp <Domain.method> [--params json|-] [--param k=v|k:=json] [--target browser|<tab>]\nReact:       react tree | inspect <id> | renders start|stop | suspense [--only-dynamic]\n             (needs `open --enable react-devtools <url>`)\nPerformance: vitals [url]\nAudit:       a11y [url] [--tags t1,t2] [--selector css]\nInit:        addinitscript <js> | removeinitscript <id>   (page main world, by request)\nBatch:       batch [--bail] [--out <file>] [\"cmd args\" | '[\"cmd\",\"arg\"]' ...]  (or one command per stdin line; # comments)\nScript:      script [file.js] [--timeout 90s]   (JS on stdin: loops over pages with page.goto/click/text, read())\nNotes:       notes [get|set|append|list|rm] [site] [text|-]   (plain per-site notes, shown atop snapshot)\nFlows:       flow steps | save <name> [--param k=v] | run <name> [--param k=v] [--fields a,b] [--where f=v] [--limit n]\n             flow list [site] | show <name> | rm <name>   (do a task once, then rerun it as one request)\nAuth Vault:  auth save <name> --url <https url> --username <u> [--password-stdin]\n             auth login <name> [--username-selector s] [--password-selector s] [--submit-selector s]\n             auth login <name> --credential-provider <plugin> [--item ref] [--url url]\n             auth list | show <name> | delete <name>\nPlugins:     plugin add <npm-name[@version] | owner/repo[#ref]> [--name n] [--capability c]\n             plugin list | show <name> | remove <name> | run <name> <type> [--payload json]\nSessions:    session | session info | session list | session id [--scope cwd|worktree] [--prefix p]\n\nOptions:\n  --session <name>        Command-state namespace: its own tabs, refs and captures (AGENT_BROWSER_SESSION)\n  --namespace <name>      Separate set of sessions (AGENT_BROWSER_NAMESPACE)\n  --json                  JSON output (AGENT_BROWSER_JSON)\n  --humanize              Humanized mouse, scroll and typing (AGENT_BROWSER_HUMANIZE=1 for all)\n  --no-humanize           Instant input (the default; AGENT_BROWSER_NO_HUMANIZE=1 forces it)\n  --no-changes            Don't report what an action changed (skips its snapshots and network watch)\n  --no-text               Leave the page text (`text:` lines) out of an action's change report\n  --data-dir <dir>        Ardia data dir to find (default $ARDIA_DATA_DIR, else the installed app's)\n  --port <n>, --cdp <n>   A plain DevTools test server on 127.0.0.1:n (testing only)\n  --ws <url>              A browser WebSocket URL\n  --capture-console       With open: start console and error capture before the page loads\n  --enable react-devtools With open: install the React DevTools hook before page JS\n  --init-script <path>    With open: register a page init script (repeatable)\n  --annotate              Screenshot: draw numbered labels for the refs\n  --screenshot-dir/-format/-quality   Screenshot defaults (AGENT_BROWSER_SCREENSHOT_*)\n  --max-output <chars>    Cap text output (default 12000, 20000 for script, 0 for none; AGENT_BROWSER_MAX_OUTPUT)\n  --full                  Don't cap text output\n  --content-boundaries    Wrap page output in markers (AGENT_BROWSER_CONTENT_BOUNDARIES)\n  --no-auto-dialog        Don't accept alert/beforeunload dialogs (AGENT_BROWSER_NO_AUTO_DIALOG)\n  --pin-tab, --no-pin-tab Fail with tab_gone instead of falling back when the session's tab closes\n  --idle-timeout <time>   End an idle session after 10s, 3m, 1h or raw ms (default 1h)\n\nNot available yet: cookies, state save (and state load of a file with cookies), set device|geo|offline|\nheaders|credentials|media|permission, network route, upload, download, highlight, clipboard, trace, profiler, record\nand stream enable. No released Ardia lets the ardia command use the DevTools methods they need: it's a\ndeliberate limit, so they fail with policy_refused naming the method, say what to do instead, and updating\nwon't help yet. A later Ardia adds them behind its full-control setting. A `cdp` method off Ardia's list\nfails the same way, but an older Ardia also refuses some methods a current one allows, so there updating\nmay help. set viewport works on a tab this session opened and never showed.\n\nNot here: connect, inspect, install, upgrade, doctor, dashboard, chat (no AI), mcp, profiles,\nconfirm/deny, iOS (-p ios, swipe, tap), cloud providers, and launch options (--headed,\n--profile, --proxy, --extension, --args, ...), since Ardia is the browser you're running.\n\nExit status: 0 done, 1 the command failed, 2 Ardia can't be reached or closed the connection\n(the outcome of an interrupted action is reported as unknown), 130 interrupted.\n\nExamples:\n  ardia browse open example.com\n  ardia browse snapshot -i\n  ardia browse click @e2\n  ardia browse fill @e3 \"user@example.com\"\n  ardia browse fill @e7 2026-11-09\n  ardia browse batch <<'EOF'\n  click @e10\n  fill #name \"Ana Ruiz\"\n  click #save\n  EOF\n  ardia browse find role button click --name Submit\n  ardia browse read --links /p/ -s table.specs\n  ardia browse script <<'EOF'\n  const out = [];\n  for (const url of await page.links(\"/p/\")) { await page.goto(url); out.push({ name: await page.text(\"h1\") }); }\n  return out;\n  EOF\n  ardia browse screenshot --annotate page.png\n\n"
+   }
+  }
+ },
+ {
+  "id": "browse--help-topic",
+  "command": "browse help",
+  "argv": [
+   "browse",
+   "help",
+   "snapshot"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--help-after",
+  "command": "browse snapshot",
+  "argv": [
+   "browse",
+   "snapshot",
+   "--help"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--version",
+  "command": "browse version",
+  "argv": [
+   "browse",
+   "--version"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--eval-stdin",
+  "command": "browse eval",
+  "argv": [
+   "browse",
+   "eval",
+   "--stdin"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "2\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "stdin": "1+1"
+ },
+ {
+  "id": "browse--json-env",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\": true}\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "env": {
+   "AGENT_BROWSER_JSON": "1"
+  }
+ },
+ {
+  "id": "browse--agent-env-forwarded",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "T\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "env": {
+   "AGENT_BROWSER_DEFAULT_TIMEOUT": "4000",
+   "AGENT_BROWSER_HUMANIZE": "0",
+   "AGENT_BROWSER_ENABLE": "a,b"
+  }
+ },
+ {
+  "id": "browse--err-and-out",
+  "command": "browse open",
+  "argv": [
+   "browse",
+   "open",
+   "https://example.com"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Example Domain\n  https://example.com/\n",
+     "err": "note: slow\n",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--shared-flag-rejected",
+  "command": "none",
+  "argv": [
+   "--timeout",
+   "5",
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--double-dash",
+  "command": "browse eval",
+  "argv": [
+   "browse",
+   "eval",
+   "--",
+   "--x"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "1\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  }
+ },
+ {
+  "id": "browse--eval-main-world-flag",
+  "command": "browse eval",
+  "argv": [
+   "browse",
+   "eval",
+   "--main-world",
+   "document.title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "\"Example Domain\"\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "--main-world is accepted and is the default; the client passes it to the daemon",
+  "intentional": {
+   "why": "the TypeScript CLI's flag table includes its own --isolated, --main-world and --touch, so telemetry's flags names them; Python doesn't know them and records none",
+   "command_properties": {
+    "flags": "--main-world"
+   }
+  }
+ },
+ {
+  "id": "browse--eval-isolated-flag",
+  "command": "browse eval",
+  "argv": [
+   "browse",
+   "eval",
+   "--isolated",
+   "document.title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "\"Example Domain\"\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "--isolated opts into the ardia-browse isolated world; the client passes it to the daemon",
+  "intentional": {
+   "why": "the TypeScript CLI's flag table includes its own --isolated, --main-world and --touch, so telemetry's flags names them; Python doesn't know them and records none",
+   "command_properties": {
+    "flags": "--isolated"
+   }
+  }
+ },
+ {
+  "id": "browse--eval-isolated-json",
+  "command": "browse eval",
+  "argv": [
+   "browse",
+   "--json",
+   "eval",
+   "--isolated",
+   "1+1"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\": true, \"data\": {\"origin\": \"https://example.com/\", \"result\": 2}, \"error\": null}\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "intentional": {
+   "why": "the TypeScript CLI's flag table includes its own --isolated, --main-world and --touch, so telemetry's flags names them; Python doesn't know them and records none",
+   "command_properties": {
+    "flags": "--isolated,--json"
+   }
+  }
+ },
+ {
+  "id": "browse--wait-fn-isolated",
+  "command": "browse wait",
+  "argv": [
+   "browse",
+   "wait",
+   "--fn",
+   "window.ready",
+   "--isolated"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "true\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "intentional": {
+   "why": "the TypeScript CLI's flag table includes its own --isolated, --main-world and --touch, so telemetry's flags names them; Python doesn't know them and records none",
+   "command_properties": {
+    "flags": "--fn,--isolated"
+   }
+  }
+ }
+]

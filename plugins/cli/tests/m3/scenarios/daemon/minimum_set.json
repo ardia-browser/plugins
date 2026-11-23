@@ -1,0 +1,13 @@
+{
+ "steps": [
+  {"argv": ["session"], "session": "d2"},
+  {"argv": ["session", "info"], "session": "d2"},
+  {"argv": ["open", "{fixture}/login.html", "--no-changes"], "session": "d2"},
+  {"argv": ["get", "title"], "session": "d2"},
+  {"argv": ["get", "url"], "session": "d2"},
+  {"argv": ["wait", "50"], "session": "d2"},
+  {"argv": ["wait", "--load", "load"], "session": "d2"},
+  {"argv": ["--json", "get", "title"], "session": "d2"},
+  {"argv": ["--json", "session", "info"], "session": "d2"}
+ ]
+}

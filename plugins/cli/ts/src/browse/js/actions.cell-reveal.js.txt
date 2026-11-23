@@ -1,0 +1,35 @@
+() => {
+  const cell = (() => {
+  const spot = globalThis.ardiaCellSpot;
+  if (!spot) return null;
+  if (spot.cell.isConnected) return spot.cell;
+  if (spot.id && document.getElementById(spot.id)) return document.getElementById(spot.id);
+  if (!spot.grid || !spot.grid.isConnected) return null;
+  const rows = Array.from(spot.grid.querySelectorAll("[role=row], tr"));
+  if (spot.row && spot.column) {
+    const row = rows.find((r) => r.getAttribute("aria-rowindex") === spot.row);
+    const cell = row && row.querySelector('[aria-colindex="' + spot.column + '"]');
+    if (cell) return cell;
+  }
+  const row = spot.rowIndex >= 0 ? rows[spot.rowIndex] : null;
+  return row && spot.cellIndex >= 0 ? row.children[spot.cellIndex] || null : null;
+})();
+  if (!cell) return false;
+  const margin = 16;
+  const box = cell.getBoundingClientRect();
+  let scroller = cell.parentElement;
+  while (scroller && scroller !== document.body && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowX + getComputedStyle(scroller).overflowY)) {
+    scroller = scroller.parentElement;
+  }
+  let area = { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
+  if (scroller && scroller !== document.body) {
+    const outer = scroller.getBoundingClientRect();
+    const left = outer.left + scroller.clientLeft, top = outer.top + scroller.clientTop;
+    area = { left: Math.max(0, left), top: Math.max(0, top), right: Math.min(innerWidth, left + scroller.clientWidth),
+             bottom: Math.min(innerHeight, top + scroller.clientHeight) };
+  }
+  const inside = box.left >= area.left && box.top >= area.top && box.right <= area.right - margin && box.bottom <= area.bottom - margin;
+  const hit = inside && document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+  if (!hit || !cell.contains(hit)) cell.scrollIntoView({ block: "center", inline: "center" });
+  return true;
+}

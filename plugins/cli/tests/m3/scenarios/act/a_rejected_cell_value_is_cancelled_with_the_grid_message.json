@@ -1,0 +1,42 @@
+{
+ "live_only": "Python's wait loops (dialog fade, disabled waits, lazy scroll, load settle) count against the daemon's own clock, so replay sends a different number of checks; first replay mismatch: Runtime.callFunctionOn (editor) => {",
+ "source": "tests/test_browse_act.py ActInChrome.test_a_rejected_cell_value_is_cancelled_with_the_grid_message",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "fill",
+    "#g-count",
+    "many"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.querySelector('#g-count').textContent"
+   ],
+   "session": "act",
+   "main_world": true
+  },
+  {
+   "argv": [
+    "eval",
+    "String(document.querySelectorAll('#grid .editor').length)"
+   ],
+   "session": "act",
+   "main_world": true
+  }
+ ]
+}

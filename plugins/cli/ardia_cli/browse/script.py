@@ -250,7 +250,7 @@ def parse_timeout(value) -> float:
         raise Usage(f"--timeout takes 30s, 2m or milliseconds, not {value}")
     seconds = float(match.group(1)) * {"ms": 0.001, "s": 1, "m": 60}[match.group(2) or "ms"]
     if seconds <= 0 or seconds > MAX_TIMEOUT:
-        raise Usage(f"--timeout goes up to {MAX_TIMEOUT / 60:g}m, not {value}")
+        raise Usage(f"--timeout takes a time above 0 and up to {MAX_TIMEOUT / 60:g}m, not {value}")
     return seconds
 
 

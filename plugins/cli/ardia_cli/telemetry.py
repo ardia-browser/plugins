@@ -180,18 +180,21 @@ def read_consent(root: Path) -> dict | None:
 
 
 def epoch_seconds(value) -> float | None:
+    import math
     from datetime import datetime
 
     if isinstance(value, bool):
         return None
-    if isinstance(value, (int, float)):
-        return value / 1000 if value > 1e11 else float(value)
-    if isinstance(value, str):
-        try:
-            return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
-        except ValueError:
+    try:
+        if isinstance(value, (int, float)):
+            seconds = value / 1000 if value > 1e11 else float(value)
+        elif isinstance(value, str):
+            seconds = datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+        else:
             return None
-    return None
+    except (ValueError, OverflowError):
+        return None
+    return seconds if math.isfinite(seconds) else None
 
 
 def valid_id(value) -> str | None:
@@ -201,13 +204,16 @@ def valid_id(value) -> str | None:
 def sharing_id(doc: dict | None, now: float | None = None) -> str | None:
     if not doc or doc.get("sharing") is not True:
         return None
-    until = epoch_seconds(doc.get("sharingUntil")) if doc.get("sharingUntil") is not None else None
-    if until is not None and until <= (time.time() if now is None else now):
-        return None
+    if doc.get("sharingUntil") is not None:
+        until = epoch_seconds(doc.get("sharingUntil"))
+        if until is None or until <= (time.time() if now is None else now):
+            return None
     return valid_id(doc.get("installId"))
 
 
 def consent(root: Path) -> str | None:
+    if opted_out(os.environ):
+        return None
     return sharing_id(read_consent(root))
 
 

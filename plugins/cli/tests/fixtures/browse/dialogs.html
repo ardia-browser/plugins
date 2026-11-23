@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Fixture Dialogs</title></head>
+<body>
+<h1>Dialogs</h1>
+<p id="answer">waiting</p>
+<script>
+  const kind = new URLSearchParams(location.search).get("kind") || "prompt";
+  addEventListener("load", () => setTimeout(() => {
+    const value = kind === "confirm" ? confirm("Proceed with the “order”?") : prompt("Your name?", "guest");
+    const shown = "answered " + JSON.stringify(value);
+    document.title = shown;
+    document.getElementById("answer").textContent = shown;
+  }, 300));
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+ "steps": [
+  {"argv": ["open", "{fixture}/consolelog.html", "--no-changes"]},
+  {"argv": ["console"]},
+  {"argv": ["errors"]},
+  {"argv": ["open", "{fixture}/consolelog.html", "--no-changes"]},
+  {"argv": ["wait", "300"]},
+  {"argv": ["console"]},
+  {"argv": ["errors"]},
+  {"argv": ["console", "--clear"]},
+  {"argv": ["console"]},
+  {"argv": ["errors", "--clear"]},
+  {"argv": ["errors", "--json"]}
+ ]
+}

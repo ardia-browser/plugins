@@ -133,7 +133,7 @@ class Rendering(unittest.TestCase):
         for n in range(10):
             self.assertIn(f"=== [{n + 1}/10] P{n}\nhttp://s/p/{n}\n", text)
         self.assertIn("short page", text)
-        self.assertIn("Narrow it instead: -s <css> (one region per page)", text)
+        self.assertIn("Narrow it: -s <css> (one region per page)", text)
         self.assertNotIn("--full", text)
         self.assertIn(" characters]\n\n=== [", text)
         _, out, _ = daemon.render({}, result=readpages.result_for(records, {}, {}))
@@ -553,7 +553,7 @@ class FilteredRefresh(unittest.TestCase):
         registry.note_temporary("I", "WORKER")
         registry.numbers("I", ["SETTINGS", "WORKER"])
         time.sleep(0.01)
-        infos = [{"targetId": "SETTINGS", "type": "page", "url": "chrome://settings/"},
+        infos = [{"targetId": "SETTINGS", "type": "other", "url": "chrome://settings/"},
                  {"targetId": "WORKER", "type": "service_worker", "url": "https://s/sw.js"},
                  {"targetId": "PAGE", "type": "page", "url": "https://s/"}]
 

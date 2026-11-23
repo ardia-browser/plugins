@@ -1,0 +1,15 @@
+() => {
+  const spot = globalThis.ardiaCellSpot;
+  if (!spot) return null;
+  if (spot.cell.isConnected) return spot.cell;
+  if (spot.id && document.getElementById(spot.id)) return document.getElementById(spot.id);
+  if (!spot.grid || !spot.grid.isConnected) return null;
+  const rows = Array.from(spot.grid.querySelectorAll("[role=row], tr"));
+  if (spot.row && spot.column) {
+    const row = rows.find((r) => r.getAttribute("aria-rowindex") === spot.row);
+    const cell = row && row.querySelector('[aria-colindex="' + spot.column + '"]');
+    if (cell) return cell;
+  }
+  const row = spot.rowIndex >= 0 ? rows[spot.rowIndex] : null;
+  return row && spot.cellIndex >= 0 ? row.children[spot.cellIndex] || null : null;
+}

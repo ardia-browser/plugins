@@ -3,7 +3,7 @@ import logging
 import re
 
 MASK = "***"
-_TOKEN_QUERY = re.compile(r"(token=)[^&\s'\"<>]+")
+_TOKEN_QUERY = re.compile(r"(token=)[^&\s'\"<>\\]+")
 _secrets: set[str] = set()
 _installed = False
 

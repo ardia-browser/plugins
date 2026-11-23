@@ -1,0 +1,17 @@
+() => {
+  const text = document.body ? document.body.innerText || "" : "";
+  let hash = 0;
+  for (let index = 0; index < text.length; index++) hash = (hash * 31 + text.charCodeAt(index)) | 0;
+  let shadowNodes = 0, shadowText = 0;
+  const walk = (root) => {
+    for (const el of root.querySelectorAll("*")) {
+      if (!el.shadowRoot) continue;
+      shadowNodes += el.shadowRoot.querySelectorAll("*").length;
+      shadowText += (el.shadowRoot.textContent || "").length;
+      walk(el.shadowRoot);
+    }
+  };
+  walk(document);
+  const busy = /(^|\n)\s*loading(\.\.\.|…)?\s*(\n|$)/i.test(text) || !!document.querySelector("[aria-busy=true]");
+  return [document.readyState, text.length + ":" + hash + ":" + shadowNodes + ":" + shadowText, busy];
+}

@@ -1,0 +1,60 @@
+{
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/hashapp.html",
+    "--no-changes"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "wait",
+    "--text",
+    "Directory"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/hashapp.html#/people/3", "--no-changes"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "get",
+    "title"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/hashapp.html#/", "--no-changes"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "get",
+    "title"
+   ],
+   "session": "d4"
+  }
+ ]
+}

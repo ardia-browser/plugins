@@ -1,0 +1,29 @@
+{
+ "live_only": "close after the batch ends the daemon, and which side of its exit the recording's last frames fall on is timing",
+ "source": "D5 hand-written: act commands on act-input.html, title reflects what the page saw",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-input.html",
+    "--show",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "batch",
+    "click #go",
+    "get title",
+    "close",
+    "--no-changes"
+   ],
+   "session": "d5"
+  }
+ ]
+}

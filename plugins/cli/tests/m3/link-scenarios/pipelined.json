@@ -1,0 +1,82 @@
+{
+ "ops": [
+  {
+   "op": "open"
+  },
+  {
+   "op": "send",
+   "method": "Target.createTarget",
+   "params": {
+    "url": "about:blank"
+   },
+   "save": "target",
+   "keep": "keys"
+  },
+  {
+   "op": "send",
+   "method": "Target.attachToTarget",
+   "params": {
+    "targetId": "@target.targetId",
+    "flatten": true
+   },
+   "save": "page",
+   "keep": "keys"
+  },
+  {
+   "op": "pipeline",
+   "count": 300,
+   "send": {
+    "op": "send",
+    "method": "Runtime.evaluate",
+    "params": {
+     "expression": "{i} * 2",
+     "returnByValue": true
+    },
+    "session": "@page.sessionId"
+   }
+  },
+  {
+   "op": "pipeline",
+   "count": 2000,
+   "send": {
+    "op": "send",
+    "method": "Browser.getVersion",
+    "keep": "keys"
+   }
+  },
+  {
+   "op": "gather",
+   "sends": [
+    {
+     "op": "send",
+     "method": "Runtime.evaluate",
+     "params": {
+      "expression": "'a'",
+      "returnByValue": true
+     },
+     "session": "@page.sessionId"
+    },
+    {
+     "op": "send",
+     "method": "Nope.nope"
+    },
+    {
+     "op": "send",
+     "method": "Target.getTargets",
+     "keep": "keys"
+    },
+    {
+     "op": "send",
+     "method": "Browser.close"
+    }
+   ]
+  },
+  {
+   "op": "send",
+   "method": "Target.closeTarget",
+   "params": {
+    "targetId": "@target.targetId"
+   }
+  }
+ ]
+}

@@ -1,0 +1,159 @@
+const SOURCE = "ardia-script.js";
+const OFFSET = %(offset)d;
+const READ_BATCH = %(read_batch)d;
+const STATE_LIMIT = %(state_limit)d;
+let state = %(state)s;
+let stateSent = "";
+let stateCheckedAt = 0;
+const syncState = (force) => {
+  const now = Date.now();
+  if (!force && now - stateCheckedAt < 1000) return;
+  stateCheckedAt = now;
+  let text;
+  try { text = JSON.stringify(state === undefined ? {} : state); } catch (e) { return; }
+  if (text === stateSent || text.length > STATE_LIMIT) return;
+  stateSent = text;
+  postMessage({ type: "state", value: text });
+};
+const waiting = new Map();
+let nextId = 1;
+const show = (value) => {
+  if (typeof value === "string") return value;
+  if (value === undefined) return "undefined";
+  if (value instanceof Error) return value.stack || String(value);
+  try { const text = JSON.stringify(value, null, 2); return text === undefined ? String(value) : text; } catch (e) { return String(value); }
+};
+const lineOf = (stack) => {
+  const pattern = new RegExp(SOURCE.replace(/[.]/g, "\\.") + ":(\\d+):(\\d+)", "g");
+  for (const match of String(stack || "").matchAll(pattern)) {
+    if (Number(match[1]) > OFFSET) return Number(match[1]) - OFFSET;
+  }
+  return null;
+};
+const log = (...args) => postMessage({ type: "log", line: args.map(show).join(" ") });
+const request = (kind, payload) => {
+  const origin = new Error();
+  const line = lineOf(origin.stack);
+  const id = nextId++;
+  syncState(false);
+  return new Promise((resolve, reject) => {
+    waiting.set(id, { resolve, reject, origin, argv: payload.argv });
+    postMessage({ type: "request", request: { id, type: kind, line, ...payload } });
+  });
+};
+onmessage = (event) => {
+  const message = event.data || {};
+  if (message.type !== "reply") return;
+  const entry = waiting.get(message.id);
+  if (!entry) return;
+  waiting.delete(message.id);
+  const answer = message.answer || {};
+  if (answer.ok) { entry.resolve(answer); return; }
+  const error = entry.origin;
+  error.message = answer.error;
+  error.code = answer.code || null;
+  error.argv = entry.argv || null;
+  entry.reject(error);
+};
+const words = (value) => value == null ? [] : (Array.isArray(value) ? value.map(String) : String(value).trim().split(/\s+/).filter(Boolean));
+const browse = (...argv) => request("call", { argv: argv.flat().map(String) });
+const absolute = async (url) => {
+  url = String(url);
+  if (!/^(\/|\.\.?\/|\?|#)/.test(url)) return url;
+  const base = (await browse("get", "url")).data.url;
+  return new URL(url, base).href;
+};
+const text = (answer) => answer.text;
+const data = (key) => (answer) => (answer.data || {})[key];
+const flags = (options, table) => {
+  const out = [];
+  for (const [key, flag] of Object.entries(table)) {
+    const value = options && options[key];
+    if (value === undefined || value === null || value === false) continue;
+    out.push(flag);
+    if (value !== true) out.push(String(value));
+  }
+  return out;
+};
+const evaluateAs = (via) => (fn, arg) => request("call", {
+  argv: ["eval", typeof fn === "function" ? "(" + fn + ")(" + (arg === undefined ? "" : JSON.stringify(arg)) + ")" : String(fn)], via,
+}).then(data("result"));
+const read = async (what, options) => {
+  options = options || {};
+  let argv = ["read"];
+  if (what && typeof what === "object" && !Array.isArray(what)) { options = { ...what, ...options }; what = options.urls; }
+  const urls = [];
+  for (const url of words(what)) urls.push(await absolute(url));
+  const rest = flags(options, { links: "--links", selector: "-s", limit: "--limit", timeout: "--timeout", http: "--http" });
+  if (options.links != null || options.limit != null || urls.length <= READ_BATCH) return (await browse(argv.concat(urls, rest))).data.pages;
+  const pages = [];
+  for (let i = 0; i < urls.length; i += READ_BATCH) pages.push(...(await browse(argv.concat(urls.slice(i, i + READ_BATCH), rest))).data.pages);
+  return pages;
+};
+const page = {
+  goto: async (url) => (await browse("open", await absolute(url))).data,
+  back: () => browse("back").then(data("url")),
+  forward: () => browse("forward").then(data("url")),
+  reload: () => browse("reload").then(data("url")),
+  click: (selector, options) => browse("click", selector, flags(options, { newTab: "--new-tab", button: "--button" })).then(text),
+  dblclick: (selector) => browse("dblclick", selector).then(text),
+  focus: (selector) => browse("focus", selector).then(text),
+  fill: (selector, value) => browse("fill", selector, String(value)).then(text),
+  type: (selector, value) => browse("type", selector, String(value)).then(text),
+  press: (...args) => browse("press", ...args.slice(-2)).then(text),
+  waitForTimeout: (ms) => new Promise((resolve) => setTimeout(resolve, Number(ms) || 0)),
+  keyboard: (value) => browse("keyboard", "type", String(value)).then(text),
+  select: (selector, ...values) => browse("select", selector, ...values.flat()).then(text),
+  check: (selector) => browse("check", selector).then(text),
+  uncheck: (selector) => browse("uncheck", selector).then(text),
+  hover: (selector) => browse("hover", selector).then(text),
+  scroll: (direction, pixels) => browse("scroll", ...words(direction), ...words(pixels)).then(text),
+  text: (selector) => selector == null ? browse("read").then(data("content")) : browse("get", "text", selector).then(data("text")),
+  value: (selector) => browse("get", "value", selector).then(data("value")),
+  attr: (selector, name) => browse("get", "attr", selector, name).then(data("value")),
+  count: (selector) => browse("get", "count", selector).then(data("count")),
+  visible: (selector) => browse("is", "visible", selector).then(data("visible")),
+  url: () => browse("get", "url").then(data("url")),
+  title: () => browse("get", "title").then(data("title")),
+  snapshot: (options) => browse("snapshot", ...(typeof options === "string" || Array.isArray(options) ? words(options)
+    : flags(options, { interactive: "-i", compact: "-c", depth: "-d", selector: "-s", urls: "-u", diff: "--diff" }))).then(text),
+  links: (pattern) => browse("read", "--links", pattern == null ? "" : String(pattern), "--list").then(data("links"),
+    (error) => { if (error.code === "no_links") return []; throw error; }),
+  wait: (what, options) => {
+    if (typeof what === "number") return request("sleep", { ms: what }).then(() => undefined);
+    if (what && typeof what === "object") { options = what; what = undefined; }
+    return browse("wait", ...words(what), ...flags(options, { text: "--text", url: "--url", load: "--load", fn: "--fn", state: "--state", timeout: "--timeout" })).then(text);
+  },
+  evaluate: evaluateAs("page.evaluate"),
+  eval: evaluateAs("page.eval"),
+};
+const sleep = (ms) => request("sleep", { ms: Number(ms) || 0 }).then(() => undefined);
+const clean = (value) => {
+  if (value === undefined) return { undefined: true };
+  try { return { value: JSON.parse(JSON.stringify(value)) }; } catch (e) { return { value: show(value) }; }
+};
+const __ardiaRun = (run) => {
+  (async () => {
+    let result;
+    try {
+      result = { kind: "done", ...clean(await run()) };
+    } catch (error) {
+      result = {
+        kind: "error",
+        message: error && error.message !== undefined ? String(error.message) : show(error),
+        name: error && error.name ? String(error.name) : "Error",
+        line: lineOf(error && error.stack),
+        code: error && error.code ? String(error.code) : null,
+        command: error && error.argv ? error.argv : null,
+      };
+    }
+    syncState(true);
+    postMessage({ type: "done", result });
+  })();
+};
+Object.assign(self, { page, browse, read, log, sleep });
+console.log = log;
+console.info = log;
+console.warn = log;
+console.error = log;
+postMessage({ type: "ready" });

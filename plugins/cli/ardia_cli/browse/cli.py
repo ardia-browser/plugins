@@ -12,6 +12,7 @@ from ardia_cli.browse.errors import BrowseError, Usage
 VALUE_FLAGS = {
     "--session", "--namespace", "--data-dir", "--port", "--ws", "--cdp", "--max-output", "--screenshot-dir", "--screenshot-format",
     "--screenshot-quality", "--idle-timeout", "--init-script", "--enable", "--headers", "--color-scheme", "--download-path",
+    "--expect-loader",
 }
 BOOL_FLAGS = {
     "--json", "--no-humanize", "--humanize", "--content-boundaries", "--annotate", "--no-auto-dialog", "--pin-tab", "--no-pin-tab",
@@ -117,6 +118,7 @@ def options_from(found: dict, env: dict) -> dict:
         "humanize": humanize,
         "timeout_ms": env.get("AGENT_BROWSER_DEFAULT_TIMEOUT") or 25000,
         "max_output": max_output,
+        "expect_loader": found.get("expect_loader"),
         "full": bool(found.get("full")),
         "no_changes": bool(found.get("no_changes")),
         "no_text": bool(found.get("no_text")),
@@ -336,6 +338,48 @@ def eval_code_given(args: list[str]) -> bool:
     return False
 
 
+MAX_CDP_STDIN = 1024 * 1024
+
+
+def cdp_params(raw: str | None, pairs: list[str], stdin: str | None) -> dict:
+    import io
+
+    from ardia_cli.call_cli import ParamsError, build_params
+
+    try:
+        params = build_params(raw, pairs, io.StringIO(stdin or "")) or {}
+    except ParamsError as error:
+        raise Usage(str(error).replace("-p ", "--param ")) from None
+    if len(json.dumps(params, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > MAX_CDP_STDIN:
+        raise Usage("--params is over 1 MB once encoded")
+    return params
+
+
+def read_cdp_stdin() -> str:
+    from ardia_cli.call_cli import ParamsError, read_params_stdin
+
+    try:
+        return read_params_stdin(sys.stdin)
+    except ParamsError as error:
+        raise Usage(str(error)) from None
+
+
+def check_cdp_flags(args: list[str]) -> dict:
+    from ardia_cli.browse.commands import CDP_FLAGS, cdp_target, parse
+    from ardia_cli.browse.script import parse_timeout
+
+    options, _ = parse(args, CDP_FLAGS)
+    cdp_target(options)
+    if options.get("timeout") is not None:
+        parse_timeout(options["timeout"])
+    return options
+
+
+def check_cdp(args: list[str], stdin: str | None) -> None:
+    options = check_cdp_flags(args)
+    cdp_params(options.get("params"), options.get("param") or [], stdin)
+
+
 def read_stdin_text() -> str:
     from ardia_cli import notes
 
@@ -430,9 +474,51 @@ def script_source(args: list[str], cwd: str) -> str:
     return source
 
 
-def main(argv: list[str]) -> int:
-    from ardia_cli.browse import outfile
+PLUGIN = None
 
+
+def refuse_plugin(argv: list[str], why: str) -> int:
+    from ardia_cli import telemetry
+    from ardia_cli.browse import plugin_access
+
+    try:
+        found, _ = split_globals(argv)
+        as_json = bool(found.get("json") or truthy(os.environ.get("AGENT_BROWSER_JSON")))
+    except Usage:
+        as_json = False
+    telemetry.note_error_code(plugin_access.CODE)
+    text = plugin_access.message(why)
+    if as_json:
+        payload = {"success": False, "data": None, "error": text, "code": plugin_access.CODE}
+        sys.stdout.write(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n")
+    else:
+        sys.stderr.write(f"✗ {text}\n")
+    return plugin_access.REFUSED
+
+
+def take_plugin(argv: list[str]) -> int | None:
+    global PLUGIN
+    from ardia_cli.browse import plugin_access
+
+    try:
+        PLUGIN = plugin_access.take(os.environ)
+        try:
+            found, rest = split_globals(argv)
+        except Usage:
+            return None
+        plugin_access.check_request(argv, found, rest, os.environ, VALUE_FLAGS)
+    except plugin_access.Refused as error:
+        return refuse_plugin(argv, str(error))
+    return None
+
+
+def main(argv: list[str]) -> int:
+    from ardia_cli.browse import outfile, plugin_access
+
+    if plugin_access.wanted(os.environ):
+        refused = take_plugin(argv)
+        if refused is not None:
+            return refused
     try:
         try:
             _, rest = split_globals(argv)
@@ -487,10 +573,12 @@ def run(argv: list[str]) -> int:
         if namespace:
             paths.check_name("A namespace", namespace)
         ws, port, data_dir = endpoint_choice(found, env)
+        if PLUGIN is not None:
+            ws, port = PLUGIN.ws, None
         register_secrets(ws, env)
         root = endpoints.data_root(data_dir)
-        endpoint_key, endpoint_label = client.endpoint_key(ws, port, root)
-        key = paths.session_key(namespace, endpoint_key, session)
+        endpoint_key, endpoint_label = (PLUGIN.endpoint_key, PLUGIN.label) if PLUGIN is not None else client.endpoint_key(ws, port, root)
+        key = paths.session_key(namespace, endpoint_key, session, for_plugin=env.get("ARDIA_BROWSE_FOR_PLUGIN") == "1")
         options["_session"] = session
         command = rest[0]
         args = rest[1:]
@@ -506,13 +594,18 @@ def run(argv: list[str]) -> int:
             if result is not None:
                 return print_result(result, as_json, options)
         stdin = None
+        cdp_flags = check_cdp_flags(args) if command == "cdp" else {}
         if command == "notes" and "-" in args:
             stdin = read_stdin_text()
         elif (command in ("eval", "addinitscript") and "--stdin" in args) or (command == "eval" and not eval_code_given(args) and not sys.stdin.isatty()) \
                 or (command == "batch" and not [a for a in args if not a.startswith("--")] and not sys.stdin.isatty()):
             stdin = sys.stdin.read()
+        elif command == "cdp" and cdp_flags.get("params") == "-":
+            stdin = read_cdp_stdin()
         elif command == "read":
             stdin = read_stdin_urls(args)
+        if command == "cdp":
+            check_cdp(args, stdin)
         elif command == "script":
             stdin = script_source(args, os.getcwd())
         if command == "close" and "--all" in args:
@@ -521,7 +614,7 @@ def run(argv: list[str]) -> int:
         config = {
             "session": session, "namespace": namespace, "key": key, "data_root": str(root), "ws": ws, "port": port, "data_dir": data_dir,
             "endpoint_label": endpoint_label, "idle_timeout_ms": parse_duration(idle) if idle else None, "debug": bool(found.get("debug")),
-            "no_auto_dialog": options["no_auto_dialog"], "pin_tab": options.get("pin_tab"),
+            "no_auto_dialog": options["no_auto_dialog"], "pin_tab": options.get("pin_tab"), "for_plugin": env.get("ARDIA_BROWSE_FOR_PLUGIN") == "1",
         }
         dir_fd = dir_fd_factory()
         try:

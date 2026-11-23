@@ -1,0 +1,24 @@
+{
+ "steps": [
+  {"argv": ["tab", "list"], "session": "tabs"},
+  {"argv": ["tab", "new", "{fixture}/login.html", "--label", "login"], "session": "tabs"},
+  {"argv": ["tab", "new", "{fixture}/form.html"], "session": "tabs"},
+  {"argv": ["tab"], "session": "tabs"},
+  {"argv": ["--json", "tab", "list"], "session": "tabs"},
+  {"argv": ["tab", "login"], "session": "tabs"},
+  {"argv": ["get", "title"], "session": "tabs"},
+  {"argv": ["tab", "new", "--label", "login"], "session": "tabs"},
+  {"argv": ["tab", "close", "login"], "session": "tabs"},
+  {"argv": ["--json", "tab", "close", "login"], "session": "tabs"},
+  {"argv": ["tab", "3"], "session": "tabs"},
+  {"argv": ["tab", "tZZ"], "session": "tabs"},
+  {"argv": ["tab", "list"], "session": "tabs"},
+  {"argv": ["window", "new", "{fixture}/item.html"], "session": "tabs"},
+  {"argv": ["--json", "window", "new"], "session": "tabs"},
+  {"argv": ["window"], "session": "tabs"},
+  {"argv": ["window", "open"], "session": "tabs"},
+  {"argv": ["tab", "close"], "session": "tabs"},
+  {"argv": ["--json", "tab", "list"], "session": "tabs"},
+  {"argv": ["session", "info"], "session": "tabs"}
+ ]
+}

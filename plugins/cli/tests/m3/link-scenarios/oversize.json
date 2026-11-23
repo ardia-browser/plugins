@@ -1,0 +1,72 @@
+{
+ "live_only": "256 MB replies from Chromium (it drops any frame over 268435456 bytes without closing); the link's own cap is tested at the exact boundary in ts/tests/m3/link.test.ts",
+ "ops": [
+  {
+   "op": "open"
+  },
+  {
+   "op": "send",
+   "method": "Target.createTarget",
+   "params": {
+    "url": "about:blank"
+   },
+   "save": "target",
+   "keep": "keys"
+  },
+  {
+   "op": "send",
+   "method": "Target.attachToTarget",
+   "params": {
+    "targetId": "@target.targetId",
+    "flatten": true
+   },
+   "save": "page",
+   "keep": "keys"
+  },
+  {
+   "op": "send",
+   "method": "Runtime.evaluate",
+   "params": {
+    "expression": "'x'.repeat(256 * 1024 * 1024 - 1024)",
+    "returnByValue": true
+   },
+   "session": "@page.sessionId",
+   "keep": {
+    "len": "result.value"
+   },
+   "timeout": 240
+  },
+  {
+   "op": "send",
+   "method": "Runtime.evaluate",
+   "params": {
+    "expression": "'x'.repeat(256 * 1024 * 1024)",
+    "returnByValue": true
+   },
+   "session": "@page.sessionId",
+   "keep": {
+    "len": "result.value"
+   },
+   "timeout": 40
+  },
+  {
+   "op": "alive"
+  },
+  {
+   "op": "send",
+   "method": "Runtime.evaluate",
+   "params": {
+    "expression": "1+1",
+    "returnByValue": true
+   },
+   "session": "@page.sessionId"
+  },
+  {
+   "op": "send",
+   "method": "Target.closeTarget",
+   "params": {
+    "targetId": "@target.targetId"
+   }
+  }
+ ]
+}

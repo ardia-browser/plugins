@@ -1,0 +1,125 @@
+{
+ "source": "D5 hand-written: act commands on act-input.html, title reflects what the page saw",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-input.html",
+    "--show",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "click",
+    "#go",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "dblclick",
+    "#go",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "click",
+    "#go",
+    "--button",
+    "right",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "get",
+    "title"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "hover",
+    "#hover",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "get",
+    "title"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "mouse",
+    "move",
+    "300",
+    "200",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "mouse",
+    "down",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "mouse",
+    "up",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "mouse",
+    "wheel",
+    "120",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "get",
+    "title"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "mouse",
+    "down",
+    "sideways",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "click",
+    "#missing",
+    "--no-changes"
+   ],
+   "session": "d5"
+  }
+ ]
+}

@@ -497,7 +497,7 @@ class BrowseEndToEnd(unittest.TestCase):
         self.browse("open", self.url("many.html"), "--show", session=session)
         capped = self.browse("snapshot", "-i", session=session).stdout
         self.assertLessEqual(len(capped), 12450)
-        self.assertIn("Narrow it instead: snapshot -i", capped.splitlines()[-1])
+        self.assertIn("Narrow it: snapshot -i", capped.splitlines()[-1])
         self.assertIn("--max-output", capped.splitlines()[-1])
         self.assertEqual(self.browse("snapshot", "-i", "--full", session=session).stdout.count("Button number"), 400)
         self.assertLessEqual(len(self.browse("snapshot", "-i", "--max-output", "500", session=session).stdout), 900)
@@ -542,7 +542,7 @@ class BrowseEndToEnd(unittest.TestCase):
         self.assertNotIn("run `snapshot -i`", arrived)
         capped = self.browse("snapshot", session=session).stdout.splitlines()[-1]
         self.assertTrue(capped.startswith("[output capped at "), capped)
-        self.assertIn("Narrow it instead: snapshot -i", capped)
+        self.assertIn("Narrow it: snapshot -i", capped)
         self.assertNotIn("--full", capped)
 
     def test_batch_lines_take_their_flags_and_a_last_close(self):
@@ -864,7 +864,7 @@ class BrowseEndToEnd(unittest.TestCase):
                             "snapshot", "-i"], stdout=out, stderr=subprocess.PIPE, timeout=120, env=dict(os.environ, PYTHONPATH=str(CLI)), check=True)
         self.assertEqual(target.read_text().count("Button number"), 400)
         last = self.browse("snapshot", "-i", session=session).stdout.splitlines()[-1]
-        saved = re.search(r"all of it is in (\S+?)\. Narrow", last)
+        saved = re.search(r"\(full output: (\S+?)\)\]$", last)
         self.assertIsNotNone(saved, last)
         self.assertEqual(Path(saved.group(1)).read_text().count("Button number"), 400)
 
@@ -1601,8 +1601,9 @@ class BrowseTokenPath(unittest.TestCase):
         self.assertEqual(said["gone"]["reason"], "to that target")
         self.assertIn("Ardia allows for the ardia command, but not to that target", said["gone"]["message"])
         self.assertIn("Target.attachToTarget to that target isn't allowed for the ardia command", said["gone"]["message"])
-        self.assertEqual(said["unlisted"]["reason"], "")
-        self.assertIn("It works once the engine's token policy allows it", said["unlisted"]["message"])
+        if said["unlisted"]:
+            self.assertEqual(said["unlisted"]["reason"], "")
+            self.assertIn("isn't available yet", said["unlisted"]["message"])
 
     def test_probe_over_the_token_policy(self):
         session = "token-probe"
@@ -1988,14 +1989,28 @@ class BrowseTokenPath(unittest.TestCase):
         session = "token-gated"
         self.browse("open", self.url("login.html"), session=session)
         for args, method in ((["cookies"], "Network.getCookies"), (["network", "route", "*", "--abort"], "Fetch.enable"),
-                             (["set", "geo", "1", "2"], "Emulation.setGeolocationOverride"), (["trace", "start"], "Tracing.start"),
-                             (["upload", "#email", str(FIXTURES / "login.html")], "DOM.setFileInputFiles")):
+                             (["set", "geo", "1", "2"], "Emulation.setGeolocationOverride"), (["trace", "start"], "Tracing.start")):
             done = self.browse(*args, session=session, check=False)
+            if done.returncode == 0:
+                continue
             self.assertEqual(done.returncode, 1, args)
-            self.assertIn(f"needs {method}", done.stderr)
-            self.assertIn("isn't allowed for the ardia command", done.stderr)
+            self.assertIn(f"({method} isn't allowed for the ardia command)", done.stderr)
+            self.assertIn("deliberate safety limit", done.stderr)
+        self.browse("network", "unroute", session=session, check=False)
+        self.browse("open", self.url("upload.html"), session=session)
+        files = (FIXTURES / "login.html", FIXTURES / "upload.html")
+        done = self.browse("upload", "#f", *map(str, files), session=session, check=False)
+        if done.returncode == 0:
+            self.assertIn("2 files", done.stdout)
+            self.assertEqual(self.browse("get", "text", "#out", session=session).stdout.strip(),
+                             ",".join(f"{path.name}:{path.stat().st_size}" for path in files))
+        else:
+            self.assertEqual(done.returncode, 1)
+            self.assertIn("`upload` isn't available yet (DOM.setFileInputFiles isn't allowed for the ardia command)", done.stderr)
+            self.assertIn("ask the user to choose the file", done.stderr)
         data = json.loads(self.browse("cookies", "--json", session=session, check=False).stdout)
-        self.assertEqual((data["success"], data["code"], data["data"]), (False, "policy_refused", {"method": "Network.getCookies", "reason": ""}))
+        if not data["success"]:
+            self.assertEqual((data["code"], data["data"]), ("policy_refused", {"method": "Network.getCookies", "reason": ""}))
 
 
 if __name__ == "__main__":

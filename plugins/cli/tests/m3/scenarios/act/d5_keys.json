@@ -1,0 +1,159 @@
+{
+ "divergences": [
+  "editing-commands"
+ ],
+ "source": "D5 hand-written: act commands on act-input.html, title reflects what the page saw",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-input.html",
+    "--show",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "click",
+    "#name",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "press",
+    "a",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "press",
+    "Shift+b",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "press",
+    "#area",
+    "Enter",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "get",
+    "title"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "keydown",
+    "Shift",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "keyup",
+    "Shift",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "keyboard",
+    "type",
+    "xyz",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "keyboard",
+    "inserttext",
+    "Q",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "get",
+    "title"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "click",
+    "#editor",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "keyboard",
+    "type",
+    "one two",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "press",
+    "Meta+a",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "press",
+    "Backspace",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "get",
+    "title"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "press",
+    "Control+Alt+Nope",
+    "--no-changes"
+   ],
+   "session": "d5"
+  },
+  {
+   "argv": [
+    "keyboard",
+    "frob",
+    "x",
+    "--no-changes"
+   ],
+   "session": "d5"
+  }
+ ]
+}

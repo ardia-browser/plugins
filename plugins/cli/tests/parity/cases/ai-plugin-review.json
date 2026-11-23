@@ -1,0 +1,4198 @@
+[
+ {
+  "id": "review--1-batch-text",
+  "command": "browse batch",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "batch",
+   "get title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 1: batch is refused before the daemon",
+  "intentional": {
+   "why": "plugin mode refuses commands that run other commands: the Python daemon checks the plugin rules on the outer command only (M3 F1 moves the check per step)",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `batch`: it runs other commands inside the daemon, which doesn't check the plugin rules on them yet, so send each step on its own; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse batch (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--1-batch-json",
+  "command": "browse batch",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "batch",
+   "get title",
+   "cdp Browser.getVersion"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 1: one JSON line with nested_commands_refused",
+  "intentional": {
+   "why": "plugin mode refuses commands that run other commands: the Python daemon checks the plugin rules on the outer command only (M3 F1 moves the check per step)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `batch`: it runs other commands inside the daemon, which doesn't check the plugin rules on them yet, so send each step on its own; nothing was sent\",\"code\":\"nested_commands_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse batch (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--1-batch-bail",
+  "command": "browse batch",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "batch",
+   "--bail",
+   "get title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 1: batch flags change nothing",
+  "intentional": {
+   "why": "plugin mode refuses commands that run other commands: the Python daemon checks the plugin rules on the outer command only (M3 F1 moves the check per step)",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `batch`: it runs other commands inside the daemon, which doesn't check the plugin rules on them yet, so send each step on its own; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse batch (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--1-open-read",
+  "command": "browse open",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "open",
+   "--read",
+   "https://example.com/"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 1: open --read runs read, which plugins can't run",
+  "intentional": {
+   "why": "plugin mode refuses commands that run other commands: the Python daemon checks the plugin rules on the outer command only (M3 F1 moves the check per step)",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `open --read`: it runs other commands inside the daemon, which doesn't check the plugin rules on them yet, so send each step on its own; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse open (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--1-open-read-inline",
+  "command": "browse open",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "open",
+   "--read=1",
+   "https://example.com/"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 1: --read=value is the same flag",
+  "intentional": {
+   "why": "plugin mode refuses commands that run other commands: the Python daemon checks the plugin rules on the outer command only (M3 F1 moves the check per step)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `open --read`: it runs other commands inside the daemon, which doesn't check the plugin rules on them yet, so send each step on its own; nothing was sent\",\"code\":\"nested_commands_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse open (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--1-goto-read",
+  "command": "browse open",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "goto",
+   "https://example.com/",
+   "--read"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 1: aliases of open too",
+  "intentional": {
+   "why": "plugin mode refuses commands that run other commands: the Python daemon checks the plugin rules on the outer command only (M3 F1 moves the check per step)",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `goto --read`: it runs other commands inside the daemon, which doesn't check the plugin rules on them yet, so send each step on its own; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse goto (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--1-open-without-read",
+  "command": "browse open",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "open",
+   "--",
+   "--read"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Opened\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: open isn't on the plugin allowlist at all",
+  "intentional": {
+   "why": "plugin mode runs only the commands and flags the AI plugin contract lists (an allowlist checked with the daemon's own grammar)",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `open` for a plugin, only page steps; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse open (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--4-scope-cdp-error",
+  "command": "browse fill",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "fill",
+   "--json",
+   "--",
+   "@e2",
+   "Ada"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":false,\"data\":null,\"error\":\"Input.insertText: ardia: tab_out_of_scope: the tab moved to another window\",\"code\":\"tab_out_of_scope\"}\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: the daemon's CDP layer codes the engine's refusal; the client passes it on; plugin_daemon_unavailable until F1-early (original in tests/parity/pending/f1-early.json)",
+  "intentional": {
+   "why": "plugin mode never reaches the Python daemon, which reads pages through page script that plugin credentials can't run (ardia#2808); until the TypeScript plugin daemon (F1-early) lands, every plugin step answers plugin_daemon_unavailable",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) has no plugin daemon yet: plugin steps will run on a TypeScript daemon that reads pages through DOM, accessibility and input only (M3 F1); nothing was sent\",\"code\":\"plugin_daemon_unavailable\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse fill (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--4-lease-cdp-error",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "click",
+   "--json",
+   "--",
+   "@e3"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":false,\"data\":null,\"error\":\"Input.dispatchMouseEvent: ardia: document_changed: no act lease covers this document\",\"code\":\"document_changed\"}\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: the act lease's refusal, coded by the daemon; plugin_daemon_unavailable until F1-early (original in tests/parity/pending/f1-early.json)",
+  "intentional": {
+   "why": "plugin mode never reaches the Python daemon, which reads pages through page script that plugin credentials can't run (ardia#2808); until the TypeScript plugin daemon (F1-early) lands, every plugin step answers plugin_daemon_unavailable",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) has no plugin daemon yet: plugin steps will run on a TypeScript daemon that reads pages through DOM, accessibility and input only (M3 F1); nothing was sent\",\"code\":\"plugin_daemon_unavailable\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse click (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--4-scope-text-in-page-error",
+  "command": "browse snapshot",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "snapshot",
+   "--json",
+   "-s",
+   "main"
+  ],
+  "env": {
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":false,\"data\":null,\"error\":\"Selector main failed: Error: ardia: tab_out_of_scope\",\"code\":\"page_script_error\"}\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: page text naming a code keeps the daemon's code; ordinary browse since round 4 (plugin mode has no daemon yet)"
+ },
+ {
+  "id": "review--4-scope-text-without-code",
+  "command": "browse press",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "press",
+   "--json",
+   "--",
+   "Enter"
+  ],
+  "env": {
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":false,\"data\":null,\"error\":\"Input.dispatchKeyEvent ardia: tab_out_of_scope isn't allowed for the ardia command\"}\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: free text never becomes an engine code; ordinary browse since round 4 (plugin mode has no daemon yet)",
+  "intentional": {
+   "why": "json errors always carry a code (AI plugin contract)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"Input.dispatchKeyEvent ardia: tab_out_of_scope isn't allowed for the ardia command\",\"code\":\"command_failed\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review--4-scope-text",
+  "command": "browse fill",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "fill",
+   "--",
+   "@e2",
+   "Ada"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "✗ Input.insertText: ardia: tab_out_of_scope: the tab moved to another window\n",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 4: text mode keeps Python's line; plugin_daemon_unavailable until F1-early (original in tests/parity/pending/f1-early.json)",
+  "intentional": {
+   "why": "plugin mode never reaches the Python daemon, which reads pages through page script that plugin credentials can't run (ardia#2808); until the TypeScript plugin daemon (F1-early) lands, every plugin step answers plugin_daemon_unavailable",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) has no plugin daemon yet: plugin steps will run on a TypeScript daemon that reads pages through DOM, accessibility and input only (M3 F1); nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse fill (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--4-scope-in-data-only",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--json",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":false,\"data\":{\"note\":\"ardia: tab_out_of_scope\"},\"error\":\"Element is covered\",\"code\":\"covered\"}\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 4: only the error text maps; a code the daemon gave is kept; ordinary browse since round 4 (plugin mode has no daemon yet)"
+ },
+ {
+  "id": "review--5-after-check-text",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "click",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "@e4"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "✗ The page loaded a new document, so this step didn't count. Ardia checks it again for the next step\n",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 5: a click that navigated, in text mode; plugin_daemon_unavailable until F1-early (original in tests/parity/pending/f1-early.json)",
+  "intentional": {
+   "why": "plugin mode never reaches the Python daemon, which reads pages through page script that plugin credentials can't run (ardia#2808); until the TypeScript plugin daemon (F1-early) lands, every plugin step answers plugin_daemon_unavailable",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) has no plugin daemon yet: plugin steps will run on a TypeScript daemon that reads pages through DOM, accessibility and input only (M3 F1); nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse click (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--5-before-check-json",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--expect-loader",
+   "OLDLOADER",
+   "--json",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":false,\"data\":null,\"error\":\"The page loaded a new document, so this step didn't count. Ardia checks it again for the next step\",\"code\":\"document_changed\"}\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 5: a stale loader, under --json; plugin_daemon_unavailable until F1-early (original in tests/parity/pending/f1-early.json)",
+  "intentional": {
+   "why": "plugin mode never reaches the Python daemon, which reads pages through page script that plugin credentials can't run (ardia#2808); until the TypeScript plugin daemon (F1-early) lands, every plugin step answers plugin_daemon_unavailable",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) has no plugin daemon yet: plugin steps will run on a TypeScript daemon that reads pages through DOM, accessibility and input only (M3 F1); nothing was sent\",\"code\":\"plugin_daemon_unavailable\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse get (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--5-same-words-other-code",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--json",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":false,\"data\":null,\"error\":\"The page loaded a new document, so this step didn't count. Ardia checks it again for the next step\",\"code\":\"tab_gone\"}\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 5: only document_changed is reworded; plugin_daemon_unavailable until F1-early (original in tests/parity/pending/f1-early.json)",
+  "intentional": {
+   "why": "plugin mode never reaches the Python daemon, which reads pages through page script that plugin credentials can't run (ardia#2808); until the TypeScript plugin daemon (F1-early) lands, every plugin step answers plugin_daemon_unavailable",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) has no plugin daemon yet: plugin steps will run on a TypeScript daemon that reads pages through DOM, accessibility and input only (M3 F1); nothing was sent\",\"code\":\"plugin_daemon_unavailable\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse get (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--6-malformed-reply-json",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--json",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "daemon": {
+   "replies": [
+    {
+     "raw": "nope\n"
+    }
+   ],
+   "endpoint": "token",
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 6: a reply that isn't JSON; ordinary browse since round 4 (plugin mode has no daemon yet)",
+  "intentional": {
+   "why": "under --json every error is one JSON line with a code on stdout (AI plugin contract §3); text mode stays Python's",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)\",\"code\":\"internal_error\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review--6-malformed-reply-text",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "daemon": {
+   "replies": [
+    {
+     "raw": "nope\n"
+    }
+   ],
+   "endpoint": "token",
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 6: text mode keeps Python's crash line; ordinary browse since round 4 (plugin mode has no daemon yet)"
+ },
+ {
+  "id": "review--6-not-object-json",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--json",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "daemon": {
+   "replies": [
+    {
+     "raw": "[1, 2]\n"
+    }
+   ],
+   "endpoint": "token",
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 6: a reply that isn't an object; ordinary browse since round 4 (plugin mode has no daemon yet)",
+  "intentional": {
+   "why": "under --json every error is one JSON line with a code on stdout (AI plugin contract §3); text mode stays Python's",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"AttributeError: 'list' object has no attribute 'get'\",\"code\":\"internal_error\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review--6-router-hand-back-json",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "get",
+   "--",
+   "ti�tle"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 6: the router's refusal when the client hands back",
+  "intentional": {
+   "why": "the router and its Python hand-back are gone: the TypeScript client reads the step itself and refuses it as a plugin step",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `get ti�tle` for a plugin, only page steps; nothing was sent\",\"code\":\"plugin_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": null,
+   "files": {}
+  }
+ },
+ {
+  "id": "review--7-port-zero",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:0/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 7: port zero",
+  "intentional": {
+   "why": "the endpoint's port must be 1 to 65535 (the WebSocket client reads port 0 as 80); Python's reference accepts it",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) needs ARDIA_PLUGIN_ENDPOINT to be ws://127.0.0.1:<port>/devtools/browser/<id>, not \\\"ws://127.0.0.1:0/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\\\"; nothing was sent\",\"code\":\"plugin_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse get (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--7-port-leading-zero",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:080/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 7: port leading zero",
+  "intentional": {
+   "why": "the endpoint's port must be 1 to 65535 (the WebSocket client reads port 0 as 80); Python's reference accepts it",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) needs ARDIA_PLUGIN_ENDPOINT to be ws://127.0.0.1:<port>/devtools/browser/<id>, not \\\"ws://127.0.0.1:080/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\\\"; nothing was sent\",\"code\":\"plugin_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse get (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--7-port-too-big",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:65536/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 7: port too big",
+  "intentional": {
+   "why": "the endpoint's port must be 1 to 65535 (the WebSocket client reads port 0 as 80); Python's reference accepts it",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) needs ARDIA_PLUGIN_ENDPOINT to be ws://127.0.0.1:<port>/devtools/browser/<id>, not \\\"ws://127.0.0.1:65536/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\\\"; nothing was sent\",\"code\":\"plugin_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse get (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--7-port-five-nines",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:99999/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 7: port five nines",
+  "intentional": {
+   "why": "the endpoint's port must be 1 to 65535 (the WebSocket client reads port 0 as 80); Python's reference accepts it",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) needs ARDIA_PLUGIN_ENDPOINT to be ws://127.0.0.1:<port>/devtools/browser/<id>, not \\\"ws://127.0.0.1:99999/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\\\"; nothing was sent\",\"code\":\"plugin_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse get (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--7-port-highest",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:65535/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":true,\"data\":{\"title\":\"T\"},\"error\":null}\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 7: 65535 is a port; plugin_daemon_unavailable until F1-early (original in tests/parity/pending/f1-early.json)",
+  "intentional": {
+   "why": "plugin mode never reaches the Python daemon, which reads pages through page script that plugin credentials can't run (ardia#2808); until the TypeScript plugin daemon (F1-early) lands, every plugin step answers plugin_daemon_unavailable",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) has no plugin daemon yet: plugin steps will run on a TypeScript daemon that reads pages through DOM, accessibility and input only (M3 F1); nothing was sent\",\"code\":\"plugin_daemon_unavailable\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse get (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review--8-eval-crlf",
+  "command": "browse eval",
+  "argv": [
+   "browse",
+   "eval",
+   "--stdin"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "2\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "stdin": "1+\r\n1\r\n",
+  "note": "finding 8: Python 3.13 on macOS reads stdin with newline=\"\\n\", so CRLF reaches the daemon unchanged"
+ },
+ {
+  "id": "review--8-eval-bare-cr",
+  "command": "browse eval",
+  "argv": [
+   "browse",
+   "eval",
+   "--stdin"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "2\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "stdin": "1+\r1\r",
+  "note": "finding 8: a bare CR stays a CR"
+ },
+ {
+  "id": "review--8-eval-cr-at-end-of-crlf",
+  "command": "browse eval",
+  "argv": [
+   "browse",
+   "eval",
+   "--stdin"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "2\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "stdin": "a\r\r\nb\n\r",
+  "note": "finding 8: CR CR LF stays as sent"
+ },
+ {
+  "id": "review--8-batch-crlf",
+  "command": "browse batch",
+  "argv": [
+   "browse",
+   "batch"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "2\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "stdin": "get title\r\nget url\r\n",
+  "note": "finding 8: batch lines from stdin"
+ },
+ {
+  "id": "review2--1-open-label-dashdash-read",
+  "command": "browse open",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "open",
+   "--label",
+   "--",
+   "--read",
+   "https://example.com/"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2 blocker 1: --label takes -- as its value, so --read stays a flag",
+  "intentional": {
+   "why": "plugin mode refuses commands that run other commands: the Python daemon checks the plugin rules on the outer command only (M3 F1 moves the check per step)",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `open --read`: it runs other commands inside the daemon, which doesn't check the plugin rules on them yet, so send each step on its own; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse open (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review2--1-goto-label-dashdash-read",
+  "command": "browse open",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "goto",
+   "--label",
+   "--",
+   "--read",
+   "https://example.com/"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2 blocker 1: the same through goto",
+  "intentional": {
+   "why": "plugin mode refuses commands that run other commands: the Python daemon checks the plugin rules on the outer command only (M3 F1 moves the check per step)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `goto --read`: it runs other commands inside the daemon, which doesn't check the plugin rules on them yet, so send each step on its own; nothing was sent\",\"code\":\"nested_commands_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse goto (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review2--1-click-button-dashdash-new-tab",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "click",
+   "--button",
+   "--",
+   "--new-tab",
+   "@e1"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2 blocker 1: --button takes --, so --new-tab stays a flag",
+  "intentional": {
+   "why": "plugin mode runs only the commands and flags the AI plugin contract lists (an allowlist checked with the daemon's own grammar)",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `click --new-tab` for a plugin, only page steps; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse click (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review2--1-wait-text-dashdash-download",
+  "command": "browse wait",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "wait",
+   "--text",
+   "--",
+   "--download",
+   "x"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2 blocker 1/2: --download names a local path",
+  "intentional": {
+   "why": "plugin mode runs only the commands and flags the AI plugin contract lists (an allowlist checked with the daemon's own grammar)",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `wait --download` for a plugin, only page steps; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse wait (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review2--1-wait-fn",
+  "command": "browse wait",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "wait",
+   "-f",
+   "1"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2 blocker 1: withheld by the contract",
+  "intentional": {
+   "why": "plugin mode runs only the commands and flags the AI plugin contract lists (an allowlist checked with the daemon's own grammar)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `wait --fn` for a plugin, only page steps; nothing was sent\",\"code\":\"plugin_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse wait (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review2--1-tab-new",
+  "command": "browse tab",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "tab",
+   "new",
+   "https://example.com/"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2 blocker 1: only the pick and the list",
+  "intentional": {
+   "why": "plugin mode runs only the commands and flags the AI plugin contract lists (an allowlist checked with the daemon's own grammar)",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `tab new https://example.com/` for a plugin, only page steps; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse tab (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review2--1-get-cdp-url",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--",
+   "cdp-url"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2 blocker 1: get's read kinds only",
+  "intentional": {
+   "why": "plugin mode runs only the commands and flags the AI plugin contract lists (an allowlist checked with the daemon's own grammar)",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `get cdp-url` for a plugin, only page steps; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse get (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review2--2-diff-snapshot-baseline",
+  "command": "browse diff",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "diff",
+   "snapshot",
+   "--baseline",
+   "baseline.txt"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2 blocker 2: a snapshot baseline is read from a local file",
+  "intentional": {
+   "why": "plugin mode runs only the commands and flags the AI plugin contract lists (an allowlist checked with the daemon's own grammar)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `diff` for a plugin, only page steps; nothing was sent\",\"code\":\"plugin_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse diff (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review2--2-upload",
+  "command": "browse upload",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "upload",
+   "@e1",
+   "file.txt"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2 blocker 2: uploads name local files",
+  "intentional": {
+   "why": "plugin mode runs only the commands and flags the AI plugin contract lists (an allowlist checked with the daemon's own grammar)",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `upload` for a plugin, only page steps; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse upload (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review2--2-screenshot",
+  "command": "browse screenshot",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "screenshot"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2 blocker 2: screenshots are written to a local path",
+  "intentional": {
+   "why": "plugin mode runs only the commands and flags the AI plugin contract lists (an allowlist checked with the daemon's own grammar)",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `screenshot` for a plugin, only page steps; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse screenshot (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review2--2-eval",
+  "command": "browse eval",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "eval",
+   "--",
+   "1+1"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: not on the contract's list",
+  "intentional": {
+   "why": "plugin mode runs only the commands and flags the AI plugin contract lists (an allowlist checked with the daemon's own grammar)",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `eval` for a plugin, only page steps; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse eval (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review2--1-click-button-inline",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "click",
+   "--button=--new-tab",
+   "--",
+   "@e1"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: --button=--new-tab is a value, not a flag; plugin_daemon_unavailable until F1-early (original in tests/parity/pending/f1-early.json)",
+  "intentional": {
+   "why": "plugin mode never reaches the Python daemon, which reads pages through page script that plugin credentials can't run (ardia#2808); until the TypeScript plugin daemon (F1-early) lands, every plugin step answers plugin_daemon_unavailable",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) has no plugin daemon yet: plugin steps will run on a TypeScript daemon that reads pages through DOM, accessibility and input only (M3 F1); nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse click (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review2--1-wait-text-takes-fn",
+  "command": "browse wait",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "wait",
+   "-t",
+   "--fn",
+   "--",
+   "x"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: -t takes --fn as its text; plugin_daemon_unavailable until F1-early (original in tests/parity/pending/f1-early.json)",
+  "intentional": {
+   "why": "plugin mode never reaches the Python daemon, which reads pages through page script that plugin credentials can't run (ardia#2808); until the TypeScript plugin daemon (F1-early) lands, every plugin step answers plugin_daemon_unavailable",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) has no plugin daemon yet: plugin steps will run on a TypeScript daemon that reads pages through DOM, accessibility and input only (M3 F1); nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse wait (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review2--1-snapshot-select-dashdash",
+  "command": "browse snapshot",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "snapshot",
+   "-s",
+   "--",
+   "-i"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: -s takes --, then -i is a flag; plugin_daemon_unavailable until F1-early (original in tests/parity/pending/f1-early.json)",
+  "intentional": {
+   "why": "plugin mode never reaches the Python daemon, which reads pages through page script that plugin credentials can't run (ardia#2808); until the TypeScript plugin daemon (F1-early) lands, every plugin step answers plugin_daemon_unavailable",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) has no plugin daemon yet: plugin steps will run on a TypeScript daemon that reads pages through DOM, accessibility and input only (M3 F1); nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse snapshot (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review2--1-help",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "click",
+   "--help"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: help is the client's own",
+  "intentional": {
+   "why": "the help lists what this build ships and Python's doesn't: eval --isolated (with --main-world the default), click --touch and set permission",
+   "stdout": {
+    "text": "ardia browse click <sel> [--new-tab] [--button left|right|middle] [--touch] [--humanize] [--no-changes] [--no-text]\n\nClicks the element (with --humanize along a curved mouse path with human timing) and prints what\nchanged: nodes added, changed or removed with their refs, URL and title, and non-GET requests it\ncaused. A long run of one role (options, links, many buttons) is one line with its count, first and\nlast name and refs, plus any selected one; a run with disabled members lists the enabled ones and\ncounts the rest; nodes redrawn unchanged are one line with their new refs. After a navigation, or when\nthe click opens something (a heading, dialog, article or region), `text:` lines give its readable\ntext with refs inline (`[@e5]`), images as `[image \"…\": screenshot @eN]` and frames with their text;\n--no-text leaves them out.\nFails with `covered by <...>` when another element sits on top of the target. A disabled target is\nwaited for up to 1.5 s (it fails then if it's still disabled), so a dependent field can follow the\none that enables it in the same batch.\n--touch taps instead when the page supports touch (it reports touch points), and clicks otherwise, saying so.\nThe selector can also come as -s <sel> or --selector <sel>.\n"
+   }
+  }
+ },
+ {
+  "id": "review2--4-notice-before-document-changed",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "click",
+   "--expect-loader",
+   "L",
+   "--",
+   "@e4"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "Ardia restarted its control server; this session reconnected\n✗ The page loaded a new document, so this step didn't count. Ardia checks it again for the next step\n",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: a notice the daemon puts first doesn't stop the rewording; plugin_daemon_unavailable until F1-early (original in tests/parity/pending/f1-early.json)",
+  "intentional": {
+   "why": "plugin mode never reaches the Python daemon, which reads pages through page script that plugin credentials can't run (ardia#2808); until the TypeScript plugin daemon (F1-early) lands, every plugin step answers plugin_daemon_unavailable",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) has no plugin daemon yet: plugin steps will run on a TypeScript daemon that reads pages through DOM, accessibility and input only (M3 F1); nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse click (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review2--4-notice-json",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "click",
+   "--expect-loader",
+   "L",
+   "--json",
+   "--",
+   "@e4"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":false,\"data\":null,\"error\":\"The page loaded a new document, so this step didn't count. Ardia checks it again for the next step\",\"code\":\"document_changed\"}\n",
+     "err": "Ardia restarted its control server; this session reconnected\n",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: under --json the notice stays on stderr; plugin_daemon_unavailable until F1-early (original in tests/parity/pending/f1-early.json)",
+  "intentional": {
+   "why": "plugin mode never reaches the Python daemon, which reads pages through page script that plugin credentials can't run (ardia#2808); until the TypeScript plugin daemon (F1-early) lands, every plugin step answers plugin_daemon_unavailable",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) has no plugin daemon yet: plugin steps will run on a TypeScript daemon that reads pages through DOM, accessibility and input only (M3 F1); nothing was sent\",\"code\":\"plugin_daemon_unavailable\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse click (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review2--4-quoted-message-mid-line",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "click",
+   "--",
+   "@e4"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "✗ step said: The page loaded a new document, so this step didn't count. Ardia checks it again for the next step\n",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: only a whole line is reworded; plugin_daemon_unavailable until F1-early (original in tests/parity/pending/f1-early.json)",
+  "intentional": {
+   "why": "plugin mode never reaches the Python daemon, which reads pages through page script that plugin credentials can't run (ardia#2808); until the TypeScript plugin daemon (F1-early) lands, every plugin step answers plugin_daemon_unavailable",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) has no plugin daemon yet: plugin steps will run on a TypeScript daemon that reads pages through DOM, accessibility and input only (M3 F1); nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse click (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review2--5-reply-bad-exit-json",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--json",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":true,\"data\":{\"title\":\"T\"},\"error\":null}\n",
+     "err": "",
+     "exit": "x"
+    }
+   ],
+   "endpoint": "token",
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: a reply whose exit isn't a number prints nothing of its out; ordinary browse since round 4 (plugin mode has no daemon yet)",
+  "intentional": {
+   "why": "under --json exactly one JSON line with a code goes to stdout, whatever fails (AI plugin contract §3)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ValueError: invalid literal for int() with base 10: 'x'\",\"code\":\"internal_error\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review2--5-reply-bad-err-json",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--json",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":true,\"data\":{\"title\":\"T\"},\"error\":null}\n",
+     "err": 5,
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: a reply whose err isn't text prints nothing of its out; ordinary browse since round 4 (plugin mode has no daemon yet)",
+  "intentional": {
+   "why": "under --json exactly one JSON line with a code goes to stdout, whatever fails (AI plugin contract §3)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"TypeError: expected string or bytes-like object, got 'int'\",\"code\":\"internal_error\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review2--5-reply-bad-exit-text",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "T\n",
+     "err": "",
+     "exit": "x"
+    }
+   ],
+   "endpoint": "token",
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: text mode stays Python's; ordinary browse since round 4 (plugin mode has no daemon yet)"
+ },
+ {
+  "id": "review2--5-other-account-home-json",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8",
+   "ARDIA_DATA_DIR": "~nobody/data"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: a data dir naming another account's home",
+  "intentional": {
+   "why": "under --json exactly one JSON line with a code goes to stdout, whatever fails (AI plugin contract §3); ~nobody expands through getpwnam as Python's expanduser does, so the request reaches the plugin daemon check like any other data dir, and every plugin step answers plugin_daemon_unavailable until F1-early",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) has no plugin daemon yet: plugin steps will run on a TypeScript daemon that reads pages through DOM, accessibility and input only (M3 F1); nothing was sent\",\"code\":\"plugin_daemon_unavailable\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse get (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review2--5-no-credential-trailing-session-json",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "get",
+   "title",
+   "--session"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: no credential and an option missing its value",
+  "intentional": {
+   "why": "under --json exactly one JSON line with a code goes to stdout, whatever fails (AI plugin contract §3)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) needs ARDIA_PLUGIN_CREDENTIAL_FD, the descriptor Ardia passes the activity's credential on, and it isn't set; nothing was sent\",\"code\":\"plugin_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review3--2-leading-data-dir",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--data-dir",
+   "elsewhere",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 3 blocker 2: a leading --data-dir picks a local folder",
+  "intentional": {
+   "why": "plugin mode takes its data folder and session settings only from Ardia's environment (a global-option allowlist)",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) takes its data folder and session settings only from Ardia, so it doesn't take --data-dir; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse get (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review3--2-top-level-data-dir",
+  "command": "browse get",
+  "argv": [
+   "--data-dir=elsewhere",
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 3 blocker 2: the same before browse, under --json",
+  "intentional": {
+   "why": "plugin mode takes its data folder and session settings only from Ardia's environment (a global-option allowlist)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) takes its data folder and session settings only from Ardia, so it doesn't take --data-dir; nothing was sent\",\"code\":\"plugin_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse get (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review3--2-idle-timeout",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--idle-timeout",
+   "5s",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 3 blocker 2: only Ardia's session settings",
+  "intentional": {
+   "why": "plugin mode takes its data folder and session settings only from Ardia's environment (a global-option allowlist)",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) takes its data folder and session settings only from Ardia, so it doesn't take --idle-timeout; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse get (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review3--2-debug",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--debug",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 3 blocker 2: only Ardia's session settings",
+  "intentional": {
+   "why": "plugin mode takes its data folder and session settings only from Ardia's environment (a global-option allowlist)",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) takes its data folder and session settings only from Ardia, so it doesn't take --debug; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse get (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review3--1-arabic-digit-hides-download",
+  "command": "browse wait",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "wait",
+   "-٣",
+   "--download",
+   "x"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 3 blocker 1: Python reads -٣ as a number, so --download is a flag",
+  "intentional": {
+   "why": "plugin mode runs only the commands and flags the AI plugin contract lists (an allowlist checked with the daemon's own grammar)",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `wait --download` for a plugin, only page steps; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse wait (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review3--1-unknown-flag-refused",
+  "command": "browse snapshot",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "snapshot",
+   "-x"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 3 blocker 1: what the guard can't read is refused, never sent",
+  "intentional": {
+   "why": "plugin mode runs only the commands and flags the AI plugin contract lists (an allowlist checked with the daemon's own grammar)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `snapshot` with arguments the plugin guard can't read (Unknown flag: -x) for a plugin, only page steps; nothing was sent\",\"code\":\"plugin_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse snapshot (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review3--3-wait-state-inline",
+  "command": "browse wait",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "wait",
+   "--state=visible",
+   "#x"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 3: both clients reject wait --state as a launch option (Python's bug, kept for parity: plugins#18); plugin_daemon_unavailable until F1-early",
+  "intentional": {
+   "why": "plugin mode never reaches the Python daemon, which reads pages through page script that plugin credentials can't run (ardia#2808); until the TypeScript plugin daemon (F1-early) lands, every plugin step answers plugin_daemon_unavailable",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) has no plugin daemon yet: plugin steps will run on a TypeScript daemon that reads pages through DOM, accessibility and input only (M3 F1); nothing was sent\",\"code\":\"plugin_daemon_unavailable\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse wait (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review3--3-wait-state-spaced",
+  "command": "browse wait",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "wait",
+   "--state",
+   "visible",
+   "#x"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 3: both clients reject wait --state as a launch option (Python's bug, kept for parity: plugins#18); plugin_daemon_unavailable until F1-early",
+  "intentional": {
+   "why": "plugin mode never reaches the Python daemon, which reads pages through page script that plugin credentials can't run (ardia#2808); until the TypeScript plugin daemon (F1-early) lands, every plugin step answers plugin_daemon_unavailable",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) has no plugin daemon yet: plugin steps will run on a TypeScript daemon that reads pages through DOM, accessibility and input only (M3 F1); nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse wait (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review3--4-json-as-a-value",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--session",
+   "--json",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 3: --json is --session's value here, so the refusal is text"
+ },
+ {
+  "id": "review3--4-dashdash-as-a-value",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--max-output",
+   "--",
+   "--json",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 3: -- is --max-output's value, so --json still counts"
+ },
+ {
+  "id": "review3--5-plain-text-out",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--json",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "Element is covered\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 3: plain text under --json becomes one error object; ordinary browse since round 4 (plugin mode has no daemon yet)",
+  "intentional": {
+   "why": "under --json exactly one JSON line with a code goes to stdout, whatever fails (AI plugin contract §3)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"Element is covered\",\"code\":\"internal_error\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review3--5-empty-output",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--json",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 3: an empty failing answer still gives one line; ordinary browse since round 4 (plugin mode has no daemon yet)",
+  "intentional": {
+   "why": "under --json exactly one JSON line with a code goes to stdout, whatever fails (AI plugin contract §3)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"the ardia browse daemon answered with exit status 1 and no output\",\"code\":\"internal_error\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review3--5-code-null",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--json",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":false,\"data\":null,\"error\":\"Element is covered\",\"code\":null}\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 3: a null code becomes internal_error; ordinary browse since round 4 (plugin mode has no daemon yet)",
+  "intentional": {
+   "why": "under --json exactly one JSON line with a code goes to stdout, whatever fails (AI plugin contract §3)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"Element is covered\",\"code\":\"internal_error\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review3--5-text-error-on-stderr",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--json",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "✗ Element is covered\n",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 3: a text-mode error line is the message, not a second stream; ordinary browse since round 4 (plugin mode has no daemon yet)",
+  "intentional": {
+   "why": "under --json exactly one JSON line with a code goes to stdout, whatever fails (AI plugin contract §3)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"Element is covered\",\"code\":\"internal_error\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review3--5-json-list-kept",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--json",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "[1, 2]\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 5: a list from a failing non-batch command is wrapped; only a batch's list is kept; ordinary browse since round 4 (plugin mode has no daemon yet)",
+  "intentional": {
+   "why": "under --json exactly one JSON line with a code goes to stdout, whatever fails (AI plugin contract §3)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"[1, 2]\",\"code\":\"internal_error\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review3--contract-snapshot-cursor",
+  "command": "browse snapshot",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "snapshot",
+   "--compact",
+   "-C"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 3 contract: --cursor needs computed styles, which plugin credentials can't read",
+  "intentional": {
+   "why": "plugin mode runs only the commands and flags the AI plugin contract lists (an allowlist checked with the daemon's own grammar)",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `snapshot --cursor` for a plugin, only page steps; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse snapshot (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review3--contract-get-styles",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "get",
+   "--",
+   "styles",
+   "@e1"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 3 contract: computed styles need page script",
+  "intentional": {
+   "why": "plugin mode runs only the commands and flags the AI plugin contract lists (an allowlist checked with the daemon's own grammar)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `get styles` for a plugin, only page steps; nothing was sent\",\"code\":\"plugin_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse get (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review4--6-batch-row-without-code",
+  "command": "browse batch",
+  "argv": [
+   "browse",
+   "--json",
+   "batch",
+   "get title",
+   "click @e9"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "[{\"command\":[\"get\",\"title\"],\"success\":true,\"result\":{\"title\":\"T\"},\"error\":null,\"text\":\"T\"},{\"command\":[\"click\",\"@e9\"],\"success\":false,\"result\":null,\"error\":\"Element is covered\",\"text\":null}]\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "round 4: a failed batch row without a code gets internal_error",
+  "intentional": {
+   "why": "under --json a failing answer's error rows always carry a code, and other JSON becomes one error object (AI plugin contract §3)",
+   "stdout": {
+    "text": "[{\"command\":[\"get\",\"title\"],\"success\":true,\"result\":{\"title\":\"T\"},\"error\":null,\"text\":\"T\"},{\"command\":[\"click\",\"@e9\"],\"success\":false,\"result\":null,\"error\":\"Element is covered\",\"text\":null,\"code\":\"internal_error\"}]\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review4--6-batch-close-row",
+  "command": "browse batch",
+  "argv": [
+   "browse",
+   "--json",
+   "batch",
+   "get title",
+   "click @e9"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "[{\"command\":[\"get\",\"title\"],\"success\":true,\"result\":{\"title\":\"T\"},\"error\":null,\"text\":\"T\"},{\"command\":[\"close\"],\"success\":false,\"result\":null,\"error\":\"Session default is closing\"}]\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "round 4: the joined close row too",
+  "intentional": {
+   "why": "under --json a failing answer's error rows always carry a code, and other JSON becomes one error object (AI plugin contract §3)",
+   "stdout": {
+    "text": "[{\"command\":[\"get\",\"title\"],\"success\":true,\"result\":{\"title\":\"T\"},\"error\":null,\"text\":\"T\"},{\"command\":[\"close\"],\"success\":false,\"result\":null,\"error\":\"Session default is closing\",\"code\":\"internal_error\"}]\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review4--6-batch-row-with-code",
+  "command": "browse batch",
+  "argv": [
+   "browse",
+   "--json",
+   "batch",
+   "get title",
+   "click @e9"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "[{\"command\":[\"get\",\"title\"],\"success\":true,\"result\":{\"title\":\"T\"},\"error\":null,\"text\":\"T\"},{\"command\":[\"click\",\"@e9\"],\"success\":false,\"result\":null,\"error\":\"Element is covered\",\"text\":null,\"code\":\"covered\"}]\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "round 4: a row's own code stays"
+ },
+ {
+  "id": "review4--6-scalar",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--json",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "42\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "round 4: a JSON number from a failing answer becomes one error object",
+  "intentional": {
+   "why": "under --json a failing answer's error rows always carry a code, and other JSON becomes one error object (AI plugin contract §3)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"42\",\"code\":\"internal_error\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review4--6-object-without-success",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--json",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"title\":\"T\"}\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "round 4: an object that isn't an error becomes one",
+  "intentional": {
+   "why": "under --json a failing answer's error rows always carry a code, and other JSON becomes one error object (AI plugin contract §3)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"{\\\"title\\\":\\\"T\\\"}\",\"code\":\"internal_error\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review4--6-success-true-but-failed",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--json",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":true,\"data\":null,\"error\":null}\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "round 4: success true with a failing exit becomes an error",
+  "intentional": {
+   "why": "under --json a failing answer's error rows always carry a code, and other JSON becomes one error object (AI plugin contract §3)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"{\\\"success\\\":true,\\\"data\\\":null,\\\"error\\\":null}\",\"code\":\"internal_error\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review5--2-batch-list-kept",
+  "command": "browse batch",
+  "argv": [
+   "browse",
+   "--json",
+   "batch",
+   "get title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "[1, 2]\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "round 5: a failing batch's list stays a list"
+ },
+ {
+  "id": "review5--2-get-list-wrapped",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--json",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "[1,2]\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "round 5: Codex's repro: get title answering [1,2] with exit 1",
+  "intentional": {
+   "why": "under --json a failing answer's error rows always carry a code, and other JSON becomes one error object (AI plugin contract §3)",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"[1,2]\",\"code\":\"internal_error\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review4--6-batch-success-untouched",
+  "command": "browse batch",
+  "argv": [
+   "browse",
+   "--json",
+   "batch",
+   "get title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "[{\"command\":[\"get\",\"title\"],\"success\":true,\"result\":{\"title\":\"T\"},\"error\":null,\"text\":\"T\"}]\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "round 4: a succeeding batch is left alone"
+ },
+ {
+  "id": "review5--3-router-json-false-padded",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json=\u001cfalse\u001c",
+   "get",
+   "--",
+   "ti�tle"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 5: false padded with U+001C is false for the router as for the client and Python",
+  "intentional": {
+   "why": "the router and its Python hand-back are gone: the TypeScript client reads the step itself and refuses it as a plugin step",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `get ti�tle` for a plugin, only page steps; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": null,
+   "files": {}
+  }
+ },
+ {
+  "id": "review5--4-leading-timeout",
+  "command": "browse get",
+  "argv": [
+   "--timeout",
+   "100",
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 5: a leading global option in plugin mode",
+  "intentional": {
+   "why": "plugin mode checks the options before browse first: anything but --json there is a plugin refusal (77), never a usage error",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't read its options (ardia browse doesn't take --timeout before browse); nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": []
+  }
+ },
+ {
+  "id": "review5--4-leading-timeout-inline",
+  "command": "browse get",
+  "argv": [
+   "--timeout=100",
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 5: a leading global option in plugin mode",
+  "intentional": {
+   "why": "plugin mode checks the options before browse first: anything but --json there is a plugin refusal (77), never a usage error",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't read its options (ardia browse doesn't take --timeout before browse); nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": []
+  }
+ },
+ {
+  "id": "review5--4-leading-session",
+  "command": "browse get",
+  "argv": [
+   "--session",
+   "x",
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 5: a leading global option in plugin mode",
+  "intentional": {
+   "why": "plugin mode checks the options before browse first: anything but --json there is a plugin refusal (77), never a usage error",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't read its options (ardia browse doesn't take --session before browse); nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": []
+  }
+ },
+ {
+  "id": "review5--4-trailing-timeout",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--timeout",
+   "100",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 5: --timeout after browse isn't an option there either",
+  "intentional": {
+   "why": "plugin mode runs only the commands and flags the AI plugin contract lists (an allowlist checked with the daemon's own grammar)",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't run `--timeout` for a plugin, only page steps; nothing was sent\n"
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse other (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review5--4-leading-json",
+  "command": "browse get",
+  "argv": [
+   "--json",
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 5: --json is the one option that may come before browse",
+  "intentional": {
+   "why": "plugin mode never reaches the Python daemon, which reads pages through page script that plugin credentials can't run (ardia#2808); until the TypeScript plugin daemon (F1-early) lands, every plugin step answers plugin_daemon_unavailable",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) has no plugin daemon yet: plugin steps will run on a TypeScript daemon that reads pages through DOM, accessibility and input only (M3 F1); nothing was sent\",\"code\":\"plugin_daemon_unavailable\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": [],
+   "usage": {
+    "recent": [
+     "browse get (exit 77)"
+    ],
+    "tasks": {}
+   }
+  }
+ },
+ {
+  "id": "review6--4-leading-session-then-json",
+  "command": "browse get",
+  "argv": [
+   "--session",
+   "x",
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "never\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 6: Codex's repro, a refusal keeps its JSON envelope",
+  "intentional": {
+   "why": "in plugin mode every refusal is one JSON line on stdout when --json appears anywhere and the options can't be read",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"ardia browse for a plugin (ARDIA_BROWSE_FOR_PLUGIN=1) can't read its options (ardia browse doesn't take --session before browse); nothing was sent\",\"code\":\"plugin_refused\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "status": 77,
+   "daemon_requests": []
+  }
+ }
+]

@@ -1,0 +1,11 @@
+ObjC.import("PDFKit");
+function run(argv) {
+  const doc = $.PDFDocument.alloc.initWithURL($.NSURL.fileURLWithPath(argv[0]));
+  if (doc.isNil()) return "\u0000";
+  const pages = [];
+  for (let i = 0; i < doc.pageCount; i++) {
+    const page = doc.pageAtIndex(i);
+    pages.push(page.isNil() || page.string.isNil() ? "" : page.string.js);
+  }
+  return pages.join("\f");
+}

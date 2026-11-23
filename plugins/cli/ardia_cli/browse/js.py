@@ -12,7 +12,7 @@ LIBRARY = r"""
   const CONTROLS = "input:not([type=hidden]), textarea, select, button[aria-haspopup], [aria-haspopup=listbox], [aria-haspopup=true], [role=combobox], [role=searchbox], [role=textbox], [contenteditable=true]";
   const IMPLICIT_ROLES = {
     main: "main", navigation: "nav", banner: "body > header", contentinfo: "body > footer", dialog: "dialog", form: "form",
-    table: "table", row: "tr", cell: "td", columnheader: "th", list: "ul, ol", listitem: "li", article: "article", search: "search",
+    table: "table", row: "tr", cell: "td", columnheader: "th", list: "ul, ol, menu", listitem: "li", article: "article", search: "search",
     button: "button, input[type=button], input[type=submit], input[type=reset], summary", link: "a[href], area[href]",
     heading: "h1, h2, h3, h4, h5, h6", checkbox: "input[type=checkbox]", radio: "input[type=radio]",
     combobox: "select:not([multiple]):not([size]), select[size='']:not([multiple]), select[size='0']:not([multiple]), select[size='1']:not([multiple]), input[list]:not([type]), input[list][type=text], input[list][type=search], input[list][type=email], input[list][type=tel], input[list][type=url]",
@@ -778,12 +778,14 @@ LIBRARY = r"""
     },
     optionSignature(el) {
       const parts = [];
+      const nodeIds = api.optionNodeIds || (api.optionNodeIds = new WeakMap());
       for (const root of api.popupsOf(el)) {
         if (!api.visible(root)) continue;
         for (const node of root.matches("[role=option]") ? [root] : root.querySelectorAll("[role=option]")) {
           if (!api.visible(node)) continue;
           const facts = api.optionFacts(node);
-          parts.push([node.id || "", facts.text, ...facts.exact].join("\u0001"));
+          if (!nodeIds.has(node)) nodeIds.set(node, (api.optionNodeCount = (api.optionNodeCount || 0) + 1));
+          parts.push([nodeIds.get(node), node.id || "", facts.text, ...facts.exact].join("\u0001"));
         }
       }
       return parts.join("\u0002");

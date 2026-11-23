@@ -1,4 +1,5 @@
 import asyncio
+import errno
 import json
 import os
 import socket
@@ -18,6 +19,7 @@ CONNECT_TIMEOUT = 5.0
 PROTOCOL = 4
 MIN_APP_PROTOCOL = 1
 CALL_TIMEOUT = 30.0
+WIDEST_ID = 2 ** 53
 ANNOUNCE_TIMEOUT = 1.0
 EVENT_QUEUE_CAP = 1000
 EVENTS = (
@@ -83,11 +85,22 @@ class Incompatible(Unreachable):
         return self
 
 
+class InvalidAnswer(Unreachable):
+    sent = True
+
+
 class MethodError(Exception):
     def __init__(self, code: str, message: str):
         super().__init__(message)
         self.code = code
         self.message = message
+
+
+def request_line(ident: int, method: str, params=None) -> bytes:
+    request = {"id": ident, "method": method}
+    if params is not None:
+        request["params"] = params
+    return json.dumps(request, ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\n"
 
 
 def unreachable(detail: str | None = None) -> Unreachable:
@@ -98,6 +111,26 @@ def socket_path(data_dir: str | None = None) -> Path:
     return endpoint.data_root(data_dir) / SOCKET_FILE
 
 
+def missing_socket_detail(path: Path) -> str:
+    folder = path.parent
+    try:
+        info = os.lstat(folder)
+    except OSError as error:
+        return f"no {path.name} in {folder} ({error.strerror})"
+    if not stat.S_ISDIR(info.st_mode):
+        return f"{folder} isn't a real folder, so Ardia won't open {path.name} there"
+    if info.st_uid != os.getuid():
+        return f"{folder} belongs to another user, so Ardia won't open {path.name} there"
+    if info.st_mode & 0o022:
+        return f"others can write to {folder} (mode {info.st_mode & 0o7777:04o}), so Ardia won't open {path.name} there; run chmod go-w on it"
+    return f"no {path.name} in {folder}"
+
+
+def socket_refusal(path: Path, error: OSError) -> str:
+    reason = f"{path}: {error.strerror or error}"
+    return f"{reason}; a sandbox or the folder's permissions may be blocking it" if error.errno in (errno.EPERM, errno.EACCES) else reason
+
+
 def check_socket(path: Path) -> None:
     size = len(os.fsencode(str(path)))
     limit = LINUX_SUN_PATH_MAX if endpoint.LINUX else SUN_PATH_MAX
@@ -105,12 +138,10 @@ def check_socket(path: Path) -> None:
         raise Unreachable(f"the control socket path is {size} bytes, over the {limit} a Unix socket allows: {path}; use a shorter data dir")
     try:
         info = os.lstat(path)
-    except FileNotFoundError:
-        raise unreachable() from None
-    except NotADirectoryError:
-        raise unreachable() from None
+    except (FileNotFoundError, NotADirectoryError):
+        raise unreachable(missing_socket_detail(path)) from None
     except OSError as error:
-        raise unreachable(f"{path.name}: {error.strerror}") from None
+        raise unreachable(socket_refusal(path, error)) from None
     if not stat.S_ISSOCK(info.st_mode):
         raise unreachable(f"{path.name} isn't a socket")
     if info.st_uid != os.getuid():
@@ -217,15 +248,12 @@ class Connection:
         self._decides.put_nowait(None)
         self._writer.close()
 
-    async def call(self, method: str, params: dict | None = None, timeout: float | None = CALL_TIMEOUT):
+    async def call(self, method: str, params: dict | None = None, timeout: float | None = CALL_TIMEOUT, require_outcome: bool = False):
         if self._lost:
             raise unreachable(self._lost)
         self._next_id += 1
         ident = self._next_id
-        request = {"id": ident, "method": method}
-        if params is not None:
-            request["params"] = params
-        line = json.dumps(request, ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\n"
+        line = request_line(ident, method, params)
         if len(line) > MAX_LINE:
             raise MethodError("bad_request", "the request is longer than 1 MB")
         future = asyncio.get_running_loop().create_future()
@@ -251,6 +279,8 @@ class Connection:
         if "error" in reply:
             error = reply["error"] if isinstance(reply["error"], dict) else {}
             raise MethodError(str(error.get("code") or "failed"), str(error.get("message") or "failed"))
+        if require_outcome and "result" not in reply:
+            raise InvalidAnswer(f"Ardia's answer to {method} had neither a result nor an error")
         return reply.get("result")
 
     async def subscribe(self, names, extra: dict | None = None):
@@ -354,8 +384,8 @@ async def with_connection(data_dir: str | None, work):
         await connection.close()
 
 
-def call(data_dir: str | None, method: str, params=None, timeout: float | None = CALL_TIMEOUT):
-    return asyncio.run(with_connection(data_dir, lambda connection: connection.call(method, params, timeout)))
+def call(data_dir: str | None, method: str, params=None, timeout: float | None = CALL_TIMEOUT, require_outcome: bool = False):
+    return asyncio.run(with_connection(data_dir, lambda connection: connection.call(method, params, timeout, require_outcome)))
 
 
 async def announce(path: Path, caller: Caller) -> None:
@@ -372,8 +402,9 @@ async def announce(path: Path, caller: Caller) -> None:
         pass
 
 
-def announce_path(control_file: str) -> Path:
-    return Path(control_file).parent.parent / SOCKET_FILE
+def announce_path(control_file: str, linux: bool | None = None) -> Path:
+    folder = Path(control_file).parent
+    return (folder if (endpoint.LINUX if linux is None else linux) else folder.parent) / SOCKET_FILE
 
 
 async def _connect_socket(sock: socket.socket, path: Path, timeout: float) -> None:
@@ -382,7 +413,9 @@ async def _connect_socket(sock: socket.socket, path: Path, timeout: float) -> No
         await asyncio.wait_for(loop.sock_connect(sock, str(path)), timeout)
     except asyncio.TimeoutError:
         raise unreachable(f"{path.name} didn't accept in {timeout:g} s") from None
-    except (FileNotFoundError, ConnectionRefusedError):
-        raise unreachable() from None
+    except ConnectionRefusedError:
+        raise unreachable(f"nothing accepts on {path}") from None
+    except FileNotFoundError:
+        raise unreachable(missing_socket_detail(path)) from None
     except OSError as error:
-        raise unreachable(f"{path.name}: {error.strerror or error}") from None
+        raise unreachable(socket_refusal(path, error)) from None

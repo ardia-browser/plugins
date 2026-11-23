@@ -1,0 +1,1 @@
+{"id": "seed--noconnection-test-help--theme--1", "command": "theme", "argv": ["theme", "--help"], "env": {"XDG_CONFIG_HOME": "", "ARDIA_CONFIG_HOME": ""}, "note": "from test_config.NoConnection.test_help"}

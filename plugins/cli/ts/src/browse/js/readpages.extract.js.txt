@@ -1,0 +1,18 @@
+(selector) => {
+  let roots;
+  if (selector) {
+    roots = ardiaBrowse.queryAll(selector);
+  } else {
+    const main = document.querySelector("main, [role=main]");
+    roots = main && (main.innerText || "").trim() ? [main] : [document.body || document.documentElement];
+  }
+  const text = roots.filter(Boolean).map((root) => ardiaBrowse.readable(root)).filter(Boolean).join("\n\n");
+  let status = null;
+  try {
+    const entry = performance.getEntriesByType("navigation")[0];
+    status = entry && entry.responseStatus ? entry.responseStatus : null;
+  } catch (e) {}
+  let scope = "";
+  try { scope = ardiaBrowse.scope(); } catch (e) {}
+  return { title: document.title || "", text, matched: roots.length, status, scope };
+}

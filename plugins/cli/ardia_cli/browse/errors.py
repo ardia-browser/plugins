@@ -53,21 +53,70 @@ def refusal_reason(text: str, method: str) -> str:
     return said.rsplit(method, 1)[1].strip()
 
 
+DOWNLOAD_INSTEAD = ("`read --links <part of the link's address> --list` prints its full URL, and for a public text or JSON file "
+                    "`read --http --raw <that URL>` fetches it; otherwise ask the user to download it")
+SCREENSHOTS_INSTEAD = "take a `screenshot` at each moment that matters"
+SIGN_IN_INSTEAD = "ask the user to sign in in the tab, then work there"
+TIMINGS_INSTEAD = "`eval` can read the page's own `performance` timings"
+OTHER_WAY = "do this step another way, or ask the user to do it"
+NOT_YET_REASONS = frozenset({"with those editing commands"})
+NOT_YET = {
+    "upload": "ask the user to choose the file in the page, then carry on",
+    "download": DOWNLOAD_INSTEAD,
+    "wait --download": "ask the user to download the file",
+    "set device": "`set viewport <w> <h>` sizes a tab this session opened and never showed",
+    "set geo": "use the site's own location field, or ask the user to set the location",
+    "set offline": "ask the user to take the computer offline if the check needs it",
+    "set media": "read the page as it is, or ask the user to switch the system's light or dark appearance",
+    "set headers": SIGN_IN_INSTEAD,
+    "set credentials": SIGN_IN_INSTEAD,
+    "set auth": SIGN_IN_INSTEAD,
+    "set permission": "ask the user to allow it when the site asks",
+    "set permissions": "ask the user to allow it when the site asks",
+    "cookies": "`eval document.cookie` reads the cookies a page script can see; for the rest, ask the user",
+    "state": "`storage local` and `storage session` read and write a site's storage",
+    "network route": "`network requests` lists what the page loads; to change answers, ask the user what the check needs",
+    "record": SCREENSHOTS_INSTEAD,
+    "stream": SCREENSHOTS_INSTEAD,
+    "highlight": "`screenshot` shows the page",
+    "clipboard": "`fill` or `type` puts text in, and `get value` (a field) or `get text` reads it out",
+    "trace": TIMINGS_INSTEAD,
+    "profiler": TIMINGS_INSTEAD,
+}
+
+
+def instead_for(command: str | None) -> str:
+    if not command:
+        return OTHER_WAY
+    return NOT_YET.get(command) or NOT_YET.get(command.split(" ")[0]) or OTHER_WAY
+
+
+def known_limit(command: str | None) -> bool:
+    return bool(command) and (command in NOT_YET or command.split(" ")[0] in NOT_YET)
+
+
+def not_yet_message(command: str | None, method: str, refusal: str) -> str:
+    what = f"`{command}`" if command else method
+    if not known_limit(command):
+        return f"{what} isn't allowed on this Ardia ({refusal}). Updating Ardia may help; if it doesn't, {OTHER_WAY}"
+    return (f"{what} isn't available yet ({refusal}). No released Ardia lets the ardia command do this: it's a deliberate safety limit, not a bug, "
+            "so retrying or updating Ardia won't help today. A later Ardia adds it behind its full-control setting. "
+            f"Instead: {instead_for(command)}")
+
+
 class Gated(BrowseError):
     def __init__(self, method: str, command: str | None = None, detail: str | None = None, reason: str | None = None):
         self.method = method
         self.reason = reason or ""
         self.refusal = " ".join(part for part in (method, self.reason, POLICY_REFUSAL) if part)
         what = f"`{command}` needs {method}" if command else f"{method} is needed"
-        if self.reason:
+        if self.reason in NOT_YET_REASONS:
+            message = not_yet_message(command, method, self.refusal)
+        elif self.reason:
             hint = REFUSAL_HINTS.get(self.reason)
             message = f"{what}, which Ardia allows for the ardia command, but not {self.reason} ({self.refusal})" + (f": {hint}" if hint else "")
         else:
-            message = (
-                f"{what}, which Ardia's ardia-command policy refuses ({self.refusal}). "
-                "It works once the engine's token policy allows it; until then only a plain DevTools test "
-                "server (--port) accepts it"
-            )
+            message = not_yet_message(command, method, self.refusal)
         super().__init__(message + (f" ({detail})" if detail else ""), data={"method": method, "reason": self.reason}, code="policy_refused")
 
     def during(self, command: str | None, detail: str | None = None) -> "Gated":
@@ -75,10 +124,11 @@ class Gated(BrowseError):
 
 
 class CdpError(BrowseError):
-    def __init__(self, method: str, message: str):
+    def __init__(self, method: str, message: str, cdp_code: int | None = None):
         super().__init__(f"{method}: {message}")
         self.method = method
         self.cdp_message = message
+        self.cdp_code = cdp_code
 
 
 class NotFocusable(CdpError):

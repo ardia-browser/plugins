@@ -1,0 +1,115 @@
+{
+ "live_only": "designed divergence (script-isolated, eval-isolated): replay serves only requests Python sent, so this runs live until the TS side records its own transcripts (M3-DESIGN 2.6)",
+ "divergences": [
+  "script-isolated"
+ ],
+ "racy_steps": {
+  "steps": [
+   6,
+   11
+  ],
+  "reason": "step 6: a refused call is named by its index and command (`in call 1, `close``), a designed difference in docs/cli.md that the harness can't express per answer, so only the exit status is compared (an unknown command inside a script answers the worker differently, so it isn't in this comparison; tests/m3/secret_check.py and d7-r3.test.ts cover it); step 11: whether the worker's un-awaited request reaches the controller before its done message depends on CDP round-trip timing, in both daemons"
+ },
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/form.html",
+    "--no-changes"
+   ],
+   "session": "scr"
+  },
+  {
+   "argv": [
+    "script"
+   ],
+   "session": "scr",
+   "stdin": "log('start');\nconst t = await page.title();\nreturn {title: t, url: await page.url()};"
+  },
+  {
+   "argv": [
+    "script"
+   ],
+   "session": "scr",
+   "stdin": "return [{n: 1}, {n: 2}];"
+  },
+  {
+   "argv": [
+    "script"
+   ],
+   "session": "scr",
+   "stdin": "state.seen = (state.seen || 0) + 1;\nreturn state.seen;"
+  },
+  {
+   "argv": [
+    "script"
+   ],
+   "session": "scr",
+   "stdin": "return state.seen;"
+  },
+  {
+   "argv": [
+    "script"
+   ],
+   "session": "scr",
+   "stdin": "log('before');\nreturn document.title;"
+  },
+  {
+   "argv": [
+    "script"
+   ],
+   "session": "scr",
+   "stdin": "await browse('close');"
+  },
+  {
+   "argv": [
+    "script"
+   ],
+   "session": "scr",
+   "stdin": "await browse('get title');\nreturn 'split';"
+  },
+  {
+   "argv": [
+    "script"
+   ],
+   "session": "scr",
+   "stdin": "  "
+  },
+  {
+   "argv": [
+    "script",
+    "--timeout",
+    "2s"
+   ],
+   "session": "scr",
+   "stdin": "state.rows = [1, 2];\nawait sleep(4000);\nreturn 1;"
+  },
+  {
+   "argv": [
+    "script"
+   ],
+   "session": "scr",
+   "stdin": "return await page.evaluate(() => document.querySelectorAll('input').length);"
+  },
+  {
+   "argv": [
+    "script"
+   ],
+   "session": "scr",
+   "stdin": "page.title();\nreturn 'x';"
+  },
+  {
+   "argv": [
+    "script"
+   ],
+   "session": "scr",
+   "stdin": "syntax error here("
+  }
+ ],
+ "unstable_steps": {
+  "steps": [
+   11
+  ],
+  "why": "step 11 calls page.title() without await and returns; whether that floating call is served before the script ends is timing, on either daemon"
+ }
+}

@@ -15,8 +15,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  rust:
-    name: Rust ardia on ${{ matrix.os }}
+  typescript:
+    name: TypeScript ardia on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
@@ -25,32 +25,71 @@ jobs:
         os: [macos-15, ubuntu-24.04]
     defaults:
       run:
-        working-directory: plugins/cli/rust
+        working-directory: plugins/cli/ts
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Rust
-        run: |
-          command -v rustup >/dev/null || curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-      - run: cargo fmt --check
-      - run: cargo clippy --locked --all-targets -- -D warnings
-      - run: cargo test --locked
-      - run: cargo build --locked --release
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.2
+      - run: bun install --frozen-lockfile --ignore-scripts
+      - name: Type check (tsrs)
+        run: ./node_modules/.bin/tsrs --noEmit -p .
+      - name: Type check the browse daemon harness (tsrs)
+        run: ./node_modules/.bin/tsrs --noEmit -p tests/m3
+      - name: Build the program and its libc addon, the addon checked against Node's own Node-API headers
+        run: sh scripts/build.sh --node-headers "$(dirname "$(dirname "$(realpath "$(command -v node)")")")/include/node"
       - name: Size
         run: |
-          echo "ardia binary: $(wc -c < target/release/ardia) bytes" >> "$GITHUB_STEP_SUMMARY"
+          echo "ardia-ts binary: $(wc -c < dist/ardia-ts) bytes" >> "$GITHUB_STEP_SUMMARY"
+          echo "ardia-libc.so addon: $(wc -c < dist/ardia-libc.so) bytes" >> "$GITHUB_STEP_SUMMARY"
       - name: uv
-        run: curl -LsSf https://astral.sh/uv/0.12.15/install.sh | sh
+        run: curl -LsSf https://astral.sh/uv/0.13.0/install.sh | sh
+      - name: Unit tests, some beside the Python CLI
+        run: |
+          ~/.local/bin/uv venv --python 3.13.16 "$RUNNER_TEMP/unit-venv"
+          ARDIA_TEST_PYTHON="$RUNNER_TEMP/unit-venv/bin/python" bun test ./tests
       - name: Parity with the Python CLI
         working-directory: plugins/cli
         env:
-          ARDIA_RUST_CLI: ${{ github.workspace }}/plugins/cli/rust/target/release/ardia
+          ARDIA_TS_CLI: ${{ github.workspace }}/plugins/cli/ts/dist/ardia-ts
+          ARDIA_TEST_REQUIRES: ts
         run: |
-          ~/.local/bin/uv venv --python 3.13 "$RUNNER_TEMP/venv"
+          ~/.local/bin/uv venv --python 3.13.16 "$RUNNER_TEMP/venv"
           VIRTUAL_ENV="$RUNNER_TEMP/venv" ~/.local/bin/uv pip install --quiet --require-hashes --no-build -r requirements.lock
-          "$RUNNER_TEMP/venv/bin/python" -m unittest -v tests.test_rust_parity
+          "$RUNNER_TEMP/venv/bin/python" -m unittest -v tests.test_parity.TsParityTable tests.test_parity.TsDeepFixtures tests.test_parity.TsProcess tests.test_parity.HarnessRules tests.test_parity.HarnessCatches tests.test_parity.ServedTable tests.test_parity.ProtocolAgrees tests.test_parity.BuildSmoke tests.test_closed_stdout.TsClosedStdout tests.test_ts_browse_plugin
+      - name: Browse daemon harness, replay mode (recordings answer the Python daemon, no browser)
+        if: matrix.os == 'macos-15'
+        working-directory: plugins/cli
+        run: '"$RUNNER_TEMP/venv/bin/python" -m unittest -v tests.test_m3_harness'
+
+  main:
+    name: Manifest v2 main on ubuntu-24.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: plugins/cli
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        if: hashFiles('plugins/cli/main/package.json') != ''
+        with:
+          node-version: 24.22.2
+      - name: Install, type check, build and test plugins/cli/main
+        if: hashFiles('plugins/cli/main/package.json') != ''
+        working-directory: plugins/cli/main
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run typecheck
+          npm run build
+          npm test
 
   python:
     name: Python tests on ${{ matrix.os }}
@@ -71,10 +110,10 @@ jobs:
         with:
           node-version: 24
       - name: uv
-        run: curl -LsSf https://astral.sh/uv/0.12.15/install.sh | sh
+        run: curl -LsSf https://astral.sh/uv/0.13.0/install.sh | sh
       - name: Locked dependencies
         run: |
-          ~/.local/bin/uv venv --python 3.13 "$RUNNER_TEMP/venv"
+          ~/.local/bin/uv venv --python 3.13.16 "$RUNNER_TEMP/venv"
           VIRTUAL_ENV="$RUNNER_TEMP/venv" ~/.local/bin/uv pip install --quiet --require-hashes --no-build -r requirements.lock
       - run: '"$RUNNER_TEMP/venv/bin/python" -m unittest discover -s tests'
       - name: plugin.json passes ardia plugins check
@@ -85,11 +124,12 @@ jobs:
       - name: The vendored plugin schema is ardia's
         if: matrix.os == 'ubuntu-24.04'
         run: |
+          ardia_ref=main
           set -euo pipefail
-          url=https://raw.githubusercontent.com/ardia-browser/ardia/main/docs/plugin.schema.json
+          url=https://raw.githubusercontent.com/ardia-browser/ardia/$ardia_ref/docs/plugin.schema.json
           if ! curl -fsSL "$url" -o "$RUNNER_TEMP/ardia-plugin.schema.json"; then
-            echo "::warning::ardia main doesn't publish docs/plugin.schema.json yet: the vendored schema wasn't compared"
+            echo "::warning::ardia $ardia_ref doesn't publish docs/plugin.schema.json: the vendored schema wasn't compared"
             exit 0
           fi
           diff -u "$RUNNER_TEMP/ardia-plugin.schema.json" ardia_cli/schemas/plugin.schema.json \
-            || { echo "::error::ardia_cli/schemas/plugin.schema.json isn't ardia main's docs/plugin.schema.json: copy it over"; exit 1; }
+            || { echo "::error::ardia_cli/schemas/plugin.schema.json isn't ardia $ardia_ref's docs/plugin.schema.json: copy it over"; exit 1; }

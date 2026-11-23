@@ -1,0 +1,17 @@
+{
+ "steps": [
+  {"argv": ["open", "{fixture}/framejobs.html", "--no-changes"], "session": "frames"},
+  {"argv": ["wait", "--text", "Careers"], "session": "frames"},
+  {"argv": ["frame"], "session": "frames"},
+  {"argv": ["frame", "framejobs-inner"], "session": "frames"},
+  {"argv": ["frame", "main"], "session": "frames"},
+  {"argv": ["--json", "frame", "iframe[title='3rd party ad content']"], "session": "frames"},
+  {"argv": ["frame", "main"], "session": "frames"},
+  {"argv": ["frame", "#board"], "session": "frames"},
+  {"argv": ["--json", "frame", "main"], "session": "frames"},
+  {"argv": ["open", "{fixture}/oopif.html", "--no-changes"], "session": "frames"},
+  {"argv": ["wait", "600"], "session": "frames"},
+  {"argv": ["--json", "frame", "#child"], "session": "frames"},
+  {"argv": ["frame", "#missing-frame"], "session": "frames"}
+ ]
+}

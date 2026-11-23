@@ -1,0 +1,130 @@
+(rules, href) => {
+const SENTINEL = -1;
+const defaultPorts = { "http:": "80", "https:": "443", "ftp:": "21" };
+const unescapedAscii = new Set(Array.from('"-<>_~0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz', (c) => c.charCodeAt(0)));
+const banned = __BANNED__;
+const leadLength = (b) => (b >= 0xC2 && b <= 0xDF ? 2 : b >= 0xE0 && b <= 0xEF ? 3 : b >= 0xF0 && b <= 0xF4 ? 4 : 0);
+const firstChar = (bytes, start, end) => {
+  if (start >= end) return null;
+  const b0 = bytes[start];
+  if (b0 < 0x80) return [b0, 1];
+  const size = leadLength(b0);
+  if (!size || end - start < size) return null;
+  let point = b0 & (size === 2 ? 0x1F : size === 3 ? 0x0F : 0x07);
+  for (let i = 1; i < size; i++) {
+    const b = bytes[start + i];
+    if (b < 0x80 || b > 0xBF) return null;
+    point = (point << 6) | (b & 0x3F);
+  }
+  const min = size === 2 ? 0x80 : size === 3 ? 0x800 : 0x10000;
+  if (point < min || point > 0x10FFFF || (point >= 0xD800 && point <= 0xDFFF)) return null;
+  return [point, size];
+};
+const decode = (bytes) => {
+  const points = [];
+  for (let i = 0; i < bytes.length; ) {
+    const found = firstChar(bytes, i, Math.min(bytes.length, i + 4));
+    if (!found) { points.push(SENTINEL); i += 1; } else { points.push(found[0]); i += found[1]; }
+  }
+  return points;
+};
+const hex = (b) => (b >= 48 && b <= 57) || (b >= 65 && b <= 70) || (b >= 97 && b <= 102);
+const escapedByte = (bytes, i) => (i + 2 >= bytes.length || bytes[i] !== 37 || !hex(bytes[i + 1]) || !hex(bytes[i + 2]) ? null : parseInt(String.fromCharCode(bytes[i + 1], bytes[i + 2]), 16));
+const shouldUnescape = (p) => (p < 0x80 ? unescapedAscii.has(p) : !banned.some(([low, high]) => p >= low && p <= high));
+const encoder = new TextEncoder();
+const unescape = (bytes) => {
+  const out = [];
+  for (let i = 0; i < bytes.length; ) {
+    const first = escapedByte(bytes, i);
+    let found = null;
+    if (first !== null) {
+      const collected = [first];
+      if (first >= 0xC2 && first <= 0xF4) {
+        while (collected.length < 4) {
+          const trail = escapedByte(bytes, i + collected.length * 3);
+          if (trail === null || trail < 0x80 || trail > 0xBF) break;
+          collected.push(trail);
+        }
+      }
+      found = firstChar(collected, 0, collected.length);
+    }
+    if (!found) {
+      if (first !== null) { out.push(first); i += 3; } else { out.push(bytes[i]); i += 1; }
+      continue;
+    }
+    const [point, size] = found;
+    if (!shouldUnescape(point)) for (let j = 0; j < 3 * size; j++) out.push(bytes[i + j]);
+    else for (const b of encoder.encode(String.fromCodePoint(point))) out.push(b);
+    i += 3 * size;
+  }
+  return out;
+};
+const search = (pattern, p, string, s, distance) => {
+  let pStart = p, sStart = s, escape = false;
+  while (true) {
+    let mismatch = false;
+    if (p === pattern.length) {
+      if (s === string.length) return [true, p, s];
+      mismatch = true;
+    } else {
+      const c = pattern[p];
+      if (!escape && (c === 42 || c === 63)) return [true, p, s];
+      if (!escape && c === 92) { escape = true; p += 1; continue; }
+      escape = false;
+      if (s === string.length) return [false, p, s];
+      if (c === string[s] && c !== SENTINEL) { p += 1; s += 1; continue; }
+      mismatch = true;
+    }
+    if (distance === 0) return [false, p, s];
+    distance -= 1;
+    p = pStart;
+    sStart += 1;
+    s = sStart;
+  }
+};
+const matchPattern = (string, pattern) => {
+  let p = 0, s = 0;
+  while (true) {
+    let stars = false, questions = 0;
+    while (p < pattern.length && (pattern[p] === 42 || pattern[p] === 63)) { stars = stars || pattern[p] === 42; questions += pattern[p] === 63 ? 1 : 0; p += 1; }
+    const [ok, np, ns] = search(pattern, p, string, s, stars ? -1 : questions);
+    if (!ok) return false;
+    p = np; s = ns;
+    if (p === pattern.length) return true;
+  }
+};
+let url = null;
+try { url = new URL(href); } catch {}
+const scheme = url ? url.protocol.slice(0, -1) : "";
+const beforeFragment = href.split("#")[0];
+const testPath = url ? (url.pathname || "/") + (beforeFragment.includes("?") ? "?" + beforeFragment.slice(beforeFragment.indexOf("?") + 1) : "") : "";
+const testHost = url ? url.hostname.toLowerCase().replace(/\.+$/, "") : "";
+const testPort = url ? url.port || defaultPorts[url.protocol] || "-1" : "";
+const isIp = testHost.startsWith("[") || /^\d+\.\d+\.\d+\.\d+$/.test(testHost);
+const pathBytes = Array.from(encoder.encode(testPath));
+const unescapedPath = unescape(pathBytes);
+const hostMatches = (p) => {
+  const pattern = p.host.replace(/\.+$/, "");
+  if (testHost === pattern) return true;
+  if (p.sub && !pattern) return true;
+  if (!p.sub || isIp) return false;
+  return testHost.length > pattern.length + 1 && testHost.endsWith(pattern) && testHost[testHost.length - pattern.length - 1] === ".";
+};
+const pathMatches = (p) => {
+  const wanted = p.utf8Bytes;
+  if (wanted.length === unescapedPath.length + 2 && wanted[wanted.length - 2] === 47 && wanted[wanted.length - 1] === 42 && unescapedPath.every((b, i) => b === wanted[i])) return true;
+  return matchPattern(decode(unescapedPath), p.utf8) || matchPattern(decode(pathBytes), p.raw);
+};
+const matches = (p) => {
+  if (!url || !p.schemes.includes(scheme)) return false;
+  if (p.all) return true;
+  if (!p.file && !hostMatches(p)) return false;
+  if (p.port !== "*" && p.port !== testPort) return false;
+  return pathMatches(p);
+};
+const hrefPoints = decode(Array.from(encoder.encode(href)));
+const globbed = (list) => list.some((points) => matchPattern(hrefPoints, points));
+const included = rules.match.some(matches) || ((scheme === "http" || scheme === "https") && globbed(rules.include));
+if (!included) return "no rule matches";
+return rules.excludeMatch.some(matches) || globbed(rules.exclude) ? "excluded" : "run";
+}

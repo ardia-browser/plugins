@@ -1,0 +1,36 @@
+{
+ "source": "tests/test_browse_act.py ActInChrome.test_grid_cells_are_edited_in_one_batch",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "batch",
+    "fill #size1 large",
+    "fill #name1 Gadget",
+    "fill #qty1 7",
+    "fill #g-item Nut",
+    "fill #g-count 12"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.querySelector('#qtyin1').value"
+   ],
+   "session": "act",
+   "main_world": true
+  }
+ ]
+}

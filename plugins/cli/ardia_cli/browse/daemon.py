@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import re
 import os
 import signal
 import sys
@@ -116,7 +117,7 @@ def render(options: dict, result=None, error: BrowseError | None = None, name: s
     from ardia_cli.redact import redact
 
     code, out, err = _render(options, result, error, name)
-    command_metrics.rendered(name, result, error, out)
+    command_metrics.rendered(name, result, error, out + err)
     return code, redact(out), redact(err)
 
 
@@ -144,8 +145,12 @@ def _render(options: dict, result=None, error: BrowseError | None = None, name: 
     text = result.text
     if text is None:
         return code, "", ""
-    text = cap(redact_text(text), options, name, getattr(result, "output_cap", None))
-    notice = cap_notice(text)
+    plain_text = redact_text(text)
+    text = plain_text if getattr(result, "whole", False) else cap(plain_text, options, name, getattr(result, "output_cap", None))
+    capped = cap_notice(text) if text != plain_text else ""
+    if capped:
+        text = text[:len(text) - len(capped)].removesuffix("\n")
+    notice = "\n".join(part for part in (getattr(result, "notice", None), capped) if part)
     if result.page_content and options.get("content_boundaries"):
         text = boundary(text)
     return code, inert(text) + "\n", inert(notice) + "\n" if notice else ""
@@ -154,7 +159,7 @@ def _render(options: dict, result=None, error: BrowseError | None = None, name: 
 NARROWER = {
     "snapshot": "snapshot -i (interactive only), snapshot -s <css> (one region), find role <role> <action> --name <text> (act without a snapshot)",
     "get": "get text <css> or read -s <css> (one region)",
-    "read": "read -s <css> (one region per page), or fewer pages",
+    "read": "read -s <css> (one region per page), read --scroll -s <list> --match <text> (just the rows with that text), or fewer pages",
     "eval": "return less from the script, or get text <css> / read -s <css> for one region",
     "script": "return fewer fields or rows from the script",
     "flow": "flow run <name> --fields a,b --limit n --where field=value",
@@ -172,10 +177,43 @@ def cap(text: str, options: dict, name: str = "", default: int | None = None) ->
         return text
     cut = text.rfind("\n", 0, limit + 1)
     cut = cut if cut >= limit * 0.8 else limit
+    narrower = (region_narrower(text) if name == "snapshot" else None) or NARROWER.get(name, NARROW_ANY)
     saved = spill(text)
-    where = f"; all of it is in {saved}" if saved else ""
-    return text[:cut] + (f"\n{CAP_NOTICE}{cut:,} of {len(text):,} characters{where}. Narrow it instead: {NARROWER.get(name, NARROW_ANY)}. "
-                         f"Only if you need every line: --max-output {len(text)}]")
+    where = f" (full output: {saved})" if saved else ""
+    return text[:cut] + f"\n{CAP_NOTICE}{cut:,} of {len(text):,} characters. Narrow it: {narrower}; or --max-output {len(text)} for every line{where}]"
+
+
+REGION_ROLES = frozenset({
+    "main", "navigation", "complementary", "form", "region", "search", "dialog", "table", "grid", "list", "listbox", "tree", "menu",
+    "tablist", "article", "feed",
+})
+REGION_MOST = 0.7
+SNAPSHOT_LINE = re.compile(r"^( *)- ([A-Za-z]+)")
+
+
+def region_narrower(text: str) -> str | None:
+    lines = text.split("\n")
+    seen: dict = {}
+    sizes = []
+    for index, line in enumerate(lines):
+        found = SNAPSHOT_LINE.match(line)
+        if found is None or found.group(2) not in REGION_ROLES:
+            continue
+        role, depth = found.group(2), len(found.group(1))
+        end = index + 1
+        while end < len(lines):
+            below = re.match(r"^( *)- ", lines[end])
+            if below is not None and len(below.group(1)) <= depth:
+                break
+            end += 1
+        seen[role] = seen.get(role, 0) + 1
+        sizes.append((role, end - index))
+    unique = sorted((item for item in sizes if seen[item[0]] == 1 and item[1] <= REGION_MOST * len(lines)), key=lambda item: -item[1])
+    if not unique or unique[0][1] < 2:
+        return None
+    role, count = unique[0]
+    return (f'snapshot -i -s "[role={role}]" (the {role}, {count:,} of {len(lines):,} lines), '
+            "find role <role> <action> --name <text> (act without a snapshot)")
 
 
 def spill(text: str) -> str | None:
@@ -203,7 +241,7 @@ def spill(text: str) -> str | None:
 
 def cap_notice(text: str) -> str:
     last = text.rpartition("\n")[2]
-    cut_short = last.startswith("[") and "Narrow it instead: " in last and "--max-output " in last
+    cut_short = last.startswith("[") and "Narrow it: " in last and "--max-output " in last
     return last if last.startswith(CAP_NOTICE) or cut_short else ""
 
 
@@ -398,10 +436,7 @@ class Daemon:
                 return
             gone.cancel()
             code, out, err = execute.result()
-            fields = command_metrics.answer_fields(request)
-            if request.get("busy_elsewhere"):
-                fields["busy_elsewhere"] = True
-            writer.write(encode_answer(code, out, err, fields))
+            writer.write(encode_reply(request, code, out, err))
             await writer.drain()
         except Exception:
             log.exception("request failed")
@@ -588,14 +623,37 @@ def timed_out(name: str, limit: float) -> BrowseError:
     return BrowseError(f"`{name}` didn't finish within {limit:g} s and was stopped{unknown}. Snapshot to see where the page is", code="command_timeout")
 
 
-def encode_answer(code: int, out: str, err: str, fields: dict | None = None) -> bytes:
+def command_name(request) -> str:
+    from ardia_cli.browse.commands import ALIASES
+
+    argv = request.get("argv") if isinstance(request, dict) else None
+    first = str(argv[0]) if isinstance(argv, list) and argv else ""
+    return ALIASES.get(first, first)
+
+
+def encode_reply(request: dict, code: int, out: str, err: str) -> bytes:
+    fields = command_metrics.answer_fields(request)
+    if request.get("busy_elsewhere"):
+        fields["busy_elsewhere"] = True
+    as_json = bool((request.get("options") or {}).get("json"))
+    return encode_answer(code, out, err, fields, command_name(request), as_json)
+
+
+def encode_answer(code: int, out: str, err: str, fields: dict | None = None, name: str = "", as_json: bool = False) -> bytes:
     from ardia_cli.printable import well_formed
 
     data = (well_formed(json.dumps({"exit": code, "out": out, "err": err, **(fields or {})}, ensure_ascii=False)) + "\n").encode()
     if len(data) <= MAX_RESPONSE:
         return data
-    message = f"✗ The answer was too large ({len(data)} bytes, the limit is {MAX_RESPONSE}); narrow it (snapshot -s, -d, --max-output)\n"
-    return (json.dumps({"exit": 1, "out": "", "err": message}) + "\n").encode()
+    if name == "cdp":
+        error = BrowseError(f"The result of `cdp` is {len(data):,} bytes once encoded for the answer, over the {MAX_RESPONSE:,} bytes the "
+                            "daemon sends back, so it wasn't printed; it did run, so check before running it again. Ask for less: "
+                            "narrower params (DOM.getDocument --param depth:=1, a smaller Network.getResponseBody), or IO.read in chunks",
+                            code="result_too_large")
+    else:
+        error = BrowseError(f"The answer was too large ({len(data)} bytes, the limit is {MAX_RESPONSE}); narrow it (snapshot -s, -d, --max-output)")
+    exit_code, out, err = _render({"json": as_json}, error=error)
+    return (json.dumps({"exit": exit_code, "out": out, "err": err, **({"code": error.code} if error.code else {})}) + "\n").encode()
 
 
 def take_lease():

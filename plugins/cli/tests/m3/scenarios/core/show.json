@@ -1,0 +1,8 @@
+{
+ "steps": [
+  {"argv": ["open", "{fixture}/login.html", "--show", "--no-changes"], "session": "show"},
+  {"argv": ["get", "title"], "session": "show"},
+  {"argv": ["open", "{fixture}/auth.html", "--show", "--no-changes"], "session": "show"},
+  {"argv": ["get", "url"], "session": "show"}
+ ]
+}

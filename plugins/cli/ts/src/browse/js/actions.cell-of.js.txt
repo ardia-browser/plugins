@@ -1,0 +1,1 @@
+(el) => el.closest('[role=gridcell], [role=cell], td')

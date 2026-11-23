@@ -1,0 +1,130 @@
+(budget, ...anchors) => {
+  const SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "HEAD", "SVG", "svg"]);
+  const BLOCK = /^(P|DIV|SECTION|ARTICLE|MAIN|HEADER|FOOTER|NAV|ASIDE|FORM|FIELDSET|UL|OL|LI|TABLE|THEAD|TBODY|TFOOT|TR|BLOCKQUOTE|PRE|FIGURE|FIGCAPTION|DETAILS|SUMMARY|DL|DT|DD|ADDRESS|HR|BR|DIALOG|H[1-6])$/;
+  const CONTAINER = "article,dialog,[role=dialog],[role=alertdialog],[role=region],section,main > *";
+  const CONTROL = "a[href],button,input,select,textarea,summary,[role=button],[role=link],[role=checkbox],[role=radio],[role=tab],[role=option],[role=menuitem],[role=menuitemcheckbox],[role=menuitemradio],[role=switch],[role=combobox],[role=textbox],[role=searchbox],[role=slider],[role=spinbutton],[role=treeitem],[contenteditable=''],[contenteditable=true]";
+  const NESTED = "h1,h2,h3,h4,h5,h6,[role=heading],li,pre,iframe,tr,dialog,[role=dialog]";
+  const SEP = "\u0002", CELL = "\u0003";
+  const norm = (text) => String(text || "").replace(/\s+/g, " ").trim();
+  const quote = (text) => JSON.stringify(norm(text).slice(0, 80));
+  const els = [], kinds = [], names = [];
+  const mark = (el, kind, name) => { els.push(el); kinds.push(kind); names.push(name || ""); return "\u0001" + (els.length - 1) + "\u0001"; };
+  const close = (el) => { line = line.replace(/[\s\u0002]+$/, "") + mark(el, "ref"); };
+  const isHeading = (el) => /^H[1-6]$/.test(el.tagName) || el.getAttribute("role") === "heading";
+  let roots = anchors.length ? anchors.map((anchor) => {
+    const from = isHeading(anchor) ? anchor.parentElement : anchor;
+    return (from && from.closest(CONTAINER)) || from || anchor;
+  }) : [document.querySelector("main,[role=main]") || document.body];
+  roots = roots.filter((root, index) => root && roots.indexOf(root) === index);
+  roots = roots.filter((root) => !roots.some((other) => other !== root && other.contains(root)));
+  roots.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+  const lines = [];
+  let line = "", size = 0, full = false;
+  const tidy = (text) => text.replace(/[\s\u0002]*\u0003[\s\u0002]*/g, "\u0003").replace(/\u0003/g, " | ").replace(/[\s\u0002]*\u0002[\s\u0002]*/g, " · ")
+    .replace(/\s+/g, " ").trim().replace(/^(· |\| )+/, "").replace(/^- (· )+/, "- ").replace(/( ·| \|)+$/, "").trim();
+  const flush = () => {
+    let text = tidy(line);
+    line = "";
+    if (!text || /^[-#]+$/.test(text) || full) return;
+    if (size + text.length > budget) { text = text.slice(0, Math.max(0, budget - size)) + "…"; full = true; }
+    lines.push(text);
+    size += text.length + 1;
+    if (size >= budget) full = true;
+  };
+  const hidden = (el, style) => style.display === "none" || style.visibility === "hidden" || el.getAttribute("aria-hidden") === "true";
+  const compact = (el) => el.textContent.length <= 500 && norm(el.innerText).length <= 200 && !el.querySelector(NESTED);
+  const field = (el) => {
+    const type = (el.type || "").toLowerCase();
+    if (el.tagName === "SELECT") return norm(el.selectedOptions && el.selectedOptions[0] ? el.selectedOptions[0].text : "");
+    if (type === "checkbox" || type === "radio") return el.checked ? "[x]" : "[ ]";
+    if (type === "password") return el.value ? "••••" : "";
+    if (["button", "submit", "reset"].includes(type)) return norm(el.value);
+    if (el.value) return quote(el.value);
+    return el.placeholder ? "(" + norm(el.placeholder).slice(0, 60) + ")" : "";
+  };
+  const pointer = (el, style) => style.cursor === "pointer" && !(el.parentElement && getComputedStyle(el.parentElement).cursor === "pointer");
+  const children = (el, oneLine) => {
+    for (const child of el.childNodes) walk(child, oneLine);
+    if (el.shadowRoot) for (const child of el.shadowRoot.childNodes) walk(child, oneLine);
+  };
+  const walk = (node, oneLine) => {
+    if (full) return;
+    if (node.nodeType === 3) { line += node.nodeValue; return; }
+    if (node.nodeType !== 1 || SKIP.has(node.tagName)) return;
+    const el = node, tag = el.tagName.toUpperCase();
+    const style = getComputedStyle(el);
+    if (hidden(el, style)) return;
+    if (tag === "IFRAME" || tag === "FRAME") {
+      flush();
+      line = "[frame " + quote(el.title || el.name || (el.src || "").split(/[?#]/)[0].split("/").pop()) + mark(el, "frame") + "]";
+      flush();
+      return;
+    }
+    const role = el.getAttribute("role");
+    if (tag === "CANVAS" || tag === "IMG" || (role === "img" && !norm(el.textContent))) {
+      const label = norm(el.getAttribute("aria-label") || el.getAttribute("alt") || el.getAttribute("title"));
+      const box = el.getBoundingClientRect();
+      if (box.width < 48 || box.height < 48) { if (label) line += " " + label + " "; return; }
+      line += " [image " + quote(label) + mark(el, "image", label) + "] ";
+      return;
+    }
+    if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") {
+      if ((el.type || "").toLowerCase() === "hidden") return;
+      line += " " + field(el) + (el.disabled ? "" : mark(el, "ref")) + " ";
+      return;
+    }
+    const off = el.disabled === true || el.getAttribute("aria-disabled") === "true";
+    const control = el.matches(CONTROL) || pointer(el, style);
+    const candidate = control && !off;
+    const label = control ? norm(el.getAttribute("aria-label")) : "";
+    if (label && norm(el.innerText).length <= 80) {
+      if (off) { line += " " + (norm(el.innerText) || "×") + " "; return; }
+      line += " " + label;
+      close(el);
+      line += " ";
+      return;
+    }
+    if (isHeading(el)) {
+      flush();
+      const level = /^H([1-6])$/.exec(tag) ? Number(tag[1]) : Number(el.getAttribute("aria-level")) || 2;
+      line = "#".repeat(level) + " ";
+      children(el, true);
+      close(el);
+      flush();
+      return;
+    }
+    const display = style.display;
+    const block = BLOCK.test(tag) || !(display.startsWith("inline") || display === "contents");
+    if (!block) {
+      children(el, oneLine);
+      if (candidate) close(el);
+      return;
+    }
+    if (oneLine) {
+      const cell = tag === "TD" || tag === "TH" || display === "table-cell";
+      line += cell ? (el.previousElementSibling ? CELL : "") : SEP;
+      children(el, true);
+      if (candidate) close(el);
+      if (!cell) line += SEP;
+      return;
+    }
+    flush();
+    if (tag === "LI") line = "- ";
+    children(el, compact(el));
+    if (candidate) close(el);
+    flush();
+  };
+  for (const root of roots) { walk(root, false); flush(); }
+  globalThis.ardiaBrowseTextEls = els;
+  const where = (el) => {
+    if (el.id) return "#" + CSS.escape(el.id);
+    const tag = el.tagName.toLowerCase(), role = el.getAttribute("role");
+    if (document.querySelectorAll(tag).length === 1) return tag;
+    if (role && document.querySelectorAll("[role=" + JSON.stringify(role) + "]").length === 1) return "[role=" + role + "]";
+    const parent = el.parentElement;
+    if (!parent || parent === document.body || parent === document.documentElement) return tag;
+    const same = [...parent.children].filter((child) => child.tagName === el.tagName);
+    return where(parent) + " > " + tag + (same.length > 1 ? ":nth-of-type(" + (same.indexOf(el) + 1) + ")" : "");
+  };
+  return { text: lines.join("\n"), kinds, names, more: full, where: roots.length ? where(roots[0]) : "" };
+}

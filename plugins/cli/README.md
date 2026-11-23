@@ -29,16 +29,18 @@ plugins/cli/build.sh <out dir>
 
 This writes `<out dir>/cli`, the plugin folder Ardia bundles, packed as `cli-plugin-<version>-<platform>.tar.gz`,
 plus the command's tarball `ardia-cli-<version>-<platform>.tar.gz` for Linux and hand installs, each with its
-`.sha256`. The version is `plugin.json`'s (`ARDIA_PLUGIN_VERSION` overrides it for a local build). It needs uv and cargo
-(`rustup`); `scripts/build.sh --help` lists the rest.
+`.sha256`. `bin/ardia` is the TypeScript command as one Bun executable, with its Node-API addon `bin/ardia-libc.so`
+beside it and esbuild in `libexec/`; there is no Python and no Rust in it. The version is `plugin.json`'s
+(`ARDIA_PLUGIN_VERSION` overrides it for a local build). It needs Bun 1.3.14 and a C compiler; `scripts/build.sh --help`
+lists the rest.
 
 ## Release
 
 The command has its own version and releases, apart from Ardia's. Bump `version` in `plugin.json`, merge, and push
-`cli-v<version>`: `.github/workflows/cli-release.yml` builds macOS and Linux, and publishes the release with every
-artifact and its `.sha256` (pull requests run it as a dry run). Ardia then pins it with
-`scripts/release/official-plugins.py pin cli <version>` in ardia-browser/ardia, and its next release bundles and signs
-it (`docs/cli.md` › Build and release).
+`cli-v<version>`: `.github/workflows/cli-release.yml` builds macOS and Linux with Bun, and publishes the release with
+every artifact and its `.sha256` (pull requests run it as a dry run). Ardia then pins it with
+`scripts/release/official-plugins.py pin cli <version>` in ardia-browser/ardia, and its next release bundles, signs
+(Developer ID, hardened runtime) and notarizes it (`docs/cli.md` › Build and release).
 
 ## Test
 
@@ -47,7 +49,7 @@ cd plugins/cli
 uv venv --python 3.13 /tmp/ardia-cli-venv
 VIRTUAL_ENV=/tmp/ardia-cli-venv uv pip install --require-hashes --no-build -r requirements.lock
 /tmp/ardia-cli-venv/bin/python -m unittest discover -s tests
-(cd rust && cargo test --locked)
+(cd ts && bun install --frozen-lockfile --ignore-scripts && bun test ./tests)
 ```
 
 A few checks compare against Ardia's own source, such as the ingest key, the tab group colours and the feedback

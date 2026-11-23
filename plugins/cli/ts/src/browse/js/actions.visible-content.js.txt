@@ -1,0 +1,13 @@
+(el) => {
+  const box = el.getBoundingClientRect();
+  if (box.width >= 2 && box.height >= 2) return null;
+  const shown = (node) => {
+    const rect = node.getBoundingClientRect();
+    return rect.width >= 2 && rect.height >= 2 && (!node.checkVisibility || node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }));
+  };
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_ELEMENT);
+  for (let node = walker.nextNode(), seen = 0; node && seen < 400; node = walker.nextNode(), seen++) {
+    if (shown(node)) return node;
+  }
+  return null;
+}

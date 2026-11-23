@@ -1,0 +1,48 @@
+{
+ "source": "tests/test_browse_act.py ActInChrome.test_a_closed_aria_modal_slid_off_screen_does_not_hold_back_a_dom_click",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/carousel-modal.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.getElementById('drawer').hidden = false, 'ok'"
+   ],
+   "session": "act",
+   "main_world": true
+  },
+  {
+   "argv": [
+    "click",
+    "#s2"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "state.clicked.join()"
+   ],
+   "session": "act",
+   "main_world": true
+  }
+ ]
+}

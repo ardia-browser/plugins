@@ -1,0 +1,7 @@
+{
+ "steps": [
+  {"argv": ["open", "{fixture}/login.html", "--show"], "session": "core"},
+  {"argv": ["get", "title"], "session": "core"},
+  {"argv": ["snapshot", "-i"], "session": "core"}
+ ]
+}

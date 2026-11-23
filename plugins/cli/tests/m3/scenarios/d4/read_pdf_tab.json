@@ -1,0 +1,25 @@
+{
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/doc.pdf",
+    "--no-changes"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read",
+    "{fixture}/doc.pdf"
+   ],
+   "session": "d4"
+  }
+ ]
+}

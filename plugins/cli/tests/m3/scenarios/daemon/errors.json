@@ -1,0 +1,12 @@
+{
+ "steps": [
+  {"argv": ["get", "title"], "session": "errs"},
+  {"argv": ["--json", "get", "url"], "session": "errs"},
+  {"argv": ["frobnicate"], "session": "errs"},
+  {"argv": ["connect"], "session": "errs"},
+  {"argv": ["wait", "--load", "sometime"], "session": "errs"},
+  {"argv": ["get"], "session": "errs"},
+  {"argv": ["open", "http://127.0.0.1:9/", "--no-changes"], "session": "errs"},
+  {"argv": ["--json", "open", "http://127.0.0.1:9/", "--no-changes"], "session": "errs"}
+ ]
+}

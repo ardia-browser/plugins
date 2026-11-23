@@ -1,0 +1,102 @@
+{
+ "live_only": "designed divergence (eval-isolated): replay serves only requests Python sent, so this runs live until the TS side records its own transcripts (M3-DESIGN 2.6)",
+ "divergences": [
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/form.html",
+    "--no-changes"
+   ],
+   "session": "js"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.title"
+   ],
+   "session": "js"
+  },
+  {
+   "argv": [
+    "eval",
+    "[...document.querySelectorAll('input')].map((i) => i.name || i.type)"
+   ],
+   "session": "js"
+  },
+  {
+   "argv": [
+    "eval",
+    "--stdin"
+   ],
+   "session": "js",
+   "stdin": "({a: 1, b: [1, 2], c: 'x'})"
+  },
+  {
+   "argv": [
+    "eval",
+    "-b",
+    "bG9jYXRpb24ucGF0aG5hbWU="
+   ],
+   "session": "js"
+  },
+  {
+   "argv": [
+    "eval",
+    "Promise.resolve(40 + 2)"
+   ],
+   "session": "js"
+  },
+  {
+   "argv": [
+    "eval",
+    "undefined"
+   ],
+   "session": "js"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.querySelectorAll('input[type=text]').length"
+   ],
+   "session": "js"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.querySelector('a[href=/a b/]')"
+   ],
+   "session": "js"
+  },
+  {
+   "argv": [
+    "eval",
+    "[{x: 1}, {x: 2}]"
+   ],
+   "session": "js"
+  },
+  {
+   "argv": [
+    "eval",
+    "throw new Error('boom')"
+   ],
+   "session": "js"
+  },
+  {
+   "argv": [
+    "eval",
+    "fetch"
+   ],
+   "session": "js"
+  },
+  {
+   "argv": [
+    "--json",
+    "eval",
+    "1.5"
+   ],
+   "session": "js"
+  }
+ ]
+}

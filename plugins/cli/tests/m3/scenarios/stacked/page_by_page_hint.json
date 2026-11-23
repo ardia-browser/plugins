@@ -1,0 +1,14 @@
+{
+ "steps": [
+  {"argv": ["open", "{fixture}/login.html", "--no-changes"], "session": "pages"},
+  {"argv": ["get", "text", "body"], "session": "pages"},
+  {"argv": ["tab", "list"], "session": "pages"},
+  {"argv": ["open", "{fixture}/form.html", "--no-changes"], "session": "pages"},
+  {"argv": ["get", "text", "body"], "session": "pages"},
+  {"argv": ["get", "text", "body"], "session": "pages"},
+  {"argv": ["back"], "session": "pages"},
+  {"argv": ["read"], "session": "pages"},
+  {"argv": ["forward"], "session": "pages"},
+  {"argv": ["get", "text", "body"], "session": "pages"}
+ ]
+}

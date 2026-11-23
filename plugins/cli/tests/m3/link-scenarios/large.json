@@ -1,0 +1,68 @@
+{
+ "ops": [
+  {
+   "op": "open"
+  },
+  {
+   "op": "send",
+   "method": "Target.createTarget",
+   "params": {
+    "url": "about:blank"
+   },
+   "save": "target",
+   "keep": "keys"
+  },
+  {
+   "op": "send",
+   "method": "Target.attachToTarget",
+   "params": {
+    "targetId": "@target.targetId",
+    "flatten": true
+   },
+   "save": "page",
+   "keep": "keys"
+  },
+  {
+   "op": "send",
+   "method": "Runtime.evaluate",
+   "params": {
+    "expression": "'x'.repeat(64 * 1024 * 1024)",
+    "returnByValue": true
+   },
+   "session": "@page.sessionId",
+   "keep": {
+    "len": "result.value"
+   },
+   "timeout": 180
+  },
+  {
+   "op": "send",
+   "method": "Runtime.evaluate",
+   "params": {
+    "expression": "'é😀'.repeat(8 * 1024 * 1024)",
+    "returnByValue": true
+   },
+   "session": "@page.sessionId",
+   "keep": {
+    "len": "result.value"
+   },
+   "timeout": 180
+  },
+  {
+   "op": "send",
+   "method": "Runtime.evaluate",
+   "params": {
+    "expression": "1+1",
+    "returnByValue": true
+   },
+   "session": "@page.sessionId"
+  },
+  {
+   "op": "send",
+   "method": "Target.closeTarget",
+   "params": {
+    "targetId": "@target.targetId"
+   }
+  }
+ ]
+}

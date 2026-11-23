@@ -1,0 +1,155 @@
+[
+ {
+  "id": "commands--commands",
+  "command": "commands",
+  "argv": [
+   "commands"
+  ],
+  "control": {
+   "replies": {
+    "commands": {
+     "result": [
+      {
+       "id": "new-tab",
+       "title": "New Tab"
+      },
+      {
+       "id": "toggle-sidebar",
+       "title": "Toggle Sidebar",
+       "variants": [
+        "left",
+        "right"
+       ]
+      },
+      {
+       "id": "a-very-long-command-id-that-goes-past-forty-characters",
+       "title": "Long",
+       "variants": "xy"
+      },
+      {
+       "id": 7,
+       "title": 3.0
+      },
+      "skipped"
+     ]
+    }
+   }
+  }
+ },
+ {
+  "id": "commands--json-commands",
+  "command": "commands",
+  "argv": [
+   "--json",
+   "commands"
+  ],
+  "control": {
+   "replies": {
+    "commands": {
+     "result": [
+      {
+       "id": "new-tab",
+       "title": "New Tab"
+      },
+      {
+       "id": "toggle-sidebar",
+       "title": "Toggle Sidebar",
+       "variants": [
+        "left",
+        "right"
+       ]
+      },
+      {
+       "id": "a-very-long-command-id-that-goes-past-forty-characters",
+       "title": "Long",
+       "variants": "xy"
+      },
+      {
+       "id": 7,
+       "title": 3.0
+      },
+      "skipped"
+     ]
+    }
+   }
+  }
+ },
+ {
+  "id": "commands--commands-json",
+  "command": "commands",
+  "argv": [
+   "commands",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "commands": {
+     "result": [
+      {
+       "memory": 807960295084425.2,
+       "cpu": 0.30000000000000004,
+       "big": 1e+300
+      }
+     ]
+    }
+   }
+  },
+  "note": "float repr"
+ },
+ {
+  "id": "commands--commands-2",
+  "command": "commands",
+  "argv": [
+   "commands"
+  ],
+  "control": {
+   "replies": {
+    "commands": {
+     "error": null
+    }
+   }
+  }
+ },
+ {
+  "id": "commands--commands-3",
+  "command": "commands",
+  "argv": [
+   "commands"
+  ],
+  "control": {
+   "replies": {
+    "commands": {
+     "result": [
+      {
+       "id": "a",
+       "variants": 5
+      }
+     ]
+    }
+   }
+  },
+  "note": "a shape Rust can't mirror",
+  "fallback": true
+ },
+ {
+  "id": "commands--commands-4",
+  "command": "commands",
+  "argv": [
+   "commands"
+  ],
+  "control": {
+   "replies": {
+    "commands": {
+     "error": {
+      "code": "failed",
+      "message": [
+       "\u00e9"
+      ]
+     }
+    }
+   }
+  },
+  "note": "a shape Rust can't mirror",
+  "fallback": true
+ }
+]

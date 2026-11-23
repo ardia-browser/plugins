@@ -1,0 +1,1 @@
+{"id": "seed--methods-test-an-answer-with-neither-result-nor-error-is-an-unknown-outcome--methods--1", "command": "methods", "argv": ["methods"], "env": {"XDG_CONFIG_HOME": "", "XDG_STATE_HOME": "", "XDG_DATA_HOME": "", "ARDIA_CONFIG_HOME": ""}, "note": "from test_call.Methods.test_an_answer_with_neither_result_nor_error_is_an_unknown_outcome"}

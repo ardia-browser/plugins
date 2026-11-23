@@ -1,0 +1,26 @@
+{
+ "source": "tests/test_browse_read.py ReadListsInChrome.test_grid_reads_as_rows_with_the_virtualized_note (open --no-changes and no eval step: open's report is D5's, eval is D7's)",
+ "window": [
+  1200,
+  800
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/virtual-lists.html",
+    "--show",
+    "--no-changes"
+   ],
+   "session": "read"
+  },
+  {
+   "argv": [
+    "read",
+    "-s",
+    "[role=grid]"
+   ],
+   "session": "read"
+  }
+ ]
+}

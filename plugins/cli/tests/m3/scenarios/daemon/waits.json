@@ -1,0 +1,11 @@
+{
+ "steps": [
+  {"argv": ["open", "{fixture}/login.html", "--no-changes"], "session": "waits"},
+  {"argv": ["wait", "--text", "Log in"], "session": "waits"},
+  {"argv": ["wait", "--url", "**/login.html"], "session": "waits"},
+  {"argv": ["wait", "--load", "domcontentloaded"], "session": "waits"},
+  {"argv": ["open", "{fixture}/auth.html", "--no-changes"], "session": "waits"},
+  {"argv": ["get", "url"], "session": "waits"},
+  {"argv": ["wait", "--text", "no such text anywhere", "--timeout", "300"], "session": "waits"}
+ ]
+}

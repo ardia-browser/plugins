@@ -1,0 +1,104 @@
+{
+ "live_only": "the tap swallows and invents replies",
+ "ops": [
+  {
+   "op": "open"
+  },
+  {
+   "op": "send",
+   "method": "Target.createTarget",
+   "params": {
+    "url": "about:blank"
+   },
+   "save": "target",
+   "keep": "keys"
+  },
+  {
+   "op": "send",
+   "method": "Target.attachToTarget",
+   "params": {
+    "targetId": "@target.targetId",
+    "flatten": true
+   },
+   "save": "page",
+   "keep": "keys"
+  },
+  {
+   "op": "fault",
+   "fault": {
+    "kind": "drop",
+    "at": 1
+   }
+  },
+  {
+   "op": "send",
+   "method": "Runtime.evaluate",
+   "params": {
+    "expression": "1+1",
+    "returnByValue": true
+   },
+   "session": "@page.sessionId",
+   "timeout": 1
+  },
+  {
+   "op": "fault",
+   "fault": {
+    "kind": "drop",
+    "at": 1
+   }
+  },
+  {
+   "op": "send",
+   "method": "Emulation.setFocusEmulationEnabled",
+   "params": {
+    "enabled": false
+   },
+   "session": "@page.sessionId",
+   "timeout": 1
+  },
+  {
+   "op": "fault",
+   "fault": {
+    "kind": "error",
+    "at": 1
+   }
+  },
+  {
+   "op": "send",
+   "method": "Runtime.evaluate",
+   "params": {
+    "expression": "1+1",
+    "returnByValue": true
+   },
+   "session": "@page.sessionId"
+  },
+  {
+   "op": "fault",
+   "fault": {
+    "kind": "error",
+    "at": 1
+   }
+  },
+  {
+   "op": "send",
+   "method": "Target.getTargets",
+   "timeout": 1
+  },
+  {
+   "op": "send",
+   "method": "Runtime.evaluate",
+   "params": {
+    "expression": "1+1",
+    "returnByValue": true
+   },
+   "session": "@page.sessionId"
+  },
+  {
+   "op": "send",
+   "method": "Target.closeTarget",
+   "params": {
+    "targetId": "@target.targetId"
+   }
+  }
+ ]
+}

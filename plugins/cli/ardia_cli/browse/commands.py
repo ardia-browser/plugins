@@ -11,7 +11,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from ardia_cli.browse import actions, changes, snapshot
+from ardia_cli.browse import actions, changes, rawcdp, snapshot
+from ardia_cli.browse.limits import MAX_GIVEN
 from ardia_cli.browse.errors import BrowseError, ConnectionLost, Gated, OutcomeUnknown, Usage
 from ardia_cli.browse.state import parse_ref, wait_until
 
@@ -23,9 +24,9 @@ ALIASES = {
 MUTATING = {
     "open", "click", "dblclick", "type", "fill", "press", "keyboard", "keydown", "keyup", "hover", "check", "uncheck",
     "select", "drag", "upload", "download", "scroll", "scrollintoview", "mouse", "back", "forward", "reload", "tab",
-    "find", "auth", "pushstate", "eval", "dialog", "batch", "storage", "cookies", "set", "state", "clipboard", "close", "script", "flow",
+    "find", "auth", "pushstate", "eval", "dialog", "batch", "storage", "cookies", "set", "state", "clipboard", "close", "script", "flow", "cdp",
 }
-KNOWN_SCHEMES = ("http", "https", "about", "data", "file", "blob", "chrome", "view-source")
+KNOWN_SCHEMES = ("http", "https", "about", "data", "file", "blob", "chrome", "chrome-extension", "chrome-untrusted", "devtools", "view-source")
 LOOPBACK = re.compile(r"^(localhost|127\.\d+\.\d+\.\d+|\[::1\])(:\d+)?(/|$)")
 
 
@@ -34,6 +35,8 @@ class Result:
     data: dict = field(default_factory=dict)
     text: str | None = "✓ Done"
     page_content: bool = False
+    whole: bool = False
+    notice: str | None = None
 
 
 @dataclass
@@ -66,6 +69,15 @@ def command(*names):
     return register
 
 
+TRUE_WORDS = ("true", "1", "yes", "on")
+
+
+def bool_value(name: str, inline: str | None) -> bool:
+    if inline is None or inline.lower() in TRUE_WORDS:
+        return True
+    raise Usage(f"{name} takes no value: give {name}, or leave it out")
+
+
 def parse(argv: list[str], flags: dict[str, str] | None = None, aliases: dict[str, str] | None = None):
     flags = flags or {}
     aliases = aliases or {}
@@ -84,7 +96,7 @@ def parse(argv: list[str], flags: dict[str, str] | None = None, aliases: dict[st
             kind = flags[name]
             key = name.lstrip("-").replace("-", "_")
             if kind == "bool":
-                options[key] = True
+                options[key] = bool_value(name, inline)
             else:
                 if inline is None:
                     if index >= len(argv):
@@ -1052,6 +1064,9 @@ async def cmd_wait(ctx: Ctx, argv):
         {"-t": "--text", "-u": "--url", "-l": "--load", "-f": "--fn"},
     )
     timeout = float(options["timeout"]) / 1000 if options.get("timeout") else ctx.timeout
+    plain = not options and args and re.fullmatch(r"\d+(\.\d+)?", args[0])
+    if (options.get("timeout") and timeout > MAX_GIVEN) or (plain and float(args[0]) / 1000 > MAX_GIVEN):
+        raise Usage(f"waits are capped at one day ({int(MAX_GIVEN * 1000)} ms); wait again for longer")
     if options.get("download"):
         path = ctx.path(args[0]) if args else None
         saved = await wait_download(ctx, None, path, timeout)
@@ -1297,7 +1312,7 @@ FIND_ACTIONS = ("click", "fill", "type", "press", "check", "uncheck", "select", 
 FIND_LOCATORS = ("role", "text", "label", "placeholder", "alt", "title", "testid", "first", "last", "nth")
 MAX_CANDIDATES = 8
 CLOSE_ENOUGH = 0.6
-BATCH_DEFAULT_CAP = 6000
+BATCH_DEFAULT_CAP = 12000
 SHOWN_HOLD = 0.3
 FIND_WAIT = 1.5
 
@@ -1962,6 +1977,69 @@ async def cmd_clipboard(ctx: Ctx, argv):
         detail = f"the {action} editing command" if action in ("copy", "paste") else None
         raise error.during(f"clipboard {action}", detail) from None
     raise Usage(f"Unknown clipboard operation: {action}")
+
+
+CDP_METHOD = re.compile(r"^[A-Z][A-Za-z0-9]*\.[a-z][A-Za-z0-9]*$")
+CDP_USAGE = "cdp <Domain.method> [--params <json>|-] [--param k=v | k:=json] [--target browser|<tab>] [--timeout 30s]"
+CDP_FLAGS = {"--params": "value", "--param": "multi", "--target": "value", "--timeout": "value"}
+
+
+def cdp_target(options: dict) -> str | None:
+    target = options.get("target")
+    if target is not None and not target.strip():
+        raise Usage("cdp --target is empty; name a tab (like t2) or browser, or leave --target out for this session's tab")
+    return target
+
+
+def refuse_raw_on_borrowed(ctx: Ctx, page, method: str):
+    borrowed = borrowed_tab(ctx.state)
+    if borrowed and borrowed == page.target_id:
+        tab = ctx.state.tab_id(borrowed)
+        raise BrowseError(
+            f"This session is using your tab [{tab}] (picked with `tab active`), so it won't send raw DevTools calls to it "
+            f"unless you name it. To send this one there anyway: `ardia browse cdp {method} --target {tab}`; to browse on "
+            "your own, use `ardia browse open <url>`",
+            data={"tabId": tab}, code="borrowed_tab",
+        )
+
+
+@command("cdp")
+async def cmd_cdp(ctx: Ctx, argv):
+    from ardia_cli.browse.cli import cdp_params
+    from ardia_cli.browse.script import parse_timeout
+
+    options, args = parse(argv, CDP_FLAGS)
+    need(args, 1, CDP_USAGE)
+    if len(args) > 1:
+        raise Usage(f"Usage: ardia browse {CDP_USAGE} (params go in --params or --param)")
+    method = args[0]
+    if not CDP_METHOD.match(method):
+        raise Usage(f"{method} isn't a DevTools method name; give Domain.method, like Page.getLayoutMetrics")
+    params = cdp_params(options.get("params"), options.get("param") or [], ctx.stdin)
+    timeout = parse_timeout(options["timeout"]) if options.get("timeout") else 30
+    target = cdp_target(options)
+    state = ctx.state
+    try:
+        if target == rawcdp.BROWSER:
+            await state.connect()
+            result, session = await rawcdp.send(state, rawcdp.BROWSER, method, params, timeout)
+            where = rawcdp.BROWSER
+        elif target:
+            await state.connect()
+            await state.refresh_targets()
+            target_id = await state.find_tab(target)
+            with state.registry.holding(state.instance, target_id):
+                result, session = await rawcdp.send(state, target_id, method, params, timeout)
+            where = state.tab_id(target_id)
+        else:
+            page = await state.page()
+            refuse_raw_on_borrowed(ctx, page, method)
+            result, session = await rawcdp.send(state, page.target_id, method, params, timeout)
+            where = state.tab_id(page.target_id)
+    except Gated as error:
+        raise error.during("cdp") from None
+    text = json.dumps(result, indent=2, ensure_ascii=False) if result else f"✓ {method}"
+    return Result({"method": method, "target": where, "session": session, "result": result}, text, page_content=bool(result), whole=True)
 
 
 @command("addinitscript")

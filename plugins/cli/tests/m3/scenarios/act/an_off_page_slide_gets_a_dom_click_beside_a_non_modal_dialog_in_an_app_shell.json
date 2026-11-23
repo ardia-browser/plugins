@@ -1,0 +1,40 @@
+{
+ "source": "tests/test_browse_act.py ActInChrome.test_an_off_page_slide_gets_a_dom_click_beside_a_non_modal_dialog_in_an_app_shell",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/carousel-modal.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "click",
+    "#s2"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "state.clicked.join()"
+   ],
+   "session": "act",
+   "main_world": true
+  }
+ ]
+}

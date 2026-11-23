@@ -1,0 +1,84 @@
+{
+ "live_only": "timeouts and the replies that arrive after them run on the driver's clock; ts/tests/m3/link.test.ts covers them against a fake peer",
+ "ops": [
+  {
+   "op": "open"
+  },
+  {
+   "op": "send",
+   "method": "Target.createTarget",
+   "params": {
+    "url": "about:blank"
+   },
+   "save": "target",
+   "keep": "keys"
+  },
+  {
+   "op": "send",
+   "method": "Target.attachToTarget",
+   "params": {
+    "targetId": "@target.targetId",
+    "flatten": true
+   },
+   "save": "page",
+   "keep": "keys"
+  },
+  {
+   "op": "send",
+   "method": "Runtime.evaluate",
+   "params": {
+    "expression": "new Promise(r => setTimeout(() => r(7), 1500))",
+    "returnByValue": true,
+    "awaitPromise": true
+   },
+   "session": "@page.sessionId",
+   "timeout": 0.3
+  },
+  {
+   "op": "send",
+   "method": "Runtime.evaluate",
+   "params": {
+    "expression": "new Promise(r => setTimeout(() => r(7), 1500))",
+    "returnByValue": true,
+    "awaitPromise": true
+   },
+   "session": "@page.sessionId",
+   "timeout": 0.3,
+   "mutation": true
+  },
+  {
+   "op": "cancel",
+   "after": 0.2,
+   "send": {
+    "op": "send",
+    "method": "Runtime.evaluate",
+    "params": {
+     "expression": "new Promise(r => setTimeout(() => r(7), 1500))",
+     "returnByValue": true,
+     "awaitPromise": true
+    },
+    "session": "@page.sessionId"
+   }
+  },
+  {
+   "op": "sleep",
+   "seconds": 2
+  },
+  {
+   "op": "send",
+   "method": "Runtime.evaluate",
+   "params": {
+    "expression": "1+1",
+    "returnByValue": true
+   },
+   "session": "@page.sessionId"
+  },
+  {
+   "op": "send",
+   "method": "Target.closeTarget",
+   "params": {
+    "targetId": "@target.targetId"
+   }
+  }
+ ]
+}

@@ -1,0 +1,271 @@
+import { Float, floatRepr, isWideInt, type JsonObject, type Value } from "./json.ts";
+import { codePoints, joinCodePoints, SPLIT_TEXT } from "./pystr.ts";
+import { reprText } from "./pyrepr.ts";
+
+export class Unsupported extends Error {
+  constructor() {
+    super("a shape only Python renders");
+  }
+}
+
+export class PythonError extends Error {
+  printed: string[] = [];
+
+  constructor(
+    readonly kind: string,
+    readonly text: string,
+  ) {
+    super(`${kind}: ${text}`);
+  }
+}
+
+export function typeName(value: Value | undefined): string {
+  if (value === undefined || value === null) return "NoneType";
+  if (typeof value === "boolean") return "bool";
+  if (typeof value === "bigint") return "int";
+  if (value instanceof Float) return "float";
+  if (typeof value === "string") return "str";
+  return Array.isArray(value) ? "list" : "dict";
+}
+
+export function truthy(value: Value | undefined): boolean {
+  if (value === undefined || value === null) return false;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "bigint") return value !== 0n;
+  if (value instanceof Float) return value.value !== 0;
+  if (typeof value === "string" || Array.isArray(value)) return value.length > 0;
+  return value.size > 0;
+}
+
+export function dict(value: Value | undefined): JsonObject {
+  if (value instanceof Map) return value;
+  throw new PythonError("AttributeError", `'${typeName(value)}' object has no attribute 'get'`);
+}
+
+export function getOrNull(value: Value | undefined, key: string): Value {
+  return dict(value).get(key) ?? null;
+}
+
+export function iterateOrEmpty(value: Value | undefined): Value[] {
+  if (!truthy(value) || value === undefined) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === "string") return codePoints(value);
+  if (value instanceof Map) return [...value.keys()];
+  throw new PythonError("TypeError", `'${typeName(value)}' object is not iterable`);
+}
+
+export function length(value: Value | undefined): number {
+  if (Array.isArray(value)) return value.length;
+  if (typeof value === "string") return codePoints(value).length;
+  if (value instanceof Map) return value.size;
+  throw new PythonError("TypeError", `object of type '${typeName(value)}' has no len()`);
+}
+
+export function isInt(value: Value | undefined): boolean {
+  return typeof value === "bigint" || typeof value === "boolean";
+}
+
+export function isNumber(value: Value | undefined): boolean {
+  return typeof value === "bigint" || value instanceof Float;
+}
+
+const EXACT = 9_007_199_254_740_992;
+
+export function number(value: Value | undefined): number {
+  if (typeof value === "boolean") return value ? 1 : 0;
+  if (typeof value === "bigint" && !isWideInt(value) && Math.abs(Number(value)) <= EXACT) return Number(value);
+  if (value instanceof Float && Number.isFinite(value.value)) return value.value;
+  throw new Unsupported();
+}
+
+export function equalsInt(value: Value | undefined, wanted: bigint): boolean {
+  if (typeof value === "boolean") return BigInt(value ? 1 : 0) === wanted;
+  if (typeof value === "bigint") return !isWideInt(value) && value === wanted;
+  if (value instanceof Float) {
+    const wantedAsFloat = Number(wanted);
+    return Number.isInteger(value.value) && value.value >= 0 && value.value === wantedAsFloat && BigInt(wantedAsFloat) === wanted;
+  }
+  return false;
+}
+
+export function reprStr(text: string): string {
+  return reprText(text);
+}
+
+type ReprFrame = { entries: [string | undefined, Value][]; next: number; close: string };
+
+function reprScalar(value: Value): string | undefined {
+  if (typeof value === "string") return reprStr(value);
+  if (Array.isArray(value) || value instanceof Map) return undefined;
+  return strOf(value);
+}
+
+export function repr(value: Value): string {
+  const out: string[] = [];
+  const stack: ReprFrame[] = [];
+  const emit = (child: Value) => {
+    const scalar = reprScalar(child);
+    if (scalar !== undefined) {
+      out.push(scalar);
+      return;
+    }
+    const container = child as Value[] | JsonObject;
+    const entries: [string | undefined, Value][] = Array.isArray(container)
+      ? container.map((inner): [undefined, Value] => [undefined, inner])
+      : [...container];
+    out.push(Array.isArray(container) ? "[" : "{");
+    stack.push({ entries, next: 0, close: Array.isArray(container) ? "]" : "}" });
+  };
+  emit(value);
+  for (let frame = stack.at(-1); frame !== undefined; frame = stack.at(-1)) {
+    if (frame.next === frame.entries.length) {
+      stack.pop();
+      out.push(frame.close);
+      continue;
+    }
+    const [key, child] = frame.entries[frame.next] as [string | undefined, Value];
+    if (frame.next > 0) out.push(", ");
+    frame.next += 1;
+    if (key !== undefined) out.push(`${reprStr(key)}: `);
+    emit(child);
+  }
+  return out.join("");
+}
+
+export function strOf(value: Value | undefined): string {
+  if (value === undefined || value === null) return "None";
+  if (value === true) return "True";
+  if (value === false) return "False";
+  if (typeof value === "bigint") return value.toString();
+  if (value instanceof Float) return floatRepr(value.value);
+  if (typeof value === "string") return value;
+  return repr(value);
+}
+
+const SPACES = new Set([
+  0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x1c, 0x1d, 0x1e, 0x1f, 0x20, 0x85, 0xa0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004,
+  0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200a, 0x2028, 0x2029, 0x202f, 0x205f, 0x3000,
+]);
+
+export function isWhitespace(ch: string): boolean {
+  const code = ch.codePointAt(0) ?? 0;
+  return SPACES.has(code) && !(code >= 0x1c && code <= 0x1f);
+}
+
+export function isSpace(ch: string): boolean {
+  return SPACES.has(ch.codePointAt(0) ?? 0);
+}
+
+const INFORMATION_SEPARATORS = new Set([0x1c, 0x1d, 0x1e, 0x1f]);
+
+export function isNumberSpace(ch: string): boolean {
+  const point = ch.codePointAt(0) ?? 0;
+  return SPACES.has(point) && !INFORMATION_SEPARATORS.has(point);
+}
+
+function leadingUnits(text: string, drop: (ch: string) => boolean): number {
+  let units = 0;
+  for (const point of codePoints(text)) {
+    if (!drop(point)) break;
+    units += point.length;
+  }
+  return units;
+}
+
+function keptUnits(text: string, drop: (ch: string) => boolean): number {
+  const points = codePoints(text);
+  let units = text.length;
+  for (let index = points.length - 1; index >= 0 && drop(points[index] ?? ""); index -= 1) units -= (points[index] as string).length;
+  return units;
+}
+
+function pointSlice(text: string, drop: (ch: string) => boolean, fromStart: boolean, fromEnd: boolean): string {
+  const chars = codePoints(text);
+  let start = 0;
+  while (fromStart && start < chars.length && drop(chars[start] ?? "")) start += 1;
+  let end = chars.length;
+  while (fromEnd && end > start && drop(chars[end - 1] ?? "")) end -= 1;
+  return joinCodePoints(chars.slice(start, end));
+}
+
+export function rstrip(text: string, strip: (ch: string) => boolean = isSpace): string {
+  if (text.includes(SPLIT_TEXT)) return pointSlice(text, strip, false, true);
+  return text.slice(0, keptUnits(text, strip));
+}
+
+export function lstrip(text: string, drop: (ch: string) => boolean = isSpace): string {
+  if (text.includes(SPLIT_TEXT)) return pointSlice(text, drop, true, false);
+  return text.slice(leadingUnits(text, drop));
+}
+
+export function strip(text: string, drop: (ch: string) => boolean): string {
+  if (text.includes(SPLIT_TEXT)) return pointSlice(text, drop, true, true);
+  const start = leadingUnits(text, drop);
+  return start === text.length ? "" : text.slice(start, keptUnits(text, drop));
+}
+
+function charCount(text: string): number {
+  return codePoints(text).length;
+}
+
+export function right(text: string, width: number): string {
+  return " ".repeat(Math.max(0, width - charCount(text))) + text;
+}
+
+export function left(text: string, width: number): string {
+  return text + " ".repeat(Math.max(0, width - charCount(text)));
+}
+
+export { charCount };
+
+export function fixed(value: number, digits: number): string {
+  const negative = value < 0 || Object.is(value, -0);
+  const view = new DataView(new ArrayBuffer(8));
+  view.setFloat64(0, Math.abs(value));
+  const bits = view.getBigUint64(0);
+  const exponentBits = Number((bits >> 52n) & 0x7ffn);
+  const fraction = bits & ((1n << 52n) - 1n);
+  const mantissa = exponentBits === 0 ? fraction : fraction | (1n << 52n);
+  const exponent = exponentBits === 0 ? -1074 : exponentBits - 1075;
+  let numerator = mantissa * 10n ** BigInt(digits);
+  let denominator = 1n;
+  if (exponent >= 0) numerator <<= BigInt(exponent);
+  else denominator <<= BigInt(-exponent);
+  let quotient = numerator / denominator;
+  const twiceRemainder = 2n * (numerator % denominator);
+  if (twiceRemainder > denominator || (twiceRemainder === denominator && (quotient & 1n) === 1n)) quotient += 1n;
+  const text = quotient.toString().padStart(digits + 1, "0");
+  const shown = digits > 0 ? `${text.slice(0, -digits)}.${text.slice(-digits)}` : text;
+  return (negative ? "-" : "") + shown;
+}
+
+function significant(value: number, exponent: number): string {
+  return fixed(value, 5 - exponent).replace(".", "").replace(/^0+/, "");
+}
+
+export function formatG(value: number): string {
+  if (Number.isNaN(value)) return "nan";
+  if (!Number.isFinite(value)) return value > 0 ? "inf" : "-inf";
+  if (value === 0) return Object.is(value, -0) ? "-0" : "0";
+  const sign = value < 0 ? "-" : "";
+  const size = Math.abs(value);
+  let exponent = Math.floor(Math.log10(size));
+  if (exponent > 5) {
+    const [mantissa = "", power = "0"] = size.toExponential(5).split("e");
+    const trimmed = mantissa.replace(/\.?0+$/, "");
+    const shift = Number(power);
+    if (shift < 6) return sign + String(Number(trimmed) * 10 ** shift);
+    return `${sign}${trimmed}e+${String(shift).padStart(2, "0")}`;
+  }
+  let digits = significant(size, exponent);
+  if (digits.length > 6) exponent += 1;
+  else if (digits.length < 6) exponent -= 1;
+  if (exponent > 5) return formatG(value >= 0 ? 1e6 : -1e6);
+  digits = significant(size, exponent).slice(0, 6);
+  if (exponent < -4) {
+    const mantissa = `${digits[0]}.${digits.slice(1)}`.replace(/\.?0+$/, "");
+    return `${sign}${mantissa}e-${String(-exponent).padStart(2, "0")}`;
+  }
+  const text = fixed(size, 5 - exponent);
+  return sign + (text.includes(".") ? text.replace(/\.?0+$/, "") : text);
+}

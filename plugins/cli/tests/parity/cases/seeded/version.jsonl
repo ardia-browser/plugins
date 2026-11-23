@@ -1,0 +1,1 @@
+{"id": "seed--commandeventtest-test-the-version-fast-path-records-nothing--version--1", "command": "--version", "argv": ["--version"], "files": {"data/telemetry.json": "{\"sharing\": true, \"installId\": \"0b6f4c1e-8d2a-4f3b-9c5d-1e2f3a4b5c6d\", \"version\": 1}"}, "note": "from test_telemetry.CommandEventTest.test_the_version_fast_path_records_nothing"}

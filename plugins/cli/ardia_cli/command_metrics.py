@@ -26,7 +26,7 @@ FLAGS = frozenset({"daemon_spawned", "reconnected_after_idle", "output_truncated
                    "setup_restored", "setup_restore_failed",
                    "selector_nth", "output_saved", "waited_for_element", "saved_to_file", "batch_line_saved", "script_state_kept", "saved_as_csv", "script_timeout_read_hint", "click_scroll_locked", "open_still_loading", "focused_inner_field", "stale_ref_after_navigation", "clicked_label_of_hidden_input", "waited_for_box_to_settle", "frame_cross_process_box", "screenshot_unchanged", "script_queued_behind_busy", "navigation_dropped_hint", "navigation_https_only_hint", "eval_timed_out", "read_queued_beside", "script_state_kept_on_interrupt", "find_closest_names", "batch_saved", "read_empty_page", "network_reloaded", "fill_no_reaction_hint", "eval_selectors_quoted", "queued_behind_script", "followed_ref_after_reload", "clicked_visible_content", "element_rehomed"})
 MAIN_PHASE = {"snapshot": "snapshot_build_ms", "eval": "eval_ms"}
-OUTPUT_MARKERS = ("\n[output capped at ", "\n[truncated ", "\n[pages cut to fit ", " not shown. Narrow it instead: ")
+OUTPUT_MARKERS = ("\n[output capped at ", "\n[truncated ", "\n[pages cut to fit ", " not shown. Narrow it: ")
 
 current: ContextVar = ContextVar("ardia_command_metrics", default=None)
 last_request_shareable = False

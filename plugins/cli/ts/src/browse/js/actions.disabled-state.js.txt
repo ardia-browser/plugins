@@ -1,0 +1,4 @@
+(el) => ({
+  native: el.matches(":disabled") || !!(el.closest && el.closest("button:disabled, fieldset:disabled")),
+  aria: el.getAttribute("aria-disabled") === "true",
+})

@@ -1,0 +1,97 @@
+{
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/form.html",
+    "--init-script",
+    "{fixture_dir}/init-title.js",
+    "--enable",
+    "react-devtools",
+    "--no-changes"
+   ],
+   "session": "setup"
+  },
+  {
+   "argv": [
+    "get",
+    "title"
+   ],
+   "session": "setup"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/login.html",
+    "--no-changes"
+   ],
+   "session": "setup"
+  },
+  {
+   "argv": [
+    "session",
+    "info"
+   ],
+   "session": "setup"
+  },
+  {
+   "argv": [
+    "open",
+    "--enable",
+    "react-devtools,react-devtools",
+    "{fixture}/form.html",
+    "--no-changes"
+   ],
+   "session": "setup"
+  },
+  {
+   "argv": [
+    "open",
+    "--enable",
+    "bogus",
+    "{fixture}/form.html",
+    "--no-changes"
+   ],
+   "session": "setup"
+  },
+  {
+   "argv": [
+    "open",
+    "--init-script",
+    "{fixture_dir}/no-such-script.js",
+    "{fixture}/form.html",
+    "--no-changes"
+   ],
+   "session": "setup"
+  },
+  {
+   "argv": [
+    "--init-script",
+    "{fixture_dir}/init-title.js",
+    "open",
+    "{fixture}/login.html",
+    "--no-changes"
+   ],
+   "session": "fresh"
+  },
+  {
+   "argv": [
+    "get",
+    "title"
+   ],
+   "session": "fresh"
+  },
+  {
+   "argv": [
+    "close"
+   ],
+   "session": "fresh"
+  },
+  {
+   "argv": [
+    "close"
+   ],
+   "session": "setup"
+  }
+ ]
+}

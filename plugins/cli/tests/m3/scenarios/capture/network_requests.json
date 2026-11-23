@@ -1,0 +1,14 @@
+{
+ "steps": [
+  {"argv": ["open", "{fixture}/loadsdata.html", "--no-changes"]},
+  {"argv": ["network", "requests", "--type", "fetch"]},
+  {"argv": ["network", "requests", "--reload", "--type", "fetch"]},
+  {"argv": ["network", "requests", "--filter", "loadsdata.json", "--status", "2xx", "--method", "get"]},
+  {"argv": ["network", "requests", "--status", "500-599"]},
+  {"argv": ["network", "request", "nope"]},
+  {"argv": ["network", "sideways"]},
+  {"argv": ["network"]},
+  {"argv": ["network", "requests", "--clear"]},
+  {"argv": ["network", "requests", "--type", "fetch"]}
+ ]
+}

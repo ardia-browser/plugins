@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>act input</title>
+<style>
+  body { font: 14px sans-serif; margin: 20px; }
+  #src, #dst { display: inline-block; width: 120px; height: 60px; border: 1px solid #555; margin: 10px; }
+  #sort li { padding: 6px; border: 1px solid #aaa; margin: 2px; width: 200px; user-select: none; }
+  #pane { height: 120px; overflow: auto; border: 1px solid #999; }
+  #pane div { height: 600px; }
+  #far { margin-top: 1600px; }
+  #editor { border: 1px solid #333; min-height: 30px; width: 300px; }
+</style>
+</head>
+<body>
+<button id="go">Go</button>
+<label>Name <input id="name"></label>
+<label>Notes <textarea id="area"></textarea></label>
+<label><input type="checkbox" id="agree"> Agree</label>
+<label>Pick <select id="pick"><option value="a">Apple</option><option value="b">Banana</option><option value="c">Cherry</option></select></label>
+<span id="hover">Hover me</span>
+<div id="editor" contenteditable="true"></div>
+<div id="src" draggable="true">Drag me</div>
+<div id="dst">Drop here</div>
+<ul id="sort"><li>One</li><li>Two</li><li>Three</li></ul>
+<div id="pane"><div>scroll inside</div></div>
+<input type="file" id="file" multiple>
+<p id="far">Far away</p>
+<script>
+  const seen = { click: 0, dbl: 0, keys: 0, hover: 0, wheel: 0, drop: 0, down: 0, up: 0, files: 0 };
+  const show = () => {
+    const name = document.getElementById("name").value;
+    const area = document.getElementById("area").value;
+    const agree = document.getElementById("agree").checked;
+    const pick = document.getElementById("pick").value;
+    const editor = document.getElementById("editor").textContent;
+    document.title = `c${seen.click} d${seen.dbl} k${seen.keys} h${seen.hover} w${seen.wheel} dr${seen.drop} md${seen.down} mu${seen.up} f${seen.files} ` +
+      `name=${name} area=${area} agree=${agree} pick=${pick} ed=${editor}`;
+  };
+  document.getElementById("go").addEventListener("click", (event) => { if (event.isTrusted) seen.click += 1; show(); });
+  document.getElementById("go").addEventListener("dblclick", () => { seen.dbl += 1; show(); });
+  document.getElementById("hover").addEventListener("mouseenter", () => { seen.hover += 1; show(); });
+  document.addEventListener("keydown", (event) => { if (event.isTrusted) seen.keys += 1; show(); });
+  document.addEventListener("input", show);
+  document.addEventListener("change", show);
+  document.addEventListener("wheel", () => { seen.wheel += 1; show(); }, { passive: true });
+  document.addEventListener("mousedown", () => { seen.down += 1; show(); });
+  document.addEventListener("mouseup", () => { seen.up += 1; show(); });
+  document.getElementById("src").addEventListener("dragstart", (event) => event.dataTransfer.setData("text/plain", "moved"));
+  document.getElementById("dst").addEventListener("dragover", (event) => event.preventDefault());
+  document.getElementById("dst").addEventListener("drop", (event) => { event.preventDefault(); seen.drop += 1; show(); });
+  document.getElementById("file").addEventListener("change", (event) => { seen.files = event.target.files.length; show(); });
+  let held = null;
+  for (const item of document.querySelectorAll("#sort li")) {
+    item.addEventListener("mousedown", () => { held = item; });
+  }
+  document.addEventListener("mouseup", (event) => {
+    if (!held) return;
+    const over = document.elementFromPoint(event.clientX, event.clientY);
+    const onto = over && over.closest("#sort li");
+    if (onto && onto !== held) onto.after(held);
+    held = null;
+  });
+  show();
+</script>
+</body>
+</html>

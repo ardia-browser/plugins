@@ -1,0 +1,2593 @@
+[
+ {
+  "id": "contract--1-pick-json",
+  "command": "browse tab",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "tab",
+   "86AFEE216CB13B62B5F557C8C255568F",
+   "--json"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":true,\"data\":{\"tabId\":\"t1\",\"appTabId\":null,\"targetId\":\"86AFEE216CB13B62B5F557C8C255568F\",\"title\":\"Form page\",\"url\":\"http://127.0.0.1:63234/form\",\"loader\":\"BC8D78A4AEFDD527B1433946AF6B12C3\"},\"error\":null}\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§1 pick and §5: data.loader passes through, one JSON line"
+ },
+ {
+  "id": "contract--1-pick-text",
+  "command": "browse tab",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "tab",
+   "86AFEE216CB13B62B5F557C8C255568F"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Form page\n  http://127.0.0.1:63234/form\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§1 plain pick"
+ },
+ {
+  "id": "contract--1-snapshot",
+  "command": "browse snapshot",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "snapshot",
+   "--compact",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "- heading \"Sign up\" [level=1, ref=e1]\n- LabelText\n  - StaticText \"Name \"\n  - textbox \"Name\" [ref=e2]\n- button \"Save\" [ref=e3]\n- link \"Next\" [ref=e4]\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§1/§3 the AI's snapshot; expect_loader reaches options"
+ },
+ {
+  "id": "contract--1-snapshot-flags",
+  "command": "browse snapshot",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "snapshot",
+   "--interactive",
+   "--compact",
+   "--depth=3",
+   "--selector=#form",
+   "--urls",
+   "--diff",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§1 grammar: options, then --, then positionals; --cursor left the contract in round 3 (computed styles need page script)"
+ },
+ {
+  "id": "contract--1-get-title",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§1 grammar: options, then --, then positionals"
+ },
+ {
+  "id": "contract--1-get-text-ref",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "text",
+   "@e2"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§1 grammar: options, then --, then positionals"
+ },
+ {
+  "id": "contract--1-click",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "click",
+   "--button=left",
+   "--no-humanize",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "@e3"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§1 grammar: options, then --, then positionals"
+ },
+ {
+  "id": "contract--1-fill",
+  "command": "browse fill",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "fill",
+   "--no-humanize",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "@e2",
+   "Ada"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§1 grammar: options, then --, then positionals"
+ },
+ {
+  "id": "contract--1-press",
+  "command": "browse press",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "press",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "Enter"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§1 grammar: options, then --, then positionals"
+ },
+ {
+  "id": "contract--1-type",
+  "command": "browse type",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "type",
+   "--delay=10",
+   "--no-humanize",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "@e2",
+   "hi"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§1 grammar: options, then --, then positionals"
+ },
+ {
+  "id": "contract--1-scroll",
+  "command": "browse scroll",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "scroll",
+   "--selector=#list",
+   "--no-humanize",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "down"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§1 grammar: options, then --, then positionals"
+ },
+ {
+  "id": "contract--1-find",
+  "command": "browse find",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "find",
+   "--name=Save",
+   "--exact",
+   "--no-humanize",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "role",
+   "button",
+   "click"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§1 grammar: options, then --, then positionals"
+ },
+ {
+  "id": "contract--1-find-partial",
+  "command": "browse find",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "find",
+   "--name=Sa",
+   "--partial",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "role",
+   "button",
+   "click"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§1 grammar: options, then --, then positionals"
+ },
+ {
+  "id": "contract--1-is",
+  "command": "browse is",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "is",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "visible",
+   "@e1"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§1 grammar: options, then --, then positionals"
+ },
+ {
+  "id": "contract--1-dash-positional",
+  "command": "browse fill",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "fill",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "@e2",
+   "-x"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§1 grammar: options, then --, then positionals"
+ },
+ {
+  "id": "contract--1-flag-like-positional",
+  "command": "browse fill",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "fill",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "@e2",
+   "--session"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§1 grammar: options, then --, then positionals"
+ },
+ {
+  "id": "contract--2-exact-env",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "Form page\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§2 runs with only the app's variables; ARDIA_TELEMETRY=0 records nothing; NO_COLOR"
+ },
+ {
+  "id": "contract--3-json-success",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--json",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":true,\"data\":{\"title\":\"Form page\"},\"error\":null}\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§3 one JSON line"
+ },
+ {
+  "id": "contract--3-fill-changes",
+  "command": "browse fill",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "fill",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "@e2",
+   "Ada"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\nchanges:\n~ textbox \"Name\" [ref=e2]: Ada (was empty)\n→ Nothing else on the page changed yet. Some fields only apply when you press Enter or leave them: `press Enter` or `press Tab`, then check again\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§3 captured fill"
+ },
+ {
+  "id": "contract--3-fill-refused",
+  "command": "browse fill",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "fill",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "@e1",
+   "Ada"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "✗ @e1 is a h1 \"Sign up\", which takes no typing; use click, select or check\n",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§3 text error: stderr only, exit 1"
+ },
+ {
+  "id": "contract--6-after-check-json",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "click",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--json",
+   "--",
+   "@e4"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":false,\"data\":null,\"error\":\"The page loaded a new document, so this step didn't count. Ardia checks it again for the next step\",\"code\":\"document_changed\"}\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§6 after-check",
+  "intentional": {
+   "why": "the daemon answers the same document_changed whether its check failed before the step (nothing ran) or after it (the step ran), so the client says it may or may not have run; the M3 F1 daemon answers document_changed_after for the second",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"The page loaded a new document before, during or after this step, so it may or may not have run; check the page before repeating it. Ardia checks it again for the next step\",\"code\":\"document_changed\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "contract--6-before-check-text",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--expect-loader",
+   "STALE",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "✗ The page loaded a new document, so this step didn't count. Ardia checks it again for the next step\n",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§6 before-check in text",
+  "intentional": {
+   "why": "the daemon answers the same document_changed whether its check failed before the step (nothing ran) or after it (the step ran), so the client says it may or may not have run; the M3 F1 daemon answers document_changed_after for the second",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ The page loaded a new document before, during or after this step, so it may or may not have run; check the page before repeating it. Ardia checks it again for the next step\n"
+   }
+  }
+ },
+ {
+  "id": "contract--3-tab-not-found",
+  "command": "browse tab",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "tab",
+   "0123456789ABCDEF0123456789ABCDEF",
+   "--json"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":false,\"data\":null,\"error\":\"Tab 0123456789ABCDEF0123456789ABCDEF not found; run `ardia browse tab` to list open tabs\",\"code\":\"tab_not_found\"}\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§3 code kept"
+ },
+ {
+  "id": "contract--3-unknown-ref",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "click",
+   "--json",
+   "--",
+   "@e99"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":false,\"data\":null,\"error\":\"Unknown ref: e99\",\"code\":\"unknown_ref\"}\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§3"
+ },
+ {
+  "id": "contract--4-plugin-key",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "Form page\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§4 the plugin session key carries \\0plugin and the credential's hash"
+ },
+ {
+  "id": "contract--7-from-a-file",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "kind": "file",
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "Form page\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§7 a credential in a regular file passes the client's checks; today the active case answers plugin_daemon_unavailable, and F1-early restores the daemon's answer here"
+ },
+ {
+  "id": "contract--8-press-enter",
+  "command": "browse press",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "press",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "Enter"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§8 plugin input rules: the daemon (M3 F1) builds these key events",
+  "cdp_rules": {
+   "Input.dispatchKeyEvent": {
+    "never_params": [
+     "nativeVirtualKeyCode",
+     "isSystemKey"
+    ],
+    "only_values": {
+     "commands": [
+      "selectAll",
+      "moveToBeginningOfLine",
+      "moveToBeginningOfLineAndModifySelection",
+      "moveToEndOfLine",
+      "moveToEndOfLineAndModifySelection",
+      "moveToBeginningOfDocument",
+      "moveToBeginningOfDocumentAndModifySelection",
+      "moveToEndOfDocument",
+      "moveToEndOfDocumentAndModifySelection",
+      "moveLeft",
+      "moveLeftAndModifySelection",
+      "moveRight",
+      "moveRightAndModifySelection",
+      "moveUp",
+      "moveUpAndModifySelection",
+      "moveDown",
+      "moveDownAndModifySelection",
+      "moveWordLeft",
+      "moveWordLeftAndModifySelection",
+      "moveWordRight",
+      "moveWordRightAndModifySelection",
+      "deleteBackward",
+      "deleteForward",
+      "deleteWordBackward",
+      "deleteWordForward",
+      "insertNewline",
+      "insertTab"
+     ]
+    },
+    "why": "ardia#2808 plugin policy: the engine refuses a plugin's key event that carries a native key code, a system key or an editing command off this list (never copy, cut, paste or pasteAndMatchStyle)"
+   }
+  }
+ },
+ {
+  "id": "contract--8-press-select-all",
+  "command": "browse press",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "press",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "Meta+a"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§8 plugin input rules: the daemon (M3 F1) builds these key events",
+  "cdp_rules": {
+   "Input.dispatchKeyEvent": {
+    "never_params": [
+     "nativeVirtualKeyCode",
+     "isSystemKey"
+    ],
+    "only_values": {
+     "commands": [
+      "selectAll",
+      "moveToBeginningOfLine",
+      "moveToBeginningOfLineAndModifySelection",
+      "moveToEndOfLine",
+      "moveToEndOfLineAndModifySelection",
+      "moveToBeginningOfDocument",
+      "moveToBeginningOfDocumentAndModifySelection",
+      "moveToEndOfDocument",
+      "moveToEndOfDocumentAndModifySelection",
+      "moveLeft",
+      "moveLeftAndModifySelection",
+      "moveRight",
+      "moveRightAndModifySelection",
+      "moveUp",
+      "moveUpAndModifySelection",
+      "moveDown",
+      "moveDownAndModifySelection",
+      "moveWordLeft",
+      "moveWordLeftAndModifySelection",
+      "moveWordRight",
+      "moveWordRightAndModifySelection",
+      "deleteBackward",
+      "deleteForward",
+      "deleteWordBackward",
+      "deleteWordForward",
+      "insertNewline",
+      "insertTab"
+     ]
+    },
+    "why": "ardia#2808 plugin policy: the engine refuses a plugin's key event that carries a native key code, a system key or an editing command off this list (never copy, cut, paste or pasteAndMatchStyle)"
+   }
+  }
+ },
+ {
+  "id": "contract--8-press-undo",
+  "command": "browse press",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "press",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "Meta+z"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§8 plugin input rules: the daemon (M3 F1) builds these key events",
+  "cdp_rules": {
+   "Input.dispatchKeyEvent": {
+    "never_params": [
+     "nativeVirtualKeyCode",
+     "isSystemKey"
+    ],
+    "only_values": {
+     "commands": [
+      "selectAll",
+      "moveToBeginningOfLine",
+      "moveToBeginningOfLineAndModifySelection",
+      "moveToEndOfLine",
+      "moveToEndOfLineAndModifySelection",
+      "moveToBeginningOfDocument",
+      "moveToBeginningOfDocumentAndModifySelection",
+      "moveToEndOfDocument",
+      "moveToEndOfDocumentAndModifySelection",
+      "moveLeft",
+      "moveLeftAndModifySelection",
+      "moveRight",
+      "moveRightAndModifySelection",
+      "moveUp",
+      "moveUpAndModifySelection",
+      "moveDown",
+      "moveDownAndModifySelection",
+      "moveWordLeft",
+      "moveWordLeftAndModifySelection",
+      "moveWordRight",
+      "moveWordRightAndModifySelection",
+      "deleteBackward",
+      "deleteForward",
+      "deleteWordBackward",
+      "deleteWordForward",
+      "insertNewline",
+      "insertTab"
+     ]
+    },
+    "why": "ardia#2808 plugin policy: the engine refuses a plugin's key event that carries a native key code, a system key or an editing command off this list (never copy, cut, paste or pasteAndMatchStyle)"
+   }
+  }
+ },
+ {
+  "id": "contract--8-press-copy",
+  "command": "browse press",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "press",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "Meta+c"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§8 plugin input rules: the daemon (M3 F1) builds these key events",
+  "cdp_rules": {
+   "Input.dispatchKeyEvent": {
+    "never_params": [
+     "nativeVirtualKeyCode",
+     "isSystemKey"
+    ],
+    "only_values": {
+     "commands": [
+      "selectAll",
+      "moveToBeginningOfLine",
+      "moveToBeginningOfLineAndModifySelection",
+      "moveToEndOfLine",
+      "moveToEndOfLineAndModifySelection",
+      "moveToBeginningOfDocument",
+      "moveToBeginningOfDocumentAndModifySelection",
+      "moveToEndOfDocument",
+      "moveToEndOfDocumentAndModifySelection",
+      "moveLeft",
+      "moveLeftAndModifySelection",
+      "moveRight",
+      "moveRightAndModifySelection",
+      "moveUp",
+      "moveUpAndModifySelection",
+      "moveDown",
+      "moveDownAndModifySelection",
+      "moveWordLeft",
+      "moveWordLeftAndModifySelection",
+      "moveWordRight",
+      "moveWordRightAndModifySelection",
+      "deleteBackward",
+      "deleteForward",
+      "deleteWordBackward",
+      "deleteWordForward",
+      "insertNewline",
+      "insertTab"
+     ]
+    },
+    "why": "ardia#2808 plugin policy: the engine refuses a plugin's key event that carries a native key code, a system key or an editing command off this list (never copy, cut, paste or pasteAndMatchStyle)"
+   }
+  }
+ },
+ {
+  "id": "contract--8-press-paste",
+  "command": "browse press",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "press",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "Meta+v"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§8 plugin input rules: the daemon (M3 F1) builds these key events",
+  "cdp_rules": {
+   "Input.dispatchKeyEvent": {
+    "never_params": [
+     "nativeVirtualKeyCode",
+     "isSystemKey"
+    ],
+    "only_values": {
+     "commands": [
+      "selectAll",
+      "moveToBeginningOfLine",
+      "moveToBeginningOfLineAndModifySelection",
+      "moveToEndOfLine",
+      "moveToEndOfLineAndModifySelection",
+      "moveToBeginningOfDocument",
+      "moveToBeginningOfDocumentAndModifySelection",
+      "moveToEndOfDocument",
+      "moveToEndOfDocumentAndModifySelection",
+      "moveLeft",
+      "moveLeftAndModifySelection",
+      "moveRight",
+      "moveRightAndModifySelection",
+      "moveUp",
+      "moveUpAndModifySelection",
+      "moveDown",
+      "moveDownAndModifySelection",
+      "moveWordLeft",
+      "moveWordLeftAndModifySelection",
+      "moveWordRight",
+      "moveWordRightAndModifySelection",
+      "deleteBackward",
+      "deleteForward",
+      "deleteWordBackward",
+      "deleteWordForward",
+      "insertNewline",
+      "insertTab"
+     ]
+    },
+    "why": "ardia#2808 plugin policy: the engine refuses a plugin's key event that carries a native key code, a system key or an editing command off this list (never copy, cut, paste or pasteAndMatchStyle)"
+   }
+  }
+ },
+ {
+  "id": "contract--8-press-word-left",
+  "command": "browse press",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "press",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "Alt+ArrowLeft"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§8 plugin input rules: the daemon (M3 F1) builds these key events",
+  "cdp_rules": {
+   "Input.dispatchKeyEvent": {
+    "never_params": [
+     "nativeVirtualKeyCode",
+     "isSystemKey"
+    ],
+    "only_values": {
+     "commands": [
+      "selectAll",
+      "moveToBeginningOfLine",
+      "moveToBeginningOfLineAndModifySelection",
+      "moveToEndOfLine",
+      "moveToEndOfLineAndModifySelection",
+      "moveToBeginningOfDocument",
+      "moveToBeginningOfDocumentAndModifySelection",
+      "moveToEndOfDocument",
+      "moveToEndOfDocumentAndModifySelection",
+      "moveLeft",
+      "moveLeftAndModifySelection",
+      "moveRight",
+      "moveRightAndModifySelection",
+      "moveUp",
+      "moveUpAndModifySelection",
+      "moveDown",
+      "moveDownAndModifySelection",
+      "moveWordLeft",
+      "moveWordLeftAndModifySelection",
+      "moveWordRight",
+      "moveWordRightAndModifySelection",
+      "deleteBackward",
+      "deleteForward",
+      "deleteWordBackward",
+      "deleteWordForward",
+      "insertNewline",
+      "insertTab"
+     ]
+    },
+    "why": "ardia#2808 plugin policy: the engine refuses a plugin's key event that carries a native key code, a system key or an editing command off this list (never copy, cut, paste or pasteAndMatchStyle)"
+   }
+  }
+ },
+ {
+  "id": "contract--8-type-humanized",
+  "command": "browse type",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "type",
+   "--delay=10",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "@e2",
+   "hi"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§8 plugin input rules: the daemon (M3 F1) builds these key events",
+  "cdp_rules": {
+   "Input.dispatchKeyEvent": {
+    "never_params": [
+     "nativeVirtualKeyCode",
+     "isSystemKey"
+    ],
+    "only_values": {
+     "commands": [
+      "selectAll",
+      "moveToBeginningOfLine",
+      "moveToBeginningOfLineAndModifySelection",
+      "moveToEndOfLine",
+      "moveToEndOfLineAndModifySelection",
+      "moveToBeginningOfDocument",
+      "moveToBeginningOfDocumentAndModifySelection",
+      "moveToEndOfDocument",
+      "moveToEndOfDocumentAndModifySelection",
+      "moveLeft",
+      "moveLeftAndModifySelection",
+      "moveRight",
+      "moveRightAndModifySelection",
+      "moveUp",
+      "moveUpAndModifySelection",
+      "moveDown",
+      "moveDownAndModifySelection",
+      "moveWordLeft",
+      "moveWordLeftAndModifySelection",
+      "moveWordRight",
+      "moveWordRightAndModifySelection",
+      "deleteBackward",
+      "deleteForward",
+      "deleteWordBackward",
+      "deleteWordForward",
+      "insertNewline",
+      "insertTab"
+     ]
+    },
+    "why": "ardia#2808 plugin policy: the engine refuses a plugin's key event that carries a native key code, a system key or an editing command off this list (never copy, cut, paste or pasteAndMatchStyle)"
+   }
+  }
+ },
+ {
+  "id": "contract--8-type-plain",
+  "command": "browse type",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "type",
+   "--no-humanize",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "@e2",
+   "hi"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§8 plugin input rules: the daemon (M3 F1) builds these key events",
+  "cdp_rules": {
+   "Input.dispatchKeyEvent": {
+    "never_params": [
+     "nativeVirtualKeyCode",
+     "isSystemKey"
+    ],
+    "only_values": {
+     "commands": [
+      "selectAll",
+      "moveToBeginningOfLine",
+      "moveToBeginningOfLineAndModifySelection",
+      "moveToEndOfLine",
+      "moveToEndOfLineAndModifySelection",
+      "moveToBeginningOfDocument",
+      "moveToBeginningOfDocumentAndModifySelection",
+      "moveToEndOfDocument",
+      "moveToEndOfDocumentAndModifySelection",
+      "moveLeft",
+      "moveLeftAndModifySelection",
+      "moveRight",
+      "moveRightAndModifySelection",
+      "moveUp",
+      "moveUpAndModifySelection",
+      "moveDown",
+      "moveDownAndModifySelection",
+      "moveWordLeft",
+      "moveWordLeftAndModifySelection",
+      "moveWordRight",
+      "moveWordRightAndModifySelection",
+      "deleteBackward",
+      "deleteForward",
+      "deleteWordBackward",
+      "deleteWordForward",
+      "insertNewline",
+      "insertTab"
+     ]
+    },
+    "why": "ardia#2808 plugin policy: the engine refuses a plugin's key event that carries a native key code, a system key or an editing command off this list (never copy, cut, paste or pasteAndMatchStyle)"
+   }
+  }
+ },
+ {
+  "id": "contract--8-fill",
+  "command": "browse fill",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "fill",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "@e2",
+   "Ada"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§8 plugin input rules: the daemon (M3 F1) builds these key events",
+  "cdp_rules": {
+   "Input.dispatchKeyEvent": {
+    "never_params": [
+     "nativeVirtualKeyCode",
+     "isSystemKey"
+    ],
+    "only_values": {
+     "commands": [
+      "selectAll",
+      "moveToBeginningOfLine",
+      "moveToBeginningOfLineAndModifySelection",
+      "moveToEndOfLine",
+      "moveToEndOfLineAndModifySelection",
+      "moveToBeginningOfDocument",
+      "moveToBeginningOfDocumentAndModifySelection",
+      "moveToEndOfDocument",
+      "moveToEndOfDocumentAndModifySelection",
+      "moveLeft",
+      "moveLeftAndModifySelection",
+      "moveRight",
+      "moveRightAndModifySelection",
+      "moveUp",
+      "moveUpAndModifySelection",
+      "moveDown",
+      "moveDownAndModifySelection",
+      "moveWordLeft",
+      "moveWordLeftAndModifySelection",
+      "moveWordRight",
+      "moveWordRightAndModifySelection",
+      "deleteBackward",
+      "deleteForward",
+      "deleteWordBackward",
+      "deleteWordForward",
+      "insertNewline",
+      "insertTab"
+     ]
+    },
+    "why": "ardia#2808 plugin policy: the engine refuses a plugin's key event that carries a native key code, a system key or an editing command off this list (never copy, cut, paste or pasteAndMatchStyle)"
+   }
+  }
+ },
+ {
+  "id": "contract--8-click-node-ids",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "click",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "@e3"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§8 refs resolve through backendNodeId from the session's own frame tree",
+  "cdp_rules": {
+   "DOM.resolveNode": {
+    "never_params": [],
+    "why": "ardia#2808: backendNodeId stays usable, but only ids from the session's own frame tree"
+   }
+  }
+ },
+ {
+  "id": "review--4-scope-cdp-error",
+  "command": "browse fill",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "fill",
+   "--json",
+   "--",
+   "@e2",
+   "Ada"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":false,\"data\":null,\"error\":\"Input.insertText: ardia: tab_out_of_scope: the tab moved to another window\",\"code\":\"tab_out_of_scope\"}\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: the daemon's CDP layer codes the engine's refusal; the client passes it on"
+ },
+ {
+  "id": "review--4-lease-cdp-error",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "click",
+   "--json",
+   "--",
+   "@e3"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":false,\"data\":null,\"error\":\"Input.dispatchMouseEvent: ardia: document_changed: no act lease covers this document\",\"code\":\"document_changed\"}\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: the act lease's refusal, coded by the daemon"
+ },
+ {
+  "id": "review--4-scope-text",
+  "command": "browse fill",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "fill",
+   "--",
+   "@e2",
+   "Ada"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "✗ Input.insertText: ardia: tab_out_of_scope: the tab moved to another window\n",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 4: text mode keeps Python's line"
+ },
+ {
+  "id": "review--5-after-check-text",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "click",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--",
+   "@e4"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "✗ The page loaded a new document, so this step didn't count. Ardia checks it again for the next step\n",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 5: a click that navigated, in text mode",
+  "intentional": {
+   "why": "the daemon answers the same document_changed whether its check failed before the step (nothing ran) or after it (the step ran), so the client says it may or may not have run; the M3 F1 daemon answers document_changed_after for the second",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ The page loaded a new document before, during or after this step, so it may or may not have run; check the page before repeating it. Ardia checks it again for the next step\n"
+   }
+  }
+ },
+ {
+  "id": "review--5-before-check-json",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--expect-loader",
+   "OLDLOADER",
+   "--json",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":false,\"data\":null,\"error\":\"The page loaded a new document, so this step didn't count. Ardia checks it again for the next step\",\"code\":\"document_changed\"}\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 5: a stale loader, under --json",
+  "intentional": {
+   "why": "the daemon answers the same document_changed whether its check failed before the step (nothing ran) or after it (the step ran), so the client says it may or may not have run; the M3 F1 daemon answers document_changed_after for the second",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"The page loaded a new document before, during or after this step, so it may or may not have run; check the page before repeating it. Ardia checks it again for the next step\",\"code\":\"document_changed\"}\n"
+   },
+   "stderr": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "review--5-same-words-other-code",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "get",
+   "--json",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":false,\"data\":null,\"error\":\"The page loaded a new document, so this step didn't count. Ardia checks it again for the next step\",\"code\":\"tab_gone\"}\n",
+     "err": "",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 5: only document_changed is reworded"
+ },
+ {
+  "id": "review--7-port-highest",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "--json",
+   "get",
+   "--",
+   "title"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:65535/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":true,\"data\":{\"title\":\"T\"},\"error\":null}\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "finding 7: 65535 is a port"
+ },
+ {
+  "id": "review2--1-click-button-inline",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "click",
+   "--button=--new-tab",
+   "--",
+   "@e1"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: --button=--new-tab is a value, not a flag"
+ },
+ {
+  "id": "review2--1-wait-text-takes-fn",
+  "command": "browse wait",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "wait",
+   "-t",
+   "--fn",
+   "--",
+   "x"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: -t takes --fn as its text"
+ },
+ {
+  "id": "review2--1-snapshot-select-dashdash",
+  "command": "browse snapshot",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "snapshot",
+   "-s",
+   "--",
+   "-i"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: -s takes --, then -i is a flag"
+ },
+ {
+  "id": "review2--4-notice-before-document-changed",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "click",
+   "--expect-loader",
+   "L",
+   "--",
+   "@e4"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "Ardia restarted its control server; this session reconnected\n✗ The page loaded a new document, so this step didn't count. Ardia checks it again for the next step\n",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: a notice the daemon puts first doesn't stop the rewording",
+  "intentional": {
+   "why": "the daemon answers the same document_changed whether its check failed before the step (nothing ran) or after it (the step ran), so the client says it may or may not have run; the M3 F1 daemon answers document_changed_after for the second",
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "Ardia restarted its control server; this session reconnected\n✗ The page loaded a new document before, during or after this step, so it may or may not have run; check the page before repeating it. Ardia checks it again for the next step\n"
+   }
+  }
+ },
+ {
+  "id": "review2--4-notice-json",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "click",
+   "--expect-loader",
+   "L",
+   "--json",
+   "--",
+   "@e4"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\":false,\"data\":null,\"error\":\"The page loaded a new document, so this step didn't count. Ardia checks it again for the next step\",\"code\":\"document_changed\"}\n",
+     "err": "Ardia restarted its control server; this session reconnected\n",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: under --json the notice stays on stderr",
+  "intentional": {
+   "why": "the daemon answers the same document_changed whether its check failed before the step (nothing ran) or after it (the step ran), so the client says it may or may not have run; the M3 F1 daemon answers document_changed_after for the second",
+   "stdout": {
+    "text": "{\"success\":false,\"data\":null,\"error\":\"The page loaded a new document before, during or after this step, so it may or may not have run; check the page before repeating it. Ardia checks it again for the next step\",\"code\":\"document_changed\"}\n"
+   },
+   "stderr": {
+    "text": "Ardia restarted its control server; this session reconnected\n"
+   }
+  }
+ },
+ {
+  "id": "review2--4-quoted-message-mid-line",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "click",
+   "--",
+   "@e4"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "✗ step said: The page loaded a new document, so this step didn't count. Ardia checks it again for the next step\n",
+     "exit": 1
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "round 2: only a whole line is reworded"
+ },
+ {
+  "id": "contract--1-wait",
+  "command": "browse wait",
+  "argv": [
+   "browse",
+   "--session",
+   "plugin-ai",
+   "wait",
+   "--text=Saved",
+   "--url=**/done",
+   "--load=load",
+   "--state=visible",
+   "--timeout=5000",
+   "--expect-loader",
+   "BC8D78A4AEFDD527B1433946AF6B12C3",
+   "--"
+  ],
+  "env": {
+   "ARDIA_BROWSE_FOR_PLUGIN": "1",
+   "ARDIA_PLUGIN_CREDENTIAL_FD": "4",
+   "ARDIA_PLUGIN_ENDPOINT": "ws://127.0.0.1:9/devtools/browser/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+   "ARDIA_TELEMETRY": "0",
+   "NO_COLOR": "1",
+   "LANG": "en_US.UTF-8"
+  },
+  "credential": {
+   "fd": 4,
+   "bytes": {
+    "text": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   }
+  },
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Done\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "plugin": "p.Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Ab3_-9xYz0Q7w"
+   },
+   "session": "plugin-ai",
+   "namespace": ""
+  },
+  "note": "§1 grammar: options, then --, then positionals"
+ }
+]

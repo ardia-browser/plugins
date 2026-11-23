@@ -1,0 +1,50 @@
+{
+ "live_only": "Python's wait loops (dialog fade, disabled waits, lazy scroll, load settle) count against the daemon's own clock, so replay sends a different number of checks; first replay mismatch: Runtime.callFunctionOn (el) => ({",
+ "source": "tests/test_browse_act.py ActInChrome.test_dependent_fields_wait_for_their_target",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "batch",
+    "fill #from Beta",
+    "select #to Yankee",
+    "click #later",
+    "get text #out"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.querySelector('#to').value"
+   ],
+   "session": "act",
+   "main_world": true
+  },
+  {
+   "argv": [
+    "click",
+    "#never"
+   ],
+   "session": "act"
+  }
+ ],
+ "unstable_steps": {
+  "steps": [
+   1,
+   3
+  ],
+  "reason": "the change report after this action depends on whether the page finished its change (a dialog fading out, a field becoming enabled) before the daemon's snapshot; Python differs from itself run to run"
+ }
+}

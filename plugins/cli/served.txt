@@ -1,0 +1,76 @@
+--version ts
+--help ts
+tabs ts
+groups ts
+windows ts
+commands ts
+browse ts
+browse-daemon ts
+call * ts
+methods ts
+run ts
+events ts
+apply ts
+tabs open ts
+tabs move ts
+tabs pin ts
+tabs unpin ts
+tabs mute ts
+tabs unmute ts
+tabs sleep ts
+tabs wake ts
+tabs close ts
+tabs activate ts
+tabs rename ts
+tabs icon ts
+groups create ts
+groups update ts
+groups rename ts
+groups move ts
+groups ungroup ts
+groups close ts
+groups delete ts
+config path ts
+config init ts
+config get ts
+config set ts
+config unset ts
+config list ts
+config edit ts
+config check ts
+theme new ts
+theme use ts
+theme list ts
+theme check ts
+theme get ts
+theme set ts
+theme unset ts
+plugins list ts
+plugins install ts
+plugins check ts
+plugins remove ts
+plugins enable ts
+plugins disable ts
+plugins call ts
+plugins path ts
+computer * ts
+hooks install ts
+hooks uninstall ts
+hooks list ts
+hooks run ts
+on ts
+scripts new ts
+scripts test ts
+scripts install ts
+scripts uninstall ts
+scripts list ts
+feedback ts
+star ts
+notes ts
+pinned ts
+history ts
+skills get ts
+skills list ts
+skills install ts
+skills refresh ts
+argparse ts

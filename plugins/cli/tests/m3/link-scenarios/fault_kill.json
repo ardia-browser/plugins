@@ -1,0 +1,56 @@
+{
+ "live_only": "kills Chromium",
+ "ops": [
+  {
+   "op": "open"
+  },
+  {
+   "op": "send",
+   "method": "Target.createTarget",
+   "params": {
+    "url": "about:blank"
+   },
+   "save": "target",
+   "keep": "keys"
+  },
+  {
+   "op": "send",
+   "method": "Target.attachToTarget",
+   "params": {
+    "targetId": "@target.targetId",
+    "flatten": true
+   },
+   "save": "page",
+   "keep": "keys"
+  },
+  {
+   "op": "fault",
+   "fault": {
+    "kind": "kill",
+    "at": 1
+   }
+  },
+  {
+   "op": "send",
+   "method": "Runtime.evaluate",
+   "params": {
+    "expression": "new Promise(r => setTimeout(() => r(7), 1500))",
+    "returnByValue": true,
+    "awaitPromise": true
+   },
+   "session": "@page.sessionId",
+   "timeout": 10
+  },
+  {
+   "op": "wait_lost",
+   "seconds": 5
+  },
+  {
+   "op": "send",
+   "method": "Browser.getVersion"
+  },
+  {
+   "op": "open"
+  }
+ ]
+}

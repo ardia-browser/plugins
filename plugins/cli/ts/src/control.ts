@@ -1,0 +1,309 @@
+import { lstatSync } from "node:fs";
+import { createConnection, type Socket } from "node:net";
+import { peerUid } from "./libc.ts";
+import { Connection, type EventLine, Stop } from "./connection.ts";
+import { dumps, field, object, same, type Value } from "./json.ts";
+import { baseName, errnoOf, join, LINUX, purePath, envSet, expandUser, home, strerror, uid } from "./paths.ts";
+import { MIN_APP_PROTOCOL, PROTOCOL, SOCKET_FILE } from "./protocol.ts";
+import { strOf, truthy, Unsupported } from "./py.ts";
+import { routedCaller } from "./routed.ts";
+
+export const NOT_REACHABLE = LINUX
+  ? 'Ardia isn\'t running, or "Let the ardia command control Ardia" is off in Settings.'
+  : "Ardia isn't running, or Command Line isn't installed (Settings › Plugins).";
+const SUN_PATH_MAX = 103;
+const LINUX_SUN_PATH_MAX = 107;
+const CONNECT_TIMEOUT = 5;
+export const CALL_TIMEOUT = 30;
+const ENOENT = 2;
+const ENOTDIR = 20;
+const ECONNREFUSED = LINUX ? 111 : 61;
+const EPERM = 1;
+const EACCES = 13;
+
+export type Failure =
+  | { kind: "unreachable"; message: string; sent: boolean }
+  | { kind: "incompatible"; message: string }
+  | { kind: "invalid"; message: string }
+  | { kind: "method"; code: string; message: string }
+  | { kind: "interrupted" }
+  | { kind: "unported"; code?: string; message?: string };
+
+export class Unsendable extends Error {}
+
+const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/u;
+
+function unsendable(value: Value): boolean {
+  if (typeof value === "string") return LONE_SURROGATE.test(value);
+  if (Array.isArray(value)) return value.some(unsendable);
+  if (value instanceof Map) return [...value].some(([key, item]) => LONE_SURROGATE.test(key) || unsendable(item));
+  return false;
+}
+
+export class ControlFailure extends Error {
+  constructor(readonly failure: Failure) {
+    super(failure.kind);
+  }
+}
+
+export function errorCode(failure: Failure): string | undefined {
+  if (failure.kind === "unreachable") return failure.sent ? "connection_dropped" : "unreachable";
+  if (failure.kind === "invalid") return "connection_dropped";
+  return failure.kind === "incompatible" ? "unsupported_protocol" : undefined;
+}
+
+function unreachable(detail?: string): ControlFailure {
+  return new ControlFailure({ kind: "unreachable", message: detail === undefined ? NOT_REACHABLE : `${NOT_REACHABLE} (${detail})`, sent: false });
+}
+
+function marked(error: unknown, sent: boolean): unknown {
+  if (error instanceof ControlFailure && error.failure.kind === "unreachable") return new ControlFailure({ ...error.failure, sent });
+  return error;
+}
+
+export function installedDataDir(linux: boolean = LINUX): string {
+  if (!linux) return join(home(), "Library", "Application Support", "com.ardia.browser");
+  const configHome = envSet("ARDIA_CONFIG_HOME");
+  if (configHome !== undefined) return join(purePath(configHome), "ardia");
+  const xdg = envSet("XDG_CONFIG_HOME");
+  return join(xdg !== undefined ? purePath(xdg) : join(home(), ".config"), "ardia");
+}
+
+export function dataRoot(dataDir: string | undefined): string {
+  const root = dataDir !== undefined && dataDir !== "" ? dataDir : envSet("ARDIA_DATA_DIR");
+  return root === undefined ? installedDataDir() : purePath(expandUser(root));
+}
+
+export function missingSocketDetail(path: string): string {
+  const at = path.lastIndexOf("/");
+  const folder = at <= 0 ? "/" : path.slice(0, at);
+  const name = path.slice(at + 1);
+  let info;
+  try {
+    info = lstatSync(folder);
+  } catch (error) {
+    return `no ${name} in ${folder} (${strerror(errnoOf(error))})`;
+  }
+  if (!info.isDirectory()) return `${folder} isn't a real folder, so Ardia won't open ${name} there`;
+  if (info.uid !== uid()) return `${folder} belongs to another user, so Ardia won't open ${name} there`;
+  if ((info.mode & 0o022) !== 0) return `others can write to ${folder} (mode ${(info.mode & 0o7777).toString(8).padStart(4, "0")}), so Ardia won't open ${name} there; run chmod go-w on it`;
+  return `no ${name} in ${folder}`;
+}
+
+function socketRefusal(path: string, errno: number): string {
+  const reason = `${path}: ${strerror(errno)}`;
+  return errno === EPERM || errno === EACCES ? `${reason}; a sandbox or the folder's permissions may be blocking it` : reason;
+}
+
+function seconds(value: number): string {
+  return String(value);
+}
+
+export function checkSocket(path: string): void {
+  const size = Buffer.byteLength(path);
+  const limit = LINUX ? LINUX_SUN_PATH_MAX : SUN_PATH_MAX;
+  if (size > limit) {
+    throw new ControlFailure({
+      kind: "unreachable",
+      message: `the control socket path is ${size} bytes, over the ${limit} a Unix socket allows: ${path}; use a shorter data dir`,
+      sent: false,
+    });
+  }
+  const name = baseName(path);
+  let info;
+  try {
+    info = lstatSync(path);
+  } catch (error) {
+    const errno = errnoOf(error);
+    if (errno === ENOENT || errno === ENOTDIR) throw unreachable(missingSocketDetail(path));
+    throw unreachable(socketRefusal(path, errno));
+  }
+  if (!info.isSocket()) throw unreachable(`${name} isn't a socket`);
+  if (info.uid !== uid()) throw unreachable(`${name} belongs to another user`);
+}
+
+function connectSocket(path: string, timeout: number): Promise<Socket> {
+  const name = baseName(path);
+  return new Promise((resolve, reject) => {
+    const socket = createConnection({ path, allowHalfOpen: true });
+    const timer = setTimeout(() => {
+      socket.destroy();
+      reject(unreachable(`${name} didn't accept in ${seconds(timeout)} s`));
+    }, timeout * 1000);
+    socket.once("connect", () => {
+      clearTimeout(timer);
+      socket.removeAllListeners("error");
+      resolve(socket);
+    });
+    socket.once("error", (error) => {
+      clearTimeout(timer);
+      const errno = errnoOf(error);
+      socket.destroy();
+      if (errno === ECONNREFUSED) reject(unreachable(`nothing accepts on ${path}`));
+      else reject(unreachable(errno === ENOENT ? missingSocketDetail(path) : socketRefusal(path, errno)));
+    });
+  });
+}
+
+let interruptedFlag = false;
+let wakeAll: (() => void) | undefined;
+
+export function interrupted(): boolean {
+  return interruptedFlag;
+}
+
+const interruptWakers = new Set<() => void>();
+
+export function wakeInterruptWaiters(): void {
+  wakeAll?.();
+  for (const wake of [...interruptWakers]) wake();
+}
+
+export function interruptSubscription(): (wake: (() => void) | undefined) => void {
+  let current: (() => void) | undefined;
+  return (wake) => {
+    if (current !== undefined) interruptWakers.delete(current);
+    current = wake;
+    if (wake !== undefined) interruptWakers.add(wake);
+  };
+}
+
+function onInterrupt(): void {
+  interruptedFlag = true;
+  wakeInterruptWaiters();
+}
+
+export function wakeOnInterrupt(wake: (() => void) | undefined): void {
+  wakeAll = wake;
+}
+
+export function catchInterrupts(): () => void {
+  process.on("SIGINT", onInterrupt);
+  return () => {
+    process.off("SIGINT", onInterrupt);
+  };
+}
+
+async function callOn(connection: Connection, method: string, params: Value | undefined, timeout: number, requireOutcome = false): Promise<Value> {
+  let reply: Value;
+  try {
+    reply = await connection.request(method, params, timeout);
+  } catch (error) {
+    if (!(error instanceof Stop)) throw error;
+    if (error.kind === "interrupted") throw new ControlFailure({ kind: "interrupted" });
+    if (error.kind === "too_long") throw new ControlFailure({ kind: "method", code: "bad_request", message: error.reason });
+    throw new ControlFailure({ kind: "unreachable", message: `${NOT_REACHABLE} (${error.reason})`, sent: error.kind !== "closed" });
+  }
+  const error = field(reply, "error");
+  if (error !== undefined) throw new ControlFailure(methodFailure(error));
+  const result = field(reply, "result");
+  if (requireOutcome && result === undefined) {
+    throw new ControlFailure({ kind: "invalid", message: `Ardia's answer to ${method} had neither a result nor an error` });
+  }
+  return result ?? null;
+}
+
+function methodFailure(error: Value): Failure {
+  const code = field(error, "code");
+  const message = field(error, "message");
+  try {
+    return { kind: "method", code: truthy(code) ? strOf(code) : "failed", message: truthy(message) ? strOf(message) : "failed" };
+  } catch (failure) {
+    if (!(failure instanceof Unsupported)) throw failure;
+    const lossy = (value: Value | undefined) => (truthy(value) && value !== undefined ? (typeof value === "string" ? value : dumps(value, "spaced")) : "failed");
+    return { kind: "unported", code: lossy(code), message: lossy(message) };
+  }
+}
+
+function spokenProtocol(info: Value): string {
+  const spoken = field(info, "protocol");
+  return typeof spoken === "bigint" ? spoken.toString() : "1";
+}
+
+async function hello(connection: Connection, name: string, callerWire: Value): Promise<void> {
+  let info: Value;
+  try {
+    info = await callOn(connection, "hello", object([["caller", callerWire], ["protocol", BigInt(PROTOCOL)]]), CONNECT_TIMEOUT);
+  } catch (error) {
+    if (!(error instanceof ControlFailure)) throw error;
+    const failure = error.failure;
+    if (failure.kind === "method" && failure.code === "unsupported_protocol") throw new ControlFailure({ kind: "incompatible", message: failure.message });
+    if (failure.kind === "method") throw unreachable(`hello failed: ${failure.message}`);
+    throw marked(error, false);
+  }
+  if (!same(field(info, "app"), "Ardia")) throw unreachable(`something other than Ardia answers on ${name}`);
+  const spoken = spokenProtocol(info);
+  if (BigInt(spoken) < BigInt(MIN_APP_PROTOCOL)) {
+    const version = field(info, "version");
+    let shown = "";
+    try {
+      shown = version === undefined ? "" : strOf(version);
+    } catch {
+      throw new ControlFailure({ kind: "unported" });
+    }
+    throw new ControlFailure({
+      kind: "incompatible",
+      message: `Ardia ${shown} speaks control protocol ${spoken}, and this ardia needs ${MIN_APP_PROTOCOL} or later: update Ardia`,
+    });
+  }
+}
+
+function peerOf(fd: number): number | undefined {
+  try {
+    return peerUid(fd);
+  } catch {
+    return undefined;
+  }
+}
+
+export class Session {
+  constructor(private readonly connection: Connection) {}
+
+  call(method: string, params: Value | undefined, timeout: number = CALL_TIMEOUT, requireOutcome = false): Promise<Value> {
+    return callOn(this.connection, method, params, timeout, requireOutcome);
+  }
+
+  async nextEvent(): Promise<EventLine> {
+    try {
+      return await this.connection.nextEvent();
+    } catch (error) {
+      if (!(error instanceof Stop)) throw error;
+      if (error.kind === "interrupted") throw new ControlFailure({ kind: "interrupted" });
+      throw new ControlFailure({ kind: "unreachable", message: `${NOT_REACHABLE} (${error.reason})`, sent: false });
+    }
+  }
+
+  takeDropped(): number {
+    return this.connection.takeDropped();
+  }
+}
+
+export async function withSession<T>(dataDir: string | undefined, work: (session: Session) => Promise<T>): Promise<T> {
+  const path = join(dataRoot(dataDir), SOCKET_FILE);
+  checkSocket(path);
+  const socket = await connectSocket(path, CONNECT_TIMEOUT);
+  const name = baseName(path);
+  const subscription = interruptSubscription();
+  let connection: Connection | undefined;
+  try {
+    const fd = (socket as unknown as { _handle?: { fd?: number } })._handle?.fd;
+    const peer = typeof fd === "number" ? peerOf(fd) : undefined;
+    if (interrupted()) throw new ControlFailure({ kind: "interrupted" });
+    if (peer === undefined || typeof fd !== "number") throw unreachable(`${name} couldn't check who serves it`);
+    if (peer !== uid()) throw unreachable(`${name} is served by another user`);
+    connection = new Connection(socket, fd, interrupted, subscription);
+    await hello(connection, name, routedCaller());
+    return await work(new Session(connection));
+  } finally {
+    subscription(undefined);
+    connection?.close();
+    socket.destroy();
+  }
+}
+
+export function call(dataDir: string | undefined, method: string, params: Value | undefined, timeout: number = CALL_TIMEOUT, requireOutcome = false): Promise<Value> {
+  return withSession(dataDir, async (session) => {
+    if (params !== undefined && unsendable(params)) throw new Unsendable();
+    return session.call(method, params, timeout, requireOutcome);
+  });
+}

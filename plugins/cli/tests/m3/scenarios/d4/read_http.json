@@ -1,0 +1,63 @@
+{
+ "steps": [
+  {
+   "argv": [
+    "read",
+    "--http",
+    "{fixture}/contents.html"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read",
+    "--http",
+    "--raw",
+    "{fixture}/login.html"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read",
+    "--http",
+    "--outline",
+    "{fixture}/contents.html"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read",
+    "--http",
+    "{fixture}/contents.html",
+    "{fixture}/login.html"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read",
+    "--http",
+    "{fixture}/does-not-exist.html"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read",
+    "--http",
+    "{fixture}/doc.pdf"
+   ],
+   "session": "d4"
+  },
+  {
+   "argv": [
+    "read",
+    "--require-md",
+    "{fixture}/login.html"
+   ],
+   "session": "d4"
+  }
+ ]
+}

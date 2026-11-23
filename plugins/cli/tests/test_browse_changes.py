@@ -540,14 +540,14 @@ class OutputCap(unittest.TestCase):
     def test_text_is_capped_at_a_line_with_ways_to_narrow_it(self):
         text = "\n".join(f"- button \"Button {index}\" [ref=e{index}]" for index in range(400))
         with mock.patch.object(daemon, "spill", return_value="/tmp/whole.txt"):
-            _, out, _ = daemon.render({}, result=commands.Result({}, text), name="snapshot")
-        body, note = out.rstrip("\n").rsplit("\n", 1)
+            _, out, err = daemon.render({}, result=commands.Result({}, text), name="snapshot")
+        body, note = out.rstrip("\n"), err.rstrip("\n")
         self.assertLessEqual(len(body), daemon.OUTPUT_CAP)
         self.assertTrue(body.endswith("]"))
-        self.assertEqual(note, f"[output capped at {len(body):,} of {len(text):,} characters; all of it is in /tmp/whole.txt. "
-                               "Narrow it instead: snapshot -i (interactive only), "
-                               "snapshot -s <css> (one region), find role <role> <action> --name <text> (act without a snapshot). "
-                               f"Only if you need every line: --max-output {len(text)}]")
+        self.assertEqual(note, f"[output capped at {len(body):,} of {len(text):,} characters. "
+                               "Narrow it: snapshot -i (interactive only), "
+                               "snapshot -s <css> (one region), find role <role> <action> --name <text> (act without a snapshot); "
+                               f"or --max-output {len(text)} for every line (full output: /tmp/whole.txt)]")
         self.assertNotIn("--full", note)
         saved = daemon.spill(text)
         self.assertEqual(Path(saved).read_text(), text)
@@ -555,8 +555,8 @@ class OutputCap(unittest.TestCase):
         script = "x" * (daemon.OUTPUT_CAP + 100)
         _, whole, _ = daemon.render({}, result=commands.Result({}, script), name="script")
         self.assertEqual(whole, script + "\n")
-        _, read, _ = daemon.render({}, result=commands.Result({}, text), name="get")
-        self.assertIn("Narrow it instead: get text <css> or read -s <css> (one region)", read)
+        _, _, read = daemon.render({}, result=commands.Result({}, text), name="get")
+        self.assertIn("Narrow it: get text <css> or read -s <css> (one region)", read)
         self.assertEqual(daemon.render({"full": True}, result=commands.Result({}, text))[1], text + "\n")
         self.assertEqual(daemon.render({"max_output": 0}, result=commands.Result({}, text))[1], text + "\n")
         self.assertNotIn("capped", daemon.render({"json": True}, result=commands.Result({"t": text}, text))[1])
@@ -662,8 +662,8 @@ class BatchFromStdin(unittest.TestCase):
     def test_a_line_max_output_only_widens_the_cap(self):
         ctx, _, _ = self.run_batch("get text main --max-output 100\n")
         self.assertEqual(ctx.options["max_output"], commands.BATCH_DEFAULT_CAP)
-        ctx, _, _ = self.run_batch("get text main --max-output 9000\n")
-        self.assertEqual(ctx.options["max_output"], 9000)
+        ctx, _, _ = self.run_batch("get text main --max-output 15000\n")
+        self.assertEqual(ctx.options["max_output"], 15000)
 
     def test_a_closing_batch_answer_includes_the_close(self):
         self.assertEqual(daemon.joined_batch("✓ Done\n", "✓ Session s closed (1 tab it opened)\n", {}), "✓ Done\n\n✓ Session s closed (1 tab it opened)\n")

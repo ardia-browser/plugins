@@ -1,0 +1,327 @@
+{
+ "plist": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n\t<key>Label</key>\n\t<string>dev.ardia.hooks</string>\n\t<key>ProgramArguments</key>\n\t<array>\n\t\t<string>/Users/x/cli/current/bin/ardia</string>\n\t\t<string>hooks</string>\n\t\t<string>run</string>\n\t\t<string>--log</string>\n\t\t<string>/Users/x/Library/Logs/Ardia/hooks.log</string>\n\t</array>\n\t<key>RunAtLoad</key>\n\t<true/>\n\t<key>KeepAlive</key>\n\t<true/>\n\t<key>ProcessType</key>\n\t<string>Background</string>\n\t<key>WorkingDirectory</key>\n\t<string>/Users/x</string>\n\t<key>EnvironmentVariables</key>\n\t<dict>\n\t\t<key>PATH</key>\n\t\t<string>/usr/bin:/a &amp; &lt;b&gt;</string>\n\t\t<key>ARDIA_DATA_DIR</key>\n\t\t<string></string>\n\t</dict>\n\t<key>StandardOutPath</key>\n\t<string>/dev/null</string>\n\t<key>StandardErrorPath</key>\n\t<string>/dev/null</string>\n</dict>\n</plist>\n",
+ "unit": "[Unit]\nDescription=Ardia hooks (ardia hooks run)\nStartLimitIntervalSec=0\n\n[Service]\nType=exec\nExecStart=\"/home/x/.local/share/ardia/cli/current/bin/ardia\" \"hooks\" \"run\" \"--log\" \"/home/x/.local/state/ardia/hooks.log\"\nWorkingDirectory=/home/x\nEnvironment=\"PATH=/p%%a$b\\\"c\" \"ARDIA_DATA_DIR=\" \"ARDIA_CONFIG_HOME=/home/x/.config\"\nRestart=on-failure\nRestartSec=10\nStandardOutput=null\nStandardError=null\n\n[Install]\nWantedBy=default.target\n",
+ "next_at": [
+  {
+   "zone": null,
+   "at": "09:00",
+   "days": [],
+   "after": 1774396800.0,
+   "next": 1774454400.0,
+   "occurrence": "h@2026-03-25T09:00"
+  },
+  {
+   "zone": null,
+   "at": "02:30",
+   "days": [],
+   "after": 1773558000.0,
+   "next": 1773567000.0,
+   "occurrence": "h@2026-03-15T02:30"
+  },
+  {
+   "zone": null,
+   "at": "01:30",
+   "days": [],
+   "after": 1793509200.0,
+   "next": 1793521800.0,
+   "occurrence": "h@2026-11-01T01:30"
+  },
+  {
+   "zone": null,
+   "at": "23:59",
+   "days": [
+    "sun"
+   ],
+   "after": 1774396800.0,
+   "next": 1774853940.0,
+   "occurrence": "h@2026-03-29T23:59"
+  },
+  {
+   "zone": null,
+   "at": "02:15",
+   "days": [],
+   "after": 1774749600.0,
+   "next": 1774775700.0,
+   "occurrence": "h@2026-03-29T02:15"
+  },
+  {
+   "zone": null,
+   "at": "00:00",
+   "days": [
+    "mon",
+    "wed"
+   ],
+   "after": 1793600000.5,
+   "next": 1793606400.0,
+   "occurrence": "h@2026-11-02T00:00"
+  },
+  {
+   "zone": "Europe/Paris",
+   "at": "09:00",
+   "days": [],
+   "after": 1774396800.0,
+   "next": 1774425600.0,
+   "occurrence": "h@2026-03-25T09:00"
+  },
+  {
+   "zone": "Europe/Paris",
+   "at": "02:30",
+   "days": [],
+   "after": 1773558000.0,
+   "next": 1773624600.0,
+   "occurrence": "h@2026-03-16T02:30"
+  },
+  {
+   "zone": "Europe/Paris",
+   "at": "01:30",
+   "days": [],
+   "after": 1793509200.0,
+   "next": 1793579400.0,
+   "occurrence": "h@2026-11-02T01:30"
+  },
+  {
+   "zone": "Europe/Paris",
+   "at": "23:59",
+   "days": [
+    "sun"
+   ],
+   "after": 1774396800.0,
+   "next": 1774821540.0,
+   "occurrence": "h@2026-03-29T23:59"
+  },
+  {
+   "zone": "Europe/Paris",
+   "at": "02:15",
+   "days": [],
+   "after": 1774749600.0,
+   "next": 1774829700.0,
+   "occurrence": "h@2026-03-30T02:15"
+  },
+  {
+   "zone": "Europe/Paris",
+   "at": "00:00",
+   "days": [
+    "mon",
+    "wed"
+   ],
+   "after": 1793600000.5,
+   "next": 1793746800.0,
+   "occurrence": "h@2026-11-04T00:00"
+  },
+  {
+   "zone": "America/New_York",
+   "at": "09:00",
+   "days": [],
+   "after": 1774396800.0,
+   "next": 1774443600.0,
+   "occurrence": "h@2026-03-25T09:00"
+  },
+  {
+   "zone": "America/New_York",
+   "at": "02:30",
+   "days": [],
+   "after": 1773558000.0,
+   "next": 1773642600.0,
+   "occurrence": "h@2026-03-16T02:30"
+  },
+  {
+   "zone": "America/New_York",
+   "at": "01:30",
+   "days": [],
+   "after": 1793509200.0,
+   "next": 1793511000.0,
+   "occurrence": "h@2026-11-01T01:30"
+  },
+  {
+   "zone": "America/New_York",
+   "at": "23:59",
+   "days": [
+    "sun"
+   ],
+   "after": 1774396800.0,
+   "next": 1774843140.0,
+   "occurrence": "h@2026-03-29T23:59"
+  },
+  {
+   "zone": "America/New_York",
+   "at": "02:15",
+   "days": [],
+   "after": 1774749600.0,
+   "next": 1774764900.0,
+   "occurrence": "h@2026-03-29T02:15"
+  },
+  {
+   "zone": "America/New_York",
+   "at": "00:00",
+   "days": [
+    "mon",
+    "wed"
+   ],
+   "after": 1793600000.5,
+   "next": 1793768400.0,
+   "occurrence": "h@2026-11-04T00:00"
+  },
+  {
+   "zone": "Asia/Kolkata",
+   "at": "09:00",
+   "days": [],
+   "after": 1774396800.0,
+   "next": 1774409400.0,
+   "occurrence": "h@2026-03-25T09:00"
+  },
+  {
+   "zone": "Asia/Kolkata",
+   "at": "02:30",
+   "days": [],
+   "after": 1773558000.0,
+   "next": 1773608400.0,
+   "occurrence": "h@2026-03-16T02:30"
+  },
+  {
+   "zone": "Asia/Kolkata",
+   "at": "01:30",
+   "days": [],
+   "after": 1793509200.0,
+   "next": 1793563200.0,
+   "occurrence": "h@2026-11-02T01:30"
+  },
+  {
+   "zone": "Asia/Kolkata",
+   "at": "23:59",
+   "days": [
+    "sun"
+   ],
+   "after": 1774396800.0,
+   "next": 1774808940.0,
+   "occurrence": "h@2026-03-29T23:59"
+  },
+  {
+   "zone": "Asia/Kolkata",
+   "at": "02:15",
+   "days": [],
+   "after": 1774749600.0,
+   "next": 1774817100.0,
+   "occurrence": "h@2026-03-30T02:15"
+  },
+  {
+   "zone": "Asia/Kolkata",
+   "at": "00:00",
+   "days": [
+    "mon",
+    "wed"
+   ],
+   "after": 1793600000.5,
+   "next": 1793730600.0,
+   "occurrence": "h@2026-11-04T00:00"
+  },
+  {
+   "zone": "Australia/Lord_Howe",
+   "at": "09:00",
+   "days": [],
+   "after": 1774396800.0,
+   "next": 1774476000.0,
+   "occurrence": "h@2026-03-26T09:00"
+  },
+  {
+   "zone": "Australia/Lord_Howe",
+   "at": "02:30",
+   "days": [],
+   "after": 1773558000.0,
+   "next": 1773588600.0,
+   "occurrence": "h@2026-03-16T02:30"
+  },
+  {
+   "zone": "Australia/Lord_Howe",
+   "at": "01:30",
+   "days": [],
+   "after": 1793509200.0,
+   "next": 1793543400.0,
+   "occurrence": "h@2026-11-02T01:30"
+  },
+  {
+   "zone": "Australia/Lord_Howe",
+   "at": "23:59",
+   "days": [
+    "sun"
+   ],
+   "after": 1774396800.0,
+   "next": 1774789140.0,
+   "occurrence": "h@2026-03-29T23:59"
+  },
+  {
+   "zone": "Australia/Lord_Howe",
+   "at": "02:15",
+   "days": [],
+   "after": 1774749600.0,
+   "next": 1774797300.0,
+   "occurrence": "h@2026-03-30T02:15"
+  },
+  {
+   "zone": "Australia/Lord_Howe",
+   "at": "00:00",
+   "days": [
+    "mon",
+    "wed"
+   ],
+   "after": 1793600000.5,
+   "next": 1793710800.0,
+   "occurrence": "h@2026-11-04T00:00"
+  }
+ ],
+ "tz": "America/Los_Angeles",
+ "env": {
+  "KEEP": "1",
+  "ARDIA_EVENT": "tab.navigated",
+  "ARDIA_WINDOW_ID": "w1",
+  "ARDIA_TAB_ID": "7",
+  "ARDIA_URL": "https://a/?q#f",
+  "ARDIA_TITLE": "Txééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+ },
+ "note_env": {
+  "ARDIA_EVENT": "notification.shown",
+  "ARDIA_TAB_ID": "t1"
+ },
+ "durations": {
+  "30m": 1800,
+  " 1h ": 3600,
+  "90s": 90,
+  "2d": 172800,
+  "1x": null,
+  "m": null,
+  "10": null,
+  "-5m": null,
+  "1.5m": null,
+  "": null
+ },
+ "formats": {
+  "60": "1m",
+  "3600": "1h",
+  "86400": "1d",
+  "90": "90s",
+  "120": "2m",
+  "7200": "2h",
+  "1": "1s"
+ },
+ "answers": {
+  "{\"a\":1}": {
+   "a": 1
+  },
+  "[1]": [
+   1
+  ],
+  "null": null,
+  "1": null,
+  "\"x\"": null,
+  "nope": null,
+  "  ": null,
+  "NaN": null,
+  "{\"a\": NaN}": {
+   "a": "nan"
+  }
+ },
+ "minimized": [
+  "https://a/b",
+  "https://a/b",
+  "https://a/b"
+ ]
+}
