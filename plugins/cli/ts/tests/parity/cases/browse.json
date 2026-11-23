@@ -1,0 +1,7751 @@
+[
+ {
+  "id": "browse--get-title",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "Example Domain\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "Example Domain\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "get",
+      "title"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "output_chars": 15,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "output_chars": 15,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--get-url-json",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--json",
+   "get",
+   "url"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\": true, \"data\": {\"url\": \"https://example.com/\"}}\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "{\"success\": true, \"data\": {\"url\": \"https://example.com/\"}}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "get",
+      "url"
+     ],
+     "options": {
+      "json": true,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "output_chars": 59,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "output_chars": 59,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--json-after",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "url",
+   "--json"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\": true}\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "{\"success\": true}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "get",
+      "url"
+     ],
+     "options": {
+      "json": true,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "output_chars": 18,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "output_chars": 18,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--snapshot",
+  "command": "browse snapshot",
+  "argv": [
+   "browse",
+   "snapshot",
+   "-i"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "- heading \"Example\" [ref=e1]\n- link \"More\" [ref=e2]\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "- heading \"Example\" [ref=e1]\n- link \"More\" [ref=e2]\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "snapshot",
+      "-i"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "snapshot",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "-i",
+      "output_chars": 52,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "snapshot",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "-i",
+      "output_chars": 52,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse snapshot"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--not-found",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "click",
+   "@e9"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "✗ no element @e9 in the last snapshot\n",
+     "exit": 1,
+     "code": "not_found"
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ no element @e9 in the last snapshot\n"
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "click",
+      "@e9"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "click",
+      "exit_code": 1,
+      "error_code": "not_found",
+      "flags": "",
+      "output_chars": 38,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "click",
+      "exit_code": 1,
+      "error_code": "not_found",
+      "flags": "",
+      "output_chars": 38,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse click (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--exit-code-string",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "x\n",
+     "err": "",
+     "exit": "2"
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "a non-int exit",
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": "x\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "get",
+      "title"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "output_chars": 2,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "output_chars": 2,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--exit-missing",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "x\n"
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "x\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "get",
+      "title"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "output_chars": 2,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "output_chars": 2,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--control-chars",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "text",
+   "body"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "a\u001b[31mred\u0007 2J é 日本\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "a\u001b[31mred\u0007 \\u009b2J\\u0085 é 日本\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "get",
+      "text",
+      "body"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "output_chars": 21,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "output_chars": 21,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--metrics",
+  "command": "browse snapshot",
+  "argv": [
+   "browse",
+   "snapshot"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "- x\n",
+     "err": "",
+     "exit": 0,
+     "metrics": {
+      "refs": 3,
+      "chars": 120,
+      "bogus": "text"
+     }
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "- x\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "snapshot"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "snapshot",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "output_chars": 4,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "snapshot",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "output_chars": 4,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse snapshot"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--token-query-masked",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "url"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "ws://127.0.0.1:9/devtools/browser/abc?token=sekrit-value-123456&x=1\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "ws://127.0.0.1:9/devtools/browser/abc?token=***&x=1\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "get",
+      "url"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "output_chars": 68,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "output_chars": 68,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--ws-secret-masked",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--ws",
+   "ws://127.0.0.1:9/devtools/browser/abc?k=SECRETVALUE0123456789",
+   "get",
+   "url"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "got SECRETVALUE0123456789 and SECRETVALUE0123456789%2F\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "ws": "ws://127.0.0.1:9/devtools/browser/abc?k=SECRETVALUE0123456789"
+   },
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "got *** and ***%2F\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "get",
+      "url"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--closed-read",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    "close"
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "the daemon hangs up on a read-only command",
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ the ardia browse daemon closed the connection without answering (it may have exited; see the session log)\n"
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "get",
+      "title"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--closed-mutating",
+  "command": "browse click",
+  "argv": [
+   "browse",
+   "click",
+   "@e1"
+  ],
+  "daemon": {
+   "replies": [
+    "close"
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "the daemon hangs up after taking a click: outcome unknown",
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ the ardia browse daemon went away after it took the command (see the session log); the outcome of `click` is unknown, so it wasn't retried\n"
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "click",
+      "@e1"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "click",
+      "exit_code": 1,
+      "error_code": "outcome_unknown",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "click",
+      "exit_code": 1,
+      "error_code": "outcome_unknown",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse click (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--raw-no-newline",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "raw": "{\"out\": \"x\"}"
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ the ardia browse daemon closed the connection without answering (it may have exited; see the session log)\n"
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "get",
+      "title"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--raw-not-json",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "raw": "nope\n"
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)\n"
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "get",
+      "title"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "$exception",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "$exception_level": "fatal",
+      "source": "cli_unhandled",
+      "$exception_types": [
+       "JSONDecodeError"
+      ],
+      "$exception_values": [
+       "JSONDecodeError"
+      ],
+      "$exception_list": [
+       {
+        "type": "JSONDecodeError",
+        "value": "JSONDecodeError",
+        "mechanism": {
+         "type": "cli_unhandled",
+         "handled": false,
+         "synthetic": false
+        },
+        "stacktrace": {
+         "type": "raw"
+        }
+       }
+      ],
+      "error_code": null,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 1,
+      "error_code": "unhandled_exception",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "$exception",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "$exception_level": "fatal",
+      "source": "cli_unhandled",
+      "$exception_types": [
+       "JSONDecodeError"
+      ],
+      "$exception_values": [
+       "JSONDecodeError"
+      ],
+      "$exception_list": [
+       {
+        "type": "JSONDecodeError",
+        "value": "JSONDecodeError",
+        "mechanism": {
+         "type": "cli_unhandled",
+         "handled": false,
+         "synthetic": false
+        },
+        "stacktrace": {
+         "type": "raw"
+        }
+       }
+      ],
+      "error_code": null,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 1,
+      "error_code": "unhandled_exception",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--session-flag",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "work",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "W\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "work",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "W\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "get",
+      "title"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "work"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--session",
+      "output_chars": 2,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--session",
+      "output_chars": 2,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--session-env",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "E\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "envs",
+   "namespace": ""
+  },
+  "env": {
+   "AGENT_BROWSER_SESSION": "envs"
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "E\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "get",
+      "title"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "envs"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {
+      "AGENT_BROWSER_SESSION": "envs"
+     },
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "output_chars": 2,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "output_chars": 2,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--namespace",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--namespace",
+   "proj",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "N\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": "proj"
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "N\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "get",
+      "title"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--namespace",
+      "output_chars": 2,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--namespace",
+      "output_chars": 2,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--bad-session",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--session",
+   "bad name",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ A session name must be 1 to 64 letters, digits, '.', '_' or '-', starting with a letter or digit\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--session",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--session",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--port-flag",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--port",
+   "9333",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "P\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "port": 9333
+   },
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "P\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "get",
+      "title"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--port-hoisted",
+  "command": "browse get",
+  "argv": [
+   "--port",
+   "9333",
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "P\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "port": 9333
+   },
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "P\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "get",
+      "title"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--port-env",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "P\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "port": 9444
+   },
+   "session": "default",
+   "namespace": ""
+  },
+  "env": {
+   "ARDIA_PORT": "9444"
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "P\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "get",
+      "title"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": false,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--port-not-number",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--port",
+   "abc",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "intentional": {
+   "why": "a usage error never repeats an option's value, which may be a secret typed in the wrong place (docs/cli.md)",
+   "stderr": {
+    "text": "✗ --port takes a number\n"
+   }
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ --port takes a number\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--cdp-env-number",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "C\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": {
+    "port": 9555
+   },
+   "session": "default",
+   "namespace": ""
+  },
+  "env": {
+   "AGENT_BROWSER_CDP": "9555"
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "C\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "get",
+      "title"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {
+      "AGENT_BROWSER_CDP": "9555"
+     },
+     "stdin": null,
+     "telemetry": false,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--max-output-bad",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--max-output",
+   "abc",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "intentional": {
+   "why": "a usage error never repeats an option's value, which may be a secret typed in the wrong place (docs/cli.md)",
+   "stderr": {
+    "text": "✗ --max-output takes a number of characters\n"
+   }
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ --max-output takes a number of characters\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--max-output",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--max-output",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--max-output",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "--max-output",
+   "5",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "abcdefghij\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "abcdefghij\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "get",
+      "title"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": 5,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--max-output",
+      "output_chars": 11,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--max-output",
+      "output_chars": 11,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--launch-only",
+  "command": "browse other",
+  "argv": [
+   "browse",
+   "--headed",
+   "open",
+   "https://example.com"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ --headed doesn't apply to Ardia: ardia browse drives the browser you're running, so launch options have no effect\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "other",
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "other",
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse other (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--value-missing",
+  "command": "browse other",
+  "argv": [
+   "browse",
+   "get",
+   "title",
+   "--session"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ --session needs a value\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "other",
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--session",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "other",
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--session",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse other (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--help",
+  "command": "browse help",
+  "argv": [
+   "browse",
+   "--help"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "intentional": {
+   "why": "the help lists what this build ships and Python's doesn't: eval --isolated (with --main-world the default), click --touch and set permission",
+   "stdout": {
+    "text": "ardia browse - agent-browser's commands, driving the Ardia you're running\n\nUsage: ardia browse <command> [args] [options]\n\nSame commands, flags and output (text and --json) as agent-browser, so an agent that\nknows `agent-browser <args>` can type `ardia browse <args>`. It drives the running Ardia\nover the ardia command's control connection (Settings > \"Let the ardia command control\nArdia\"), with a small CDP client of its own. Input is instant unless --humanize. Actions print what they changed\n(nodes with refs, URL, title, the POSTs they caused), a session works in background tabs of its\nown (`tab active` picks the user's tab), and text output stops at about 12,000 characters (narrow it\nwith snapshot -i or -s <css>).\n\nCore Commands:\n  open [url]                 Open url in a new background tab of this session (later opens reuse it)\n  read [url...]              Read pages' text in background tabs (--links <pattern>: every matching link; -s sel)\n  links [pattern]            List the session tab's links whose URL contains pattern (read --links … --list)\n  click <sel>                Click element (or @ref) [--new-tab] [--touch]\n  dblclick <sel>             Double-click element\n  type <sel> <text>          Type into element\n  fill <sel> <text>          Clear, then type (date/time/color/range inputs: set the value; a <select>: pick;\n                             a grid cell: open its editor, set, Enter)\n  press [sel] <key>          Press key (Enter, Tab, Control+a, Meta+a), in <sel> if given\n  keydown <key> / keyup <key>  Hold or release a key\n  keyboard type <text>       Type at the current focus (humanized keystrokes)\n  keyboard inserttext <text> Insert text without key events\n  hover <sel>                Hover element\n  focus <sel>                Focus element\n  check <sel> / uncheck <sel>  Set a checkbox\n  select <sel> <val...>      Pick option(s): a <select>, or a combobox/typeahead (types, picks the match)\n  drag <src> <dst>           Drag onto dst's far half, taking its place [--before|--after]\n  upload <sel> <files...>    Set a file input's files\n  download <sel> <path>      Click element, save the download it starts to path\n  scroll [dir] [px]          Scroll (up/down/left/right, default down 300) [-s <sel>]\n  scrollintoview <sel>       Scroll element into view\n  wait <sel|ms>              Wait for element or time; --text, --url, --load, --fn, --state\n  screenshot [sel] [path]    Screenshot [--full] [--annotate]\n  pdf <path>                 Save as PDF\n  snapshot                   Accessibility tree with refs [-i] [-c] [-d n] [-s sel] [-u] [--diff]\n  eval <js>                  Run JavaScript in the page [-b base64] [--stdin] [--timeout 2m] [--isolated]\n  close [--all]              Close the tabs this session opened and end the session\n\nSelectors:   CSS, @e3, text=Save (text=\"Save\" exact), role=button[name=\"Save\"], li:has-text(\"Ana\"), li >> nth=2 (third match; -1 last), main >> text=Save, li:text-is(\"Ana\"), xpath=//a;\n             [role=main] also matches <main> and the other implicit roles\nNavigation:  back, forward, reload, pushstate <url>\nGet Info:    get text|html|value|title|url|count|box|styles <sel> | attr <sel> <name> (or -s <sel>)\nCheck State: is visible|enabled|checked <sel>\nFind:        find role|text|label|placeholder|alt|title|testid|first|last|nth <value> [action] [text]\n             actions: click (default), fill, type, check, uncheck, select, hover, focus, dblclick, text\n             find role <role> <action> --name <name>: exact name first, several matches list refs\n             --nth <n> picks match n of several (from 0)\nMouse:       mouse move <x> <y> | down [btn] | up [btn] | wheel <dy> [dx]\nSettings:    set viewport <w> <h> [scale] | reset                 (this session's own hidden tab, off-screen)\n             set device|geo|offline|headers|credentials|media|permission\nNetwork:     network requests [--reload --filter --type --method --status --clear] | request <id>\n             network har start [--content text|all|none] | har stop [path]\n             network route <url> [--abort|--body <json>] | unroute [url]\nStorage:     storage local|session [get [key] | set <k> <v> | clear]\n             cookies [get|set|clear]\n             state save|load <path>\nTabs:        tab [list] | tab new [--label name] [url] | tab <t1|tab-…|label|targetId> | tab active\n             tab close [tab] (only tabs this session opened) | window new [url]\n             (t1 ids are the same in every session; tab-… ids are the ones `ardia windows` prints)\nFrames:      frame <sel|@ref|name|url> | frame main\nDialogs:     dialog status | accept [text] | dismiss\nDiff:        diff snapshot [--baseline f] | diff screenshot --baseline f | diff url <u1> <u2>\nDebug:       console [--clear], errors [--clear]   (turn on Runtime for the tab on first use)\n             highlight <sel>, clipboard read|write|copy|paste\n             trace start|stop [path], profiler start|stop [path]\n             record start <path.webm> [url] | stop | restart             (needs ffmpeg)\nStreaming:   stream enable [--port n] [--input] | disable | status\nRaw CDP:     cdp <Domain.method> [--params json|-] [--param k=v|k:=json] [--target browser|<tab>]\nReact:       react tree | inspect <id> | renders start|stop | suspense [--only-dynamic]\n             (needs `open --enable react-devtools <url>`)\nPerformance: vitals [url]\nAudit:       a11y [url] [--tags t1,t2] [--selector css]\nInit:        addinitscript <js> | removeinitscript <id>   (page main world, by request)\nBatch:       batch [--bail] [--out <file>] [\"cmd args\" | '[\"cmd\",\"arg\"]' ...]  (or one command per stdin line; # comments)\nScript:      script [file.js] [--timeout 90s]   (JS on stdin: loops over pages with page.goto/click/text, read())\nNotes:       notes [get|set|append|list|rm] [site] [text|-]   (plain per-site notes, shown atop snapshot)\nFlows:       flow steps | save <name> [--param k=v] | run <name> [--param k=v] [--fields a,b] [--where f=v] [--limit n]\n             flow list [site] | show <name> | rm <name>   (do a task once, then rerun it as one request)\nAuth Vault:  auth save <name> --url <https url> --username <u> [--password-stdin]\n             auth login <name> [--username-selector s] [--password-selector s] [--submit-selector s]\n             auth login <name> --credential-provider <plugin> [--item ref] [--url url]\n             auth list | show <name> | delete <name>\nPlugins:     plugin add <npm-name[@version] | owner/repo[#ref]> [--name n] [--capability c]\n             plugin list | show <name> | remove <name> | run <name> <type> [--payload json]\nSessions:    session | session info | session list | session id [--scope cwd|worktree] [--prefix p]\n\nOptions:\n  --session <name>        Command-state namespace: its own tabs, refs and captures (AGENT_BROWSER_SESSION)\n  --namespace <name>      Separate set of sessions (AGENT_BROWSER_NAMESPACE)\n  --json                  JSON output (AGENT_BROWSER_JSON)\n  --humanize              Humanized mouse, scroll and typing (AGENT_BROWSER_HUMANIZE=1 for all)\n  --no-humanize           Instant input (the default; AGENT_BROWSER_NO_HUMANIZE=1 forces it)\n  --no-changes            Don't report what an action changed (skips its snapshots and network watch)\n  --no-text               Leave the page text (`text:` lines) out of an action's change report\n  --data-dir <dir>        Ardia data dir to find (default $ARDIA_DATA_DIR, else the installed app's)\n  --port <n>, --cdp <n>   A plain DevTools test server on 127.0.0.1:n (testing only)\n  --ws <url>              A browser WebSocket URL\n  --capture-console       With open: start console and error capture before the page loads\n  --enable react-devtools With open: install the React DevTools hook before page JS\n  --init-script <path>    With open: register a page init script (repeatable)\n  --annotate              Screenshot: draw numbered labels for the refs\n  --screenshot-dir/-format/-quality   Screenshot defaults (AGENT_BROWSER_SCREENSHOT_*)\n  --max-output <chars>    Cap text output (default 12000, 20000 for script, 0 for none; AGENT_BROWSER_MAX_OUTPUT)\n  --full                  Don't cap text output\n  --content-boundaries    Wrap page output in markers (AGENT_BROWSER_CONTENT_BOUNDARIES)\n  --no-auto-dialog        Don't accept alert/beforeunload dialogs (AGENT_BROWSER_NO_AUTO_DIALOG)\n  --pin-tab, --no-pin-tab Fail with tab_gone instead of falling back when the session's tab closes\n  --idle-timeout <time>   End an idle session after 10s, 3m, 1h or raw ms (default 1h)\n\nNot available yet: cookies, state save (and state load of a file with cookies), set device|geo|offline|\nheaders|credentials|media|permission, network route, upload, download, highlight, clipboard, trace, profiler, record\nand stream enable. No released Ardia lets the ardia command use the DevTools methods they need: it's a\ndeliberate limit, so they fail with policy_refused naming the method, say what to do instead, and updating\nwon't help yet. A later Ardia adds them behind its full-control setting. A `cdp` method off Ardia's list\nfails the same way, but an older Ardia also refuses some methods a current one allows, so there updating\nmay help. set viewport works on a tab this session opened and never showed.\n\nNot here: connect, inspect, install, upgrade, doctor, dashboard, chat (no AI), mcp, profiles,\nconfirm/deny, iOS (-p ios, swipe, tap), cloud providers, and launch options (--headed,\n--profile, --proxy, --extension, --args, ...), since Ardia is the browser you're running.\n\nExit status: 0 done, 1 the command failed, 2 Ardia can't be reached or closed the connection\n(the outcome of an interrupted action is reported as unknown), 130 interrupted.\n\nExamples:\n  ardia browse open example.com\n  ardia browse snapshot -i\n  ardia browse click @e2\n  ardia browse fill @e3 \"user@example.com\"\n  ardia browse fill @e7 2026-11-09\n  ardia browse batch <<'EOF'\n  click @e10\n  fill #name \"Ana Ruiz\"\n  click #save\n  EOF\n  ardia browse find role button click --name Submit\n  ardia browse read --links /p/ -s table.specs\n  ardia browse script <<'EOF'\n  const out = [];\n  for (const url of await page.links(\"/p/\")) { await page.goto(url); out.push({ name: await page.text(\"h1\") }); }\n  return out;\n  EOF\n  ardia browse screenshot --annotate page.png\n\n"
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "ardia browse - agent-browser's commands, driving the Ardia you're running\n\nUsage: ardia browse <command> [args] [options]\n\nSame commands, flags and output (text and --json) as agent-browser, so an agent that\nknows `agent-browser <args>` can type `ardia browse <args>`. It drives the running Ardia\nover the ardia command's control connection (Settings > \"Let the ardia command control\nArdia\"), with a small CDP client of its own. Input is instant unless --humanize. Actions print what they changed\n(nodes with refs, URL, title, the POSTs they caused), a session works in background tabs of its\nown (`tab active` picks the user's tab), and text output stops at about 12,000 characters (narrow it\nwith snapshot -i or -s <css>).\n\nCore Commands:\n  open [url]                 Open url in a new background tab of this session (later opens reuse it)\n  read [url...]              Read pages' text in background tabs (--links <pattern>: every matching link; -s sel)\n  links [pattern]            List the session tab's links whose URL contains pattern (read --links … --list)\n  click <sel>                Click element (or @ref) [--new-tab] [--touch]\n  dblclick <sel>             Double-click element\n  type <sel> <text>          Type into element\n  fill <sel> <text>          Clear, then type (date/time/color/range inputs: set the value; a <select>: pick;\n                             a grid cell: open its editor, set, Enter)\n  press [sel] <key>          Press key (Enter, Tab, Control+a, Meta+a), in <sel> if given\n  keydown <key> / keyup <key>  Hold or release a key\n  keyboard type <text>       Type at the current focus (humanized keystrokes)\n  keyboard inserttext <text> Insert text without key events\n  hover <sel>                Hover element\n  focus <sel>                Focus element\n  check <sel> / uncheck <sel>  Set a checkbox\n  select <sel> <val...>      Pick option(s): a <select>, or a combobox/typeahead (types, picks the match)\n  drag <src> <dst>           Drag onto dst's far half, taking its place [--before|--after]\n  upload <sel> <files...>    Set a file input's files\n  download <sel> <path>      Click element, save the download it starts to path\n  scroll [dir] [px]          Scroll (up/down/left/right, default down 300) [-s <sel>]\n  scrollintoview <sel>       Scroll element into view\n  wait <sel|ms>              Wait for element or time; --text, --url, --load, --fn, --state\n  screenshot [sel] [path]    Screenshot [--full] [--annotate]\n  pdf <path>                 Save as PDF\n  snapshot                   Accessibility tree with refs [-i] [-c] [-d n] [-s sel] [-u] [--diff]\n  eval <js>                  Run JavaScript in the page [-b base64] [--stdin] [--timeout 2m] [--isolated]\n  close [--all]              Close the tabs this session opened and end the session\n\nSelectors:   CSS, @e3, text=Save (text=\"Save\" exact), role=button[name=\"Save\"], li:has-text(\"Ana\"), li >> nth=2 (third match; -1 last), main >> text=Save, li:text-is(\"Ana\"), xpath=//a;\n             [role=main] also matches <main> and the other implicit roles\nNavigation:  back, forward, reload, pushstate <url>\nGet Info:    get text|html|value|title|url|count|box|styles <sel> | attr <sel> <name> (or -s <sel>)\nCheck State: is visible|enabled|checked <sel>\nFind:        find role|text|label|placeholder|alt|title|testid|first|last|nth <value> [action] [text]\n             actions: click (default), fill, type, check, uncheck, select, hover, focus, dblclick, text\n             find role <role> <action> --name <name>: exact name first, several matches list refs\n             --nth <n> picks match n of several (from 0)\nMouse:       mouse move <x> <y> | down [btn] | up [btn] | wheel <dy> [dx]\nSettings:    set viewport <w> <h> [scale] | reset                 (this session's own hidden tab, off-screen)\n             set device|geo|offline|headers|credentials|media|permission\nNetwork:     network requests [--reload --filter --type --method --status --clear] | request <id>\n             network har start [--content text|all|none] | har stop [path]\n             network route <url> [--abort|--body <json>] | unroute [url]\nStorage:     storage local|session [get [key] | set <k> <v> | clear]\n             cookies [get|set|clear]\n             state save|load <path>\nTabs:        tab [list] | tab new [--label name] [url] | tab <t1|tab-…|label|targetId> | tab active\n             tab close [tab] (only tabs this session opened) | window new [url]\n             (t1 ids are the same in every session; tab-… ids are the ones `ardia windows` prints)\nFrames:      frame <sel|@ref|name|url> | frame main\nDialogs:     dialog status | accept [text] | dismiss\nDiff:        diff snapshot [--baseline f] | diff screenshot --baseline f | diff url <u1> <u2>\nDebug:       console [--clear], errors [--clear]   (turn on Runtime for the tab on first use)\n             highlight <sel>, clipboard read|write|copy|paste\n             trace start|stop [path], profiler start|stop [path]\n             record start <path.webm> [url] | stop | restart             (needs ffmpeg)\nStreaming:   stream enable [--port n] [--input] | disable | status\nRaw CDP:     cdp <Domain.method> [--params json|-] [--param k=v|k:=json] [--target browser|<tab>]\nReact:       react tree | inspect <id> | renders start|stop | suspense [--only-dynamic]\n             (needs `open --enable react-devtools <url>`)\nPerformance: vitals [url]\nAudit:       a11y [url] [--tags t1,t2] [--selector css]\nInit:        addinitscript <js> | removeinitscript <id>   (page main world, by request)\nBatch:       batch [--bail] [--out <file>] [\"cmd args\" | '[\"cmd\",\"arg\"]' ...]  (or one command per stdin line; # comments)\nScript:      script [file.js] [--timeout 90s]   (JS on stdin: loops over pages with page.goto/click/text, read())\nNotes:       notes [get|set|append|list|rm] [site] [text|-]   (plain per-site notes, shown atop snapshot)\nFlows:       flow steps | save <name> [--param k=v] | run <name> [--param k=v] [--fields a,b] [--where f=v] [--limit n]\n             flow list [site] | show <name> | rm <name>   (do a task once, then rerun it as one request)\nAuth Vault:  auth save <name> --url <https url> --username <u> [--password-stdin]\n             auth login <name> [--username-selector s] [--password-selector s] [--submit-selector s]\n             auth login <name> --credential-provider <plugin> [--item ref] [--url url]\n             auth list | show <name> | delete <name>\nPlugins:     plugin add <npm-name[@version] | owner/repo[#ref]> [--name n] [--capability c]\n             plugin list | show <name> | remove <name> | run <name> <type> [--payload json]\nSessions:    session | session info | session list | session id [--scope cwd|worktree] [--prefix p]\n\nOptions:\n  --session <name>        Command-state namespace: its own tabs, refs and captures (AGENT_BROWSER_SESSION)\n  --namespace <name>      Separate set of sessions (AGENT_BROWSER_NAMESPACE)\n  --json                  JSON output (AGENT_BROWSER_JSON)\n  --humanize              Humanized mouse, scroll and typing (AGENT_BROWSER_HUMANIZE=1 for all)\n  --no-humanize           Instant input (the default; AGENT_BROWSER_NO_HUMANIZE=1 forces it)\n  --no-changes            Don't report what an action changed (skips its snapshots and network watch)\n  --no-text               Leave the page text (`text:` lines) out of an action's change report\n  --data-dir <dir>        Ardia data dir to find (default $ARDIA_DATA_DIR, else the installed app's)\n  --port <n>, --cdp <n>   A plain DevTools test server on 127.0.0.1:n (testing only)\n  --ws <url>              A browser WebSocket URL\n  --capture-console       With open: start console and error capture before the page loads\n  --enable react-devtools With open: install the React DevTools hook before page JS\n  --init-script <path>    With open: register a page init script (repeatable)\n  --annotate              Screenshot: draw numbered labels for the refs\n  --screenshot-dir/-format/-quality   Screenshot defaults (AGENT_BROWSER_SCREENSHOT_*)\n  --max-output <chars>    Cap text output (default 12000, 20000 for script, 0 for none; AGENT_BROWSER_MAX_OUTPUT)\n  --full                  Don't cap text output\n  --content-boundaries    Wrap page output in markers (AGENT_BROWSER_CONTENT_BOUNDARIES)\n  --no-auto-dialog        Don't accept alert/beforeunload dialogs (AGENT_BROWSER_NO_AUTO_DIALOG)\n  --pin-tab, --no-pin-tab Fail with tab_gone instead of falling back when the session's tab closes\n  --idle-timeout <time>   End an idle session after 10s, 3m, 1h or raw ms (default 1h)\n\nNot available yet: cookies, state save (and state load of a file with cookies), set device|geo|offline|\nheaders|credentials|media|permission, network route, upload, download, highlight, clipboard, trace, profiler, record\nand stream enable. No released Ardia lets the ardia command use the DevTools methods they need: it's a\ndeliberate limit, so they fail with policy_refused naming the method, say what to do instead, and updating\nwon't help yet. A later Ardia adds them behind its full-control setting. A `cdp` method off Ardia's list\nfails the same way, but an older Ardia also refuses some methods a current one allows, so there updating\nmay help. set viewport works on a tab this session opened and never showed.\n\nNot here: connect, inspect, install, upgrade, doctor, dashboard, chat (no AI), mcp, profiles,\nconfirm/deny, iOS (-p ios, swipe, tap), cloud providers, and launch options (--headed,\n--profile, --proxy, --extension, --args, ...), since Ardia is the browser you're running.\n\nExit status: 0 done, 1 the command failed, 2 Ardia can't be reached or closed the connection\n(the outcome of an interrupted action is reported as unknown), 130 interrupted.\n\nExamples:\n  ardia browse open example.com\n  ardia browse snapshot -i\n  ardia browse click @e2\n  ardia browse fill @e3 \"user@example.com\"\n  ardia browse fill @e7 2026-11-09\n  ardia browse batch <<'EOF'\n  click @e10\n  fill #name \"Ana Ruiz\"\n  click #save\n  EOF\n  ardia browse find role button click --name Submit\n  ardia browse read --links /p/ -s table.specs\n  ardia browse script <<'EOF'\n  const out = [];\n  for (const url of await page.links(\"/p/\")) { await page.goto(url); out.push({ name: await page.text(\"h1\") }); }\n  return out;\n  EOF\n  ardia browse screenshot --annotate page.png\n\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "help",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "help",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse help"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--help-bare",
+  "command": "browse help",
+  "argv": [
+   "browse"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "intentional": {
+   "why": "the help lists what this build ships and Python's doesn't: eval --isolated (with --main-world the default), click --touch and set permission",
+   "stdout": {
+    "text": "ardia browse - agent-browser's commands, driving the Ardia you're running\n\nUsage: ardia browse <command> [args] [options]\n\nSame commands, flags and output (text and --json) as agent-browser, so an agent that\nknows `agent-browser <args>` can type `ardia browse <args>`. It drives the running Ardia\nover the ardia command's control connection (Settings > \"Let the ardia command control\nArdia\"), with a small CDP client of its own. Input is instant unless --humanize. Actions print what they changed\n(nodes with refs, URL, title, the POSTs they caused), a session works in background tabs of its\nown (`tab active` picks the user's tab), and text output stops at about 12,000 characters (narrow it\nwith snapshot -i or -s <css>).\n\nCore Commands:\n  open [url]                 Open url in a new background tab of this session (later opens reuse it)\n  read [url...]              Read pages' text in background tabs (--links <pattern>: every matching link; -s sel)\n  links [pattern]            List the session tab's links whose URL contains pattern (read --links … --list)\n  click <sel>                Click element (or @ref) [--new-tab] [--touch]\n  dblclick <sel>             Double-click element\n  type <sel> <text>          Type into element\n  fill <sel> <text>          Clear, then type (date/time/color/range inputs: set the value; a <select>: pick;\n                             a grid cell: open its editor, set, Enter)\n  press [sel] <key>          Press key (Enter, Tab, Control+a, Meta+a), in <sel> if given\n  keydown <key> / keyup <key>  Hold or release a key\n  keyboard type <text>       Type at the current focus (humanized keystrokes)\n  keyboard inserttext <text> Insert text without key events\n  hover <sel>                Hover element\n  focus <sel>                Focus element\n  check <sel> / uncheck <sel>  Set a checkbox\n  select <sel> <val...>      Pick option(s): a <select>, or a combobox/typeahead (types, picks the match)\n  drag <src> <dst>           Drag onto dst's far half, taking its place [--before|--after]\n  upload <sel> <files...>    Set a file input's files\n  download <sel> <path>      Click element, save the download it starts to path\n  scroll [dir] [px]          Scroll (up/down/left/right, default down 300) [-s <sel>]\n  scrollintoview <sel>       Scroll element into view\n  wait <sel|ms>              Wait for element or time; --text, --url, --load, --fn, --state\n  screenshot [sel] [path]    Screenshot [--full] [--annotate]\n  pdf <path>                 Save as PDF\n  snapshot                   Accessibility tree with refs [-i] [-c] [-d n] [-s sel] [-u] [--diff]\n  eval <js>                  Run JavaScript in the page [-b base64] [--stdin] [--timeout 2m] [--isolated]\n  close [--all]              Close the tabs this session opened and end the session\n\nSelectors:   CSS, @e3, text=Save (text=\"Save\" exact), role=button[name=\"Save\"], li:has-text(\"Ana\"), li >> nth=2 (third match; -1 last), main >> text=Save, li:text-is(\"Ana\"), xpath=//a;\n             [role=main] also matches <main> and the other implicit roles\nNavigation:  back, forward, reload, pushstate <url>\nGet Info:    get text|html|value|title|url|count|box|styles <sel> | attr <sel> <name> (or -s <sel>)\nCheck State: is visible|enabled|checked <sel>\nFind:        find role|text|label|placeholder|alt|title|testid|first|last|nth <value> [action] [text]\n             actions: click (default), fill, type, check, uncheck, select, hover, focus, dblclick, text\n             find role <role> <action> --name <name>: exact name first, several matches list refs\n             --nth <n> picks match n of several (from 0)\nMouse:       mouse move <x> <y> | down [btn] | up [btn] | wheel <dy> [dx]\nSettings:    set viewport <w> <h> [scale] | reset                 (this session's own hidden tab, off-screen)\n             set device|geo|offline|headers|credentials|media|permission\nNetwork:     network requests [--reload --filter --type --method --status --clear] | request <id>\n             network har start [--content text|all|none] | har stop [path]\n             network route <url> [--abort|--body <json>] | unroute [url]\nStorage:     storage local|session [get [key] | set <k> <v> | clear]\n             cookies [get|set|clear]\n             state save|load <path>\nTabs:        tab [list] | tab new [--label name] [url] | tab <t1|tab-…|label|targetId> | tab active\n             tab close [tab] (only tabs this session opened) | window new [url]\n             (t1 ids are the same in every session; tab-… ids are the ones `ardia windows` prints)\nFrames:      frame <sel|@ref|name|url> | frame main\nDialogs:     dialog status | accept [text] | dismiss\nDiff:        diff snapshot [--baseline f] | diff screenshot --baseline f | diff url <u1> <u2>\nDebug:       console [--clear], errors [--clear]   (turn on Runtime for the tab on first use)\n             highlight <sel>, clipboard read|write|copy|paste\n             trace start|stop [path], profiler start|stop [path]\n             record start <path.webm> [url] | stop | restart             (needs ffmpeg)\nStreaming:   stream enable [--port n] [--input] | disable | status\nRaw CDP:     cdp <Domain.method> [--params json|-] [--param k=v|k:=json] [--target browser|<tab>]\nReact:       react tree | inspect <id> | renders start|stop | suspense [--only-dynamic]\n             (needs `open --enable react-devtools <url>`)\nPerformance: vitals [url]\nAudit:       a11y [url] [--tags t1,t2] [--selector css]\nInit:        addinitscript <js> | removeinitscript <id>   (page main world, by request)\nBatch:       batch [--bail] [--out <file>] [\"cmd args\" | '[\"cmd\",\"arg\"]' ...]  (or one command per stdin line; # comments)\nScript:      script [file.js] [--timeout 90s]   (JS on stdin: loops over pages with page.goto/click/text, read())\nNotes:       notes [get|set|append|list|rm] [site] [text|-]   (plain per-site notes, shown atop snapshot)\nFlows:       flow steps | save <name> [--param k=v] | run <name> [--param k=v] [--fields a,b] [--where f=v] [--limit n]\n             flow list [site] | show <name> | rm <name>   (do a task once, then rerun it as one request)\nAuth Vault:  auth save <name> --url <https url> --username <u> [--password-stdin]\n             auth login <name> [--username-selector s] [--password-selector s] [--submit-selector s]\n             auth login <name> --credential-provider <plugin> [--item ref] [--url url]\n             auth list | show <name> | delete <name>\nPlugins:     plugin add <npm-name[@version] | owner/repo[#ref]> [--name n] [--capability c]\n             plugin list | show <name> | remove <name> | run <name> <type> [--payload json]\nSessions:    session | session info | session list | session id [--scope cwd|worktree] [--prefix p]\n\nOptions:\n  --session <name>        Command-state namespace: its own tabs, refs and captures (AGENT_BROWSER_SESSION)\n  --namespace <name>      Separate set of sessions (AGENT_BROWSER_NAMESPACE)\n  --json                  JSON output (AGENT_BROWSER_JSON)\n  --humanize              Humanized mouse, scroll and typing (AGENT_BROWSER_HUMANIZE=1 for all)\n  --no-humanize           Instant input (the default; AGENT_BROWSER_NO_HUMANIZE=1 forces it)\n  --no-changes            Don't report what an action changed (skips its snapshots and network watch)\n  --no-text               Leave the page text (`text:` lines) out of an action's change report\n  --data-dir <dir>        Ardia data dir to find (default $ARDIA_DATA_DIR, else the installed app's)\n  --port <n>, --cdp <n>   A plain DevTools test server on 127.0.0.1:n (testing only)\n  --ws <url>              A browser WebSocket URL\n  --capture-console       With open: start console and error capture before the page loads\n  --enable react-devtools With open: install the React DevTools hook before page JS\n  --init-script <path>    With open: register a page init script (repeatable)\n  --annotate              Screenshot: draw numbered labels for the refs\n  --screenshot-dir/-format/-quality   Screenshot defaults (AGENT_BROWSER_SCREENSHOT_*)\n  --max-output <chars>    Cap text output (default 12000, 20000 for script, 0 for none; AGENT_BROWSER_MAX_OUTPUT)\n  --full                  Don't cap text output\n  --content-boundaries    Wrap page output in markers (AGENT_BROWSER_CONTENT_BOUNDARIES)\n  --no-auto-dialog        Don't accept alert/beforeunload dialogs (AGENT_BROWSER_NO_AUTO_DIALOG)\n  --pin-tab, --no-pin-tab Fail with tab_gone instead of falling back when the session's tab closes\n  --idle-timeout <time>   End an idle session after 10s, 3m, 1h or raw ms (default 1h)\n\nNot available yet: cookies, state save (and state load of a file with cookies), set device|geo|offline|\nheaders|credentials|media|permission, network route, upload, download, highlight, clipboard, trace, profiler, record\nand stream enable. No released Ardia lets the ardia command use the DevTools methods they need: it's a\ndeliberate limit, so they fail with policy_refused naming the method, say what to do instead, and updating\nwon't help yet. A later Ardia adds them behind its full-control setting. A `cdp` method off Ardia's list\nfails the same way, but an older Ardia also refuses some methods a current one allows, so there updating\nmay help. set viewport works on a tab this session opened and never showed.\n\nNot here: connect, inspect, install, upgrade, doctor, dashboard, chat (no AI), mcp, profiles,\nconfirm/deny, iOS (-p ios, swipe, tap), cloud providers, and launch options (--headed,\n--profile, --proxy, --extension, --args, ...), since Ardia is the browser you're running.\n\nExit status: 0 done, 1 the command failed, 2 Ardia can't be reached or closed the connection\n(the outcome of an interrupted action is reported as unknown), 130 interrupted.\n\nExamples:\n  ardia browse open example.com\n  ardia browse snapshot -i\n  ardia browse click @e2\n  ardia browse fill @e3 \"user@example.com\"\n  ardia browse fill @e7 2026-11-09\n  ardia browse batch <<'EOF'\n  click @e10\n  fill #name \"Ana Ruiz\"\n  click #save\n  EOF\n  ardia browse find role button click --name Submit\n  ardia browse read --links /p/ -s table.specs\n  ardia browse script <<'EOF'\n  const out = [];\n  for (const url of await page.links(\"/p/\")) { await page.goto(url); out.push({ name: await page.text(\"h1\") }); }\n  return out;\n  EOF\n  ardia browse screenshot --annotate page.png\n\n"
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "ardia browse - agent-browser's commands, driving the Ardia you're running\n\nUsage: ardia browse <command> [args] [options]\n\nSame commands, flags and output (text and --json) as agent-browser, so an agent that\nknows `agent-browser <args>` can type `ardia browse <args>`. It drives the running Ardia\nover the ardia command's control connection (Settings > \"Let the ardia command control\nArdia\"), with a small CDP client of its own. Input is instant unless --humanize. Actions print what they changed\n(nodes with refs, URL, title, the POSTs they caused), a session works in background tabs of its\nown (`tab active` picks the user's tab), and text output stops at about 12,000 characters (narrow it\nwith snapshot -i or -s <css>).\n\nCore Commands:\n  open [url]                 Open url in a new background tab of this session (later opens reuse it)\n  read [url...]              Read pages' text in background tabs (--links <pattern>: every matching link; -s sel)\n  links [pattern]            List the session tab's links whose URL contains pattern (read --links … --list)\n  click <sel>                Click element (or @ref) [--new-tab] [--touch]\n  dblclick <sel>             Double-click element\n  type <sel> <text>          Type into element\n  fill <sel> <text>          Clear, then type (date/time/color/range inputs: set the value; a <select>: pick;\n                             a grid cell: open its editor, set, Enter)\n  press [sel] <key>          Press key (Enter, Tab, Control+a, Meta+a), in <sel> if given\n  keydown <key> / keyup <key>  Hold or release a key\n  keyboard type <text>       Type at the current focus (humanized keystrokes)\n  keyboard inserttext <text> Insert text without key events\n  hover <sel>                Hover element\n  focus <sel>                Focus element\n  check <sel> / uncheck <sel>  Set a checkbox\n  select <sel> <val...>      Pick option(s): a <select>, or a combobox/typeahead (types, picks the match)\n  drag <src> <dst>           Drag onto dst's far half, taking its place [--before|--after]\n  upload <sel> <files...>    Set a file input's files\n  download <sel> <path>      Click element, save the download it starts to path\n  scroll [dir] [px]          Scroll (up/down/left/right, default down 300) [-s <sel>]\n  scrollintoview <sel>       Scroll element into view\n  wait <sel|ms>              Wait for element or time; --text, --url, --load, --fn, --state\n  screenshot [sel] [path]    Screenshot [--full] [--annotate]\n  pdf <path>                 Save as PDF\n  snapshot                   Accessibility tree with refs [-i] [-c] [-d n] [-s sel] [-u] [--diff]\n  eval <js>                  Run JavaScript in the page [-b base64] [--stdin] [--timeout 2m] [--isolated]\n  close [--all]              Close the tabs this session opened and end the session\n\nSelectors:   CSS, @e3, text=Save (text=\"Save\" exact), role=button[name=\"Save\"], li:has-text(\"Ana\"), li >> nth=2 (third match; -1 last), main >> text=Save, li:text-is(\"Ana\"), xpath=//a;\n             [role=main] also matches <main> and the other implicit roles\nNavigation:  back, forward, reload, pushstate <url>\nGet Info:    get text|html|value|title|url|count|box|styles <sel> | attr <sel> <name> (or -s <sel>)\nCheck State: is visible|enabled|checked <sel>\nFind:        find role|text|label|placeholder|alt|title|testid|first|last|nth <value> [action] [text]\n             actions: click (default), fill, type, check, uncheck, select, hover, focus, dblclick, text\n             find role <role> <action> --name <name>: exact name first, several matches list refs\n             --nth <n> picks match n of several (from 0)\nMouse:       mouse move <x> <y> | down [btn] | up [btn] | wheel <dy> [dx]\nSettings:    set viewport <w> <h> [scale] | reset                 (this session's own hidden tab, off-screen)\n             set device|geo|offline|headers|credentials|media|permission\nNetwork:     network requests [--reload --filter --type --method --status --clear] | request <id>\n             network har start [--content text|all|none] | har stop [path]\n             network route <url> [--abort|--body <json>] | unroute [url]\nStorage:     storage local|session [get [key] | set <k> <v> | clear]\n             cookies [get|set|clear]\n             state save|load <path>\nTabs:        tab [list] | tab new [--label name] [url] | tab <t1|tab-…|label|targetId> | tab active\n             tab close [tab] (only tabs this session opened) | window new [url]\n             (t1 ids are the same in every session; tab-… ids are the ones `ardia windows` prints)\nFrames:      frame <sel|@ref|name|url> | frame main\nDialogs:     dialog status | accept [text] | dismiss\nDiff:        diff snapshot [--baseline f] | diff screenshot --baseline f | diff url <u1> <u2>\nDebug:       console [--clear], errors [--clear]   (turn on Runtime for the tab on first use)\n             highlight <sel>, clipboard read|write|copy|paste\n             trace start|stop [path], profiler start|stop [path]\n             record start <path.webm> [url] | stop | restart             (needs ffmpeg)\nStreaming:   stream enable [--port n] [--input] | disable | status\nRaw CDP:     cdp <Domain.method> [--params json|-] [--param k=v|k:=json] [--target browser|<tab>]\nReact:       react tree | inspect <id> | renders start|stop | suspense [--only-dynamic]\n             (needs `open --enable react-devtools <url>`)\nPerformance: vitals [url]\nAudit:       a11y [url] [--tags t1,t2] [--selector css]\nInit:        addinitscript <js> | removeinitscript <id>   (page main world, by request)\nBatch:       batch [--bail] [--out <file>] [\"cmd args\" | '[\"cmd\",\"arg\"]' ...]  (or one command per stdin line; # comments)\nScript:      script [file.js] [--timeout 90s]   (JS on stdin: loops over pages with page.goto/click/text, read())\nNotes:       notes [get|set|append|list|rm] [site] [text|-]   (plain per-site notes, shown atop snapshot)\nFlows:       flow steps | save <name> [--param k=v] | run <name> [--param k=v] [--fields a,b] [--where f=v] [--limit n]\n             flow list [site] | show <name> | rm <name>   (do a task once, then rerun it as one request)\nAuth Vault:  auth save <name> --url <https url> --username <u> [--password-stdin]\n             auth login <name> [--username-selector s] [--password-selector s] [--submit-selector s]\n             auth login <name> --credential-provider <plugin> [--item ref] [--url url]\n             auth list | show <name> | delete <name>\nPlugins:     plugin add <npm-name[@version] | owner/repo[#ref]> [--name n] [--capability c]\n             plugin list | show <name> | remove <name> | run <name> <type> [--payload json]\nSessions:    session | session info | session list | session id [--scope cwd|worktree] [--prefix p]\n\nOptions:\n  --session <name>        Command-state namespace: its own tabs, refs and captures (AGENT_BROWSER_SESSION)\n  --namespace <name>      Separate set of sessions (AGENT_BROWSER_NAMESPACE)\n  --json                  JSON output (AGENT_BROWSER_JSON)\n  --humanize              Humanized mouse, scroll and typing (AGENT_BROWSER_HUMANIZE=1 for all)\n  --no-humanize           Instant input (the default; AGENT_BROWSER_NO_HUMANIZE=1 forces it)\n  --no-changes            Don't report what an action changed (skips its snapshots and network watch)\n  --no-text               Leave the page text (`text:` lines) out of an action's change report\n  --data-dir <dir>        Ardia data dir to find (default $ARDIA_DATA_DIR, else the installed app's)\n  --port <n>, --cdp <n>   A plain DevTools test server on 127.0.0.1:n (testing only)\n  --ws <url>              A browser WebSocket URL\n  --capture-console       With open: start console and error capture before the page loads\n  --enable react-devtools With open: install the React DevTools hook before page JS\n  --init-script <path>    With open: register a page init script (repeatable)\n  --annotate              Screenshot: draw numbered labels for the refs\n  --screenshot-dir/-format/-quality   Screenshot defaults (AGENT_BROWSER_SCREENSHOT_*)\n  --max-output <chars>    Cap text output (default 12000, 20000 for script, 0 for none; AGENT_BROWSER_MAX_OUTPUT)\n  --full                  Don't cap text output\n  --content-boundaries    Wrap page output in markers (AGENT_BROWSER_CONTENT_BOUNDARIES)\n  --no-auto-dialog        Don't accept alert/beforeunload dialogs (AGENT_BROWSER_NO_AUTO_DIALOG)\n  --pin-tab, --no-pin-tab Fail with tab_gone instead of falling back when the session's tab closes\n  --idle-timeout <time>   End an idle session after 10s, 3m, 1h or raw ms (default 1h)\n\nNot available yet: cookies, state save (and state load of a file with cookies), set device|geo|offline|\nheaders|credentials|media|permission, network route, upload, download, highlight, clipboard, trace, profiler, record\nand stream enable. No released Ardia lets the ardia command use the DevTools methods they need: it's a\ndeliberate limit, so they fail with policy_refused naming the method, say what to do instead, and updating\nwon't help yet. A later Ardia adds them behind its full-control setting. A `cdp` method off Ardia's list\nfails the same way, but an older Ardia also refuses some methods a current one allows, so there updating\nmay help. set viewport works on a tab this session opened and never showed.\n\nNot here: connect, inspect, install, upgrade, doctor, dashboard, chat (no AI), mcp, profiles,\nconfirm/deny, iOS (-p ios, swipe, tap), cloud providers, and launch options (--headed,\n--profile, --proxy, --extension, --args, ...), since Ardia is the browser you're running.\n\nExit status: 0 done, 1 the command failed, 2 Ardia can't be reached or closed the connection\n(the outcome of an interrupted action is reported as unknown), 130 interrupted.\n\nExamples:\n  ardia browse open example.com\n  ardia browse snapshot -i\n  ardia browse click @e2\n  ardia browse fill @e3 \"user@example.com\"\n  ardia browse fill @e7 2026-11-09\n  ardia browse batch <<'EOF'\n  click @e10\n  fill #name \"Ana Ruiz\"\n  click #save\n  EOF\n  ardia browse find role button click --name Submit\n  ardia browse read --links /p/ -s table.specs\n  ardia browse script <<'EOF'\n  const out = [];\n  for (const url of await page.links(\"/p/\")) { await page.goto(url); out.push({ name: await page.text(\"h1\") }); }\n  return out;\n  EOF\n  ardia browse screenshot --annotate page.png\n\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "help",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "help",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse help"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--help-topic",
+  "command": "browse help",
+  "argv": [
+   "browse",
+   "help",
+   "snapshot"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "ardia browse snapshot [-i] [-c] [-d <n>] [-s <sel>] [-u] [--diff]\n\nAccessibility tree with refs (@e1, @e2...). -i interactive only, -c compact, -d depth, -s scope to a\nselector or @ref (every match that shows, so hidden matches like a closed cookie banner are skipped),\n-u include link URLs, --diff only what changed since this session's last snapshot\nof the document. Date and time inputs show as one textbox with their value. Names past 100\ncharacters end in … (find --name takes the clipped name as a prefix). In a long run of one role, -i\nlists the enabled members and counts the disabled ones in one line. Site notes, when there\nare any, come first. Refs belong to this snapshot's document: a navigation, a new document or an\nArdia restart makes them stale. When the page redraws an element, its ref follows the new one only if\nit was the only one with its role and name, and still is, inside the same named dialog, row or form.\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "help",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "help",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse help"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--help-after",
+  "command": "browse snapshot",
+  "argv": [
+   "browse",
+   "snapshot",
+   "--help"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "ardia browse snapshot [-i] [-c] [-d <n>] [-s <sel>] [-u] [--diff]\n\nAccessibility tree with refs (@e1, @e2...). -i interactive only, -c compact, -d depth, -s scope to a\nselector or @ref (every match that shows, so hidden matches like a closed cookie banner are skipped),\n-u include link URLs, --diff only what changed since this session's last snapshot\nof the document. Date and time inputs show as one textbox with their value. Names past 100\ncharacters end in … (find --name takes the clipped name as a prefix). In a long run of one role, -i\nlists the enabled members and counts the disabled ones in one line. Site notes, when there\nare any, come first. Refs belong to this snapshot's document: a navigation, a new document or an\nArdia restart makes them stale. When the page redraws an element, its ref follows the new one only if\nit was the only one with its role and name, and still is, inside the same named dialog, row or form.\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "snapshot",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "snapshot",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse snapshot"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--version",
+  "command": "browse version",
+  "argv": [
+   "browse",
+   "--version"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "ardia browse 0.0.0.dev0\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "version",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "version",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse version"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--eval-stdin",
+  "command": "browse eval",
+  "argv": [
+   "browse",
+   "eval",
+   "--stdin"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "2\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "stdin": "1+1",
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "2\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "eval",
+      "--stdin"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": "1+1",
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "eval",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--stdin",
+      "output_chars": 2,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "eval",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--stdin",
+      "output_chars": 2,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse eval"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--json-env",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\": true}\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "env": {
+   "AGENT_BROWSER_JSON": "1"
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "{\"success\": true}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "get",
+      "title"
+     ],
+     "options": {
+      "json": true,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {
+      "AGENT_BROWSER_JSON": "1"
+     },
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "output_chars": 18,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "output_chars": 18,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--agent-env-forwarded",
+  "command": "browse get",
+  "argv": [
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "T\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "env": {
+   "AGENT_BROWSER_DEFAULT_TIMEOUT": "4000",
+   "AGENT_BROWSER_HUMANIZE": "0",
+   "AGENT_BROWSER_ENABLE": "a,b"
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "T\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "get",
+      "title"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": "4000",
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [
+       "a",
+       "b"
+      ],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {
+      "AGENT_BROWSER_DEFAULT_TIMEOUT": "4000",
+      "AGENT_BROWSER_HUMANIZE": "0",
+      "AGENT_BROWSER_ENABLE": "a,b"
+     },
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "output_chars": 2,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "get",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "output_chars": 2,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse get"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--err-and-out",
+  "command": "browse open",
+  "argv": [
+   "browse",
+   "open",
+   "https://example.com"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "✓ Example Domain\n  https://example.com/\n",
+     "err": "note: slow\n",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "✓ Example Domain\n  https://example.com/\n"
+   },
+   "stderr": {
+    "text": "note: slow\n"
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "open",
+      "https://example.com"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "open",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "output_chars": 51,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "open",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "output_chars": 51,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse open"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--shared-flag-rejected",
+  "command": "none",
+  "argv": [
+   "--timeout",
+   "5",
+   "browse",
+   "get",
+   "title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "✗ ardia browse doesn't take --timeout\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--double-dash",
+  "command": "browse eval",
+  "argv": [
+   "browse",
+   "eval",
+   "--",
+   "--x"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "1\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "1\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "eval",
+      "--",
+      "--x"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": "",
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "eval",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "output_chars": 2,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "eval",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "output_chars": 2,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse eval"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--eval-main-world-flag",
+  "command": "browse eval",
+  "argv": [
+   "browse",
+   "eval",
+   "--main-world",
+   "document.title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "\"Example Domain\"\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "--main-world is accepted and is the default; the client passes it to the daemon",
+  "intentional": {
+   "why": "the TypeScript CLI's flag table includes its own --isolated, --main-world and --touch, so telemetry's flags names them; Python doesn't know them and records none",
+   "command_properties": {
+    "flags": "--main-world"
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "\"Example Domain\"\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "eval",
+      "--main-world",
+      "document.title"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "eval",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--main-world",
+      "output_chars": 17,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "eval",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--main-world",
+      "output_chars": 17,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse eval"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--eval-isolated-flag",
+  "command": "browse eval",
+  "argv": [
+   "browse",
+   "eval",
+   "--isolated",
+   "document.title"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "\"Example Domain\"\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "note": "--isolated opts into the ardia-browse isolated world; the client passes it to the daemon",
+  "intentional": {
+   "why": "the TypeScript CLI's flag table includes its own --isolated, --main-world and --touch, so telemetry's flags names them; Python doesn't know them and records none",
+   "command_properties": {
+    "flags": "--isolated"
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "\"Example Domain\"\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "eval",
+      "--isolated",
+      "document.title"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "eval",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--isolated",
+      "output_chars": 17,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "eval",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--isolated",
+      "output_chars": 17,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse eval"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--eval-isolated-json",
+  "command": "browse eval",
+  "argv": [
+   "browse",
+   "--json",
+   "eval",
+   "--isolated",
+   "1+1"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "{\"success\": true, \"data\": {\"origin\": \"https://example.com/\", \"result\": 2}, \"error\": null}\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "intentional": {
+   "why": "the TypeScript CLI's flag table includes its own --isolated, --main-world and --touch, so telemetry's flags names them; Python doesn't know them and records none",
+   "command_properties": {
+    "flags": "--isolated,--json"
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "{\"success\": true, \"data\": {\"origin\": \"https://example.com/\", \"result\": 2}, \"error\": null}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "eval",
+      "--isolated",
+      "1+1"
+     ],
+     "options": {
+      "json": true,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "eval",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--isolated,--json",
+      "output_chars": 90,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "eval",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--isolated,--json",
+      "output_chars": 90,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse eval"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "browse--wait-fn-isolated",
+  "command": "browse wait",
+  "argv": [
+   "browse",
+   "wait",
+   "--fn",
+   "window.ready",
+   "--isolated"
+  ],
+  "daemon": {
+   "replies": [
+    {
+     "out": "true\n",
+     "err": "",
+     "exit": 0
+    }
+   ],
+   "endpoint": "token",
+   "session": "default",
+   "namespace": ""
+  },
+  "intentional": {
+   "why": "the TypeScript CLI's flag table includes its own --isolated, --main-world and --touch, so telemetry's flags names them; Python doesn't know them and records none",
+   "command_properties": {
+    "flags": "--fn,--isolated"
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "true\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [
+    {
+     "argv": [
+      "wait",
+      "--fn",
+      "window.ready",
+      "--isolated"
+     ],
+     "options": {
+      "json": false,
+      "humanize": false,
+      "timeout_ms": 25000,
+      "max_output": null,
+      "expect_loader": null,
+      "full": false,
+      "no_changes": false,
+      "no_text": false,
+      "content_boundaries": false,
+      "annotate": false,
+      "screenshot_dir": null,
+      "screenshot_format": null,
+      "screenshot_quality": null,
+      "no_auto_dialog": false,
+      "capture_console": null,
+      "show": null,
+      "enable": [],
+      "init_scripts": [],
+      "_session": "default"
+     },
+     "cwd": "<parity:box>/cwd",
+     "env": {},
+     "stdin": null,
+     "telemetry": true,
+     "caller": {
+      "name": "ardia"
+     }
+    }
+   ],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "wait",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--fn,--isolated",
+      "output_chars": 5,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "browse",
+      "subcommand": "wait",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--fn,--isolated",
+      "output_chars": 5,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "browse wait"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ }
+]

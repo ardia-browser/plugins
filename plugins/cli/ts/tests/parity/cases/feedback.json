@@ -1,0 +1,4371 @@
+[
+ {
+  "id": "feedback--no-title",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "the button did nothing"
+  ],
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia feedback: ardia feedback needs --title \"…\" (1-67 characters)\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--title-too-long",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--title",
+   "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "desc"
+  ],
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia feedback: the title is 68 characters; keep it to 67\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--title-only-secrets",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--title",
+   "jane@example.com",
+   "desc"
+  ],
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia feedback: nothing is left of the title once secrets and personal data are removed; describe the problem instead\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--title-spaces-collapse",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--title",
+   "  two   words\tand\nmore ",
+   "it broke"
+  ],
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": "Not sent: this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service. It's kept on this Mac: <parity:box>/cli-home/Usage/feedback.jsonl\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {},
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/feedback.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"at\": \"<now utc>\", \"kind\": \"bug\", \"title\": \"two words and more\", \"description\": \"it broke\", \"cli_version\": \"0.0.0.dev0\", \"about_command\": null, \"attachments\": [], \"reason\": \"this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service\"}\n"
+     }
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--no-description",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--title",
+   "click did nothing"
+  ],
+  "stdin": "",
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia feedback: ardia feedback needs a description: ardia feedback --title \"…\" \"what happened, what you expected\"\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--description-only-secrets",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--title",
+   "t",
+   "password=hunter2"
+  ],
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": "Not sent: this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service. It's kept on this Mac: <parity:box>/cli-home/Usage/feedback.jsonl\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {},
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/feedback.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"at\": \"<now utc>\", \"kind\": \"bug\", \"title\": \"t\", \"description\": \"password=<redacted>\", \"cli_version\": \"0.0.0.dev0\", \"about_command\": null, \"attachments\": [], \"reason\": \"this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service\"}\n"
+     }
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--dash-reads-stdin",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--title",
+   "fill misses date inputs",
+   "-"
+  ],
+  "stdin": "fill on a date input typed into the wrong field\n",
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": "Not sent: this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service. It's kept on this Mac: <parity:box>/cli-home/Usage/feedback.jsonl\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {},
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/feedback.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"at\": \"<now utc>\", \"kind\": \"bug\", \"title\": \"fill misses date inputs\", \"description\": \"fill on a date input typed into the wrong field\", \"cli_version\": \"0.0.0.dev0\", \"about_command\": null, \"attachments\": [], \"reason\": \"this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service\"}\n"
+     }
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--stdin-without-words",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--title",
+   "fill misses date inputs"
+  ],
+  "stdin": "typed into the wrong field, card 4111 1111 1111 1111\n",
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": "Not sent: this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service. It's kept on this Mac: <parity:box>/cli-home/Usage/feedback.jsonl\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {},
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/feedback.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"at\": \"<now utc>\", \"kind\": \"bug\", \"title\": \"fill misses date inputs\", \"description\": \"typed into the wrong field, card <number>\", \"cli_version\": \"0.0.0.dev0\", \"about_command\": null, \"attachments\": [], \"reason\": \"this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service\"}\n"
+     }
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--kept-checkout-build",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--kind",
+   "idea",
+   "--title",
+   "open takes 9 s",
+   "--command",
+   "ardia browse open https://u:p@example.com/?token=abc",
+   "it used",
+   "to take 1 s"
+  ],
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": "Not sent: this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service. It's kept on this Mac: <parity:box>/cli-home/Usage/feedback.jsonl\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--command,--kind,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--command,--kind,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {},
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/feedback.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"at\": \"<now utc>\", \"kind\": \"idea\", \"title\": \"open takes 9 s\", \"description\": \"it used to take 1 s\", \"cli_version\": \"0.0.0.dev0\", \"about_command\": \"ardia browse open https://example.com/?<redacted>\", \"attachments\": [], \"reason\": \"this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service\"}\n"
+     }
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--kept-equals-forms",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--kind=slow",
+   "--title=slow open",
+   "--command=ardia browse open x",
+   "words"
+  ],
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": "Not sent: this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service. It's kept on this Mac: <parity:box>/cli-home/Usage/feedback.jsonl\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--command,--kind,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--command,--kind,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {},
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/feedback.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"at\": \"<now utc>\", \"kind\": \"slow\", \"title\": \"slow open\", \"description\": \"words\", \"cli_version\": \"0.0.0.dev0\", \"about_command\": \"ardia browse open x\", \"attachments\": [], \"reason\": \"this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service\"}\n"
+     }
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--do-not-track",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--title",
+   "t",
+   "d"
+  ],
+  "env": {
+   "DO_NOT_TRACK": " Yes "
+  },
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": "Not sent: DO_NOT_TRACK=Yes is set. It's kept on this Mac: <parity:box>/cli-home/Usage/feedback.jsonl\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    }
+   ],
+   "usage": {},
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/feedback.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"at\": \"<now utc>\", \"kind\": \"bug\", \"title\": \"t\", \"description\": \"d\", \"cli_version\": \"0.0.0.dev0\", \"about_command\": null, \"attachments\": [], \"reason\": \"DO_NOT_TRACK=Yes is set\"}\n"
+     }
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--telemetry-off",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--title",
+   "t",
+   "d"
+  ],
+  "env": {
+   "ARDIA_TELEMETRY": "off"
+  },
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": "Not sent: ARDIA_TELEMETRY=off is set. It's kept on this Mac: <parity:box>/cli-home/Usage/feedback.jsonl\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    }
+   ],
+   "usage": {},
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/feedback.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"at\": \"<now utc>\", \"kind\": \"bug\", \"title\": \"t\", \"description\": \"d\", \"cli_version\": \"0.0.0.dev0\", \"about_command\": null, \"attachments\": [], \"reason\": \"ARDIA_TELEMETRY=off is set\"}\n"
+     }
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--test-browser",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--title",
+   "t",
+   "d"
+  ],
+  "env": {
+   "ARDIA_PORT": "9222"
+  },
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": "Not sent: ARDIA_PORT points ardia at a test browser. It's kept on this Mac: <parity:box>/cli-home/Usage/feedback.jsonl\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    }
+   ],
+   "usage": {},
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/feedback.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"at\": \"<now utc>\", \"kind\": \"bug\", \"title\": \"t\", \"description\": \"d\", \"cli_version\": \"0.0.0.dev0\", \"about_command\": null, \"attachments\": [], \"reason\": \"ARDIA_PORT points ardia at a test browser\"}\n"
+     }
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--bad-feedback-url",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--title",
+   "t",
+   "d"
+  ],
+  "env": {
+   "ARDIA_FEEDBACK_URL": "http://example.com/api"
+  },
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": "Not sent: ARDIA_FEEDBACK_URL isn't a loopback http:// URL. It's kept on this Mac: <parity:box>/cli-home/Usage/feedback.jsonl\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {},
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/feedback.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"at\": \"<now utc>\", \"kind\": \"bug\", \"title\": \"t\", \"description\": \"d\", \"cli_version\": \"0.0.0.dev0\", \"about_command\": null, \"attachments\": [], \"reason\": \"ARDIA_FEEDBACK_URL isn't a loopback http:// URL\"}\n"
+     }
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--attach-missing",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--title",
+   "t",
+   "--attach",
+   "nope.png",
+   "d"
+  ],
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia feedback: nope.png: No such file or directory\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--attach,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--attach,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--attach-kind",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--title",
+   "t",
+   "--attach",
+   "a.exe",
+   "d"
+  ],
+  "files": {
+   "cwd/a.exe": "x"
+  },
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia feedback: a.exe: can't attach this kind of file (see ardia feedback --help for the kinds)\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--attach,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--attach,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--attach-empty",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--title",
+   "t",
+   "--attach",
+   "a.png",
+   "d"
+  ],
+  "files": {
+   "cwd/a.png": ""
+  },
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia feedback: a.png: the file is empty\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--attach,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--attach,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--attach-folder",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--title",
+   "t",
+   "--attach",
+   "dir.png",
+   "d"
+  ],
+  "files": {
+   "cwd/dir.png": {
+    "dir": true
+   }
+  },
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia feedback: dir.png: not a file\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--attach,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--attach,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--attach-two-recordings",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--title",
+   "t",
+   "--attach",
+   "a.mp4",
+   "--attach=b.MP4",
+   "d"
+  ],
+  "files": {
+   "cwd/a.mp4": "x",
+   "cwd/b.MP4": "y"
+  },
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia feedback: only one .mp4 recording can be attached\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--attach,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--attach,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--attach-kept",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--title",
+   "t",
+   "--attach",
+   "shot.png",
+   "--attach",
+   "crash.ips",
+   "--attach",
+   "trace.json.gz",
+   "d"
+  ],
+  "files": {
+   "cwd/shot.png": "png",
+   "cwd/crash.ips": "ips",
+   "cwd/trace.json.gz": "gz"
+  },
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": "Not sent: this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service. It's kept on this Mac: <parity:box>/cli-home/Usage/feedback.jsonl\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--attach,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--attach,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {},
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/feedback.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"at\": \"<now utc>\", \"kind\": \"bug\", \"title\": \"t\", \"description\": \"d\", \"cli_version\": \"0.0.0.dev0\", \"about_command\": null, \"attachments\": [\"<parity:box>/cwd/shot.png\", \"<parity:box>/cwd/crash.ips\", \"<parity:box>/cwd/trace.json.gz\"], \"reason\": \"this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service\"}\n"
+     }
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--attach-too-many",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--title",
+   "t",
+   "--attach",
+   "f0.txt",
+   "--attach",
+   "f1.txt",
+   "--attach",
+   "f2.txt",
+   "--attach",
+   "f3.txt",
+   "--attach",
+   "f4.txt",
+   "--attach",
+   "f5.txt",
+   "--attach",
+   "f6.txt",
+   "--attach",
+   "f7.txt",
+   "--attach",
+   "f8.txt",
+   "--attach",
+   "f9.txt",
+   "--attach",
+   "f10.txt",
+   "d"
+  ],
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia feedback: at most 10 files can be attached\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--attach,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--attach,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--json-before",
+  "command": "feedback",
+  "argv": [
+   "--json",
+   "feedback",
+   "--title",
+   "t",
+   "d"
+  ],
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: feedback doesn't take --json\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--port-before",
+  "command": "feedback",
+  "argv": [
+   "--port",
+   "9222",
+   "feedback",
+   "--title",
+   "t",
+   "d"
+  ],
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: feedback doesn't take --port\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {},
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--data-dir-before",
+  "command": "feedback",
+  "argv": [
+   "--data-dir",
+   "{data}",
+   "feedback",
+   "--title",
+   "t",
+   "d"
+  ],
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": "Not sent: this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service. It's kept on this Mac: <parity:box>/cli-home/Usage/feedback.jsonl\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--data-dir,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--data-dir,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {},
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/feedback.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"at\": \"<now utc>\", \"kind\": \"bug\", \"title\": \"t\", \"description\": \"d\", \"cli_version\": \"0.0.0.dev0\", \"about_command\": null, \"attachments\": [], \"reason\": \"this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service\"}\n"
+     }
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--data-dir-after",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--title",
+   "t",
+   "--data-dir",
+   "{data}",
+   "d"
+  ],
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": "Not sent: this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service. It's kept on this Mac: <parity:box>/cli-home/Usage/feedback.jsonl\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--data-dir,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--data-dir,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {},
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/feedback.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"at\": \"<now utc>\", \"kind\": \"bug\", \"title\": \"t\", \"description\": \"d\", \"cli_version\": \"0.0.0.dev0\", \"about_command\": null, \"attachments\": [], \"reason\": \"this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service\"}\n"
+     }
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--double-dash",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--title",
+   "t",
+   "--",
+   "--not-a-flag",
+   "text"
+  ],
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": "Not sent: this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service. It's kept on this Mac: <parity:box>/cli-home/Usage/feedback.jsonl\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {},
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/feedback.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"at\": \"<now utc>\", \"kind\": \"bug\", \"title\": \"t\", \"description\": \"--not-a-flag text\", \"cli_version\": \"0.0.0.dev0\", \"about_command\": null, \"attachments\": [], \"reason\": \"this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service\"}\n"
+     }
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--previous-kept-lines",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--title",
+   "t",
+   "d"
+  ],
+  "files": {
+   "cli-home/Usage/feedback.jsonl": {
+    "text": "{\"old\": 1}\r\n{\"older\": 2}\n"
+   }
+  },
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": "Not sent: this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service. It couldn't be saved on this Mac either (Usage must be private (mode 0700)).\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--sharing-on-identity",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--title",
+   "t",
+   "d"
+  ],
+  "consent": {
+   "lastVersion": "1.2.3",
+   "lastBuild": 45,
+   "channel": "nightly",
+   "sessionOpen": true,
+   "sessionId": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c"
+  },
+  "normalize": [
+   [
+    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
+    "\"at\": \"<at>\""
+   ]
+  ],
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": "Not sent: this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service. It's kept on this Mac: <parity:box>/cli-home/Usage/feedback.jsonl\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {},
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/feedback.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"at\": \"<now utc>\", \"kind\": \"bug\", \"title\": \"t\", \"description\": \"d\", \"cli_version\": \"0.0.0.dev0\", \"about_command\": null, \"attachments\": [], \"reason\": \"this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service\"}\n"
+     }
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--mixed-positionals",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "word",
+   "--title",
+   "t",
+   "more"
+  ],
+  "fallback": true,
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "usage: ardia [-h] [--version] [--skill] <command> ...\nardia: error: unrecognized arguments: more\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--bad-kind",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--kind",
+   "nope",
+   "--title",
+   "t",
+   "d"
+  ],
+  "fallback": true,
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "usage: ardia feedback [-h] [--title TITLE] [--kind {bug,slow,idea,other}] [--attach FILE]\n                      [--command CMD] [--data-dir DATA_DIR]\n                      [text ...]\nardia feedback: error: argument --kind: invalid choice: 'nope' (choose from 'bug', 'slow', 'idea', 'other')\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--kind,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--kind,--title",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--help",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--help"
+  ],
+  "fallback": true,
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia feedback [-h] [--title TITLE] [--kind {bug,slow,idea,other}] [--attach FILE]\n                      [--command CMD] [--data-dir DATA_DIR]\n                      [text ...]\n\nReport a problem or an idea to Ardia's developer: a confusing error, a missing command, output that cost you extra\nturns, something slow. Give it a short title and say what you ran, what happened and what you expected.\n\nIt goes to the feedback service on ardia.dev (sent even while \"Share anonymous crash reports and usage stats\" is off:\nsending a report is consent for that report) and opens a public GitHub issue with the title and description; files you\nattach stay private. Before it leaves, secrets are removed by exact pattern (key=value and key: value secrets, auth\nheaders, known key formats, JWTs), along with emails, URL logins and queries, card numbers and the name in\n/Users/<name>. At most 20 a day are sent. When it can't be sent, it's kept on this Mac and the reason is printed.\n\npositional arguments:\n  text                  what happened and what you expected; - or nothing reads stdin\n\noptions:\n  -h, --help            show this help message and exit\n  --title TITLE         a short title, 1-67 characters (required)\n  --kind {bug,slow,idea,other}\n                        bug (default), slow, idea or other\n  --attach FILE         attach a file (repeatable)\n  --command CMD         the command that misbehaved\n  --data-dir DATA_DIR   the Ardia data dir whose install id and session apply\n\nExamples:\n  ardia feedback --title \"snapshot -i hides dialog buttons\" \"the Save button inside a dialog wasn't listed with a ref\"\n  ardia feedback --kind slow --title \"open takes 9 s\" --command \"ardia browse open https://example.com\" \"it used to take 1 s\"\n  echo \"fill on a date input typed into the wrong field\" | ardia feedback --title \"fill misses date inputs\"\n  ardia feedback --title \"click did nothing\" --attach shot.png \"the button stayed the same after click @e4\"\n\nAttach: .mp4 (one recording, 100 MB), .json.gz (one trace, 50 MB), .ips crash reports, and .png .jpg .jpeg .gif .webp\n.heic .mov .txt .log .md .json .jsonl .csv (10 MB each), 10 files at most.\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "feedback--abbreviated-flag",
+  "command": "feedback",
+  "argv": [
+   "feedback",
+   "--tit",
+   "t",
+   "d"
+  ],
+  "fallback": true,
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": "Not sent: this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service. It's kept on this Mac: <parity:box>/cli-home/Usage/feedback.jsonl\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "feedback",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {},
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/feedback.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "{\"at\": \"<now utc>\", \"kind\": \"bug\", \"title\": \"t\", \"description\": \"d\", \"cli_version\": \"0.0.0.dev0\", \"about_command\": null, \"attachments\": [], \"reason\": \"this ardia is a checkout build (0.0.0.dev0), which never sends to ardia.dev; set ARDIA_FEEDBACK_URL to a local service\"}\n"
+     }
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ }
+]

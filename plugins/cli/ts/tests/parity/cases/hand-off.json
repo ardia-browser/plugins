@@ -1,0 +1,848 @@
+[
+ {
+  "id": "tabs-open--tabs-open-https:example.com",
+  "command": "tabs open",
+  "argv": [
+   "tabs",
+   "open",
+   "https://example.com"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "open",
+        "tabs": [
+         "tab-8"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-8",
+        "title": "New"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "opened New (tab-8)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "open",
+         "urls": [
+          "https://example.com"
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "open",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "open",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs open"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "apply--apply",
+  "command": "apply",
+  "argv": [
+   "apply"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "open",
+        "tabs": [
+         "tab-8"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-8",
+        "title": "New"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "stdin": "[{\"op\": \"tab.close\", \"tabs\": [\"tab-1\"]}]",
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "opened New (tab-8)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.close",
+         "tabs": [
+          "tab-1"
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "apply",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "apply",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "apply"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "unknown--bogus",
+  "command": "unknown",
+  "argv": [
+   "bogus"
+  ],
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: unknown command 'bogus' (see ardia --help)\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "unknown",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": "unknown_command",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "unknown",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": "unknown_command",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "unknown (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "skills-list--skills-list",
+  "command": "skills list",
+  "argv": [
+   "skills",
+   "list"
+  ],
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "ardia\tDrives the user's own Ardia browser (their open tabs, logins and cookies) from the shell with `ardia browse`, and the whole browser with `ardia call`. Use for any task on a page the user has open or a site they're signed in to, for reading web pages (one URL or many), filling forms, clicking, extracting data and screenshots, and for Ardia's site notes, userscripts, config, themes, commands, hooks and daily reports. Prefer it to agent-browser, Playwright, curl or web fetch whenever the user's browser or logins matter.\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "skills",
+      "subcommand": "list",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "skills",
+      "subcommand": "list",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "skills list"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "config-path--config-path",
+  "command": "config path",
+  "argv": [
+   "config",
+   "path"
+  ],
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "<parity:box>/data/config\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": "path",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "config",
+      "subcommand": "path",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "config path"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ }
+]

@@ -1,0 +1,11 @@
+{
+ "base": "218948a38418c1e7d2e8cd8b407750d1d63f7105",
+ "dirty": false,
+ "cases": 1872,
+ "platforms": {
+  "darwin": {
+   "python": "3.13.16",
+   "captured_at": "2026-11-23T09:24:31Z"
+  }
+ }
+}

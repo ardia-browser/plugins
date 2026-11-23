@@ -1,0 +1,3242 @@
+[
+ {
+  "id": "windows--windows",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": [
+      {
+       "id": 1,
+       "kind": "normal",
+       "focused": true,
+       "profileName": "Personal",
+       "tabs": [
+        {
+         "id": 11,
+         "title": "A é",
+         "url": "https://a.example/",
+         "active": true,
+         "pinned": false,
+         "group": null
+        },
+        {
+         "id": 12,
+         "title": null,
+         "url": "https://b.example/\u0007",
+         "active": false,
+         "pinned": true,
+         "group": "g-1"
+        },
+        {
+         "id": 13,
+         "active": false
+        }
+       ]
+      },
+      {
+       "id": 2,
+       "kind": "popup",
+       "focused": false,
+       "profile": "p-2",
+       "tabs": []
+      },
+      "not a window"
+     ]
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "window 1  normal, focused  Personal\n  *  11  A é  https://a.example/\n   p 12    https://b.example/\\u0007  (group g-1)\n     13    \nwindow 2  popup  p-2\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "windows"
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "windows"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "windows--windows-json",
+  "command": "windows",
+  "argv": [
+   "windows",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": [
+      {
+       "id": 1,
+       "kind": "normal",
+       "focused": true,
+       "profileName": "Personal",
+       "tabs": [
+        {
+         "id": 11,
+         "title": "A é",
+         "url": "https://a.example/",
+         "active": true,
+         "pinned": false,
+         "group": null
+        },
+        {
+         "id": 12,
+         "title": null,
+         "url": "https://b.example/\u0007",
+         "active": false,
+         "pinned": true,
+         "group": "g-1"
+        },
+        {
+         "id": 13,
+         "active": false
+        }
+       ]
+      },
+      {
+       "id": 2,
+       "kind": "popup",
+       "focused": false,
+       "profile": "p-2",
+       "tabs": []
+      },
+      "not a window"
+     ]
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "[\n  {\n    \"id\": 1,\n    \"kind\": \"normal\",\n    \"focused\": true,\n    \"profileName\": \"Personal\",\n    \"tabs\": [\n      {\n        \"id\": 11,\n        \"title\": \"A é\",\n        \"url\": \"https://a.example/\",\n        \"active\": true,\n        \"pinned\": false,\n        \"group\": null\n      },\n      {\n        \"id\": 12,\n        \"title\": null,\n        \"url\": \"https://b.example/\\u0007\",\n        \"active\": false,\n        \"pinned\": true,\n        \"group\": \"g-1\"\n      },\n      {\n        \"id\": 13,\n        \"active\": false\n      }\n    ]\n  },\n  {\n    \"id\": 2,\n    \"kind\": \"popup\",\n    \"focused\": false,\n    \"profile\": \"p-2\",\n    \"tabs\": []\n  },\n  \"not a window\"\n]\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "windows"
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "windows"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "windows--windows-2",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": null
+    }
+   }
+  },
+  "note": "a null result",
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "windows"
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "windows"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "windows--windows-3",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": [
+      {
+       "id": 1,
+       "profileName": "p\u001c ",
+       "tabs": []
+      }
+     ]
+    }
+   }
+  },
+  "note": "Python's whitespace in a profile name",
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "window 1  normal  p\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "windows"
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "windows"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "windows--windows-4",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "error": {
+      "message": "broken"
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia windows: broken\n"
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "windows"
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "windows (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "windows--windows-5",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": "close"
+   }
+  },
+  "note": "Ardia hangs up mid-call",
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or Command Line isn't installed (Settings › Plugins). (Ardia closed the connection)\n"
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "windows"
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": "connection_dropped",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": "connection_dropped",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "windows (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "windows--windows-6",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": "not json\n"
+    }
+   }
+  },
+  "note": "a reply that isn't JSON",
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or Command Line isn't installed (Settings › Plugins). (Ardia sent a line that isn't JSON)\n"
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "windows"
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": "connection_dropped",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": "connection_dropped",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "windows (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "windows--windows-7",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": null,
+  "note": "Ardia isn't running",
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or Command Line isn't installed (Settings › Plugins). (no ArdiaControl.sock in <parity:box>/data)\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": "unreachable",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": "unreachable",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "windows (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "windows--windows-8",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "error": {
+      "code": 7,
+      "message": [
+       "a",
+       1.5
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia windows: ['a', 1.5]\n"
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "windows"
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "windows (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "windows--windows-26",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "result": [
+      {
+       "id": 1,
+       "tabs": [
+        "x"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  "note": "a shape Rust can't mirror",
+  "fallback": true,
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": "window 1  normal\n"
+   },
+   "stderr": {
+    "text": "AttributeError: 'str' object has no attribute 'get'\n"
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "windows"
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "$exception",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "$exception_level": "fatal",
+      "source": "cli_unhandled",
+      "$exception_types": [
+       "AttributeError"
+      ],
+      "$exception_values": [
+       "AttributeError"
+      ],
+      "$exception_list": [
+       {
+        "type": "AttributeError",
+        "value": "AttributeError",
+        "mechanism": {
+         "type": "cli_unhandled",
+         "handled": false,
+         "synthetic": false
+        },
+        "stacktrace": {
+         "type": "raw"
+        }
+       }
+      ],
+      "error_code": null,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": "unhandled_exception",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "$exception",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "$exception_level": "fatal",
+      "source": "cli_unhandled",
+      "$exception_types": [
+       "AttributeError"
+      ],
+      "$exception_values": [
+       "AttributeError"
+      ],
+      "$exception_list": [
+       {
+        "type": "AttributeError",
+        "value": "AttributeError",
+        "mechanism": {
+         "type": "cli_unhandled",
+         "handled": false,
+         "synthetic": false
+        },
+        "stacktrace": {
+         "type": "raw"
+        }
+       }
+      ],
+      "error_code": null,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": "unhandled_exception",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "windows (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "windows--stray-replies-ignored",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": "{\"id\":null,\"error\":{\"code\":\"bad_request\",\"message\":\"no id\"}}\n{\"id\":99,\"result\":\"not yours\"}\n{\"id\":\"2\",\"result\":\"a string id\"}\n{\"event\":\"tab.opened\",\"data\":{}}\n{\"id\":2,\"result\":[{\"id\": 1, \"kind\": \"normal\", \"focused\": true, \"profileName\": \"Personal\", \"tabs\": []}]}\n"
+    }
+   }
+  },
+  "note": "Ardia sends lines that aren't this call's reply (null, unknown and string ids, an event) before the reply",
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "window 1  normal, focused  Personal\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "windows"
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "windows"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "windows--stray-replies-ignored-json",
+  "command": "windows",
+  "argv": [
+   "windows",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": "{\"id\":null,\"error\":{\"code\":\"bad_request\",\"message\":\"no id\"}}\n{\"id\":99,\"result\":\"not yours\"}\n{\"id\":\"2\",\"result\":\"a string id\"}\n{\"event\":\"tab.opened\",\"data\":{}}\n{\"id\":2,\"result\":[{\"id\": 1, \"kind\": \"normal\", \"focused\": true, \"profileName\": \"Personal\", \"tabs\": []}]}\n"
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "[\n  {\n    \"id\": 1,\n    \"kind\": \"normal\",\n    \"focused\": true,\n    \"profileName\": \"Personal\",\n    \"tabs\": []\n  }\n]\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "windows"
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "windows"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "windows--lone-surrogates",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": "{\"id\":2,\"result\":[{\"id\":1,\"kind\":\"normal\",\"\\ud800\":1,\"\\ud801\":2,\"profileName\":\"\\udfffP\",\"tabs\":[{\"id\":11,\"title\":\"a\\ud83d\\ude00b\\ud83dc\\udc00\",\"url\":\"https://x/\\udbff\",\"\\ud800\":3}]}]}\n"
+    }
+   }
+  },
+  "note": "lone surrogate escapes stay distinct (two keys stay two) and become U+FFFD only when written",
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "window 1  normal  �P\n     11  a😀b�c�  https://x/�\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "windows"
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "windows"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "windows--utf8-encoded-surrogates",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": {
+      "base64": "eyJpZCI6MiwicmVzdWx0IjpbeyJpZCI6MSwia2luZCI6Im7toIAiLCJ0YWJzIjpbeyJpZCI6MTEsInRpdGxlIjoidO2/vyIsInVybCI6InUifV19XX0K"
+     }
+    }
+   }
+  },
+  "note": "json.loads decodes UTF-8 with surrogatepass, so an encoded surrogate is read, not refused",
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "window 1  n�\n     11  t�  u\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "windows"
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "windows"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "windows--utf16-reply-line",
+  "command": "windows",
+  "argv": [
+   "windows"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": {
+      "base64": "ewAiAGkAZAAiADoAMgAsACIAcgBlAHMAdQBsAHQAIgA6AFsAewAiAGkAZAAiADoAMQAsACIAdABhAGIAcwAiADoAWwBdAH0AXQB9AAo="
+     }
+    }
+   }
+  },
+  "note": "a reply line is decoded like json.loads(bytes): UTF-16 without a BOM is detected",
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or Command Line isn't installed (Settings › Plugins). (Ardia sent a line that isn't JSON)\n"
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "windows"
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": "connection_dropped",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": "connection_dropped",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "windows (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "windows--lone-surrogates-json",
+  "command": "windows",
+  "argv": [
+   "windows",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": "{\"id\":2,\"result\":[{\"id\":1,\"kind\":\"normal\",\"\\ud800\":1,\"\\ud801\":2,\"profileName\":\"\\udfffP\",\"tabs\":[{\"id\":11,\"title\":\"a\\ud83d\\ude00b\\ud83dc\\udc00\",\"url\":\"https://x/\\udbff\",\"\\ud800\":3}]}]}\n"
+    }
+   }
+  },
+  "note": "lone surrogate escapes stay distinct (two keys stay two) and become U+FFFD only when written",
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "[\n  {\n    \"id\": 1,\n    \"kind\": \"normal\",\n    \"�\": 1,\n    \"�\": 2,\n    \"profileName\": \"�P\",\n    \"tabs\": [\n      {\n        \"id\": 11,\n        \"title\": \"a😀b�c�\",\n        \"url\": \"https://x/�\",\n        \"�\": 3\n      }\n    ]\n  }\n]\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "windows"
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "windows"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "windows--utf8-encoded-surrogates-json",
+  "command": "windows",
+  "argv": [
+   "windows",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": {
+      "base64": "eyJpZCI6MiwicmVzdWx0IjpbeyJpZCI6MSwia2luZCI6Im7toIAiLCJ0YWJzIjpbeyJpZCI6MTEsInRpdGxlIjoidO2/vyIsInVybCI6InUifV19XX0K"
+     }
+    }
+   }
+  },
+  "note": "json.loads decodes UTF-8 with surrogatepass, so an encoded surrogate is read, not refused",
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "[\n  {\n    \"id\": 1,\n    \"kind\": \"n�\",\n    \"tabs\": [\n      {\n        \"id\": 11,\n        \"title\": \"t�\",\n        \"url\": \"u\"\n      }\n    ]\n  }\n]\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "windows"
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "windows"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "windows--utf16-reply-line-json",
+  "command": "windows",
+  "argv": [
+   "windows",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "windows": {
+     "raw": {
+      "base64": "ewAiAGkAZAAiADoAMgAsACIAcgBlAHMAdQBsAHQAIgA6AFsAewAiAGkAZAAiADoAMQAsACIAdABhAGIAcwAiADoAWwBdAH0AXQB9AAo="
+     }
+    }
+   }
+  },
+  "note": "a reply line is decoded like json.loads(bytes): UTF-16 without a BOM is detected",
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or Command Line isn't installed (Settings › Plugins). (Ardia sent a line that isn't JSON)\n"
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "windows"
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": "connection_dropped",
+      "flags": "--json",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "windows",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": "connection_dropped",
+      "flags": "--json",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "windows (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ }
+]

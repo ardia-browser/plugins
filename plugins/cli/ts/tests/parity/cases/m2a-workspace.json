@@ -1,0 +1,8257 @@
+[
+ {
+  "id": "m2a-tabs-open-0",
+  "command": "tabs open",
+  "argv": [
+   "tabs",
+   "open",
+   "a.example",
+   "https://b/",
+   "--group",
+   "Work",
+   "--pin",
+   "row",
+   "--activate",
+   "--before",
+   "tab-9",
+   "--window",
+   "w-1",
+   "--profile",
+   "p-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "open",
+        "tabs": [
+         "tab-1",
+         "tab-3"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "opened One é (tab-1), tab-3\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "open",
+         "urls": [
+          "a.example",
+          "https://b/"
+         ],
+         "before": "tab-9",
+         "window": "w-1",
+         "profile": "p-1",
+         "group": "Work",
+         "pin": "row",
+         "activate": true
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "open",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--activate,--before,--group,--pin,--profile,--window",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "open",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--activate,--before,--group,--pin,--profile,--window",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs open"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-move-1",
+  "command": "tabs move",
+  "argv": [
+   "tabs",
+   "move",
+   "tab-1",
+   "tab-2",
+   "--top",
+   "--after",
+   "g-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.move",
+        "tabs": [
+         "tab-1",
+         "tab-2"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "moved One é (tab-1), tab-2\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.move",
+         "tabs": [
+          "tab-1",
+          "tab-2"
+         ],
+         "after": "g-1",
+         "group": null
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "move",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--after,--top",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "move",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--after,--top",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs move"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-move-2",
+  "command": "tabs move",
+  "argv": [
+   "tabs",
+   "move",
+   "tab-1",
+   "--group",
+   "",
+   "--window",
+   "w-2"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.move",
+        "tabs": [
+         "tab-1"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "moved One é (tab-1)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.move",
+         "tabs": [
+          "tab-1"
+         ],
+         "window": "w-2"
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "move",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--group,--window",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "move",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--group,--window",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs move"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-pin-3",
+  "command": "tabs pin",
+  "argv": [
+   "tabs",
+   "pin",
+   "tab-1",
+   "--row"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.pin",
+        "tabs": [
+         "tab-1"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "pinned One é (tab-1)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.pin",
+         "tabs": [
+          "tab-1"
+         ],
+         "as": "row"
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "pin",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--row",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "pin",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--row",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs pin"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-pin-4",
+  "command": "tabs pin",
+  "argv": [
+   "tabs",
+   "pin",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.pin",
+        "outcomes": {
+         "tab-1": "pinned",
+         "tab-2": "already\u0007"
+        }
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "One é (tab-1): pinned  tab-2: already\\u0007\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.pin",
+         "tabs": [
+          "tab-1"
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "pin",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "pin",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs pin"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-unpin-5",
+  "command": "tabs unpin",
+  "argv": [
+   "tabs",
+   "unpin",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.unpin",
+        "tabs": []
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "unpinned\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.unpin",
+         "tabs": [
+          "tab-1"
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "unpin",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "unpin",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs unpin"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-mute-6",
+  "command": "tabs mute",
+  "argv": [
+   "--json",
+   "tabs",
+   "mute",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.mute",
+        "tabs": [
+         "tab-1"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "{\n  \"ok\": true,\n  \"applied\": 1,\n  \"results\": [\n    {\n      \"op\": \"tab.mute\",\n      \"tabs\": [\n        \"tab-1\"\n      ]\n    }\n  ],\n  \"tabs\": [\n    {\n      \"id\": \"tab-1\",\n      \"title\": \"One é\"\n    },\n    {\n      \"id\": \"tab-2\",\n      \"title\": \"\"\n    },\n    \"junk\"\n  ]\n}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.mute",
+         "tabs": [
+          "tab-1"
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "mute",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "mute",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs mute"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-unmute-7",
+  "command": "tabs unmute",
+  "argv": [
+   "tabs",
+   "unmute",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.unmute",
+        "tabs": [
+         "tab-1"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "unmuted One é (tab-1)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.unmute",
+         "tabs": [
+          "tab-1"
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "unmute",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "unmute",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs unmute"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-sleep-8",
+  "command": "tabs sleep",
+  "argv": [
+   "tabs",
+   "sleep",
+   "tab-1",
+   "tab-2"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.sleep",
+        "tabs": [
+         "tab-1",
+         "tab-2"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "tab.sleep One é (tab-1), tab-2\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.sleep",
+         "tabs": [
+          "tab-1",
+          "tab-2"
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "sleep",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "sleep",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs sleep"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-wake-9",
+  "command": "tabs wake",
+  "argv": [
+   "tabs",
+   "wake",
+   "tab-2"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.wake",
+        "tabs": [
+         "tab-2"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "tab.wake tab-2\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.wake",
+         "tabs": [
+          "tab-2"
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "wake",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "wake",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs wake"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-close-10",
+  "command": "tabs close",
+  "argv": [
+   "tabs",
+   "close",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.close",
+        "tabs": [
+         "tab-1"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "closed One é (tab-1)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.close",
+         "tabs": [
+          "tab-1"
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "close",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "close",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs close"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-activate-11",
+  "command": "tabs activate",
+  "argv": [
+   "tabs",
+   "activate",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.activate",
+        "tabs": [
+         "tab-1"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "showing One é (tab-1)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.activate",
+         "tab": "tab-1"
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "activate",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "activate",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs activate"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-rename-12",
+  "command": "tabs rename",
+  "argv": [
+   "tabs",
+   "rename",
+   "tab-1",
+   "Name é"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.rename",
+        "tabs": [
+         "tab-1"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "renamed One é (tab-1)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.rename",
+         "tab": "tab-1",
+         "title": "Name é"
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "rename",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "rename",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs rename"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-rename-13",
+  "command": "tabs rename",
+  "argv": [
+   "tabs",
+   "rename",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.rename",
+        "tabs": [
+         "tab-1"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "renamed One é (tab-1)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.rename",
+         "tab": "tab-1",
+         "title": null
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "rename",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "rename",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs rename"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-icon-14",
+  "command": "tabs icon",
+  "argv": [
+   "tabs",
+   "icon",
+   "tab-1",
+   "symbol:star"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.icon",
+        "tabs": [
+         "tab-1"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "set the icon of One é (tab-1)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.icon",
+         "tab": "tab-1",
+         "icon": "symbol:star"
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "icon",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "icon",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs icon"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-icon-15",
+  "command": "tabs icon",
+  "argv": [
+   "tabs",
+   "icon",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "tab.icon"
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "set the icon of\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.icon",
+         "tab": "tab-1",
+         "icon": null
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "icon",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "icon",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs icon"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-pin-both",
+  "command": "tabs pin",
+  "argv": [
+   "tabs",
+   "pin",
+   "tab-1",
+   "--row",
+   "--tile"
+  ],
+  "control": {
+   "replies": {}
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia tabs pin: give --row or --tile, not both\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "pin",
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--row,--tile",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "pin",
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--row,--tile",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs pin (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-close-failed",
+  "command": "tabs close",
+  "argv": [
+   "tabs",
+   "close",
+   "tab-1",
+   "tab-2"
+  ],
+  "error_codes": {
+   "not_found": "other"
+  },
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": false,
+      "applied": 0,
+      "results": [],
+      "error": {
+       "code": "not_found",
+       "message": "no tab tab-1"
+      }
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia tabs close: no tab tab-1\n"
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.close",
+         "tabs": [
+          "tab-1",
+          "tab-2"
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "close",
+      "exit_code": 1,
+      "error_code": "other",
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "close",
+      "exit_code": 1,
+      "error_code": "other",
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs close (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-close-failed-documented",
+  "command": "tabs close",
+  "argv": [
+   "tabs",
+   "close",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": false,
+      "applied": 0,
+      "results": [],
+      "error": {
+       "code": "no_window",
+       "message": "no tab tab-1"
+      }
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia tabs close: no tab tab-1\n"
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.close",
+         "tabs": [
+          "tab-1"
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "close",
+      "exit_code": 1,
+      "error_code": "no_window",
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "close",
+      "exit_code": 1,
+      "error_code": "no_window",
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs close (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-listing-free-text-code",
+  "command": "tabs",
+  "argv": [
+   "tabs"
+  ],
+  "error_codes": {
+   "secret_text": "other"
+  },
+  "control": {
+   "replies": {
+    "workspace": {
+     "error": {
+      "code": "secret_text",
+      "message": "x"
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia tabs: x\n"
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "workspace",
+      "params": {}
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": "other",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": "other",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-groups-listing-documented-code",
+  "command": "groups",
+  "argv": [
+   "groups"
+  ],
+  "control": {
+   "replies": {
+    "workspace": {
+     "error": {
+      "code": "refused",
+      "message": "x"
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia groups: x\n"
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "workspace",
+      "params": {}
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": "refused",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": "refused",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "groups (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-close-refused-free-text",
+  "command": "tabs close",
+  "argv": [
+   "tabs",
+   "close",
+   "tab-1"
+  ],
+  "error_codes": {
+   "user_secret_value": "other"
+  },
+  "control": {
+   "replies": {
+    "apply": {
+     "error": {
+      "code": "user_secret_value",
+      "message": "x"
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia tabs close: x\n"
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.close",
+         "tabs": [
+          "tab-1"
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "close",
+      "exit_code": 1,
+      "error_code": "other",
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "close",
+      "exit_code": 1,
+      "error_code": "other",
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs close (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-close-failed-plain",
+  "command": "tabs close",
+  "argv": [
+   "tabs",
+   "close",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": false
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia tabs close: it failed\n"
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.close",
+         "tabs": [
+          "tab-1"
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "close",
+      "exit_code": 1,
+      "error_code": "failed",
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "close",
+      "exit_code": 1,
+      "error_code": "failed",
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs close (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-close-not-dict",
+  "command": "tabs close",
+  "argv": [
+   "tabs",
+   "close",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": [
+      1
+     ]
+    }
+   }
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia tabs close: it failed\n"
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.close",
+         "tabs": [
+          "tab-1"
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "close",
+      "exit_code": 1,
+      "error_code": "failed",
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "close",
+      "exit_code": 1,
+      "error_code": "failed",
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs close (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-close-unknown-method",
+  "command": "tabs close",
+  "argv": [
+   "tabs",
+   "close",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "error": {
+      "code": "unknown_method",
+      "message": "x"
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia tabs close: this Ardia doesn't know tabs close yet; update Ardia\n"
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.close",
+         "tabs": [
+          "tab-1"
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "close",
+      "exit_code": 1,
+      "error_code": "unknown_method",
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "close",
+      "exit_code": 1,
+      "error_code": "unknown_method",
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs close (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-close-refused",
+  "command": "tabs close",
+  "argv": [
+   "tabs",
+   "close",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "error": {
+      "code": "refused",
+      "message": "private window"
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia tabs close: private window\n"
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.close",
+         "tabs": [
+          "tab-1"
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "close",
+      "exit_code": 1,
+      "error_code": "refused",
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "close",
+      "exit_code": 1,
+      "error_code": "refused",
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs close (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-close-dropped",
+  "command": "tabs close",
+  "argv": [
+   "tabs",
+   "close",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": "close"
+   }
+  },
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia tabs close: the connection dropped after the request went out, so it may or may not have run (Ardia isn't running, or Command Line isn't installed (Settings › Plugins). (Ardia closed the connection))\n"
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "tab.close",
+         "tabs": [
+          "tab-1"
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "close",
+      "exit_code": 2,
+      "error_code": "connection_dropped",
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "close",
+      "exit_code": 2,
+      "error_code": "connection_dropped",
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs close (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-tabs-close-not-running",
+  "command": "tabs close",
+  "argv": [
+   "tabs",
+   "close",
+   "tab-1"
+  ],
+  "control": null,
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or Command Line isn't installed (Settings › Plugins). (no ArdiaControl.sock in <parity:box>/data)\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "close",
+      "exit_code": 2,
+      "error_code": "unreachable",
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": "close",
+      "exit_code": 2,
+      "error_code": "unreachable",
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs close (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-groups-create-28",
+  "command": "groups create",
+  "argv": [
+   "groups",
+   "create",
+   "tab-1",
+   "tab-2",
+   "--url",
+   "https://a",
+   "--url",
+   "b",
+   "--name",
+   "N",
+   "--icon",
+   "🚀",
+   "--color",
+   "blue",
+   "--collapsed",
+   "--parent",
+   "P",
+   "--unpinned",
+   "--window",
+   "w",
+   "--profile",
+   "p",
+   "--after",
+   "g-0"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "group.create",
+        "group": "g-1",
+        "label": "Work é",
+        "icon": "🚀",
+        "tabs": [
+         "tab-1",
+         "tab-2"
+        ]
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "created group 🚀 Work é (g-1) with 2 tabs\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "group.create",
+         "after": "g-0",
+         "window": "w",
+         "profile": "p",
+         "tabs": [
+          "tab-1",
+          "tab-2"
+         ],
+         "urls": [
+          "https://a",
+          "b"
+         ],
+         "name": "N",
+         "icon": "🚀",
+         "color": "blue",
+         "parent": "P",
+         "collapsed": true,
+         "pinned": false
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "create",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--after,--collapsed,--color,--icon,--name,--parent,--profile,--unpinned,--url,--window",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "create",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--after,--collapsed,--color,--icon,--name,--parent,--profile,--unpinned,--url,--window",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "groups create"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-groups-create-29",
+  "command": "groups create",
+  "argv": [
+   "groups",
+   "create"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "group.create",
+        "group": "g-2",
+        "tabs": [
+         "tab-1"
+        ],
+        "icon": "symbol:star",
+        "label": ""
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "created group g-2 with 1 tab\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "group.create"
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "create",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "create",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "groups create"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-groups-update-30",
+  "command": "groups update",
+  "argv": [
+   "groups",
+   "update",
+   "Work",
+   "--name",
+   "",
+   "--color",
+   "none",
+   "--collapse"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "group.update",
+        "group": "g-1",
+        "label": "Work é",
+        "icon": "🚀"
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "updated group 🚀 Work é (g-1)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "group.update",
+         "group": "Work",
+         "name": "",
+         "color": "none",
+         "collapsed": true
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "update",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--collapse,--color,--name",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "update",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--collapse,--color,--name",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "groups update"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-groups-update-31",
+  "command": "groups update",
+  "argv": [
+   "groups",
+   "update",
+   "Work",
+   "--reset-icon",
+   "--expand"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "group.update",
+        "group": "g-1",
+        "label": "Work é",
+        "icon": "none"
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "updated group Work é (g-1)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "group.update",
+         "group": "Work",
+         "icon": null,
+         "collapsed": false
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "update",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--expand,--reset-icon",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "update",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--expand,--reset-icon",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "groups update"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-groups-rename-32",
+  "command": "groups rename",
+  "argv": [
+   "groups",
+   "rename",
+   "g-1",
+   "New"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "group.update",
+        "group": "g-1",
+        "label": "Work é",
+        "icon": "🚀"
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "updated group 🚀 Work é (g-1)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "group.update",
+         "group": "g-1",
+         "name": "New"
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "rename",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "rename",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "groups rename"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-groups-move-33",
+  "command": "groups move",
+  "argv": [
+   "groups",
+   "move",
+   "g-1",
+   "--top",
+   "--pin",
+   "--before",
+   "tab-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "group.move",
+        "group": "g-1",
+        "label": "Work é",
+        "icon": "🚀"
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "moved group 🚀 Work é (g-1)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "group.move",
+         "group": "g-1",
+         "before": "tab-1",
+         "parent": null,
+         "pinned": true
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "move",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--before,--pin,--top",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "move",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--before,--pin,--top",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "groups move"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-groups-move-34",
+  "command": "groups move",
+  "argv": [
+   "groups",
+   "move",
+   "g-1",
+   "--parent",
+   "P",
+   "--unpin",
+   "--profile",
+   "p"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "group.move",
+        "group": "g-1",
+        "label": "Work é",
+        "icon": "🚀"
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "moved group 🚀 Work é (g-1)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "group.move",
+         "group": "g-1",
+         "profile": "p",
+         "parent": "P",
+         "pinned": false
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "move",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--parent,--profile,--unpin",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "move",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--parent,--profile,--unpin",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "groups move"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-groups-ungroup-35",
+  "command": "groups ungroup",
+  "argv": [
+   "groups",
+   "ungroup",
+   "g-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "group.ungroup",
+        "group": "g-1",
+        "label": "Work é",
+        "icon": "🚀"
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "ungrouped 🚀 Work é (g-1)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "group.ungroup",
+         "group": "g-1"
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "ungroup",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "ungroup",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "groups ungroup"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-groups-close-36",
+  "command": "groups close",
+  "argv": [
+   "groups",
+   "close",
+   "g-1",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 1,
+      "results": [
+       {
+        "op": "group.close",
+        "group": "g-1",
+        "label": "Work é",
+        "icon": "🚀"
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "{\n  \"ok\": true,\n  \"applied\": 1,\n  \"results\": [\n    {\n      \"op\": \"group.close\",\n      \"group\": \"g-1\",\n      \"label\": \"Work é\",\n      \"icon\": \"🚀\"\n    }\n  ],\n  \"tabs\": [\n    {\n      \"id\": \"tab-1\",\n      \"title\": \"One é\"\n    },\n    {\n      \"id\": \"tab-2\",\n      \"title\": \"\"\n    },\n    \"junk\"\n  ]\n}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "group.close",
+         "group": "g-1"
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "close",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "close",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "groups close"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-groups-delete-37",
+  "command": "groups delete",
+  "argv": [
+   "groups",
+   "delete",
+   "g-1"
+  ],
+  "control": {
+   "replies": {
+    "apply": {
+     "result": {
+      "ok": true,
+      "applied": 2,
+      "results": [
+       {
+        "op": "group.delete",
+        "group": "g-1",
+        "label": null,
+        "icon": "🚀"
+       },
+       {
+        "op": "group.weird"
+       }
+      ],
+      "tabs": [
+       {
+        "id": "tab-1",
+        "title": "One é"
+       },
+       {
+        "id": "tab-2",
+        "title": ""
+       },
+       "junk"
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "deleted group g-1\ngroup.weird group \n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "apply",
+      "params": {
+       "ops": [
+        {
+         "op": "group.delete",
+         "group": "g-1"
+        }
+       ]
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "delete",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "delete",
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "batch_steps": 1,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "groups delete"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-groups-update-nothing",
+  "command": "groups update",
+  "argv": [
+   "groups",
+   "update",
+   "g-1"
+  ],
+  "control": {
+   "replies": {}
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia groups update: give --name, --icon, --reset-icon, --color, --collapse or --expand\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "update",
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "update",
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "groups update (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-groups-update-icon-and-reset",
+  "command": "groups update",
+  "argv": [
+   "groups",
+   "update",
+   "g-1",
+   "--icon",
+   "x",
+   "--reset-icon"
+  ],
+  "control": {
+   "replies": {}
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia groups update: give --icon or --reset-icon, not both\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "update",
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--icon,--reset-icon",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "update",
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--icon,--reset-icon",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "groups update (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-groups-move-nothing",
+  "command": "groups move",
+  "argv": [
+   "groups",
+   "move",
+   "g-1"
+  ],
+  "control": {
+   "replies": {}
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia groups move: give --parent, --top, --pin, --unpin, --before, --after, --window or --profile\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "move",
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "move",
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "groups move (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "m2a-groups-move-empty-parent",
+  "command": "groups move",
+  "argv": [
+   "groups",
+   "move",
+   "g-1",
+   "--parent",
+   ""
+  ],
+  "control": {
+   "replies": {}
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia groups move: give --parent, --top, --pin, --unpin, --before, --after, --window or --profile\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "move",
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--parent",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "groups",
+      "subcommand": "move",
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--parent",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "groups move (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ }
+]

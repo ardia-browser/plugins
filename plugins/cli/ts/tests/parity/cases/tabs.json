@@ -1,0 +1,5917 @@
+[
+ {
+  "id": "tabs--tabs",
+  "command": "tabs",
+  "argv": [
+   "tabs"
+  ],
+  "control": {
+   "replies": {
+    "workspace": {
+     "result": {
+      "profiles": [
+       {
+        "id": "p-1",
+        "name": "Personal"
+       }
+      ],
+      "windows": [
+       {
+        "id": "w-1",
+        "kind": "normal",
+        "focused": true,
+        "profile": "p-1",
+        "spaces": [
+         {
+          "profile": "p-1",
+          "profileName": "Personal",
+          "shown": true,
+          "topApps": [
+           {
+            "type": "tab",
+            "id": "tab-9",
+            "url": "https://mail.example/",
+            "title": "Mail",
+            "pin": "tile",
+            "active": false,
+            "muted": false,
+            "asleep": true,
+            "pid": 501,
+            "cpu": 0.25,
+            "memory": 90500000
+           }
+          ],
+          "pinned": [
+           {
+            "type": "group",
+            "id": "g-0",
+            "label": "Pinned \u00e9",
+            "icon": "symbol:star",
+            "color": "neutral",
+            "pinned": true,
+            "items": []
+           }
+          ],
+          "tabs": [
+           {
+            "type": "group",
+            "id": "g-1",
+            "name": "Work",
+            "label": "Work",
+            "icon": "\ud83d\ude80",
+            "color": "blue",
+            "collapsed": false,
+            "pinned": false,
+            "parent": null,
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-2",
+              "url": "https://b.example/?q=\u0085",
+              "title": "B\u001b[31m red",
+              "pin": null,
+              "active": false,
+              "muted": true,
+              "asleep": false,
+              "pid": 777,
+              "cpu": 87.35,
+              "memory": 412000000
+             },
+             {
+              "type": "group",
+              "id": "g-2",
+              "name": "",
+              "label": "Docs \"quoted\"",
+              "icon": null,
+              "color": "neutral",
+              "collapsed": true,
+              "pinned": false,
+              "parent": "g-1",
+              "items": [
+               {
+                "type": "tab",
+                "id": "tab-3",
+                "url": "https://c.example/",
+                "title": "C\ud800",
+                "pin": null,
+                "active": false,
+                "muted": false,
+                "asleep": false,
+                "pid": 777,
+                "cpu": 87.35,
+                "memory": 412000000
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "folder",
+            "id": "f-1",
+            "name": "Later",
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-4",
+              "url": "about:blank",
+              "title": "",
+              "pin": "row",
+              "active": false,
+              "muted": false,
+              "asleep": true,
+              "pid": null,
+              "cpu": null,
+              "memory": null
+             }
+            ]
+           },
+           {
+            "type": "tab",
+            "id": "tab-1",
+            "url": "https://a.example/",
+            "title": "A \u65e5\u672c",
+            "pin": null,
+            "active": true,
+            "muted": false,
+            "asleep": false,
+            "pid": 501,
+            "cpu": 2.5,
+            "memory": 1500000.0
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "id": 2,
+        "kind": "popup",
+        "focused": false,
+        "spaces": [
+         {
+          "profile": "p-2",
+          "profileName": "",
+          "shown": false,
+          "topApps": [],
+          "pinned": null,
+          "tabs": [
+           {
+            "type": "tab",
+            "id": "tab-7",
+            "url": "https://d.example/",
+            "title": null,
+            "active": true,
+            "pid": true,
+            "cpu": 0,
+            "memory": 0
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "window w-1  normal, focused\n  Personal (p-1)  shown\n    Top Apps\n        tab-9  Mail  https://mail.example/  (asleep, pinned tile)\n    Pinned\n        group g-0  \"Pinned \u00e9\"  symbol:star pinned\n    Tabs\n        group g-1  \"Work\"  \ud83d\ude80 blue\n            tab-2  B\\u001b[31m red  https://b.example/?q=\\u0085  (muted)\n            group g-2  \"Docs \\\"quoted\\\"\"  collapsed\n                tab-3  C\ufffd  https://c.example/\n        folder f-1  \"Later\"\n            tab-4    about:blank  (asleep, pinned row)\n      * tab-1  A \u65e5\u672c  https://a.example/\nwindow 2  popup\n  p-2 (p-2)\n    Tabs\n      * tab-7    https://d.example/\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "workspace",
+      "params": {}
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "tabs--tabs-json",
+  "command": "tabs",
+  "argv": [
+   "tabs",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "workspace": {
+     "result": {
+      "profiles": [
+       {
+        "id": "p-1",
+        "name": "Personal"
+       }
+      ],
+      "windows": [
+       {
+        "id": "w-1",
+        "kind": "normal",
+        "focused": true,
+        "profile": "p-1",
+        "spaces": [
+         {
+          "profile": "p-1",
+          "profileName": "Personal",
+          "shown": true,
+          "topApps": [
+           {
+            "type": "tab",
+            "id": "tab-9",
+            "url": "https://mail.example/",
+            "title": "Mail",
+            "pin": "tile",
+            "active": false,
+            "muted": false,
+            "asleep": true,
+            "pid": 501,
+            "cpu": 0.25,
+            "memory": 90500000
+           }
+          ],
+          "pinned": [
+           {
+            "type": "group",
+            "id": "g-0",
+            "label": "Pinned \u00e9",
+            "icon": "symbol:star",
+            "color": "neutral",
+            "pinned": true,
+            "items": []
+           }
+          ],
+          "tabs": [
+           {
+            "type": "group",
+            "id": "g-1",
+            "name": "Work",
+            "label": "Work",
+            "icon": "\ud83d\ude80",
+            "color": "blue",
+            "collapsed": false,
+            "pinned": false,
+            "parent": null,
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-2",
+              "url": "https://b.example/?q=\u0085",
+              "title": "B\u001b[31m red",
+              "pin": null,
+              "active": false,
+              "muted": true,
+              "asleep": false,
+              "pid": 777,
+              "cpu": 87.35,
+              "memory": 412000000
+             },
+             {
+              "type": "group",
+              "id": "g-2",
+              "name": "",
+              "label": "Docs \"quoted\"",
+              "icon": null,
+              "color": "neutral",
+              "collapsed": true,
+              "pinned": false,
+              "parent": "g-1",
+              "items": [
+               {
+                "type": "tab",
+                "id": "tab-3",
+                "url": "https://c.example/",
+                "title": "C\ud800",
+                "pin": null,
+                "active": false,
+                "muted": false,
+                "asleep": false,
+                "pid": 777,
+                "cpu": 87.35,
+                "memory": 412000000
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "folder",
+            "id": "f-1",
+            "name": "Later",
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-4",
+              "url": "about:blank",
+              "title": "",
+              "pin": "row",
+              "active": false,
+              "muted": false,
+              "asleep": true,
+              "pid": null,
+              "cpu": null,
+              "memory": null
+             }
+            ]
+           },
+           {
+            "type": "tab",
+            "id": "tab-1",
+            "url": "https://a.example/",
+            "title": "A \u65e5\u672c",
+            "pin": null,
+            "active": true,
+            "muted": false,
+            "asleep": false,
+            "pid": 501,
+            "cpu": 2.5,
+            "memory": 1500000.0
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "id": 2,
+        "kind": "popup",
+        "focused": false,
+        "spaces": [
+         {
+          "profile": "p-2",
+          "profileName": "",
+          "shown": false,
+          "topApps": [],
+          "pinned": null,
+          "tabs": [
+           {
+            "type": "tab",
+            "id": "tab-7",
+            "url": "https://d.example/",
+            "title": null,
+            "active": true,
+            "pid": true,
+            "cpu": 0,
+            "memory": 0
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "{\n  \"profiles\": [\n    {\n      \"id\": \"p-1\",\n      \"name\": \"Personal\"\n    }\n  ],\n  \"windows\": [\n    {\n      \"id\": \"w-1\",\n      \"kind\": \"normal\",\n      \"focused\": true,\n      \"profile\": \"p-1\",\n      \"spaces\": [\n        {\n          \"profile\": \"p-1\",\n          \"profileName\": \"Personal\",\n          \"shown\": true,\n          \"topApps\": [\n            {\n              \"type\": \"tab\",\n              \"id\": \"tab-9\",\n              \"url\": \"https://mail.example/\",\n              \"title\": \"Mail\",\n              \"pin\": \"tile\",\n              \"active\": false,\n              \"muted\": false,\n              \"asleep\": true,\n              \"pid\": 501,\n              \"cpu\": 0.25,\n              \"memory\": 90500000\n            }\n          ],\n          \"pinned\": [\n            {\n              \"type\": \"group\",\n              \"id\": \"g-0\",\n              \"label\": \"Pinned \u00e9\",\n              \"icon\": \"symbol:star\",\n              \"color\": \"neutral\",\n              \"pinned\": true,\n              \"items\": []\n            }\n          ],\n          \"tabs\": [\n            {\n              \"type\": \"group\",\n              \"id\": \"g-1\",\n              \"name\": \"Work\",\n              \"label\": \"Work\",\n              \"icon\": \"\ud83d\ude80\",\n              \"color\": \"blue\",\n              \"collapsed\": false,\n              \"pinned\": false,\n              \"parent\": null,\n              \"items\": [\n                {\n                  \"type\": \"tab\",\n                  \"id\": \"tab-2\",\n                  \"url\": \"https://b.example/?q=\\u0085\",\n                  \"title\": \"B\\u001b[31m red\",\n                  \"pin\": null,\n                  \"active\": false,\n                  \"muted\": true,\n                  \"asleep\": false,\n                  \"pid\": 777,\n                  \"cpu\": 87.35,\n                  \"memory\": 412000000\n                },\n                {\n                  \"type\": \"group\",\n                  \"id\": \"g-2\",\n                  \"name\": \"\",\n                  \"label\": \"Docs \\\"quoted\\\"\",\n                  \"icon\": null,\n                  \"color\": \"neutral\",\n                  \"collapsed\": true,\n                  \"pinned\": false,\n                  \"parent\": \"g-1\",\n                  \"items\": [\n                    {\n                      \"type\": \"tab\",\n                      \"id\": \"tab-3\",\n                      \"url\": \"https://c.example/\",\n                      \"title\": \"C\ufffd\",\n                      \"pin\": null,\n                      \"active\": false,\n                      \"muted\": false,\n                      \"asleep\": false,\n                      \"pid\": 777,\n                      \"cpu\": 87.35,\n                      \"memory\": 412000000\n                    }\n                  ]\n                }\n              ]\n            },\n            {\n              \"type\": \"folder\",\n              \"id\": \"f-1\",\n              \"name\": \"Later\",\n              \"items\": [\n                {\n                  \"type\": \"tab\",\n                  \"id\": \"tab-4\",\n                  \"url\": \"about:blank\",\n                  \"title\": \"\",\n                  \"pin\": \"row\",\n                  \"active\": false,\n                  \"muted\": false,\n                  \"asleep\": true,\n                  \"pid\": null,\n                  \"cpu\": null,\n                  \"memory\": null\n                }\n              ]\n            },\n            {\n              \"type\": \"tab\",\n              \"id\": \"tab-1\",\n              \"url\": \"https://a.example/\",\n              \"title\": \"A \u65e5\u672c\",\n              \"pin\": null,\n              \"active\": true,\n              \"muted\": false,\n              \"asleep\": false,\n              \"pid\": 501,\n              \"cpu\": 2.5,\n              \"memory\": 1500000.0\n            }\n          ]\n        }\n      ]\n    },\n    {\n      \"id\": 2,\n      \"kind\": \"popup\",\n      \"focused\": false,\n      \"spaces\": [\n        {\n          \"profile\": \"p-2\",\n          \"profileName\": \"\",\n          \"shown\": false,\n          \"topApps\": [],\n          \"pinned\": null,\n          \"tabs\": [\n            {\n              \"type\": \"tab\",\n              \"id\": \"tab-7\",\n              \"url\": \"https://d.example/\",\n              \"title\": null,\n              \"active\": true,\n              \"pid\": true,\n              \"cpu\": 0,\n              \"memory\": 0\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "workspace",
+      "params": {}
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "tabs--tabs-flat",
+  "command": "tabs",
+  "argv": [
+   "tabs",
+   "--flat"
+  ],
+  "control": {
+   "replies": {
+    "workspace": {
+     "result": {
+      "profiles": [
+       {
+        "id": "p-1",
+        "name": "Personal"
+       }
+      ],
+      "windows": [
+       {
+        "id": "w-1",
+        "kind": "normal",
+        "focused": true,
+        "profile": "p-1",
+        "spaces": [
+         {
+          "profile": "p-1",
+          "profileName": "Personal",
+          "shown": true,
+          "topApps": [
+           {
+            "type": "tab",
+            "id": "tab-9",
+            "url": "https://mail.example/",
+            "title": "Mail",
+            "pin": "tile",
+            "active": false,
+            "muted": false,
+            "asleep": true,
+            "pid": 501,
+            "cpu": 0.25,
+            "memory": 90500000
+           }
+          ],
+          "pinned": [
+           {
+            "type": "group",
+            "id": "g-0",
+            "label": "Pinned \u00e9",
+            "icon": "symbol:star",
+            "color": "neutral",
+            "pinned": true,
+            "items": []
+           }
+          ],
+          "tabs": [
+           {
+            "type": "group",
+            "id": "g-1",
+            "name": "Work",
+            "label": "Work",
+            "icon": "\ud83d\ude80",
+            "color": "blue",
+            "collapsed": false,
+            "pinned": false,
+            "parent": null,
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-2",
+              "url": "https://b.example/?q=\u0085",
+              "title": "B\u001b[31m red",
+              "pin": null,
+              "active": false,
+              "muted": true,
+              "asleep": false,
+              "pid": 777,
+              "cpu": 87.35,
+              "memory": 412000000
+             },
+             {
+              "type": "group",
+              "id": "g-2",
+              "name": "",
+              "label": "Docs \"quoted\"",
+              "icon": null,
+              "color": "neutral",
+              "collapsed": true,
+              "pinned": false,
+              "parent": "g-1",
+              "items": [
+               {
+                "type": "tab",
+                "id": "tab-3",
+                "url": "https://c.example/",
+                "title": "C\ud800",
+                "pin": null,
+                "active": false,
+                "muted": false,
+                "asleep": false,
+                "pid": 777,
+                "cpu": 87.35,
+                "memory": 412000000
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "folder",
+            "id": "f-1",
+            "name": "Later",
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-4",
+              "url": "about:blank",
+              "title": "",
+              "pin": "row",
+              "active": false,
+              "muted": false,
+              "asleep": true,
+              "pid": null,
+              "cpu": null,
+              "memory": null
+             }
+            ]
+           },
+           {
+            "type": "tab",
+            "id": "tab-1",
+            "url": "https://a.example/",
+            "title": "A \u65e5\u672c",
+            "pin": null,
+            "active": true,
+            "muted": false,
+            "asleep": false,
+            "pid": 501,
+            "cpu": 2.5,
+            "memory": 1500000.0
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "id": 2,
+        "kind": "popup",
+        "focused": false,
+        "spaces": [
+         {
+          "profile": "p-2",
+          "profileName": "",
+          "shown": false,
+          "topApps": [],
+          "pinned": null,
+          "tabs": [
+           {
+            "type": "tab",
+            "id": "tab-7",
+            "url": "https://d.example/",
+            "title": null,
+            "active": true,
+            "pid": true,
+            "cpu": 0,
+            "memory": 0
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "  w-1  p-1  tab-9  Mail  https://mail.example/  (asleep, pinned tile)\n  w-1  p-1  tab-2  B\\u001b[31m red  https://b.example/?q=\\u0085  (muted)\n  w-1  p-1  tab-3  C\ufffd  https://c.example/\n  w-1  p-1  tab-4    about:blank  (asleep, pinned row)\n* w-1  p-1  tab-1  A \u65e5\u672c  https://a.example/\n* 2  p-2  tab-7    https://d.example/\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "workspace",
+      "params": {}
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--flat",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--flat",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "tabs--tabs-flat-json",
+  "command": "tabs",
+  "argv": [
+   "tabs",
+   "--flat",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "workspace": {
+     "result": {
+      "profiles": [
+       {
+        "id": "p-1",
+        "name": "Personal"
+       }
+      ],
+      "windows": [
+       {
+        "id": "w-1",
+        "kind": "normal",
+        "focused": true,
+        "profile": "p-1",
+        "spaces": [
+         {
+          "profile": "p-1",
+          "profileName": "Personal",
+          "shown": true,
+          "topApps": [
+           {
+            "type": "tab",
+            "id": "tab-9",
+            "url": "https://mail.example/",
+            "title": "Mail",
+            "pin": "tile",
+            "active": false,
+            "muted": false,
+            "asleep": true,
+            "pid": 501,
+            "cpu": 0.25,
+            "memory": 90500000
+           }
+          ],
+          "pinned": [
+           {
+            "type": "group",
+            "id": "g-0",
+            "label": "Pinned \u00e9",
+            "icon": "symbol:star",
+            "color": "neutral",
+            "pinned": true,
+            "items": []
+           }
+          ],
+          "tabs": [
+           {
+            "type": "group",
+            "id": "g-1",
+            "name": "Work",
+            "label": "Work",
+            "icon": "\ud83d\ude80",
+            "color": "blue",
+            "collapsed": false,
+            "pinned": false,
+            "parent": null,
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-2",
+              "url": "https://b.example/?q=\u0085",
+              "title": "B\u001b[31m red",
+              "pin": null,
+              "active": false,
+              "muted": true,
+              "asleep": false,
+              "pid": 777,
+              "cpu": 87.35,
+              "memory": 412000000
+             },
+             {
+              "type": "group",
+              "id": "g-2",
+              "name": "",
+              "label": "Docs \"quoted\"",
+              "icon": null,
+              "color": "neutral",
+              "collapsed": true,
+              "pinned": false,
+              "parent": "g-1",
+              "items": [
+               {
+                "type": "tab",
+                "id": "tab-3",
+                "url": "https://c.example/",
+                "title": "C\ud800",
+                "pin": null,
+                "active": false,
+                "muted": false,
+                "asleep": false,
+                "pid": 777,
+                "cpu": 87.35,
+                "memory": 412000000
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "folder",
+            "id": "f-1",
+            "name": "Later",
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-4",
+              "url": "about:blank",
+              "title": "",
+              "pin": "row",
+              "active": false,
+              "muted": false,
+              "asleep": true,
+              "pid": null,
+              "cpu": null,
+              "memory": null
+             }
+            ]
+           },
+           {
+            "type": "tab",
+            "id": "tab-1",
+            "url": "https://a.example/",
+            "title": "A \u65e5\u672c",
+            "pin": null,
+            "active": true,
+            "muted": false,
+            "asleep": false,
+            "pid": 501,
+            "cpu": 2.5,
+            "memory": 1500000.0
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "id": 2,
+        "kind": "popup",
+        "focused": false,
+        "spaces": [
+         {
+          "profile": "p-2",
+          "profileName": "",
+          "shown": false,
+          "topApps": [],
+          "pinned": null,
+          "tabs": [
+           {
+            "type": "tab",
+            "id": "tab-7",
+            "url": "https://d.example/",
+            "title": null,
+            "active": true,
+            "pid": true,
+            "cpu": 0,
+            "memory": 0
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "[\n  {\n    \"type\": \"tab\",\n    \"id\": \"tab-9\",\n    \"url\": \"https://mail.example/\",\n    \"title\": \"Mail\",\n    \"pin\": \"tile\",\n    \"active\": false,\n    \"muted\": false,\n    \"asleep\": true,\n    \"pid\": 501,\n    \"cpu\": 0.25,\n    \"memory\": 90500000,\n    \"window\": \"w-1\",\n    \"profile\": \"p-1\",\n    \"section\": \"Top Apps\"\n  },\n  {\n    \"type\": \"tab\",\n    \"id\": \"tab-2\",\n    \"url\": \"https://b.example/?q=\\u0085\",\n    \"title\": \"B\\u001b[31m red\",\n    \"pin\": null,\n    \"active\": false,\n    \"muted\": true,\n    \"asleep\": false,\n    \"pid\": 777,\n    \"cpu\": 87.35,\n    \"memory\": 412000000,\n    \"window\": \"w-1\",\n    \"profile\": \"p-1\",\n    \"section\": \"Tabs\"\n  },\n  {\n    \"type\": \"tab\",\n    \"id\": \"tab-3\",\n    \"url\": \"https://c.example/\",\n    \"title\": \"C\ufffd\",\n    \"pin\": null,\n    \"active\": false,\n    \"muted\": false,\n    \"asleep\": false,\n    \"pid\": 777,\n    \"cpu\": 87.35,\n    \"memory\": 412000000,\n    \"window\": \"w-1\",\n    \"profile\": \"p-1\",\n    \"section\": \"Tabs\"\n  },\n  {\n    \"type\": \"tab\",\n    \"id\": \"tab-4\",\n    \"url\": \"about:blank\",\n    \"title\": \"\",\n    \"pin\": \"row\",\n    \"active\": false,\n    \"muted\": false,\n    \"asleep\": true,\n    \"pid\": null,\n    \"cpu\": null,\n    \"memory\": null,\n    \"window\": \"w-1\",\n    \"profile\": \"p-1\",\n    \"section\": \"Tabs\"\n  },\n  {\n    \"type\": \"tab\",\n    \"id\": \"tab-1\",\n    \"url\": \"https://a.example/\",\n    \"title\": \"A \u65e5\u672c\",\n    \"pin\": null,\n    \"active\": true,\n    \"muted\": false,\n    \"asleep\": false,\n    \"pid\": 501,\n    \"cpu\": 2.5,\n    \"memory\": 1500000.0,\n    \"window\": \"w-1\",\n    \"profile\": \"p-1\",\n    \"section\": \"Tabs\"\n  },\n  {\n    \"type\": \"tab\",\n    \"id\": \"tab-7\",\n    \"url\": \"https://d.example/\",\n    \"title\": null,\n    \"active\": true,\n    \"pid\": true,\n    \"cpu\": 0,\n    \"memory\": 0,\n    \"window\": 2,\n    \"profile\": \"p-2\",\n    \"section\": \"Tabs\"\n  }\n]\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "workspace",
+      "params": {}
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--flat,--json",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--flat,--json",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "tabs--tabs-usage",
+  "command": "tabs",
+  "argv": [
+   "tabs",
+   "--usage"
+  ],
+  "control": {
+   "replies": {
+    "workspace": {
+     "result": {
+      "profiles": [
+       {
+        "id": "p-1",
+        "name": "Personal"
+       }
+      ],
+      "windows": [
+       {
+        "id": "w-1",
+        "kind": "normal",
+        "focused": true,
+        "profile": "p-1",
+        "spaces": [
+         {
+          "profile": "p-1",
+          "profileName": "Personal",
+          "shown": true,
+          "topApps": [
+           {
+            "type": "tab",
+            "id": "tab-9",
+            "url": "https://mail.example/",
+            "title": "Mail",
+            "pin": "tile",
+            "active": false,
+            "muted": false,
+            "asleep": true,
+            "pid": 501,
+            "cpu": 0.25,
+            "memory": 90500000
+           }
+          ],
+          "pinned": [
+           {
+            "type": "group",
+            "id": "g-0",
+            "label": "Pinned \u00e9",
+            "icon": "symbol:star",
+            "color": "neutral",
+            "pinned": true,
+            "items": []
+           }
+          ],
+          "tabs": [
+           {
+            "type": "group",
+            "id": "g-1",
+            "name": "Work",
+            "label": "Work",
+            "icon": "\ud83d\ude80",
+            "color": "blue",
+            "collapsed": false,
+            "pinned": false,
+            "parent": null,
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-2",
+              "url": "https://b.example/?q=\u0085",
+              "title": "B\u001b[31m red",
+              "pin": null,
+              "active": false,
+              "muted": true,
+              "asleep": false,
+              "pid": 777,
+              "cpu": 87.35,
+              "memory": 412000000
+             },
+             {
+              "type": "group",
+              "id": "g-2",
+              "name": "",
+              "label": "Docs \"quoted\"",
+              "icon": null,
+              "color": "neutral",
+              "collapsed": true,
+              "pinned": false,
+              "parent": "g-1",
+              "items": [
+               {
+                "type": "tab",
+                "id": "tab-3",
+                "url": "https://c.example/",
+                "title": "C\ud800",
+                "pin": null,
+                "active": false,
+                "muted": false,
+                "asleep": false,
+                "pid": 777,
+                "cpu": 87.35,
+                "memory": 412000000
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "folder",
+            "id": "f-1",
+            "name": "Later",
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-4",
+              "url": "about:blank",
+              "title": "",
+              "pin": "row",
+              "active": false,
+              "muted": false,
+              "asleep": true,
+              "pid": null,
+              "cpu": null,
+              "memory": null
+             }
+            ]
+           },
+           {
+            "type": "tab",
+            "id": "tab-1",
+            "url": "https://a.example/",
+            "title": "A \u65e5\u672c",
+            "pin": null,
+            "active": true,
+            "muted": false,
+            "asleep": false,
+            "pid": 501,
+            "cpu": 2.5,
+            "memory": 1500000.0
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "id": 2,
+        "kind": "popup",
+        "focused": false,
+        "spaces": [
+         {
+          "profile": "p-2",
+          "profileName": "",
+          "shown": false,
+          "topApps": [],
+          "pinned": null,
+          "tabs": [
+           {
+            "type": "tab",
+            "id": "tab-7",
+            "url": "https://d.example/",
+            "title": null,
+            "active": true,
+            "pid": true,
+            "cpu": 0,
+            "memory": 0
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "    PID    CPU%    MEMORY    TAB\n    777    87.3    412 MB    tab-2  B\\u001b[31m red  https://b.example/?q=\\u0085  (muted)\n    777    87.3    412 MB    tab-3  C\ufffd  https://c.example/\n    501     2.5      2 MB  * tab-1  A \u65e5\u672c  https://a.example/\n    501     0.2     90 MB    tab-9  Mail  https://mail.example/  (asleep, pinned tile)\n      1     0.0      0 MB  * tab-7    https://d.example/\n      -       -         -    tab-4    about:blank  (asleep, pinned row)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "workspace",
+      "params": {
+       "usage": true
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--usage",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--usage",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "tabs--tabs-usage-json",
+  "command": "tabs",
+  "argv": [
+   "tabs",
+   "--usage",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "workspace": {
+     "result": {
+      "profiles": [
+       {
+        "id": "p-1",
+        "name": "Personal"
+       }
+      ],
+      "windows": [
+       {
+        "id": "w-1",
+        "kind": "normal",
+        "focused": true,
+        "profile": "p-1",
+        "spaces": [
+         {
+          "profile": "p-1",
+          "profileName": "Personal",
+          "shown": true,
+          "topApps": [
+           {
+            "type": "tab",
+            "id": "tab-9",
+            "url": "https://mail.example/",
+            "title": "Mail",
+            "pin": "tile",
+            "active": false,
+            "muted": false,
+            "asleep": true,
+            "pid": 501,
+            "cpu": 0.25,
+            "memory": 90500000
+           }
+          ],
+          "pinned": [
+           {
+            "type": "group",
+            "id": "g-0",
+            "label": "Pinned \u00e9",
+            "icon": "symbol:star",
+            "color": "neutral",
+            "pinned": true,
+            "items": []
+           }
+          ],
+          "tabs": [
+           {
+            "type": "group",
+            "id": "g-1",
+            "name": "Work",
+            "label": "Work",
+            "icon": "\ud83d\ude80",
+            "color": "blue",
+            "collapsed": false,
+            "pinned": false,
+            "parent": null,
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-2",
+              "url": "https://b.example/?q=\u0085",
+              "title": "B\u001b[31m red",
+              "pin": null,
+              "active": false,
+              "muted": true,
+              "asleep": false,
+              "pid": 777,
+              "cpu": 87.35,
+              "memory": 412000000
+             },
+             {
+              "type": "group",
+              "id": "g-2",
+              "name": "",
+              "label": "Docs \"quoted\"",
+              "icon": null,
+              "color": "neutral",
+              "collapsed": true,
+              "pinned": false,
+              "parent": "g-1",
+              "items": [
+               {
+                "type": "tab",
+                "id": "tab-3",
+                "url": "https://c.example/",
+                "title": "C\ud800",
+                "pin": null,
+                "active": false,
+                "muted": false,
+                "asleep": false,
+                "pid": 777,
+                "cpu": 87.35,
+                "memory": 412000000
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "folder",
+            "id": "f-1",
+            "name": "Later",
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-4",
+              "url": "about:blank",
+              "title": "",
+              "pin": "row",
+              "active": false,
+              "muted": false,
+              "asleep": true,
+              "pid": null,
+              "cpu": null,
+              "memory": null
+             }
+            ]
+           },
+           {
+            "type": "tab",
+            "id": "tab-1",
+            "url": "https://a.example/",
+            "title": "A \u65e5\u672c",
+            "pin": null,
+            "active": true,
+            "muted": false,
+            "asleep": false,
+            "pid": 501,
+            "cpu": 2.5,
+            "memory": 1500000.0
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "id": 2,
+        "kind": "popup",
+        "focused": false,
+        "spaces": [
+         {
+          "profile": "p-2",
+          "profileName": "",
+          "shown": false,
+          "topApps": [],
+          "pinned": null,
+          "tabs": [
+           {
+            "type": "tab",
+            "id": "tab-7",
+            "url": "https://d.example/",
+            "title": null,
+            "active": true,
+            "pid": true,
+            "cpu": 0,
+            "memory": 0
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "{\n  \"profiles\": [\n    {\n      \"id\": \"p-1\",\n      \"name\": \"Personal\"\n    }\n  ],\n  \"windows\": [\n    {\n      \"id\": \"w-1\",\n      \"kind\": \"normal\",\n      \"focused\": true,\n      \"profile\": \"p-1\",\n      \"spaces\": [\n        {\n          \"profile\": \"p-1\",\n          \"profileName\": \"Personal\",\n          \"shown\": true,\n          \"topApps\": [\n            {\n              \"type\": \"tab\",\n              \"id\": \"tab-9\",\n              \"url\": \"https://mail.example/\",\n              \"title\": \"Mail\",\n              \"pin\": \"tile\",\n              \"active\": false,\n              \"muted\": false,\n              \"asleep\": true,\n              \"pid\": 501,\n              \"cpu\": 0.25,\n              \"memory\": 90500000\n            }\n          ],\n          \"pinned\": [\n            {\n              \"type\": \"group\",\n              \"id\": \"g-0\",\n              \"label\": \"Pinned \u00e9\",\n              \"icon\": \"symbol:star\",\n              \"color\": \"neutral\",\n              \"pinned\": true,\n              \"items\": []\n            }\n          ],\n          \"tabs\": [\n            {\n              \"type\": \"group\",\n              \"id\": \"g-1\",\n              \"name\": \"Work\",\n              \"label\": \"Work\",\n              \"icon\": \"\ud83d\ude80\",\n              \"color\": \"blue\",\n              \"collapsed\": false,\n              \"pinned\": false,\n              \"parent\": null,\n              \"items\": [\n                {\n                  \"type\": \"tab\",\n                  \"id\": \"tab-2\",\n                  \"url\": \"https://b.example/?q=\\u0085\",\n                  \"title\": \"B\\u001b[31m red\",\n                  \"pin\": null,\n                  \"active\": false,\n                  \"muted\": true,\n                  \"asleep\": false,\n                  \"pid\": 777,\n                  \"cpu\": 87.35,\n                  \"memory\": 412000000\n                },\n                {\n                  \"type\": \"group\",\n                  \"id\": \"g-2\",\n                  \"name\": \"\",\n                  \"label\": \"Docs \\\"quoted\\\"\",\n                  \"icon\": null,\n                  \"color\": \"neutral\",\n                  \"collapsed\": true,\n                  \"pinned\": false,\n                  \"parent\": \"g-1\",\n                  \"items\": [\n                    {\n                      \"type\": \"tab\",\n                      \"id\": \"tab-3\",\n                      \"url\": \"https://c.example/\",\n                      \"title\": \"C\ufffd\",\n                      \"pin\": null,\n                      \"active\": false,\n                      \"muted\": false,\n                      \"asleep\": false,\n                      \"pid\": 777,\n                      \"cpu\": 87.35,\n                      \"memory\": 412000000\n                    }\n                  ]\n                }\n              ]\n            },\n            {\n              \"type\": \"folder\",\n              \"id\": \"f-1\",\n              \"name\": \"Later\",\n              \"items\": [\n                {\n                  \"type\": \"tab\",\n                  \"id\": \"tab-4\",\n                  \"url\": \"about:blank\",\n                  \"title\": \"\",\n                  \"pin\": \"row\",\n                  \"active\": false,\n                  \"muted\": false,\n                  \"asleep\": true,\n                  \"pid\": null,\n                  \"cpu\": null,\n                  \"memory\": null\n                }\n              ]\n            },\n            {\n              \"type\": \"tab\",\n              \"id\": \"tab-1\",\n              \"url\": \"https://a.example/\",\n              \"title\": \"A \u65e5\u672c\",\n              \"pin\": null,\n              \"active\": true,\n              \"muted\": false,\n              \"asleep\": false,\n              \"pid\": 501,\n              \"cpu\": 2.5,\n              \"memory\": 1500000.0\n            }\n          ]\n        }\n      ]\n    },\n    {\n      \"id\": 2,\n      \"kind\": \"popup\",\n      \"focused\": false,\n      \"spaces\": [\n        {\n          \"profile\": \"p-2\",\n          \"profileName\": \"\",\n          \"shown\": false,\n          \"topApps\": [],\n          \"pinned\": null,\n          \"tabs\": [\n            {\n              \"type\": \"tab\",\n              \"id\": \"tab-7\",\n              \"url\": \"https://d.example/\",\n              \"title\": null,\n              \"active\": true,\n              \"pid\": true,\n              \"cpu\": 0,\n              \"memory\": 0\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "workspace",
+      "params": {
+       "usage": true
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json,--usage",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json,--usage",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "tabs--tabs-pid-777",
+  "command": "tabs",
+  "argv": [
+   "tabs",
+   "--pid",
+   "777"
+  ],
+  "control": {
+   "replies": {
+    "workspace": {
+     "result": {
+      "profiles": [
+       {
+        "id": "p-1",
+        "name": "Personal"
+       }
+      ],
+      "windows": [
+       {
+        "id": "w-1",
+        "kind": "normal",
+        "focused": true,
+        "profile": "p-1",
+        "spaces": [
+         {
+          "profile": "p-1",
+          "profileName": "Personal",
+          "shown": true,
+          "topApps": [
+           {
+            "type": "tab",
+            "id": "tab-9",
+            "url": "https://mail.example/",
+            "title": "Mail",
+            "pin": "tile",
+            "active": false,
+            "muted": false,
+            "asleep": true,
+            "pid": 501,
+            "cpu": 0.25,
+            "memory": 90500000
+           }
+          ],
+          "pinned": [
+           {
+            "type": "group",
+            "id": "g-0",
+            "label": "Pinned \u00e9",
+            "icon": "symbol:star",
+            "color": "neutral",
+            "pinned": true,
+            "items": []
+           }
+          ],
+          "tabs": [
+           {
+            "type": "group",
+            "id": "g-1",
+            "name": "Work",
+            "label": "Work",
+            "icon": "\ud83d\ude80",
+            "color": "blue",
+            "collapsed": false,
+            "pinned": false,
+            "parent": null,
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-2",
+              "url": "https://b.example/?q=\u0085",
+              "title": "B\u001b[31m red",
+              "pin": null,
+              "active": false,
+              "muted": true,
+              "asleep": false,
+              "pid": 777,
+              "cpu": 87.35,
+              "memory": 412000000
+             },
+             {
+              "type": "group",
+              "id": "g-2",
+              "name": "",
+              "label": "Docs \"quoted\"",
+              "icon": null,
+              "color": "neutral",
+              "collapsed": true,
+              "pinned": false,
+              "parent": "g-1",
+              "items": [
+               {
+                "type": "tab",
+                "id": "tab-3",
+                "url": "https://c.example/",
+                "title": "C\ud800",
+                "pin": null,
+                "active": false,
+                "muted": false,
+                "asleep": false,
+                "pid": 777,
+                "cpu": 87.35,
+                "memory": 412000000
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "folder",
+            "id": "f-1",
+            "name": "Later",
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-4",
+              "url": "about:blank",
+              "title": "",
+              "pin": "row",
+              "active": false,
+              "muted": false,
+              "asleep": true,
+              "pid": null,
+              "cpu": null,
+              "memory": null
+             }
+            ]
+           },
+           {
+            "type": "tab",
+            "id": "tab-1",
+            "url": "https://a.example/",
+            "title": "A \u65e5\u672c",
+            "pin": null,
+            "active": true,
+            "muted": false,
+            "asleep": false,
+            "pid": 501,
+            "cpu": 2.5,
+            "memory": 1500000.0
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "id": 2,
+        "kind": "popup",
+        "focused": false,
+        "spaces": [
+         {
+          "profile": "p-2",
+          "profileName": "",
+          "shown": false,
+          "topApps": [],
+          "pinned": null,
+          "tabs": [
+           {
+            "type": "tab",
+            "id": "tab-7",
+            "url": "https://d.example/",
+            "title": null,
+            "active": true,
+            "pid": true,
+            "cpu": 0,
+            "memory": 0
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "    PID    CPU%    MEMORY    TAB\n    777    87.3    412 MB    tab-2  B\\u001b[31m red  https://b.example/?q=\\u0085  (muted)\n    777    87.3    412 MB    tab-3  C\ufffd  https://c.example/\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "workspace",
+      "params": {
+       "usage": true
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--pid",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--pid",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "tabs--tabs-pid-501-json",
+  "command": "tabs",
+  "argv": [
+   "tabs",
+   "--pid=501",
+   "--json"
+  ],
+  "control": {
+   "replies": {
+    "workspace": {
+     "result": {
+      "profiles": [
+       {
+        "id": "p-1",
+        "name": "Personal"
+       }
+      ],
+      "windows": [
+       {
+        "id": "w-1",
+        "kind": "normal",
+        "focused": true,
+        "profile": "p-1",
+        "spaces": [
+         {
+          "profile": "p-1",
+          "profileName": "Personal",
+          "shown": true,
+          "topApps": [
+           {
+            "type": "tab",
+            "id": "tab-9",
+            "url": "https://mail.example/",
+            "title": "Mail",
+            "pin": "tile",
+            "active": false,
+            "muted": false,
+            "asleep": true,
+            "pid": 501,
+            "cpu": 0.25,
+            "memory": 90500000
+           }
+          ],
+          "pinned": [
+           {
+            "type": "group",
+            "id": "g-0",
+            "label": "Pinned \u00e9",
+            "icon": "symbol:star",
+            "color": "neutral",
+            "pinned": true,
+            "items": []
+           }
+          ],
+          "tabs": [
+           {
+            "type": "group",
+            "id": "g-1",
+            "name": "Work",
+            "label": "Work",
+            "icon": "\ud83d\ude80",
+            "color": "blue",
+            "collapsed": false,
+            "pinned": false,
+            "parent": null,
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-2",
+              "url": "https://b.example/?q=\u0085",
+              "title": "B\u001b[31m red",
+              "pin": null,
+              "active": false,
+              "muted": true,
+              "asleep": false,
+              "pid": 777,
+              "cpu": 87.35,
+              "memory": 412000000
+             },
+             {
+              "type": "group",
+              "id": "g-2",
+              "name": "",
+              "label": "Docs \"quoted\"",
+              "icon": null,
+              "color": "neutral",
+              "collapsed": true,
+              "pinned": false,
+              "parent": "g-1",
+              "items": [
+               {
+                "type": "tab",
+                "id": "tab-3",
+                "url": "https://c.example/",
+                "title": "C\ud800",
+                "pin": null,
+                "active": false,
+                "muted": false,
+                "asleep": false,
+                "pid": 777,
+                "cpu": 87.35,
+                "memory": 412000000
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "folder",
+            "id": "f-1",
+            "name": "Later",
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-4",
+              "url": "about:blank",
+              "title": "",
+              "pin": "row",
+              "active": false,
+              "muted": false,
+              "asleep": true,
+              "pid": null,
+              "cpu": null,
+              "memory": null
+             }
+            ]
+           },
+           {
+            "type": "tab",
+            "id": "tab-1",
+            "url": "https://a.example/",
+            "title": "A \u65e5\u672c",
+            "pin": null,
+            "active": true,
+            "muted": false,
+            "asleep": false,
+            "pid": 501,
+            "cpu": 2.5,
+            "memory": 1500000.0
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "id": 2,
+        "kind": "popup",
+        "focused": false,
+        "spaces": [
+         {
+          "profile": "p-2",
+          "profileName": "",
+          "shown": false,
+          "topApps": [],
+          "pinned": null,
+          "tabs": [
+           {
+            "type": "tab",
+            "id": "tab-7",
+            "url": "https://d.example/",
+            "title": null,
+            "active": true,
+            "pid": true,
+            "cpu": 0,
+            "memory": 0
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "[\n  {\n    \"type\": \"tab\",\n    \"id\": \"tab-1\",\n    \"url\": \"https://a.example/\",\n    \"title\": \"A \u65e5\u672c\",\n    \"pin\": null,\n    \"active\": true,\n    \"muted\": false,\n    \"asleep\": false,\n    \"pid\": 501,\n    \"cpu\": 2.5,\n    \"memory\": 1500000.0,\n    \"window\": \"w-1\",\n    \"profile\": \"p-1\",\n    \"section\": \"Tabs\"\n  },\n  {\n    \"type\": \"tab\",\n    \"id\": \"tab-9\",\n    \"url\": \"https://mail.example/\",\n    \"title\": \"Mail\",\n    \"pin\": \"tile\",\n    \"active\": false,\n    \"muted\": false,\n    \"asleep\": true,\n    \"pid\": 501,\n    \"cpu\": 0.25,\n    \"memory\": 90500000,\n    \"window\": \"w-1\",\n    \"profile\": \"p-1\",\n    \"section\": \"Top Apps\"\n  }\n]\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "workspace",
+      "params": {
+       "usage": true
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json,--pid",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json,--pid",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "tabs--tabs-pid-1",
+  "command": "tabs",
+  "argv": [
+   "tabs",
+   "--pid",
+   "1"
+  ],
+  "control": {
+   "replies": {
+    "workspace": {
+     "result": {
+      "profiles": [
+       {
+        "id": "p-1",
+        "name": "Personal"
+       }
+      ],
+      "windows": [
+       {
+        "id": "w-1",
+        "kind": "normal",
+        "focused": true,
+        "profile": "p-1",
+        "spaces": [
+         {
+          "profile": "p-1",
+          "profileName": "Personal",
+          "shown": true,
+          "topApps": [
+           {
+            "type": "tab",
+            "id": "tab-9",
+            "url": "https://mail.example/",
+            "title": "Mail",
+            "pin": "tile",
+            "active": false,
+            "muted": false,
+            "asleep": true,
+            "pid": 501,
+            "cpu": 0.25,
+            "memory": 90500000
+           }
+          ],
+          "pinned": [
+           {
+            "type": "group",
+            "id": "g-0",
+            "label": "Pinned \u00e9",
+            "icon": "symbol:star",
+            "color": "neutral",
+            "pinned": true,
+            "items": []
+           }
+          ],
+          "tabs": [
+           {
+            "type": "group",
+            "id": "g-1",
+            "name": "Work",
+            "label": "Work",
+            "icon": "\ud83d\ude80",
+            "color": "blue",
+            "collapsed": false,
+            "pinned": false,
+            "parent": null,
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-2",
+              "url": "https://b.example/?q=\u0085",
+              "title": "B\u001b[31m red",
+              "pin": null,
+              "active": false,
+              "muted": true,
+              "asleep": false,
+              "pid": 777,
+              "cpu": 87.35,
+              "memory": 412000000
+             },
+             {
+              "type": "group",
+              "id": "g-2",
+              "name": "",
+              "label": "Docs \"quoted\"",
+              "icon": null,
+              "color": "neutral",
+              "collapsed": true,
+              "pinned": false,
+              "parent": "g-1",
+              "items": [
+               {
+                "type": "tab",
+                "id": "tab-3",
+                "url": "https://c.example/",
+                "title": "C\ud800",
+                "pin": null,
+                "active": false,
+                "muted": false,
+                "asleep": false,
+                "pid": 777,
+                "cpu": 87.35,
+                "memory": 412000000
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "folder",
+            "id": "f-1",
+            "name": "Later",
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-4",
+              "url": "about:blank",
+              "title": "",
+              "pin": "row",
+              "active": false,
+              "muted": false,
+              "asleep": true,
+              "pid": null,
+              "cpu": null,
+              "memory": null
+             }
+            ]
+           },
+           {
+            "type": "tab",
+            "id": "tab-1",
+            "url": "https://a.example/",
+            "title": "A \u65e5\u672c",
+            "pin": null,
+            "active": true,
+            "muted": false,
+            "asleep": false,
+            "pid": 501,
+            "cpu": 2.5,
+            "memory": 1500000.0
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "id": 2,
+        "kind": "popup",
+        "focused": false,
+        "spaces": [
+         {
+          "profile": "p-2",
+          "profileName": "",
+          "shown": false,
+          "topApps": [],
+          "pinned": null,
+          "tabs": [
+           {
+            "type": "tab",
+            "id": "tab-7",
+            "url": "https://d.example/",
+            "title": null,
+            "active": true,
+            "pid": true,
+            "cpu": 0,
+            "memory": 0
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "    PID    CPU%    MEMORY    TAB\n      1     0.0      0 MB  * tab-7    https://d.example/\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "workspace",
+      "params": {
+       "usage": true
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--pid",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--pid",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "tabs--json-tabs-window-w-1-profile-p-1",
+  "command": "tabs",
+  "argv": [
+   "--json",
+   "tabs",
+   "--window",
+   "w-1",
+   "--profile=p-1"
+  ],
+  "control": {
+   "replies": {
+    "workspace": {
+     "result": {
+      "profiles": [
+       {
+        "id": "p-1",
+        "name": "Personal"
+       }
+      ],
+      "windows": [
+       {
+        "id": "w-1",
+        "kind": "normal",
+        "focused": true,
+        "profile": "p-1",
+        "spaces": [
+         {
+          "profile": "p-1",
+          "profileName": "Personal",
+          "shown": true,
+          "topApps": [
+           {
+            "type": "tab",
+            "id": "tab-9",
+            "url": "https://mail.example/",
+            "title": "Mail",
+            "pin": "tile",
+            "active": false,
+            "muted": false,
+            "asleep": true,
+            "pid": 501,
+            "cpu": 0.25,
+            "memory": 90500000
+           }
+          ],
+          "pinned": [
+           {
+            "type": "group",
+            "id": "g-0",
+            "label": "Pinned \u00e9",
+            "icon": "symbol:star",
+            "color": "neutral",
+            "pinned": true,
+            "items": []
+           }
+          ],
+          "tabs": [
+           {
+            "type": "group",
+            "id": "g-1",
+            "name": "Work",
+            "label": "Work",
+            "icon": "\ud83d\ude80",
+            "color": "blue",
+            "collapsed": false,
+            "pinned": false,
+            "parent": null,
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-2",
+              "url": "https://b.example/?q=\u0085",
+              "title": "B\u001b[31m red",
+              "pin": null,
+              "active": false,
+              "muted": true,
+              "asleep": false,
+              "pid": 777,
+              "cpu": 87.35,
+              "memory": 412000000
+             },
+             {
+              "type": "group",
+              "id": "g-2",
+              "name": "",
+              "label": "Docs \"quoted\"",
+              "icon": null,
+              "color": "neutral",
+              "collapsed": true,
+              "pinned": false,
+              "parent": "g-1",
+              "items": [
+               {
+                "type": "tab",
+                "id": "tab-3",
+                "url": "https://c.example/",
+                "title": "C\ud800",
+                "pin": null,
+                "active": false,
+                "muted": false,
+                "asleep": false,
+                "pid": 777,
+                "cpu": 87.35,
+                "memory": 412000000
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "folder",
+            "id": "f-1",
+            "name": "Later",
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-4",
+              "url": "about:blank",
+              "title": "",
+              "pin": "row",
+              "active": false,
+              "muted": false,
+              "asleep": true,
+              "pid": null,
+              "cpu": null,
+              "memory": null
+             }
+            ]
+           },
+           {
+            "type": "tab",
+            "id": "tab-1",
+            "url": "https://a.example/",
+            "title": "A \u65e5\u672c",
+            "pin": null,
+            "active": true,
+            "muted": false,
+            "asleep": false,
+            "pid": 501,
+            "cpu": 2.5,
+            "memory": 1500000.0
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "id": 2,
+        "kind": "popup",
+        "focused": false,
+        "spaces": [
+         {
+          "profile": "p-2",
+          "profileName": "",
+          "shown": false,
+          "topApps": [],
+          "pinned": null,
+          "tabs": [
+           {
+            "type": "tab",
+            "id": "tab-7",
+            "url": "https://d.example/",
+            "title": null,
+            "active": true,
+            "pid": true,
+            "cpu": 0,
+            "memory": 0
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "{\n  \"profiles\": [\n    {\n      \"id\": \"p-1\",\n      \"name\": \"Personal\"\n    }\n  ],\n  \"windows\": [\n    {\n      \"id\": \"w-1\",\n      \"kind\": \"normal\",\n      \"focused\": true,\n      \"profile\": \"p-1\",\n      \"spaces\": [\n        {\n          \"profile\": \"p-1\",\n          \"profileName\": \"Personal\",\n          \"shown\": true,\n          \"topApps\": [\n            {\n              \"type\": \"tab\",\n              \"id\": \"tab-9\",\n              \"url\": \"https://mail.example/\",\n              \"title\": \"Mail\",\n              \"pin\": \"tile\",\n              \"active\": false,\n              \"muted\": false,\n              \"asleep\": true,\n              \"pid\": 501,\n              \"cpu\": 0.25,\n              \"memory\": 90500000\n            }\n          ],\n          \"pinned\": [\n            {\n              \"type\": \"group\",\n              \"id\": \"g-0\",\n              \"label\": \"Pinned \u00e9\",\n              \"icon\": \"symbol:star\",\n              \"color\": \"neutral\",\n              \"pinned\": true,\n              \"items\": []\n            }\n          ],\n          \"tabs\": [\n            {\n              \"type\": \"group\",\n              \"id\": \"g-1\",\n              \"name\": \"Work\",\n              \"label\": \"Work\",\n              \"icon\": \"\ud83d\ude80\",\n              \"color\": \"blue\",\n              \"collapsed\": false,\n              \"pinned\": false,\n              \"parent\": null,\n              \"items\": [\n                {\n                  \"type\": \"tab\",\n                  \"id\": \"tab-2\",\n                  \"url\": \"https://b.example/?q=\\u0085\",\n                  \"title\": \"B\\u001b[31m red\",\n                  \"pin\": null,\n                  \"active\": false,\n                  \"muted\": true,\n                  \"asleep\": false,\n                  \"pid\": 777,\n                  \"cpu\": 87.35,\n                  \"memory\": 412000000\n                },\n                {\n                  \"type\": \"group\",\n                  \"id\": \"g-2\",\n                  \"name\": \"\",\n                  \"label\": \"Docs \\\"quoted\\\"\",\n                  \"icon\": null,\n                  \"color\": \"neutral\",\n                  \"collapsed\": true,\n                  \"pinned\": false,\n                  \"parent\": \"g-1\",\n                  \"items\": [\n                    {\n                      \"type\": \"tab\",\n                      \"id\": \"tab-3\",\n                      \"url\": \"https://c.example/\",\n                      \"title\": \"C\ufffd\",\n                      \"pin\": null,\n                      \"active\": false,\n                      \"muted\": false,\n                      \"asleep\": false,\n                      \"pid\": 777,\n                      \"cpu\": 87.35,\n                      \"memory\": 412000000\n                    }\n                  ]\n                }\n              ]\n            },\n            {\n              \"type\": \"folder\",\n              \"id\": \"f-1\",\n              \"name\": \"Later\",\n              \"items\": [\n                {\n                  \"type\": \"tab\",\n                  \"id\": \"tab-4\",\n                  \"url\": \"about:blank\",\n                  \"title\": \"\",\n                  \"pin\": \"row\",\n                  \"active\": false,\n                  \"muted\": false,\n                  \"asleep\": true,\n                  \"pid\": null,\n                  \"cpu\": null,\n                  \"memory\": null\n                }\n              ]\n            },\n            {\n              \"type\": \"tab\",\n              \"id\": \"tab-1\",\n              \"url\": \"https://a.example/\",\n              \"title\": \"A \u65e5\u672c\",\n              \"pin\": null,\n              \"active\": true,\n              \"muted\": false,\n              \"asleep\": false,\n              \"pid\": 501,\n              \"cpu\": 2.5,\n              \"memory\": 1500000.0\n            }\n          ]\n        }\n      ]\n    },\n    {\n      \"id\": 2,\n      \"kind\": \"popup\",\n      \"focused\": false,\n      \"spaces\": [\n        {\n          \"profile\": \"p-2\",\n          \"profileName\": \"\",\n          \"shown\": false,\n          \"topApps\": [],\n          \"pinned\": null,\n          \"tabs\": [\n            {\n              \"type\": \"tab\",\n              \"id\": \"tab-7\",\n              \"url\": \"https://d.example/\",\n              \"title\": null,\n              \"active\": true,\n              \"pid\": true,\n              \"cpu\": 0,\n              \"memory\": 0\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "workspace",
+      "params": {
+       "window": "w-1",
+       "profile": "p-1"
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json,--profile,--window",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json,--profile,--window",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "tabs--tabs-window-x",
+  "command": "tabs",
+  "argv": [
+   "tabs",
+   "--window",
+   ""
+  ],
+  "control": {
+   "replies": {
+    "workspace": {
+     "result": {
+      "profiles": [
+       {
+        "id": "p-1",
+        "name": "Personal"
+       }
+      ],
+      "windows": [
+       {
+        "id": "w-1",
+        "kind": "normal",
+        "focused": true,
+        "profile": "p-1",
+        "spaces": [
+         {
+          "profile": "p-1",
+          "profileName": "Personal",
+          "shown": true,
+          "topApps": [
+           {
+            "type": "tab",
+            "id": "tab-9",
+            "url": "https://mail.example/",
+            "title": "Mail",
+            "pin": "tile",
+            "active": false,
+            "muted": false,
+            "asleep": true,
+            "pid": 501,
+            "cpu": 0.25,
+            "memory": 90500000
+           }
+          ],
+          "pinned": [
+           {
+            "type": "group",
+            "id": "g-0",
+            "label": "Pinned \u00e9",
+            "icon": "symbol:star",
+            "color": "neutral",
+            "pinned": true,
+            "items": []
+           }
+          ],
+          "tabs": [
+           {
+            "type": "group",
+            "id": "g-1",
+            "name": "Work",
+            "label": "Work",
+            "icon": "\ud83d\ude80",
+            "color": "blue",
+            "collapsed": false,
+            "pinned": false,
+            "parent": null,
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-2",
+              "url": "https://b.example/?q=\u0085",
+              "title": "B\u001b[31m red",
+              "pin": null,
+              "active": false,
+              "muted": true,
+              "asleep": false,
+              "pid": 777,
+              "cpu": 87.35,
+              "memory": 412000000
+             },
+             {
+              "type": "group",
+              "id": "g-2",
+              "name": "",
+              "label": "Docs \"quoted\"",
+              "icon": null,
+              "color": "neutral",
+              "collapsed": true,
+              "pinned": false,
+              "parent": "g-1",
+              "items": [
+               {
+                "type": "tab",
+                "id": "tab-3",
+                "url": "https://c.example/",
+                "title": "C\ud800",
+                "pin": null,
+                "active": false,
+                "muted": false,
+                "asleep": false,
+                "pid": 777,
+                "cpu": 87.35,
+                "memory": 412000000
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "folder",
+            "id": "f-1",
+            "name": "Later",
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-4",
+              "url": "about:blank",
+              "title": "",
+              "pin": "row",
+              "active": false,
+              "muted": false,
+              "asleep": true,
+              "pid": null,
+              "cpu": null,
+              "memory": null
+             }
+            ]
+           },
+           {
+            "type": "tab",
+            "id": "tab-1",
+            "url": "https://a.example/",
+            "title": "A \u65e5\u672c",
+            "pin": null,
+            "active": true,
+            "muted": false,
+            "asleep": false,
+            "pid": 501,
+            "cpu": 2.5,
+            "memory": 1500000.0
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "id": 2,
+        "kind": "popup",
+        "focused": false,
+        "spaces": [
+         {
+          "profile": "p-2",
+          "profileName": "",
+          "shown": false,
+          "topApps": [],
+          "pinned": null,
+          "tabs": [
+           {
+            "type": "tab",
+            "id": "tab-7",
+            "url": "https://d.example/",
+            "title": null,
+            "active": true,
+            "pid": true,
+            "cpu": 0,
+            "memory": 0
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "window w-1  normal, focused\n  Personal (p-1)  shown\n    Top Apps\n        tab-9  Mail  https://mail.example/  (asleep, pinned tile)\n    Pinned\n        group g-0  \"Pinned \u00e9\"  symbol:star pinned\n    Tabs\n        group g-1  \"Work\"  \ud83d\ude80 blue\n            tab-2  B\\u001b[31m red  https://b.example/?q=\\u0085  (muted)\n            group g-2  \"Docs \\\"quoted\\\"\"  collapsed\n                tab-3  C\ufffd  https://c.example/\n        folder f-1  \"Later\"\n            tab-4    about:blank  (asleep, pinned row)\n      * tab-1  A \u65e5\u672c  https://a.example/\nwindow 2  popup\n  p-2 (p-2)\n    Tabs\n      * tab-7    https://d.example/\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "workspace",
+      "params": {}
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--window",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--window",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "tabs--tabs-data-dir-{box}elsewhere",
+  "command": "tabs",
+  "argv": [
+   "tabs",
+   "--data-dir",
+   "{box}/elsewhere"
+  ],
+  "control": {
+   "replies": {
+    "workspace": {
+     "result": {
+      "profiles": [
+       {
+        "id": "p-1",
+        "name": "Personal"
+       }
+      ],
+      "windows": [
+       {
+        "id": "w-1",
+        "kind": "normal",
+        "focused": true,
+        "profile": "p-1",
+        "spaces": [
+         {
+          "profile": "p-1",
+          "profileName": "Personal",
+          "shown": true,
+          "topApps": [
+           {
+            "type": "tab",
+            "id": "tab-9",
+            "url": "https://mail.example/",
+            "title": "Mail",
+            "pin": "tile",
+            "active": false,
+            "muted": false,
+            "asleep": true,
+            "pid": 501,
+            "cpu": 0.25,
+            "memory": 90500000
+           }
+          ],
+          "pinned": [
+           {
+            "type": "group",
+            "id": "g-0",
+            "label": "Pinned \u00e9",
+            "icon": "symbol:star",
+            "color": "neutral",
+            "pinned": true,
+            "items": []
+           }
+          ],
+          "tabs": [
+           {
+            "type": "group",
+            "id": "g-1",
+            "name": "Work",
+            "label": "Work",
+            "icon": "\ud83d\ude80",
+            "color": "blue",
+            "collapsed": false,
+            "pinned": false,
+            "parent": null,
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-2",
+              "url": "https://b.example/?q=\u0085",
+              "title": "B\u001b[31m red",
+              "pin": null,
+              "active": false,
+              "muted": true,
+              "asleep": false,
+              "pid": 777,
+              "cpu": 87.35,
+              "memory": 412000000
+             },
+             {
+              "type": "group",
+              "id": "g-2",
+              "name": "",
+              "label": "Docs \"quoted\"",
+              "icon": null,
+              "color": "neutral",
+              "collapsed": true,
+              "pinned": false,
+              "parent": "g-1",
+              "items": [
+               {
+                "type": "tab",
+                "id": "tab-3",
+                "url": "https://c.example/",
+                "title": "C\ud800",
+                "pin": null,
+                "active": false,
+                "muted": false,
+                "asleep": false,
+                "pid": 777,
+                "cpu": 87.35,
+                "memory": 412000000
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "folder",
+            "id": "f-1",
+            "name": "Later",
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-4",
+              "url": "about:blank",
+              "title": "",
+              "pin": "row",
+              "active": false,
+              "muted": false,
+              "asleep": true,
+              "pid": null,
+              "cpu": null,
+              "memory": null
+             }
+            ]
+           },
+           {
+            "type": "tab",
+            "id": "tab-1",
+            "url": "https://a.example/",
+            "title": "A \u65e5\u672c",
+            "pin": null,
+            "active": true,
+            "muted": false,
+            "asleep": false,
+            "pid": 501,
+            "cpu": 2.5,
+            "memory": 1500000.0
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "id": 2,
+        "kind": "popup",
+        "focused": false,
+        "spaces": [
+         {
+          "profile": "p-2",
+          "profileName": "",
+          "shown": false,
+          "topApps": [],
+          "pinned": null,
+          "tabs": [
+           {
+            "type": "tab",
+            "id": "tab-7",
+            "url": "https://d.example/",
+            "title": null,
+            "active": true,
+            "pid": true,
+            "cpu": 0,
+            "memory": 0
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  "note": "the flag beats ARDIA_DATA_DIR: nothing listens there",
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or Command Line isn't installed (Settings \u203a Plugins). (no ArdiaControl.sock in <parity:box>/elsewhere (No such file or directory))\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "tabs--tabs-2",
+  "command": "tabs",
+  "argv": [
+   "tabs"
+  ],
+  "control": {
+   "replies": {
+    "workspace": {
+     "error": {
+      "code": "unknown_method",
+      "message": "no"
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia tabs: this Ardia doesn't know tabs yet; update Ardia\n"
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "workspace",
+      "params": {}
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": "unknown_method",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": "unknown_method",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "tabs--tabs-usage-2",
+  "command": "tabs",
+  "argv": [
+   "tabs",
+   "--usage"
+  ],
+  "control": {
+   "replies": {
+    "workspace": {
+     "error": {
+      "code": "bad_request",
+      "message": "params: not usage"
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia tabs: this Ardia doesn't know --usage and --pid yet; update Ardia\n"
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "workspace",
+      "params": {
+       "usage": true
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": "unknown_method",
+      "flags": "--usage",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": "unknown_method",
+      "flags": "--usage",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "tabs--tabs-pid-5",
+  "command": "tabs",
+  "argv": [
+   "tabs",
+   "--pid",
+   "5"
+  ],
+  "control": {
+   "replies": {
+    "workspace": {
+     "result": {
+      "windows": []
+     }
+    }
+   }
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia tabs: this Ardia doesn't report tab process ids yet; update Ardia (ardia tabs --usage still shows CPU and memory)\n"
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "workspace",
+      "params": {
+       "usage": true
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": "no_pid",
+      "flags": "--pid",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": "no_pid",
+      "flags": "--pid",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "tabs--tabs-3",
+  "command": "tabs",
+  "argv": [
+   "tabs"
+  ],
+  "control": {
+   "hello": {
+    "result": {
+     "app": "Something"
+    }
+   }
+  },
+  "note": "something else on the socket",
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or Command Line isn't installed (Settings \u203a Plugins). (something other than Ardia answers on ArdiaControl.sock)\n"
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": "unreachable",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": "unreachable",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "tabs--tabs-4",
+  "command": "tabs",
+  "argv": [
+   "tabs"
+  ],
+  "control": {
+   "hello": {
+    "error": {
+     "code": "x",
+     "message": "go away"
+    }
+   }
+  },
+  "note": "hello refused",
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or Command Line isn't installed (Settings \u203a Plugins). (hello failed: go away)\n"
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": "unreachable",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": "unreachable",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "tabs--tabs-5",
+  "command": "tabs",
+  "argv": [
+   "tabs"
+  ],
+  "control": {
+   "replies": {
+    "workspace": {
+     "result": 3
+    }
+   }
+  },
+  "note": "a shape Rust can't mirror",
+  "fallback": true,
+  "expected": {
+   "status": 3,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "workspace",
+      "params": {}
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 3,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 3,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs (exit 3)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "tabs--tabs-6",
+  "command": "tabs",
+  "argv": [
+   "tabs"
+  ],
+  "control": {
+   "replies": {
+    "workspace": {
+     "result": "oops"
+    }
+   }
+  },
+  "note": "a shape Rust can't mirror",
+  "fallback": true,
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "AttributeError: 'str' object has no attribute 'get'\n"
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "workspace",
+      "params": {}
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "$exception",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "$exception_level": "fatal",
+      "source": "cli_unhandled",
+      "$exception_types": [
+       "AttributeError"
+      ],
+      "$exception_values": [
+       "AttributeError"
+      ],
+      "$exception_list": [
+       {
+        "type": "AttributeError",
+        "value": "AttributeError",
+        "mechanism": {
+         "type": "cli_unhandled",
+         "handled": false,
+         "synthetic": false
+        },
+        "stacktrace": {
+         "type": "raw"
+        }
+       }
+      ],
+      "error_code": null,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": "unhandled_exception",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "$exception",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "$exception_level": "fatal",
+      "source": "cli_unhandled",
+      "$exception_types": [
+       "AttributeError"
+      ],
+      "$exception_values": [
+       "AttributeError"
+      ],
+      "$exception_list": [
+       {
+        "type": "AttributeError",
+        "value": "AttributeError",
+        "mechanism": {
+         "type": "cli_unhandled",
+         "handled": false,
+         "synthetic": false
+        },
+        "stacktrace": {
+         "type": "raw"
+        }
+       }
+      ],
+      "error_code": null,
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": "unhandled_exception",
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "tabs--tabs-win-w-1",
+  "command": "tabs",
+  "argv": [
+   "tabs",
+   "--win",
+   "w-1"
+  ],
+  "control": {
+   "replies": {
+    "workspace": {
+     "result": {
+      "profiles": [
+       {
+        "id": "p-1",
+        "name": "Personal"
+       }
+      ],
+      "windows": [
+       {
+        "id": "w-1",
+        "kind": "normal",
+        "focused": true,
+        "profile": "p-1",
+        "spaces": [
+         {
+          "profile": "p-1",
+          "profileName": "Personal",
+          "shown": true,
+          "topApps": [
+           {
+            "type": "tab",
+            "id": "tab-9",
+            "url": "https://mail.example/",
+            "title": "Mail",
+            "pin": "tile",
+            "active": false,
+            "muted": false,
+            "asleep": true,
+            "pid": 501,
+            "cpu": 0.25,
+            "memory": 90500000
+           }
+          ],
+          "pinned": [
+           {
+            "type": "group",
+            "id": "g-0",
+            "label": "Pinned \u00e9",
+            "icon": "symbol:star",
+            "color": "neutral",
+            "pinned": true,
+            "items": []
+           }
+          ],
+          "tabs": [
+           {
+            "type": "group",
+            "id": "g-1",
+            "name": "Work",
+            "label": "Work",
+            "icon": "\ud83d\ude80",
+            "color": "blue",
+            "collapsed": false,
+            "pinned": false,
+            "parent": null,
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-2",
+              "url": "https://b.example/?q=\u0085",
+              "title": "B\u001b[31m red",
+              "pin": null,
+              "active": false,
+              "muted": true,
+              "asleep": false,
+              "pid": 777,
+              "cpu": 87.35,
+              "memory": 412000000
+             },
+             {
+              "type": "group",
+              "id": "g-2",
+              "name": "",
+              "label": "Docs \"quoted\"",
+              "icon": null,
+              "color": "neutral",
+              "collapsed": true,
+              "pinned": false,
+              "parent": "g-1",
+              "items": [
+               {
+                "type": "tab",
+                "id": "tab-3",
+                "url": "https://c.example/",
+                "title": "C\ud800",
+                "pin": null,
+                "active": false,
+                "muted": false,
+                "asleep": false,
+                "pid": 777,
+                "cpu": 87.35,
+                "memory": 412000000
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "folder",
+            "id": "f-1",
+            "name": "Later",
+            "items": [
+             {
+              "type": "tab",
+              "id": "tab-4",
+              "url": "about:blank",
+              "title": "",
+              "pin": "row",
+              "active": false,
+              "muted": false,
+              "asleep": true,
+              "pid": null,
+              "cpu": null,
+              "memory": null
+             }
+            ]
+           },
+           {
+            "type": "tab",
+            "id": "tab-1",
+            "url": "https://a.example/",
+            "title": "A \u65e5\u672c",
+            "pin": null,
+            "active": true,
+            "muted": false,
+            "asleep": false,
+            "pid": 501,
+            "cpu": 2.5,
+            "memory": 1500000.0
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "id": 2,
+        "kind": "popup",
+        "focused": false,
+        "spaces": [
+         {
+          "profile": "p-2",
+          "profileName": "",
+          "shown": false,
+          "topApps": [],
+          "pinned": null,
+          "tabs": [
+           {
+            "type": "tab",
+            "id": "tab-7",
+            "url": "https://d.example/",
+            "title": null,
+            "active": true,
+            "pid": true,
+            "cpu": 0,
+            "memory": 0
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  "note": "argparse's prefix match",
+  "fallback": true,
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "window w-1  normal, focused\n  Personal (p-1)  shown\n    Top Apps\n        tab-9  Mail  https://mail.example/  (asleep, pinned tile)\n    Pinned\n        group g-0  \"Pinned \u00e9\"  symbol:star pinned\n    Tabs\n        group g-1  \"Work\"  \ud83d\ude80 blue\n            tab-2  B\\u001b[31m red  https://b.example/?q=\\u0085  (muted)\n            group g-2  \"Docs \\\"quoted\\\"\"  collapsed\n                tab-3  C\ufffd  https://c.example/\n        folder f-1  \"Later\"\n            tab-4    about:blank  (asleep, pinned row)\n      * tab-1  A \u65e5\u672c  https://a.example/\nwindow 2  popup\n  p-2 (p-2)\n    Tabs\n      * tab-7    https://d.example/\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [
+    [
+     {
+      "id": 1,
+      "method": "hello",
+      "params": {
+       "caller": {
+        "name": "ardia"
+       },
+       "protocol": 4
+      }
+     },
+     {
+      "id": 2,
+      "method": "workspace",
+      "params": {
+       "window": "w-1"
+      }
+     }
+    ]
+   ],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "tabs--tabs-bogus",
+  "command": "tabs",
+  "argv": [
+   "tabs",
+   "--bogus"
+  ],
+  "fallback": true,
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "usage: ardia [-h] [--version] [--skill] <command> ...\nardia: error: unrecognized arguments: --bogus\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "tabs--port-1-tabs",
+  "command": "tabs",
+  "argv": [
+   "--port",
+   "1",
+   "tabs"
+  ],
+  "fallback": true,
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: tabs doesn't take --port\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "tabs--tabs-help",
+  "command": "tabs",
+  "argv": [
+   "tabs",
+   "--help"
+  ],
+  "fallback": true,
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia tabs [-h] [--data-dir DIR] [--json] [--window ID] [--profile ID] [--flat] [--usage]\n                  [--pid N]\n                  <command> ...\n\nList and organize Ardia's tabs: the same actions as the sidebar, through the app's own store, so pins, groups and\nsync behave exactly as when you do it by hand. Nothing here changes which tab a window shows unless you ask\n(tabs open --activate, tabs activate) or close the tab it shows. Private windows are never reachable.\n\nWithout a command, it lists every window's tabs per profile: Top Apps, the pinned section (pinned tabs and pinned\ngroups), then the rest, with groups nested as in the sidebar. --json prints the tree with stable ids (see\ndocs/automation.md); --flat prints one tab per line.\n\n--usage adds each tab's renderer process: its pid, CPU (percent of one core, as Chrome's Task Manager shows it) and\nmemory, hottest first, so a process from `top -o power` or Activity Monitor can be named. --pid N prints the tabs\nrunning in process N. With --json each tab gets \"pid\", \"cpu\" and \"memory\" (bytes); null for a sleeping tab, which has\nno process. Tabs that share a process show that process's numbers. The first --usage in a while takes about 2 s,\nsince CPU is measured over time.\n\nIds: tab-\u2026 for tabs, g-\u2026 for groups, w-\u2026 for windows (ardia tabs shows them). --group takes a group's id or its\nname (case-insensitive, in that window; an exact id wins, and a name two groups share is refused with their ids).\n--before and --after take a tab or a group id.\n\nExit status: 0 done, 1 refused, a bad request or a target that isn't there (nothing after the failing operation\nran), 2 Ardia can't be reached (or the connection dropped after the request went out, so it may or may not have run).\n\nExamples:\n  ardia tabs --json\n  ardia tabs --usage\n  ardia tabs --pid 61234\n  ardia tabs open https://example.com news.ycombinator.com --group Work\n  ardia tabs move tab-1 tab-2 --group Work\n  ardia tabs move tab-3 --top\n  ardia tabs pin tab-4 --row\n  ardia tabs sleep tab-5 tab-6\n\npositional arguments:\n  <command>\n    open          open URLs in the background\n    move          move tabs: into a group, out of one, next to another tab, to a window or profile\n    pin           pin tabs\n    unpin         unpin tabs (a tab of a pinned group leaves it)\n    mute          mute tabs\n    unmute        unmute tabs (and their site, if it was muted)\n    sleep         put tabs to sleep: pinned ones unload, others are discarded; never the tab a\n                  window shows\n    wake          load sleeping tabs again, in the background\n    close         close tabs (a pinned tab unloads, as with its close button)\n    activate      show a tab in its window (doesn't focus the window)\n    rename        give a tab its own name (no NAME resets it)\n    icon          set a tab's icon (no ICON resets it)\n\noptions:\n  -h, --help      show this help message and exit\n  --data-dir DIR  the Ardia data dir (default: $ARDIA_DATA_DIR, else the installed app's)\n  --json          print JSON\n  --window ID     only this window\n  --profile ID    only this profile\n  --flat          one tab per line (with --json, a flat list)\n  --usage         each tab's process id, CPU and memory, hottest first\n  --pid N         only the tabs running in process N (implies --usage)\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "tabs",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "tabs"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ }
+]

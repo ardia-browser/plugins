@@ -1,0 +1,4833 @@
+[
+ {
+  "id": "pinned--live-text",
+  "command": "pinned",
+  "argv": [
+   "pinned"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "pinned    E  https://e.test/  [Work]\nfavorite  A  https://a.test/  (folder Faves)  [Personal]\npinned    Custom B  https://b.test/  [Personal]\nfavorite  https://c.test/  https://c.test/  [Personal]\npinned    tab\\u0009with\\u000acontrols  https://d.test/\\u0007bell  (folder Inner)  [Personal]\npinned    G  https://grouped.test/  (folder Pinned folder)  [Personal]\npinned    Parked  https://parked.test/  (folder Parked folder)  [p3] parked\nfavorite  https://parked2.test/  https://parked2.test/  [p3] parked\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "pinned"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "pinned--live-json",
+  "command": "pinned",
+  "argv": [
+   "pinned",
+   "--json"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "[\n  {\n    \"title\": \"E\",\n    \"url\": \"https://e.test/\",\n    \"pinned_url\": null,\n    \"kind\": \"pinned\",\n    \"folder\": null,\n    \"profile\": \"Work\",\n    \"parked\": false\n  },\n  {\n    \"title\": \"A\",\n    \"url\": \"https://a.test/\",\n    \"pinned_url\": null,\n    \"kind\": \"favorite\",\n    \"folder\": \"Faves\",\n    \"profile\": \"Personal\",\n    \"parked\": false\n  },\n  {\n    \"title\": \"Custom B\",\n    \"url\": \"https://b.test/\",\n    \"pinned_url\": null,\n    \"kind\": \"pinned\",\n    \"folder\": null,\n    \"profile\": \"Personal\",\n    \"parked\": false\n  },\n  {\n    \"title\": \"https://c.test/\",\n    \"url\": \"https://c.test/\",\n    \"pinned_url\": \"https://c.test/\",\n    \"kind\": \"favorite\",\n    \"folder\": null,\n    \"profile\": \"Personal\",\n    \"parked\": false\n  },\n  {\n    \"title\": \"tab\\twith\\ncontrols\",\n    \"url\": \"https://d.test/\\u0007bell\",\n    \"pinned_url\": null,\n    \"kind\": \"pinned\",\n    \"folder\": \"Inner\",\n    \"profile\": \"Personal\",\n    \"parked\": false\n  },\n  {\n    \"title\": \"G\",\n    \"url\": \"https://grouped.test/\",\n    \"pinned_url\": null,\n    \"kind\": \"pinned\",\n    \"folder\": \"Pinned folder\",\n    \"profile\": \"Personal\",\n    \"parked\": false\n  },\n  {\n    \"title\": \"Parked\",\n    \"url\": \"https://parked.test/\",\n    \"pinned_url\": null,\n    \"kind\": \"pinned\",\n    \"folder\": \"Parked folder\",\n    \"profile\": \"p3\",\n    \"parked\": true\n  },\n  {\n    \"title\": \"https://parked2.test/\",\n    \"url\": \"https://parked2.test/\",\n    \"pinned_url\": null,\n    \"kind\": \"favorite\",\n    \"folder\": null,\n    \"profile\": \"p3\",\n    \"parked\": true\n  }\n]\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "pinned"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "pinned--json-before",
+  "command": "pinned",
+  "argv": [
+   "--json",
+   "pinned"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "[\n  {\n    \"title\": \"E\",\n    \"url\": \"https://e.test/\",\n    \"pinned_url\": null,\n    \"kind\": \"pinned\",\n    \"folder\": null,\n    \"profile\": \"Work\",\n    \"parked\": false\n  },\n  {\n    \"title\": \"A\",\n    \"url\": \"https://a.test/\",\n    \"pinned_url\": null,\n    \"kind\": \"favorite\",\n    \"folder\": \"Faves\",\n    \"profile\": \"Personal\",\n    \"parked\": false\n  },\n  {\n    \"title\": \"Custom B\",\n    \"url\": \"https://b.test/\",\n    \"pinned_url\": null,\n    \"kind\": \"pinned\",\n    \"folder\": null,\n    \"profile\": \"Personal\",\n    \"parked\": false\n  },\n  {\n    \"title\": \"https://c.test/\",\n    \"url\": \"https://c.test/\",\n    \"pinned_url\": \"https://c.test/\",\n    \"kind\": \"favorite\",\n    \"folder\": null,\n    \"profile\": \"Personal\",\n    \"parked\": false\n  },\n  {\n    \"title\": \"tab\\twith\\ncontrols\",\n    \"url\": \"https://d.test/\\u0007bell\",\n    \"pinned_url\": null,\n    \"kind\": \"pinned\",\n    \"folder\": \"Inner\",\n    \"profile\": \"Personal\",\n    \"parked\": false\n  },\n  {\n    \"title\": \"G\",\n    \"url\": \"https://grouped.test/\",\n    \"pinned_url\": null,\n    \"kind\": \"pinned\",\n    \"folder\": \"Pinned folder\",\n    \"profile\": \"Personal\",\n    \"parked\": false\n  },\n  {\n    \"title\": \"Parked\",\n    \"url\": \"https://parked.test/\",\n    \"pinned_url\": null,\n    \"kind\": \"pinned\",\n    \"folder\": \"Parked folder\",\n    \"profile\": \"p3\",\n    \"parked\": true\n  },\n  {\n    \"title\": \"https://parked2.test/\",\n    \"url\": \"https://parked2.test/\",\n    \"pinned_url\": null,\n    \"kind\": \"favorite\",\n    \"folder\": null,\n    \"profile\": \"p3\",\n    \"parked\": true\n  }\n]\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "pinned"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "pinned--port-refused",
+  "command": "pinned",
+  "argv": [
+   "--port",
+   "9",
+   "pinned"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: pinned doesn't take --port\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "pinned (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "pinned--old-session",
+  "command": "pinned",
+  "argv": [
+   "pinned"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 1, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "pinned"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "pinned--bad-session",
+  "command": "pinned",
+  "argv": [
+   "pinned"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": "{nope",
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia pinned: <parity:box>/data/session.json isn't valid JSON (Ardia may be writing it; try again)\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "pinned (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "pinned--no-session",
+  "command": "pinned",
+  "argv": [
+   "pinned",
+   "--json"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "[]\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--json",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "pinned"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "pinned--session-folder",
+  "command": "pinned",
+  "argv": [
+   "pinned"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "dir": true
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia pinned: <parity:box>/data/session.json isn't a regular file\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "pinned (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "pinned--not-running",
+  "command": "pinned",
+  "argv": [
+   "pinned"
+  ],
+  "files": {
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or Command Line isn't installed (Settings › Plugins).\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "pinned (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "pinned--control-mode",
+  "command": "pinned",
+  "argv": [
+   "pinned"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 420
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or Command Line isn't installed (Settings › Plugins). (ArdiaControl.json must be mode 0600)\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "pinned (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "pinned--control-dead-pid",
+  "command": "pinned",
+  "argv": [
+   "pinned"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": 1, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or Command Line isn't installed (Settings › Plugins).\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "pinned (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "pinned--control-bad-token",
+  "command": "pinned",
+  "argv": [
+   "pinned"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"short\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or Command Line isn't installed (Settings › Plugins). (ArdiaControl.json has no valid token)\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "pinned (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "pinned--control-bad-json",
+  "command": "pinned",
+  "argv": [
+   "pinned"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "[1,",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia: Ardia isn't running, or Command Line isn't installed (Settings › Plugins). (ArdiaControl.json isn't valid JSON)\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "pinned",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "pinned (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "history--live-text",
+  "command": "history",
+  "argv": [
+   "history",
+   "--days",
+   "100000"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "2024-12-30T02:40:29+00:00     2  Upper  HTTPS://UPPER.Example.COM:8443/p  [Personal]\n2024-12-30T02:40:07+00:00     1  Work page  https://work.example/  [Work]\n2024-12-30T02:40:06+00:00     1  IPv6  https://user:pw@[::1]:9/z  [Personal]\n2024-12-30T02:40:05+00:00     2  Example A  https://www.example.com/a  [Personal]\n2024-12-30T02:40:04+00:00     1  News ☃  http://news.site.org/x?q=1  [Personal]\n2024-12-30T02:40:03+00:00     1  -  https://example.com/b  [Personal]\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--days",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--days",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "history"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "history--live-json",
+  "command": "history",
+  "argv": [
+   "history",
+   "--days",
+   "100000",
+   "--json"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "[\n  {\n    \"url\": \"HTTPS://UPPER.Example.COM:8443/p\",\n    \"title\": \"Upper\",\n    \"visits\": 2,\n    \"total_visits\": 5,\n    \"last_visit\": \"2024-12-30T02:40:29+00:00\",\n    \"profile\": \"Personal\"\n  },\n  {\n    \"url\": \"https://work.example/\",\n    \"title\": \"Work page\",\n    \"visits\": 1,\n    \"total_visits\": 4,\n    \"last_visit\": \"2024-12-30T02:40:07+00:00\",\n    \"profile\": \"Work\"\n  },\n  {\n    \"url\": \"https://user:pw@[::1]:9/z\",\n    \"title\": \"IPv6\",\n    \"visits\": 1,\n    \"total_visits\": 4,\n    \"last_visit\": \"2024-12-30T02:40:06+00:00\",\n    \"profile\": \"Personal\"\n  },\n  {\n    \"url\": \"https://www.example.com/a\",\n    \"title\": \"Example A\",\n    \"visits\": 2,\n    \"total_visits\": 5,\n    \"last_visit\": \"2024-12-30T02:40:05+00:00\",\n    \"profile\": \"Personal\"\n  },\n  {\n    \"url\": \"http://news.site.org/x?q=1\",\n    \"title\": \"News ☃\",\n    \"visits\": 1,\n    \"total_visits\": 4,\n    \"last_visit\": \"2024-12-30T02:40:04+00:00\",\n    \"profile\": \"Personal\"\n  },\n  {\n    \"url\": \"https://example.com/b\",\n    \"title\": \"\",\n    \"visits\": 1,\n    \"total_visits\": 4,\n    \"last_visit\": \"2024-12-30T02:40:03+00:00\",\n    \"profile\": \"Personal\"\n  }\n]\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--days,--json",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--days,--json",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "history"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "history--domains",
+  "command": "history",
+  "argv": [
+   "history",
+   "--days=100000",
+   "--domains"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "    3  example.com  2 pages  Example A  [Personal]\n    2  upper.example.com  1 page  Upper  [Personal]\n    1  work.example  1 page  Work page  [Work]\n    1  ::1  1 page  IPv6  [Personal]\n    1  news.site.org  1 page  News ☃  [Personal]\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--days,--domains",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--days,--domains",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "history"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "history--domains-json-limit",
+  "command": "history",
+  "argv": [
+   "--json",
+   "history",
+   "--days",
+   "1e5",
+   "--domains",
+   "--limit",
+   "2"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "[\n  {\n    \"domain\": \"example.com\",\n    \"visits\": 3,\n    \"pages\": 2,\n    \"last_visit\": \"2024-12-30T02:40:05+00:00\",\n    \"top_title\": \"Example A\",\n    \"profile\": \"Personal\"\n  },\n  {\n    \"domain\": \"upper.example.com\",\n    \"visits\": 2,\n    \"pages\": 1,\n    \"last_visit\": \"2024-12-30T02:40:29+00:00\",\n    \"top_title\": \"Upper\",\n    \"profile\": \"Personal\"\n  }\n]\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--days,--domains,--json,--limit",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--days,--domains,--json,--limit",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "history"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "history--profile-folder",
+  "command": "history",
+  "argv": [
+   "history",
+   "--days",
+   "100000",
+   "--profile",
+   "Profile 2"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "2024-12-30T02:40:07+00:00     1  Work page  https://work.example/  [Work]\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--days,--profile",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--days,--profile",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "history"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "history--profile-label",
+  "command": "history",
+  "argv": [
+   "history",
+   "--days",
+   "100000",
+   "--profile",
+   "Personal",
+   "--limit",
+   "3"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "2024-12-30T02:40:29+00:00     2  Upper  HTTPS://UPPER.Example.COM:8443/p  [Personal]\n2024-12-30T02:40:06+00:00     1  IPv6  https://user:pw@[::1]:9/z  [Personal]\n2024-12-30T02:40:05+00:00     2  Example A  https://www.example.com/a  [Personal]\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--days,--limit,--profile",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--days,--limit,--profile",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "history"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "history--profile-unknown",
+  "command": "history",
+  "argv": [
+   "history",
+   "--days",
+   "100000",
+   "--profile",
+   "Nope"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia history: no profile named 'Nope' has history (known: Personal, Work)\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--days,--profile",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--days,--profile",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "history (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "history--recent-window-empty",
+  "command": "history",
+  "argv": [
+   "history"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "history"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "history--days-zero",
+  "command": "history",
+  "argv": [
+   "history",
+   "--days",
+   "0"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia history: --days must be more than 0\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--days",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--days",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "history (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "history--days-negative",
+  "command": "history",
+  "argv": [
+   "history",
+   "--days",
+   "-1"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia history: --days must be more than 0\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--days",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--days",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "history (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "history--limit-negative",
+  "command": "history",
+  "argv": [
+   "history",
+   "--limit",
+   "-5"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia history: --limit can't be negative\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--limit",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--limit",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "history (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "history--limit-zero-all",
+  "command": "history",
+  "argv": [
+   "history",
+   "--days",
+   "100000",
+   "--limit",
+   "0",
+   "--json"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "[\n  {\n    \"url\": \"HTTPS://UPPER.Example.COM:8443/p\",\n    \"title\": \"Upper\",\n    \"visits\": 2,\n    \"total_visits\": 5,\n    \"last_visit\": \"2024-12-30T02:40:29+00:00\",\n    \"profile\": \"Personal\"\n  },\n  {\n    \"url\": \"https://work.example/\",\n    \"title\": \"Work page\",\n    \"visits\": 1,\n    \"total_visits\": 4,\n    \"last_visit\": \"2024-12-30T02:40:07+00:00\",\n    \"profile\": \"Work\"\n  },\n  {\n    \"url\": \"https://user:pw@[::1]:9/z\",\n    \"title\": \"IPv6\",\n    \"visits\": 1,\n    \"total_visits\": 4,\n    \"last_visit\": \"2024-12-30T02:40:06+00:00\",\n    \"profile\": \"Personal\"\n  },\n  {\n    \"url\": \"https://www.example.com/a\",\n    \"title\": \"Example A\",\n    \"visits\": 2,\n    \"total_visits\": 5,\n    \"last_visit\": \"2024-12-30T02:40:05+00:00\",\n    \"profile\": \"Personal\"\n  },\n  {\n    \"url\": \"http://news.site.org/x?q=1\",\n    \"title\": \"News ☃\",\n    \"visits\": 1,\n    \"total_visits\": 4,\n    \"last_visit\": \"2024-12-30T02:40:04+00:00\",\n    \"profile\": \"Personal\"\n  },\n  {\n    \"url\": \"https://example.com/b\",\n    \"title\": \"\",\n    \"visits\": 1,\n    \"total_visits\": 4,\n    \"last_visit\": \"2024-12-30T02:40:03+00:00\",\n    \"profile\": \"Personal\"\n  }\n]\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--days,--json,--limit",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--days,--json,--limit",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "history"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "history--not-a-database",
+  "command": "history",
+  "argv": [
+   "history",
+   "--days",
+   "100000"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": "not sqlite",
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "expected": {
+   "status": 1,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "ardia history: can't read <parity:box>/data/Chromium/Default/History (file is not a database)\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--days",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 1,
+      "error_code": null,
+      "flags": "--days",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "history (exit 1)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "history--linked-history-skipped",
+  "command": "history",
+  "argv": [
+   "history",
+   "--days",
+   "100000"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile 2/History": {
+    "link": "{data}/Chromium/Default/History"
+   }
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "2024-12-30T02:40:29+00:00     2  Upper  HTTPS://UPPER.Example.COM:8443/p  [Personal]\n2024-12-30T02:40:06+00:00     1  IPv6  https://user:pw@[::1]:9/z  [Personal]\n2024-12-30T02:40:05+00:00     2  Example A  https://www.example.com/a  [Personal]\n2024-12-30T02:40:04+00:00     1  News ☃  http://news.site.org/x?q=1  [Personal]\n2024-12-30T02:40:03+00:00     1  -  https://example.com/b  [Personal]\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--days",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--days",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "history"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "history--days-text",
+  "command": "history",
+  "argv": [
+   "history",
+   "--days",
+   "soon"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "fallback": true,
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "usage: ardia history [-h] [--days N] [--limit N] [--profile P] [--domains] [--json]\n                     [--data-dir DIR]\nardia history: error: argument --days: invalid float value: 'soon'\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--days",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--days",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "history (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "history--limit-float",
+  "command": "history",
+  "argv": [
+   "history",
+   "--limit",
+   "2.5"
+  ],
+  "files": {
+   "data/Chromium/ArdiaControl.json": {
+    "text": "{\"port\": 9222, \"browser\": \"/devtools/browser/abc\", \"token\": \"tttttttttttttttttttttttt\", \"pid\": {harness_pid}, \"generation\": 1}",
+    "mode": 384
+   },
+   "data/session.json": {
+    "text": "{\"version\": 2, \"profiles\": {\"default\": {\"name\": \"Personal\"}, \"p2\": {\"name\": \"Work\", \"dataId\": \"2\"}, \"incognito:x\": {\"name\": \"Secret\"}, \"p3\": {\"dataId\": \"3\"}}, \"profileOrder\": [\"p2\", \"default\", \"p2\"], \"windowOrder\": [\"w2\", \"w1\"], \"windows\": {\"w1\": {\"tabIds\": [\"t1\", \"t2\", \"t3\", \"t4\", \"t9\"]}, \"w2\": {\"tabIds\": [\"t5\", \"t6\"], \"kind\": \"main\"}, \"w3\": {\"tabIds\": [\"t7\"], \"incognito\": true}, \"w4\": {\"tabIds\": [\"t8\"], \"kind\": \"mini\"}}, \"tabs\": [{\"id\": \"t1\", \"url\": \"https://a.test/\", \"title\": \"A\", \"profileId\": \"default\", \"pin\": {\"as\": \"tile\", \"folder\": {\"name\": \"Faves\"}}}, {\"id\": \"t2\", \"url\": \"https://b.test/\", \"customTitle\": \"Custom B\", \"title\": \"B\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t3\", \"pinnedUrl\": \"https://c.test/\", \"profileId\": \"default\", \"pinned\": true, \"pinnedAsRow\": false, \"tileFolder\": {\"name\": \"\"}}, {\"id\": \"t4\", \"url\": \"https://d.test/\\u0007bell\", \"title\": \"tab\\twith\\ncontrols\", \"profileId\": \"default\"}, {\"id\": \"t5\", \"url\": \"https://e.test/\", \"title\": \"E\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t6\", \"url\": \"https://e.test/\", \"title\": \"E again\", \"profileId\": \"p2\", \"pinKey\": \"k5\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t7\", \"url\": \"https://secret.test/\", \"profileId\": \"incognito:x\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t8\", \"url\": \"https://mini.test/\", \"profileId\": \"default\", \"pin\": {\"as\": \"row\"}}, {\"id\": \"t9\", \"url\": \"https://grouped.test/\", \"title\": \"G\", \"profileId\": \"default\"}], \"groups\": [{\"id\": \"g1\", \"name\": \"Pinned folder\", \"pinned\": true, \"tabIds\": [\"t9\", \"t4\"]}, {\"id\": \"g2\", \"name\": \"Inner\", \"pinned\": true, \"parentId\": \"g1\", \"tabIds\": [\"t4\"]}], \"parkedPins\": {\"p3\": {\"groups\": [{\"id\": \"pg\", \"name\": \"Parked folder\"}], \"tabs\": [{\"id\": \"pt1\", \"url\": \"https://parked.test/\", \"title\": \"Parked\", \"groupId\": \"pg\"}, {\"id\": \"pt2\", \"url\": \"https://parked2.test/\", \"pin\": {\"as\": \"tile\"}}]}, \"default\": \"bad\"}}"
+   },
+   "data/Chromium/Default/History": {
+    "blob": "8b68062e8e92b08464baa95a7d32add1d63feff3c6b834a41968bfe7024a52fb"
+   },
+   "data/Chromium/Profile 2/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/Profile Guest 1/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   },
+   "data/Chromium/System Profile/History": {
+    "blob": "b057d38de362ca22e023b671eac97a2fb59e4229887d6e914d970df430f90b88"
+   }
+  },
+  "fallback": true,
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "usage: ardia history [-h] [--days N] [--limit N] [--profile P] [--domains] [--json]\n                     [--data-dir DIR]\nardia history: error: argument --limit: invalid int value: '2.5'\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--limit",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "history",
+      "subcommand": null,
+      "exit_code": 2,
+      "error_code": null,
+      "flags": "--limit",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "history (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ }
+]

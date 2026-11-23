@@ -1,0 +1,1490 @@
+[
+ {
+  "id": "help--help",
+  "command": "--help",
+  "argv": [
+   "--help"
+  ],
+  "env": {
+   "COLUMNS": "200"
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia [-h] [--version] [--skill] <command> ...\n\nControl a running Ardia from the terminal. ardia browse drives the browser (ardia browse --help); ardia computer operates native Mac apps through the bundled cua-driver (ardia computer --help). Agents: skip if an ardia skill is already in your context; otherwise run ardia --skill.\n\npositional arguments:\n  <command>\n    browse    drive the browser with agent-browser's commands (ardia browse --help)\n    notes     read and write notes (ardia notes --help)\n    computer  operate native Mac apps through the bundled cua-driver: computer use (ardia computer --help)\n    pinned    list favorites and pinned tabs\n    history   list recent history\n    skills    print or install the ardia agent skill\n    scripts   write, test and install userscripts\n    config    read, write and check config.json\n    theme     make, pick, edit and check themes\n    run       run one of Ardia's commands\n    commands  list the commands ardia run can run\n    windows   list Ardia's windows and their tabs\n    events    print events as they happen\n    on        run a program for each event\n    hooks     run hooks from hooks.json, at login if you like\n    tabs      list and organize tabs\n    groups    list and organize tab groups\n    apply     apply several tab and group operations at once (JSON)\n    call      send any method to Ardia's control socket (ardia methods lists them)\n    methods   list the methods ardia call can send\n    plugins   install, list and manage plugins\n    feedback  report a problem or idea to Ardia's developer (agents welcome)\n    star      star the Ardia repo on GitHub, only after the user says yes\n\noptions:\n  -h, --help  show this help message and exit\n  --version   show program's version number and exit\n  --skill     print the agent skill that ships with this ardia (SKILL.md) and exit; same as ardia skills get\n\nShared options go before the command or after it, for the commands that take them:\n  --port N        a plain DevTools server on 127.0.0.1:N (testing; $ARDIA_PORT)\n  --ws URL        a browser WebSocket URL ($ARDIA_WS)\n  --data-dir DIR  the Ardia data dir ($ARDIA_DATA_DIR, else the installed app's)\n  --timeout S     and --json\nA flag wins over its environment variable.\n\nExamples:\n  ardia --port 9222 browse snapshot -i\n  ardia browse --port 9222 snapshot -i\n  ardia windows --json\n  ardia tabs --json\n  ardia groups create tab-1 tab-2 --name Work --icon 🚀\n  ardia methods\n  ardia call run -p command=newTab\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "help--help-2",
+  "command": "--help",
+  "argv": [
+   "--help"
+  ],
+  "env": {
+   "COLUMNS": "100"
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia [-h] [--version] [--skill] <command> ...\n\nControl a running Ardia from the terminal. ardia browse drives the browser (ardia browse --help); ardia computer operates native Mac apps through the bundled cua-driver (ardia computer --help). Agents: skip if an ardia skill is already in your context; otherwise run ardia --skill.\n\npositional arguments:\n  <command>\n    browse    drive the browser with agent-browser's commands (ardia browse --help)\n    notes     read and write notes (ardia notes --help)\n    computer  operate native Mac apps through the bundled cua-driver: computer use (ardia computer\n              --help)\n    pinned    list favorites and pinned tabs\n    history   list recent history\n    skills    print or install the ardia agent skill\n    scripts   write, test and install userscripts\n    config    read, write and check config.json\n    theme     make, pick, edit and check themes\n    run       run one of Ardia's commands\n    commands  list the commands ardia run can run\n    windows   list Ardia's windows and their tabs\n    events    print events as they happen\n    on        run a program for each event\n    hooks     run hooks from hooks.json, at login if you like\n    tabs      list and organize tabs\n    groups    list and organize tab groups\n    apply     apply several tab and group operations at once (JSON)\n    call      send any method to Ardia's control socket (ardia methods lists them)\n    methods   list the methods ardia call can send\n    plugins   install, list and manage plugins\n    feedback  report a problem or idea to Ardia's developer (agents welcome)\n    star      star the Ardia repo on GitHub, only after the user says yes\n\noptions:\n  -h, --help  show this help message and exit\n  --version   show program's version number and exit\n  --skill     print the agent skill that ships with this ardia (SKILL.md) and exit; same as ardia\n              skills get\n\nShared options go before the command or after it, for the commands that take them:\n  --port N        a plain DevTools server on 127.0.0.1:N (testing; $ARDIA_PORT)\n  --ws URL        a browser WebSocket URL ($ARDIA_WS)\n  --data-dir DIR  the Ardia data dir ($ARDIA_DATA_DIR, else the installed app's)\n  --timeout S     and --json\nA flag wins over its environment variable.\n\nExamples:\n  ardia --port 9222 browse snapshot -i\n  ardia browse --port 9222 snapshot -i\n  ardia windows --json\n  ardia tabs --json\n  ardia groups create tab-1 tab-2 --name Work --icon 🚀\n  ardia methods\n  ardia call run -p command=newTab\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "help--help-3",
+  "command": "--help",
+  "argv": [
+   "--help"
+  ],
+  "env": {
+   "COLUMNS": "80"
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia [-h] [--version] [--skill] <command> ...\n\nControl a running Ardia from the terminal. ardia browse drives the browser (ardia browse --help); ardia computer operates native Mac apps through the bundled cua-driver (ardia computer --help). Agents: skip if an ardia skill is already in your context; otherwise run ardia --skill.\n\npositional arguments:\n  <command>\n    browse    drive the browser with agent-browser's commands (ardia browse\n              --help)\n    notes     read and write notes (ardia notes --help)\n    computer  operate native Mac apps through the bundled cua-driver: computer\n              use (ardia computer --help)\n    pinned    list favorites and pinned tabs\n    history   list recent history\n    skills    print or install the ardia agent skill\n    scripts   write, test and install userscripts\n    config    read, write and check config.json\n    theme     make, pick, edit and check themes\n    run       run one of Ardia's commands\n    commands  list the commands ardia run can run\n    windows   list Ardia's windows and their tabs\n    events    print events as they happen\n    on        run a program for each event\n    hooks     run hooks from hooks.json, at login if you like\n    tabs      list and organize tabs\n    groups    list and organize tab groups\n    apply     apply several tab and group operations at once (JSON)\n    call      send any method to Ardia's control socket (ardia methods lists\n              them)\n    methods   list the methods ardia call can send\n    plugins   install, list and manage plugins\n    feedback  report a problem or idea to Ardia's developer (agents welcome)\n    star      star the Ardia repo on GitHub, only after the user says yes\n\noptions:\n  -h, --help  show this help message and exit\n  --version   show program's version number and exit\n  --skill     print the agent skill that ships with this ardia (SKILL.md) and\n              exit; same as ardia skills get\n\nShared options go before the command or after it, for the commands that take them:\n  --port N        a plain DevTools server on 127.0.0.1:N (testing; $ARDIA_PORT)\n  --ws URL        a browser WebSocket URL ($ARDIA_WS)\n  --data-dir DIR  the Ardia data dir ($ARDIA_DATA_DIR, else the installed app's)\n  --timeout S     and --json\nA flag wins over its environment variable.\n\nExamples:\n  ardia --port 9222 browse snapshot -i\n  ardia browse --port 9222 snapshot -i\n  ardia windows --json\n  ardia tabs --json\n  ardia groups create tab-1 tab-2 --name Work --icon 🚀\n  ardia methods\n  ardia call run -p command=newTab\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "help--help-4",
+  "command": "--help",
+  "argv": [
+   "--help"
+  ],
+  "env": {
+   "COLUMNS": "60"
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia [-h] [--version] [--skill] <command> ...\n\nControl a running Ardia from the terminal. ardia browse drives the browser (ardia browse --help); ardia computer operates native Mac apps through the bundled cua-driver (ardia computer --help). Agents: skip if an ardia skill is already in your context; otherwise run ardia --skill.\n\npositional arguments:\n  <command>\n    browse    drive the browser with agent-browser's\n              commands (ardia browse --help)\n    notes     read and write notes (ardia notes --help)\n    computer  operate native Mac apps through the bundled\n              cua-driver: computer use (ardia computer\n              --help)\n    pinned    list favorites and pinned tabs\n    history   list recent history\n    skills    print or install the ardia agent skill\n    scripts   write, test and install userscripts\n    config    read, write and check config.json\n    theme     make, pick, edit and check themes\n    run       run one of Ardia's commands\n    commands  list the commands ardia run can run\n    windows   list Ardia's windows and their tabs\n    events    print events as they happen\n    on        run a program for each event\n    hooks     run hooks from hooks.json, at login if you\n              like\n    tabs      list and organize tabs\n    groups    list and organize tab groups\n    apply     apply several tab and group operations at\n              once (JSON)\n    call      send any method to Ardia's control socket\n              (ardia methods lists them)\n    methods   list the methods ardia call can send\n    plugins   install, list and manage plugins\n    feedback  report a problem or idea to Ardia's\n              developer (agents welcome)\n    star      star the Ardia repo on GitHub, only after\n              the user says yes\n\noptions:\n  -h, --help  show this help message and exit\n  --version   show program's version number and exit\n  --skill     print the agent skill that ships with this\n              ardia (SKILL.md) and exit; same as ardia\n              skills get\n\nShared options go before the command or after it, for the commands that take them:\n  --port N        a plain DevTools server on 127.0.0.1:N (testing; $ARDIA_PORT)\n  --ws URL        a browser WebSocket URL ($ARDIA_WS)\n  --data-dir DIR  the Ardia data dir ($ARDIA_DATA_DIR, else the installed app's)\n  --timeout S     and --json\nA flag wins over its environment variable.\n\nExamples:\n  ardia --port 9222 browse snapshot -i\n  ardia browse --port 9222 snapshot -i\n  ardia windows --json\n  ardia tabs --json\n  ardia groups create tab-1 tab-2 --name Work --icon 🚀\n  ardia methods\n  ardia call run -p command=newTab\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "help--help-5",
+  "command": "--help",
+  "argv": [
+   "--help"
+  ],
+  "env": {
+   "COLUMNS": "56"
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia [-h] [--version] [--skill] <command> ...\n\nControl a running Ardia from the terminal. ardia browse drives the browser (ardia browse --help); ardia computer operates native Mac apps through the bundled cua-driver (ardia computer --help). Agents: skip if an ardia skill is already in your context; otherwise run ardia --skill.\n\npositional arguments:\n  <command>\n    browse    drive the browser with agent-browser's\n              commands (ardia browse --help)\n    notes     read and write notes (ardia notes\n              --help)\n    computer  operate native Mac apps through the\n              bundled cua-driver: computer use (ardia\n              computer --help)\n    pinned    list favorites and pinned tabs\n    history   list recent history\n    skills    print or install the ardia agent skill\n    scripts   write, test and install userscripts\n    config    read, write and check config.json\n    theme     make, pick, edit and check themes\n    run       run one of Ardia's commands\n    commands  list the commands ardia run can run\n    windows   list Ardia's windows and their tabs\n    events    print events as they happen\n    on        run a program for each event\n    hooks     run hooks from hooks.json, at login if\n              you like\n    tabs      list and organize tabs\n    groups    list and organize tab groups\n    apply     apply several tab and group operations\n              at once (JSON)\n    call      send any method to Ardia's control\n              socket (ardia methods lists them)\n    methods   list the methods ardia call can send\n    plugins   install, list and manage plugins\n    feedback  report a problem or idea to Ardia's\n              developer (agents welcome)\n    star      star the Ardia repo on GitHub, only\n              after the user says yes\n\noptions:\n  -h, --help  show this help message and exit\n  --version   show program's version number and exit\n  --skill     print the agent skill that ships with\n              this ardia (SKILL.md) and exit; same as\n              ardia skills get\n\nShared options go before the command or after it, for the commands that take them:\n  --port N        a plain DevTools server on 127.0.0.1:N (testing; $ARDIA_PORT)\n  --ws URL        a browser WebSocket URL ($ARDIA_WS)\n  --data-dir DIR  the Ardia data dir ($ARDIA_DATA_DIR, else the installed app's)\n  --timeout S     and --json\nA flag wins over its environment variable.\n\nExamples:\n  ardia --port 9222 browse snapshot -i\n  ardia browse --port 9222 snapshot -i\n  ardia windows --json\n  ardia tabs --json\n  ardia groups create tab-1 tab-2 --name Work --icon 🚀\n  ardia methods\n  ardia call run -p command=newTab\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "help--help-6",
+  "command": "--help",
+  "argv": [
+   "--help"
+  ],
+  "env": {
+   "COLUMNS": "0"
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia [-h] [--version] [--skill] <command> ...\n\nControl a running Ardia from the terminal. ardia browse drives the browser (ardia browse --help); ardia computer operates native Mac apps through the bundled cua-driver (ardia computer --help). Agents: skip if an ardia skill is already in your context; otherwise run ardia --skill.\n\npositional arguments:\n  <command>\n    browse    drive the browser with agent-browser's commands (ardia browse\n              --help)\n    notes     read and write notes (ardia notes --help)\n    computer  operate native Mac apps through the bundled cua-driver: computer\n              use (ardia computer --help)\n    pinned    list favorites and pinned tabs\n    history   list recent history\n    skills    print or install the ardia agent skill\n    scripts   write, test and install userscripts\n    config    read, write and check config.json\n    theme     make, pick, edit and check themes\n    run       run one of Ardia's commands\n    commands  list the commands ardia run can run\n    windows   list Ardia's windows and their tabs\n    events    print events as they happen\n    on        run a program for each event\n    hooks     run hooks from hooks.json, at login if you like\n    tabs      list and organize tabs\n    groups    list and organize tab groups\n    apply     apply several tab and group operations at once (JSON)\n    call      send any method to Ardia's control socket (ardia methods lists\n              them)\n    methods   list the methods ardia call can send\n    plugins   install, list and manage plugins\n    feedback  report a problem or idea to Ardia's developer (agents welcome)\n    star      star the Ardia repo on GitHub, only after the user says yes\n\noptions:\n  -h, --help  show this help message and exit\n  --version   show program's version number and exit\n  --skill     print the agent skill that ships with this ardia (SKILL.md) and\n              exit; same as ardia skills get\n\nShared options go before the command or after it, for the commands that take them:\n  --port N        a plain DevTools server on 127.0.0.1:N (testing; $ARDIA_PORT)\n  --ws URL        a browser WebSocket URL ($ARDIA_WS)\n  --data-dir DIR  the Ardia data dir ($ARDIA_DATA_DIR, else the installed app's)\n  --timeout S     and --json\nA flag wins over its environment variable.\n\nExamples:\n  ardia --port 9222 browse snapshot -i\n  ardia browse --port 9222 snapshot -i\n  ardia windows --json\n  ardia tabs --json\n  ardia groups create tab-1 tab-2 --name Work --icon 🚀\n  ardia methods\n  ardia call run -p command=newTab\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "help--help-7",
+  "command": "--help",
+  "argv": [
+   "--help"
+  ],
+  "env": {
+   "COLUMNS": "abc"
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia [-h] [--version] [--skill] <command> ...\n\nControl a running Ardia from the terminal. ardia browse drives the browser (ardia browse --help); ardia computer operates native Mac apps through the bundled cua-driver (ardia computer --help). Agents: skip if an ardia skill is already in your context; otherwise run ardia --skill.\n\npositional arguments:\n  <command>\n    browse    drive the browser with agent-browser's commands (ardia browse\n              --help)\n    notes     read and write notes (ardia notes --help)\n    computer  operate native Mac apps through the bundled cua-driver: computer\n              use (ardia computer --help)\n    pinned    list favorites and pinned tabs\n    history   list recent history\n    skills    print or install the ardia agent skill\n    scripts   write, test and install userscripts\n    config    read, write and check config.json\n    theme     make, pick, edit and check themes\n    run       run one of Ardia's commands\n    commands  list the commands ardia run can run\n    windows   list Ardia's windows and their tabs\n    events    print events as they happen\n    on        run a program for each event\n    hooks     run hooks from hooks.json, at login if you like\n    tabs      list and organize tabs\n    groups    list and organize tab groups\n    apply     apply several tab and group operations at once (JSON)\n    call      send any method to Ardia's control socket (ardia methods lists\n              them)\n    methods   list the methods ardia call can send\n    plugins   install, list and manage plugins\n    feedback  report a problem or idea to Ardia's developer (agents welcome)\n    star      star the Ardia repo on GitHub, only after the user says yes\n\noptions:\n  -h, --help  show this help message and exit\n  --version   show program's version number and exit\n  --skill     print the agent skill that ships with this ardia (SKILL.md) and\n              exit; same as ardia skills get\n\nShared options go before the command or after it, for the commands that take them:\n  --port N        a plain DevTools server on 127.0.0.1:N (testing; $ARDIA_PORT)\n  --ws URL        a browser WebSocket URL ($ARDIA_WS)\n  --data-dir DIR  the Ardia data dir ($ARDIA_DATA_DIR, else the installed app's)\n  --timeout S     and --json\nA flag wins over its environment variable.\n\nExamples:\n  ardia --port 9222 browse snapshot -i\n  ardia browse --port 9222 snapshot -i\n  ardia windows --json\n  ardia tabs --json\n  ardia groups create tab-1 tab-2 --name Work --icon 🚀\n  ardia methods\n  ardia call run -p command=newTab\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "help--help-8",
+  "command": "--help",
+  "argv": [
+   "--help"
+  ],
+  "env": {
+   "COLUMNS": " 70 "
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia [-h] [--version] [--skill] <command> ...\n\nControl a running Ardia from the terminal. ardia browse drives the browser (ardia browse --help); ardia computer operates native Mac apps through the bundled cua-driver (ardia computer --help). Agents: skip if an ardia skill is already in your context; otherwise run ardia --skill.\n\npositional arguments:\n  <command>\n    browse    drive the browser with agent-browser's commands (ardia\n              browse --help)\n    notes     read and write notes (ardia notes --help)\n    computer  operate native Mac apps through the bundled cua-\n              driver: computer use (ardia computer --help)\n    pinned    list favorites and pinned tabs\n    history   list recent history\n    skills    print or install the ardia agent skill\n    scripts   write, test and install userscripts\n    config    read, write and check config.json\n    theme     make, pick, edit and check themes\n    run       run one of Ardia's commands\n    commands  list the commands ardia run can run\n    windows   list Ardia's windows and their tabs\n    events    print events as they happen\n    on        run a program for each event\n    hooks     run hooks from hooks.json, at login if you like\n    tabs      list and organize tabs\n    groups    list and organize tab groups\n    apply     apply several tab and group operations at once (JSON)\n    call      send any method to Ardia's control socket (ardia\n              methods lists them)\n    methods   list the methods ardia call can send\n    plugins   install, list and manage plugins\n    feedback  report a problem or idea to Ardia's developer (agents\n              welcome)\n    star      star the Ardia repo on GitHub, only after the user\n              says yes\n\noptions:\n  -h, --help  show this help message and exit\n  --version   show program's version number and exit\n  --skill     print the agent skill that ships with this ardia\n              (SKILL.md) and exit; same as ardia skills get\n\nShared options go before the command or after it, for the commands that take them:\n  --port N        a plain DevTools server on 127.0.0.1:N (testing; $ARDIA_PORT)\n  --ws URL        a browser WebSocket URL ($ARDIA_WS)\n  --data-dir DIR  the Ardia data dir ($ARDIA_DATA_DIR, else the installed app's)\n  --timeout S     and --json\nA flag wins over its environment variable.\n\nExamples:\n  ardia --port 9222 browse snapshot -i\n  ardia browse --port 9222 snapshot -i\n  ardia windows --json\n  ardia tabs --json\n  ardia groups create tab-1 tab-2 --name Work --icon 🚀\n  ardia methods\n  ardia call run -p command=newTab\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "help--help-9",
+  "command": "--help",
+  "argv": [
+   "--help"
+  ],
+  "env": {
+   "COLUMNS": "-3"
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia [-h] [--version] [--skill] <command> ...\n\nControl a running Ardia from the terminal. ardia browse drives the browser (ardia browse --help); ardia computer operates native Mac apps through the bundled cua-driver (ardia computer --help). Agents: skip if an ardia skill is already in your context; otherwise run ardia --skill.\n\npositional arguments:\n  <command>\n    browse    drive the browser with agent-browser's commands (ardia browse\n              --help)\n    notes     read and write notes (ardia notes --help)\n    computer  operate native Mac apps through the bundled cua-driver: computer\n              use (ardia computer --help)\n    pinned    list favorites and pinned tabs\n    history   list recent history\n    skills    print or install the ardia agent skill\n    scripts   write, test and install userscripts\n    config    read, write and check config.json\n    theme     make, pick, edit and check themes\n    run       run one of Ardia's commands\n    commands  list the commands ardia run can run\n    windows   list Ardia's windows and their tabs\n    events    print events as they happen\n    on        run a program for each event\n    hooks     run hooks from hooks.json, at login if you like\n    tabs      list and organize tabs\n    groups    list and organize tab groups\n    apply     apply several tab and group operations at once (JSON)\n    call      send any method to Ardia's control socket (ardia methods lists\n              them)\n    methods   list the methods ardia call can send\n    plugins   install, list and manage plugins\n    feedback  report a problem or idea to Ardia's developer (agents welcome)\n    star      star the Ardia repo on GitHub, only after the user says yes\n\noptions:\n  -h, --help  show this help message and exit\n  --version   show program's version number and exit\n  --skill     print the agent skill that ships with this ardia (SKILL.md) and\n              exit; same as ardia skills get\n\nShared options go before the command or after it, for the commands that take them:\n  --port N        a plain DevTools server on 127.0.0.1:N (testing; $ARDIA_PORT)\n  --ws URL        a browser WebSocket URL ($ARDIA_WS)\n  --data-dir DIR  the Ardia data dir ($ARDIA_DATA_DIR, else the installed app's)\n  --timeout S     and --json\nA flag wins over its environment variable.\n\nExamples:\n  ardia --port 9222 browse snapshot -i\n  ardia browse --port 9222 snapshot -i\n  ardia windows --json\n  ardia tabs --json\n  ardia groups create tab-1 tab-2 --name Work --icon 🚀\n  ardia methods\n  ardia call run -p command=newTab\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "help--h",
+  "command": "--help",
+  "argv": [
+   "-h"
+  ],
+  "env": {
+   "COLUMNS": "120"
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia [-h] [--version] [--skill] <command> ...\n\nControl a running Ardia from the terminal. ardia browse drives the browser (ardia browse --help); ardia computer operates native Mac apps through the bundled cua-driver (ardia computer --help). Agents: skip if an ardia skill is already in your context; otherwise run ardia --skill.\n\npositional arguments:\n  <command>\n    browse    drive the browser with agent-browser's commands (ardia browse --help)\n    notes     read and write notes (ardia notes --help)\n    computer  operate native Mac apps through the bundled cua-driver: computer use (ardia computer --help)\n    pinned    list favorites and pinned tabs\n    history   list recent history\n    skills    print or install the ardia agent skill\n    scripts   write, test and install userscripts\n    config    read, write and check config.json\n    theme     make, pick, edit and check themes\n    run       run one of Ardia's commands\n    commands  list the commands ardia run can run\n    windows   list Ardia's windows and their tabs\n    events    print events as they happen\n    on        run a program for each event\n    hooks     run hooks from hooks.json, at login if you like\n    tabs      list and organize tabs\n    groups    list and organize tab groups\n    apply     apply several tab and group operations at once (JSON)\n    call      send any method to Ardia's control socket (ardia methods lists them)\n    methods   list the methods ardia call can send\n    plugins   install, list and manage plugins\n    feedback  report a problem or idea to Ardia's developer (agents welcome)\n    star      star the Ardia repo on GitHub, only after the user says yes\n\noptions:\n  -h, --help  show this help message and exit\n  --version   show program's version number and exit\n  --skill     print the agent skill that ships with this ardia (SKILL.md) and exit; same as ardia skills get\n\nShared options go before the command or after it, for the commands that take them:\n  --port N        a plain DevTools server on 127.0.0.1:N (testing; $ARDIA_PORT)\n  --ws URL        a browser WebSocket URL ($ARDIA_WS)\n  --data-dir DIR  the Ardia data dir ($ARDIA_DATA_DIR, else the installed app's)\n  --timeout S     and --json\nA flag wins over its environment variable.\n\nExamples:\n  ardia --port 9222 browse snapshot -i\n  ardia browse --port 9222 snapshot -i\n  ardia windows --json\n  ardia tabs --json\n  ardia groups create tab-1 tab-2 --name Work --icon 🚀\n  ardia methods\n  ardia call run -p command=newTab\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "-h",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "-h",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "help--bare",
+  "command": "--help",
+  "argv": [],
+  "env": {
+   "COLUMNS": "90"
+  },
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia [-h] [--version] [--skill] <command> ...\n\nControl a running Ardia from the terminal. ardia browse drives the browser (ardia browse --help); ardia computer operates native Mac apps through the bundled cua-driver (ardia computer --help). Agents: skip if an ardia skill is already in your context; otherwise run ardia --skill.\n\npositional arguments:\n  <command>\n    browse    drive the browser with agent-browser's commands (ardia browse --help)\n    notes     read and write notes (ardia notes --help)\n    computer  operate native Mac apps through the bundled cua-driver: computer use\n              (ardia computer --help)\n    pinned    list favorites and pinned tabs\n    history   list recent history\n    skills    print or install the ardia agent skill\n    scripts   write, test and install userscripts\n    config    read, write and check config.json\n    theme     make, pick, edit and check themes\n    run       run one of Ardia's commands\n    commands  list the commands ardia run can run\n    windows   list Ardia's windows and their tabs\n    events    print events as they happen\n    on        run a program for each event\n    hooks     run hooks from hooks.json, at login if you like\n    tabs      list and organize tabs\n    groups    list and organize tab groups\n    apply     apply several tab and group operations at once (JSON)\n    call      send any method to Ardia's control socket (ardia methods lists them)\n    methods   list the methods ardia call can send\n    plugins   install, list and manage plugins\n    feedback  report a problem or idea to Ardia's developer (agents welcome)\n    star      star the Ardia repo on GitHub, only after the user says yes\n\noptions:\n  -h, --help  show this help message and exit\n  --version   show program's version number and exit\n  --skill     print the agent skill that ships with this ardia (SKILL.md) and exit; same\n              as ardia skills get\n\nShared options go before the command or after it, for the commands that take them:\n  --port N        a plain DevTools server on 127.0.0.1:N (testing; $ARDIA_PORT)\n  --ws URL        a browser WebSocket URL ($ARDIA_WS)\n  --data-dir DIR  the Ardia data dir ($ARDIA_DATA_DIR, else the installed app's)\n  --timeout S     and --json\nA flag wins over its environment variable.\n\nExamples:\n  ardia --port 9222 browse snapshot -i\n  ardia browse --port 9222 snapshot -i\n  ardia windows --json\n  ardia tabs --json\n  ardia groups create tab-1 tab-2 --name Work --icon 🚀\n  ardia methods\n  ardia call run -p command=newTab\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "help--help-10",
+  "command": "--help",
+  "argv": [
+   "--help"
+  ],
+  "env": {
+   "COLUMNS": "40"
+  },
+  "note": "too narrow: Python wraps it",
+  "fallback": true,
+  "expected": {
+   "status": 0,
+   "stdout": {
+    "text": "usage: ardia [-h] [--version]\n             [--skill]\n             <command> ...\n\nControl a running Ardia from the terminal. ardia browse drives the browser (ardia browse --help); ardia computer operates native Mac apps through the bundled cua-driver (ardia computer --help). Agents: skip if an ardia skill is already in your context; otherwise run ardia --skill.\n\npositional arguments:\n  <command>\n    browse    drive the browser with\n              agent-browser's commands\n              (ardia browse --help)\n    notes     read and write notes\n              (ardia notes --help)\n    computer  operate native Mac apps\n              through the bundled cua-\n              driver: computer use\n              (ardia computer --help)\n    pinned    list favorites and\n              pinned tabs\n    history   list recent history\n    skills    print or install the\n              ardia agent skill\n    scripts   write, test and install\n              userscripts\n    config    read, write and check\n              config.json\n    theme     make, pick, edit and\n              check themes\n    run       run one of Ardia's\n              commands\n    commands  list the commands ardia\n              run can run\n    windows   list Ardia's windows and\n              their tabs\n    events    print events as they\n              happen\n    on        run a program for each\n              event\n    hooks     run hooks from\n              hooks.json, at login if\n              you like\n    tabs      list and organize tabs\n    groups    list and organize tab\n              groups\n    apply     apply several tab and\n              group operations at once\n              (JSON)\n    call      send any method to\n              Ardia's control socket\n              (ardia methods lists\n              them)\n    methods   list the methods ardia\n              call can send\n    plugins   install, list and manage\n              plugins\n    feedback  report a problem or idea\n              to Ardia's developer\n              (agents welcome)\n    star      star the Ardia repo on\n              GitHub, only after the\n              user says yes\n\noptions:\n  -h, --help  show this help message\n              and exit\n  --version   show program's version\n              number and exit\n  --skill     print the agent skill\n              that ships with this\n              ardia (SKILL.md) and\n              exit; same as ardia\n              skills get\n\nShared options go before the command or after it, for the commands that take them:\n  --port N        a plain DevTools server on 127.0.0.1:N (testing; $ARDIA_PORT)\n  --ws URL        a browser WebSocket URL ($ARDIA_WS)\n  --data-dir DIR  the Ardia data dir ($ARDIA_DATA_DIR, else the installed app's)\n  --timeout S     and --json\nA flag wins over its environment variable.\n\nExamples:\n  ardia --port 9222 browse snapshot -i\n  ardia browse --port 9222 snapshot -i\n  ardia windows --json\n  ardia tabs --json\n  ardia groups create tab-1 tab-2 --name Work --icon 🚀\n  ardia methods\n  ardia call run -p command=newTab\n"
+   },
+   "stderr": {
+    "text": ""
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     },
+     "sent": true
+    }
+   ],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    },
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "<now float s>",
+     "properties": {
+      "command": "none",
+      "subcommand": null,
+      "exit_code": 0,
+      "error_code": null,
+      "flags": "--help",
+      "cli_version": "0.0.0.dev0",
+      "$environment": "dev"
+     }
+    }
+   ],
+   "usage": null,
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "data/Telemetry/cli-flush-claim.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/cli-flush.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/cli-queue.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ],
+    "data/Telemetry/local": [
+     "written",
+     "dir",
+     448
+    ],
+    "data/Telemetry/local/cli-<parity:today>.jsonl": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "data/Telemetry/local/cli-local.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ }
+]
