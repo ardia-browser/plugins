@@ -135,6 +135,10 @@ describe("page calls a script makes", () => {
     expect(expression).not.toContain("JSON");
     expect(new Function("JSON", `return (${expression});`)({ parse: () => [99] })).toBe(7);
     expect(literal({ a: [1, "x", null, true], "": -0 })).toBe('{["a"]:[1,"x",null,true],[""]:-0}');
+    const tricky = ["document.querySelector('[href=/docs]')", "\u2028\u2029", "\ud800", 1e308, { ["__proto__"]: 1 }];
+    const passed = evaluateExpression({ op: "evaluate", fn: "(...a) => a", isFunction: true, args: tricky });
+    expect(passed).not.toContain("querySelector(");
+    expect(new Function(`return (${passed});`)()).toEqual(tricky);
     let deep: unknown = 1;
     for (let i = 0; i < 600; i += 1) deep = [deep];
     expect(() => literal(deep)).toThrow(ArgumentsTooDeep);

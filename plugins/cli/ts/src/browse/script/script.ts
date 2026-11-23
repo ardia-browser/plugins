@@ -252,6 +252,9 @@ class ScriptRun {
   inflightBytes = 0;
   error: Error | null = null;
   readonly stop = new AbortController();
+  readonly controls = new Map<number, AbortController>();
+  readonly mutating = new Set<number>();
+  private ended = false;
   private settling: Promise<void> | null = null;
 
   constructor(readonly ctx: Ctx, readonly runner: Runner) {}
@@ -266,7 +269,7 @@ class ScriptRun {
 
   async drain(): Promise<void> {
     this.gate.close();
-    if (this.running.size > 0) this.stop.abort(new Cancelled());
+    if (!this.ended && this.running.size > 0) this.stop.abort(new Cancelled());
     await Promise.allSettled([...this.running]);
   }
 
@@ -280,9 +283,14 @@ class ScriptRun {
   }
 
   stopRunning(): number {
-    const cut = this.running.size;
+    this.ended = true;
     this.gate.close();
-    if (cut > 0) this.stop.abort(new Cancelled());
+    let cut = 0;
+    for (const [id, control] of this.controls) {
+      if (this.mutating.has(id)) continue;
+      control.abort(new Cancelled());
+      cut += 1;
+    }
     return cut;
   }
 
@@ -354,6 +362,7 @@ async function serveCall(run: ScriptRun, request: Request): Promise<Answer> {
   if (light) run.receiptsSkipped += 1;
   try {
     const answer = await run.gate.run(exclusive, () => run.admitted(async () => {
+      if (exclusive) run.mutating.add(request.id);
       if (!exclusive) await run.settle(name, words.slice(1));
       return answerCall(run.ctx, words, index, light);
     }));
@@ -418,6 +427,8 @@ async function serve(run: ScriptRun, request: Request): Promise<void> {
     return;
   } finally {
     run.inflight.delete(request.id);
+    run.controls.delete(request.id);
+    run.mutating.delete(request.id);
     run.inflightBytes -= Number(request["bytes"]) || 0;
   }
   run.reply(request.id, answer);
@@ -468,7 +479,8 @@ async function drive(run: ScriptRun, source: string): Promise<Message> {
         run.fail(tooBusy(`The script made more than ${MAX_CALLS.toLocaleString("en-US")} calls; do less per run and keep results in \`state\``));
         continue;
       }
-      if (run.inflightBytes + event.request.length > IN_FLIGHT_BYTES) {
+      const bytes = Buffer.byteLength(event.request, "utf8");
+      if (run.inflightBytes + bytes > IN_FLIGHT_BYTES) {
         run.fail(tooBusy(`The script's waiting calls carried more than ${IN_FLIGHT_BYTES / 1024 / 1024} MB of arguments; send less at once`));
         continue;
       }
@@ -476,9 +488,11 @@ async function drive(run: ScriptRun, source: string): Promise<Message> {
         run.fail(tooBusy(`The script had more than ${MAX_PENDING.toLocaleString("en-US")} calls waiting at once; await them in smaller groups (Promise.all over a few dozen at a time)`));
         continue;
       }
-      request["bytes"] = event.request.length;
-      run.inflightBytes += event.request.length;
-      const work = withSignal(signal, () => serve(run, request));
+      request["bytes"] = bytes;
+      run.inflightBytes += bytes;
+      const control = new AbortController();
+      run.controls.set(request.id, control);
+      const work = withSignal(AbortSignal.any([signal, control.signal]), () => serve(run, request));
       run.running.add(work);
       void work.finally(() => run.running.delete(work));
     } else if (event.type === "log") {
@@ -621,12 +635,21 @@ export async function run(ctx: Ctx, source: string, seconds: number): Promise<Re
       count("script_receipts_skipped", script.receiptsSkipped);
     }
   }
-  if (script !== null && script.error !== null) throw script.error;
   keepState(state, message["state"]);
+  if (script !== null && script.error !== null) {
+    const late = script.error;
+    if (message["kind"] !== "error" || late instanceof ConnectionLost || !(late instanceof BrowseError)) throw late;
+    const line = sourceLine(source, message["line"]);
+    throw new BrowseError(
+      `${errorText(message, source, script.calls)}\nA call the script didn't await then failed too: ${late.text}`,
+      { ...failureData(message, script.calls), line },
+      late.code ?? "script_failed",
+    );
+  }
   const logs = Array.isArray(message["logs"]) ? message["logs"].map(String) : [];
   if (message["logsDropped"]) logs.push(`[${String(message["logsDropped"])} more log lines dropped past ${Math.floor(LOG_LIMIT / 1024)} KB]`);
   const notes: string[] = [];
-  const unawaited = Number(message["unawaited"]) || 0;
+  const unawaited = script !== null ? script.gate.dropped : Number(message["unawaited"]) || 0;
   if (unawaited) notes.push(`[${unawaited} command${unawaited !== 1 ? "s" : ""} the script didn't await never ran]`);
   const cut = Number(message["cut"]) || 0;
   if (cut) notes.push(`[${cut} command${cut !== 1 ? "s" : ""} the script didn't await ${cut !== 1 ? "were" : "was"} still running when it ended and ${cut !== 1 ? "were" : "was"} stopped]`);

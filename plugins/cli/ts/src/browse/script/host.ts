@@ -13,6 +13,8 @@ export const READ_CONCURRENCY = 8;
 export const MEMORY_LIMIT = 1024 * 1024 * 1024;
 export const MEMORY_POLL_MS = 200;
 export const QUEUED_BYTES = 128 * 1024 * 1024;
+export const QUEUED_EVENTS = 10_000;
+export const EVENT_OVERHEAD = 64;
 const KEPT_ENV = ["TZ", "LANG", "LC_ALL", "LC_CTYPE", "LC_TIME", "LC_NUMERIC"];
 
 export type Exit = { type: "exit"; code: number | null; signal: string | null };
@@ -57,10 +59,10 @@ function runnerEnv(): Record<string, string> {
 
 function payloadSize(event: RunnerEvent): number {
   const fields = event as Record<string, unknown>;
-  let size = 0;
+  let size = EVENT_OVERHEAD;
   for (const key of ["request", "line", "value", "result", "name"]) {
     const value = fields[key];
-    if (typeof value === "string") size += value.length;
+    if (typeof value === "string") size += Buffer.byteLength(value, "utf8");
   }
   return size;
 }
@@ -109,7 +111,7 @@ export class Runner {
       return;
     }
     const size = payloadSize(given);
-    if (this.queuedBytes + size > QUEUED_BYTES) {
+    if (this.queuedBytes + size > QUEUED_BYTES || this.events.length >= QUEUED_EVENTS) {
       this.overBudget = true;
       this.events.splice(0, this.events.length);
       this.queuedBytes = 0;
@@ -239,6 +241,7 @@ export class Gate {
   private readonly queue: Waiter[] = [];
   private closed = false;
   peak = 0;
+  dropped = 0;
 
   constructor(private readonly limit = READ_CONCURRENCY) {}
 
@@ -247,13 +250,19 @@ export class Gate {
   }
 
   async run<T>(exclusive: boolean, work: () => Promise<T>): Promise<T> {
-    if (this.closed) throw new Dropped();
+    if (this.closed) {
+      this.dropped += 1;
+      throw new Dropped();
+    }
     await new Promise<void>((resolve, reject) => {
       this.queue.push({ exclusive, resolve, reject });
       this.pump();
     });
     try {
-      if (this.closed) throw new Dropped();
+      if (this.closed) {
+        this.dropped += 1;
+        throw new Dropped();
+      }
       return await work();
     } finally {
       if (exclusive) this.writer = false;
@@ -269,6 +278,7 @@ export class Gate {
 
   dropQueued(): number {
     const dropped = this.queue.splice(0, this.queue.length);
+    this.dropped += dropped.length;
     for (const waiter of dropped) waiter.reject(new Dropped());
     return dropped.length;
   }

@@ -135,6 +135,22 @@ describe.skipIf(!CHROME)("browse script against headless Chrome", () => {
     expect(JSON.parse(receipt.out).data.value).toContain("changes:");
   });
 
+  test("an action the script didn't await still finishes after it returns", async () => {
+    expect((await browse(["open", `${origin}/`])).status).toBe(0);
+    const returned = await script("page.click('#filter');\nawait sleep(30);\nreturn 'returned';");
+    expect(returned.status).toBe(0);
+    expect(returned.out).toContain("returned");
+    expect(returned.out).not.toContain("stopped");
+    const after = await script("return await page.$$eval('article:not([hidden])', (rows) => rows.length);", "--json");
+    expect(JSON.parse(after.out).data.value).toBe(10);
+    expect((await browse(["open", `${origin}/`])).status).toBe(0);
+    const unstarted = await script("page.click('#filter');\npage.click('#filter');\nreturn 'returned';");
+    expect(unstarted.status).toBe(0);
+    const rows = JSON.parse((await script("return await page.$$eval('article:not([hidden])', (rows) => rows.length);", "--json")).out).data.value;
+    const reported = /\[(\d) commands? the script didn't await never ran\]/u.exec(unstarted.out);
+    expect(Number(reported?.[1] ?? 0) + (rows === 10 ? 1 : 0)).toBeGreaterThanOrEqual(1);
+  });
+
   test("a failed page call names its line and call", async () => {
     const done = await script("const a = 1;\nawait page.$eval('#missing', (el) => el.id);");
     expect(done.status).toBe(1);
