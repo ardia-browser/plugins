@@ -5,7 +5,8 @@
   "scripts": {
     "typecheck": "tsrs --noEmit -p .",
     "build": "sh scripts/build.sh",
-    "typecheck:harness": "tsrs --noEmit -p tests/m3"
+    "typecheck:harness": "tsrs --noEmit -p tests/m3",
+    "test": "bun test --parallel ./tests"
   },
   "devDependencies": {
     "@types/bun": "1.3.14",

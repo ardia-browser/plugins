@@ -2,10 +2,11 @@ name: Command Line plugin
 
 on:
   pull_request:
-    paths: ["plugins/cli/**", ".github/workflows/cli.yml"]
+    paths: ["plugins/cli/**", ".github/workflows/cli.yml", ".github/release/check-build.sh"]
   push:
     branches: [main]
-    paths: ["plugins/cli/**", ".github/workflows/cli.yml"]
+    paths: ["plugins/cli/**", ".github/workflows/cli.yml", ".github/release/check-build.sh"]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,14 +16,59 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  route:
+    name: Which checks run
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      cli: ${{ steps.route.outputs.cli }}
+      main: ${{ steps.route.outputs.main }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+          sparse-checkout: .github
+      - id: route
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          cli=true
+          reason="a $EVENT run checks everything"
+          if [ "$EVENT" = pull_request ]; then
+            changed=$(git diff --no-renames --name-only HEAD^1 HEAD)
+            cli=false
+            reason="only docs and the bench changed"
+            while IFS= read -r path; do
+              case $path in
+                plugins/cli/README.md|plugins/cli/docs/*|plugins/cli/bench/*) ;;
+                plugins/cli/*|.github/workflows/cli.yml|.github/release/check-build.sh) cli=true; reason="$path changed"; break ;;
+              esac
+            done <<<"$changed"
+          fi
+          main=false
+          [ "$cli" = false ] || [ -z "$(git ls-tree --name-only HEAD plugins/cli/main/package.json)" ] || main=true
+          echo "cli=$cli" >> "$GITHUB_OUTPUT"
+          echo "main=$main" >> "$GITHUB_OUTPUT"
+          echo "### CLI checks: $([ "$cli" = true ] && echo run || echo skipped) ($reason)" >> "$GITHUB_STEP_SUMMARY"
+
   typescript:
     name: TypeScript ardia on ${{ matrix.os }}
+    needs: route
+    if: needs.route.outputs.cli == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15, ubuntu-24.04]
+        include:
+          - os: macos-15
+            cache: ~/Library/Caches/ardia-cli-build
+            platform: macos-arm64
+          - os: ubuntu-24.04
+            cache: ~/.cache/ardia-cli-build
+            platform: linux-x64
     defaults:
       run:
         working-directory: plugins/cli/ts
@@ -36,6 +82,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24.22.2
+      - uses: actions/cache@v4
+        with:
+          path: ${{ matrix.cache }}
+          key: ardia-cli-build-${{ matrix.platform }}-${{ hashFiles('plugins/cli/scripts/build.sh') }}
       - run: bun install --frozen-lockfile --ignore-scripts
       - name: Type check (tsrs)
         run: ./node_modules/.bin/tsrs --noEmit -p .
@@ -47,30 +97,39 @@ jobs:
         run: |
           echo "ardia-ts binary: $(wc -c < dist/ardia-ts) bytes" >> "$GITHUB_STEP_SUMMARY"
           echo "ardia-libc.so addon: $(wc -c < dist/ardia-libc.so) bytes" >> "$GITHUB_STEP_SUMMARY"
+      - name: Package the plugin as the release does, and check it
+        working-directory: .
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' plugins/cli/plugin.json | head -n 1)
+          plugins/cli/build.sh "$RUNNER_TEMP/out"
+          .github/release/check-build.sh "$RUNNER_TEMP/out" "$version"
       - name: uv
         run: curl -LsSf https://astral.sh/uv/0.13.0/install.sh | sh
-      - name: Unit tests, some beside the Python CLI
+      - name: Unit tests, some beside the Python CLI, one file per core at a time
         run: |
           ~/.local/bin/uv venv --python 3.13.16 "$RUNNER_TEMP/unit-venv"
-          ARDIA_TEST_PYTHON="$RUNNER_TEMP/unit-venv/bin/python" bun test ./tests
-      - name: Parity with the Python CLI
-        working-directory: plugins/cli
-        env:
-          ARDIA_TS_CLI: ${{ github.workspace }}/plugins/cli/ts/dist/ardia-ts
-          ARDIA_TEST_REQUIRES: ts
-        run: |
-          ~/.local/bin/uv venv --python 3.13.16 "$RUNNER_TEMP/venv"
-          VIRTUAL_ENV="$RUNNER_TEMP/venv" ~/.local/bin/uv pip install --quiet --require-hashes --no-build -r requirements.lock
-          "$RUNNER_TEMP/venv/bin/python" -m unittest -v tests.test_parity.TsParityTable tests.test_parity.TsDeepFixtures tests.test_parity.TsProcess tests.test_parity.HarnessRules tests.test_parity.HarnessCatches tests.test_parity.ServedTable tests.test_parity.ProtocolAgrees tests.test_parity.BuildSmoke tests.test_closed_stdout.TsClosedStdout tests.test_ts_browse_plugin
-      - name: Browse daemon harness, replay mode (recordings answer the Python daemon, no browser)
-        if: matrix.os == 'macos-15'
-        working-directory: plugins/cli
-        run: '"$RUNNER_TEMP/venv/bin/python" -m unittest -v tests.test_m3_harness'
+          ARDIA_TEST_PYTHON="$RUNNER_TEMP/unit-venv/bin/python" bun run test
 
-  main:
-    name: Manifest v2 main on ubuntu-24.04
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
+  python-parity:
+    name: ${{ matrix.name }} on ${{ matrix.os }}
+    needs: route
+    if: needs.route.outputs.cli == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            name: Parity with the Python CLI
+            tests: tests.test_parity.TsParityTable tests.test_parity.TsDeepFixtures tests.test_parity.TsProcess tests.test_parity.HarnessRules tests.test_parity.HarnessCatches tests.test_parity.ServedTable tests.test_parity.ProtocolAgrees tests.test_parity.BuildSmoke tests.test_closed_stdout.TsClosedStdout tests.test_ts_browse_plugin
+          - os: ubuntu-24.04
+            name: Parity with the Python CLI
+            tests: tests.test_parity.TsParityTable tests.test_parity.TsDeepFixtures tests.test_parity.TsProcess tests.test_parity.HarnessRules tests.test_parity.HarnessCatches tests.test_parity.ServedTable tests.test_parity.ProtocolAgrees tests.test_parity.BuildSmoke tests.test_closed_stdout.TsClosedStdout tests.test_ts_browse_plugin
+          - os: macos-15
+            name: Browse daemon harness, replay mode (recordings answer the Python daemon, no browser)
+            tests: tests.test_m3_harness
     defaults:
       run:
         working-directory: plugins/cli
@@ -78,21 +137,34 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
       - uses: actions/setup-node@v4
-        if: hashFiles('plugins/cli/main/package.json') != ''
         with:
           node-version: 24.22.2
-      - name: Install, type check, build and test plugins/cli/main
-        if: hashFiles('plugins/cli/main/package.json') != ''
-        working-directory: plugins/cli/main
+      - name: Build the TypeScript ardia
+        working-directory: plugins/cli/ts
         run: |
-          npm ci --ignore-scripts --no-audit --no-fund
-          npm run typecheck
-          npm run build
-          npm test
+          bun install --frozen-lockfile --ignore-scripts
+          sh scripts/build.sh
+      - name: uv
+        run: curl -LsSf https://astral.sh/uv/0.13.0/install.sh | sh
+      - name: Locked dependencies
+        run: |
+          ~/.local/bin/uv venv --python 3.13.16 "$RUNNER_TEMP/venv"
+          VIRTUAL_ENV="$RUNNER_TEMP/venv" ~/.local/bin/uv pip install --quiet --require-hashes --no-build -r requirements.lock
+      - name: ${{ matrix.name }}
+        env:
+          ARDIA_TS_CLI: ${{ github.workspace }}/plugins/cli/ts/dist/ardia-ts
+          ARDIA_TEST_REQUIRES: ts
+          TESTS: ${{ matrix.tests }}
+        run: '"$RUNNER_TEMP/venv/bin/python" -m unittest -v $TESTS'
 
   python:
     name: Python tests on ${{ matrix.os }}
+    needs: route
+    if: needs.route.outputs.cli == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -121,8 +193,19 @@ jobs:
           ARDIA_DATA_DIR: ${{ runner.temp }}/data
           ARDIA_TELEMETRY: "off"
         run: '"$RUNNER_TEMP/venv/bin/python" -m ardia_cli plugins check "$PWD"'
-      - name: The vendored plugin schema is ardia's
-        if: matrix.os == 'ubuntu-24.04'
+
+  schema:
+    name: The vendored plugin schema is ardia main's
+    needs: route
+    if: needs.route.outputs.cli == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: plugins/cli/ardia_cli/schemas
+      - name: Compare with ardia main's docs/plugin.schema.json
         run: |
           ardia_ref=main
           set -euo pipefail
@@ -131,5 +214,45 @@ jobs:
             echo "::warning::ardia $ardia_ref doesn't publish docs/plugin.schema.json: the vendored schema wasn't compared"
             exit 0
           fi
-          diff -u "$RUNNER_TEMP/ardia-plugin.schema.json" ardia_cli/schemas/plugin.schema.json \
-            || { echo "::error::ardia_cli/schemas/plugin.schema.json isn't ardia $ardia_ref's docs/plugin.schema.json: copy it over"; exit 1; }
+          diff -u "$RUNNER_TEMP/ardia-plugin.schema.json" plugins/cli/ardia_cli/schemas/plugin.schema.json \
+            || { echo "::error::plugins/cli/ardia_cli/schemas/plugin.schema.json isn't ardia $ardia_ref's docs/plugin.schema.json: copy it over"; exit 1; }
+
+  main:
+    name: Manifest v2 main on ubuntu-24.04
+    needs: route
+    if: needs.route.outputs.main == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: plugins/cli/main
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.2
+      - name: Install, type check, build and test plugins/cli/main
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run typecheck
+          npm run build
+          npm test
+
+  done:
+    name: CLI checks pass
+    needs: [route, typescript, python-parity, python, schema, main]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+          ROUTE: ${{ needs.route.result }}
+        run: |
+          echo "results: $RESULTS"
+          [ "$ROUTE" = success ] || { echo "::error::the route job didn't finish, so no check ran"; exit 1; }
+          for result in $RESULTS; do
+            case $result in success|skipped) ;; *) echo "::error::a check ended $result"; exit 1 ;; esac
+          done
