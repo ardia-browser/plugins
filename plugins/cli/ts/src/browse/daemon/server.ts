@@ -403,7 +403,7 @@ export class Daemon {
       if ("error" in outcome) throw outcome.error;
       const [code, out, err, body] = outcome.answer;
       const fields: [string, Value][] = [];
-      if (body) fields.push(["body", Buffer.from(body).toString("base64")]);
+      if (body) fields.push(["body", Buffer.from(body).toString("base64")], ["body_bytes", BigInt(body.length)]);
       const extra = answerFields(metrics);
       if (extra.metrics) fields.push(["metrics", new Map([...extra.metrics].map(([key, value]): [string, Value] => [key, typeof value === "number" ? BigInt(value) : value]))]);
       if (extra.code) fields.push(["code", extra.code]);

@@ -559,6 +559,7 @@ export function limitNote(found: number, limit: number, flagName: string): strin
 export async function readLocal(options: Options, positional: string[], stdin: string | null, globalOptions: Options): Promise<Result> {
   const urls = wantedUrls(options, positional, stdin);
   if (urls.length === 0) throw new Usage("Usage: ardia browse read <url>... [--stdin] [--links <pattern>] [-s <selector>] [--http]");
+  if (urls.length === 1 && globalOptions["out_body"] && !options["selector"]) return fetchRun(urls[0] as string, options, globalOptions);
   const limit = pagesLimit(options, urls.length);
   pageTimeout(options);
   if (options["selector"]) throw new Usage("-s needs the browser's DOM; drop --http to read the pages in Ardia");
@@ -605,6 +606,7 @@ export async function run(ctx: Ctx, options: Options, positional: string[]): Pro
   let records: PageRecord[];
   if (fetchOnly(options)) {
     if (selector) throw new Usage("-s needs the browser's DOM; drop --http to read the pages in Ardia");
+    if (urls.length === 1 && named === 1 && ctx.options["out_body"]) return fetchRun(urls[0] as string, options, ctx.options);
     records = await readHttp(urls, options);
   } else records = await readTabs(ctx, urls, selector, timeout, options);
   return resultFor(records, options, ctx.options, extra, dataExtra);

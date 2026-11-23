@@ -22,13 +22,13 @@ const TEXT_TYPES = new Set([
   "application/yaml", "application/x-yaml", "application/toml", "application/x-sh", "application/sql", "image/svg+xml",
   "audio/x-mpegurl", "audio/mpegurl", "application/x-mpegurl", "application/vnd.apple.mpegurl", "audio/x-scpls",
 ]);
-const BINARY_FAMILIES = ["image/", "audio/", "video/", "font/", "model/"];
+const BINARY_FAMILIES = ["image/", "audio/", "video/", "font/"];
 const BINARY_TYPES = new Set([
   "application/zip", "application/gzip", "application/x-gzip", "application/x-tar", "application/x-7z-compressed", "application/x-rar-compressed",
   "application/vnd.rar", "application/x-bzip2", "application/x-xz", "application/zstd", "application/wasm", "application/x-sqlite3",
   "application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint", "application/x-msdownload", "application/java-archive",
 ]);
-const UNICODE_CHARSETS = /^utf-?(16|32)(le|be)?$/iu;
+const UNICODE_CHARSETS = /^utf(16|32)(le|be)?$/u;
 
 export type Fetched = [number, string, string, string, Uint8Array?];
 export type BinaryMode = "refuse" | "keep" | "skip";
@@ -96,9 +96,9 @@ export function binaryType(kind: string): boolean {
 export function binaryBody(kind: string, charset: string | null, body: Uint8Array): boolean {
   if (textualType(kind)) return false;
   if (binaryType(kind)) return true;
-  if (charset !== null && UNICODE_CHARSETS.test(charset)) return false;
+  if (charset !== null && UNICODE_CHARSETS.test(charset.toLowerCase().replaceAll(/[-_]/gu, ""))) return false;
+  if (body.includes(0)) return true;
   const sample = body.length > MAX_BODY ? trimmedToChar(body.subarray(0, MAX_BODY)) : body;
-  if (sample.includes(0)) return true;
   if (charset !== null && !/^utf-?8$/iu.test(charset)) return false;
   try {
     new TextDecoder("utf-8", { fatal: true }).decode(sample);
@@ -123,6 +123,15 @@ function trimmedToChar(head: Uint8Array): Uint8Array {
     return sequenceLength(unit) > back ? head.subarray(0, end - back) : head;
   }
   return head;
+}
+
+export function locationText(location: string): string {
+  if (!/[\x80-\xff]/u.test(location) || /[^\x00-\xff]/u.test(location)) return location;
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(Buffer.from(location, "latin1"));
+  } catch {
+    return location;
+  }
 }
 
 export function requestUrl(url: string): string {
@@ -165,10 +174,10 @@ export async function fetchUrl(url: string, timeout: number, accept = ACCEPT, bi
         );
         const location = response.headers.get("location");
         if (![301, 302, 303, 307, 308].includes(response.status) || !location || hop >= REDIRECTS) break;
-        const joined = urljoin(target, location);
-        if (!WEB_SCHEMES.has(urlsplit(joined).scheme.toLowerCase())) break;
         let next: string;
         try {
+          const joined = urljoin(target, locationText(location));
+          if (!WEB_SCHEMES.has(urlsplit(joined).scheme.toLowerCase())) break;
           next = requestUrl(joined);
         } catch {
           break;
@@ -194,6 +203,7 @@ export async function fetchUrl(url: string, timeout: number, accept = ACCEPT, bi
     const final = (response as unknown as { finalUrl: string }).finalUrl;
     const kind = pyStrip(contentType.split(";")[0] as string).toLowerCase();
     const pdf = kind === "application/pdf" || (body[0] === 0x25 && body[1] === 0x50 && body[2] === 0x44 && body[3] === 0x46);
+    if (pdf && binary === "skip") return [response.status, "application/pdf", "", final, new Uint8Array()];
     if (pdf && binary === "keep") {
       if (body.length > MAX_BODY) throw new BrowseError(`${url} sent a binary file over ${groupThousands(String(MAX_BODY))} bytes; read --http --out saves files up to that size`, null, "result_too_large");
       return [response.status, "application/pdf", "", final, body];
@@ -211,6 +221,7 @@ export async function fetchUrl(url: string, timeout: number, accept = ACCEPT, bi
       if (body.length > MAX_BODY) throw new BrowseError(`${url} sent a binary file over ${groupThousands(String(MAX_BODY))} bytes; read --http --out saves files up to that size`, null, "result_too_large");
       return [response.status, kind || "application/octet-stream", "", final, body];
     }
+    if (binary === "keep" && body.length > MAX_BODY) throw new BrowseError(`${url} sent over ${groupThousands(String(MAX_BODY))} bytes; read --http --out saves responses up to that size`, null, "result_too_large");
     const text = decode(body.subarray(0, MAX_BODY), declared ?? "utf-8");
     return [response.status, kind, text, final];
   } finally {

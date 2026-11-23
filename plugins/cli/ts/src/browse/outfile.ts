@@ -222,7 +222,7 @@ export function savedBody(command: string, answer: JsonObject): Uint8Array | nul
   const encoded = command === "read" ? answer.get("body") : undefined;
   if (typeof encoded !== "string") return null;
   const body = Buffer.from(encoded, "base64");
-  if (body.toString("base64") !== encoded) throw new BodyDamaged();
+  if (body.toString("base64") !== encoded || answer.get("body_bytes") !== BigInt(body.length)) throw new BodyDamaged();
   return body;
 }
 

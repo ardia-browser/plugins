@@ -35,6 +35,12 @@ beforeAll(() => {
       if (url.pathname === "/late-binary") return new Response(Buffer.concat([Buffer.from("a".repeat(8192)), Buffer.from([0xff, 0x00, 0x80])]), { headers: { "content-type": "application/octet-stream" } });
       if (url.pathname === "/doc.pdf") return new Response(Buffer.from("%PDF-1.4\n%\xe2\xe3\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n", "latin1"), { headers: { "content-type": "application/pdf" } });
       if (url.pathname === "/playlist") return new Response("#EXTM3U\n#EXTINF:5,\nclip.ts\n", { headers: { "content-type": "audio/x-mpegurl" } });
+      if (url.pathname === "/big-then-nul") return new Response(Buffer.concat([Buffer.alloc(8 * 1024 * 1024, 0x61), Buffer.from([0])]), { headers: { "content-type": "application/octet-stream" } });
+      if (url.pathname === "/utf16-dashed") return new Response(Buffer.from("Hello", "utf16le"), { headers: { "content-type": "application/octet-stream; charset=utf-16-le" } });
+      if (url.pathname === "/model.obj") return new Response("v 0 0 0\nv 1 0 0\nf 1 2\n", { headers: { "content-type": "model/obj" } });
+      if (url.pathname === "/ok") return new Response("<html><title>OK</title><body><main>A readable page with words.</main></body></html>", { headers: { "content-type": "text/html" } });
+      if (url.pathname === "/ok.md") return new Response(Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.alloc(8 * 1024 * 1024 + 10, 0x20)]), { headers: { "content-type": "application/pdf" } });
+      if (url.pathname === "/bad-location") return new Response(null, { status: 302, headers: { location: "http://[" } });
       if (url.pathname === "/utf16") return new Response(Buffer.from("Hello", "utf16le"), { headers: { "content-type": "application/octet-stream; charset=utf-16le" } });
       if (url.pathname === "/pixmap") return new Response(Uint8Array.from([0x50, 0x36, 0x0a, 0x31, 0x20, 0x31, 0x0a, 0x32, 0x35, 0x35, 0x0a, 0x01, 0x02, 0x03]), { headers: { "content-type": "image/x-portable-pixmap" } });
       if (url.pathname === "/readable") return new Response("<html><title>Readable</title><body><main>A readable page with enough words in it.</main></body></html>", { headers: { "content-type": "text/html" } });
@@ -96,8 +102,11 @@ describe("read --http keeps binary bodies whole (plugins#73, FB-8EJR)", () => {
 
   test("a body that arrives altered or short is refused, never saved", () => {
     const encoded = Buffer.from(ZIP).toString("base64");
-    expect(() => savedBody("read", new Map([["body", `${encoded.slice(0, 4)}***${encoded.slice(7)}`]]))).toThrow(BodyDamaged);
-    expect(savedBody("read", new Map([["body", encoded]]))?.length).toBe(ZIP.length);
+    const size = BigInt(ZIP.length);
+    expect(() => savedBody("read", new Map<string, Value>([["body", `${encoded.slice(0, 4)}***${encoded.slice(7)}`], ["body_bytes", size]]))).toThrow(BodyDamaged);
+    expect(() => savedBody("read", new Map<string, Value>([["body", encoded.slice(0, 8)], ["body_bytes", size]]))).toThrow(BodyDamaged);
+    expect(() => savedBody("read", new Map<string, Value>([["body", encoded]]))).toThrow(BodyDamaged);
+    expect(savedBody("read", new Map<string, Value>([["body", encoded], ["body_bytes", size]]))?.length).toBe(ZIP.length);
   });
 
   test("an untyped binary body is sniffed and kept raw too", async () => {
@@ -137,6 +146,37 @@ describe("read --http keeps binary bodies whole (plugins#73, FB-8EJR)", () => {
     expect(Buffer.from(pdf.body as Uint8Array).subarray(0, 5).toString()).toBe("%PDF-");
     await expect(fetchRun(`${base}/deck.pptx`, {}, { out_only: true })).rejects.toMatchObject({ code: "binary_body" });
     expect((await fetchRun(`${base}/playlist`, { raw: true }, {})).data).toMatchObject({ content: "#EXTM3U\n#EXTINF:5,\nclip.ts\n" });
+  });
+
+  test("Codex r3: oversized ambiguous bodies, charset spellings, text models, PDF probes, raw redirects", async () => {
+    await expect(fetchRun(`${base}/big-then-nul`, {}, { out_body: true })).rejects.toMatchObject({ code: "result_too_large" });
+    expect((await fetchRun(`${base}/utf16-dashed`, { raw: true }, {})).data).toMatchObject({ content: "Hello" });
+    expect(String((await fetchRun(`${base}/model.obj`, { raw: true }, {})).data && ((await fetchRun(`${base}/model.obj`, { raw: true }, {})).data as Record<string, unknown>)["content"])).toContain("v 1 0 0");
+    expect(String(((await fetchRun(`${base}/ok`, {}, {})).data as Record<string, unknown>)["content"])).toContain("A readable page");
+    const [status] = await fetchUrl(`${base}/bad-location`, 5);
+    expect(status).toBe(302);
+    const seenRaw: string[] = [];
+    const raw = Bun.listen({
+      hostname: "127.0.0.1",
+      port: 0,
+      socket: {
+        data(socket, chunk) {
+          const line = Buffer.from(chunk).toString("latin1").split("\r\n")[0] as string;
+          seenRaw.push(line);
+          if (line.startsWith("GET /start ")) socket.write(Buffer.concat([Buffer.from("HTTP/1.1 302 Found\r\nContent-Length: 0\r\nLocation: "), Buffer.from("/東京", "utf8"), Buffer.from("\r\nConnection: close\r\n\r\n")]));
+          else socket.write("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 5\r\nConnection: close\r\n\r\ntokyo");
+          socket.end();
+        },
+      },
+    });
+    try {
+      const [rawStatus, , text] = await fetchUrl(`http://127.0.0.1:${raw.port}/start`, 5);
+      expect(rawStatus).toBe(200);
+      expect(text).toBe("tokyo");
+      expect(seenRaw.some((line) => line.startsWith("GET /%E6%9D%B1%E4%BA%AC "))).toBe(true);
+    } finally {
+      raw.stop(true);
+    }
   });
 
   test("a UTF-16 body served as octets reads as text, a pixmap saves raw", async () => {
