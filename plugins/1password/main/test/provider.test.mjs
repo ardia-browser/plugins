@@ -102,7 +102,7 @@ describe("sign in through the 1Password app", () => {
     assert.deepEqual(connect.argv, ["vault", "list", "--format", "json", "--account=ACCOUNTUUID1"]);
     assert.equal(connect.timeoutMs, 90_000);
     assert.equal(connect.signIn, true);
-    assert.deepEqual(connect.env, { OP_INTEGRATION_NAME: "Ardia", OP_INTEGRATION_ID: "ardia", OP_INTEGRATION_BUILDNUMBER: "010000" });
+    assert.deepEqual(connect.env, { OP_INTEGRATION_NAME: "Ardia", OP_INTEGRATION_ID: "ardia" });
   });
 
   test("with several accounts it asks which, then connects the one chosen", async () => {
@@ -170,6 +170,23 @@ describe("sign in through the 1Password app", () => {
     const answer = await h.call("signIn", start);
     assert.equal(answer.result.problem, "failed");
     assert.match(answer.result.detail, /^something odd happened/);
+  });
+
+  const BAD_REQUEST = "[ERROR] 2026/11/23 10:00:00 (400) Bad Request: The structure of request was invalid.";
+  for (const [call, input, context] of [["signIn", start, signedOut], ["unlock", { password: null }, locked]]) {
+    test(`${call} rejected by 1Password's server is a plain failure with op's line, never setup`, async () => {
+      const { h } = harness([oneAccount, ["vault list*", fail(BAD_REQUEST, 8)]], context);
+      const answer = await h.call(call, input);
+      assert.deepEqual(answer.result, { ok: false, problem: "failed", detail: "(400) Bad Request: The structure of request was invalid." });
+      assert.equal(h.session, null);
+    });
+  }
+
+  test("an account list the server rejects fails with op's line, never setup", async () => {
+    const { h } = harness([["account list --format json", fail(BAD_REQUEST, 8)]], signedOut);
+    const detail = "(400) Bad Request: The structure of request was invalid.";
+    assert.deepEqual((await h.call("signIn", start)).result, { ok: false, problem: "failed", detail, state: "unavailable" });
+    assert.deepEqual((await h.call("state", { explicit: true })).result, { state: "unavailable", problem: "failed", detail });
   });
 
   test("an account list op can't give stops before any approval", async () => {

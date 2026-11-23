@@ -1,4 +1,4 @@
-import { CREDENTIAL_LIMITS, SignIn, json, type Choice, type CredentialContext, type JsonRecord, type ProblemCode, type ProviderState, type SignInOutcome } from "@ardia/plugin-sdk/credentials";
+import { CREDENTIAL_LIMITS, SignIn, json, verbs, type Choice, type CredentialContext, type JsonRecord, type ProblemCode, type ProviderState, type SignInOutcome, type VerbResult } from "@ardia/plugin-sdk/credentials";
 import { ACCOUNT_PREFERENCE, problemOf } from "./cli";
 
 export type Account = { reference: string; names: string[]; email?: string; url?: string };
@@ -20,7 +20,12 @@ function accountOf(record: JsonRecord): Account | null {
   };
 }
 
-type Listed = { accounts: Account[]; problem: null } | { accounts: []; problem: ProblemCode };
+type Listed = { accounts: Account[]; problem: null } | { accounts: []; problem: ProblemCode; detail?: string };
+
+function failureDetail(result: VerbResult, problem: ProblemCode): { detail?: string } {
+  const detail = problem === "failed" ? verbs.firstLine(result) : null;
+  return detail ? { detail } : {};
+}
 
 export async function listAccounts(ctx: CredentialContext): Promise<Listed> {
   const result = await ctx.cli.verb("account.list");
@@ -36,7 +41,8 @@ export async function listAccounts(ctx: CredentialContext): Promise<Listed> {
     return { accounts, problem: null };
   }
   if (result.hints.includes("noAccounts")) return { accounts: [], problem: null };
-  return { accounts: [], problem: problemOf(result, ctx) };
+  const problem = problemOf(result, ctx);
+  return { accounts: [], problem, ...failureDetail(result, problem) };
 }
 
 export async function rememberedAccount(ctx: CredentialContext, accounts: readonly Account[]): Promise<Account | undefined> {
@@ -70,7 +76,7 @@ function serverOf(url: string): { url: string } {
 
 export async function providerState(ctx: CredentialContext): Promise<ProviderState> {
   const listed = await listAccounts(ctx);
-  if (listed.problem) return { state: "unavailable", problem: listed.problem };
+  if (listed.problem) return { state: "unavailable", problem: listed.problem, ...(listed.detail ? { detail: listed.detail } : {}) };
   if (!listed.accounts.length) return { state: "signedOut", problem: "setupNeeded" };
   const account = await rememberedAccount(ctx, listed.accounts);
   if (!account) return { state: "signedOut" };
@@ -83,7 +89,7 @@ export async function providerState(ctx: CredentialContext): Promise<ProviderSta
 
 export async function connect(ctx: CredentialContext, requested: string | undefined, waitingState: "signedOut" | "locked"): Promise<SignInOutcome> {
   const listed = await listAccounts(ctx);
-  if (listed.problem) return SignIn.failed(listed.problem, { state: "unavailable" });
+  if (listed.problem) return SignIn.failed(listed.problem, { state: "unavailable", ...(listed.detail ? { detail: listed.detail } : {}) });
   if (!listed.accounts.length) return SignIn.failed("setupNeeded", { state: "signedOut" });
   let account: Account | undefined;
   if (requested) {
@@ -102,7 +108,7 @@ export async function connect(ctx: CredentialContext, requested: string | undefi
   if (result.hints.includes("appUnreachable")) return SignIn.failed("appUnreachable");
   if (result.hints.includes("setupNeeded")) return SignIn.failed("setupNeeded");
   const problem = problemOf(result, ctx);
-  return problem === "failed" && result.stderr ? SignIn.failed("failed", { detail: result.stderr }) : SignIn.failed(problem);
+  return SignIn.failed(problem, failureDetail(result, problem));
 }
 
 export async function signOut(ctx: CredentialContext): Promise<void> {

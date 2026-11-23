@@ -202,4 +202,14 @@ describe("the manifest", () => {
     assert.equal(normal.env.OP_CONFIG_DIR, undefined);
     assert.equal(isolated.env.OP_CONFIG_DIR, "/scratch/1password");
   });
+
+  test("op is told it runs for Ardia without a build number, which 1Password's server rejects", () => {
+    const names = manifest.contributes.credentialProvider.cli.env.map((entry) => entry.name);
+    assert.ok(names.includes("OP_INTEGRATION_NAME"));
+    assert.ok(names.includes("OP_INTEGRATION_ID"));
+    assert.ok(!names.includes("OP_INTEGRATION_BUILDNUMBER"));
+    const launch = sdk.buildVerbLaunch(manifest, "connect", { account: ACCOUNT.account_uuid }, () => null, null);
+    assert.equal(launch.env.OP_INTEGRATION_BUILDNUMBER, undefined);
+    assert.equal(launch.env.OP_INTEGRATION_NAME, "Ardia");
+  });
 });
