@@ -5,7 +5,8 @@ import { Result } from "../../src/browse/daemon/render.ts";
 import { Ctx } from "../../src/browse/commands/ctx.ts";
 import { dispatch, hooks, OWNERS, register, served } from "../../src/browse/commands/all.ts";
 import { Element, Page, WORLD_NAME } from "../../src/browse/state/page.ts";
-import { parseRef, PROBE_FANOUT } from "../../src/browse/state/state.ts";
+import { parseRef, PROBE_FANOUT, type Ref } from "../../src/browse/state/state.ts";
+import { advance, vocabulary } from "../../src/browse/snapshot/epoch.ts";
 import { oracle } from "../oracle-fixtures.ts";
 import { cdpError, FakeBrowser, frameTree, LOADER, MAIN, stateWith, timeout } from "./core-helpers.ts";
 
@@ -387,11 +388,58 @@ describe("refs", () => {
     expect(state.refs.has(id)).toBe(false);
     expect(state.navigatedRefs.has(id)).toBe(true);
     const stale = (await state.resolveRef(id).catch((error: unknown) => error)) as BrowseError;
-    expect(stale.code).toBe("stale_ref");
+    expect(stale.code).toBe("vocab_superseded");
     expect(stale.text).toContain("the page navigated since that snapshot");
     const unknown = (await state.resolveRef("e99").catch((error: unknown) => error)) as BrowseError;
     expect(unknown.code).toBe("unknown_ref");
     expect(LOADER).toBe("LOADER-1");
+  });
+
+  test("any document change is vocab_superseded, per frame, and a whole-page redraw with nothing in common supersedes same-document refs", async () => {
+    const browser = new FakeBrowser((method, params) => {
+      if (method === "DOM.resolveNode") return { object: { objectId: `OBJ${String(params["backendNodeId"])}` } };
+      if (method === "Runtime.callFunctionOn" && String(params["functionDeclaration"]).includes("isConnected")) return { result: { value: false } };
+      return undefined;
+    });
+    const state = stateWith(browser);
+    const page = await state.page("TARGET");
+    const id = state.addRef(page, new Element(MAIN, "OBJ", 5, "x"), "button", "Go");
+    const first = state.refs.get(id) as Ref;
+    const epochs = advance(state, page, [first], true);
+    expect(epochs.main).toBe(1);
+    first.epoch = epochs.main;
+    state.setRefs([first], "snap", page);
+    expect(state.addRef(page, new Element(MAIN, "OBJ", 5, "x"))).toBe(id);
+    expect((state.refs.get(id) as Ref).epoch).toBe(1);
+    state.setRefs([{ ...first, epoch: undefined } as unknown as Ref], null, page);
+    expect((state.refs.get(id) as Ref).epoch).toBe(1);
+    const sameDoc = (await state.resolveRef(id).catch((error: unknown) => error)) as BrowseError;
+    expect(sameDoc.code).toBe("stale_ref");
+    const other = { ...first, id: "e9", backend: 9, name: "Something else" };
+    expect(advance(state, page, [other], true).main).toBe(2);
+    const swapped = (await state.resolveRef(id).catch((error: unknown) => error)) as BrowseError;
+    expect(swapped.code).toBe("vocab_superseded");
+    expect(swapped.text).toContain("nothing in common with that snapshot");
+    (page.frames.get(MAIN) as { loader: string | null }).loader = "LOADER-2";
+    const navigated = (await state.resolveRef(id).catch((error: unknown) => error)) as BrowseError;
+    expect(navigated.code).toBe("vocab_superseded");
+  });
+
+  test("closing a tab forgets its frame numbers and vocabularies, and ref numbers keep rising", async () => {
+    const state = stateWith(new FakeBrowser());
+    const page = await state.page("TARGET");
+    page.frameSessions.set("CHILD", "S1");
+    const ref = state.refForNode(page, "CHILD", 41);
+    expect(ref).toMatch(/^f1e\d+$/u);
+    advance(state, page, [], true);
+    expect(state.frameOrdinals.size).toBe(1);
+    expect(state.framesPerTab.size).toBe(1);
+    state.forgetTarget("TARGET");
+    expect(state.frameOrdinals.size).toBe(0);
+    expect(state.framesPerTab.size).toBe(0);
+    expect(vocabulary(state, "TARGET", MAIN)).toBe(null);
+    expect(state.nextRef()).toBe(`e${state.issuedRefs}`);
+    expect(state.issuedRefs).toBe(Number(ref.slice(ref.indexOf("e") + 1)) + 1);
   });
 });
 

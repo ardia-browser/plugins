@@ -388,6 +388,7 @@ export class State extends Refs implements temptabs.TempTabState {
     this.views.delete(targetId);
     this.snapshotsShown.delete(targetId);
     this.pendingShown?.delete(targetId);
+    this.forgetTabFrames(targetId);
     this.setOffscreen(targetId, false);
     for (const [label, owner] of [...this.labels]) if (owner === targetId) this.labels.delete(label);
     if (this.current === targetId && !this.pinTab) {

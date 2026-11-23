@@ -145,6 +145,7 @@ export class Page {
   awake = false;
   unansweredAt = 0;
   private framesFreshUntil = 0;
+  frameTreeSettled = true;
   private frameEvents = 0;
   private readonly calls = new Set<AbortController>();
   private restoring: { session: string; done: Set<string> } | null = null;
@@ -481,7 +482,8 @@ export class Page {
       sessions = this.oopifs.size > 0 ? await oopif.childFrames(this, frames, frameOf) : null;
       if (events === this.frameEvents && session === this.session) break;
     }
-    if ((events !== this.frameEvents || session !== this.session) && this.mainFrame !== null) return this.frames;
+    this.frameTreeSettled = events === this.frameEvents && session === this.session;
+    if (!this.frameTreeSettled && this.mainFrame !== null) return this.frames;
     if (sessions !== null) oopif.useSessions(this, sessions);
     this.frames = frames;
     this.mainFrame = String(record(tree["frame"])["id"]);

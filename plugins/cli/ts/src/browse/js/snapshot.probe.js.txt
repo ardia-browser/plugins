@@ -1,0 +1,126 @@
+(root, wantModal) => {
+  const HIDDEN_LIMIT = 200;
+  const MODAL_LIMIT = 50;
+  const scope = root || document;
+  const hidden = [];
+  let closedHosts = 0;
+  const textual = (el) => (el.textContent || "").trim().length > 0;
+  const clippedEmpty = (el, style) => {
+    if (style.display === "contents" || style.display === "inline") return false;
+    const clips = (value) => value === "hidden" || value === "clip";
+    if (!clips(style.overflowX) && !clips(style.overflowY)) return false;
+    const rect = el.getBoundingClientRect();
+    const flat = (clips(style.overflowY) && rect.height < 0.5) || (clips(style.overflowX) && rect.width < 0.5);
+    return flat;
+  };
+  const ATTACHABLE = new Set(["article", "aside", "blockquote", "body", "div", "footer", "h1", "h2", "h3", "h4", "h5", "h6", "header", "main", "nav", "p", "section", "span"]);
+  const maybeClosedHost = (el) => {
+    if (el.shadowRoot) return false;
+    if (el.localName.includes("-")) return el.matches(":defined");
+    if (!ATTACHABLE.has(el.localName) || el.firstChild) return false;
+    const rect = el.getBoundingClientRect();
+    return rect.width >= 1 && rect.height >= 1;
+  };
+  const rejected = (el) => {
+    if (maybeClosedHost(el)) closedHosts += 1;
+    const style = getComputedStyle(el);
+    if (style.display === "none") return true;
+    if (hidden.length < HIDDEN_LIMIT && (Number(style.opacity) === 0 || clippedEmpty(el, style)) && textual(el)) {
+      hidden.push(el);
+      return true;
+    }
+    if (el.shadowRoot) visit(el.shadowRoot);
+    return false;
+  };
+  const visit = (start) => {
+    if (start.nodeType === Node.ELEMENT_NODE && rejected(start)) return;
+    const walker = document.createTreeWalker(start, NodeFilter.SHOW_ELEMENT, {
+      acceptNode: (el) => (rejected(el) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+    });
+    while (walker.nextNode()) {}
+  };
+  visit(scope);
+  let modal = null;
+  if (wantModal && !root) {
+    const width = innerWidth;
+    const height = innerHeight;
+    const deepHit = (x, y) => {
+      let hit = document.elementFromPoint(x, y);
+      while (hit && hit.shadowRoot) {
+        const inner = hit.shadowRoot.elementFromPoint(x, y);
+        if (!inner || inner === hit) break;
+        hit = inner;
+      }
+      return hit;
+    };
+    const inside = (node, container) => {
+      for (let at = node; at; at = at.parentNode || at.host) if (at === container) return true;
+      return false;
+    };
+    const fivePoints = (box) => {
+      const inset = Math.max(1, Math.min(box.right - box.left, box.bottom - box.top) * 0.15);
+      return [[(box.left + box.right) / 2, (box.top + box.bottom) / 2], [box.left + inset, box.top + inset], [box.right - inset, box.top + inset], [box.left + inset, box.bottom - inset], [box.right - inset, box.bottom - inset]];
+    };
+    const candidates = [];
+    const collect = (start) => {
+      for (const el of start.querySelectorAll("dialog[open], [role=dialog], [role=alertdialog], [aria-modal=true]")) {
+        if (candidates.length < MODAL_LIMIT) candidates.push(el);
+      }
+      for (const host of start.querySelectorAll("*")) if (host.shadowRoot) collect(host.shadowRoot);
+    };
+    collect(document);
+    const overlaid = (el, rect) => {
+      const points = [[6, 6], [width - 6, 6], [6, height - 6], [width - 6, height - 6]].filter(([x, y]) => x < rect.left || x > rect.right || y < rect.top || y > rect.bottom);
+      if (points.length < 2) return true;
+      let blocked = 0;
+      for (const [x, y] of points) {
+        const hit = deepHit(x, y);
+        if (!hit) continue;
+        if (inside(el, hit)) { blocked += 1; continue; }
+        const box = hit.getBoundingClientRect();
+        const position = getComputedStyle(hit).position;
+        if ((position === "fixed" || position === "absolute") && box.width * box.height >= 0.8 * width * height) blocked += 1;
+      }
+      return blocked >= Math.ceil(points.length * 0.75);
+    };
+    const passing = [];
+    candidates.forEach((el, order) => {
+      if (el.closest("[inert], [aria-hidden=true]")) return;
+      if (el.checkVisibility && !el.checkVisibility({ opacityProperty: true, visibilityProperty: true, checkOpacity: true, checkVisibilityCSS: true })) return;
+      const rect = el.getBoundingClientRect();
+      const box = { left: Math.max(rect.left, 0), top: Math.max(rect.top, 0), right: Math.min(rect.right, width), bottom: Math.min(rect.bottom, height) };
+      if (box.right - box.left < 8 || box.bottom - box.top < 8) return;
+      const isModal = (() => { try { return el.matches(":modal"); } catch (error) { return false; } })() || el.getAttribute("aria-modal") === "true" || overlaid(el, rect);
+      if (!isModal) return;
+      let hits = 0;
+      for (const [x, y] of fivePoints(box)) {
+        const hit = deepHit(x, y);
+        if (hit && inside(hit, el)) hits += 1;
+      }
+      if (hits >= 3) passing.push({ el, hits, order, box });
+    });
+    const later = (a, b) => (a.hits !== b.hits ? (a.hits > b.hits ? a : b) : a.order > b.order ? a : b);
+    const onTop = (a, b) => {
+      const shared = { left: Math.max(a.box.left, b.box.left), top: Math.max(a.box.top, b.box.top), right: Math.min(a.box.right, b.box.right), bottom: Math.min(a.box.bottom, b.box.bottom) };
+      if (shared.right - shared.left < 2 || shared.bottom - shared.top < 2) return later(a, b);
+      let forA = 0;
+      let forB = 0;
+      for (const [x, y] of fivePoints(shared)) {
+        const hit = deepHit(x, y);
+        const inA = Boolean(hit) && inside(hit, a.el);
+        const inB = Boolean(hit) && inside(hit, b.el);
+        if (inA && inB) {
+          if (inside(b.el, a.el)) forB += 1;
+          else forA += 1;
+        } else if (inA) forA += 1;
+        else if (inB) forB += 1;
+      }
+      return forA === forB ? later(a, b) : forA > forB ? a : b;
+    };
+    const best = passing.reduce((current, next) => (current === null ? next : onTop(current, next)), null);
+    if (best !== null) modal = best;
+  }
+  const elements = modal ? [modal.el, ...hidden] : hidden;
+  globalThis.ardiaBrowseScopeElements = elements;
+  return { modal: modal !== null, hits: modal ? modal.hits : 0, hidden: hidden.length, closedHosts };
+}

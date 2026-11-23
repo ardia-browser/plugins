@@ -90,13 +90,17 @@ describe.skipIf(!CHROME)("repeated snapshot -i against headless Chrome", () => {
     expect(after.out).toContain('button "Elsewhere"');
   });
 
-  test("a capped snapshot doesn't become the baseline, --out saves the whole list, and a batch's earlier --full doesn't stop a diff", () => {
+  test("a snapshot fit to the cap doesn't replace the baseline, --out saves the whole list, and a batch's earlier --full doesn't stop a diff", () => {
     expect(browse("open", url(BOARD)).status).toBe(0);
     expect(browse("snapshot", "-i").status).toBe(0);
     const capped = browse("snapshot", "-i", "--max-output", "60");
-    expect(capped.err).toContain("[output capped at");
+    expect(capped.err).not.toContain("[output capped at");
+    expect(capped.out.trimEnd().length <= 60).toBe(true);
+    expect(capped.out).toContain("[fit to 60 chars");
+    expect(browse("click", "#add").status).toBe(0);
     const after = browse("snapshot", "-i");
-    expect(after.out).not.toContain("since your snapshot");
+    expect(after.out.split("\n")[0]).toContain("since your snapshot 3 commands ago");
+    expect(after.out).toContain('+ button "Fresh task"');
     const saved = path.join(root, "snap.txt");
     expect(browse("snapshot", "-i", "--out", saved).status).toBe(0);
     expect(fs.readFileSync(saved, "utf8")).toContain('button "Item 7"');
@@ -116,8 +120,8 @@ describe.skipIf(!CHROME)("repeated snapshot -i against headless Chrome", () => {
     expect(browse("open", url(BOARD)).status).toBe(0);
     expect(browse("snapshot", "-i").status).toBe(0);
     expect(browse("click", "#add").status).toBe(0);
-    const cut = browse("--max-output", "80", "batch", JSON.stringify(["snapshot", "-i"]));
-    expect(cut.err).toContain("[output capped at");
+    const cut = browse("--max-output", "80", "batch", JSON.stringify(["snapshot", "-i"]), JSON.stringify(["get", "title"]));
+    expect(`${cut.out}${cut.err}`).toMatch(/\[fit to 80 chars|\[output capped at/u);
     const after = browse("snapshot", "-i");
     expect(after.out.split("\n")[0]).toContain("since your snapshot");
     expect(after.out).toContain('+ button "Fresh task"');

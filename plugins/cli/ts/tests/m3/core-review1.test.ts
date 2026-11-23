@@ -139,7 +139,7 @@ describe("2: a ref resolves only to its own backend node", () => {
     state.setRefs([], null, page);
     snapshotsGiving(77);
     const error = (await failure(state.resolveRef(id))) as BrowseError;
-    expect(error.code).toBe("stale_ref");
+    expect(error.code).toBe("vocab_superseded");
   });
 
   test("a redrawn element is stale even when its successor is unique", async () => {

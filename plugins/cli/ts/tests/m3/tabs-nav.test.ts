@@ -309,7 +309,7 @@ describe("navigation", () => {
     expect(result.data).toEqual({ url: "http://127.0.0.1/page.html" });
     expect(page.loader(MAIN)).toBe("LOADER-2");
     const stale = await failure(state.resolveRef(ref));
-    expect(stale.code).toBe("stale_ref");
+    expect(stale.code).toBe("vocab_superseded");
   });
 });
 

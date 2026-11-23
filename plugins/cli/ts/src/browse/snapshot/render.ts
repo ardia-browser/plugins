@@ -53,7 +53,7 @@ export function shownName(name: string): string {
   return `${pyRstrip(head(name, SHOWN_NAME - 1))}…`;
 }
 
-export function line(node: Node, depth: number, urls: boolean, near?: string | null): string {
+export function line(node: Node, depth: number, urls: boolean, near?: string | null, note?: string | null): string {
   let out = `${"  ".repeat(depth)}- ${node.role}`;
   if (node.name) out += ` ${quoted(node.role === "StaticText" ? node.name : shownName(node.name))}`;
   const shown = attrs(node, urls);
@@ -61,6 +61,7 @@ export function line(node: Node, depth: number, urls: boolean, near?: string | n
   if (node.value && node.value !== node.name && node.role !== "StaticText" && node.role !== "link" && node.role !== "heading") out += `: ${node.value.replaceAll("\n", " ")}`;
   if (node.hints && node.hints.length) out += ` clickable [${node.hints.join(", ")}]`;
   if (near) out += ` (near ${quoted(near)})`;
+  if (note) out += ` (${note})`;
   return out;
 }
 
@@ -169,21 +170,21 @@ function runSpan(nodes: readonly Node[]): string {
   return nodes.length > 1 ? `${spanLabel(nodes[0] as Node)} … ${spanLabel(nodes.at(-1) as Node)}` : spanLabel(nodes[0] as Node);
 }
 
-export type Listed = { text: string; ref: string | null; key: string };
+export type Listed = { text: string; ref: string | null; key: string; level?: number; node?: Node | null };
 
 export function interactiveLines(rows: readonly Row[], urls: boolean, near: ReadonlyMap<Node, string> = new Map()): string[] {
   return interactiveListed(rows, urls, near).map((entry) => entry.text);
 }
 
-function listedNode(node: Node, level: number, urls: boolean, near: string | undefined): Listed {
-  return { text: line(node, level, urls, near), ref: node.ref ?? null, key: line({ ...node, ref: null }, 0, urls, near).slice(2) };
+function listedNode(node: Node, level: number, urls: boolean, near: string | undefined, note?: string): Listed {
+  return { text: line(node, level, urls, near, note), ref: node.ref ?? null, key: line({ ...node, ref: null }, 0, urls, near).slice(2), level, node };
 }
 
-function listedSummary(text: string): Listed {
-  return { text, ref: null, key: text.trimStart().slice(2) };
+function listedSummary(text: string, level: number): Listed {
+  return { text, ref: null, key: text.trimStart().slice(2), level, node: null };
 }
 
-export function interactiveListed(rows: readonly Row[], urls: boolean, near: ReadonlyMap<Node, string> = new Map()): Listed[] {
+export function interactiveListed(rows: readonly Row[], urls: boolean, near: ReadonlyMap<Node, string> = new Map(), notes: ReadonlyMap<Node, string> = new Map()): Listed[] {
   const lines: Listed[] = [];
   let index = 0;
   while (index < rows.length) {
@@ -200,7 +201,7 @@ export function interactiveListed(rows: readonly Row[], urls: boolean, near: Rea
     const off = members.filter(disabled);
     const run = Object.hasOwn(DISABLED_RUN, node.role) ? (DISABLED_RUN[node.role] as number) : members.length + 1;
     if (members.length < run || off.length < MIN_DISABLED) {
-      lines.push(listedNode(node, level, urls, near.get(node)));
+      lines.push(listedNode(node, level, urls, notes.has(node) ? undefined : near.get(node), notes.get(node)));
       index += 1;
       continue;
     }
@@ -213,29 +214,29 @@ export function interactiveListed(rows: readonly Row[], urls: boolean, near: Rea
       if (hiding) {
         flag("snapshot_disabled_folded", true);
         if (!noted) {
-          lines.push(listedSummary(`${"  ".repeat(level)}- ${off.length} disabled ${row.role}${off.length > 1 ? "s" : ""} (${runSpan(off)})`));
+          lines.push(listedSummary(`${"  ".repeat(level)}- ${off.length} disabled ${row.role}${off.length > 1 ? "s" : ""} (${runSpan(off)})`, level));
           noted = true;
         }
         continue;
       }
-      lines.push(listedNode(row, rowLevel, urls, near.get(row)));
+      lines.push(listedNode(row, rowLevel, urls, notes.has(row) ? undefined : near.get(row), notes.get(row)));
     }
     index = end;
   }
   return lines;
 }
 
-export function renderListed(nodes: readonly Node[], depth: number | null, urls: boolean): Listed[] {
+export function renderListed(nodes: readonly Node[], depth: number | null, urls: boolean, notes: ReadonlyMap<Node, string> = new Map()): Listed[] {
   const rows = interactiveRows(nodes).filter(([level]) => depth === null || level <= depth);
-  return interactiveListed(rows, urls, labelsForRepeats(nodes, rows));
+  return interactiveListed(rows, urls, labelsForRepeats(nodes, rows), notes);
 }
 
 export type RenderOptions = { interactive?: boolean; compact?: boolean; depth?: number | null; urls?: boolean };
+export type Rendered = { text: string; node: Node; level: number };
 
-export function render(nodes: readonly Node[], options: RenderOptions = {}): string {
-  const { interactive = false, compact = false, depth = null, urls = false } = options;
-  if (interactive) return renderListed(nodes, depth, urls).map((entry) => entry.text).join("\n");
-  const lines: string[] = [];
+export function renderRows(nodes: readonly Node[], options: RenderOptions = {}, notes: ReadonlyMap<Node, string> = new Map()): Rendered[] {
+  const { compact = false, depth = null, urls = false } = options;
+  const rows: Rendered[] = [];
   const kept = new Map<Node, boolean>();
   const keepCompact = (node: Node): boolean => {
     const known = kept.get(node);
@@ -255,9 +256,15 @@ export function render(nodes: readonly Node[], options: RenderOptions = {}): str
     if (compact && !keepCompact(node)) return;
     if (node.role === "StaticText" && !pyStripped(node.name)) return;
     if (depth !== null && level > depth) return;
-    lines.push(line(node, level, urls));
+    rows.push({ text: line(node, level, urls, null, notes.get(node)), node, level });
     for (const child of node.children) emit(child, level + 1, node.name);
   };
   for (const node of nodes) emit(node, 0, "");
-  return lines.join("\n");
+  return rows;
+}
+
+export function render(nodes: readonly Node[], options: RenderOptions = {}): string {
+  const { interactive = false, depth = null, urls = false } = options;
+  if (interactive) return renderListed(nodes, depth, urls).map((entry) => entry.text).join("\n");
+  return renderRows(nodes, options).map((row) => row.text).join("\n");
 }

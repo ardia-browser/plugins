@@ -1,15 +1,11 @@
 import { roundTo, formatG } from "../../pylib/format.ts";
 import { unifiedDiff } from "../../pylib/difflib.ts";
-import { pyLen, splitlines } from "../../pylib/str.ts";
+import { splitlines } from "../../pylib/str.ts";
 import { urlsplit } from "../../pylib/urllib.ts";
-import { asData, renderReport } from "../changes/text.ts";
-import { diff as diffViews, type View } from "../changes/report.ts";
-import { previous } from "../changes/views.ts";
 import { BrowseError, Usage } from "../daemon-errors.ts";
-import { OUTPUT_CAP, Result } from "../daemon/render.ts";
+import { Result } from "../daemon/render.ts";
 import { hydration } from "../act/react.ts";
 import { capturePng, comparison, diffScreenshot } from "../media/commands.ts";
-import { diffAgainst, DIFF_SCOPE, forgetShown, lastShown, placeOf, rememberShown, samePlace, scopeOf } from "../snapshot/since.ts";
 import { take } from "../snapshot/take.ts";
 import type { Element, Page } from "../state/page.ts";
 import { frameOffset } from "../state/offsets.ts";
@@ -26,7 +22,7 @@ import "../snapshot/collect.ts";
 import { siteToolsHeader } from "./tool.ts";
 
 export type Header = { key: string; data: unknown; line: string };
-const toolsHeader = (_ctx: Ctx, page: Page): Promise<Header | null> => siteToolsHeader(page);
+export const toolsHeader = (_ctx: Ctx, page: Page): Promise<Header | null> => siteToolsHeader(page);
 export const snapshotHeaders: ((ctx: Ctx, page: Page) => Promise<Header | null>)[] = [];
 export const mediaHooks: {
   diffScreenshot: (ctx: Ctx, argv: string[]) => Promise<Result>;
@@ -44,68 +40,6 @@ const TEXT_OF = "(el) => (el.innerText != null ? el.innerText : el.textContent |
 
 function intOption(value: unknown): number | null {
   return value !== undefined && value !== null ? pyIntArg(String(value)) : null;
-}
-
-export async function cmdSnapshot(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, args] = parse(
-    argv,
-    { "--interactive": "bool", "--compact": "bool", "--depth": "value", "--selector": "value", "--urls": "bool", "--cursor": "bool", "--diff": "bool", "--tools": "bool" },
-    { "-i": "--interactive", "-c": "--compact", "-d": "--depth", "-s": "--selector", "-u": "--urls", "-C": "--cursor" },
-  );
-  const selector = (options["selector"] as string | undefined) || (args[0] ?? null);
-  const depth = intOption(options["depth"]);
-  if (options["diff"] && (selector || depth !== null)) throw new Usage("snapshot --diff compares the whole page, so it takes no -s or -d");
-  const page = await ctx.state.page();
-  await page.refreshFrames();
-  const before = options["diff"] ? previous(ctx.state, page) : null;
-  const scope = scopeOf(options, selector, depth);
-  const seen = ctx.state.topCommand !== "script" && ctx.state.scriptsRunning === 0;
-  const place = placeOf(ctx.state, page);
-  const fullListing = ctx.state.topCommand === "batch" ? Boolean(ctx.options["full_listing"]) : Boolean(ctx.options["full"]);
-  const uncapped = ctx.options["max_output"] !== undefined && ctx.options["max_output"] !== null && Number(ctx.options["max_output"]) === 0;
-  const shown = seen && scope === DIFF_SCOPE && !fullListing && !uncapped && !ctx.options["json"] ? lastShown(ctx.state, place) : null;
-  const [text, , listed] = await take(ctx.state, page, {
-    interactive: Boolean(options["interactive"]),
-    compact: Boolean(options["compact"]),
-    depth,
-    selector,
-    urls: Boolean(options["urls"]),
-  });
-  const origin = originOf(page, page.mainFrame) || page.url;
-  const data: Record<string, unknown> = { origin: origin.endsWith("/") ? origin : `${origin}/`, refs: ctx.state.refsJson(), snapshot: text };
-  let body = text || "(empty page)";
-  const title = (ctx.state.views.get(page.targetId) as View | undefined)?.title ?? "";
-  const settled = placeOf(ctx.state, page);
-  const steady = samePlace(place, settled);
-  const since = shown !== null && steady && shown.scope === scope && listed !== null ? diffAgainst(shown, listed, body, ctx.state.commandsRun, page.url) : null;
-  if (shown !== null) flag(since === null ? "snapshot_diff_full" : "snapshot_diff", true);
-  if (since !== null) {
-    data["diff"] = since.data;
-    body = since.text;
-  }
-  const limit = ctx.options["full"] ? 0 : ctx.options["max_output"] === undefined || ctx.options["max_output"] === null ? OUTPUT_CAP : Number(ctx.options["max_output"]);
-  const fits = limit <= 0 || pyLen(body) <= limit;
-  const visible = !ctx.options["json"] && !ctx.options["out_only"];
-  if (visible && seen && steady && fits) rememberShown(ctx.state, { ...settled, scope, command: ctx.state.commandsRun, url: page.url, title, listed: listed ?? [] });
-  else if (visible && seen) forgetShown(ctx.state, page.targetId);
-  if (options["diff"]) {
-    if (before === null) {
-      data["changes"] = null;
-      body = `(no earlier snapshot of this document in this session, so here is all of it)\n${body}`;
-    } else {
-      const report = diffViews(before, ctx.state.views.get(page.targetId) as View);
-      data["changes"] = asData(report);
-      body = renderReport(report);
-    }
-  }
-  const headers = options["tools"] ? [...snapshotHeaders, toolsHeader] : snapshotHeaders;
-  for (const header of headers) {
-    const found = await header(ctx, page);
-    if (found === null) continue;
-    data[found.key] = found.data;
-    body = `${found.line}\n${body}`;
-  }
-  return new Result(data, body, true);
 }
 
 function boxText(value: number): string {
@@ -283,7 +217,6 @@ export async function cmdDiff(ctx: Ctx, argv: string[]): Promise<Result> {
   throw new Usage(`Unknown diff kind: ${kind} (snapshot, screenshot, url)`);
 }
 
-register("snapshot", cmdSnapshot);
 register("get", cmdGet);
 register("is", cmdIs);
 register("vitals", cmdVitals);

@@ -19,8 +19,11 @@ import { captureOf } from "../capture/store.ts";
 import { take } from "../snapshot/take.ts";
 import { frameOffset } from "../state/offsets.ts";
 import { type AnnotationRow, drawAnnotations, thresholdOf } from "./draw.ts";
+import { refNumber } from "../state/refs.ts";
 import { defaultPath } from "./paths.ts";
 import { type Comparison, comparePngs, encodePng } from "./png.ts";
+
+export const mediaPairing: { withSnapshot: ((ctx: Ctx, file: string | null) => Promise<Result>) | null } = { withSnapshot: null };
 
 export type Clip = { x: unknown; y: unknown; width: number; height: number; scale: number };
 export type Annotation = AnnotationRow & { ref: string; role: string; name?: string };
@@ -32,7 +35,7 @@ function osError(error: unknown, file: string): unknown {
   return pyError(pythonOsError(errno), `[Errno ${errno}] ${strerror(errno)}: ${reprText(file)}`);
 }
 
-function writeBytes(file: string, data: Uint8Array): void {
+export function writeBytes(file: string, data: Uint8Array): void {
   try {
     fs.writeFileSync(file, data);
   } catch (error) {
@@ -40,7 +43,7 @@ function writeBytes(file: string, data: Uint8Array): void {
   }
 }
 
-function makeParents(file: string): void {
+export function makeParents(file: string): void {
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
   } catch (error) {
@@ -111,7 +114,7 @@ async function annotations(ctx: Ctx, page: Page, full: boolean): Promise<[Annota
       width: roundHalfEven(Math.max(...xs) - Math.min(...xs)),
       height: roundHalfEven(Math.max(...ys) - Math.min(...ys)),
     };
-    const entry: Annotation = { number: pyIntArg(ref.id.slice(1)), ref: ref.id, role: ref.role, box };
+    const entry: Annotation = { number: refNumber(ref.id) ?? 0, ref: ref.id, role: ref.role, box };
     if (ref.name) entry.name = ref.name;
     if (inImage(box, region)) rows.push(entry);
   }
@@ -154,6 +157,7 @@ export async function cmdScreenshot(ctx: Ctx, argv: string[]): Promise<Result> {
       "--out": "value",
       "--if-changed": "bool",
       "--threshold": "value",
+      "--with-snapshot": "bool",
       ...SELECTOR_FLAG,
     },
     { "-f": "--full", ...SELECTOR_ALIAS },
@@ -183,6 +187,13 @@ export async function cmdScreenshot(ctx: Ctx, argv: string[]): Promise<Result> {
     else target = arg;
   }
   if (annotate && fmt !== "png") throw new BrowseError("--annotate draws on a PNG; drop --screenshot-format jpeg");
+  if (options["with_snapshot"]) {
+    if (selector !== null || full || annotate || fmt !== "png" || options["if_changed"]) {
+      throw new Usage("screenshot --with-snapshot pairs the whole viewport with its snapshot, so it takes only a path (no selector, --full, --annotate, --if-changed or jpeg)");
+    }
+    if (mediaPairing.withSnapshot === null) throw new Usage("screenshot --with-snapshot isn't available here");
+    return mediaPairing.withSnapshot(ctx, target);
+  }
   let page = await ctx.state.page();
   let clip: Clip | null = null;
   if (selector) {

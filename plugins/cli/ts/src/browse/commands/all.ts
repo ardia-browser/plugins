@@ -1,6 +1,7 @@
 import "./core.ts";
 import "./wait.ts";
 import "./read.ts";
+import "./snapshot.ts";
 import "./read-page.ts";
 import "./find.ts";
 import "./storage.ts";

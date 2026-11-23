@@ -1,7 +1,7 @@
 import { checkCancelled } from "../cdp/cancel.ts";
 import { BrowseError, ConnectionLost } from "../daemon-errors.ts";
 import { SNAPSHOT_BOXLESS, SNAPSHOT_FIELD_VALUE } from "../js/index.ts";
-import { flag } from "../metrics.ts";
+import { count, flag } from "../metrics.ts";
 import type { Element, Page } from "../state/page.ts";
 import { quiet } from "../state/page.ts";
 import * as pierce from "../state/pierce.ts";
@@ -10,6 +10,7 @@ import { parseRef, type Ref, Refs, type Snapshots } from "../state/refs.ts";
 import { isSecret, masked } from "../state/secrets.ts";
 import type { State } from "../state/state.ts";
 import { SNAPSHOT_FROM, snapshotBackends, snapshotRefused } from "./domsnapshot.ts";
+import { Prober, pruneHidden } from "./probe.ts";
 import { buildTree, clipped, INTERACTIVE, isAxList, MAX_SCOPES, type Node, REF_ROLES, walk, walkInContext } from "./tree.ts";
 
 export const CLICKABLES = `() => {
@@ -117,9 +118,23 @@ export async function linkUrls(page: Page, nodes: readonly Node[], frame: string
   );
 }
 
-export async function frameNodes(page: Page, frame: string, scopes: number[] | null = null): Promise<Node[]> {
-  const result = await page.send("Accessibility.getFullAXTree", { frameId: frame }, { timeout: 60, session: page.sessionFor(frame) });
-  const raw = isAxList(result["nodes"]) ? result["nodes"] : [];
+export type CollectOptions = { modal?: boolean; visible?: boolean };
+export type Collected = { modal: Node | null; hiddenDropped: number; closedRoots: number; oopifFrames: number };
+export const collectedInfo = new WeakMap<Node[], Collected>();
+const pruned = new WeakMap<Page, { dropped: number }>();
+const readIdentities = new WeakMap<Page, Identity>();
+
+export async function frameNodes(page: Page, frame: string, scopes: number[] | null = null, hidden: ReadonlySet<number> | null = null): Promise<Node[]> {
+  const session = page.sessionFor(frame);
+  const read = { loader: page.loader(frame), session: page.frameSessions.get(frame) ?? null };
+  const result = await page.send("Accessibility.getFullAXTree", { frameId: frame }, { timeout: 60, session });
+  let raw = isAxList(result["nodes"]) ? result["nodes"] : [];
+  if (hidden !== null && hidden.size > 0) {
+    const cut = pruneHidden(raw, hidden);
+    raw = cut.nodes;
+    const tally = pruned.get(page);
+    if (tally !== undefined) tally.dropped += cut.dropped;
+  }
   let nodes: Node[];
   if (scopes === null) nodes = buildTree(raw);
   else {
@@ -133,7 +148,8 @@ export async function frameNodes(page: Page, frame: string, scopes: number[] | n
     }
   }
   for (const node of walk(nodes)) node.frame = frame;
-  readLoaders.get(page)?.set(frame, page.loader(frame));
+  readLoaders.get(page)?.set(frame, read.loader);
+  readIdentities.get(page)?.set(frame, read);
   return nodes;
 }
 
@@ -176,9 +192,10 @@ function isOopif(page: Page, frame: string): boolean {
   return page.frameSessions.has(frame);
 }
 
-async function stitchFrames(page: Page, nodes: Node[], frame: string): Promise<void> {
+async function stitchFrames(page: Page, nodes: Node[], frame: string, prober: Prober | null = null): Promise<number> {
   const queue = [...walk(nodes)];
   let crossed = false;
+  let crossings = 0;
   for (let index = 0; index < queue.length; index += 1) {
     const node = queue[index] as Node;
     if ((node.role !== "Iframe" && node.role !== "iframe") || node.backend === null) continue;
@@ -186,9 +203,11 @@ async function stitchFrames(page: Page, nodes: Node[], frame: string): Promise<v
       const described = await page.send("DOM.describeNode", { backendNodeId: node.backend }, { session: page.sessionFor(node.frame) });
       const child = record(described["node"])["frameId"];
       if (typeof child === "string" && child && page.frames.has(child) && child !== frame) {
-        node.children = await frameNodes(page, child);
+        const hidden = prober === null ? null : ((await prober.frame(child)).extras.get(child)?.hidden ?? null);
+        node.children = await frameNodes(page, child, null, hidden);
         if (isOopif(page, child)) {
           crossed = true;
+          crossings += 1;
           queue.push(...walk(node.children));
         }
       }
@@ -197,10 +216,34 @@ async function stitchFrames(page: Page, nodes: Node[], frame: string): Promise<v
     }
   }
   if (crossed) flag("snapshot_oopif_frames", true);
+  return crossings;
 }
 
 const readLoaders = new WeakMap<Page, Map<string, string | null>>();
 export const SNAPSHOT_MOVED = "The page changed document while the snapshot was being taken, so its refs would point into two documents; snapshot again";
+
+export type Identity = Map<string, { loader: string | null; session: string | null }>;
+export const collectedIdentity = new WeakMap<Node[], Identity>();
+
+export async function verifyIdentity(page: Page, nodes: Node[]): Promise<void> {
+  await page.refreshFrames(true);
+  if (!page.frameTreeSettled) {
+    flag("snapshot_document_changed", true);
+    throw new BrowseError(SNAPSHOT_MOVED, null, "document_changed");
+  }
+  sameIdentity(page, nodes);
+}
+
+export function sameIdentity(page: Page, nodes: Node[]): void {
+  const identity = collectedIdentity.get(nodes);
+  if (identity === undefined) return;
+  for (const [frame, known] of identity) {
+    if (page.loader(frame) !== known.loader || (page.frameSessions.get(frame) ?? null) !== known.session) {
+      flag("snapshot_document_changed", true);
+      throw new BrowseError(SNAPSHOT_MOVED, null, "document_changed");
+    }
+  }
+}
 
 function sameDocuments(page: Page, loaders: ReadonlyMap<string, string | null>): void {
   for (const [frame, loader] of loaders) {
@@ -217,17 +260,26 @@ export function maskSecretValues(state: object, page: Pick<Page, "targetId" | "l
   }
 }
 
-export async function collect(state: State, page: Page, selector: string | null = null, cursor = true): Promise<Node[]> {
+export async function collect(state: State, page: Page, selector: string | null = null, cursor = true, options: CollectOptions = {}): Promise<Node[]> {
   const loaders = new Map<string, string | null>();
   readLoaders.set(page, loaders);
+  const identity: Identity = new Map();
+  readIdentities.set(page, identity);
+  const tally = { dropped: 0 };
+  const shaping = Boolean(options.visible || options.modal);
+  if (shaping) pruned.set(page, tally);
   try {
-    return await collectInto(state, page, selector, cursor, loaders);
+    const nodes = await collectInto(state, page, selector, cursor, loaders, shaping ? options : {});
+    collectedIdentity.set(nodes, identity);
+    return nodes;
   } finally {
     if (readLoaders.get(page) === loaders) readLoaders.delete(page);
+    if (readIdentities.get(page) === identity) readIdentities.delete(page);
+    if (pruned.get(page) === tally) pruned.delete(page);
   }
 }
 
-async function collectInto(state: State, page: Page, selector: string | null, cursor: boolean, loaders: Map<string, string | null>): Promise<Node[]> {
+async function collectInto(state: State, page: Page, selector: string | null, cursor: boolean, loaders: Map<string, string | null>, options: CollectOptions): Promise<Node[]> {
   await page.refreshFrames();
   let frame = (state.frameFor(page) || page.mainFrame) as string;
   let scopes: number[] | null = null;
@@ -236,15 +288,34 @@ async function collectInto(state: State, page: Page, selector: string | null, cu
     frame = found;
     scopes = elements.map((element) => element.backendId);
   }
-  const nodes = scopes ? await frameNodes(page, frame, scopes) : await frameNodes(page, frame);
+  const prober = options.visible || options.modal ? new Prober(page, backendsOf) : null;
+  const top = prober === null ? null : await prober.frame(frame, Boolean(options.modal && !selector));
+  const hidden = options.visible && top !== null ? (top.extras.get(frame)?.hidden ?? null) : null;
+  let modalScoped = false;
+  let nodes: Node[];
+  if (top !== null && top.modal !== null && !scopes) {
+    nodes = await frameNodes(page, frame, [top.modal], hidden);
+    modalScoped = nodes.length > 0;
+    if (!modalScoped) nodes = await frameNodes(page, frame, null, hidden);
+  } else nodes = scopes ? await frameNodes(page, frame, scopes, hidden) : await frameNodes(page, frame, null, hidden);
   if (scopes && nodes.length === 0) {
     const many = scopes.length > 1 ? `all ${scopes.length} elements matching it are` : "the element matching it is";
     throw new BrowseError(`Nothing in the accessibility tree under ${selector}: ${many} hidden or empty`);
   }
-  await stitchFrames(page, nodes, frame);
+  const oopifFrames = await stitchFrames(page, nodes, frame, options.visible ? prober : null);
+  if (oopifFrames > 0) count("snapshot_oopif_count", oopifFrames);
   const framesUsed = [...new Set([...walk(nodes)].map((node) => node.frame as string))];
   const clickable = new Map<string, Map<number, string[]>>();
   if (cursor) for (const used of framesUsed) clickable.set(used, await clickableMap(page, used));
+  if (cursor && prober !== null) {
+    for (const probed of prober.probed.values()) {
+      for (const [used, extras] of (await probed).extras) {
+        const map = clickable.get(used);
+        if (map === undefined) continue;
+        for (const [backend, hints] of extras.clicks) if (!map.has(backend)) map.set(backend, hints);
+      }
+    }
+  }
   const unclickable = new Map<string, Set<number>>();
   for (const used of framesUsed) unclickable.set(used, await boxless(page, used));
   sameDocuments(page, loaders);
@@ -279,6 +350,11 @@ async function collectInto(state: State, page: Page, selector: string | null, cu
   }
   maskSecretValues(state, page, nodes);
   if (mainTitle !== undefined) collectedTitles.set(nodes, mainTitle);
+  if (prober !== null) {
+    const dropped = pruned.get(page)?.dropped ?? 0;
+    if (dropped > 0) flag("snapshot_hidden_text_dropped", true);
+    collectedInfo.set(nodes, { modal: modalScoped ? (nodes[0] ?? null) : null, hiddenDropped: dropped, closedRoots: prober.closedRootsSeen, oopifFrames });
+  }
   return nodes;
 }
 

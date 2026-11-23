@@ -93,7 +93,7 @@ async function selectorState(ctx: Ctx, page: Page, selector: string, wanted: str
   try {
     found = ref && !isBareRef(selector) ? await ctx.state.resolveRef(ref) : await ctx.state.locate(selector, page);
   } catch (error) {
-    if (error instanceof BrowseError && (error.code === "not_found" || error.code === "stale_ref")) return wanted === "hidden" || wanted === "detached";
+    if (error instanceof BrowseError && (error.code === "not_found" || error.code === "stale_ref" || error.code === "vocab_superseded")) return wanted === "hidden" || wanted === "detached";
     throw error;
   }
   if (wanted === "attached") return true;

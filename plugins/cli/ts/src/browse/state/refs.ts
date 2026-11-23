@@ -1,4 +1,4 @@
-import { BrowseError, ConnectionLost, StaleRef } from "../daemon-errors.ts";
+import { BrowseError, ConnectionLost, StaleRef, SUPERSEDED } from "../daemon-errors.ts";
 import { flag } from "../metrics.ts";
 import type { Element, Page } from "./page.ts";
 
@@ -29,7 +29,15 @@ export type Ref = {
   name: string;
   unique: boolean;
   context: readonly unknown[];
+  epoch?: number;
 };
+
+export type Vocabulary = { epoch: number; loader: string };
+
+export interface Epochs {
+  vocabulary(state: Refs, target: string, frame: string): Vocabulary | null;
+  forget(state: Refs, target: string): void;
+}
 
 export type SnapshotNode = { ref?: string | null; role: string; name: string; boxless?: boolean };
 
@@ -41,24 +49,32 @@ export interface Snapshots {
 
 type RefKey = [string | null, string, string, string, number];
 
-function digits(text: string): boolean {
-  return /^[0-9]+$/u.test(text);
+const REF_ID = /^(?:f[0-9]+)?e[0-9]+$/u;
+
+export function isRefId(text: string): boolean {
+  return REF_ID.test(text);
+}
+
+export function refNumber(refId: string): number | null {
+  if (!isRefId(refId)) return null;
+  return Number(refId.slice(refId.lastIndexOf("e") + 1));
 }
 
 export function parseRef(selector: string): string | null {
-  if (selector.startsWith("@") && selector.slice(1, 2) === "e" && digits(selector.slice(2))) return selector.slice(1);
-  if (selector.startsWith("ref=") && selector.slice(4, 5) === "e" && digits(selector.slice(5))) return selector.slice(4);
-  if (selector.startsWith("[ref=") && selector.endsWith("]") && selector.slice(5, 6) === "e" && digits(selector.slice(6, -1))) return selector.slice(5, -1);
+  if (selector.startsWith("@") && isRefId(selector.slice(1))) return selector.slice(1);
+  if (selector.startsWith("ref=") && isRefId(selector.slice(4))) return selector.slice(4);
+  if (selector.startsWith("[ref=") && selector.endsWith("]") && isRefId(selector.slice(5, -1))) return selector.slice(5, -1);
   if (isBareRef(selector)) return selector;
   return null;
 }
 
 export function isBareRef(selector: string): boolean {
-  return selector.slice(0, 1) === "e" && digits(selector.slice(1));
+  return isRefId(selector);
 }
 
 export abstract class Refs {
   static snapshots: Snapshots | null = null;
+  static epochs: Epochs | null = null;
 
   abstract instance: string | null;
   abstract readonly pages: Map<string, Page>;
@@ -73,6 +89,8 @@ export abstract class Refs {
   generation = 0;
   lastSnapshot: string | null = null;
   readonly openReplaced: OpenReplaced[] = [];
+  readonly frameOrdinals = new Map<string, number>();
+  readonly framesPerTab = new Map<string, number>();
 
   documentsOf(page: Page): Set<string> {
     return new Set([...page.frames].filter(([, frame]) => frame.loader).map(([frameId, frame]) => documentKey(frameId, frame.loader as string)));
@@ -95,7 +113,19 @@ export abstract class Refs {
       ref.id,
       `it was on "${replaced.from}"; \`open\` replaced it in this tab with "${replaced.to}"`,
       "To keep both pages, open the second with `ardia browse tab new <url>`",
+      SUPERSEDED,
     );
+  }
+
+  elementCode(ref: Ref): string {
+    const now = Refs.epochs?.vocabulary(this, ref.target, ref.frame) ?? null;
+    return now !== null && ref.epoch !== undefined && now.loader === ref.loader && now.epoch > ref.epoch ? SUPERSEDED : "stale_ref";
+  }
+
+  forgetTabFrames(target: string): void {
+    for (const key of [...this.frameOrdinals.keys()]) if ((JSON.parse(key) as [string | null, string, string])[1] === target) this.frameOrdinals.delete(key);
+    for (const key of [...this.framesPerTab.keys()]) if ((JSON.parse(key) as [string | null, string])[1] === target) this.framesPerTab.delete(key);
+    Refs.epochs?.forget(this, target);
   }
 
   setRefs(refs: Ref[], snapshotText: string | null, page: Page | null = null): void {
@@ -103,6 +133,10 @@ export abstract class Refs {
     if (page !== null) this.pruneRefs(page);
     for (const ref of refs) {
       ref.generation = this.generation;
+      if (ref.epoch === undefined) {
+        const kept = this.refs.get(ref.id)?.epoch;
+        if (kept !== undefined) ref.epoch = kept;
+      }
       this.refs.set(ref.id, ref);
     }
     this.currentRefs = refs.map((ref) => ref.id);
@@ -126,9 +160,22 @@ export abstract class Refs {
     while (this.navigatedRefs.size > NAVIGATED_REFS_KEPT) this.navigatedRefs.delete(this.navigatedRefs.keys().next().value as string);
   }
 
-  nextRef(): string {
+  nextRef(prefix = ""): string {
     this.issuedRefs += 1;
-    return `e${this.issuedRefs}`;
+    return `${prefix}e${this.issuedRefs}`;
+  }
+
+  framePrefix(page: Page, frame: string): string {
+    if (!page.frameSessions.has(frame)) return "";
+    const key = JSON.stringify([this.instance, page.targetId, frame]);
+    let ordinal = this.frameOrdinals.get(key);
+    if (ordinal === undefined) {
+      const tab = JSON.stringify([this.instance, page.targetId]);
+      ordinal = (this.framesPerTab.get(tab) ?? 0) + 1;
+      this.framesPerTab.set(tab, ordinal);
+      this.frameOrdinals.set(key, ordinal);
+    }
+    return `f${ordinal}`;
   }
 
   refForNode(page: Page, frame: string, backend: number): string {
@@ -136,7 +183,7 @@ export abstract class Refs {
     const text = JSON.stringify(key);
     let entry = this.refKeys.get(text);
     if (entry === undefined) {
-      entry = [key, this.nextRef()];
+      entry = [key, this.nextRef(this.framePrefix(page, frame))];
       this.refKeys.set(text, entry);
     }
     return entry[1];
@@ -166,6 +213,7 @@ export abstract class Refs {
       name: name || (known?.name ?? ""),
       unique: Boolean(known?.unique),
       context: known?.context ?? [],
+      ...(known?.epoch !== undefined ? { epoch: known.epoch } : {}),
     });
     return id;
   }
@@ -174,8 +222,9 @@ export abstract class Refs {
     const ref = this.refs.get(refId);
     if (ref === undefined) {
       const old = this.navigatedRefs.get(refId);
-      if (old !== undefined) throw this.staleAfterOpen(old) ?? new StaleRef(refId, await this.afterNavigation(old));
-      if (digits(refId.slice(1)) && Number(refId.slice(1)) <= this.issuedRefs) throw new StaleRef(refId, "it came from an earlier snapshot, and refs are never reused");
+      if (old !== undefined) throw this.staleAfterOpen(old) ?? new StaleRef(refId, await this.afterNavigation(old), null, SUPERSEDED);
+      const issued = refNumber(refId);
+      if (issued !== null && issued <= this.issuedRefs) throw new StaleRef(refId, "it came from an earlier snapshot, and refs are never reused");
       throw new BrowseError(`Unknown ref: ${refId}`, null, "unknown_ref");
     }
     if (ref.instance !== this.instance) throw new StaleRef(refId, "Ardia restarted since that snapshot");
@@ -190,14 +239,17 @@ export abstract class Refs {
     await page.refreshFrames();
     const frame = page.frames.get(ref.frame);
     if (frame === undefined) throw this.staleAfterOpen(ref) ?? new StaleRef(refId, "its frame is gone");
-    if (frame.loader !== ref.loader) throw this.staleAfterOpen(ref) ?? new StaleRef(refId, "the page navigated since that snapshot");
+    if (frame.loader !== ref.loader) throw this.staleAfterOpen(ref) ?? new StaleRef(refId, "the page navigated since that snapshot", null, SUPERSEDED);
     const element = await page.resolveBackend(ref.backend, ref.frame, `@${refId}`);
     let gone: string;
     if (element === null) gone = "the element is no longer in the page";
     else if (!(await page.call("(el) => el.isConnected", [element], { frame: ref.frame }))) gone = "the element was removed from the page";
     else return [page, element];
     const successor = await this.redrawn(page, ref);
-    if (successor === null) throw new StaleRef(refId, gone);
+    if (successor === null) {
+      const code = this.elementCode(ref);
+      throw new StaleRef(refId, code === SUPERSEDED ? `${gone}, and the page has nothing in common with that snapshot any more` : gone, null, code);
+    }
     throw new StaleRef(refId, `${gone}; the page redrew it, and the same ${ref.role} "${ref.name}" is now @${successor.id}`);
   }
 

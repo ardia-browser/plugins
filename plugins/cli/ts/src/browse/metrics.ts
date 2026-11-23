@@ -14,6 +14,7 @@ export const COUNTS = new Set([
   "cdp_calls", "read_data_blocks", "snapshot_nodes", "snapshot_chars", "output_chars", "network_writes_count", "batch_steps", "read_rows", "read_pages",
   "batch_lines_compacted", "read_tabs_reopened", "skills_installed", "skills_skipped", "failed_step_index", "batch_lines_held", "read_nav_hidden", "read_nav_chars_hidden",
   "script_calls", "script_concurrent_peak", "script_receipts_skipped",
+  "snapshot_oopif_count", "snapshot_lines_dropped", "snapshot_new_lines", "snapshot_find_matches",
 ]);
 export const READ_FLAGS = new Set([
   "read_data", "read_data_shaped", "read_scrolled", "read_matched", "read_virtualized_grid", "read_pdf", "read_waited_for_content", "read_beside_busy",
@@ -52,6 +53,7 @@ export const FLAGS = new Set([
   "eval_main_world", "eval_isolated_reference_error", "permission_granted", "guessed_syntax", "find_closest_ref", "select_retyped", "select_word_match", "open_here", "stale_ref_after_open", "snapshot_diff", "snapshot_diff_full", "settle_ignored_background", "frame_point_unconfirmed",
   "script_eval_args", "script_selector_eval", "script_frames_listed", "script_frame_eval", "script_missing_api", "script_runner_warm", "script_runner_unconfined",
   "script_runner_crashed", "script_memory_limit", "script_sandbox_hint",
+  "snapshot_budget_trimmed", "snapshot_modal_scoped", "snapshot_hidden_text_dropped", "snapshot_closed_shadow", "snapshot_dom_depth_retry", "snapshot_find", "snapshot_paired", "snapshot_paired_unstable",
 ]);
 export const MAIN_PHASE: Readonly<Record<string, string>> = { snapshot: "snapshot_build_ms", eval: "eval_ms" };
 export const FAILED_WITHOUT_CODE = "command_failed";

@@ -14,7 +14,6 @@ export const TS_ONLY_FLAGS: readonly string[] = [
   "permission_granted",
   "read_oopif_frames",
   "route_enable_undone",
-  "select_retyped",
   "script_eval_args",
   "script_frame_eval",
   "script_frames_listed",
@@ -25,19 +24,28 @@ export const TS_ONLY_FLAGS: readonly string[] = [
   "script_runner_warm",
   "script_sandbox_hint",
   "script_selector_eval",
+  "select_retyped",
   "select_word_match",
   "selector_in_shadow_root",
   "setup_session_dropped",
+  "snapshot_budget_trimmed",
+  "snapshot_closed_shadow",
   "snapshot_diff",
   "snapshot_diff_full",
   "snapshot_document_changed",
+  "snapshot_dom_depth_retry",
+  "snapshot_find",
+  "snapshot_hidden_text_dropped",
+  "snapshot_modal_scoped",
   "snapshot_oopif_frames",
+  "snapshot_paired",
+  "snapshot_paired_unstable",
   "stale_ref_after_open",
   "tab_close_interrupted",
   "tab_readopted_after_restart",
 ];
 
-export const TS_ONLY_COUNTS: readonly string[] = ["failed_step_index", "script_calls", "script_concurrent_peak", "script_receipts_skipped"];
+export const TS_ONLY_COUNTS: readonly string[] = ["failed_step_index", "script_calls", "script_concurrent_peak", "script_receipts_skipped", "snapshot_find_matches", "snapshot_lines_dropped", "snapshot_new_lines", "snapshot_oopif_count"];
 
 const FLAGS = new Set([...METRIC_FLAGS, ...TS_ONLY_FLAGS, ...PRECISION_FLAGS]);
 const DURATIONS = new Set(METRIC_DURATIONS);
