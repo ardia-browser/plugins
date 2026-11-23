@@ -20,6 +20,7 @@ import type { State } from "../state/state.ts";
 import { Dropped, Gate, MEMORY_LIMIT, type Runner, type RunnerEvent, takeRunner, whenReady } from "./host.ts";
 import { ArgumentsTooDeep, evaluateExpression, frameFunction, framesAnswer, selectorExpression, validEvaluate } from "./page-calls.ts";
 import { renderJson } from "./render.ts";
+import { overBytes } from "./runner.ts";
 import { MAX_TIMEOUT, parseTimeout } from "./timeout.ts";
 import { EVAL_TIMEOUT } from "../commands/pagejs.ts";
 import { hasPendingReaction, reactionWaits, settleReaction } from "../changes/observe.ts";
@@ -333,7 +334,7 @@ class ScriptRun {
 }
 
 function parseRequest(text: unknown): Request | null {
-  if (typeof text !== "string" || text.length > REQUEST_LIMIT) return null;
+  if (typeof text !== "string" || overBytes(text, REQUEST_LIMIT)) return null;
   let given: unknown;
   try {
     given = JSON.parse(text);
@@ -503,11 +504,11 @@ async function drive(run: ScriptRun, source: string): Promise<Message> {
     } else if (event.type === "log") {
       if (typeof event.line === "string") run.keep(event.line);
     } else if (event.type === "state") {
-      if (typeof event.value === "string" && event.value.length <= STATE_LIMIT) run.stateText = event.value;
+      if (typeof event.value === "string" && !overBytes(event.value, STATE_LIMIT)) run.stateText = event.value;
     } else if (event.type === "missing") {
       flag("script_missing_api", true);
     } else if (event.type === "done") {
-      const text = typeof event.result === "string" && event.result.length <= RESULT_LIMIT ? event.result : null;
+      const text = typeof event.result === "string" && !overBytes(event.result, RESULT_LIMIT) ? event.result : null;
       const result = text !== null && parseText(text) !== undefined ? (JSON.parse(text) as unknown) : null;
       const unawaited = run.gate.close();
       const cut = run.stopRunning();

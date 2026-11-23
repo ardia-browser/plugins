@@ -10,6 +10,10 @@ export const LOG_LIMIT = 1024 * 1024;
 export const ARGS_LIMIT = 16 * 1024 * 1024;
 export const LOG_LINE_LIMIT = 64 * 1024;
 export const LOG_TOTAL = LOG_LIMIT * 4;
+
+export function overBytes(text: string, limit: number): boolean {
+  return text.length > limit || Buffer.byteLength(text, "utf8") > limit;
+}
 export const RESULT_LIMIT = 64 * 1024 * 1024;
 export const STATE_LIMIT = 16 * 1024 * 1024;
 
@@ -97,7 +101,7 @@ export function startRunner(link: RunnerLink): void {
       if (typeof kind !== "string" || typeof payload !== "string" || finished) return undefined;
       switch (kind) {
         case "request":
-          if (payload.length > ARGS_LIMIT + 64 * 1024) return "";
+          if (overBytes(payload, ARGS_LIMIT + 64 * 1024)) return "";
           link.post({ type: "request", request: payload });
           return "";
         case "log": {
@@ -108,7 +112,7 @@ export function startRunner(link: RunnerLink): void {
           return "";
         }
         case "state":
-          if (payload.length > STATE_LIMIT) return "";
+          if (overBytes(payload, STATE_LIMIT)) return "";
           link.post({ type: "state", value: payload });
           return "";
         case "missing":
@@ -146,7 +150,7 @@ export function startRunner(link: RunnerLink): void {
           timers.clear();
           link.post({
             type: "done",
-            result: payload.length <= RESULT_LIMIT ? payload : JSON.stringify({ kind: "error", message: "the script's result is over 64 MB; return less, or keep it in `state`", name: "Error", line: null, code: null, command: null }),
+            result: !overBytes(payload, RESULT_LIMIT) ? payload : JSON.stringify({ kind: "error", message: "the script's result is over 64 MB; return less, or keep it in `state`", name: "Error", line: null, code: null, command: null }),
           });
           return "";
         default:

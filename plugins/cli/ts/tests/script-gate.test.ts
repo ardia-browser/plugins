@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { overBytes } from "../src/browse/script/runner.ts";
 import { Dropped, Gate } from "../src/browse/script/host.ts";
 import { ArgumentsTooDeep, evaluateExpression, frameFunction, literal, selectorExpression, validEvaluate } from "../src/browse/script/page-calls.ts";
 
@@ -85,6 +86,15 @@ describe("the script's call gate", () => {
     await busy;
     await expect(queued).rejects.toBeInstanceOf(Dropped);
     expect(ran).toEqual(["first"]);
+  });
+});
+
+describe("byte limits", () => {
+  test("count UTF-8 bytes, not UTF-16 units", () => {
+    expect(overBytes("x".repeat(60), 60)).toBe(false);
+    expect(overBytes("界".repeat(30), 60)).toBe(true);
+    expect(overBytes("界".repeat(20), 60)).toBe(false);
+    expect(overBytes("😀".repeat(16), 60)).toBe(true);
   });
 });
 
