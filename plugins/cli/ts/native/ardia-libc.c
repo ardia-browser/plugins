@@ -611,7 +611,7 @@ static ssize_t write_once(int fd, const char *bytes, size_t length) {
   }
 }
 
-static bool write_cannot_block(int fd) {
+static bool regular_file_or_null(int fd) {
   struct stat info, null_device;
   if (fstat(fd, &info) != 0) return false;
   if (S_ISREG(info.st_mode)) return true;
@@ -641,9 +641,9 @@ static napi_value write_some(napi_env env, napi_callback_info info) {
   plain.sa_handler = SIG_DFL;
   sigemptyset(&plain.sa_mask);
   if (sigaction(SIGINT, NULL, &kept) != 0) return status(env, failed());
-  bool swapped = kept.sa_handler != SIG_IGN && !(guarded && write_cannot_block(fd)) && sigaction(SIGINT, &plain, NULL) == 0;
-#ifdef ARDIA_WRITE_PAUSE_US
-  usleep(ARDIA_WRITE_PAUSE_US);
+  bool swapped = kept.sa_handler != SIG_IGN && !(guarded && regular_file_or_null(fd)) && sigaction(SIGINT, &plain, NULL) == 0;
+#ifdef ARDIA_WRITE_RAISES_SIGINT
+  raise(SIGINT);
 #endif
   ssize_t result = write_once(fd, (const char *)data + offset, length - (size_t)offset);
   if (swapped) sigaction(SIGINT, &kept, NULL);
