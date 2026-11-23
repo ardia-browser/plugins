@@ -234,7 +234,7 @@ export type ControlRecord = {
   readonly generation: bigint | null;
 };
 
-export function readControlFile(file: string, signal: (pid: number, sig: 0) => unknown = (target, sig) => process.kill(target, sig)): ControlRecord {
+export function readControlFile(file: string, signal: (pid: number, sig: 0) => unknown = (target, sig) => process.kill(target, sig), probeSocket = true): ControlRecord {
   const label = file.slice(file.lastIndexOf("/") + 1);
   let fd: number;
   try {
@@ -270,7 +270,7 @@ export function readControlFile(file: string, signal: (pid: number, sig: 0) => u
   if (!(pid !== undefined && pid > 1n && pid < 2n ** 31n)) throw new EndpointError(NOT_REACHABLE);
   const state = pidState(Number(pid), signal);
   if (state === "gone") throw new EndpointError(NOT_REACHABLE);
-  const problem = state === "unsignalable" ? sandboxHint(Number(pid), announcePath(file)) : undefined;
+  const problem = state === "unsignalable" && probeSocket ? sandboxHint(Number(pid), announcePath(file)) : undefined;
   if (problem !== undefined) throw new EndpointError(`${NOT_REACHABLE} (${problem})`);
   return { file, label, port, browser, token: typeof token === "string" ? token : null, pid, generation: pyInt(control.get("generation")) ?? null };
 }
@@ -301,9 +301,10 @@ const askSocket: EndpointCall = (socketFile, signal) => controlCall(socketFile, 
 
 function grantedEndpoint(answer: unknown): { port: bigint; token: string; generation: bigint } {
   const fields = answer instanceof Map ? Object.fromEntries(answer) : (answer as Record<string, unknown> | null) ?? {};
-  const port = typeof fields["port"] === "number" ? BigInt(fields["port"]) : pyInt(fields["port"]);
+  const whole = (value: unknown) => (typeof value === "number" ? (Number.isSafeInteger(value) ? BigInt(value) : undefined) : pyInt(value));
+  const port = whole(fields["port"]);
   const token = fields["token"];
-  const generation = typeof fields["generation"] === "number" ? BigInt(fields["generation"]) : pyInt(fields["generation"]);
+  const generation = whole(fields["generation"]);
   if (!(port !== undefined && port > 0n && port < 65536n) || !(typeof token === "string" && TOKEN.test(token)) || generation === undefined) {
     throw new EndpointError(`${NOT_REACHABLE} (Ardia's control socket answered ${DEVTOOLS_ENDPOINT_METHOD} without a valid port, token and generation)`);
   }
@@ -368,7 +369,7 @@ export async function resolveInstance(config: EndpointConfig, signal: AbortSigna
   if (setting(config.ws) !== null || typeof config.port === "number" || typeof config.port === "bigint" || envEndpoint() !== null) {
     return (await resolve(config, signal)).instance;
   }
-  const record = readControlFile(controlFilePath(dataRoot(setting(config.data_dir) ?? undefined)));
+  const record = readControlFile(controlFilePath(dataRoot(setting(config.data_dir) ?? undefined)), undefined, false);
   return `${record.pid}:${record.generation ?? 0n}:${record.browser}`;
 }
 

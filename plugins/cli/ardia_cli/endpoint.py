@@ -208,6 +208,9 @@ def from_control_file(path: Path) -> Endpoint:
     return _endpoint_of(record, record.port, record.token)
 
 
+import contextvars
+
+OPEN_SOCKETS: contextvars.ContextVar[list | None] = contextvars.ContextVar("ardia_open_sockets", default=None)
 DEVTOOLS_ENDPOINT_METHOD = "control.devtoolsEndpoint"
 DEVTOOLS_ENDPOINT_TIMEOUT = 70.0
 
@@ -232,6 +235,9 @@ def ask_socket(sock_path: Path, timeout: float = DEVTOOLS_ENDPOINT_TIMEOUT):
     deadline = time.monotonic() + timeout
     sock = sockets.socket(sockets.AF_UNIX, sockets.SOCK_STREAM)
     sock.settimeout(timeout)
+    sink = OPEN_SOCKETS.get()
+    if sink is not None:
+        sink.append(sock)
     try:
         try:
             sock.connect(str(sock_path))

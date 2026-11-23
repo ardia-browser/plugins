@@ -200,3 +200,30 @@ test("a reply to the method before hello succeeded is ignored, and a frame that 
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("a fractional port or generation is a bad answer, not a RangeError", async () => {
+  const root = scratch();
+  try {
+    const file = writeControl(root, {});
+    await assert.rejects(fromControl(file, null, answers({ port: 9222, token: SOCKET_TOKEN, generation: 3.5 })), /without a valid port, token and generation/);
+    await assert.rejects(fromControl(file, null, answers({ port: 9222.5, token: SOCKET_TOKEN, generation: 3 })), /without a valid port, token and generation/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the idle check accepts an unsignalable pid without touching the socket", async () => {
+  const root = scratch();
+  try {
+    const file = writeControl(root, {});
+    const eperm = () => {
+      const error: NodeJS.ErrnoException = new Error("EPERM");
+      error.code = "EPERM";
+      throw error;
+    };
+    assert.equal(readControlFile(file, eperm, false).pid, BigInt(process.pid));
+    assert.throws(() => readControlFile(file, eperm), /can't be signalled/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

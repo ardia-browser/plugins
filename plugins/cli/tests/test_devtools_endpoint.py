@@ -138,6 +138,41 @@ class DevtoolsEndpoint(unittest.TestCase):
             endpoint.ask_socket(self.serve(lambda request: [[1, 2]]), timeout=5)
         self.assertEqual(caught.exception.code, "bad_reply")
 
+    def test_cancelling_a_command_closes_its_pending_socket(self):
+        import asyncio
+        import time
+
+        from ardia_cli.browse.state import State
+
+        saw_eof = threading.Event()
+        path = self.root / "ArdiaControl.sock"
+        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        server.bind(str(path))
+        server.listen(1)
+        self.addCleanup(server.close)
+
+        def hold():
+            connection, _ = server.accept()
+            with connection:
+                while connection.recv(65536):
+                    pass
+                saw_eof.set()
+
+        threading.Thread(target=hold, daemon=True).start()
+        state = State({"session": "t"}, lambda: endpoint.ask_socket(path, timeout=30))
+
+        async def cancel_soon():
+            task = asyncio.ensure_future(state.resolve_off_loop())
+            await asyncio.sleep(0.3)
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+
+        started = time.monotonic()
+        asyncio.run(cancel_soon())
+        self.assertTrue(saw_eof.wait(5))
+        self.assertLess(time.monotonic() - started, 10)
+
     def test_a_different_port_is_another_server(self):
         path = write_control(self.root)
         with self.assertRaisesRegex(EndpointError, "restarted its DevTools connection"):
