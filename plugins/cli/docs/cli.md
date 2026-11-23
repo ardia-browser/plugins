@@ -928,13 +928,49 @@ Refs stay valid across the batch as long as their nodes do (a dialog that's reop
 every selector form (see Refs) and `find` line works as on the command line. `eval` with `fetch(`, `DOMParser` or
 XHR, and open → `get text` on three pages in a row, print a one-time tip on stderr pointing at `read` and `script`.
 
-`ardia browse script` (`browse/script.py`) runs its JavaScript in a Worker of a blank background page, outside the
-page it drives: each `page.*` call is a browse command on the session, and `page.evaluate(fn, arg)` (also
-`page.eval`) is `eval` of `(fn)(arg)` in the page's main world. `page.dblclick`, `page.focus` and `page.keyboard(text)`
-(`keyboard type`) cover cells and fields that only take typing. Two mistakes get a hint under the error: a
-`ReferenceError` for `document`, `window`, `localStorage`, `sessionStorage` or `getComputedStyle` in the script itself
-says the script runs outside the page and points at `page.evaluate` or `ardia browse eval`, and one from inside
-`page.evaluate` for a script variable says to pass it as the argument.
+`ardia browse script` runs its JavaScript in a runner process the daemon starts from its own program
+(`--ardia-script-runner`, TypeScript; Python's `browse/script.py` still uses a Worker of a blank background page). The
+script sees only its API: `page`, `browse`, `read`, `log`, `sleep`, `state`, `console`, timers, `URL`,
+`URLSearchParams`, `atob`, `btoa` and `structuredClone`, in a `node:vm` context whose global has no prototype from the
+runner (every object it can reach is its own realm's, and `import()` is refused with its own error). The runner talks
+to the daemon only over its IPC channel, starts with an empty environment and `/` as its folder, and confines itself
+before it runs anything: on macOS a Seatbelt profile (`ardia-libc.so` `confineProcess`) denies network, file writes,
+file reads outside `/usr` and `/System`, process exec and fork, Mach lookups and POSIX IPC; on Linux Landlock (where
+the kernel has it) denies the file system, TCP and, from ABI 6, abstract sockets and signals. A runner that can't
+confine itself on macOS refuses the script. Each script gets a fresh runner; the daemon keeps one started and
+waiting (killed after 5 idle minutes), so a script starts without a tab or a page load. A script past its
+`--timeout`, one using more than 1 GB (polled every 200 ms: `proc_pid_rusage` on macOS, `/proc` on Linux) and one
+interrupted are killed with SIGKILL; `state` survives each, since the runner sends it as it goes.
+
+Each `page.*` call is a browse command on the session, served straight from the IPC message (no controller tab and no
+CDP hop per call). Read-only calls (`get`, `is`, `read`, `page.evaluate`, `page.$eval`, `page.$$eval`,
+`page.frames()`) run side by side, up to 8 at once, so `Promise.all` over them is concurrent; every other call waits
+for the calls before it and runs alone, in the order the script made them. Calls still queued when the script returns
+never run. When it returns or fails, actions and `evaluate` calls it didn't await that were already sent finish (still
+within its `--timeout`), while reads and sleeps still running are stopped; the result says how many never ran and how
+many were stopped. A timeout or interrupt stops waiting on everything still running; code an action or
+`evaluate` already started in the page can still finish there, since CDP has no way to stop it midway. Either way
+every call's promise is awaited before the command answers. A CDP reply that arrives later (a temporary tab created past its deadline) is
+still cleaned up when it lands, as for any command.
+`page.evaluate` counts as a read: an `evaluate` that changes the page should be awaited on its own, not inside
+`Promise.all`. A script has exactly the authority of the `ardia browse` commands it calls, no more: `screenshot` and
+`pdf` write the files it names and `read --http` fetches through the daemon, as they do from a shell. Actions made through `page` (`click`, `fill`, `type`, `press`, `select`,
+`check`, `uncheck`, `hover`, `focus`, `dblclick`, `keyboard`, `scroll`) wait for the page to settle (network and the
+DOM's reaction) but skip the change report's snapshots and text; pass `{receipt: true}` as their last argument for the
+report. `browse('click', …)` is the command as typed, with its report. `page.evaluate(fn, ...args)` (also `page.eval`)
+is `eval` of `(fn)(...args)` in the page's main world, the arguments JSON. `page.$eval(sel, fn, ...args)` calls `fn`
+with the first match (failing when none matches) and `page.$$eval(sel, fn, ...args)` with an array of every match;
+their selector is written into the expression as a literal, so `eval`'s quoting repair fixes an unquoted attribute
+value. `page.frames()` lists the tab's frames (`id`, `url`, `name`, `origin`, `parent`, `main`, `crossProcess`), each
+with `evaluate`, `$eval` and `$$eval` that run in that frame's isolated world, cross-process frames included where the
+session attached them. `page.dblclick`, `page.focus` and `page.keyboard(text)` (`keyboard type`; also
+`.press(key)`, `.type(text)` and `.insertText(text)`) cover cells and fields that only take typing, and the
+Playwright names agents reach for (`content`, `innerText`, `textContent`, `inputValue`, `getAttribute`, `isVisible`,
+`goBack`, `goForward`, `waitForSelector`, `waitForURL`, `waitForLoadState`) map to the matching commands. Any other
+`page` method throws a `TypeError` (code `usage`) that names the API instead of `page.x is not a function`. Two
+mistakes get a hint under the error: a `ReferenceError` for `document`, `window`, `localStorage`, `sessionStorage` or
+`getComputedStyle` in the script itself says the script runs outside the page and points at `page.evaluate` or
+`ardia browse eval`, and one from inside `page.evaluate` for a script variable says to pass it as an argument.
 
 ### Site notes
 
@@ -1715,7 +1751,15 @@ from a checkout), `$geoip_disable`, `$process_person_profile: false` and `$sessi
   `other`; never its arguments), with `error_code` set to that line's code (TypeScript only; watch `failed_step_command`
   with `error_code` on `batch` to see which step agents lose batches on; a trailing `close` that fails counts as the
   step after the last line, and a line that can't be parsed, one that isn't a JSON array of strings or a command
-  line, is the failed step with `other`, though nothing ran), and `cdp_calls` with `cdp_ms_total` (the
+  line, is the failed step with `other`, though nothing ran), for a `script` `script_calls` (the page calls it made),
+  `script_concurrent_peak` (the most read-only calls it ran at once), `script_receipts_skipped` (actions that skipped the
+  change report because the script didn't ask for one) and the flags `script_runner_warm` (it started on the daemon's
+  waiting runner), `script_eval_args` (`page.evaluate` got more than one argument), `script_selector_eval`
+  (`page.$eval` or `page.$$eval`), `script_frames_listed`, `script_frame_eval`, `script_missing_api` (it called a
+  `page` method the API doesn't have; the name isn't sent), `script_runner_unconfined` (Linux without Landlock),
+  `script_runner_crashed`, `script_memory_limit` and `script_sandbox_hint` (a `require`, `fetch` or `process` the
+  sandbox lacks got a hint) (TypeScript only; watch `total_ms` on `script` against
+  `script_calls`, and `error_code` on `script` beside `script_missing_api`), and `cdp_calls` with `cdp_ms_total` (the
   command's own DevTools calls, counted in `connection.py`). The daemon returns its share as `metrics` in its answer
   (`command_metrics.py`).
 - `$exception` for a crash the CLI didn't handle (`source` and mechanism `cli_unhandled`, level `fatal`) or one inside

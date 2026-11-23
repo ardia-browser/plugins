@@ -504,10 +504,10 @@ export async function observe<T>(ctx: Ctx, page: Page, run: () => Promise<T>, re
   const state = ctx.state;
   const batch = batches.get(state);
   if (batch?.pending && (batch.pending.page !== page || batch.pending.session !== page.session)) batch.flushed = await flushBatch(ctx, batch);
-  if (ctx.options["no_changes"]) {
+  if (ctx.options["no_changes"] || ctx.options["settle_only"]) {
     if (batch?.pending) batch.flushed = await flushBatch(ctx, batch);
     if (react !== null) await watchReaction(state, page, react);
-    return [await run(), null];
+    return [ctx.options["no_changes"] ? await run() : await settled(page, run), null];
   }
   const group = batch?.pending ?? null;
   const reused = group === null && batch !== undefined ? reusable(state, page, batch.previous) : null;
