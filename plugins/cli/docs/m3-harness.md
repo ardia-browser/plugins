@@ -28,9 +28,10 @@ from `plugins/cli/ts`.
 
 ```sh
 sh scripts/build.sh                                       # the daemon the replay starts
-bun tests/m3/harness/main.ts replay                       # every scenario with a recording
+bun tests/m3/harness/main.ts replay                       # every scenario with a recording, pending ones skipped
 bun tests/m3/harness/main.ts replay 'core/*' daemon/waits # names under scenarios/, globs allowed
-bun tests/m3/harness/main.ts list 'act/*'                 # steps and live-only marks
+bun tests/m3/harness/main.ts replay core/open_title        # a pending recording named exactly still runs
+bun tests/m3/harness/main.ts list 'act/*'                 # steps, live-only and pending marks
 bun tests/m3/harness/main.ts link-replay                  # every link recording that isn't live-only
 bun tests/m3/harness/main.ts link-list
 bun test tests/m3/harness/harness.test.ts                 # normalizer rules, port blocks, divergences
@@ -45,7 +46,7 @@ another copy of the data (scenarios, transcripts, link data, schema and `elastic
 
 Recording new transcripts, live runs against Chromium and fault runs (`cancel`) come with a TypeScript record mode in
 plugins#108. Until then the corpus can only be replayed, and a scenario whose recording no longer describes the daemon
-goes on `PENDING` in `replay-corpus.test.ts` with its reason.
+goes on `PENDING` in `harness/pending.ts` (read by `replay-corpus.test.ts` and the `replay` command) with its reason.
 
 ## Ports
 
@@ -162,7 +163,7 @@ credentials, `Authorization`, `Proxy-Authorization` and `Cookie` header values a
 
 The recordings were made from the Python daemon. plugins#92 changed what the TypeScript daemon sends: it keeps Network
 on per session and reuses a frame tree and a visibility probe it read in the last 0.75 s and 0.25 s. The 26
-recordings that change touched no longer describe its requests, so `PENDING` in `replay-corpus.test.ts` holds them out
+recordings that change touched no longer describe its requests, so `PENDING` in `harness/pending.ts` holds them out
 of the corpus with that reason, and a test checks each one is still a replayable recording. They come back once
 plugins#108 re-records them from TypeScript.
 
