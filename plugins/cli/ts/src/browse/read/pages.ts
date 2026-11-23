@@ -342,8 +342,10 @@ export async function linksIn(page: Page, listing: string, pattern: string, time
   let failed: BrowseError | null = null;
   for (;;) {
     const now = await linksNow(page, deadline);
-    if (now instanceof BrowseError) failed = now;
-    else scanned = now;
+    if (now instanceof BrowseError) {
+      failed = now;
+      scanned = null;
+    } else scanned = now;
     if ((scanned !== null && wanted(scanned, page.url || listing)) || monotonic() + THIN_POLL >= deadline) break;
     await sleep(THIN_POLL);
   }
