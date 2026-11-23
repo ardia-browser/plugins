@@ -1,0 +1,89 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { bundleForTests } from "../build.mjs";
+
+const here = (path) => fileURLToPath(new URL(path, import.meta.url));
+
+export const sdk = await bundleForTests(here("bundle.ts"));
+export const manifest = JSON.parse(readFileSync(here("../../plugin.json"), "utf8"));
+
+export const ACCOUNT = { url: "my.1password.com", email: "me@example.com", user_uuid: "USERUUID1", account_uuid: "ACCOUNTUUID1" };
+export const WORK_ACCOUNT = { url: "work.1password.com", email: "me@work.example", user_uuid: "USERUUID2", account_uuid: "ACCOUNTUUID2", shorthand: "work" };
+export const ITEM_ID = "abcdefghijklmnopqrstuvwxyz";
+export const PASSWORD = "fixture-" + "pw-1";
+export const NEW_PASSWORD = "fixture-" + "pw-2";
+export const TOTP_URI = "otpauth://totp/Example:me@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example";
+
+export const listedEntry = (overrides = {}) => ({
+  id: ITEM_ID,
+  title: "Example",
+  version: 3,
+  vault: { id: "vvvvvvvvvvvvvvvvvvvvvvvvvv", name: "Private" },
+  category: "LOGIN",
+  last_edited_by: "USERUUID1",
+  created_at: "2025-12-01T00:00:00Z",
+  updated_at: "2026-01-02T03:04:05.678Z",
+  additional_information: "me@example.com",
+  urls: [{ label: "website", primary: true, href: "https://example.com" }],
+  ...overrides,
+});
+
+export const revealedEntry = ({ password = PASSWORD, username = "me@example.com", otp, extraFields = [], ...overrides } = {}) => ({
+  id: ITEM_ID,
+  title: "Example",
+  version: 3,
+  vault: { id: "vvvvvvvvvvvvvvvvvvvvvvvvvv", name: "Private" },
+  category: "LOGIN",
+  fields: [
+    { id: "username", type: "STRING", purpose: "USERNAME", label: "username", value: username, reference: `op://Private/${ITEM_ID}/username` },
+    ...(password === null ? [] : [{ id: "password", type: "CONCEALED", purpose: "PASSWORD", label: "password", value: password, entropy: 71.2, password_details: { strength: "FANTASTIC" }, reference: `op://Private/${ITEM_ID}/password` }]),
+    { id: "notesPlain", type: "STRING", purpose: "NOTES", label: "notesPlain", reference: `op://Private/${ITEM_ID}/notesPlain` },
+    ...(otp ? [{ id: "TOTP_abc", section: { id: "add more" }, type: "OTP", label: "one-time password", ...otp }] : []),
+    ...extraFields,
+  ],
+  urls: [{ label: "website", primary: true, href: "https://example.com" }],
+  ...overrides,
+});
+
+const json = (value) => ({ stdout: JSON.stringify(value) });
+export const ok = (value) => (typeof value === "string" ? { stdout: value } : json(value));
+export const fail = (stderr, status = 1) => ({ status, stderr });
+
+export function fakeOp(routes) {
+  const seen = [];
+  const cli = (launch) => {
+    const line = launch.argv.join(" ");
+    seen.push({ line, launch });
+    for (const [pattern, answer] of routes) {
+      const glob = new RegExp(`^${pattern.split("*").map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`, "s");
+      const matches = glob.test(line);
+      if (matches) return typeof answer === "function" ? answer(launch, seen) : answer;
+    }
+    return fail(`[ERROR] 2026/11/22 10:00:00 the fake op has no route for: ${line}`);
+  };
+  cli.seen = seen;
+  cli.lines = () => seen.map((entry) => entry.line);
+  return cli;
+}
+
+export const unlocked = { session: { key: null }, preferences: { account: ACCOUNT.account_uuid } };
+
+export function harness(routes, context = unlocked) {
+  const cli = fakeOp(routes);
+  const h = sdk.createCredentialHarness({ provider: sdk.onePassword, manifest, cli, context });
+  return { h, cli };
+}
+
+export async function listAll(h) {
+  const items = [];
+  let request = { snapshot: null, cursor: null };
+  const pages = [];
+  for (;;) {
+    const answer = await h.call("list", request);
+    if (!answer.ok) return { answer, items, pages };
+    pages.push(answer.result);
+    items.push(...answer.result.items);
+    if (!answer.result.cursor) return { answer, items, pages };
+    request = { snapshot: answer.result.snapshot, cursor: answer.result.cursor };
+  }
+}
