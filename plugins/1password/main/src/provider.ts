@@ -1,9 +1,12 @@
-import type { CredentialProvider } from "@ardia/plugin-sdk/credentials";
+import type { CredentialHandler, CredentialProvider, Item, SealedAddTotpRequest, SealedEditRequest } from "@ardia/plugin-sdk/credentials";
 import { connect, providerState, signOut } from "./accounts";
 import { editItem } from "./edits";
 import { listItems, reveal } from "./items";
 import { itemLink } from "./links";
 import { saveLogin } from "./saving";
+
+const edit: CredentialHandler<SealedEditRequest, Item> = ({ id, change }, ctx) => editItem(ctx, id, change);
+const addTotp: CredentialHandler<SealedAddTotpRequest, Item> = ({ id, uri }, ctx) => editItem(ctx, id, { totp: { set: uri } });
 
 export const onePassword: CredentialProvider = {
   state: (_request, ctx) => providerState(ctx),
@@ -13,7 +16,7 @@ export const onePassword: CredentialProvider = {
   list: (_request, ctx) => listItems(ctx),
   reveal: (request, ctx) => reveal(ctx, request),
   save: ({ login }, ctx) => saveLogin(ctx, login),
-  edit: ({ id, change }, ctx) => editItem(ctx, id, change),
-  addTotp: ({ id, uri }, ctx) => editItem(ctx, id, { totp: { set: uri } }),
+  edit,
+  addTotp,
   link: ({ id }, ctx) => itemLink(ctx, id),
 };

@@ -25,7 +25,7 @@ const approve = ["vault list --format json --account=*", ok([])];
 const signedOut = { session: null, preferences: {} };
 const locked = { session: null, preferences: { account: ACCOUNT.account_uuid } };
 const start = { method: "app", step: "start", fields: {} };
-const sealed = (h, change) => ({
+const sealedChange = (h, change) => ({
   ...change,
   ...(typeof change.password === "string" ? { password: h.secret(change.password) } : {}),
   ...(change.totp && change.totp !== "remove" ? { totp: { set: h.secret(change.totp.set) } } : {}),
@@ -593,11 +593,12 @@ describe("editing a login", () => {
     test(`${name} goes only in its own argument, so the login keeps its passkey`, async () => {
       const { vault, routes } = opHoldingPasskey(stored);
       const { h, cli } = harness(routes);
-      const answer = await h.call("edit", { id: ITEM_ID, change: sealed(h, change) });
+      const answer = await h.call("edit", { id: ITEM_ID, change: sealedChange(h, change) });
       assert.equal(answer.ok, true, JSON.stringify(answer));
       assert.equal(vault.passkey, true);
       const launch = editLaunch(cli);
       assert.deepEqual(argumentsHolding(launch, secret), [element]);
+      assert.equal(cli.seen.filter((entry) => entry.launch.argv.some((argument) => argument.includes(secret))).length, 1);
       assert.deepEqual(secretSeen(launch, secret), [false, false]);
       assert.equal(JSON.stringify(answer).includes(secret), false);
       if (change.password !== undefined) assert.equal(vault.item.fields.find((field) => field.purpose === "PASSWORD").value, change.password);
@@ -608,7 +609,7 @@ describe("editing a login", () => {
   test("a new code replaces code fields under other names in the same edit", async () => {
     const { vault, routes } = opHoldingPasskey(revealedEntry({ extraFields: [codeField("backup code")] }));
     const { h, cli } = harness(routes);
-    assert.equal((await h.call("edit", { id: ITEM_ID, change: sealed(h, { totp: { set: TOTP_URI } }) })).ok, true);
+    assert.equal((await h.call("edit", { id: ITEM_ID, change: sealedChange(h, { totp: { set: TOTP_URI } }) })).ok, true);
     assert.deepEqual(editLaunch(cli).argv.slice(3, -2), ["backup code[delete]", `one-time password[otp]=${TOTP_URI}`]);
     assert.equal(cli.seen.filter((entry) => entry.launch.verb === "item.assign").length, 1);
     assert.deepEqual(vault.item.fields.filter((field) => field.type === "OTP").map((field) => field.label), ["one-time password"]);
@@ -622,7 +623,7 @@ describe("editing a login", () => {
     test(`a new code isn't added over ${name}`, async () => {
       const { vault, routes } = opHoldingPasskey(revealedEntry({ extraFields }));
       const { h, cli } = harness(routes);
-      assert.equal(problemOf(await h.call("edit", { id: ITEM_ID, change: sealed(h, { totp: { set: TOTP_URI } }) })), "cantPrepare");
+      assert.equal(problemOf(await h.call("edit", { id: ITEM_ID, change: sealedChange(h, { totp: { set: TOTP_URI } }) })), "cantPrepare");
       assert.deepEqual([ranEdit(cli), vault.passkey], [false, true]);
     });
   }
@@ -637,7 +638,7 @@ describe("editing a login", () => {
     test(`${name} is refused by Ardia and never reaches op`, async () => {
       const { vault, routes } = opHoldingPasskey(revealedEntry());
       const { h, cli } = harness(routes);
-      const answer = await h.call("edit", { id: ITEM_ID, change: sealed(h, change) });
+      const answer = await h.call("edit", { id: ITEM_ID, change: sealedChange(h, change) });
       assert.equal(answer.ok, false);
       assert.deepEqual([ranEdit(cli), vault.passkey], [false, true]);
     });
@@ -647,7 +648,7 @@ describe("editing a login", () => {
     ["a password", { password: NEW_PASSWORD }],
     ["a code", { totp: { set: TOTP_URI } }],
   ]) {
-    test(`${name} that arrives as plain text is left to the 1Password app and runs nothing`, async () => {
+    test(`${name} that somehow arrives unsealed is still refused and runs nothing`, async () => {
       const { vault, routes } = opHoldingPasskey(revealedEntry());
       const { h, cli } = harness(routes);
       const error = failure(await h.call("edit", { id: ITEM_ID, change }));
@@ -659,12 +660,12 @@ describe("editing a login", () => {
 
   test("a sealed password that comes back unchanged is notTaken", async () => {
     const { h } = harness(editRoutes(revealedEntry(), revealedEntry()));
-    assert.equal(problemOf(await h.call("edit", { id: ITEM_ID, change: sealed(h, { password: NEW_PASSWORD }) })), "notTaken");
+    assert.equal(problemOf(await h.call("edit", { id: ITEM_ID, change: sealedChange(h, { password: NEW_PASSWORD }) })), "notTaken");
   });
 
   test("an op error that repeats the new password keeps it out of the error", async () => {
     const { h } = harness([["item get*", ok(revealedEntry())], ["item edit*", (launch) => fail(`[ERROR] 2026/11/23 10:00:00 couldn't apply ${launch.argv.join(" ")}`)]]);
-    const answer = await h.call("edit", { id: ITEM_ID, change: sealed(h, { password: NEW_PASSWORD }) });
+    const answer = await h.call("edit", { id: ITEM_ID, change: sealedChange(h, { password: NEW_PASSWORD }) });
     assert.equal(problemOf(answer), "failed");
     assert.equal(JSON.stringify(answer).includes(NEW_PASSWORD), false);
   });
@@ -767,7 +768,7 @@ describe("adding a code", () => {
     });
   }
 
-  test("a code that arrives as plain text is left to the 1Password app", async () => {
+  test("a code that somehow arrives unsealed is still refused", async () => {
     const { h, cli } = harness([]);
     assert.equal(problemOf(await h.call("addTotp", { id: ITEM_ID, uri: TOTP_URI })), "failed");
     assert.equal(cli.seen.length, 0);
@@ -812,7 +813,7 @@ describe("opening a login in 1Password", () => {
   ]) {
     test(`after ${name} the edit fails plainly and the login still opens in 1Password`, async () => {
       const { h } = harness([oneAccount, ["item get*", ok(revealedEntry())], ["item edit*", error]]);
-      const answer = await h.call("edit", { id: ITEM_ID, change: sealed(h, change) });
+      const answer = await h.call("edit", { id: ITEM_ID, change: sealedChange(h, change) });
       assert.equal(answer.ok, false);
       assert.ok(["failed", "notTaken"].includes(problemOf(answer)));
       assert.deepEqual((await h.call("link", { id: ITEM_ID })).result, { url: LINK });

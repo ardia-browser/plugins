@@ -22,11 +22,11 @@ never send a template: one `op item edit` uses `op`'s assignment statements, whi
 - A username is `username=<value>`, a site is `--url=<address>` (https, or http to this Mac), and removing a code is
   `<label>[delete]` for each code field, with `.`, `=` and `\` in the label escaped by a backslash.
 - A password is `password=<value>` and a new code is `one-time password[otp]=<otpauth address>`. Code fields under
-  other names are deleted in the same edit. Ardia hands the plugin these values sealed, as secret handles, and puts
-  them on `op`'s command line itself, each as one argument behind its literal prefix (the manifest's `argvSecrets`);
+  other names are deleted in the same edit. Ardia hands the plugin these values sealed, as single-use secret handles
+  that go into exactly one `op` run, and puts them on `op`'s command line itself, each as one argument behind its literal prefix (the manifest's `argvSecrets`);
   the plugin only forwards the handle and never builds a value into a string. While `op` runs, other apps on the Mac can
   read its arguments, which `op`'s help also warns about. Ardia refuses a value with a line break or NUL, or over 4096
-  bytes, and a password or code that reaches the plugin as plain text is left to the 1Password app.
+  bytes, and the plugin refuses a password or code that ever arrives unsealed.
 - A sealed password counts as saved when the login's password reads back changed; a sealed code when the login's one
   code field reads back as a new otpauth address.
 - A code field whose label has brackets, is empty, starts with `-`, names a built-in field or matches another field's

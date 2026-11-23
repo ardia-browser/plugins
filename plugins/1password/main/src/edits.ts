@@ -15,9 +15,13 @@ const FIELD_DELETION = /^[^\u0000-\u001f\u007f-\u009f[\]\-][^\u0000-\u001f\u007f
 const CONTROL_OR_SPACE = /[\s\u0000-\u001f\u007f-\u009f]/;
 const NAMES_OP_RESERVES = new Set(["username", "password", "notesplain", "notes", "title", "url", "website"]);
 
-const newCode = (change: LoginChange) => (change.totp === undefined || change.totp === "remove" ? undefined : change.totp.set);
+type AnyChange = LoginChange<string | SecretHandle>;
 
-function holdsSealed(fields: readonly JsonRecord[], change: LoginChange, before: readonly JsonRecord[]): boolean {
+export type SealedChange = LoginChange<SecretHandle>;
+
+const newCode = (change: AnyChange) => (change.totp === undefined || change.totp === "remove" ? undefined : change.totp.set);
+
+function holdsSealed(fields: readonly JsonRecord[], change: AnyChange, before: readonly JsonRecord[]): boolean {
   if (isSecretHandle(change.password)) {
     const now = purposeValue(fields, "PASSWORD");
     if (!now || now === purposeValue(before, "PASSWORD")) return false;
@@ -31,7 +35,7 @@ function holdsSealed(fields: readonly JsonRecord[], change: LoginChange, before:
   return true;
 }
 
-export function holds(item: JsonRecord, change: LoginChange, before: JsonRecord | null = null, now = Date.now()): boolean {
+export function holds(item: JsonRecord, change: AnyChange, before: JsonRecord | null = null, now = Date.now()): boolean {
   const fields = json.dicts(item.fields);
   if (change.username !== undefined && (purposeValue(fields, "USERNAME") ?? "") !== change.username) return false;
   if (change.url !== undefined && !json.dicts(item.urls).some((url) => json.string(url.href) === change.url)) return false;
@@ -97,7 +101,7 @@ function codeChanges(fields: readonly JsonRecord[], keepNamed: string | null): R
   return params;
 }
 
-export function assignments(item: JsonRecord, change: LoginChange): VerbParams | null {
+export function assignments(item: JsonRecord, change: SealedChange): VerbParams | null {
   if ((json.string(item.category) ?? "LOGIN").toUpperCase() !== "LOGIN") return null;
   const params: Record<string, string | SecretHandle> = {};
   if (change.username !== undefined) {
@@ -124,10 +128,11 @@ export function assignments(item: JsonRecord, change: LoginChange): VerbParams |
   return params;
 }
 
-export async function editItem(ctx: CredentialContext, id: string, change: LoginChange): Promise<Item> {
+export async function editItem(ctx: CredentialContext, id: string, change: SealedChange): Promise<Item> {
   requireUnlocked(ctx);
   if (!isItemId(id)) throw CredentialError.notFound();
-  if (typeof change.password === "string" || typeof newCode(change) === "string") throw CredentialError.failed("failed", { detail: SECRET_NOT_SEALED });
+  const unsealed = [change.password, newCode(change)].some((secret) => secret !== undefined && !isSecretHandle(secret));
+  if (unsealed) throw CredentialError.failed("failed", { detail: SECRET_NOT_SEALED });
   const stored = await revealedItem(ctx, id);
   const params = json.string(stored.id) === id ? assignments(stored, change) : null;
   if (!params) throw CredentialError.failed("cantPrepare");
