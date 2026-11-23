@@ -73,11 +73,12 @@ export function controlCall(
   signal: AbortSignal | null = currentSignal(),
 ): Promise<unknown> {
   if (signal?.aborted) return Promise.reject(new Cancelled());
-  if (!usable(file)) return Promise.reject(new ControlRefused("unreachable", "the control socket isn't there"));
+  if (!usable(file)) return Promise.reject(new ControlRefused("not_connected", "the control socket isn't there"));
   return new Promise<unknown>((resolve, reject) => {
     const socket = net.connect(file);
     let buffer = Buffer.alloc(0);
     let finished = false;
+    let connected = false;
     const cancel = () => finish(new Cancelled());
     const finish = (error: Error | null, value?: unknown) => {
       if (finished) return;
@@ -90,9 +91,10 @@ export function controlCall(
     };
     const timer = setTimeout(() => finish(new ControlRefused("timeout", `the control socket didn't answer ${method} in time`)), timeout * 1000);
     signal?.addEventListener("abort", cancel, { once: true });
-    socket.on("error", (error) => finish(new ControlRefused("unreachable", error.message)));
+    socket.on("error", (error) => finish(new ControlRefused(connected ? "unreachable" : "not_connected", error.message)));
     socket.on("close", () => finish(new ControlRefused("unreachable", "the control socket closed")));
     socket.once("connect", () => {
+      connected = true;
       const fd = (socket as unknown as { _handle?: { fd?: unknown } })._handle?.fd;
       let peer: number | null = null;
       try {

@@ -54,8 +54,8 @@ test("an Ardia without the method falls back to the file's token", async () => {
     const file = writeControl(root, { token: FILE_TOKEN });
     const endpoint = await fromControl(file, null, refusing("unknown_method", `unknown method ${DEVTOOLS_ENDPOINT_METHOD}`));
     assert.match(endpoint.ws, new RegExp(`token=${FILE_TOKEN}$`));
-    const unreachable = await fromControl(file, null, refusing("unreachable", "the control socket isn't there"));
-    assert.match(unreachable.ws, new RegExp(`token=${FILE_TOKEN}$`));
+    const notConnected = await fromControl(file, null, refusing("not_connected", "the control socket isn't there"));
+    assert.match(notConnected.ws, new RegExp(`token=${FILE_TOKEN}$`));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -67,6 +67,9 @@ test("a program Ardia turns away never falls back to the file, even when it hold
     const file = writeControl(root, { token: FILE_TOKEN });
     await assert.rejects(fromControl(file, null, refusing("refused", "Not allowed")), (error: Error) => error instanceof EndpointError && /didn't let this program control it/.test(error.message) && !error.message.includes(FILE_TOKEN));
     await assert.rejects(fromControl(file, null, refusing("failed", "Control is off.")), (error: Error) => error instanceof EndpointError && error.message.includes("Control is off."));
+    for (const code of ["unreachable", "timeout", "bad_reply"]) {
+      await assert.rejects(fromControl(file, null, refusing(code, "after connecting")), (error: Error) => error instanceof EndpointError && !error.message.includes(FILE_TOKEN), code);
+    }
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -137,6 +140,23 @@ test("over a real socket the method's answer is read and an unknown method is to
     await assert.rejects(controlCall(socketFile, null, DEVTOOLS_ENDPOINT_METHOD, null, 5, null), (error: Error) => error instanceof ControlRefused && error.code === "unknown_method");
   } finally {
     server.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a socket that isn't there is not_connected, and one that closes after connecting is unreachable", async () => {
+  const root = scratch();
+  try {
+    await assert.rejects(controlCall(path.join(root, "ArdiaControl.sock"), null, DEVTOOLS_ENDPOINT_METHOD, null, 5, null), (error: Error) => error instanceof ControlRefused && error.code === "not_connected");
+    const socketFile = path.join(root, "ArdiaControl.sock");
+    const server = createServer((connection) => connection.once("data", () => connection.end()));
+    await new Promise<void>((resolve) => server.listen(socketFile, () => resolve()));
+    try {
+      await assert.rejects(controlCall(socketFile, null, DEVTOOLS_ENDPOINT_METHOD, null, 5, null), (error: Error) => error instanceof ControlRefused && error.code === "unreachable");
+    } finally {
+      server.close();
+    }
+  } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });

@@ -293,7 +293,7 @@ export function fromControlFile(file: string, signal: (pid: number, sig: 0) => u
 }
 
 export const DEVTOOLS_ENDPOINT_METHOD = "control.devtoolsEndpoint";
-export const DEVTOOLS_ENDPOINT_TIMEOUT = 60;
+export const DEVTOOLS_ENDPOINT_TIMEOUT = 70;
 
 export type EndpointCall = (socketFile: string, signal: AbortSignal | null) => Promise<unknown>;
 
@@ -319,7 +319,7 @@ export async function fromControl(file: string, signal: AbortSignal | null = cur
   } catch (error) {
     if (error instanceof Cancelled) throw error;
     if (!(error instanceof ControlRefused)) throw error;
-    if (error.code === "unknown_method" || (error.code === "unreachable" && record.token !== null)) {
+    if (error.code === "unknown_method" || (error.code === "not_connected" && record.token !== null)) {
       if (record.token === null) throw new EndpointError(`${NOT_REACHABLE} (${record.label} has no valid token)`);
       return endpointOf(record, record.port, record.token);
     }

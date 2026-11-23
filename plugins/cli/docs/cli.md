@@ -1704,10 +1704,14 @@ The token comes from the control socket, not the file (`fromControl` in `endpoin
 as every socket method. The file still gives the browser path and pid, and a `generation` that differs from the file's
 (the server restarted in between) is read again once, then refused.
 - **Falling back to the file's token:** only when the reply is `unknown_method` (an Ardia older than #3908, or Linux and
-  Windows, which don't list the method), or when the socket can't be reached at all and the file still holds a token.
+  Windows, which don't list the method), or when `connect()` itself fails (no socket, refused, or a sandbox's EACCES or
+  EPERM: `not_connected`) and the file still holds a token.
+- **Never once connected:** a stream that ends before the reply (an approval revoked or expired, or control turned off
+  while waiting), a timeout or a bad reply never falls back. The socket has had its say by then.
 - **No fallback:** a refusal (`{"id": null, "error": {"code": "refused"}}`, the socket turning the program away) and any
   other error stop there, with the reason.
-- **Timeout:** the call waits up to 60 s, so a person can answer an approval prompt.
+- **Timeout:** the call waits up to 70 s, longer than the approval prompt's own 60 s, so a prompt nobody answers
+  reaches the command as the socket's `refused` rather than as a timeout.
 - **When Ardia stops writing the token:** once a later engine leaves it out of the file, the fallback ends, and
   `ArdiaControl.json` no longer holds a secret.
 

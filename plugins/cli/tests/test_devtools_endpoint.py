@@ -52,7 +52,7 @@ class DevtoolsEndpoint(unittest.TestCase):
     def test_an_ardia_without_the_method_falls_back_to_the_file(self):
         path = write_control(self.root, token=FILE_TOKEN)
         self.assertTrue(endpoint.from_control(path, refusing("unknown_method", "x")).ws.endswith(f"token={FILE_TOKEN}"))
-        self.assertTrue(endpoint.from_control(path, refusing("unreachable", "x")).ws.endswith(f"token={FILE_TOKEN}"))
+        self.assertTrue(endpoint.from_control(path, refusing("not_connected", "x")).ws.endswith(f"token={FILE_TOKEN}"))
 
     def test_a_refused_program_never_falls_back(self):
         path = write_control(self.root, token=FILE_TOKEN)
@@ -60,6 +60,18 @@ class DevtoolsEndpoint(unittest.TestCase):
             endpoint.from_control(path, refusing("refused", "Not allowed"))
         with self.assertRaisesRegex(EndpointError, "Control is off"):
             endpoint.from_control(path, refusing("failed", "Control is off."))
+        for code in ("unreachable", "timeout", "bad_reply"):
+            with self.assertRaises(EndpointError, msg=code):
+                endpoint.from_control(path, refusing(code, "after connecting"))
+
+    def test_a_missing_socket_is_not_connected_and_one_closed_after_connecting_is_not(self):
+        with self.assertRaises(SocketRefused) as missing:
+            endpoint.ask_socket(self.root / "ArdiaControl.sock", timeout=5)
+        self.assertEqual(missing.exception.code, "not_connected")
+        silent = self.serve(lambda request: [])
+        with self.assertRaises(SocketRefused) as waited:
+            endpoint.ask_socket(silent, timeout=1)
+        self.assertEqual(waited.exception.code, "timeout")
 
     def test_no_method_and_no_token_says_so(self):
         path = write_control(self.root)

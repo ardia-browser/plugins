@@ -209,7 +209,7 @@ def from_control_file(path: Path) -> Endpoint:
 
 
 DEVTOOLS_ENDPOINT_METHOD = "control.devtoolsEndpoint"
-DEVTOOLS_ENDPOINT_TIMEOUT = 60.0
+DEVTOOLS_ENDPOINT_TIMEOUT = 70.0
 
 
 class SocketRefused(Exception):
@@ -230,7 +230,7 @@ def ask_socket(sock_path: Path, timeout: float = DEVTOOLS_ENDPOINT_TIMEOUT):
         try:
             sock.connect(str(sock_path))
         except OSError as error:
-            raise SocketRefused("unreachable", error.strerror or str(error)) from None
+            raise SocketRefused("not_connected", error.strerror or str(error)) from None
         if control.peer_uid(sock) != os.getuid():
             raise SocketRefused("unreachable", "the control socket is served by another user")
         sock.sendall(control.request_line(1, "hello", {"protocol": control.PROTOCOL}))
@@ -282,7 +282,7 @@ def from_control(path: Path, ask=None) -> Endpoint:
     try:
         answer = (ask or ask_socket)(control.announce_path(str(path)))
     except SocketRefused as error:
-        if error.code == "unknown_method" or (error.code == "unreachable" and record.token is not None):
+        if error.code == "unknown_method" or (error.code == "not_connected" and record.token is not None):
             if record.token is None:
                 raise EndpointError(f"{NOT_REACHABLE} ({path.name} has no valid token)") from None
             return _endpoint_of(record, record.port, record.token)
