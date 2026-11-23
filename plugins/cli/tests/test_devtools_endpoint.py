@@ -149,6 +149,7 @@ class DevtoolsEndpoint(unittest.TestCase):
         from ardia_cli.browse.state import State
 
         saw_eof = threading.Event()
+        accepted = threading.Event()
         path = self.root / "ArdiaControl.sock"
         server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         server.bind(str(path))
@@ -157,6 +158,7 @@ class DevtoolsEndpoint(unittest.TestCase):
 
         def hold():
             connection, _ = server.accept()
+            accepted.set()
             with connection:
                 while connection.recv(65536):
                     pass
@@ -167,7 +169,7 @@ class DevtoolsEndpoint(unittest.TestCase):
 
         async def cancel_soon():
             task = asyncio.ensure_future(state.resolve_off_loop())
-            await asyncio.sleep(0.3)
+            self.assertTrue(await asyncio.get_running_loop().run_in_executor(None, accepted.wait, 5), "the worker never connected")
             task.cancel()
             with self.assertRaises(asyncio.CancelledError):
                 await task
