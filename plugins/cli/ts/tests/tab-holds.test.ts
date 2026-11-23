@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "bun:test";
-import { ACTIVE_FOR, HOLD_SECONDS, heldAppTabs, keepRunningCommandsTargets, MAP_RETRY, MAX_HELD, RENEW_EVERY, recentlyUsed, shouldScan, TabHolds } from "../src/browse/daemon/holds.ts";
+import { ACTIVE_FOR, HOLD_SECONDS, heldAppTabs, MAP_RETRY, MAX_HELD, RENEW_EVERY, recentlyUsed, shouldScan, TabHolds } from "../src/browse/daemon/holds.ts";
 import { ControlRefused } from "../src/browse/state/apptabs.ts";
 
 type Call = [string, Record<string, unknown>];
@@ -118,12 +118,15 @@ test("when Ardia has no room for another session, the daemon says so and asks ag
   assert.deepEqual(holds.holding, []);
 });
 
-test("a tab a still-running command used stays recent however long the command runs, and goes stale once it ends", () => {
-  const used = new Map<string, number>([["evaluating", 10], ["earlier", 5]]);
-  keepRunningCommandsTargets(used, [10], 10 + ACTIVE_FOR + 100);
-  assert.deepEqual(recentlyUsed(used, 10 + ACTIVE_FOR + 100), ["evaluating"]);
-  keepRunningCommandsTargets(used, [], 10 + 2 * ACTIVE_FOR + 200);
-  assert.deepEqual(recentlyUsed(used, 10 + 2 * ACTIVE_FOR + 200), []);
+test("a tab a still-running command used stays recent however long the command runs, in its real order, and goes stale once it ends", () => {
+  const used = new Map<string, number>([["earlier", 5], ...Array.from({ length: MAX_HELD }, (_, i): [string, number] => [`busy-${i}`, 10 + i]), ["waited-on", 100]]);
+  const later = 100 + ACTIVE_FOR + 100;
+  const recent = recentlyUsed(used, later, [10]);
+  assert.equal(recent[0], "waited-on", "the newest tab leads, its timestamp untouched");
+  assert.ok(!recent.includes("earlier"));
+  assert.equal(heldAppTabs(recent, () => true, (target) => `tab-${target}`)[0], "tab-waited-on", "the cap never drops the tab being waited on");
+  assert.equal(used.get("waited-on"), 100, "nothing rewrites when a tab was used");
+  assert.deepEqual(recentlyUsed(used, later, []), [], "once the command ends, they age out");
 });
 
 test("Ardia's windows are read at most every few seconds for new tabs, and once a minute for tabs that stay unmapped", () => {

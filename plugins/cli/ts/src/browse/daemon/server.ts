@@ -29,7 +29,7 @@ import { dispatch, hooks } from "../commands/all.ts";
 import { Ctx } from "../commands/ctx.ts";
 import { State } from "../state/state.ts";
 import { appCall, appTabMap } from "../state/apptabs.ts";
-import { heldAppTabs, keepRunningCommandsTargets, recentlyUsed, shouldScan, TabHolds } from "./holds.ts";
+import { heldAppTabs, recentlyUsed, shouldScan, TabHolds } from "./holds.ts";
 import { reportException } from "../../telemetry.ts";
 import { buildStamp, cliVersion } from "../../version.ts";
 
@@ -384,8 +384,7 @@ export class Daemon {
   private async renewHolds(): Promise<void> {
     if (this.stopping) return;
     const now = monotonic();
-    keepRunningCommandsTargets(this.state.usedAt, [...this.active].map((task) => task.startedAt), now);
-    const recent = recentlyUsed(this.state.usedAt, now);
+    const recent = recentlyUsed(this.state.usedAt, now, [...this.active].map((task) => task.startedAt));
     for (const target of this.state.usedAt.keys()) if (!recent.includes(target)) this.state.usedAt.delete(target);
     const live = (target: string) => this.state.targetInfos.has(target);
     const unmapped = recent.filter((target) => live(target) && !this.state.appTabs.has(target));

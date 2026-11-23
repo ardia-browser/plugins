@@ -9,17 +9,12 @@ export type HoldCall = (method: "tabs.hold" | "tabs.release", params: Record<str
 
 export const MAP_RETRY = 5;
 
-export function recentlyUsed(usedAt: ReadonlyMap<string, number>, now: number): string[] {
+export function recentlyUsed(usedAt: ReadonlyMap<string, number>, now: number, runningSince: readonly number[] = []): string[] {
+  const oldestRunning = runningSince.length > 0 ? Math.min(...runningSince) : Number.POSITIVE_INFINITY;
   return [...usedAt]
-    .filter(([, at]) => now - at < ACTIVE_FOR)
+    .filter(([, at]) => now - at < ACTIVE_FOR || at >= oldestRunning)
     .sort((a, b) => b[1] - a[1])
     .map(([tab]) => tab);
-}
-
-export function keepRunningCommandsTargets(usedAt: Map<string, number>, runningSince: readonly number[], now: number): void {
-  if (runningSince.length === 0) return;
-  const oldest = Math.min(...runningSince);
-  for (const [target, at] of usedAt) if (at >= oldest) usedAt.set(target, now);
 }
 
 export function shouldScan(unmapped: readonly string[], usedAt: ReadonlyMap<string, number>, scannedAt: number, now: number): boolean {
