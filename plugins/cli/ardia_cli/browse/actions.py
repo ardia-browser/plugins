@@ -723,6 +723,22 @@ VISIBLE_CONTENT = """(el) => {
   }
   return null;
 }"""
+HOLDS_TEXT = r"""(el) => {
+  if (!el.isContentEditable) return { text: "value" in el && Boolean(el.value), chrome: false };
+  const chrome = Boolean(el.querySelector('[contenteditable="false"]'));
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
+      return node.isContentEditable && !/^(STYLE|SCRIPT|TEMPLATE)$/.test(node.tagName) ? NodeFilter.FILTER_SKIP : NodeFilter.FILTER_REJECT;
+    },
+  });
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (!/[^\s​-‍⁠﻿]/.test(node.data)) continue;
+    const parent = node.parentElement;
+    if (!parent || !parent.checkVisibility || parent.checkVisibility({ checkVisibilityCSS: true })) return { text: true, chrome };
+  }
+  return { text: false, chrome };
+}"""
 SCROLL_LOCK = """(el) => {
   const shown = (node) => node.checkVisibility ? node.checkVisibility({ checkVisibilityCSS: true }) : !!node.offsetParent;
   const dialogs = [...document.querySelectorAll("dialog[open], [role=dialog], [role=alertdialog], [aria-modal=true]")]
@@ -846,16 +862,18 @@ async def type_into(page, element, text: str, humanize: bool, guard=None):
 
 
 async def clear_field(page, element, humanize: bool):
-    info = await page.call("(el) => ardiaBrowse.info(el)", element, frame=element.frame)
-    if not info.get("value"):
+    held = await page.call(HOLDS_TEXT, element, frame=element.frame)
+    if not held.get("text"):
         return
     await expect_input(page, element.frame, lambda: page.input.gesture("clear", lambda: page.input.press_combo("Meta+a", humanize)),
                        {"keydown": 2}, "Select all", element)
     await expect_input(page, element.frame, lambda: page.input.gesture("clear", lambda: page.input.press_combo("Backspace", humanize)),
                        {"keydown": 1}, "Backspace", element)
-    info = await page.call("(el) => ardiaBrowse.info(el)", element, frame=element.frame)
-    if info.get("value"):
+    held = await page.call(HOLDS_TEXT, element, frame=element.frame)
+    if held.get("text"):
         raise BrowseError(f"Couldn't clear {element.label}; it still holds text")
+    if held.get("chrome"):
+        command_metrics.flag("fill_cleared_beside_chrome", True)
 
 
 async def not_editable_message(page, element) -> str:

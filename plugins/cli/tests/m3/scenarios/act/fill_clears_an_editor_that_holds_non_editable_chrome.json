@@ -1,0 +1,48 @@
+{
+ "source": "tests/test_browse_act.py ActInChrome.test_fill_clears_an_editor_that_holds_non_editable_chrome",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/rich-editor.html"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "fill",
+    "#tts",
+    "New words"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "[...document.querySelectorAll('#tts > p')].map((p) => p.textContent).join('|')"
+   ],
+   "session": "act",
+   "main_world": true
+  },
+  {
+   "argv": [
+    "eval",
+    "document.querySelector('#tts .chrome').textContent"
+   ],
+   "session": "act",
+   "main_world": true
+  }
+ ]
+}

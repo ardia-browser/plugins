@@ -246,6 +246,18 @@ class ActInChrome(unittest.TestCase):
         self.assertEqual(self.value("document.querySelector('#g-count').textContent"), "5")
         self.assertEqual(self.value("String(document.querySelectorAll('#grid .editor').length)"), "0")
 
+    def test_fill_clears_an_editor_that_holds_non_editable_chrome(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/rich-editor.html")
+        self.browse("fill", "#tts", "New words")
+        paragraphs = "[...document.querySelectorAll('#tts > p')].map((p) => p.textContent).join('|')"
+        self.assertEqual(self.value(paragraphs), "New words")
+        self.assertEqual(self.value("document.querySelector('#tts .chrome').textContent"), "Voice: Rachel 12 / 5000")
+
+    def test_fill_types_straight_into_an_editor_holding_only_chrome(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/rich-editor.html")
+        self.browse("fill", "#blank", "Notes here")
+        self.assertEqual(self.value("[...document.querySelectorAll('#blank > p')].map((p) => p.textContent).join('|')"), "Notes here")
+
     def test_dependent_fields_wait_for_their_target(self):
         out = self.browse("batch", "fill #from Beta", "select #to Yankee", "click #later", "get text #out").stdout
         self.assertIn("later clicked", out)

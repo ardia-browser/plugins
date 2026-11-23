@@ -1,0 +1,40 @@
+{
+ "source": "tests/test_browse_act.py ActInChrome.test_fill_types_straight_into_an_editor_holding_only_chrome",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/rich-editor.html"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "fill",
+    "#blank",
+    "Notes here"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "[...document.querySelectorAll('#blank > p')].map((p) => p.textContent).join('|')"
+   ],
+   "session": "act",
+   "main_world": true
+  }
+ ]
+}

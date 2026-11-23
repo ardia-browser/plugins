@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>rich editor</title>
+<style>
+  body { font: 14px sans-serif; margin: 20px; }
+  .editor { border: 1px solid #333; min-height: 60px; width: 420px; padding: 6px; margin-bottom: 12px; }
+  .chrome { color: #666; font-size: 12px; user-select: none; }
+  .chip { background: #def; border-radius: 4px; padding: 0 3px; }
+</style>
+</head>
+<body>
+<div id="tts" class="editor" contenteditable="true" role="textbox" aria-label="Text to speech"><div class="chrome" contenteditable="false"><button type="button">Voice: Rachel</button> <span>12 / 5000</span></div><p>Hello <span class="chip" contenteditable="false">@Rachel</span> world</p></div>
+<div id="blank" class="editor" contenteditable="true" role="textbox" aria-label="Notes"><div class="chrome" contenteditable="false"><span>Drag a voice here</span></div><p><br></p></div>
+<script>
+  const paragraphs = (editor) => [...editor.children].filter((node) => node.tagName === "P");
+  const selectContent = (editor) => {
+    const list = paragraphs(editor);
+    const range = document.createRange();
+    range.setStartBefore(list[0]);
+    range.setEndAfter(list[list.length - 1]);
+    const selection = getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    editor.dataset.all = "1";
+  };
+  for (const editor of document.querySelectorAll(".editor")) {
+    editor.addEventListener("keydown", (event) => {
+      if (event.key === "a" && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        selectContent(editor);
+        return;
+      }
+      if (event.key === "Backspace" && editor.dataset.all === "1") {
+        event.preventDefault();
+        for (const node of paragraphs(editor)) node.remove();
+        const empty = document.createElement("p");
+        empty.innerHTML = '<br class="trailing-break">';
+        editor.appendChild(empty);
+        const range = document.createRange();
+        range.setStart(empty, 0);
+        range.collapse(true);
+        getSelection().removeAllRanges();
+        getSelection().addRange(range);
+        delete editor.dataset.all;
+        return;
+      }
+      delete editor.dataset.all;
+    });
+  }
+</script>
+</body>
+</html>
