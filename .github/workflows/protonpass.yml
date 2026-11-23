@@ -1,0 +1,51 @@
+name: Proton Pass plugin
+
+on:
+  pull_request:
+    paths: ["plugins/protonpass/**", ".github/workflows/protonpass.yml"]
+  push:
+    branches: [main]
+    paths: ["plugins/protonpass/**", ".github/workflows/protonpass.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: protonpass-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  plugin:
+    name: Proton Pass on ubuntu-24.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: plugins/protonpass/main
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.2
+      - name: Install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Type check
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+      - name: Test
+        run: npm test
+      - name: Pack the plugin folder
+        working-directory: .
+        run: |
+          set -eu
+          plugins/protonpass/build.sh "$RUNNER_TEMP/out"
+          cd "$RUNNER_TEMP/out"
+          sha256sum -c protonpass-plugin-*.tar.gz.sha256
+          tar -tzf protonpass-plugin-*.tar.gz | sort > files.txt
+          printf '%s\n' protonpass/ protonpass/dist/ protonpass/dist/main.js protonpass/plugin.json > expected.txt
+          diff -u expected.txt files.txt
+          echo "protonpass: $(wc -c < protonpass/dist/main.js) bytes of main.js, sha256 $(cut -d' ' -f1 protonpass-plugin-*.tar.gz.sha256)" >> "$GITHUB_STEP_SUMMARY"

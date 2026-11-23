@@ -13,6 +13,7 @@ Install the `ardia` command: in Ardia, open **Settings**, search for **command l
 |---|---|---|
 | [`cli`](plugins/cli) | The `ardia` command: drive Ardia, read pages and run its commands from your terminal or an agent. Built into Ardia: install it in one click from **Settings › Plugins**. | Ardia on macOS |
 | [`compact-command-bar`](plugins/compact-command-bar/plugin.json) | ⌘T stops listing your pinned tabs and Top Apps, and shows at most 5 open tabs before you type. Typing still finds every tab. | Ardia 0.2.46-nightly.4 |
+| [`protonpass`](plugins/protonpass) | Fills and saves logins and one-time codes from Proton Pass, signed in through proton.me. A source in Ardia's password manager: install it from **Settings › Passwords**. | Ardia on macOS and the Proton Pass CLI (`pass-cli`) |
 
 ## Install
 
