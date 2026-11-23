@@ -748,6 +748,7 @@ HOLDS_TEXT = r"""(el) => {
       return NodeFilter.FILTER_SKIP;
     },
   });
+  let placeholders = 0;
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const parent = node.parentElement;
     if (!parent || !content(parent)) continue;
@@ -757,7 +758,7 @@ HOLDS_TEXT = r"""(el) => {
       ? /[^ \t\n\r\f\u200b-\u200d\u2060\ufeff]/.test(node.data)
         || (/[ \t\n\r\f]/.test(node.data) && (kept === "preserve" || kept === "break-spaces"))
         || (/\n/.test(node.data) && kept === "preserve-breaks")
-      : !placeholder(node);
+      : !placeholder(node) || ++placeholders > 1;
     if (!shown || style.visibility !== "visible") continue;
     let box = parent;
     while (box && box !== el && getComputedStyle(box).display === "contents") box = box.parentElement;
