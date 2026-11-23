@@ -30,7 +30,7 @@
   {
    "argv": [
     "press",
-    "@e13",
+    "@e35",
     "Enter"
    ],
    "session": "act"
@@ -54,7 +54,7 @@
   {
    "argv": [
     "click",
-    "@e21"
+    "@e44"
    ],
    "session": "act"
   },

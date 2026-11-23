@@ -1,0 +1,54 @@
+{
+ "source": "tests/test_browse_act.py ActInChrome.test_a_stale_ref_does_not_follow_to_a_namesake_while_a_boxless_one_shares_its_name",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/search-box.html"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "snapshot",
+    "-i"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.querySelector('#del1').remove(); const b = document.createElement('button'); b.id = 'del2'; b.textContent = 'Delete'; b.onclick = () => state.deleted.push('del2'); document.querySelector('#dels').prepend(b); 'ok'"
+   ],
+   "session": "act",
+   "main_world": true
+  },
+  {
+   "argv": [
+    "click",
+    "@e21"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "state.deleted.join(',') || 'none'"
+   ],
+   "session": "act",
+   "main_world": true
+  }
+ ]
+}

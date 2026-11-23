@@ -28,6 +28,7 @@ export class Node {
     public hints: string[] | null = null,
     public url: string | null = null,
     public frame: string | null = null,
+    public boxless = false,
   ) {}
 }
 

@@ -588,8 +588,8 @@ class State:
             raise
         except Exception:
             return None
-        same = [node.ref for node in snapshot.walk(nodes) if node.ref and node.role == ref.role and node.name == ref.name]
-        return self.refs.get(same[0]) if len(same) == 1 else None
+        same = [node.ref for node in snapshot.walk(nodes) if (node.ref or node.boxless) and node.role == ref.role and node.name == ref.name]
+        return self.refs.get(same[0]) if len(same) == 1 and same[0] else None
 
     async def locate(self, selector: str, page: Page | None = None, wait: float = 0.0):
         ref = parse_ref(selector)

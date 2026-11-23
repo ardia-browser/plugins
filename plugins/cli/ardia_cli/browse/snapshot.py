@@ -84,6 +84,7 @@ class Node:
     hints: list | None = None
     url: str | None = None
     frame: str | None = None
+    boxless: bool = False
 
 
 def _value(item) -> str:
@@ -518,6 +519,7 @@ async def collect(state, page, selector=None, cursor=True) -> list[Node]:
                 continue
             if node.role != "heading" and node.backend in unclickable.get(node.frame, ()):
                 command_metrics.flag("snapshot_boxless_skipped", True)
+                node.boxless = True
                 continue
             node.ref = state.ref_for_node(page, node.frame, node.backend)
     return nodes
@@ -540,7 +542,7 @@ def walk_in_context(nodes, context: tuple = ()):
 
 def refs_of(state, page, nodes: list[Node], whole_page: bool = True) -> list[Ref]:
     placed = [(node, context) for node, context in walk_in_context(nodes) if node.ref and node.backend is not None]
-    counts = Counter((node.role, node.name) for node, _ in placed)
+    counts = Counter((node.role, node.name) for node in walk(nodes) if (node.ref or node.boxless) and node.backend is not None)
     refs = []
     for node, context in placed:
         if whole_page:

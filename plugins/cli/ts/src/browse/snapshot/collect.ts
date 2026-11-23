@@ -204,6 +204,7 @@ async function collectInto(state: State, page: Page, selector: string | null, cu
       if ((node.role === "heading" && !node.name) || node.backend === null) continue;
       if (node.role !== "heading" && unclickable.get(node.frame as string)?.has(node.backend)) {
         flag("snapshot_boxless_skipped", true);
+        node.boxless = true;
         continue;
       }
       node.ref = state.refForNode(page, node.frame as string, node.backend);
@@ -216,7 +217,7 @@ export function refsOf(state: Refs, page: Page, nodes: readonly Node[], wholePag
   const placed = walkInContext(nodes).filter(([node]) => node.ref && node.backend !== null);
   const counts = new Map<string, number>();
   const keyOf = (node: Node) => JSON.stringify([node.role, node.name]);
-  for (const [node] of placed) counts.set(keyOf(node), (counts.get(keyOf(node)) ?? 0) + 1);
+  for (const node of walk(nodes)) if ((node.ref || node.boxless) && node.backend !== null) counts.set(keyOf(node), (counts.get(keyOf(node)) ?? 0) + 1);
   return placed.map(([node, here]) => {
     let unique: boolean;
     let context: readonly unknown[];

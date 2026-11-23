@@ -267,6 +267,16 @@ class ActInChrome(unittest.TestCase):
         self.browse("click", "@" + shown.group(1))
         self.assertEqual(self.value("document.querySelector('#out').textContent"), "searched duck")
 
+    def test_a_stale_ref_does_not_follow_to_a_namesake_while_a_boxless_one_shares_its_name(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/search-box.html")
+        listed = self.browse("snapshot", "-i").stdout
+        delete = re.findall(r'button "Delete" \[ref=(e\d+)\]', listed)
+        self.assertEqual(len(delete), 1, listed)
+        self.browse("eval", "document.querySelector('#del1').remove(); const b = document.createElement('button'); b.id = 'del2'; b.textContent = 'Delete'; b.onclick = () => state.deleted.push('del2'); document.querySelector('#dels').prepend(b); 'ok'")
+        done = self.browse("click", "@" + delete[0], check=False)
+        self.assertEqual(done.returncode, 1, done.stdout)
+        self.assertEqual(self.value("state.deleted.join(',') || 'none'"), "none")
+
     def test_dependent_fields_wait_for_their_target(self):
         out = self.browse("batch", "fill #from Beta", "select #to Yankee", "click #later", "get text #out").stdout
         self.assertIn("later clicked", out)

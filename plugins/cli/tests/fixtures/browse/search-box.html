@@ -29,9 +29,11 @@
 <span role="slider button" tabindex="0" aria-label="Volume" aria-valuenow="5" aria-valuemin="0" aria-valuemax="10" style="display: inline-block; width: 0; height: 0; overflow: hidden"></span>
 <button class="wrap" id="textonly" aria-label="Text only">Text only</button>
 <div contenteditable="true" id="notes">Notes <button id="inline" aria-label="Inline action" style="width: 0; padding: 0; border: 0; overflow: hidden"></button></div>
+<div id="dels"><button id="del1" onclick="state.deleted.push('del1')">Delete</button><button id="del0" style="width: 0; padding: 0; border: 0; overflow: hidden">Delete</button></div>
 <p id="out"></p>
 <main id="main">Results</main>
 <script>
+  globalThis.state = { deleted: [] };
   const form = document.getElementById("search");
   const q = document.getElementById("q");
   q.addEventListener("input", () => form.classList.toggle("typed", q.value !== ""));
