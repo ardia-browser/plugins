@@ -6,7 +6,7 @@ import path from "node:path";
 import { test } from "node:test";
 import "./libc-loaded.ts";
 import { announcePath } from "../src/browse/daemon/announce.ts";
-import { controlFilePath, DEVTOOLS_ENDPOINT_METHOD, type EndpointCall, EndpointError, fromControl, readControlFile } from "../src/browse/endpoint.ts";
+import { controlFilePath, DEVTOOLS_ENDPOINT_METHOD, type EndpointCall, EndpointError, fromControl, readControlFile, resolveInstance } from "../src/browse/endpoint.ts";
 import { ControlRefused, controlCall } from "../src/browse/state/apptabs.ts";
 
 const FILE_TOKEN = "f".repeat(32);
@@ -157,6 +157,46 @@ test("a socket that isn't there is not_connected, and one that closes after conn
       server.close();
     }
   } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a different port means another server, even with the same generation", async () => {
+  const root = scratch();
+  try {
+    const file = writeControl(root, {});
+    await assert.rejects(fromControl(file, null, answers({ port: 9333, token: SOCKET_TOKEN, generation: 3 })), /restarted its DevTools connection/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the idle check reads only the file's identity and never asks the socket", async () => {
+  const root = scratch();
+  try {
+    writeControl(root, {});
+    assert.equal(await resolveInstance({ data_dir: root }), `${process.pid}:3:/devtools/browser/abc-123`);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a reply to the method before hello succeeded is ignored, and a frame that isn't JSON is bad_reply", async () => {
+  const root = scratch();
+  const early = path.join(root, "early.sock");
+  const server = await serveLines(early, (request) =>
+    request["method"] === "hello"
+      ? [JSON.stringify({ id: 2, result: { port: 1, token: "x".repeat(32), generation: 9 } }), JSON.stringify({ id: 1, result: { app: "Ardia", protocol: 4 } })]
+      : [JSON.stringify({ id: request["id"], result: { port: 9222, token: SOCKET_TOKEN, generation: 3 } })],
+  );
+  const garbled = path.join(root, "garbled.sock");
+  const other = await serveLines(garbled, () => ["not json"]);
+  try {
+    assert.deepEqual(await controlCall(early, null, DEVTOOLS_ENDPOINT_METHOD, null, 5, null), { port: 9222, token: SOCKET_TOKEN, generation: 3 });
+    await assert.rejects(controlCall(garbled, null, DEVTOOLS_ENDPOINT_METHOD, null, 5, null), (error: Error) => error instanceof ControlRefused && error.code === "bad_reply");
+  } finally {
+    server.close();
+    other.close();
     rmSync(root, { recursive: true, force: true });
   }
 });

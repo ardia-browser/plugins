@@ -264,6 +264,13 @@ class Daemon:
             except endpoints.EndpointError as error:
                 raise Unreachable(str(error)) from None
 
+        def resolve_instance():
+            try:
+                return endpoints.resolve_instance(ws=config.get("ws"), port=config.get("port"), data_dir=config.get("data_dir"))
+            except endpoints.EndpointError as error:
+                raise Unreachable(str(error)) from None
+
+        self.resolve_instance = resolve_instance
         self.state = State(config, resolve)
         self.lock = asyncio.Lock()
         self.state.extras["command_lock"] = self.lock
@@ -408,11 +415,11 @@ class Daemon:
                 continue
             if browser is None and self.state.instance is not None and self.pending == 0:
                 try:
-                    endpoint = await asyncio.to_thread(self.state.resolve_endpoint)
+                    instance = await asyncio.to_thread(self.resolve_instance)
                 except BrowseError:
                     self.stop.set()
                     continue
-                if endpoint.instance != self.state.instance:
+                if instance != self.state.instance:
                     self.stop.set()
 
     async def handle(self, reader, writer):

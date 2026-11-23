@@ -79,6 +79,7 @@ export function controlCall(
     let buffer = Buffer.alloc(0);
     let finished = false;
     let connected = false;
+    let greeted = false;
     const cancel = () => finish(new Cancelled());
     const finish = (error: Error | null, value?: unknown) => {
       if (finished) return;
@@ -134,10 +135,11 @@ export function controlCall(
             finish(new ControlRefused("unreachable", "something other than Ardia answers on the control socket"));
             return;
           }
+          greeted = true;
           const request: Record<string, unknown> = { id: 2, method };
           if (params !== null) request["params"] = params;
           socket.write(`${JSON.stringify(request)}\n`);
-        } else if (reply["id"] === 2) {
+        } else if (reply["id"] === 2 && greeted) {
           if (reply["error"] !== undefined) finish(new ControlRefused(String(failed["code"] || "failed"), String(failed["message"] || "failed")));
           else finish(null, reply["result"] ?? null);
           return;

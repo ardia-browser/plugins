@@ -8,7 +8,7 @@ import { formatG, roundHalfEven } from "../../pylib/format.ts";
 import { PyException } from "../../pylib/str.ts";
 import { Cancelled, currentSignal, withSignal } from "../cdp/cancel.ts";
 import { BrowseError, ConnectionLost, Unreachable } from "../daemon-errors.ts";
-import { type Endpoint, EndpointError, resolve } from "../endpoint.ts";
+import { type Endpoint, EndpointError, resolve, resolveInstance } from "../endpoint.ts";
 import { BEHIND_SCRIPT_WAIT, commandLimit, QUEUE_WAIT, queueWait } from "../limits.ts";
 import { active, answerFields, begin, failedStep, flag, type Metrics } from "../metrics.ts";
 import { browseDir, closeFd, listNames, openPrivateDirAt, PathError, sameSocket, type SocketId, socketIsOurs, takeLock, unlinkQuietly, writePrivateJson } from "../paths.ts";
@@ -124,6 +124,15 @@ export class Daemon {
   async resolveEndpoint(): Promise<Endpoint> {
     try {
       return await resolve({ ws: this.config.ws, port: this.config.port, data_dir: this.config.dataDir });
+    } catch (error) {
+      if (error instanceof EndpointError) throw new Unreachable(error.message);
+      throw error;
+    }
+  }
+
+  async resolveInstance(): Promise<string | null> {
+    try {
+      return await resolveInstance({ ws: this.config.ws, port: this.config.port, data_dir: this.config.dataDir });
     } catch (error) {
       if (error instanceof EndpointError) throw new Unreachable(error.message);
       throw error;
@@ -357,9 +366,9 @@ export class Daemon {
       return;
     }
     if (browser === null && this.state.instance !== null && this.pending === 0) {
-      let endpoint: Endpoint;
+      let instance: string | null;
       try {
-        endpoint = await this.resolveEndpoint();
+        instance = await this.resolveInstance();
       } catch (error) {
         if (error instanceof BrowseError) {
           this.stopNow();
@@ -367,7 +376,7 @@ export class Daemon {
         }
         throw error;
       }
-      if (endpoint.instance !== this.state.instance) this.stopNow();
+      if (instance !== this.state.instance) this.stopNow();
     }
     await this.renewHolds();
   }

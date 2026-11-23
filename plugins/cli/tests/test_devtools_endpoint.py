@@ -115,13 +115,37 @@ class DevtoolsEndpoint(unittest.TestCase):
             endpoint.ask_socket(path, timeout=5)
         self.assertEqual(caught.exception.code, "refused")
 
-    def test_a_real_socket_answer_and_an_unknown_method(self):
+    def test_a_real_socket_answer(self):
         def answer(request):
             if request["method"] == "hello":
-                return [{"id": request["id"], "result": {"app": "Ardia", "version": "0.2.49", "protocol": 4}}]
+                return [{"id": 2, "result": {"port": 1, "token": "x" * 32, "generation": 9}}, {"id": request["id"], "result": {"app": "Ardia", "version": "0.2.49", "protocol": 4}}]
             return [{"id": request["id"], "result": {"port": 9222, "token": SOCKET_TOKEN, "generation": 3}}]
 
         self.assertEqual(endpoint.ask_socket(self.serve(answer), timeout=5), {"port": 9222, "token": SOCKET_TOKEN, "generation": 3})
+
+    def test_a_real_socket_unknown_method(self):
+        def answer(request):
+            if request["method"] == "hello":
+                return [{"id": request["id"], "result": {"app": "Ardia", "version": "0.2.48", "protocol": 4}}]
+            return [{"id": request["id"], "error": {"code": "unknown_method", "message": "unknown method"}}]
+
+        with self.assertRaises(SocketRefused) as caught:
+            endpoint.ask_socket(self.serve(answer), timeout=5)
+        self.assertEqual(caught.exception.code, "unknown_method")
+
+    def test_a_frame_that_isnt_an_object_is_bad_reply(self):
+        with self.assertRaises(SocketRefused) as caught:
+            endpoint.ask_socket(self.serve(lambda request: [[1, 2]]), timeout=5)
+        self.assertEqual(caught.exception.code, "bad_reply")
+
+    def test_a_different_port_is_another_server(self):
+        path = write_control(self.root)
+        with self.assertRaisesRegex(EndpointError, "restarted its DevTools connection"):
+            endpoint.from_control(path, lambda _s: {"port": 9333, "token": SOCKET_TOKEN, "generation": 3})
+
+    def test_the_idle_check_reads_only_the_file(self):
+        write_control(self.root)
+        self.assertEqual(endpoint.resolve_instance(data_dir=str(self.root)), f"{os.getpid()}:3:/devtools/browser/abc-123")
 
 
 if __name__ == "__main__":

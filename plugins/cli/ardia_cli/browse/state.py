@@ -120,7 +120,7 @@ class State:
             self.lost = True
         if self.lost:
             raise ConnectionLost()
-        endpoint = self.resolve_endpoint()
+        endpoint = await asyncio.to_thread(self.resolve_endpoint)
         if self.instance is not None and endpoint.instance != self.instance:
             self.restarted = True
             raise RestartedBrowser(

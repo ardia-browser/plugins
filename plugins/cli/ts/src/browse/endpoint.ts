@@ -327,9 +327,10 @@ export async function fromControl(file: string, signal: AbortSignal | null = cur
     throw new EndpointError(`${NOT_REACHABLE} (${redact(error.message)})`);
   }
   const granted = grantedEndpoint(answer);
-  if (record.generation !== granted.generation) {
+  const sameServer = (seen: ControlRecord) => seen.generation === granted.generation && seen.port === granted.port;
+  if (!sameServer(record)) {
     record = readControlFile(file, pids);
-    if (record.generation !== granted.generation) throw new EndpointError(`${NOT_REACHABLE} (Ardia restarted its DevTools connection while this command connected; run it again)`);
+    if (!sameServer(record)) throw new EndpointError(`${NOT_REACHABLE} (Ardia restarted its DevTools connection while this command connected; run it again)`);
   }
   return endpointOf(record, granted.port, granted.token);
 }
@@ -361,6 +362,14 @@ export async function resolve(config: EndpointConfig, signal: AbortSignal | null
   const found = await fromControl(controlFilePath(dataRoot(dataDir ?? undefined)), signal);
   checkCancelled(signal);
   return found;
+}
+
+export async function resolveInstance(config: EndpointConfig, signal: AbortSignal | null = currentSignal()): Promise<string | null> {
+  if (setting(config.ws) !== null || typeof config.port === "number" || typeof config.port === "bigint" || envEndpoint() !== null) {
+    return (await resolve(config, signal)).instance;
+  }
+  const record = readControlFile(controlFilePath(dataRoot(setting(config.data_dir) ?? undefined)));
+  return `${record.pid}:${record.generation ?? 0n}:${record.browser}`;
 }
 
 export function unreachableMessage(endpoint: Endpoint, error: unknown): string {

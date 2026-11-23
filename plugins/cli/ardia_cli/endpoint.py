@@ -221,9 +221,15 @@ class SocketRefused(Exception):
 
 def ask_socket(sock_path: Path, timeout: float = DEVTOOLS_ENDPOINT_TIMEOUT):
     import socket as sockets
+    import time
 
     from ardia_cli import control
 
+    try:
+        control.check_socket(sock_path)
+    except control.Unreachable as error:
+        raise SocketRefused("not_connected", str(error)) from None
+    deadline = time.monotonic() + timeout
     sock = sockets.socket(sockets.AF_UNIX, sockets.SOCK_STREAM)
     sock.settimeout(timeout)
     try:
@@ -234,21 +240,32 @@ def ask_socket(sock_path: Path, timeout: float = DEVTOOLS_ENDPOINT_TIMEOUT):
         if control.peer_uid(sock) != os.getuid():
             raise SocketRefused("unreachable", "the control socket is served by another user")
         sock.sendall(control.request_line(1, "hello", {"protocol": control.PROTOCOL}))
+        greeted = False
         buffer = b""
         while True:
+            left = deadline - time.monotonic()
+            if left <= 0:
+                raise SocketRefused("timeout", f"the control socket didn't answer {DEVTOOLS_ENDPOINT_METHOD} in time")
+            sock.settimeout(left)
             try:
                 chunk = sock.recv(65536)
+            except TimeoutError:
+                raise SocketRefused("timeout", f"the control socket didn't answer {DEVTOOLS_ENDPOINT_METHOD} in time") from None
             except OSError as error:
-                raise SocketRefused("timeout" if isinstance(error, TimeoutError) else "unreachable", str(error)) from None
+                raise SocketRefused("unreachable", str(error)) from None
             if not chunk:
                 raise SocketRefused("unreachable", "the control socket closed")
             buffer += chunk
+            if len(buffer) > control.MAX_LINE and b"\n" not in buffer:
+                raise SocketRefused("too_long", "the control socket's answer is too long")
             while b"\n" in buffer:
                 line, buffer = buffer.split(b"\n", 1)
                 try:
                     reply = json.loads(line)
                 except ValueError:
                     raise SocketRefused("bad_reply", "the control socket's answer isn't JSON") from None
+                if not isinstance(reply, dict):
+                    raise SocketRefused("bad_reply", "the control socket's answer isn't an object")
                 failed = reply.get("error") if isinstance(reply.get("error"), dict) else {}
                 if reply.get("id") is None and "error" in reply:
                     raise SocketRefused(str(failed.get("code") or "refused"), str(failed.get("message") or "Ardia turned this program away"))
@@ -256,8 +273,9 @@ def ask_socket(sock_path: Path, timeout: float = DEVTOOLS_ENDPOINT_TIMEOUT):
                     result = reply.get("result")
                     if "error" in reply or not isinstance(result, dict) or result.get("app") != "Ardia":
                         raise SocketRefused("unreachable", "something other than Ardia answers on the control socket")
+                    greeted = True
                     sock.sendall(control.request_line(2, DEVTOOLS_ENDPOINT_METHOD))
-                elif reply.get("id") == 2:
+                elif reply.get("id") == 2 and greeted:
                     if "error" in reply:
                         raise SocketRefused(str(failed.get("code") or "failed"), str(failed.get("message") or "failed"))
                     return reply.get("result")
@@ -290,9 +308,9 @@ def from_control(path: Path, ask=None) -> Endpoint:
             raise EndpointError(f"Ardia didn't let this program control it ({redact(error.message)})") from None
         raise EndpointError(f"{NOT_REACHABLE} ({redact(error.message)})") from None
     port, token, generation = _granted(answer)
-    if record.generation != generation:
+    if (record.generation, record.port) != (generation, port):
         record = read_control_file(path)
-        if record.generation != generation:
+        if (record.generation, record.port) != (generation, port):
             raise EndpointError(f"{NOT_REACHABLE} (Ardia restarted its DevTools connection while this command connected; run it again)")
     return _endpoint_of(record, port, token)
 
@@ -305,3 +323,10 @@ def _alive(pid: int) -> bool:
     except PermissionError:
         return False
     return True
+
+
+def resolve_instance(ws: str | None = None, port: int | None = None, data_dir: str | None = None) -> str | None:
+    if ws or port is not None or os.environ.get("ARDIA_WS") or os.environ.get("ARDIA_PORT") or os.environ.get("ARDIA_CDP_URL"):
+        return resolve(ws=ws, port=port, data_dir=data_dir).instance
+    record = read_control_file(control_file_path(data_root(data_dir)))
+    return f"{record.pid}:{record.generation if record.generation is not None else 0}:{record.browser}"
