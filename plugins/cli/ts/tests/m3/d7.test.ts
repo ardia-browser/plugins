@@ -12,7 +12,6 @@ import { load, listing, remove, save, validate } from "../../src/browse/flows/fl
 import { browseDir, closeFd, takeLock } from "../../src/browse/paths.ts";
 import { Registry } from "../../src/browse/state/registry.ts";
 import { cmdEval, evaluateIsolated, ISOLATED_EVAL } from "../../src/browse/commands/pagejs.ts";
-import { workerSource } from "../../src/browse/script/script.ts";
 import { scratch, type Scratch } from "./daemon-helpers.ts";
 import { spawnSync } from "node:child_process";
 import { run, RunTimedOut, signalGroup } from "../../src/browse/auth/run.ts";
@@ -297,12 +296,6 @@ describe("notes files", () => {
 });
 
 describe("script and eval sources", () => {
-  test("the worker's line offset counts its own lines, as Python's does", () => {
-    const [code, offset] = workerSource("return 1");
-    expect(code.split("\n")[offset]).toBe("return 1");
-    expect(code.endsWith("//# sourceURL=ardia-script.js")).toBe(true);
-  });
-
   test("eval runs in the page's main world by default and with --main-world; --isolated uses the world handle", async () => {
     const sent: string[] = [];
     const page = {

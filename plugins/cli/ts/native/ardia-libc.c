@@ -1043,6 +1043,88 @@ static napi_value account_home(napi_env env, napi_callback_info info) {
   }
 }
 
+#if defined(__APPLE__)
+int sandbox_init(const char *profile, uint64_t flags, char **errorbuf);
+void sandbox_free_error(char *errorbuf);
+static const char CONFINED_PROFILE[] =
+    "(version 1)(allow default)(deny network*)(deny file-write*)(deny file-read* (subpath \"/\"))"
+    "(allow file-read* (subpath \"/usr\") (subpath \"/System\") (literal \"/dev/null\") (literal \"/dev/urandom\") (literal \"/dev/random\"))"
+    "(deny process-exec*)(deny process-fork)(deny mach-lookup)(deny ipc-posix*)(deny system-socket)(deny iokit-open*)";
+
+static int confine(void) {
+  char *error = NULL;
+  if (sandbox_init(CONFINED_PROFILE, 0, &error) == 0) return 1;
+  if (error != NULL) sandbox_free_error(error);
+  return -EPERM;
+}
+#elif defined(__linux__)
+#include <sys/prctl.h>
+#ifndef PR_SET_NO_NEW_PRIVS
+#define PR_SET_NO_NEW_PRIVS 38
+#endif
+#define LANDLOCK_CREATE_RULESET 444
+#define LANDLOCK_RESTRICT_SELF 446
+#define LANDLOCK_VERSION_FLAG 1u
+
+typedef struct {
+  uint64_t handled_access_fs;
+  uint64_t handled_access_net;
+  uint64_t scoped;
+} LandlockRuleset;
+
+static int confine(void) {
+  long abi = syscall(LANDLOCK_CREATE_RULESET, NULL, 0, LANDLOCK_VERSION_FLAG);
+  if (abi < 1) return 0;
+  LandlockRuleset ruleset;
+  memset(&ruleset, 0, sizeof(ruleset));
+  ruleset.handled_access_fs = (1ull << 13) - 1;
+  if (abi >= 2) ruleset.handled_access_fs |= 1ull << 13;
+  if (abi >= 3) ruleset.handled_access_fs |= 1ull << 14;
+  if (abi >= 5) ruleset.handled_access_fs |= 1ull << 15;
+  size_t size = sizeof(uint64_t);
+  if (abi >= 4) {
+    ruleset.handled_access_net = 3;
+    size = 2 * sizeof(uint64_t);
+  }
+  if (abi >= 6) {
+    ruleset.scoped = 3;
+    size = sizeof(ruleset);
+  }
+  if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0) return -errno;
+  long fd = syscall(LANDLOCK_CREATE_RULESET, &ruleset, size, 0);
+  if (fd < 0) return -errno;
+  long restricted = syscall(LANDLOCK_RESTRICT_SELF, (int)fd, 0);
+  int failure = restricted == 0 ? 0 : errno;
+  close((int)fd);
+  return failure == 0 ? (int)abi : -failure;
+}
+#else
+static int confine(void) {
+  return 0;
+}
+#endif
+
+static napi_value footprint(napi_env env, napi_callback_info info) {
+  Call call;
+  int32_t pid;
+  if (!take_args(env, info, 1, &call)) return status(env, -EINVAL);
+  if (!int_arg(&call, 0, &pid)) return NULL;
+  if (pid <= 0) return status(env, -EINVAL);
+#if defined(__APPLE__)
+  struct rusage_info_v2 usage;
+  if (proc_pid_rusage(pid, RUSAGE_INFO_V2, (rusage_info_t *)&usage) != 0) return status(env, failed());
+  return number(env, (double)usage.ri_phys_footprint);
+#else
+  return status(env, -ENOSYS);
+#endif
+}
+
+static napi_value confine_process(napi_env env, napi_callback_info info) {
+  Call call;
+  if (!take_args(env, info, 0, &call)) return status(env, -EINVAL);
+  return status(env, confine());
+}
+
 static bool define(napi_env env, napi_value exports, const char *name, napi_callback callback) {
   napi_value function = NULL;
   return napi_create_function(env, name, NAPI_AUTO_LENGTH, callback, NULL, &function) == napi_ok
@@ -1079,7 +1161,9 @@ __attribute__((visibility("default"))) napi_value napi_register_module_v1(napi_e
       && define(env, exports, "execProgram", exec_program)
       && define(env, exports, "zoneName", zone_name)
       && define(env, exports, "processInfo", process_info)
-      && define(env, exports, "accountHome", account_home);
+      && define(env, exports, "accountHome", account_home)
+      && define(env, exports, "confineProcess", confine_process)
+      && define(env, exports, "footprint", footprint);
   return ok ? exports : NULL;
 }
 

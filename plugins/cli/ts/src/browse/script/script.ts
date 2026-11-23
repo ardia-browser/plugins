@@ -1,4 +1,4 @@
-import { dumps, parseText, type Value } from "../../json.ts";
+import { parseText, type Value } from "../../json.ts";
 import { isSpace, strip } from "../../py.ts";
 import { redact } from "../../redact.ts";
 import { PY_SPACE_CLASS } from "../../pylib/re.ts";
@@ -6,8 +6,7 @@ import { codePoints } from "../../pystr.ts";
 import { formatG, groupThousands } from "../../pylib/format.ts";
 import { shlexQuote, shlexSplit } from "../../pylib/shlex.ts";
 import { PyException, pyLen } from "../../pylib/str.ts";
-import type { CdpResult } from "../cdp/browser.ts";
-import { Cancelled, currentSignal, later, shield, sleep, withSignal } from "../cdp/cancel.ts";
+import { Cancelled, currentSignal, later, sleep, untilCancelled, withSignal } from "../cdp/cancel.ts";
 import { Ctx } from "../commands/ctx.ts";
 import { canonical, dispatch, OWNERS, register, SKIPPED } from "../commands/index.ts";
 import { parse } from "../commands/parse.ts";
@@ -15,50 +14,35 @@ import { BrowseError, ConnectionLost, OutcomeUnknown, Usage } from "../daemon-er
 import { MUTATING } from "../daemon/names.ts";
 import { safeCode } from "../codes.ts";
 import { Result } from "../daemon/render.ts";
-import { SCRIPT_CONTROLLER, SCRIPT_WORKER } from "../js/index.ts";
-import { flag } from "../metrics.ts";
-import { Page } from "../state/page.ts";
+import { add, count, flag } from "../metrics.ts";
 import { record } from "../state/records.ts";
 import type { State } from "../state/state.ts";
-import * as temptabs from "../state/temptabs.ts";
+import { Dropped, Gate, MEMORY_LIMIT, type Runner, type RunnerEvent, takeRunner, whenReady } from "./host.ts";
+import { evaluateExpression, frameFunction, framesAnswer, selectorExpression, validEvaluate } from "./page-calls.ts";
 import { renderJson } from "./render.ts";
 import { MAX_TIMEOUT, parseTimeout } from "./timeout.ts";
+import { EVAL_TIMEOUT } from "../commands/pagejs.ts";
+import { hasPendingReaction, reactionWaits, settleReaction } from "../changes/observe.ts";
 
 export { DEFAULT_TIMEOUT, MAX_TIMEOUT, parseTimeout } from "./timeout.ts";
+export { SOURCE_URL } from "./runner.ts";
 
 export const READ_HINT_OPENS = 3;
 export const MAX_SOURCE = 1024 * 1024;
 export const STATE_LIMIT = 16 * 1024 * 1024;
 export const LOG_LIMIT = 1024 * 1024;
-export const CONTROL_TIMEOUT = 20.0;
-export const SOURCE_URL = "ardia-script.js";
 export const REFUSED = ["close", "script", "batch"];
 export const FATAL = ["outcome_unknown", "connection_lost"];
-export const TITLE = "ardia browse script";
 export const READ_BATCH = 100;
 export const STATE_PREVIEW_CHARS = 1500;
+export const CONCURRENT_CALLS: ReadonlySet<string> = new Set(["get", "is", "read"]);
+export const LIGHT_CALLS: ReadonlySet<string> = new Set(["click", "dblclick", "fill", "type", "press", "keyboard", "select", "check", "uncheck", "hover", "focus", "scroll"]);
 const PY_WHITESPACE = new RegExp(`[${PY_SPACE_CLASS}]+`, "u");
 const PAGE_GLOBAL = /\b(document|window|localStorage|sessionStorage|getComputedStyle) is not defined/u;
 const PAGE_MISSING = /ReferenceError: ([\p{L}\p{N}_]+) is not defined/u;
 
 type Message = Record<string, unknown>;
-type Answer = { ok: boolean; text?: string | null; data?: unknown; error?: string; code?: string | null };
-
-export function controllerSource(): string {
-  return SCRIPT_CONTROLLER.replace("%(log_limit)d", String(LOG_LIMIT)).replace("%(title)s", dumps(TITLE, "spaced"));
-}
-
-function workerApi(offset: number, state: string): string {
-  return SCRIPT_WORKER.replace("%(offset)d", String(offset))
-    .replace("%(read_batch)d", String(READ_BATCH))
-    .replace("%(state_limit)d", String(STATE_LIMIT))
-    .replace("%(state)s", () => state);
-}
-
-export function workerSource(source: string, state = "{}"): [string, number] {
-  const offset = (workerApi(0, state).match(/\n/gu)?.length ?? 0) + 2;
-  return [`${workerApi(offset, state)}\n__ardiaRun(async () => {\n${source}\n});\n//# sourceURL=${SOURCE_URL}`, offset];
-}
+type Answer = { ok: boolean; text?: string | null; data?: unknown; error?: string; code?: string | null; call?: number };
 
 export function sourceLine(source: string, wrappedLine: unknown): number | null {
   if (typeof wrappedLine !== "number") return null;
@@ -99,50 +83,20 @@ export function pageWorldHint(text: string, command: unknown): string | null {
   return null;
 }
 
+const SANDBOX_MISSING = /\b(require|process|fetch|Bun|Deno|XMLHttpRequest|WebSocket|Worker|module|exports|__dirname|Buffer) is not defined/u;
+
+export function sandboxHint(text: string, command: unknown): string | null {
+  if (Array.isArray(command) && command.length > 0) return null;
+  const missing = SANDBOX_MISSING.exec(text);
+  if (!missing) return null;
+  return `${missing[1] as string} isn't here: a script runs in a sandbox with no modules, files or network. Load pages through the browser with read(urls) or page.goto(url), and return the data (--out <file> saves it)`;
+}
+
 export function failure(message: string, logs: string[], data: Record<string, unknown>, code: string | null = null): BrowseError {
   const shown = logs.map((line) => redact(line));
   let body = redact(message);
   if (shown.length > 0) body += `\nlogged before that:\n${tail(shown)}`;
   return new BrowseError(body, { ...data, logs: shown }, code || "script_failed");
-}
-
-async function openController(state: State, owned: string[]): Promise<Page> {
-  const targetId = await temptabs.create(state, owned);
-  const page = new Page(state, targetId);
-  state.pages.set(targetId, page);
-  await page.attach(state.browser as NonNullable<State["browser"]>);
-  return page;
-}
-
-async function control(page: Page, handle: string, fn: string, args: unknown[] = [], timeout = CONTROL_TIMEOUT): Promise<unknown> {
-  const result: CdpResult = await page.send(
-    "Runtime.callFunctionOn",
-    { objectId: handle, functionDeclaration: fn, arguments: args.map((value) => ({ value })), returnByValue: true, awaitPromise: true },
-    { timeout },
-  );
-  if (Object.hasOwn(result, "exceptionDetails")) {
-    const details = record(result["exceptionDetails"]);
-    throw new BrowseError(`the script's controller failed: ${String(record(details["exception"])["description"] ?? details["text"] ?? "None")}`);
-  }
-  return record(result["result"])["value"];
-}
-
-async function install(page: Page): Promise<string> {
-  let remote: unknown;
-  try {
-    remote = await page.call(`function () { return (${controllerSource()}); }`, [], { frame: page.mainFrame, byValue: false, timeout: CONTROL_TIMEOUT });
-  } catch (error) {
-    if (error instanceof BrowseError && error.code === "page_script_error") throw new BrowseError("couldn't start the script's controller page");
-    throw error;
-  }
-  const handle = record(remote)["objectId"];
-  if (typeof handle !== "string" || !handle) throw new BrowseError("couldn't start the script's controller page");
-  return handle;
-}
-
-async function start(page: Page, handle: string, source: string, state = "{}"): Promise<void> {
-  const [code, offset] = workerSource(source, state);
-  await control(page, handle, "function (source, offset) { return this.start(source, offset); }", [code, offset]);
 }
 
 function knownCommand(word: string): boolean {
@@ -200,7 +154,8 @@ export function scriptCode(code: unknown): string {
   return typeof code === "string" ? (safeCode(code, "script_failed") ?? "script_failed") : "script_failed";
 }
 
-function callIndex(calls: readonly unknown[][], command: unknown): number | null {
+function callIndex(calls: readonly unknown[][], command: unknown, given: unknown = null): number | null {
+  if (typeof given === "number" && Number.isInteger(given) && given >= 1 && given <= calls.length) return given;
   const wanted = JSON.stringify(command);
   for (let index = calls.length - 1; index >= 0; index -= 1) if (JSON.stringify(calls[index]) === wanted) return index + 1;
   return null;
@@ -215,7 +170,7 @@ export function errorText(message: Message, source: string, calls: readonly unkn
   const failed = message["command"];
   let command = "";
   if (Array.isArray(failed) && failed.length > 0) {
-    const index = callIndex(calls, failed);
+    const index = callIndex(calls, failed, message["call"]);
     command = index === null ? ` (in \`${commandName(failed)}\`)` : ` (in ${callLabel(index, failed)})`;
   }
   return `${where}${text}${command}`;
@@ -224,7 +179,7 @@ export function errorText(message: Message, source: string, calls: readonly unkn
 export function failureData(message: Message, calls: readonly unknown[][]): Record<string, unknown> {
   const failed = message["command"];
   const named = Array.isArray(failed) && failed.length > 0;
-  return { line: null, call: named ? callIndex(calls, failed) : null, command: named ? commandName(failed) : null };
+  return { line: null, call: named ? callIndex(calls, failed, message["call"]) : null, command: named ? commandName(failed) : null };
 }
 
 export const UNPARSED_CALL = "that call couldn't be parsed";
@@ -243,12 +198,10 @@ export function refusedCall(given: unknown): Answer | null {
   return null;
 }
 
-async function answerCall(ctx: Ctx, given: unknown, index: number): Promise<Answer> {
-  const refused = refusedCall(given);
-  if (refused !== null) return refused;
-  const argv = splitCommandLine(given as string[]);
+async function answerCall(ctx: Ctx, argv: string[], index: number, light: boolean): Promise<Answer> {
   const name = canonical(argv[0] as string);
-  const sub = new Ctx(ctx.state, { ...ctx.options }, ctx.cwd, ctx.env, null, name);
+  const options = light ? { ...ctx.options, settle_only: true } : { ...ctx.options };
+  const sub = new Ctx(ctx.state, options, ctx.cwd, ctx.env, null, name);
   ctx.state.scriptsRunning += 1;
   let ran: Awaited<ReturnType<typeof runOne>>;
   try {
@@ -267,28 +220,216 @@ async function answerCall(ctx: Ctx, given: unknown, index: number): Promise<Answ
   return { ok: true, text: done.text, data: jsonCopy(done.data) };
 }
 
-async function drive(ctx: Ctx, page: Page, handle: string, source: string, current: Map<string, unknown>, done: string[], calls: unknown[][]): Promise<Message> {
-  await start(page, handle, source, ctx.state.scriptState);
-  for (;;) {
-    const message = record(await control(page, handle, "function () { return this.next(); }", [], MAX_TIMEOUT + 30));
-    if (message["kind"] !== "request") return message;
-    const argv = message["argv"];
-    if (Array.isArray(argv) && argv.every((word) => typeof word === "string")) message["argv"] = splitCommandLine(argv as string[]);
-    current.clear();
-    for (const [key, value] of Object.entries(message)) current.set(key, value);
-    let answer: Answer;
-    if (message["type"] === "sleep") {
-      await sleep(Math.max(Number(message["ms"]) || 0, 0) / 1000);
-      answer = { ok: true, text: "", data: {} };
-    } else {
-      if (message["via"] === "page.eval") flag("script_eval_alias", true);
-      calls.push(Array.isArray(argv) ? [...(argv as unknown[])] : []);
-      current.set("call", calls.length);
-      answer = await answerCall(ctx, message["argv"], calls.length);
-      done.push(commandName(argv));
+type Tracked = { argv: unknown; call: number | null; line: unknown; type: string };
+type Request = Record<string, unknown> & { id: number; op: string };
+
+class ScriptRun {
+  readonly gate = new Gate();
+  readonly calls: unknown[][] = [];
+  readonly done: string[] = [];
+  readonly inflight = new Map<number, Tracked>();
+  readonly running = new Set<Promise<void>>();
+  readonly logs: string[] = [];
+  logSize = 0;
+  logsDropped = 0;
+  stateText: string | null = null;
+  receiptsSkipped = 0;
+  private settling: Promise<void> | null = null;
+  private failure: ((error: Error) => void) | null = null;
+  readonly failed: Promise<never>;
+
+  constructor(readonly ctx: Ctx, readonly runner: Runner) {
+    this.failed = new Promise<never>((_, reject) => {
+      this.failure = reject;
+    });
+    this.failed.catch(() => {});
+  }
+
+  fail(error: Error): void {
+    this.failure?.(error);
+    this.failure = null;
+  }
+
+  keep(line: string): void {
+    if (this.logSize + line.length > LOG_LIMIT) {
+      this.logsDropped += 1;
+      return;
     }
-    current.clear();
-    await control(page, handle, "function (id, answer) { return this.reply(id, answer); }", [message["id"], answer]);
+    this.logs.push(line);
+    this.logSize += line.length + 1;
+  }
+
+  current(): Map<string, unknown> {
+    const first = [...this.inflight.values()].sort((a, b) => (a.call ?? Infinity) - (b.call ?? Infinity))[0];
+    const current = new Map<string, unknown>();
+    if (first === undefined) return current;
+    if (first.type === "sleep") current.set("type", "sleep");
+    else current.set("argv", first.argv);
+    if (first.call !== null) current.set("call", first.call);
+    current.set("line", first.line);
+    return current;
+  }
+
+  async settle(name: string, args: readonly string[]): Promise<void> {
+    if (!hasPendingReaction(this.ctx.state) || !reactionWaits(name, args)) return;
+    this.settling ??= settleReaction(this.ctx.state, name, args).finally(() => {
+      this.settling = null;
+    });
+    await this.settling;
+  }
+
+  reply(id: number, answer: Answer): void {
+    this.runner.send({ type: "reply", id, answer: JSON.stringify(answer) });
+  }
+}
+
+function parseRequest(text: unknown): Request | null {
+  if (typeof text !== "string") return null;
+  let given: unknown;
+  try {
+    given = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (given === null || typeof given !== "object" || Array.isArray(given)) return null;
+  const request = given as Record<string, unknown>;
+  if (typeof request["id"] !== "number" || typeof request["op"] !== "string") return null;
+  return request as Request;
+}
+
+async function serveCall(run: ScriptRun, request: Request): Promise<Answer> {
+  const given = request["argv"];
+  run.calls.push(Array.isArray(given) ? [...(given as unknown[])] : []);
+  const index = run.calls.length;
+  const argv = Array.isArray(given) && given.every((word) => typeof word === "string") ? splitCommandLine(given as string[]) : given;
+  run.inflight.set(request.id, { argv, call: index, line: request["line"], type: "call" });
+  const refused = refusedCall(given);
+  if (refused !== null) return { ...refused, call: index };
+  const words = argv as string[];
+  const name = canonical(words[0] as string);
+  if (request["via"] === "page.eval") flag("script_eval_alias", true);
+  const exclusive = !CONCURRENT_CALLS.has(name);
+  const light = request["light"] === true && request["receipt"] !== true && LIGHT_CALLS.has(name);
+  if (light) run.receiptsSkipped += 1;
+  try {
+    const answer = await run.gate.run(exclusive, async () => {
+      if (!exclusive) await run.settle(name, words.slice(1));
+      return answerCall(run.ctx, words, index, light);
+    });
+    return answer.ok ? answer : { ...answer, call: index };
+  } finally {
+    run.done.push(commandName(given));
+  }
+}
+
+async function servePage(run: ScriptRun, request: Request): Promise<Answer> {
+  run.calls.push(["eval"]);
+  const index = run.calls.length;
+  run.inflight.set(request.id, { argv: ["eval"], call: index, line: request["line"], type: "call" });
+  const op = request.op;
+  if (op === "evaluate" && Array.isArray(request["args"]) && request["args"].length > 1) flag("script_eval_args", true);
+  if (op === "$eval" || op === "$$eval") flag("script_selector_eval", true);
+  if (request["via"] === "page.eval") flag("script_eval_alias", true);
+  const frame = typeof request["frame"] === "string" && request["frame"] ? request["frame"] : null;
+  try {
+    return await run.gate.run(false, async () => {
+      await run.settle("eval", []);
+      if (op === "frames") {
+        flag("script_frames_listed", true);
+        return { ok: true, text: "", data: await framesAnswer(await run.ctx.state.page()) };
+      }
+      const invalid = validEvaluate(request);
+      if (invalid !== null) return { ok: false, error: invalid, code: "usage", call: index };
+      if (frame !== null) {
+        flag("script_frame_eval", true);
+        const page = await run.ctx.state.page();
+        const [declaration, args] = frameFunction(request);
+        try {
+          return { ok: true, text: "", data: { result: jsonCopy(await page.call(declaration, args, { frame, read: true, timeout: EVAL_TIMEOUT })) } };
+        } catch (error) {
+          if (error instanceof OutcomeUnknown || error instanceof ConnectionLost || !(error instanceof BrowseError)) throw error;
+          return { ok: false, error: error.text, code: error.code ?? null, call: index };
+        }
+      }
+      const expression = op === "evaluate" ? evaluateExpression(request) : selectorExpression(request);
+      const answer = await answerCall(run.ctx, ["eval", expression], index, false);
+      return answer.ok ? answer : { ...answer, call: index };
+    });
+  } finally {
+    run.done.push("eval");
+  }
+}
+
+async function serve(run: ScriptRun, request: Request): Promise<void> {
+  let answer: Answer;
+  try {
+    add("script_calls");
+    if (request.op === "sleep") {
+      run.inflight.set(request.id, { argv: null, call: null, line: request["line"], type: "sleep" });
+      await sleep(Math.min(Math.max(Number(request["ms"]) || 0, 0), MAX_TIMEOUT * 1000) / 1000);
+      answer = { ok: true, text: "", data: {} };
+    } else if (request.op === "call") answer = await serveCall(run, request);
+    else if (["evaluate", "$eval", "$$eval", "frames"].includes(request.op)) answer = await servePage(run, request);
+    else answer = { ok: false, error: `unknown script call ${JSON.stringify(request.op.slice(0, 40))}`, code: "usage" };
+  } catch (error) {
+    if (error instanceof Dropped) return;
+    if (error instanceof Error && !(error instanceof Cancelled)) run.fail(error);
+    return;
+  } finally {
+    run.inflight.delete(request.id);
+  }
+  run.reply(request.id, answer);
+}
+
+function crashed(event: RunnerEvent & { type: "exit" }, overMemory = false): Message {
+  if (overMemory) {
+    flag("script_memory_limit", true);
+    return {
+      kind: "error",
+      message: `The script used more than ${MEMORY_LIMIT / 1024 / 1024 / 1024} GB of memory and was stopped. Keep less in variables at once: push results into \`state\` and read pages in smaller batches`,
+      name: "",
+      line: null,
+      code: null,
+    };
+  }
+  flag("script_runner_crashed", true);
+  const how = event.signal ? `it was stopped by ${event.signal}` : `it exited with status ${String(event.code)}`;
+  return {
+    kind: "error",
+    message: `The script's runner stopped before the script finished (${how}). A script that runs out of memory or crashes the JavaScript engine does this; do less per run and keep results in \`state\``,
+    name: "",
+    line: null,
+    code: null,
+  };
+}
+
+async function drive(run: ScriptRun, source: string): Promise<Message> {
+  const runner = run.runner;
+  runner.watchMemory();
+  if (!runner.send({ type: "start", source, state: run.ctx.state.scriptState, readBatch: READ_BATCH, stateLimit: STATE_LIMIT })) return crashed({ type: "exit", code: null, signal: null });
+  for (;;) {
+    const event = await untilCancelled(Promise.race([runner.next(), run.failed]));
+    if (event.type === "request") {
+      const request = parseRequest(event.request);
+      if (request === null) continue;
+      const work = serve(run, request);
+      run.running.add(work);
+      void work.finally(() => run.running.delete(work));
+    } else if (event.type === "log") {
+      if (typeof event.line === "string") run.keep(event.line);
+    } else if (event.type === "state") {
+      if (typeof event.value === "string" && event.value.length <= STATE_LIMIT) run.stateText = event.value;
+    } else if (event.type === "missing") {
+      flag("script_missing_api", true);
+    } else if (event.type === "done") {
+      const result = typeof event.result === "string" ? (parseText(event.result) === undefined ? null : (JSON.parse(event.result) as unknown)) : null;
+      const unawaited = run.gate.dropQueued();
+      await untilCancelled(Promise.race([Promise.allSettled([...run.running]), run.failed]));
+      const message = result !== null && typeof result === "object" && !Array.isArray(result) ? (result as Message) : { kind: "error", message: "the script's result couldn't be read" };
+      return { ...message, unawaited, logs: run.logs, logsDropped: run.logsDropped, state: run.stateText };
+    } else if (event.type === "exit") {
+      return { ...crashed(event, runner.overMemory), logs: run.logs, logsDropped: run.logsDropped, state: run.stateText };
+    }
   }
 }
 
@@ -330,15 +471,6 @@ function timedOut(seconds: number, current: Map<string, unknown>, source: string
       "`ardia browse read <url> <url> …` (or `await read(urls)` here) loads them side by side, each with its own time limit";
   }
   return failure(message, logs, { line, call, command: Array.isArray(argv) && argv.length > 0 ? commandName(argv) : null }, "timeout");
-}
-
-async function stopWorker(page: Page, handle: string): Promise<Message> {
-  try {
-    return record(await control(page, handle, "function () { return this.stop(); }", [], CONTROL_TIMEOUT));
-  } catch (error) {
-    if (error instanceof BrowseError) return {};
-    throw error;
-  }
 }
 
 function truthyValue(value: Value): boolean {
@@ -384,35 +516,35 @@ export async function run(ctx: Ctx, source: string, seconds: number): Promise<Re
   if (!strip(source, isSpace)) throw new Usage("Usage: ardia browse script [file.js] (or the script on stdin: ardia browse script <<'EOF' … EOF)");
   if (pyLen(source) > MAX_SOURCE) throw new Usage(`The script is over ${Math.floor(MAX_SOURCE / 1024)} KB`);
   const state = ctx.state;
-  await state.connect();
-  await temptabs.sweep(state);
-  const current = new Map<string, unknown>();
-  const done: string[] = [];
-  const calls: unknown[][] = [];
-  const owned: string[] = [];
+  const { runner, warm } = takeRunner();
+  flag("script_runner_warm", warm);
+  let script: ScriptRun | null = null;
   let message: Message;
   try {
-    const page = await openController(state, owned);
-    const handle = await install(page);
+    const confined = await whenReady(runner);
+    if (confined < 0) throw new BrowseError("The script didn't run: its runner couldn't sandbox itself", null, "script_failed");
+    if (confined === 0) flag("script_runner_unconfined", true);
+    const started = new ScriptRun(ctx, runner);
+    script = started;
     let outcome: { value: Message } | { timedOut: true };
     try {
-      outcome = await withDeadline(seconds, () => drive(ctx, page, handle, source, current, done, calls));
+      outcome = await withDeadline(seconds, () => drive(started, source));
     } catch (error) {
-      if (error instanceof Cancelled) {
-        const stopped = await shield(() => stopWorker(page, handle));
-        if (keepState(state, stopped["state"])) flag("script_state_kept_on_interrupt", true);
-      }
+      if (error instanceof Cancelled && keepState(state, started.stateText)) flag("script_state_kept_on_interrupt", true);
       throw error;
     }
     if ("timedOut" in outcome) {
-      const stopped = await stopWorker(page, handle);
-      const kept = keepState(state, stopped["state"]);
-      const logs = Array.isArray(stopped["logs"]) ? stopped["logs"].map(String) : [];
-      throw timedOut(seconds, current, source, logs, kept, done, stopped["state"]);
+      runner.kill();
+      const kept = keepState(state, started.stateText);
+      throw timedOut(seconds, started.current(), source, started.logs, kept, started.done, started.stateText);
     }
     message = outcome.value;
   } finally {
-    await temptabs.release(state, owned);
+    runner.kill();
+    if (script !== null) {
+      count("script_concurrent_peak", script.gate.peak);
+      count("script_receipts_skipped", script.receiptsSkipped);
+    }
   }
   keepState(state, message["state"]);
   const logs = Array.isArray(message["logs"]) ? message["logs"].map(String) : [];
@@ -425,8 +557,12 @@ export async function run(ctx: Ctx, source: string, seconds: number): Promise<Re
     const failed = message["command"];
     let hint = pageWorldHint(String(message["message"] || "error"), failed);
     if (hint) flag("script_page_world_hint", true);
+    else {
+      hint = sandboxHint(String(message["message"] || "error"), failed);
+      if (hint) flag("script_sandbox_hint", true);
+    }
     hint = hint ? `\n${hint}` : "";
-    throw failure(`${errorText(message, source, calls)}${hint}`, [...logs, ...notes], { ...failureData(message, calls), line }, scriptCode(message["code"]));
+    throw failure(`${errorText(message, source, script?.calls ?? [])}${hint}`, [...logs, ...notes], { ...failureData(message, script?.calls ?? []), line }, scriptCode(message["code"]));
   }
   const value = renderValue(message);
   const parts = [...logs, ...(value !== null ? [value] : []), ...notes];
