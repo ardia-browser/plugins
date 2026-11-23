@@ -406,7 +406,7 @@
   const structuredCloneValue = (value) => {
     const seen = new Map();
     const copyProps = (from, to) => {
-      for (const key of Object.keys(from)) to[key] = copy(from[key]);
+      for (const key of Object.keys(from)) Object.defineProperty(to, key, { value: copy(from[key]), writable: true, enumerable: true, configurable: true });
       return to;
     };
     const copy = (given) => {

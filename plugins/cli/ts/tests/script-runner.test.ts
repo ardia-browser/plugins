@@ -295,6 +295,15 @@ describe("the script runner", () => {
     expect(sent).toBeLessThanOrEqual(LOG_TOTAL);
   });
 
+  test("structuredClone keeps an own __proto__ key as data", async () => {
+    const { result } = await runScript(`
+      const source = JSON.parse('{"__proto__": {"x": 1}, "y": 2}');
+      const copy = structuredClone(source);
+      return [Object.keys(copy), Object.getPrototypeOf(copy) === Object.prototype, copy.x === undefined, Object.getOwnPropertyDescriptor(copy, "__proto__").value.x];
+    `);
+    expect(result?.["value"]).toEqual([["__proto__", "y"], true, true, 1]);
+  });
+
   test("waitForSelector passes its state and timeout to wait", async () => {
     const { requests } = await runScript("await page.waitForSelector('#spinner', { state: 'hidden', timeout: '5s' }); await page.waitForSelector('#ready');");
     expect(requests.map((request) => request["argv"])).toEqual([["wait", "#spinner", "--state", "hidden", "--timeout", "5s"], ["wait", "#ready"]]);
