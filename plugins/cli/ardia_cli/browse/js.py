@@ -471,6 +471,79 @@ LIBRARY = r"""
         if (linkText < text * 0.5) return null;
         return { label, controls: controls.length, names: controls.map(controlName).filter(Boolean), search };
       };
+      const FACET_MIN = 16;
+      const FACET_LINES = 15;
+      const FACET_TAGS = /^(SECTION|DIV|UL|OL|ASIDE|FORM|FIELDSET|MENU)$/;
+      let pageText = -1;
+      let facetFree = null;
+      const queryOf = (search) => {
+        const pairs = new Map();
+        for (const [key, value] of new URLSearchParams(search)) pairs.set(key + "=" + value, true);
+        return pairs;
+      };
+      const facetLink = (a) => a.tagName === "A" && a.search.length > 1 && a.host === a.ownerDocument.location.host && a.pathname === a.ownerDocument.location.pathname;
+      const chosen = (control, current) => {
+        if (control.matches("input:checked") || ["true", "page", "step", "location", "date"].includes(control.getAttribute("aria-checked") || control.getAttribute("aria-pressed") || control.getAttribute("aria-selected") || control.getAttribute("aria-current") || "")) return true;
+        if (!facetLink(control)) return false;
+        const pairs = Array.from(queryOf(control.search).keys());
+        return pairs.length > 0 && pairs.every((pair) => current.has(pair));
+      };
+      const facetsOf = (el) => {
+        if (facetFree && facetFree.contains(el)) return null;
+        if (!FACET_TAGS.test(el.tagName) || el.closest("article, [role~=article i]") || el.querySelector("main, article, [role~=main i], [role~=article i]")) return null;
+        const controls = Array.from(el.querySelectorAll(CONTROLS + ", " + FACETS + ", [role=option]")).filter(shownOnPage);
+        if (controls.length < FACET_MIN) {
+          facetFree = el;
+          return null;
+        }
+        const names = controls.map(fullName);
+        const short = names.filter((name) => name && name.length <= 30).length;
+        if (short < controls.length * 0.8) return null;
+        const links = controls.filter((control) => control.tagName === "A");
+        const choices = controls.filter((control) => control.matches(FACETS + ", [role=option]")).length;
+        if (links.filter(facetLink).length < links.length * 0.6 && choices < controls.length * 0.6) return null;
+        const text = norm(el.innerText || "").length;
+        const controlText = names.reduce((total, name) => total + name.length, 0);
+        if (controlText < text * 0.6) return null;
+        if (pageText < 0) pageText = norm(root.innerText || "").length;
+        if (pageText - text < Math.max(400, text)) return null;
+        const current = queryOf(el.ownerDocument.location.search);
+        const selected = [];
+        for (const control of controls) {
+          const name = controlName(control);
+          if (name && chosen(control, current) && !selected.includes(name)) selected.push(name);
+        }
+        return { controls: controls.length, selected };
+      };
+      const hideFacets = (node, facets) => {
+        flush();
+        const start = lines.length;
+        hiding = true;
+        try {
+          for (const child of node.childNodes) walk(child);
+          if (node.shadowRoot) for (const child of node.shadowRoot.childNodes) walk(child);
+        } finally {
+          hiding = false;
+        }
+        flush();
+        const removed = lines.splice(start);
+        const chars = removed.reduce((total, line) => total + line.length + (line ? 1 : 0), 0);
+        if (!chars) return;
+        if (removed.filter(Boolean).length <= FACET_LINES) {
+          lines.push(...removed);
+          return;
+        }
+        collapsed.sections += 1;
+        collapsed.chars += chars;
+        const shown = { names: [], size: 0, more: false };
+        const texts = removed.map((line) => norm(line.replace(/^-\s+/, ""))).filter((line) => line && line.length <= 40 && !/^\[/.test(line));
+        const often = new Map();
+        for (const line of texts) often.set(line, (often.get(line) || 0) + 1);
+        addNames(shown, texts.filter((line) => often.get(line) < 3).map((line) => (line.length > 30 ? line.slice(0, 29) + "…" : line)));
+        const list = shown.names.length ? `: ${shown.names.join(" · ")}${shown.more ? " …" : ""}` : "";
+        const picked = facets.selected.length ? `; selected: ${facets.selected.slice(0, 5).join(" · ")}${facets.selected.length > 5 ? " …" : ""}` : "";
+        lines.push("", `[filters hidden, ${facets.controls} options${list}${picked}; read --nav shows them, snapshot -i gives their refs]`, "");
+      };
       let hiding = false;
       let summary = null;
       const summaries = [];
@@ -646,6 +719,10 @@ LIBRARY = r"""
         if (hidden && !hiding && node !== root && (/^(NAV|FOOTER|ASIDE|SECTION|DIV|UL|OL|HEADER|MENU)$/.test(tag) || landmarkRole)) {
           const chrome = chromeOf(node);
           if (chrome) { hideChrome(node, chrome); return; }
+        }
+        if (hidden && !hiding && node !== root && FACET_TAGS.test(tag)) {
+          const facets = facetsOf(node);
+          if (facets) { hideFacets(node, facets); return; }
         }
         if (!insideAside && node !== root && /^(NAV|ASIDE|SECTION|DIV|UL)$/.test(tag)) {
           const label = asideLabel(node);
