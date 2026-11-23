@@ -99,7 +99,7 @@ describe("Browser", () => {
     );
     await browser.send("Test.go");
     expect(seen).toEqual([["Page.frameNavigated", { m: "Page.frameNavigated" }, "S"], ["Inspector.detached", { m: "Inspector.detached" }, "S"]]);
-    expect(EVENTS.length).toBe(35);
+    expect(EVENTS.length).toBe(37);
     expect(MAX_MESSAGE).toBe(256 * 1024 * 1024);
   });
 
