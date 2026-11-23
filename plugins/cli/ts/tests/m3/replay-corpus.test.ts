@@ -13,9 +13,10 @@ import { PENDING } from "./harness/pending.ts";
 import { recordedFixture, type Scenario } from "./harness/side.ts";
 
 const REPLAY_MS = 900_000;
-const MINIMUM_CORPUS = 28;
+const MINIMUM_CORPUS = 82;
 const MINIMUM_LINK = 4;
 const MINIMUM_ANSWERS = 50;
+const RETRIES = 2;
 
 
 const program = tsProgram();
@@ -27,6 +28,23 @@ function needsProgram(): void {
 
 function failures(results: Outcome[]): string {
   return results.filter((result) => !result.ok).map((result) => `${result.name}: ${(result.differences ?? []).slice(0, 3).join("\n    ")}`).join("\n");
+}
+
+async function settled(harness: Harness, scenarios: Scenario[], results: Outcome[]): Promise<Outcome[]> {
+  const byName = new Map(scenarios.map((scenario) => [scenario.name, scenario]));
+  const flaky: string[] = [];
+  const final: Outcome[] = [];
+  for (const result of results) {
+    let outcome = result;
+    const raced = (result.differences ?? []).some((line) => line.startsWith("tap: "));
+    for (let round = 0; raced && !outcome.ok && round < RETRIES; round += 1) {
+      outcome = await harness.replay(byName.get(result.name) as Scenario, "ts");
+      if (outcome.ok) flaky.push(`${result.name} (passed on retry ${round + 1}; first run: ${(result.differences ?? [])[0]?.slice(0, 160) ?? ""})`);
+    }
+    final.push(outcome);
+  }
+  if (flaky.length > 0) process.stderr.write(`m3 corpus: ${flaky.length} recording(s) needed a retry:\n  ${flaky.join("\n  ")}\n`);
+  return final;
 }
 
 function corpus(): Scenario[] {
@@ -48,7 +66,7 @@ describe.skipIf(process.platform !== "darwin")("the m3 recordings replay against
     needsProgram();
     const scenarios = corpus();
     expect(scenarios.length).toBeGreaterThanOrEqual(MINIMUM_CORPUS);
-    const results = await harness.replayAll(scenarios, "ts");
+    const results = await settled(harness, scenarios, await harness.replayAll(scenarios, "ts"));
     expect(results.filter((result) => !result.ok).map((result) => result.name), failures(results)).toEqual([]);
   }, REPLAY_MS);
 

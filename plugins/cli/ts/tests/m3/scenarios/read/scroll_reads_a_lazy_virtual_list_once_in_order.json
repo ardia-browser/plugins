@@ -1,5 +1,4 @@
 {
- "live_only": "Python's wait loops (dialog fade, disabled waits, lazy scroll, load settle) count against the daemon's own clock, so replay sends a different number of checks; first replay mismatch: Runtime.callFunctionOn (selector, action, to) => {",
  "source": "tests/test_browse_read.py ReadListsInChrome.test_scroll_reads_a_lazy_virtual_list_once_in_order",
  "window": [
   1200,

@@ -1,6 +1,4 @@
 {
- "live_only": "the TypeScript daemon aims a pointer action with one page call (PREPARE_ACTION) and clicks the point it hit-tested, and reuses the frame tree it read in the last 0.75 s (plugins#92); Python sends info, the viewport, scrollIntoViewIfNeeded, two getContentQuads with a sleep and a hit test, so this runs ts against ts",
- "designed": "the TypeScript daemon aims a pointer action with one page call (PREPARE_ACTION) and clicks the point it hit-tested, and reuses the frame tree it read in the last 0.75 s (plugins#92); Python sends info, the viewport, scrollIntoViewIfNeeded, two getContentQuads with a sleep and a hit test, so this runs ts against ts",
  "source": "D5 hand-written: act commands on act-input.html, title reflects what the page saw",
  "window": [
   1200,

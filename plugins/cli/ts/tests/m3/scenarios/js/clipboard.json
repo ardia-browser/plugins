@@ -1,5 +1,4 @@
 {
- "live_only": "designed divergence (eval-isolated, permission-overrides): replay serves only requests Python sent, so this runs live until the TS side records its own transcripts (M3-DESIGN 2.6)",
  "divergences": [
   "eval-isolated",
   "permission-overrides"

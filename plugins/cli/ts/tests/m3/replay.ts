@@ -32,6 +32,8 @@ const RESPONSE_ID = /^\{"id":(\d+),/;
 const TEMP_MARKER = "about:blank#ardia-temp-";
 const PIERCE_DOCUMENT = "() => document";
 const NO_DOCUMENT = { result: { type: "object", subtype: "null", value: null } };
+const READY_STATE = "() => document.readyState";
+const LOADED = { result: { type: "string", value: "complete" } };
 const EMPTY_DOCUMENT = { root: { nodeId: 1, backendNodeId: 1, nodeType: 9, nodeName: "#document", localName: "", nodeValue: "", childNodeCount: 0, children: [] } };
 
 type Message = NonNullable<ReturnType<typeof parse>>;
@@ -42,6 +44,38 @@ function synthesize(message: Message): Record<string, unknown> | null {
   if (message.method === "DOM.getDocument" && params["pierce"] === true) return EMPTY_DOCUMENT;
   if (message.method === "Runtime.callFunctionOn" && params["functionDeclaration"] === PIERCE_DOCUMENT) return NO_DOCUMENT;
   return null;
+}
+
+function answerBody(item: Outgoing | null): string | null {
+  if (item === null) return null;
+  const message = parse(item.text);
+  if (message === null) return null;
+  const { id: _id, ...rest } = message;
+  return JSON.stringify(rest);
+}
+
+function sameAnswer(earlier: Outgoing | null, later: Outgoing | null): boolean {
+  const body = answerBody(earlier);
+  return body !== null && body === answerBody(later);
+}
+
+function handleOf(message: Message): string | null {
+  const params = (message.params ?? {}) as Record<string, unknown>;
+  if (typeof params["objectId"] === "string") return `object:${params["objectId"]}`;
+  if (typeof params["contextId"] === "number") return `context:${params["contextId"]}`;
+  if (typeof params["executionContextId"] === "number") return `context:${params["executionContextId"]}`;
+  return null;
+}
+
+function loadEvidence(text: string): boolean {
+  const event = parse(text);
+  if (event?.method === "Page.loadEventFired") return true;
+  return event?.method === "Page.lifecycleEvent" && ((event.params ?? {}) as Record<string, unknown>)["name"] === "load";
+}
+
+function readyStateProbe(message: Message): boolean {
+  const params = (message.params ?? {}) as Record<string, unknown>;
+  return (message.method === "Runtime.callFunctionOn" && params["functionDeclaration"] === READY_STATE) || (message.method === "Runtime.evaluate" && params["expression"] === READY_STATE);
 }
 
 function designed(message: Message): Message {
@@ -56,6 +90,8 @@ export class ReplayConn {
   private readonly requests: Recorded[] = [];
   private readonly outgoing: Outgoing[] = [];
   private readonly happened = new Map<number, number>();
+  private readonly loadedSessions = new Set<string>();
+  private readonly recordedHandles = new Set<string>();
   private readonly groups = new Map<string, number[]>();
   private readonly members = new Map<number, Recorded[]>();
   private readonly position = new Map<string, number>();
@@ -70,7 +106,7 @@ export class ReplayConn {
   private readonly navigated = new Map<string, Map<string, Record<string, unknown>>>();
 
   constructor(entries: Entry[], private readonly hooks: ReplayHooks, private readonly elastic: Elastic, from: string | undefined, to: string | undefined,
-              private readonly paced = false) {
+              private readonly paced = false, private readonly literal = false) {
     this.lastEmit = performance.now();
     const outstanding = new Map<string, Set<number>>();
     const byId = new Map<number, Recorded>();
@@ -92,7 +128,9 @@ export class ReplayConn {
         if (open.size === 0 || list.length === 0) list.push(index);
         open.add(message.id);
         const group = list[list.length - 1] ?? index;
-        const recorded: Recorded = { index, id: message.id, session, form: requestForm(message), group, consumed: false, skipped: false, liveId: -1, response: null };
+        const recorded: Recorded = { index, id: message.id, session, form: requestForm(designed(message)), group, consumed: false, skipped: false, liveId: -1, response: null };
+        const handle = handleOf(message);
+        if (handle !== null) this.recordedHandles.add(`${session}|${handle}`);
         this.requests.push(recorded);
         this.members.set(group, [...(this.members.get(group) ?? []), recorded]);
         byId.set(message.id, recorded);
@@ -103,6 +141,7 @@ export class ReplayConn {
         const respondsTo = id === undefined ? null : byId.get(Number(id)) ?? null;
         if (respondsTo) outstanding.get(respondsTo.session)?.delete(respondsTo.id);
         const item: Outgoing = { kind: "message", text, respondsTo, after: lastOut, delay: gap, code: 0, sent: false };
+        if (!respondsTo && loadEvidence(text)) this.loadedSessions.add(parse(text)?.sessionId ?? "");
         if (respondsTo) respondsTo.response = item;
         this.outgoing.push(item);
       } else if (entry.k === "close" && entry.by !== "browser") {
@@ -125,9 +164,9 @@ export class ReplayConn {
     if (this.failed) return;
     const message = parse(text);
     if (!message || message.id === undefined || !message.method) return;
-    if (this.worldHandle(message)) return;
+    if (!this.literal && this.worldHandle(message)) return;
     const session = message.sessionId ?? "";
-    if (this.binding.delete(session) && message.method === "Page.getFrameTree") {
+    if (!this.literal && this.binding.delete(session) && message.method === "Page.getFrameTree") {
       const tree = this.lastTree.get(session);
       if (tree !== undefined) {
         this.hooks.note("divergence", requestForm(message));
@@ -136,13 +175,18 @@ export class ReplayConn {
       }
     }
     const form = requestForm(designed(message));
-    const synthesized = synthesize(message);
+    const synthesized = this.literal ? null : synthesize(message);
     if (synthesized !== null) {
       this.hooks.note("synthesized", form);
       this.hooks.batch(() => this.hooks.send(JSON.stringify({ id: message.id, result: synthesized, ...(message.sessionId ? { sessionId: message.sessionId } : {}) })));
       return;
     }
     const found = this.find(session, form);
+    if (!found && this.literal && readyStateProbe(message) && this.loadedSessions.has(session) && this.recordedHandles.has(`${session}|${handleOf(message)}`)) {
+      this.hooks.note("assumed-loaded", form);
+      this.hooks.batch(() => this.hooks.send(JSON.stringify({ id: message.id, result: LOADED, ...(message.sessionId ? { sessionId: message.sessionId } : {}) })));
+      return;
+    }
     if (!found) {
       this.fail(session, form);
       return;
@@ -226,9 +270,11 @@ export class ReplayConn {
   private find(session: string, form: string): Found | null {
     const list = this.groups.get(session) ?? [];
     const start = this.startOf(session);
+    const earlier = this.literal && this.elastic.repeats(form) ? this.lastAnswered(session, form) : undefined;
     for (let at = start; at < list.length && at <= start + this.elastic.lookahead; at += 1) {
       const hit = this.open(list[at] ?? -1).find((request) => request.form === form);
       if (!hit) continue;
+      if (earlier && at > start && sameAnswer(earlier.response, hit.response) && !this.gatesEvents(hit)) return { repeat: earlier };
       for (let before = start; before < at; before += 1) {
         for (const request of this.open(list[before] ?? -1)) {
           if (!this.elastic.repeats(request.form)) continue;
@@ -244,6 +290,14 @@ export class ReplayConn {
     const same = this.requests.filter((request) => request.session === session && request.form === form && request.response);
     const repeat = [...same].reverse().find((request) => request.consumed) ?? same[0];
     return repeat ? { repeat } : null;
+  }
+
+  private gatesEvents(request: Recorded): boolean {
+    return this.outgoing.some((item) => item.respondsTo === null && item.after === request.index);
+  }
+
+  private lastAnswered(session: string, form: string): Recorded | undefined {
+    return [...this.requests].reverse().find((request) => request.session === session && request.form === form && request.consumed && request.response?.sent);
   }
 
   private fail(session: string, form: string): void {

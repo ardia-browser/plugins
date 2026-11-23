@@ -44,9 +44,56 @@ free port pair). A live-only scenario is reported as skipped with its reason. A 
 the request the daemon sent and the recorded ones it could have been. `ARDIA_M3_DATA_ROOT` points the harness at
 another copy of the data (scenarios, transcripts, link data, schema and `elastic.json`).
 
-Recording new transcripts, live runs against Chromium and fault runs (`cancel`) come with a TypeScript record mode in
-plugins#108. Until then the corpus can only be replayed, and a scenario whose recording no longer describes the daemon
-goes on `PENDING` in `harness/pending.ts` (read by `replay-corpus.test.ts` and the `replay` command) with its reason.
+## Recording from TypeScript
+
+The harness records with the TypeScript daemon (plugins#108):
+
+```sh
+export ARDIA_M3_CHROME=<chrome-headless-shell> ARDIA_M3_PORT_BASE=9800
+bun tests/m3/harness/main.ts record core/open_title 'act/d5_*'   # live run, kept only if it replays
+bun tests/m3/harness/main.ts live core/open_title                # twin headless Chromiums, compared, nothing written
+bun tests/m3/harness/main.ts link-record round_trips             # the link driver's recording
+bun tests/m3/harness/main.ts link-live round_trips
+```
+
+`record` runs the scenario once against headless Chromium behind the tap (`--upstream`), with the TypeScript client and
+its seeded daemon and the scenario's window (1200x900 unless it says otherwise). It writes the candidate `.jsonl.gz` and
+`.result.json.gz` to its scratch folder and replays it from there `--verify` times (3 by default). Only a recording that
+replays every time is published into `transcripts/`, the two files as a pair (both staged, then renamed, the first put
+back if the second fails) under a lock beside them. Otherwise it records again, up to `--tries` times (3), and leaves the
+old recording in place when none steadies. `record` or `link-record` with no scenario refuses, because it would rewrite
+every transcript. A recording keeps the fixture port it was made with in `subs.fixture`, and replay maps it to its own.
+A browser counts as started only when its own profile's `DevToolsActivePort` names the port and the browser path that
+`/json/version` reports, so a run never drives another run's Chromium on the same port.
+
+The result file is what Python's `json.dumps(sort_keys=True, indent=1)` wrote, plus `"recorder": "ts"`. The answers
+are re-parsed from their raw lines, so integers past 2^53 and key order survive. Link results are Python's compact
+`json.dumps`. `harness/record.test.ts` checks that every stored result round-trips byte for byte.
+
+The tap writes `"recorder": "ts"` in the transcript's `meta` line, and replay then answers from it literally. It doesn't
+synthesize what Python never sent (`Target.setAutoAttach`, the `globalThis` world handle and the `Page.getFrameTree`
+after it, the shadow-pierce probes), because the recording has the real ones. Two allowances are left, both for the
+TypeScript daemon's own probes:
+
+- a `() => document.readyState` probe that the recording never needed is answered `complete` (noted `assumed-loaded`),
+  but only on a handle the recording used, on a session where it saw the page load. The recorded run moved on without
+  asking because its load events had arrived; under replay's pacing they can still be behind a poll.
+- an elastic probe sent early (a frame tree or visibility read whose 0.75 s or 0.25 s cache ran out sooner on the
+  replay's clock) gets the answer it got last time, but only when the recording's later answer is the same and no
+  browser event waits on that later request. Otherwise replay moves ahead as before.
+
+Recordings made by Python keep the shims.
+
+`replay-corpus.test.ts` retries a recording that fails at the tap (an unexpected request, or one never sent) up to twice
+more, one at a time. It fails only when the recording never passes, and prints the ones that needed a retry. A run whose
+requests matched but whose answers, files or protocol differ fails at once. Some scenarios still wait on the daemon's
+own clock (a frame tree cached for 0.75 s, a scroll loop, a title read), and under the parallel replay about one replay
+in a hundred loses that race. A regression fails every time.
+
+To change a scenario on purpose: edit its JSON, `record` it, and commit both the scenario and the recording. A
+scenario that was `live_only` only because a Python recording couldn't describe the TypeScript daemon loses the flag once
+it has a TypeScript recording. `harness/pending.ts` still exists for a recording a change leaves behind (with its reason),
+but `record` is the way out of it.
 
 ## Ports
 

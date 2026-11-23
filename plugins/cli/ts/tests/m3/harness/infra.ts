@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { openSync, closeSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, openSync, closeSync, readFileSync, statSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { FIXTURES } from "./paths.ts";
@@ -9,6 +9,10 @@ export const BLOCK = 20;
 export const RECORDED_FIXTURE = DEFAULT_BASE + BLOCK - 1;
 const PROBE_MS = 200;
 const TAKE_MS = 600_000;
+const CHROME_START_MS = 30_000;
+export const CHROME_ENV = "ARDIA_M3_CHROME";
+export const CHROME_FLAGS = ["--headless", "--no-first-run", "--no-default-browser-check", "--disable-background-networking", "--disable-component-update",
+  "--disable-sync", "--disable-default-apps", "--mute-audio", "--hide-scrollbars", "--force-color-profile=srgb"];
 
 export class PortsBusy extends Error {
   override readonly name = "PortsBusy";
@@ -276,4 +280,50 @@ export async function firstLine(child: ChildProcess, ms: number): Promise<string
     stdout.on("data", onData);
     child.once("exit", onExit);
   });
+}
+
+export function chromeBinary(): string {
+  const found = process.env[CHROME_ENV];
+  if (!found || !existsSync(found)) {
+    throw new Error(`live modes need ${CHROME_ENV}, a pinned chrome-headless-shell (Chrome for Testing 158.0.8127.18, Playwright's chromium_headless_shell-1254; docs/m3-harness.md)`);
+  }
+  return found;
+}
+
+async function ours(port: number, profile: string): Promise<boolean> {
+  let lines: string[];
+  try {
+    lines = readFileSync(path.join(profile, "DevToolsActivePort"), "utf8").split("\n");
+  } catch {
+    return false;
+  }
+  if (lines[0]?.trim() !== String(port) || !lines[1]?.startsWith("/devtools/browser/")) return false;
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(1000) });
+    if (!response.ok) return false;
+    const info = (await response.json()) as { webSocketDebuggerUrl?: unknown };
+    return typeof info.webSocketDebuggerUrl === "string" && new URL(info.webSocketDebuggerUrl).pathname === lines[1].trim();
+  } catch {
+    return false;
+  }
+}
+
+export async function launchChrome(port: number, profile: string, window: [number, number]): Promise<ChildProcess> {
+  mkdirSync(profile, { recursive: true });
+  const log = openSync(path.join(path.dirname(profile), "chrome.log"), "w");
+  let chrome: ChildProcess;
+  try {
+    chrome = spawn(chromeBinary(), [...CHROME_FLAGS, `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, `--window-size=${window[0]},${window[1]}`, "about:blank"],
+      { detached: true, stdio: ["ignore", log, log] });
+  } finally {
+    closeSync(log);
+  }
+  const deadline = performance.now() + CHROME_START_MS;
+  while (performance.now() < deadline) {
+    if (chrome.exitCode !== null || chrome.signalCode !== null) break;
+    if (await ours(port, profile)) return chrome;
+    await sleep(100);
+  }
+  await stop(chrome);
+  throw new Error(`the Chromium started on port ${port} didn't answer as itself within ${CHROME_START_MS / 1000} s (its DevToolsActivePort and /json/version must agree; another browser may hold the port; see chrome.log beside ${profile})`);
 }

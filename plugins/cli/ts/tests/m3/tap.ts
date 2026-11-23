@@ -18,6 +18,7 @@ const upstreamPort = options.get("--upstream");
 const replayPath = options.get("--replay");
 const chromePid = Number(options.get("--chrome-pid") ?? 0);
 const scratch = options.get("--scratch");
+const recorder = options.get("--recorder");
 if (!listen || !out || (!upstreamPort && !replayPath)) {
   process.stderr.write("tap.ts: --listen, --out and one of --upstream or --replay are required\n");
   process.exit(64);
@@ -27,7 +28,7 @@ const started = performance.now();
 const now = () => Math.round((performance.now() - started) * 1000) / 1000;
 writeFileSync(out, "");
 const record = (entry: Entry) => appendFileSync(out, `${JSON.stringify(entry)}\n`);
-record({ k: "meta", scratch: scratch ?? "", listen, mode: replayPath ? "replay" : "live" });
+record({ k: "meta", scratch: scratch ?? "", listen, mode: replayPath ? "replay" : "live", ...(recorder && !replayPath ? { recorder } : {}) });
 
 const fixtureFrom = options.get("--fixture-from");
 const fixtureTo = options.get("--fixture-to");
@@ -37,6 +38,7 @@ const recording = (replayPath ? readTranscript(replayPath) : []).map((entry) =>
 );
 const recordedScratch = recording.find((entry) => entry.k === "meta")?.scratch;
 const recordedVersion = recording.find((entry) => entry.k === "version")?.body;
+const literal = (recording.find((entry) => entry.k === "meta") as { recorder?: unknown } | undefined)?.recorder === "ts";
 const elasticRules = JSON.parse(readFileSync(ELASTIC, "utf8")) as { lookahead: number; methods: string[]; probes: string[] };
 const elastic: Elastic = {
   lookahead: elasticRules.lookahead,
@@ -202,7 +204,7 @@ function startReplay(link: Link, socket: ServerWebSocket<Link>): void {
       record({ k: "mismatch", c: link.conn, t: now(), report });
       process.stderr.write(`tap: ${report}\n`);
     },
-  }, elastic, recordedScratch, scratch, options.get("--pace") === "recorded");
+  }, elastic, recordedScratch, scratch, options.get("--pace") === "recorded", literal);
   link.replay.start();
 }
 

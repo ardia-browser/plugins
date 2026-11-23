@@ -1,6 +1,4 @@
 {
- "live_only": "the TypeScript daemon reuses the frame tree it read in the last 0.75 s unless a frame event arrived, and keeps Network on per session (plugins#92); Python reads Page.getFrameTree again for each step, so this runs ts against ts",
- "designed": "the TypeScript daemon reuses the frame tree it read in the last 0.75 s unless a frame event arrived, and keeps Network on per session (plugins#92); Python reads Page.getFrameTree again for each step, so this runs ts against ts",
  "steps": [
   {"argv": ["open", "{fixture}/login.html", "--no-changes"], "session": "waits"},
   {"argv": ["wait", "--text", "Log in"], "session": "waits"},

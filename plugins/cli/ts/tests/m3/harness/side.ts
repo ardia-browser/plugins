@@ -4,7 +4,8 @@ import { constants } from "node:os";
 import { gunzipSync } from "node:zlib";
 import path from "node:path";
 import { daemonOf } from "./divergences.ts";
-import { alive, bun, exited, firstLine, type Pair, RECORDED_FIXTURE, sleep, spawnGroup, stop } from "./infra.ts";
+import type { ChildProcess } from "node:child_process";
+import { alive, bun, exited, firstLine, launchChrome, type Pair, RECORDED_FIXTURE, sleep, spawnGroup, stop } from "./infra.ts";
 import type { RunResult, Step } from "./normalize.ts";
 import { CLIENT_MAIN, CLIENT_PRELOAD, FIXTURES, TAP, tsProgram } from "./paths.ts";
 import { isRecord, type Json, type JsonRecord, pyLoads } from "./pyvalues.ts";
@@ -14,6 +15,7 @@ const TEARDOWN_TIMEOUT_MS = 60_000;
 const DAEMON_EXIT_MS = 15_000;
 const TAP_START_MS = 30_000;
 const TAP_CALL_MS = 10_000;
+export const DEFAULT_WINDOW: [number, number] = [1200, 900];
 const KEPT_ENV = ["PATH", "LANG", "LC_ALL", "TZ"];
 const HARNESS_ENV = ["ARDIA_M3_SEED", "ARDIA_M3_ANSWERS", "ARDIA_M3_TS_PROGRAM"];
 
@@ -34,7 +36,7 @@ export type Scenario = {
   [key: string]: unknown;
 };
 
-export type ReplayRun = RunResult & { tap: JsonRecord };
+export type ReplayRun = RunResult & { tap: JsonRecord; answerLines?: string[][] };
 
 export async function tapCall(port: number, route: string, body?: unknown): Promise<JsonRecord> {
   const response = await fetch(`http://127.0.0.1:${port}${route}`, {
@@ -177,12 +179,13 @@ function runClient(argv: string[], env: NodeJS.ProcessEnv, cwd: string, stdin: s
 
 export class Side {
   private tap: ReturnType<typeof spawnGroup> | null = null;
+  private chrome: ChildProcess | null = null;
   private readonly tapPort: number;
   private readonly chromePort: number;
   private readonly fixturePort: number;
 
   constructor(private readonly scenario: Scenario, private readonly root: string, private readonly impl: string, ports: Pair, private readonly fixture: string,
-              private readonly seed: number, private readonly replay: string) {
+              private readonly seed: number, private readonly replay: string | null) {
     [this.chromePort, this.tapPort] = ports;
     this.fixturePort = Number(new URL(fixture).port);
   }
@@ -194,8 +197,13 @@ export class Side {
   private async start(): Promise<void> {
     rmSync(this.root, { recursive: true, force: true });
     mkdirSync(path.join(this.root, "data"), { recursive: true });
-    const argv = [bun(), TAP, "--listen", String(this.tapPort), "--out", path.join(this.root, "transcript.jsonl"), "--scratch", this.root,
-      "--replay", this.replay, "--pace", this.scenario.pace ?? "asap", "--fixture-from", String(recordedFixture(this.replay)), "--fixture-to", String(this.fixturePort)];
+    const argv = [bun(), TAP, "--listen", String(this.tapPort), "--out", path.join(this.root, "transcript.jsonl"), "--scratch", this.root];
+    if (this.replay !== null) {
+      argv.push("--replay", this.replay, "--pace", this.scenario.pace ?? "asap", "--fixture-from", String(recordedFixture(this.replay)), "--fixture-to", String(this.fixturePort));
+    } else {
+      this.chrome = await launchChrome(this.chromePort, path.join(this.root, "profile"), this.scenario.window ?? DEFAULT_WINDOW);
+      argv.push("--upstream", String(this.chromePort), "--chrome-pid", String(this.chrome.pid), "--recorder", "ts");
+    }
     this.tap = spawnGroup(argv, { log: path.join(this.root, "tap.log") });
     const line = await firstLine(this.tap, TAP_START_MS);
     if (!line.startsWith("{")) {
@@ -220,11 +228,17 @@ export class Side {
     });
   }
 
-  private answersSince(count: number): Json[] {
+  private answerLinesSince(count: number): string[] {
     const file = path.join(this.root, "answers.jsonl");
     if (!existsSync(file)) return [];
-    return readFileSync(file, "utf8").split(/\r\n|\r|\n/).filter((line) => line.length > 0).slice(count).map((line) => pyLoads(line));
+    return readFileSync(file, "utf8").split(/\r\n|\r|\n/).filter((line) => line.length > 0).slice(count);
   }
+
+  private answersSince(count: number): Json[] {
+    return this.answerLinesSince(count).map((line) => pyLoads(line));
+  }
+
+  readonly answerLines: string[][] = [];
 
   private async runStep(index: number, step: ScenarioStep, env: NodeJS.ProcessEnv): Promise<Step> {
     await tapCall(this.tapPort, "/tap/mark", { step: index });
@@ -232,6 +246,7 @@ export class Side {
     const stdin = step.stdin !== undefined && step.stdin !== null ? substitute(step.stdin, this.fixture, this.home()) : null;
     const started = performance.now();
     const ran = await runClient(this.client(step), env, this.home(), stdin, STEP_TIMEOUT_MS);
+    this.answerLines.push(this.answerLinesSince(before));
     return { exit: ran.exit, out: ran.out, err: ran.timedOut ? `${ran.err}\n[harness: the step timed out]` : ran.err, answers: this.answersSince(before), interrupted: false,
       fault_fired: null, seconds: Math.round(performance.now() - started) / 1000 };
   }
@@ -255,8 +270,8 @@ export class Side {
   async run(): Promise<ReplayRun> {
     const result: ReplayRun = { root: this.root, transcript: path.join(this.root, "transcript.jsonl"), steps: [], files: {}, tap: {},
       subs: { root: this.root, tap: this.tapPort, chrome: this.chromePort, fixture: this.fixturePort, fixture_dir: FIXTURES } };
-    await this.start();
     try {
+      await this.start();
       const env = this.env();
       for (const [index, step] of this.scenario.steps.entries()) result.steps.push(await this.runStep(index, step, env));
       await sleep(Number(this.scenario.settle ?? 0) * 1000);
@@ -268,20 +283,25 @@ export class Side {
       await this.close();
     }
     writeFileSync(path.join(this.root, "result.json"), JSON.stringify({ steps: result.steps, files: result.files, tap: result.tap, subs: result.subs }, null, 1));
+    result.answerLines = this.answerLines;
     return result;
   }
 
   private async close(): Promise<void> {
     const tap = this.tap;
-    if (tap === null) return;
-    tap.stdout?.destroy();
-    if (tap.exitCode === null && tap.signalCode === null) {
-      try {
-        await tapCall(this.tapPort, "/tap/quit", {});
-        if (!(await exited(tap, 5000))) await stop(tap);
-      } catch {
-        await stop(tap);
+    if (tap !== null) {
+      tap.stdout?.destroy();
+      if (tap.exitCode === null && tap.signalCode === null) {
+        try {
+          await tapCall(this.tapPort, "/tap/quit", {});
+          if (!(await exited(tap, 5000))) await stop(tap);
+        } catch {
+          await stop(tap);
+        }
       }
     }
+    await stop(this.chrome);
+    this.chrome = null;
+    rmSync(path.join(this.root, "profile"), { recursive: true, force: true });
   }
 }

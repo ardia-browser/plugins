@@ -1,5 +1,4 @@
 {
- "live_only": "`cdp` is plugins#11 (full-control/cli 3917106), not yet on main: compare live against its Python (docs/m3-harness.md, D7); record and replay once it lands",
  "steps": [
   {
    "argv": [

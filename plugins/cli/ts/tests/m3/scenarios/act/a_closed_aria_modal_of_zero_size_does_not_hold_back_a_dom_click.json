@@ -1,5 +1,4 @@
 {
- "live_only": "Python's wait loops (dialog fade, disabled waits, lazy scroll, load settle) count against the daemon's own clock, so replay sends a different number of checks",
  "source": "tests/test_browse_act.py ActInChrome.test_a_closed_aria_modal_of_zero_size_does_not_hold_back_a_dom_click",
  "window": [
   1200,
