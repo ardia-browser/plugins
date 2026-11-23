@@ -91,6 +91,14 @@ export async function listAll(h) {
 const unescapedName = (name) => name.replace(/\\(.)/g, "$1");
 const opName = (name) => name.replace(/\s/g, "").toLowerCase();
 
+function splitAssignment(argument) {
+  for (let at = 0; at < argument.length; at++) {
+    if (argument[at] === "\\") at++;
+    else if (argument[at] === "=") return { target: argument.slice(0, at), value: argument.slice(at + 1) };
+  }
+  return { target: argument, value: undefined };
+}
+
 function applyAssignment(item, argument) {
   if (argument.startsWith("--url=")) {
     const href = argument.slice("--url=".length);
@@ -99,19 +107,28 @@ function applyAssignment(item, argument) {
     item.urls = urls.length ? urls.map((url, i) => (i === at ? { ...url, href } : url)) : [{ href, primary: true }];
     return true;
   }
-  if (argument.endsWith("[delete]")) {
-    const name = opName(unescapedName(argument.slice(0, -"[delete]".length)));
-    const matching = item.fields.filter((field) => opName(field.label ?? "") === name);
-    if (matching.length !== 1 || matching[0].purpose) return false;
+  const { target, value } = splitAssignment(argument);
+  const typed = /^(.*)\[([a-z]+)\]$/s.exec(target);
+  const name = opName(unescapedName(typed ? typed[1] : target));
+  const type = typed?.[2];
+  const builtIn = item.fields.find((field) => field.id === name);
+  if (builtIn?.purpose) {
+    if (type || value === undefined) return false;
+    const { entropy: _entropy, password_details: _details, ...kept } = builtIn;
+    item.fields = item.fields.map((field) => (field === builtIn ? { ...kept, value } : field));
+    return true;
+  }
+  const matching = item.fields.filter((field) => opName(field.label ?? "") === name);
+  if (matching.length > 1) return false;
+  if (type === "delete") {
+    if (!matching.length || value !== undefined) return false;
     item.fields = item.fields.filter((field) => field !== matching[0]);
     return true;
   }
-  if (argument.startsWith("username=")) {
-    const field = item.fields.find((entry) => entry.purpose === "USERNAME");
-    field.value = argument.slice("username=".length);
-    return true;
-  }
-  return false;
+  if (type !== "otp" || value === undefined) return false;
+  if (matching.length) item.fields = item.fields.map((field) => (field === matching[0] ? { ...field, type: "OTP", value } : field));
+  else item.fields = [...item.fields, { id: `field${item.fields.length}`, type: "OTP", label: unescapedName(typed[1]), value }];
+  return true;
 }
 
 export function opHoldingPasskey(stored) {

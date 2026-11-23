@@ -1,11 +1,11 @@
-import { CREDENTIAL_LIMITS, CredentialError, json, origins, totp, type CredentialContext, type Item, type JsonRecord, type LoginChange, type VerbParams } from "@ardia/plugin-sdk/credentials";
+import { CREDENTIAL_LIMITS, CredentialError, isSecretHandle, json, origins, totp, type CredentialContext, type Item, type JsonRecord, type LoginChange, type SecretHandle, type VerbParams } from "@ardia/plugin-sdk/credentials";
 import { check, isItemId, requireUnlocked, withAccount } from "./cli";
 import { isOneTimeField, listedItem, purposeValue, revealedItem } from "./items";
 
-export const PASSWORD_IN_APP =
-  "1Password's CLI can't take a new password without showing it to other apps or deleting the login's passkey, so change it in 1Password.";
-export const CODE_IN_APP =
-  "1Password's CLI can't take a new one-time code without showing it to other apps or deleting the login's passkey, so add it in 1Password.";
+export const CODE_FIELD_LABEL = "one-time password";
+
+export const SECRET_NOT_SEALED =
+  "Ardia didn't hand this secret over sealed, so it can't go to 1Password's CLI. Change it in 1Password.";
 
 export const MOST_CODE_FIELDS_REMOVED = 4;
 export const REMOVE_CODE_SLOTS = Array.from({ length: MOST_CODE_FIELDS_REMOVED }, (_, i) => `removeCode${i + 1}`);
@@ -15,14 +15,31 @@ const FIELD_DELETION = /^[^\u0000-\u001f\u007f-\u009f[\]\-][^\u0000-\u001f\u007f
 const CONTROL_OR_SPACE = /[\s\u0000-\u001f\u007f-\u009f]/;
 const NAMES_OP_RESERVES = new Set(["username", "password", "notesplain", "notes", "title", "url", "website"]);
 
-export function holds(item: JsonRecord, change: LoginChange, now = Date.now()): boolean {
+const newCode = (change: LoginChange) => (change.totp === undefined || change.totp === "remove" ? undefined : change.totp.set);
+
+function holdsSealed(fields: readonly JsonRecord[], change: LoginChange, before: readonly JsonRecord[]): boolean {
+  if (isSecretHandle(change.password)) {
+    const now = purposeValue(fields, "PASSWORD");
+    if (!now || now === purposeValue(before, "PASSWORD")) return false;
+  }
+  if (isSecretHandle(newCode(change))) {
+    const codes = fields.filter(isOneTimeField);
+    const value = codes.length === 1 && opName(json.string(codes[0]!.label) ?? "") === opName(CODE_FIELD_LABEL) ? json.string(codes[0]!.value) : undefined;
+    const earlier = before.find((field) => isOneTimeField(field) && opName(json.string(field.label) ?? "") === opName(CODE_FIELD_LABEL));
+    if (!value || !value.toLowerCase().startsWith("otpauth://") || !totp.parse(value) || (earlier && json.string(earlier.value) === value)) return false;
+  }
+  return true;
+}
+
+export function holds(item: JsonRecord, change: LoginChange, before: JsonRecord | null = null, now = Date.now()): boolean {
   const fields = json.dicts(item.fields);
   if (change.username !== undefined && (purposeValue(fields, "USERNAME") ?? "") !== change.username) return false;
-  if (change.password !== undefined && purposeValue(fields, "PASSWORD") !== change.password) return false;
   if (change.url !== undefined && !json.dicts(item.urls).some((url) => json.string(url.href) === change.url)) return false;
+  if (!holdsSealed(fields, change, json.dicts(before?.fields))) return false;
+  if (typeof change.password === "string" && purposeValue(fields, "PASSWORD") !== change.password) return false;
   if (change.totp === "remove") return !fields.some(isOneTimeField);
-  if (change.totp) {
-    const uri = change.totp.set;
+  const uri = newCode(change);
+  if (typeof uri === "string") {
     const wanted = totp.parse(uri);
     if (!wanted) return false;
     const codes = new Set([-1, 0, 1].map((step) => totp.code(wanted, now + step * wanted.period * 1000)));
@@ -54,37 +71,55 @@ export function assignableUrl(url: string): boolean {
   return scheme === "https" || (scheme === "http" && origins.isLocalHost(origins.host(url) ?? ""));
 }
 
+const namesField = (field: JsonRecord, name: string) => [field.label, field.id].some((text) => typeof text === "string" && opName(text) === name);
+
 export function fieldDeletion(field: JsonRecord, fields: readonly JsonRecord[]): string | null {
   const label = json.string(field.label) ?? "";
   const name = opName(label);
   if (!name || NAMES_OP_RESERVES.has(name) || /[[\]]/.test(label)) return null;
-  const namesOther = (other: JsonRecord) => other !== field && [other.label, other.id].some((text) => typeof text === "string" && opName(text) === name);
-  if (fields.some(namesOther)) return null;
+  if (fields.some((other) => other !== field && namesField(other, name))) return null;
   const deletion = `${label.replace(/[\\.=]/g, (character) => `\\${character}`)}[delete]`;
   return fitsIdSlot(deletion, FIELD_DELETION) ? deletion : null;
 }
 
+function codeChanges(fields: readonly JsonRecord[], keepNamed: string | null): Record<string, string> | null {
+  const codeFields = fields.filter(isOneTimeField);
+  const kept = keepNamed === null ? [] : fields.filter((field) => namesField(field, keepNamed));
+  if (kept.length > 1 || kept.some((field) => !isOneTimeField(field))) return null;
+  const removed = codeFields.filter((field) => !kept.includes(field));
+  if (removed.length > MOST_CODE_FIELDS_REMOVED) return null;
+  const params: Record<string, string> = {};
+  for (const [at, field] of removed.entries()) {
+    const deletion = fieldDeletion(field, fields);
+    if (!deletion) return null;
+    params[REMOVE_CODE_SLOTS[at]!] = deletion;
+  }
+  return params;
+}
+
 export function assignments(item: JsonRecord, change: LoginChange): VerbParams | null {
   if ((json.string(item.category) ?? "LOGIN").toUpperCase() !== "LOGIN") return null;
-  const params: Record<string, string> = {};
+  const params: Record<string, string | SecretHandle> = {};
   if (change.username !== undefined) {
     const username = `username=${change.username}`;
     if (!fitsIdSlot(username, USERNAME_ASSIGNMENT)) return null;
     params.username = username;
   }
+  if (change.password !== undefined) {
+    if (!isSecretHandle(change.password)) return null;
+    params.password = change.password;
+  }
   if (change.url !== undefined) {
     if (!assignableUrl(change.url)) return null;
     params.url = change.url;
   }
-  if (change.totp === "remove") {
-    const fields = json.dicts(item.fields);
-    const codeFields = fields.filter(isOneTimeField);
-    if (codeFields.length > MOST_CODE_FIELDS_REMOVED) return null;
-    for (const [at, field] of codeFields.entries()) {
-      const deletion = fieldDeletion(field, fields);
-      if (!deletion) return null;
-      params[REMOVE_CODE_SLOTS[at]!] = deletion;
-    }
+  if (change.totp !== undefined) {
+    const setting = newCode(change);
+    if (setting !== undefined && !isSecretHandle(setting)) return null;
+    const codes = codeChanges(json.dicts(item.fields), setting === undefined ? null : opName(CODE_FIELD_LABEL));
+    if (!codes) return null;
+    Object.assign(params, codes);
+    if (setting !== undefined) params.oneTimeCode = setting;
   }
   return params;
 }
@@ -92,8 +127,7 @@ export function assignments(item: JsonRecord, change: LoginChange): VerbParams |
 export async function editItem(ctx: CredentialContext, id: string, change: LoginChange): Promise<Item> {
   requireUnlocked(ctx);
   if (!isItemId(id)) throw CredentialError.notFound();
-  if (change.password !== undefined) throw CredentialError.failed("failed", { detail: PASSWORD_IN_APP });
-  if (change.totp !== undefined && change.totp !== "remove") throw CredentialError.failed("failed", { detail: CODE_IN_APP });
+  if (typeof change.password === "string" || typeof newCode(change) === "string") throw CredentialError.failed("failed", { detail: SECRET_NOT_SEALED });
   const stored = await revealedItem(ctx, id);
   const params = json.string(stored.id) === id ? assignments(stored, change) : null;
   if (!params) throw CredentialError.failed("cantPrepare");
@@ -107,6 +141,7 @@ export async function editItem(ctx: CredentialContext, id: string, change: Login
   const returned = json.dict(result.json);
   const saved = listedItem(returned);
   if (!returned || !saved) throw CredentialError.failed("savedNotReturned");
-  if (!holds(returned, change) && !holds(await revealedItem(ctx, id), change)) throw CredentialError.failed("notTaken");
+  const sealed = params.password !== undefined || params.oneTimeCode !== undefined;
+  if ((sealed || !holds(returned, change)) && !holds(await revealedItem(ctx, id), change, stored)) throw CredentialError.failed("notTaken");
   return change.username !== undefined ? { ...saved, username: change.username } : saved;
 }

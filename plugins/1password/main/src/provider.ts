@@ -2,6 +2,7 @@ import type { CredentialProvider } from "@ardia/plugin-sdk/credentials";
 import { connect, providerState, signOut } from "./accounts";
 import { editItem } from "./edits";
 import { listItems, reveal } from "./items";
+import { itemLink } from "./links";
 import { saveLogin } from "./saving";
 
 export const onePassword: CredentialProvider = {
@@ -13,4 +14,6 @@ export const onePassword: CredentialProvider = {
   reveal: (request, ctx) => reveal(ctx, request),
   save: ({ login }, ctx) => saveLogin(ctx, login),
   edit: ({ id, change }, ctx) => editItem(ctx, id, change),
+  addTotp: ({ id, uri }, ctx) => editItem(ctx, id, { totp: { set: uri } }),
+  link: ({ id }, ctx) => itemLink(ctx, id),
 };

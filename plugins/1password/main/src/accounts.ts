@@ -1,7 +1,7 @@
 import { CREDENTIAL_LIMITS, SignIn, json, verbs, type Choice, type CredentialContext, type JsonRecord, type ProblemCode, type ProviderState, type SignInOutcome, type VerbResult } from "@ardia/plugin-sdk/credentials";
 import { ACCOUNT_PREFERENCE, problemOf } from "./cli";
 
-export type Account = { reference: string; names: string[]; email?: string; url?: string };
+export type Account = { reference: string; names: string[]; uuid?: string; email?: string; url?: string };
 
 const ACCOUNT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9.@_-]{0,319}$/;
 const REFERENCE_KEYS = ["account_uuid", "shorthand", "url"];
@@ -12,9 +12,11 @@ function accountOf(record: JsonRecord): Account | null {
   if (!reference) return null;
   const email = json.string(record.email);
   const url = json.string(record.url);
+  const uuid = json.string(record.account_uuid);
   return {
     reference,
     names: NAME_KEYS.flatMap((key) => json.string(record[key]) ?? []),
+    ...(uuid ? { uuid } : {}),
     ...(email ? { email } : {}),
     ...(url ? { url } : {}),
   };

@@ -25,7 +25,16 @@
         "totp",
         "save",
         "edit",
+        "addTotp",
         "touchID"
+      ],
+      "passkeys": [
+        {
+          "via": "system"
+        }
+      ],
+      "appLinks": [
+        "https://start.1password.com/open/i?"
       ],
       "signIn": {
         "methods": [
@@ -249,6 +258,36 @@
               "mode": "lines"
             }
           },
+          "item.link": {
+            "argv": [
+              "item",
+              "get",
+              {
+                "slot": "id"
+              },
+              "--format",
+              "json",
+              {
+                "flag": "--account",
+                "slot": "account"
+              }
+            ],
+            "slots": {
+              "id": {
+                "type": "id",
+                "pattern": "item"
+              },
+              "account": {
+                "type": "id",
+                "pattern": "account",
+                "optional": true
+              }
+            },
+            "timeoutMs": 60000,
+            "output": {
+              "mode": "json"
+            }
+          },
           "item.create": {
             "argv": [
               "item",
@@ -298,6 +337,10 @@
                 "slot": "username"
               },
               {
+                "slot": "password",
+                "prefix": "password="
+              },
+              {
                 "slot": "removeCode1"
               },
               {
@@ -308,6 +351,10 @@
               },
               {
                 "slot": "removeCode4"
+              },
+              {
+                "slot": "oneTimeCode",
+                "prefix": "one-time password[otp]="
               },
               {
                 "flag": "--url",
@@ -327,6 +374,10 @@
               "username": {
                 "type": "id",
                 "pattern": "usernameAssignment",
+                "optional": true
+              },
+              "password": {
+                "type": "secret",
                 "optional": true
               },
               "removeCode1": {
@@ -349,6 +400,10 @@
                 "pattern": "fieldDeletion",
                 "optional": true
               },
+              "oneTimeCode": {
+                "type": "secret",
+                "optional": true
+              },
               "url": {
                 "type": "url",
                 "allowLocalHttp": true,
@@ -360,6 +415,7 @@
                 "optional": true
               }
             },
+            "argvSecrets": true,
             "timeoutMs": 60000,
             "output": {
               "mode": "json"

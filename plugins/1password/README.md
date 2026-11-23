@@ -1,7 +1,7 @@
 # 1Password
 
 Ardia's official 1Password plugin. It makes 1Password a source inside Ardia's password manager: Ardia fills logins
-and one-time codes from it, saves new logins into your personal vault, and updates usernames and sites and removes
+and one-time codes from it, saves new logins into your personal vault, and updates usernames, passwords, sites and
 codes. You approve Ardia in the 1Password app; there is no password to type.
 
 ## What it needs
@@ -17,20 +17,27 @@ create and edit, signout), builds every command itself, and never lets the plugi
 
 `op item edit` with a JSON template rewrites the whole item, and `op item edit --help` warns that "the passkey will be
 overwritten". `op`'s item JSON doesn't show passkeys, so the plugin can't tell which logins have one. Edits therefore
-never send a template: they use `op`'s assignment statements, which change only the fields they name.
+never send a template: one `op item edit` uses `op`'s assignment statements, which change only the fields they name.
 
 - A username is `username=<value>`, a site is `--url=<address>` (https, or http to this Mac), and removing a code is
-  `<label>[delete]` for each code field, with `.`, `=` and `\` in the label escaped by a backslash. A code field whose
-  label has brackets, is empty, starts with `-`, names a built-in field or matches another field's name or id is left
-  alone, and the edit doesn't run.
-- A new password or one-time code isn't changed from Ardia. `op` takes a new value only on its command line, where
-  other apps on the Mac can read it, or in a template, which deletes the passkey; Ardia says to change it in
-  1Password instead. That is also why the plugin doesn't offer to add codes.
+  `<label>[delete]` for each code field, with `.`, `=` and `\` in the label escaped by a backslash.
+- A password is `password=<value>` and a new code is `one-time password[otp]=<otpauth address>`. Code fields under
+  other names are deleted in the same edit. Ardia hands the plugin these values sealed, as secret handles, and puts
+  them on `op`'s command line itself, each as one argument behind its literal prefix (the manifest's `argvSecrets`);
+  the plugin only forwards the handle and never builds a value into a string. While `op` runs, other apps on the Mac can
+  read its arguments, which `op`'s help also warns about. Ardia refuses a value with a line break or NUL, or over 4096
+  bytes, and a password or code that reaches the plugin as plain text is left to the 1Password app.
+- A sealed password counts as saved when the login's password reads back changed; a sealed code when the login's one
+  code field reads back as a new otpauth address.
+- A code field whose label has brackets, is empty, starts with `-`, names a built-in field or matches another field's
+  name or id is left alone, and the edit doesn't run.
+- Every edit is read back. When one fails, Ardia offers Open in 1Password: the `link` handler returns the item's
+  private link, `https://start.1password.com/open/i?a=<account>&v=<vault>&i=<item>&h=<sign-in host>`, built from
+  `op account list` and the item's vault.
 - Saving a new login still uses a template, since the item it creates has no passkey yet.
 
-Ardia sets `OP_BIOMETRIC_UNLOCK_ENABLED=true` for every `op` command. Without it, `op` decides whether the app
-integration is on by reading 1Password's settings file, and macOS keeps apps other than Terminal out of 1Password's
-group container, so `op` run by Ardia would see no accounts and ask you to turn on an integration that is already on.
+Passkeys themselves go through macOS (`"passkeys": [{ "via": "system" }]`): the 1Password app answers them, so the
+plugin has no passkey handlers.
 
 With more than one 1Password account, sign-in asks which one to use and remembers it. An approval lasts 10 minutes
 for reads Ardia starts in the background; after that, 1Password asks again.

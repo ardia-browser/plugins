@@ -11,6 +11,7 @@ import {
   harness,
   listAll,
   listedEntry,
+  manifest,
   ok,
   opHoldingPasskey,
   revealedEntry,
@@ -24,6 +25,11 @@ const approve = ["vault list --format json --account=*", ok([])];
 const signedOut = { session: null, preferences: {} };
 const locked = { session: null, preferences: { account: ACCOUNT.account_uuid } };
 const start = { method: "app", step: "start", fields: {} };
+const sealed = (h, change) => ({
+  ...change,
+  ...(typeof change.password === "string" ? { password: h.secret(change.password) } : {}),
+  ...(change.totp && change.totp !== "remove" ? { totp: { set: h.secret(change.totp.set) } } : {}),
+});
 const failure = (answer) => (answer.ok ? null : answer.error);
 const problemOf = (answer) => failure(answer)?.problem ?? failure(answer)?.code;
 const notLaunched = () => {
@@ -574,21 +580,94 @@ describe("editing a login", () => {
     });
   }
 
-  for (const [name, change] of [
-    ["a new password", { password: NEW_PASSWORD }],
-    ["a new password with a new username", { username: "new@example.com", password: NEW_PASSWORD }],
-    ["a new code", { totp: { set: TOTP_URI } }],
+  const argumentsHolding = (launch, secret) => launch.argv.filter((argument) => argument.includes(secret));
+  const secretSeen = (launch, secret) => [launch.stdin.includes(secret), Object.values(launch.env).some((value) => value.includes(secret))];
+
+  for (const [name, stored, change, secret, element] of [
+    ["a new password", revealedEntry(), { password: NEW_PASSWORD }, NEW_PASSWORD, `password=${NEW_PASSWORD}`],
+    ["a new password with a new username", revealedEntry(), { username: "new@example.com", password: NEW_PASSWORD }, NEW_PASSWORD, `password=${NEW_PASSWORD}`],
+    ["a password with spaces, = and a tab", revealedEntry(), { password: "a b=c\td" }, "a b=c\td", "password=a b=c\td"],
+    ["a new code on a login without one", revealedEntry(), { totp: { set: TOTP_URI } }, TOTP_URI, `one-time password[otp]=${TOTP_URI}`],
+    ["a new code over 1Password's own code field", revealedEntry({ otp: { value: "otpauth://totp/Old?secret=GEZDGNBVGY3TQOJQ" } }), { totp: { set: TOTP_URI } }, TOTP_URI, `one-time password[otp]=${TOTP_URI}`],
   ]) {
-    test(`${name} is left to the 1Password app: nothing runs, so the secret never reaches op's arguments`, async () => {
+    test(`${name} goes only in its own argument, so the login keeps its passkey`, async () => {
+      const { vault, routes } = opHoldingPasskey(stored);
+      const { h, cli } = harness(routes);
+      const answer = await h.call("edit", { id: ITEM_ID, change: sealed(h, change) });
+      assert.equal(answer.ok, true, JSON.stringify(answer));
+      assert.equal(vault.passkey, true);
+      const launch = editLaunch(cli);
+      assert.deepEqual(argumentsHolding(launch, secret), [element]);
+      assert.deepEqual(secretSeen(launch, secret), [false, false]);
+      assert.equal(JSON.stringify(answer).includes(secret), false);
+      if (change.password !== undefined) assert.equal(vault.item.fields.find((field) => field.purpose === "PASSWORD").value, change.password);
+      if (change.totp) assert.deepEqual(vault.item.fields.filter((field) => field.type === "OTP").map((field) => [field.label, field.value]), [["one-time password", TOTP_URI]]);
+    });
+  }
+
+  test("a new code replaces code fields under other names in the same edit", async () => {
+    const { vault, routes } = opHoldingPasskey(revealedEntry({ extraFields: [codeField("backup code")] }));
+    const { h, cli } = harness(routes);
+    assert.equal((await h.call("edit", { id: ITEM_ID, change: sealed(h, { totp: { set: TOTP_URI } }) })).ok, true);
+    assert.deepEqual(editLaunch(cli).argv.slice(3, -2), ["backup code[delete]", `one-time password[otp]=${TOTP_URI}`]);
+    assert.equal(cli.seen.filter((entry) => entry.launch.verb === "item.assign").length, 1);
+    assert.deepEqual(vault.item.fields.filter((field) => field.type === "OTP").map((field) => field.label), ["one-time password"]);
+    assert.equal(vault.passkey, true);
+  });
+
+  for (const [name, extraFields] of [
+    ["a text field already named one-time password", [{ id: "note1", type: "STRING", label: "One-Time Password", value: "x" }]],
+    ["two fields named one-time password", [codeField("one-time password"), codeField("One-Time  Password", { id: "TOTP_second" })]],
+  ]) {
+    test(`a new code isn't added over ${name}`, async () => {
+      const { vault, routes } = opHoldingPasskey(revealedEntry({ extraFields }));
+      const { h, cli } = harness(routes);
+      assert.equal(problemOf(await h.call("edit", { id: ITEM_ID, change: sealed(h, { totp: { set: TOTP_URI } }) })), "cantPrepare");
+      assert.deepEqual([ranEdit(cli), vault.passkey], [false, true]);
+    });
+  }
+
+  for (const [name, change] of [
+    ["a password with a line break", { password: "pw\n--vault=x" }],
+    ["a password with a carriage return", { password: "pw\rx" }],
+    ["a password with NUL", { password: "pw\u0000x" }],
+    ["a password over 4096 bytes", { password: "é".repeat(2049) }],
+    ["a code address with a line break", { totp: { set: `${TOTP_URI}\nx` } }],
+  ]) {
+    test(`${name} is refused by Ardia and never reaches op`, async () => {
+      const { vault, routes } = opHoldingPasskey(revealedEntry());
+      const { h, cli } = harness(routes);
+      const answer = await h.call("edit", { id: ITEM_ID, change: sealed(h, change) });
+      assert.equal(answer.ok, false);
+      assert.deepEqual([ranEdit(cli), vault.passkey], [false, true]);
+    });
+  }
+
+  for (const [name, change] of [
+    ["a password", { password: NEW_PASSWORD }],
+    ["a code", { totp: { set: TOTP_URI } }],
+  ]) {
+    test(`${name} that arrives as plain text is left to the 1Password app and runs nothing`, async () => {
       const { vault, routes } = opHoldingPasskey(revealedEntry());
       const { h, cli } = harness(routes);
       const error = failure(await h.call("edit", { id: ITEM_ID, change }));
       assert.equal(error.problem, "failed");
-      assert.match(error.detail, /passkey/);
-      assert.match(error.detail, /in 1Password\.$/);
+      assert.match(error.detail, /Change it in 1Password\.$/);
       assert.deepEqual([cli.seen.length, vault.passkey], [0, true]);
     });
   }
+
+  test("a sealed password that comes back unchanged is notTaken", async () => {
+    const { h } = harness(editRoutes(revealedEntry(), revealedEntry()));
+    assert.equal(problemOf(await h.call("edit", { id: ITEM_ID, change: sealed(h, { password: NEW_PASSWORD }) })), "notTaken");
+  });
+
+  test("an op error that repeats the new password keeps it out of the error", async () => {
+    const { h } = harness([["item get*", ok(revealedEntry())], ["item edit*", (launch) => fail(`[ERROR] 2026/11/23 10:00:00 couldn't apply ${launch.argv.join(" ")}`)]]);
+    const answer = await h.call("edit", { id: ITEM_ID, change: sealed(h, { password: NEW_PASSWORD }) });
+    assert.equal(problemOf(answer), "failed");
+    assert.equal(JSON.stringify(answer).includes(NEW_PASSWORD), false);
+  });
 
   test("an address op can't take is refused before any edit, and http to this Mac is allowed", async () => {
     for (const url of ["http://intranet.example", "ftp://example.com", "https://user:pw@example.com", "https://a b.example", "-https://example.com"]) {
@@ -661,5 +740,118 @@ describe("editing a login", () => {
     const { h, cli } = harness([], locked);
     assert.deepEqual(failure(await h.call("edit", { id: ITEM_ID, change: { username: "new@example.com" } })), { code: "locked" });
     assert.equal(cli.seen.length, 0);
+  });
+});
+
+describe("adding a code", () => {
+  test("a login gains a code field by assignment, kept with its passkey", async () => {
+    const { vault, routes } = opHoldingPasskey(revealedEntry());
+    const { h, cli } = harness(routes);
+    assert.equal((await h.call("addTotp", { id: ITEM_ID, uri: h.secret(TOTP_URI) })).ok, true);
+    assert.equal(vault.passkey, true);
+    const launch = cli.seen.find((entry) => entry.launch.verb === "item.assign").launch;
+    assert.deepEqual(launch.argv, ["item", "edit", ITEM_ID, `one-time password[otp]=${TOTP_URI}`, "--format=json", "--account=ACCOUNTUUID1"]);
+    assert.equal(launch.stdin, "");
+  });
+
+  for (const [name, readBack] of [
+    ["no code field", revealedEntry()],
+    ["the old code", revealedEntry({ otp: { value: "otpauth://totp/Old?secret=GEZDGNBVGY3TQOJQ" } })],
+    ["a code field that isn't an otpauth address", revealedEntry({ otp: { value: "not a code" } })],
+  ]) {
+    test(`reading back ${name} is notTaken`, async () => {
+      let reads = 0;
+      const before = revealedEntry({ otp: { value: "otpauth://totp/Old?secret=GEZDGNBVGY3TQOJQ" } });
+      const { h } = harness([["item get*", () => ok(reads++ === 0 ? before : readBack)], ["item edit*", ok(readBack)]]);
+      assert.equal(problemOf(await h.call("addTotp", { id: ITEM_ID, uri: h.secret(TOTP_URI) })), "notTaken");
+    });
+  }
+
+  test("a code that arrives as plain text is left to the 1Password app", async () => {
+    const { h, cli } = harness([]);
+    assert.equal(problemOf(await h.call("addTotp", { id: ITEM_ID, uri: TOTP_URI })), "failed");
+    assert.equal(cli.seen.length, 0);
+  });
+});
+
+describe("opening a login in 1Password", () => {
+  const VAULT_ID = "vvvvvvvvvvvvvvvvvvvvvvvvvv";
+  const LINK = `https://start.1password.com/open/i?a=ACCOUNTUUID1&v=${VAULT_ID}&i=${ITEM_ID}&h=my.1password.com`;
+  const linkRoutes = (stored = revealedEntry()) => [oneAccount, ["item get*", ok(stored)]];
+
+  test("a private link names the account, vault, item and sign-in host", () => {
+    assert.equal(sdk.privateLink({ account: "ACCOUNTUUID1", vault: VAULT_ID, item: ITEM_ID, signInAddress: "my.1password.com" }), LINK);
+    assert.equal(sdk.privateLink({ account: "ACCOUNTUUID1", vault: VAULT_ID, item: ITEM_ID, signInAddress: "https://Team.1Password.EU/" }), LINK.replace("my.1password.com", "team.1password.eu"));
+  });
+
+  for (const [name, parts] of [
+    ["an account with a query character", { account: "ACCOUNT&x=1" }],
+    ["a vault with a query character", { vault: "vault&i=other" }],
+    ["an item that isn't an id", { item: "../x" }],
+    ["a sign-in host with a path", { signInAddress: "my.1password.com/evil" }],
+    ["a sign-in address over http", { signInAddress: "http://my.1password.com" }],
+    ["a sign-in host with a port", { signInAddress: "my.1password.com:8443" }],
+    ["no sign-in host", { signInAddress: "" }],
+  ]) {
+    test(`a private link isn't made from ${name}`, () => {
+      assert.equal(sdk.privateLink({ account: "ACCOUNTUUID1", vault: VAULT_ID, item: ITEM_ID, signInAddress: "my.1password.com", ...parts }), null);
+    });
+  }
+
+  test("link reads the item without revealing it and returns its private link", async () => {
+    const { h, cli } = harness(linkRoutes());
+    assert.deepEqual(await h.call("link", { id: ITEM_ID }), { ok: true, result: { url: LINK } });
+    const get = cli.seen.find((entry) => entry.launch.verb === "item.link").launch;
+    assert.deepEqual(get.argv, ["item", "get", ITEM_ID, "--format", "json", "--account=ACCOUNTUUID1"]);
+  });
+
+  for (const [name, error, change] of [
+    ["an op error", fail("[ERROR] 2026/11/23 10:00:00 something went wrong"), { password: NEW_PASSWORD }],
+    ["a change 1Password didn't keep", ok(revealedEntry()), { password: NEW_PASSWORD }],
+    ["a code 1Password didn't keep", ok(revealedEntry()), { totp: { set: TOTP_URI } }],
+  ]) {
+    test(`after ${name} the edit fails plainly and the login still opens in 1Password`, async () => {
+      const { h } = harness([oneAccount, ["item get*", ok(revealedEntry())], ["item edit*", error]]);
+      const answer = await h.call("edit", { id: ITEM_ID, change: sealed(h, change) });
+      assert.equal(answer.ok, false);
+      assert.ok(["failed", "notTaken"].includes(problemOf(answer)));
+      assert.deepEqual((await h.call("link", { id: ITEM_ID })).result, { url: LINK });
+    });
+  }
+
+  test("an item op returns under another id has no link", async () => {
+    const { h } = harness(linkRoutes(revealedEntry({ id: "someoneelse000000000000001" })));
+    assert.equal(problemOf(await h.call("link", { id: ITEM_ID })), "unreadable");
+  });
+
+  test("a bad id has no link and runs nothing", async () => {
+    const { h, cli } = harness([]);
+    assert.deepEqual(failure(await h.call("link", { id: "--vault=x" })), { code: "notFound" });
+    assert.equal(cli.seen.length, 0);
+  });
+});
+
+describe("the manifest", () => {
+  const contribution = () => sdk.readCredentialContribution(manifest);
+
+  test("passkeys go through the system route, with no passkeys capability or handlers", () => {
+    assert.deepEqual(contribution().passkeys, [{ via: "system" }]);
+    assert.equal(contribution().capabilities.includes("passkeys"), false);
+    assert.equal(sdk.onePassword.passkeys, undefined);
+  });
+
+  test("the private links the plugin makes are under a declared app link", () => {
+    const link = sdk.privateLink({ account: "ACCOUNTUUID1", vault: "vvvvvvvvvvvvvvvvvvvvvvvvvv", item: ITEM_ID, signInAddress: "my.1password.com" });
+    assert.ok(contribution().appLinks.some((prefix) => link.startsWith(prefix)));
+  });
+
+  test("only the assign verb puts secrets on argv, each behind a literal prefix", () => {
+    const verbs = contribution().cli.verbs;
+    const withSecrets = Object.entries(verbs).filter(([, verb]) => verb.argv.some((token) => typeof token === "object" && "prefix" in token));
+    assert.deepEqual(withSecrets.map(([id]) => id), ["item.assign"]);
+    assert.deepEqual(verbs["item.assign"].argv.filter((token) => typeof token === "object" && "prefix" in token), [
+      { slot: "password", prefix: "password=" },
+      { slot: "oneTimeCode", prefix: "one-time password[otp]=" },
+    ]);
   });
 });
