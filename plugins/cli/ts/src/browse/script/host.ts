@@ -15,7 +15,8 @@ export const MEMORY_POLL_MS = 200;
 const KEPT_ENV = ["TZ", "LANG", "LC_ALL", "LC_CTYPE", "LC_TIME", "LC_NUMERIC"];
 
 export type Exit = { type: "exit"; code: number | null; signal: string | null };
-export type RunnerEvent = RunnerOutbound | Exit;
+export type Fatal = { type: "fatal"; error: Error };
+export type RunnerEvent = RunnerOutbound | Exit | Fatal;
 
 function compiled(): boolean {
   return import.meta.url.includes("$bunfs") || import.meta.url.startsWith("file:///$bunfs");
@@ -73,7 +74,7 @@ export class Runner {
     this.child = Bun.spawn(command, {
       cwd: "/",
       env: runnerEnv(),
-      stdio: ["ignore", "ignore", "ignore"],
+      stdio: ["pipe", "ignore", "ignore"],
       serialization: "json",
       ipc: (message: unknown) => this.receive(message),
       onExit: (_child, code, signal) => this.exited(code, signal === null || signal === undefined ? null : String(signal)),
@@ -115,6 +116,10 @@ export class Runner {
     this.failedToStart?.(new BrowseError("the script's runner exited before it started", null, "script_failed"));
     this.failedToStart = null;
     this.push(this.exit);
+  }
+
+  inject(event: RunnerEvent): void {
+    this.push(event);
   }
 
   private push(event: RunnerEvent): void {
@@ -207,6 +212,7 @@ export class Gate {
   private readers = 0;
   private writer = false;
   private readonly queue: Waiter[] = [];
+  private closed = false;
   peak = 0;
 
   constructor(private readonly limit = READ_CONCURRENCY) {}
@@ -216,17 +222,24 @@ export class Gate {
   }
 
   async run<T>(exclusive: boolean, work: () => Promise<T>): Promise<T> {
+    if (this.closed) throw new Dropped();
     await new Promise<void>((resolve, reject) => {
       this.queue.push({ exclusive, resolve, reject });
       this.pump();
     });
     try {
+      if (this.closed) throw new Dropped();
       return await work();
     } finally {
       if (exclusive) this.writer = false;
       else this.readers -= 1;
       this.pump();
     }
+  }
+
+  close(): number {
+    this.closed = true;
+    return this.dropQueued();
   }
 
   dropQueued(): number {
@@ -253,3 +266,5 @@ export class Gate {
     }
   }
 }
+
+process.on("exit", dropSpare);

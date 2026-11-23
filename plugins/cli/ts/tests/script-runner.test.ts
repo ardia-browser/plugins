@@ -122,7 +122,7 @@ describe("the script runner", () => {
     expect((result?.["value"] as string[]).filter((line) => !line.endsWith(":own"))).toEqual([]);
   });
 
-  test("a confined process can't read files, write files, connect or run programs", () => {
+  test("a confined process can't read files, write files, connect, signal others or run programs", async () => {
     if (process.platform !== "darwin") return;
     const probe = `
       import { loadLibc, confineProcess } from ${JSON.stringify(path.resolve(import.meta.dir, "..", "src", "libc.ts"))};
@@ -135,12 +135,23 @@ describe("the script runner", () => {
         readEtc: () => fs.readFileSync("/etc/hosts"),
         write: () => fs.writeFileSync(${JSON.stringify(path.join(os.tmpdir(), `ardia-confined-${process.pid}`))}, "x"),
         spawn: () => Bun.spawnSync(["/bin/echo", "hi"]),
+        signal: () => process.kill(Number(process.env.ARDIA_SIGNAL_TARGET), "SIGTERM"),
       })) { try { run(); tries[name] = "allowed"; } catch (e) { tries[name] = "denied"; } }
       try { await fetch("http://127.0.0.1:9/"); tries.connect = "allowed"; } catch (e) { tries.connect = "denied"; }
       console.log(JSON.stringify(tries));
     `;
-    const done = spawnSync(process.execPath, ["-e", probe], { encoding: "utf8", timeout: 20_000 });
-    expect(JSON.parse(done.stdout.trim().split("\n").at(-1) as string)).toEqual({ confined: 1, readHome: "denied", readEtc: "denied", write: "denied", spawn: "denied", connect: "denied" });
+    const target = Bun.spawn(["/bin/sleep", "30"], { stdio: ["ignore", "ignore", "ignore"] });
+    const done = spawnSync(process.execPath, ["-e", probe], { encoding: "utf8", timeout: 20_000, env: { ...process.env, ARDIA_SIGNAL_TARGET: String(target.pid) } });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    let targetAlive = true;
+    try {
+      process.kill(target.pid, 0);
+    } catch {
+      targetAlive = false;
+    }
+    target.kill("SIGKILL");
+    expect(targetAlive).toBe(true);
+    expect(JSON.parse(done.stdout.trim().split("\n").at(-1) as string)).toEqual({ confined: 1, readHome: "denied", readEtc: "denied", write: "denied", spawn: "denied", signal: "denied", connect: "denied" });
   });
 
   test("errors carry the script's own line numbers", async () => {
@@ -213,6 +224,33 @@ describe("the script runner", () => {
     const outcome = await runScript("const keep = []; for (;;) keep.push(new Array(1e6).fill(1));", DEFAULT_ANSWER, (runner) => runner.watchMemory(256 * 1024 * 1024, 50));
     expect(outcome.exit?.type).toBe("exit");
     expect(outcome.runner.overMemory).toBe(true);
+  });
+
+  test("a busy runner dies with the daemon that started it", async () => {
+    const parent = `
+      import ${JSON.stringify(path.resolve(import.meta.dir, "libc-loaded.ts"))};
+      import { Runner, whenReady } from ${JSON.stringify(path.resolve(import.meta.dir, "..", "src", "browse", "script", "host.ts"))};
+      const runner = new Runner();
+      await whenReady(runner);
+      runner.send({ type: "start", source: "for (;;) {}", state: "{}", readBatch: 100, stateLimit: 1 << 24 });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      console.log(runner.child.pid);
+      process.exit(0);
+    `;
+    const done = spawnSync(process.execPath, ["-e", parent], { encoding: "utf8", timeout: 20_000 });
+    const pid = Number(done.stdout.trim().split("\n").at(-1));
+    expect(pid).toBeGreaterThan(0);
+    let alive = true;
+    for (let tries = 0; tries < 40 && alive; tries += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      try {
+        process.kill(pid, 0);
+      } catch {
+        alive = false;
+      }
+    }
+    if (alive) process.kill(pid, "SIGKILL");
+    expect(alive).toBe(false);
   });
 
   test("a busy loop is killed and the runner exits", async () => {

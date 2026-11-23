@@ -88,6 +88,28 @@ describe("the script's call gate", () => {
   });
 });
 
+describe("a closed gate", () => {
+  test("refuses new calls and drops admitted ones that hadn't started", async () => {
+    const gate = new Gate(1);
+    const hold = deferred();
+    const ran: string[] = [];
+    const busy = gate.run(false, async () => {
+      await hold.promise;
+      ran.push("busy");
+    });
+    const waiting = gate.run(false, async () => {
+      ran.push("waiting");
+    });
+    await tick();
+    expect(gate.close()).toBe(1);
+    await expect(gate.run(true, async () => ran.push("late"))).rejects.toBeInstanceOf(Dropped);
+    hold.resolve();
+    await busy;
+    await expect(waiting).rejects.toBeInstanceOf(Dropped);
+    expect(ran).toEqual(["busy"]);
+  });
+});
+
 function evaluateWith(expression: string, document: unknown): unknown {
   return new Function("document", `return (${expression});`)(document);
 }

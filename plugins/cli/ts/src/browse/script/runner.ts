@@ -1,5 +1,5 @@
 import vm from "node:vm";
-import { confineProcess, loadLibc } from "../../libc.ts";
+import { confineProcess, loadLibc, watchLifeline } from "../../libc.ts";
 import PRELUDE from "./prelude.js.txt" with { type: "text" };
 
 export { SCRIPT_RUNNER_ARGUMENT } from "../../flush-argument.ts";
@@ -196,6 +196,7 @@ export async function runnerMain(libcFile: string): Promise<number> {
   let confined = 0;
   try {
     loadLibc(libcFile);
+    watchLifeline(0);
     confined = confineProcess();
   } catch {
     confined = -1;

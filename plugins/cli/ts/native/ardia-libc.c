@@ -1049,7 +1049,8 @@ void sandbox_free_error(char *errorbuf);
 static const char CONFINED_PROFILE[] =
     "(version 1)(allow default)(deny network*)(deny file-write*)(deny file-read* (subpath \"/\"))"
     "(allow file-read* (subpath \"/usr\") (subpath \"/System\") (literal \"/dev/null\") (literal \"/dev/urandom\") (literal \"/dev/random\"))"
-    "(deny process-exec*)(deny process-fork)(deny mach-lookup)(deny ipc-posix*)(deny system-socket)(deny iokit-open*)";
+    "(deny process-exec*)(deny process-fork)(deny mach-lookup)(deny ipc-posix*)(deny system-socket)(deny iokit-open*)"
+    "(deny signal)(allow signal (target self))";
 
 static int confine(void) {
   char *error = NULL;
