@@ -5,6 +5,7 @@ import http from "node:http";
 import net from "node:net";
 import path from "node:path";
 import { parseConfig } from "../../src/browse/daemon/config.ts";
+import { DEVTOOLS_ENDPOINT_METHOD } from "../../src/browse/endpoint.ts";
 import { Daemon } from "../../src/browse/daemon/server.ts";
 import { spawnDaemon } from "../../src/browse/daemon/spawn.ts";
 import { State } from "../../src/browse/state/state.ts";
@@ -332,7 +333,12 @@ describe.skipIf(!CHROME)("caller attribution against headless Chrome for Testing
           const message = JSON.parse(buffer.slice(0, at));
           buffer = buffer.slice(at + 1);
           heard.push(message);
-          const result = message.method === "hello" ? { app: "Ardia", protocol: 4 } : { ok: true };
+          const result =
+            message.method === "hello"
+              ? { app: "Ardia", protocol: 4 }
+              : message.method === DEVTOOLS_ENDPOINT_METHOD
+                ? { port: CHROME_PORT, token: "t0k3n-t0k3n-t0k3n-t0k3n", generation: 1 }
+                : { ok: true };
           socket.write(`${JSON.stringify({ id: message.id, result })}\n`);
         }
       });
@@ -354,11 +360,10 @@ describe.skipIf(!CHROME)("caller attribution against headless Chrome for Testing
     await ask(found.data, daemon.key, ["get", "title"], {}, { caller: { name: "second-agent" } });
     await ask(found.data, daemon.key, ["close"], {}, { caller: { name: "second-agent" } });
     await running;
-    const said = heard.map((message) => {
-      const fields = message as { method: string; params?: { caller?: { name: string } } };
-      return fields.method === "hello" ? `hello:${fields.params?.caller?.name}` : fields.method;
-    });
-    expect(said).toEqual(["hello:first-agent", "caller", "hello:second-agent", "caller"]);
+    const messages = heard as { method: string; params?: { caller?: { name: string } } }[];
+    const announced = messages.flatMap((message, index) => (message.method === "caller" ? [`hello:${messages[index - 1]?.params?.caller?.name}`, "caller"] : []));
+    expect(announced).toEqual(["hello:first-agent", "caller", "hello:second-agent", "caller"]);
+    expect(messages.some((message) => message.method === DEVTOOLS_ENDPOINT_METHOD)).toBe(true);
   });
 });
 
