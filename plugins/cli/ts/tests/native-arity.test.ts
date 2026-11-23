@@ -22,6 +22,7 @@ test("every native call refuses arguments it doesn't take", () => {
   assert.equal(native.connectAt?.(0, "x", 10, 1), -EINVAL);
   assert.equal(native.socketInfoAt?.(0, "x", 1), -EINVAL);
   assert.equal(native.strerror?.(1, 2), -EINVAL);
+  assert.equal(native.writeSome?.(1, Buffer.alloc(0), 0), -EINVAL);
   assert.equal(native.peerUid?.(), -EINVAL);
 });
 

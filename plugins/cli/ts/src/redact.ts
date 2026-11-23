@@ -213,6 +213,7 @@ function widened(text: string, nodes: readonly JsonNode[], longestFirst: readonl
 function maskedDocument(whole: string, longestFirst: readonly string[]): string {
   const lead = whole.length - whole.trimStart().length;
   const core = whole.trim();
+  if (!/^[{["]/u.test(core)) return replaceSecrets(whole, longestFirst);
   const before = whole.slice(0, lead);
   const after = whole.slice(lead + core.length);
   const out = before + maskedCore(core, longestFirst) + after;
@@ -224,8 +225,7 @@ function maskedDocument(whole: string, longestFirst: readonly string[]): string 
     }
     return false;
   });
-  if (!straddles) return out;
-  return /^[{["]/u.test(core) ? before + QUOTED_MASK + after : replaceSecrets(whole, longestFirst);
+  return straddles ? before + QUOTED_MASK + after : out;
 }
 
 function maskedCore(text: string, longestFirst: readonly string[]): string {
