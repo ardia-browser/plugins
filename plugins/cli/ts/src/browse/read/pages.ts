@@ -67,6 +67,7 @@ export function flags(): Record<string, "bool" | "value" | "multi"> {
     "--fields": "value",
     "--where": "multi",
     "--block": "value",
+    "--nav": "bool",
   };
 }
 
@@ -229,6 +230,13 @@ export function footer(limit: number, cutAny: boolean, hidden: number, wanted: n
   if (hidden) parts.push(`+${hidden} page${hidden !== 1 ? "s" : ""} not shown`);
   const where = saved ? ` (full output: ${saved})` : "";
   return `[${parts.join("; ")}. Narrow it: -s <css> (one region per page), a tighter --links pattern, or --limit <n>; or --max-output ${wanted} for every line${where}]`;
+}
+
+export function noteNav(got: Record<string, unknown>): void {
+  const sections = Number(got["navSections"]) || 0;
+  if (!sections) return;
+  add("read_nav_hidden", sections);
+  add("read_nav_chars_hidden", Number(got["navChars"]) || 0);
 }
 
 export function noteVirtualized(...texts: unknown[]): void {
@@ -488,16 +496,16 @@ export async function goto(page: Page, url: string, timeout: number, keepPartial
   return null;
 }
 
-export async function extractFilled(page: Page, selector: string | null, timeout: number): Promise<Record<string, unknown>> {
+export async function extractFilled(page: Page, selector: string | null, timeout: number, nav = false): Promise<Record<string, unknown>> {
   const deadline = monotonic() + Math.min(THIN_WAIT, timeout);
-  let got = record(await page.call(READPAGES_EXTRACT, [selector], { frame: page.mainFrame, read: true }));
+  let got = record(await page.call(READPAGES_EXTRACT, [selector, nav], { frame: page.mainFrame, read: true }));
   if ((Number(got["status"]) || 0) >= 400 || botCheck(String(got["title"] || ""), String(got["text"] || ""), got["status"], false)) return got;
   let waited = false;
   while (thin(got, selector) && monotonic() + THIN_POLL < deadline) {
     waited = true;
     await sleep(THIN_POLL);
     try {
-      got = record(await page.call(READPAGES_EXTRACT, [selector], { frame: page.mainFrame, read: true }));
+      got = record(await page.call(READPAGES_EXTRACT, [selector, nav], { frame: page.mainFrame, read: true }));
     } catch (error) {
       if (!(error instanceof BrowseError) || !["document_changed", "page_navigated", "frame_gone"].includes(error.code ?? "")) throw error;
       await settle(page, Math.min(deadline, monotonic() + SETTLE_LIMIT));
@@ -507,16 +515,16 @@ export async function extractFilled(page: Page, selector: string | null, timeout
   return got;
 }
 
-async function extractAfterDetach(page: Page, url: string, selector: string | null, timeout: number): Promise<Record<string, unknown>> {
+async function extractAfterDetach(page: Page, url: string, selector: string | null, timeout: number, nav: boolean): Promise<Record<string, unknown>> {
   const loaded = page.loader(page.mainFrame);
   try {
-    return await extractFilled(page, selector, timeout);
+    return await extractFilled(page, selector, timeout, nav);
   } catch (error) {
     if (!(error instanceof BrowseError) || error instanceof ConnectionLost || error.code !== "tab_detached") throw error;
     await page.state.reattach(page, url);
     await page.refreshFrames();
     if (page.loader(page.mainFrame) !== loaded) throw error;
-    return extractFilled(page, selector, timeout);
+    return extractFilled(page, selector, timeout, nav);
   }
 }
 
@@ -531,13 +539,14 @@ export async function readIn(page: Page, url: string, selector: string | null, t
       if (selector) out["note"] = `${url} is a PDF, so -s ${selector} doesn't apply; this is the whole document's text`;
       return out;
     }
-    got = await extractAfterDetach(page, url, selector, timeout);
+    got = await extractAfterDetach(page, url, selector, timeout, Boolean(options["nav"]));
   } catch (error) {
     if (!quiet(error) || (error instanceof OutcomeUnknown && page.state.targetInfos.has(page.targetId))) throw error;
     out["error"] = (error as BrowseError).text;
     return out;
   }
   Object.assign(out, { finalUrl: page.url, title: got["title"] || "", status: got["status"] ?? null, readAt: readAt(), text: postProcess(String(got["text"] || ""), options) });
+  noteNav(got);
   if (got["scope"]) {
     out["scope"] = got["scope"];
     flag("read_scope_shown", true);

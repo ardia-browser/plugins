@@ -24,7 +24,8 @@ A session starts with no tab: run one of these first. `snapshot -i` lists what y
 
 - This page's text: `ardia browse read`, or `read -s <sel>`. Other pages, any number, in one call:
   `read <url> <url> …`, or every link here whose URL matches: `read --links /p/ -s table.specs` (`--list` or
-  `links <pattern>`: just the URLs). They load in background tabs, logged in.
+  `links <pattern>`: just the URLs). They load in background tabs, logged in. Site menus print as
+  one `[navigation hidden, …]` line; `read --nav` shows them.
 - A page's data: `read --data` (JSON it embeds), `network requests --reload --type xhr,fetch`
   (JSON it loads); `read --http <url>` gets it.
 - A long or scroll-loaded list (`1–40 of 200`): `read --scroll` (the main list, or `-s <list>`; `--match <text>`).
