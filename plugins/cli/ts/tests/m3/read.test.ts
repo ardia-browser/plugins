@@ -393,6 +393,51 @@ describe("ReadingTabs", () => {
     }
   });
 
+  test("test_links_from_urls_keep_other_listings_when_one_fails_and_skip_named_listings (plugins#74)", async () => {
+    const run = scene();
+    const previous = pages.readers.linksIn;
+    const asked: boolean[] = [];
+    pages.readers.linksIn = async (_page, listing, _pattern, _timeout, wanted) => {
+      if (listing.endsWith("/down")) throw new BrowseError("couldn't load it: net::ERR_CONNECTION_REFUSED", null, "navigation_failed");
+      const found = listing.endsWith("/catalog/a") ? ["http://s/catalog/b", "http://s/catalog/p1"] : ["http://s/catalog/a", "http://s/catalog/p2"];
+      asked.push(wanted(["http://s/catalog/b"], listing));
+      return found;
+    };
+    try {
+      const listing = await pages.run(run.ctx, { links: "/catalog/", list: true }, ["http://s/catalog/a", "http://s/down", "http://s/catalog/b"]);
+      expect((listing.data as Record<string, unknown>)["links"]).toEqual(["http://s/catalog/p1", "http://s/catalog/p2"]);
+      expect(listing.failed).toBe(true);
+      expect(listing.text).toContain("couldn't list the links on http://s/down: couldn't load it: net::ERR_CONNECTION_REFUSED");
+      expect(asked).toEqual([false, false]);
+      expect([...run.closed].sort()).toEqual([...run.created].sort());
+      pages.readers.linksIn = async () => {
+        throw new BrowseError("couldn't load it: net::ERR_NAME_NOT_RESOLVED", null, "navigation_failed");
+      };
+      await expect(pages.run(run.ctx, { links: "/p/", list: true }, ["http://s/x"])).rejects.toMatchObject({ code: "navigation_failed" });
+    } finally {
+      pages.readers.linksIn = previous;
+      run.restore();
+    }
+  });
+
+  test("test_links_from_urls_read_twenty_by_default_whatever_the_listing_count (plugins#74)", async () => {
+    const run = scene();
+    const previous = pages.readers.linksIn;
+    pages.readers.linksIn = async () => Array.from({ length: 26 }, (_, n) => `http://s/p/${n}`);
+    try {
+      const listings = Array.from({ length: 25 }, (_, n) => `http://s/list/${n}`);
+      run.visits.length = 0;
+      await pages.run(run.ctx, { links: "/p/" }, listings);
+      expect(run.visits.length).toBe(20);
+      run.visits.length = 0;
+      await pages.run(run.ctx, { links: "/p/", limit: "26" }, listings.slice(0, 1));
+      expect(run.visits.length).toBe(26);
+    } finally {
+      pages.readers.linksIn = previous;
+      run.restore();
+    }
+  });
+
   test("test_a_cancelled_read_still_closes_its_tabs", async () => {
     const run = scene(5);
     try {

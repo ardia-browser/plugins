@@ -305,18 +305,33 @@ async function linksOn(page: Page, frame: string): Promise<string[]> {
   return distinctLinks(Array.isArray(got) ? got.map(String) : []);
 }
 
-export async function linksIn(page: Page, listing: string, pattern: string, timeout: number): Promise<string[]> {
+const RETRY_CODES = ["document_changed", "page_navigated", "frame_gone"];
+
+async function linksNow(page: Page, until: number): Promise<string[]> {
+  try {
+    return await linksOn(page, page.mainFrame as string);
+  } catch (error) {
+    if (!(error instanceof BrowseError) || error instanceof ConnectionLost || !RETRY_CODES.includes(error.code ?? "")) throw error;
+    await settle(page, Math.min(until, monotonic() + SETTLE_LIMIT));
+    await page.refreshFrames();
+    return [];
+  }
+}
+
+export async function linksIn(page: Page, listing: string, pattern: string, timeout: number, wanted: (found: string[], landed: string) => boolean): Promise<string[]> {
   await goto(page, listing, timeout, true);
-  let found = await linksOn(page, page.mainFrame as string);
   const deadline = monotonic() + Math.min(THIN_WAIT, timeout);
-  while (pickLinks(found, pattern, page.url).length === 0 && monotonic() + THIN_POLL < deadline) {
+  let found = await linksNow(page, deadline);
+  while (!wanted(found, page.url || listing) && monotonic() + THIN_POLL < deadline) {
     await sleep(THIN_POLL);
-    found = await linksOn(page, page.mainFrame as string);
+    found = await linksNow(page, deadline);
   }
   return found;
 }
 
-export async function collectLinksFrom(ctx: Ctx, listings: readonly string[], pattern: string, timeout: number): Promise<[string, string[], string[]]> {
+export type ListingFailure = { url: string; error: string };
+
+export async function collectLinksFrom(ctx: Ctx, listings: readonly string[], pattern: string, timeout: number): Promise<[string, string[], string[], ListingFailure[]]> {
   const state = ctx.state;
   await state.connect();
   await temptabs.sweep(state);
@@ -324,20 +339,32 @@ export async function collectLinksFrom(ctx: Ctx, listings: readonly string[], pa
   const links: string[] = [];
   const picked: string[] = [];
   const sources: string[] = [];
+  const failures: ListingFailure[] = [];
+  const skipped = new Set(listings.map(canonicalLink));
+  const keep = (found: readonly string[], landed: string) => pickLinks(found, pattern, landed).filter((url) => !skipped.has(url));
   try {
-    const page = await openReader(ctx, opened);
+    let page: Page | null = null;
     for (const listing of listings) {
-      const found = await readers.linksIn(page, listing, pattern, timeout);
+      if (page === null || page.sessionId === null) page = await openReader(ctx, opened);
+      let found: string[];
+      try {
+        found = await readers.linksIn(page, listing, pattern, timeout, (now, landed) => keep(now, landed).length > 0);
+      } catch (error) {
+        if (!quiet(error) || error instanceof ConnectionLost || (error instanceof OutcomeUnknown && state.targetInfos.has(page.targetId))) throw error;
+        failures.push({ url: listing, error: (error as BrowseError).text });
+        continue;
+      }
       const landed = page.url || listing;
+      skipped.add(canonicalLink(landed));
       sources.push(landed);
       for (const url of found) if (!links.includes(url)) links.push(url);
-      for (const url of pickLinks(found, pattern, landed)) if (!picked.includes(url) && !listings.includes(url)) picked.push(url);
+      for (const url of keep(found, landed)) if (!picked.includes(url)) picked.push(url);
     }
   } finally {
     await temptabs.release(state, opened);
   }
   flag("read_links_from_url", true);
-  return [sources.join(", "), links, picked];
+  return [sources.join(", ") || listings.join(", "), links, picked.filter((url) => !skipped.has(url)), failures];
 }
 
 export async function openReader(ctx: Ctx, opened: string[]): Promise<Page> {
@@ -625,18 +652,30 @@ export async function run(ctx: Ctx, options: Options, positional: string[]): Pro
     base = page.url;
   }
   let urls = wantedUrls(options, positional, ctx.stdin, base);
-  const named = urls.length;
+  let named = urls.length;
   let dataExtra: Record<string, unknown> = {};
+  let listingNote = "";
+  let listingFailed = false;
   if (options["links"] !== undefined) {
     const pattern = options["links"] as string;
-    const [source, links, picked] = urls.length > 0 ? await collectLinksFrom(ctx, urls, pattern, timeout) : await collectLinks(ctx, pattern);
-    if (picked.length === 0) throw new BrowseError(noLinksMessage(pattern, source, links), { links: links.length }, "no_links");
-    dataExtra = { listing: source, matched: picked.length };
+    const listed = urls.length > 0;
+    const [source, links, picked, failures] = listed ? await collectLinksFrom(ctx, urls, pattern, timeout) : [...(await collectLinks(ctx, pattern)), [] as ListingFailure[]];
+    const failed = failures.map((failure) => `[couldn't list the links on ${failure.url}: ${failure.error}]`).join("\n");
+    if (picked.length === 0) {
+      if (failures.length === urls.length && failures.length > 0) throw new BrowseError(failed.replaceAll(/^\[|\]$/gmu, ""), { failed: failures.length }, "navigation_failed");
+      throw new BrowseError([noLinksMessage(pattern, source, links), failed].filter((part) => part).join("\n"), { links: links.length }, "no_links");
+    }
+    dataExtra = { listing: source, matched: picked.length, ...(failures.length ? { failedListings: failures } : {}) };
+    listingNote = failed;
+    listingFailed = failures.length > 0;
+    if (listed && options["limit"] === undefined) named = 0;
     urls = picked;
     if (options["list"]) {
       const shown = options["limit"] !== undefined ? picked.slice(0, limit) : picked;
-      const text = shown.join("\n") + (shown.length < picked.length ? `\n${limitNote(picked.length, limit, "--limit")}` : "");
-      return new Result({ links: shown, matched: picked.length, listing: source }, text, true);
+      const text = [shown.join("\n") + (shown.length < picked.length ? `\n${limitNote(picked.length, limit, "--limit")}` : ""), failed].filter((part) => part).join("\n");
+      const listing = new Result({ links: shown, matched: picked.length, listing: source, ...(failures.length ? { failedListings: failures } : {}) }, text, true);
+      listing.failed = failures.length > 0;
+      return listing;
     }
   } else if (options["list"]) throw new Usage("--list goes with --links <pattern>: it prints the links that read would visit");
   if (urls.length === 0) throw new Usage("Usage: ardia browse read <url>... [--stdin] [--links <pattern>] [-s <selector>] [--http]");
@@ -648,5 +687,7 @@ export async function run(ctx: Ctx, options: Options, positional: string[]): Pro
     if (selector) throw new Usage("-s needs the browser's DOM; drop --http to read the pages in Ardia");
     records = await readHttp(urls, options);
   } else records = await readTabs(ctx, urls, selector, timeout, options);
-  return resultFor(records, options, ctx.options, extra, dataExtra);
+  const result = resultFor(records, options, ctx.options, [extra, listingNote].filter((part) => part).join("\n"), dataExtra);
+  if (listingFailed) result.failed = true;
+  return result;
 }

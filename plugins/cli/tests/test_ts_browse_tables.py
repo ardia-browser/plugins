@@ -153,6 +153,8 @@ TS_HELP_ADDITIONS = (
      "released Ardia allows yet: it fails with policy_refused).\n"),
     ("read", "--links <pattern> reads every link on the session's tab whose URL contains the\npattern (* matches anything), in page order; --list only prints those links.",
      "--links <pattern> reads every link whose URL contains the pattern (* matches\nanything), in page order, from each URL you name (opened in a background tab, not read itself), else from the session's\ntab; --list only prints those links."),
+    ("read", "Every URL you name is read (up to 100);\n--links finds at mos",
+     "Without --links, every URL you name is read (up to 100);\n--links finds at mos"),
 )
 
 
