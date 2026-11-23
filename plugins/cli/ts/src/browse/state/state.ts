@@ -264,7 +264,6 @@ export class State extends Refs implements temptabs.TempTabState {
       }
       try {
         await untilCancelled(pending);
-        return;
       } catch (error) {
         if (!(error instanceof Cancelled) || currentSignal()?.aborted) throw error;
       }

@@ -45,6 +45,26 @@ describe("concurrent connects share one attempt", () => {
     expect(state.lost).toBe(false);
   });
 
+  test("a caller that waited checks the connection again, since a disconnect can land as the attempt ends", async () => {
+    const made: Opening[] = [];
+    const state = freshState();
+    state.makeBrowser = () => {
+      const browser = new Opening();
+      made.push(browser);
+      return browser as never;
+    };
+    const first = state.connect();
+    const shared = (state as unknown as { connecting: Promise<void> }).connecting;
+    void shared.then(() => {
+      (state as unknown as { browser: unknown }).browser = null;
+    });
+    const second = state.connect();
+    await first;
+    await second;
+    expect(state.connected).toBe(true);
+    expect(made).toHaveLength(2);
+  });
+
   test("a caller waiting on an attempt someone else cancelled connects on its own", async () => {
     const stop = new AbortController();
     const made: Opening[] = [];
