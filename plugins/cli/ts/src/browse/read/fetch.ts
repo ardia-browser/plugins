@@ -175,10 +175,11 @@ export async function fetchUrl(url: string, timeout: number, accept = ACCEPT, bi
       let target = requested;
       let landed = url;
       for (let hop = 0; ; hop += 1) {
-        if (guard !== null && !(await untilCancelled(guard.check(target)))) throw new UnsafeAddress(target);
+        const pinned = guard === null ? null : await untilCancelled(guard.check(target));
+        if (guard !== null && pinned === null) throw new UnsafeAddress(target);
         response = await untilCancelled(
-          guard !== null
-            ? guard.request(target, { headers: { Accept: accept, "User-Agent": USER_AGENT }, signal: controller.signal, ca })
+          guard !== null && pinned !== null
+            ? guard.request(pinned, { headers: { Accept: accept, "User-Agent": USER_AGENT }, signal: controller.signal, ca })
             : fetch(target, {
                 headers: { Accept: accept, "User-Agent": USER_AGENT },
                 redirect: "manual",

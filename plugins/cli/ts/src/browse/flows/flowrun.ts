@@ -247,10 +247,10 @@ function liveDriver(ctx: Ctx): Driver {
 
 export const driver: { live: (ctx: Ctx) => Driver } = { live: liveDriver };
 
-export async function replayFlow(ctx: Ctx, root: string, flow: Json, values: Record<string, string>): Promise<Result> {
+export async function replayFlow(ctx: Ctx, root: string, flow: Json, values: Record<string, string>, confirmed = false): Promise<Result> {
   const secrets = flow["params"].filter((param: Json) => param["source"] === "secret").map((param: Json) => values[param["name"]] ?? "").filter((value: string) => value);
   const steps: ReplayStep[] = flow["steps"].map((step: Json) => ({ seq: step["seq"], action: step["action"] ?? null, command: step["command"] ?? null }));
-  const report = await replay(driver.live(ctx), { name: flow["name"], site: flow["site"] }, steps, values, secrets);
+  const report = await replay(driver.live(ctx), { name: flow["name"], site: flow["site"] }, steps, values, secrets, undefined, { escape: confirmed });
   const used = Object.fromEntries(Object.entries(values).filter(([name]) => !flow["params"].some((param: Json) => param["name"] === name && param["source"] === "secret")));
   report.episodes = report.episodes.map((episode) => scrubbed({ ...episode, values: used }, secrets));
   try {
@@ -291,7 +291,7 @@ export async function run(ctx: Ctx, root: string, flow: Json, options: Record<st
   }
   if (replaying) {
     if (options["replay"] && !flow["steps"].some((step: Json) => step["action"])) throw new Usage(`${flow["name"]} keeps no page actions to replay; save it again with \`flow save --actions\``);
-    return replayFlow(ctx, root, flow, values);
+    return replayFlow(ctx, root, flow, values, Boolean(options["yes"]));
   }
   const shape = shaping.parseShape(options["fields"] as string | undefined, options["where"] as string[] | undefined, options["limit"] as string | undefined);
   const timeout = options["timeout"] ? secondsOf(options["timeout"] as string) : RUN_TIMEOUT;

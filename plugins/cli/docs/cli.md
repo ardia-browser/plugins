@@ -1170,7 +1170,7 @@ plain rule, and what a rule can't fix is kept as structured data for whoever fix
   `--yes` (`flow_writes`) whenever a step does more than open, wait, scroll, hover, focus or switch frames, whatever
   the file's `writes` says. Each element step tries its candidates in rank order, each only when it matches exactly
   one element (`get count`, for every locator a command resolves itself, role selectors for press and submit
-  included; several is `ambiguous` and skipped), then presses Escape once (a stray
+  included; several is `ambiguous` and skipped), then, on a run confirmed with `--yes`, presses Escape once (a stray
   menu or popover) and tries them again, then finds the element by role and name (`find role <role> <action> --name
   <name> --exact`, so several matches never pick one). An answer of unknown outcome (`outcome_unknown`), a lost
   connection, a closed tab or a policy refusal stops at once and is never retried, the Escape press included. A step every tier misses stops the
@@ -1206,19 +1206,21 @@ plain rule, and what a rule can't fix is kept as structured data for whoever fix
 
 `ardia browse record [--save <name>] [--timeout 2m] [--idle 20s] [--here] [--description text]` watches the tab the
 user is on (the session's with `--here`) and turns what they do into a version 2 action flow; `record start|stop|
-restart` is still the video recorder. It adds a `Runtime.addBinding` and a `Page.addScriptToEvaluateOnNewDocument`
-script in an isolated world of its own (`ardia-record`), so it sees each new document's events without the page seeing
-it, and removes both and its listeners when it stops: after `--timeout` (2 minutes, at most 10), after `--idle` quiet
-seconds once something was done, or when the tab closes. Only trusted events count. A click, a change of a field or a
+restart` is still the video recorder. It runs entirely in ardia's own isolated page world, the one every command already uses, so it needs no
+`Runtime.addBinding` or named new-document world and works on an Ardia whose token policy refuses those: each
+document gets the listeners on the first poll, they queue what happens, the command drains every frame's queue
+every 0.1 s, and stopping removes the listeners and drains what's left, even if the command was interrupted. When a
+page hides for a navigation (a click on a link or a submit button), events the poll hasn't read yet are handed to
+the next document through one `sessionStorage` key holding a token for this recording, read and removed on that
+document's first poll; a key from another recording is dropped, and stopping removes it. It stops after `--timeout`
+(2 minutes, at most 10), after `--idle` quiet seconds once something was done, or when the tab closes. Only trusted events count. A click, a change of a field or a
 list, Enter or Escape and a form being sent are kept; a navigation within 2.5 s of one of them is its result, and one
 after that is an `open` step. Each element is described where it is (role, accessible name, `aria-label`,
 `placeholder`, `name`, test id, text, a CSS path checked to be unique, an XPath), never by a snapshot ref; a password
 field sends no value, and neither does one that ever looked secret while being typed in (a password, one-time
 code, card or PIN field, by type, autocomplete, name or label), even if it turns into plain text before it's left.
 Typed text a flow can't keep as an example (spaces, punctuation) stays a param with no example. A recorded flow
-always has `writes: true`, so its runs need `--yes`. Stopping removes the new-document script first, then flushes
-pending fields in each recorder world while still listening, then removes the binding; none of it is cut short by an
-interrupted command. A field's `<label>` and `aria-labelledby` text count when deciding it's secret, and a secret
+always has `writes: true`, so its runs need `--yes`. A field's `<label>` and `aria-labelledby` text count when deciding it's secret, and a secret
 editable element is described by its label only, never its text. Steps in a same-origin frame are wrapped in `frame <css>` and `frame main`. Hosts off the start
 page's site and addresses a flow can't keep are left out and listed. Without `--save` the flow is printed.
 
@@ -1232,8 +1234,9 @@ name with a word like delete, pay, send, add or update, which a read-only annota
 as a `# site tools` line. `ardia browse tool <name> ['{json}' | -] [--yes]` checks the arguments against the tool's
 input schema and needs `--yes` for every call, since each runs the page's own code (`unconfirmed_tool`, or
 `consequential_tool`). Finding and calling happen on one object in the page's JavaScript context: the call
-runs the exact handler that was found, through the same provider, after checking the tool still matches what was
-approved (`site_tool_changed`); a new document invalidates the object (`document_changed`); and prints its output as `[UNTRUSTED]` page data (`data.isError` and exit 1 when the tool says it
+runs the exact handler function captured when it was found (a tool's `execute`, or the provider's or browser's
+call), and is refused if the page has since swapped that function or changed the tool (`site_tool_changed`); the
+object is released afterwards, and a page error while reading or calling a tool is `page_script_error`; a new document invalidates the object (`document_changed`); and prints its output as `[UNTRUSTED]` page data (`data.isError` and exit 1 when the tool says it
 failed). Names, descriptions and output all come from the page.
 
 ### Reading documentation fast
@@ -1245,7 +1248,7 @@ is Markdown), `llms_txt` (the nearest `llms.txt` links this page's Markdown; at 
 text) or `raw` (the page's whole visible text, when the reader kept under 25% of it). `tried` lists what was asked
 for. `--outline` and `--filter` work on any of them. Every request, including a Markdown address a page's
 `ard.json` lists and each redirect, connects to the address it was checked against: the name is resolved once,
-checked, and the connection is pinned to that address (TLS still verifies the name), so a name that answers a
+checked, and the connection is pinned to that address, one lookup per request and per redirect (TLS still verifies the name), so a name that answers a
 public address first and a private one later can't be used to reach the private one. Only the page's own origin
 may be private (the user asked for it); anything else must resolve only to public addresses (loopback, private,
 link-local, site-local, CGNAT, ULA and metadata addresses are refused). A refusal fails the read with

@@ -97,7 +97,15 @@ function same(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((part, index) => part === b[index]);
 }
 
-export async function replayStep(driver: Driver, step: ReplayStep, values: Readonly<Record<string, string>>, secrets: readonly string[] = []): Promise<StepOutcome & { candidate: number | null }> {
+export type ReplayOptions = { escape?: boolean };
+
+export async function replayStep(
+  driver: Driver,
+  step: ReplayStep,
+  values: Readonly<Record<string, string>>,
+  secrets: readonly string[] = [],
+  options: ReplayOptions = {},
+): Promise<StepOutcome & { candidate: number | null }> {
   const action = step.action;
   const tried: Attempt[] = [];
   const outcome = (ok: boolean, tier: Tier | null, candidate: number | null = null, extra: Partial<StepOutcome> = {}) => ({
@@ -135,7 +143,7 @@ export async function replayStep(driver: Driver, step: ReplayStep, values: Reado
     for (const index of ladder.keys()) {
       if (await tryCandidate(index === 0 ? "selector" : "candidate", index)) return outcome(true, index === 0 ? "selector" : "candidate", index);
     }
-    if (ladder.length > 0) {
+    if (ladder.length > 0 && options.escape !== false) {
       try {
         await driver.run(["press", "Escape"]);
       } catch (error) {
@@ -168,12 +176,13 @@ export async function replay(
   values: Readonly<Record<string, string>>,
   secrets: readonly string[] = [],
   now: () => string = () => `${new Date().toISOString().slice(0, 19)}Z`,
+  options: ReplayOptions = {},
 ): Promise<ReplayReport> {
   const outcomes: StepOutcome[] = [];
   const episodes: Episode[] = [];
   for (const step of steps) {
     const url = driver.url();
-    const result = await replayStep(driver, step, values, secrets);
+    const result = await replayStep(driver, step, values, secrets, options);
     const { candidate, ...kept } = result;
     outcomes.push(kept);
     const action = step.action;

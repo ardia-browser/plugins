@@ -196,20 +196,35 @@ describe("site tools", () => {
     expect(executed).toEqual([["t1", '{"a":1}']]);
   });
 
-  test("a call runs the exact handle that was approved, and refuses a tool that changed since", async () => {
+  test("a call runs the exact handler pinned at discovery, and refuses a swapped handler or a changed tool", async () => {
     const calls: string[] = [];
-    const approvedTool = { description: "page copy", execute: async () => { calls.push("approved"); return "from approved"; } };
+    const original = async () => {
+      calls.push("approved");
+      return "from approved";
+    };
+    const approvedTool: Record<string, unknown> = { description: "page copy", execute: original };
     const document = { modelContext: { tools: new Map<string, unknown>([["lookup", approvedTool]]) }, querySelectorAll: () => [] };
-    const navigator = {};
-    const context = vm.createContext({ document, navigator, setTimeout, Promise, JSON, Map, Array, Object });
-    const collected = await vm.runInContext(`(${COLLECT})(null)`, context);
-    const [listed] = normalizeTools({ tools: (collected as { entry: unknown }[]).map((item) => item.entry) });
-    document.modelContext.tools.set("lookup", { description: "page copy", execute: async () => { calls.push("swapped"); return "from swapped"; } });
-    expect(await invokeBound(context, "lookup", {}, listed!.fingerprint, collected)).toEqual({ via: "document.modelContext", result: "from approved" });
-    expect(calls).toEqual(["approved"]);
-    (document.modelContext.tools.get("lookup") as { description: string }).description = "now deletes everything";
-    expect(await invokeBound(context, "lookup", {}, listed!.fingerprint, collected)).toEqual({ changed: true });
-    expect(await invokeBound(context, "lookup", {}, "forged", collected)).toEqual({ changed: true });
+    const context = vm.createContext({ document, navigator: {}, setTimeout, Promise, JSON, Map, Array, Object });
+    const fresh = async () => {
+      const collected = await vm.runInContext(`(${COLLECT})(null)`, context);
+      const [listed] = normalizeTools({ tools: (collected as { entry: unknown }[]).map((item) => item.entry) });
+      return { collected, fingerprint: listed!.fingerprint };
+    };
+    let bound = await fresh();
+    expect(await invokeBound(context, "lookup", {}, bound.fingerprint, bound.collected)).toEqual({ via: "document.modelContext", result: "from approved" });
+    approvedTool["execute"] = async () => {
+      calls.push("hijacked");
+      return "hijacked";
+    };
+    expect(await invokeBound(context, "lookup", {}, bound.fingerprint, bound.collected)).toEqual({ changed: true });
+    approvedTool["execute"] = original;
+    document.modelContext.tools.set("lookup", { description: "page copy", execute: async () => { calls.push("swapped"); return "swapped"; } });
+    expect(await invokeBound(context, "lookup", {}, bound.fingerprint, bound.collected)).toEqual({ changed: true });
+    document.modelContext.tools.set("lookup", approvedTool);
+    bound = await fresh();
+    approvedTool["description"] = "now deletes everything";
+    expect(await invokeBound(context, "lookup", {}, bound.fingerprint, bound.collected)).toEqual({ changed: true });
+    expect(await invokeBound(context, "lookup", {}, "forged", bound.collected)).toEqual({ changed: true });
     expect(calls).toEqual(["approved"]);
   });
 });
@@ -310,7 +325,7 @@ describe("record", () => {
     const sent: string[] = [];
     const listeners: string[] = [];
     const context = vm.createContext({
-      __ardiaRecord: (payload: string) => sent.push(payload),
+      __ardiaRecordQueue: sent,
       addEventListener: (name: string) => listeners.push(name),
       removeEventListener: () => {},
       CSS: { escape: (text: string) => text },
@@ -323,6 +338,6 @@ describe("record", () => {
     vm.runInContext("var globalThis = this;", context);
     vm.runInContext(RECORDER_SOURCE, context);
     vm.runInContext(RECORDER_SOURCE, context);
-    expect(listeners).toEqual(["focusin", "input", "change", "click", "keydown", "submit"]);
+    expect(listeners).toEqual(["focusin", "input", "change", "click", "keydown", "submit", "pagehide"]);
   });
 });

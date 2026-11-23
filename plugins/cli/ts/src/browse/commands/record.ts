@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { sleep, withSignal } from "../cdp/cancel.ts";
 import { BrowseError, ConnectionLost, Usage } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
@@ -17,21 +18,29 @@ import { cliVersion } from "../../version.ts";
 import type { Ctx } from "./ctx.ts";
 import { parse } from "./parse.ts";
 
-export const RECORD_WORLD = "ardia-record";
-export const BINDING = "__ardiaRecord";
+export const QUEUE = "__ardiaRecordQueue";
+export const QUEUE_LIMIT = 500;
 export const DEFAULT_TIMEOUT = 120;
 export const MAX_TIMEOUT = 600;
 export const DEFAULT_IDLE = 20;
 export const MAX_EVENTS = 500;
 export const MAX_PAYLOAD = 16 * 1024;
-const POLL = 0.2;
-export const FLUSH_GRACE = 0.15;
+export const POLL = 0.1;
 export const FLAGS = { "--save": "value", "--timeout": "value", "--idle": "value", "--here": "bool", "--description": "value" } as const;
 
-export const RECORDER_SOURCE = `(() => {
+export const CARRY = "__ardiaRecordCarry";
+
+export function recorderSource(token: string): string {
+  return `(() => {
   if (globalThis.__ardiaRecorderStop) return;
-  const send = globalThis[${JSON.stringify(BINDING)}];
-  if (typeof send !== "function") return;
+  const queue = globalThis[${JSON.stringify(QUEUE)}] || (globalThis[${JSON.stringify(QUEUE)}] = []);
+  const send = (payload) => { if (queue.length < ${QUEUE_LIMIT}) queue.push(payload); };
+  const token = ${JSON.stringify(token)};
+  try {
+    const carried = JSON.parse(sessionStorage.getItem(${JSON.stringify(CARRY)}) || "null");
+    if (carried !== null) sessionStorage.removeItem(${JSON.stringify(CARRY)});
+    if (token && carried && carried.token === token && Array.isArray(carried.events)) for (const item of carried.events) if (typeof item === "string") send(item);
+  } catch {}
   const INPUT_ROLES = { button: "button", submit: "button", reset: "button", image: "button", checkbox: "checkbox", radio: "radio", range: "slider", number: "spinbutton", search: "searchbox" };
   const TAG_ROLES = { button: "button", summary: "button", textarea: "textbox", option: "option", h1: "heading", h2: "heading", h3: "heading", h4: "heading", h5: "heading", h6: "heading", nav: "navigation", main: "main", dialog: "dialog" };
   const short = (text, limit = 100) => String(text || "").replace(/\\s+/g, " ").trim().slice(0, limit);
@@ -166,17 +175,31 @@ export const RECORDER_SOURCE = `(() => {
     flushAll();
     emit({ kind: "submit", target: form && form.nodeType === 1 ? describe(form) : null, method: form && form.getAttribute ? (form.getAttribute("method") || "get").toLowerCase() : "get" });
   };
+  const onHide = () => {
+    flushAll();
+    if (!token || queue.length === 0) return;
+    try { sessionStorage.setItem(${JSON.stringify(CARRY)}, JSON.stringify({ token, events: queue.splice(0) })); } catch {}
+  };
   const options = { capture: true, passive: true };
-  const listeners = [["focusin", onFocus], ["input", onInput], ["change", onChange], ["click", onClick], ["keydown", onKey], ["submit", onSubmit]];
+  const listeners = [["focusin", onFocus], ["input", onInput], ["change", onChange], ["click", onClick], ["keydown", onKey], ["submit", onSubmit], ["pagehide", onHide]];
   for (const [name, listener] of listeners) addEventListener(name, listener, options);
   globalThis.__ardiaRecorderStop = () => {
     flushAll();
     for (const [name, listener] of listeners) removeEventListener(name, listener, options);
+    try { sessionStorage.removeItem(${JSON.stringify(CARRY)}); } catch {}
     delete globalThis.__ardiaRecorderStop;
   };
 })()`;
+}
 
-export const STOP_SOURCE = "(() => { if (globalThis.__ardiaRecorderStop) globalThis.__ardiaRecorderStop(); })()";
+export const RECORDER_SOURCE = recorderSource("");
+
+export function drainSource(token: string): string {
+  return `() => { ${recorderSource(token)}; return (globalThis[${JSON.stringify(QUEUE)}] || []).splice(0); }`;
+}
+
+export const STOP_DRAIN = `() => { if (globalThis.__ardiaRecorderStop) globalThis.__ardiaRecorderStop(); return (globalThis[${JSON.stringify(QUEUE)}] || []).splice(0); }`;
+export const DRAIN = drainSource("");
 
 export function parseEvent(payload: unknown): RecEvent | null {
   if (typeof payload !== "string" || payload.length > MAX_PAYLOAD) return null;
@@ -265,81 +288,84 @@ export function recordedFlow(name: string, events: readonly RecEvent[], startUrl
   return { flow, skipped };
 }
 
-async function installIn(page: Page, frame: string): Promise<number> {
-  const created = await page.send("Page.createIsolatedWorld", { frameId: frame, worldName: RECORD_WORLD }, { session: page.sessionFor(frame) });
-  const context = Number(created["executionContextId"]);
-  await page.send("Runtime.evaluate", { expression: RECORDER_SOURCE, contextId: context, returnByValue: true }, { session: page.sessionFor(frame) });
-  return context;
+export type Pages = { frames(): string[]; call(fn: string, frame: string): Promise<unknown>; closed(): boolean };
+
+export function livePages(page: Page): Pages {
+  return {
+    frames: () => [...page.frames.keys()],
+    call: (fn, frame) => page.call(fn, [], { frame, read: true, timeout: 5 }),
+    closed: () => page.crashed,
+  };
 }
 
-export type Teardown = { identifier: string | null; binding: boolean; contexts: Set<number>; closed: boolean };
-
-export async function teardown(page: Page, installed: Teardown, settle: () => Promise<void> = async () => {}): Promise<void> {
-  if (installed.closed) return;
-  await withSignal(null, async () => {
-    const quietly = async (method: string, params: Record<string, unknown>) => {
-      try {
-        await page.send(method, params);
-      } catch {
-        return;
+export async function drainFrames(pages: Pages, fn: string, into: RecEvent[]): Promise<number> {
+  let added = 0;
+  for (const frame of pages.frames()) {
+    let drained: unknown;
+    try {
+      drained = await pages.call(fn, frame);
+    } catch (error) {
+      if (error instanceof ConnectionLost) throw error;
+      continue;
+    }
+    for (const payload of Array.isArray(drained) ? drained : []) {
+      const event = parseEvent(payload);
+      if (event !== null && into.length < MAX_EVENTS) {
+        into.push(event);
+        added += 1;
       }
-    };
-    if (installed.identifier !== null) await quietly("Page.removeScriptToEvaluateOnNewDocument", { identifier: installed.identifier });
-    for (const context of installed.contexts) await quietly("Runtime.evaluate", { expression: STOP_SOURCE, contextId: context, returnByValue: true });
-    await settle();
-    if (installed.binding) await quietly("Runtime.removeBinding", { name: BINDING });
+    }
+  }
+  return added;
+}
+
+export async function finalDrain(pages: Pages, into: RecEvent[]): Promise<void> {
+  if (pages.closed()) return;
+  await withSignal(null, async () => {
+    try {
+      await drainFrames(pages, STOP_DRAIN, into);
+    } catch {
+      return;
+    }
   });
 }
 
-export async function capture(ctx: Ctx, page: Page, timeout: number, idle: number): Promise<{ events: RecEvent[]; startUrl: string; stoppedBy: string }> {
+export async function capture(
+  ctx: Ctx,
+  page: Page,
+  timeout: number,
+  idle: number,
+  pages: Pages = livePages(page),
+  token: string = randomBytes(12).toString("hex"),
+): Promise<{ events: RecEvent[]; startUrl: string; stoppedBy: string }> {
+  const drain = drainSource(token);
   const state = ctx.state;
   const startUrl = page.url;
   const events: RecEvent[] = [];
   let lastAt = monotonic();
-  const installed: Teardown = { identifier: null, binding: false, contexts: new Set<number>(), closed: false };
+  let closed = false;
   const listener: Listener = (source, method, params) => {
     if (source !== page) {
-      if (source === null && method === "Target.targetDestroyed" && params["targetId"] === page.targetId) installed.closed = true;
+      if (source === null && method === "Target.targetDestroyed" && params["targetId"] === page.targetId) closed = true;
       return;
     }
-    if (method === "Runtime.executionContextCreated") {
-      const context = params["context"] as Record<string, unknown> | undefined;
-      if (context && context["name"] === RECORD_WORLD && typeof context["id"] === "number") installed.contexts.add(context["id"]);
-    } else if (method === "Runtime.bindingCalled" && params["name"] === BINDING) {
-      if (typeof params["executionContextId"] === "number") installed.contexts.add(params["executionContextId"]);
-      const event = parseEvent(params["payload"]);
-      if (event !== null && events.length < MAX_EVENTS) {
-        events.push(event);
-        lastAt = monotonic();
-      }
-    } else if (method === "Page.frameNavigated") {
+    if (method === "Page.frameNavigated") {
       const frame = params["frame"] as Record<string, unknown> | undefined;
       if (frame && !frame["parentId"] && typeof frame["url"] === "string" && events.length < MAX_EVENTS) events.push({ kind: "navigate", at: Date.now(), url: frame["url"] });
-    } else if (method === "Inspector.detached" || method === "Inspector.targetCrashed") installed.closed = true;
+    } else if (method === "Inspector.detached" || method === "Inspector.targetCrashed") closed = true;
   };
   state.listeners.push(listener);
   let stoppedBy = "timeout";
   try {
-    await page.enableRuntime();
-    await page.send("Runtime.addBinding", { name: BINDING, executionContextName: RECORD_WORLD });
-    installed.binding = true;
-    const added = await page.send("Page.addScriptToEvaluateOnNewDocument", { source: RECORDER_SOURCE, worldName: RECORD_WORLD });
-    installed.identifier = typeof added["identifier"] === "string" ? added["identifier"] : null;
     await page.refreshFrames();
-    for (const frame of page.frames.keys()) {
-      try {
-        installed.contexts.add(await installIn(page, frame));
-      } catch (error) {
-        if (error instanceof ConnectionLost) throw error;
-      }
-    }
     const deadline = monotonic() + timeout;
     for (;;) {
-      if (installed.closed || page.crashed) {
-        installed.closed = true;
+      if (closed || pages.closed()) {
+        closed = true;
         stoppedBy = "the tab closed";
         break;
       }
+      if ((await drainFrames(pages, drain, events)) > 0) lastAt = monotonic();
       const now = monotonic();
       if (now >= deadline) break;
       if (events.some((event) => event.kind !== "navigate") && now - lastAt >= idle) {
@@ -350,12 +376,13 @@ export async function capture(ctx: Ctx, page: Page, timeout: number, idle: numbe
     }
   } finally {
     try {
-      await teardown(page, installed, () => withSignal(null, () => sleep(FLUSH_GRACE, null)));
+      if (!closed) await finalDrain(pages, events);
     } finally {
       const at = state.listeners.indexOf(listener);
       if (at >= 0) state.listeners.splice(at, 1);
     }
   }
+  events.sort((a, b) => a.at - b.at);
   return { events, startUrl, stoppedBy };
 }
 

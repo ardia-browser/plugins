@@ -7,7 +7,8 @@ import { BrowseError } from "../daemon-errors.ts";
 
 export type Resolver = (host: string) => Promise<string[]>;
 export type PinnedInit = { headers: Record<string, string>; signal: AbortSignal; ca?: string[] | null };
-export type HopGuard = { check(url: string): Promise<boolean>; request(url: string, init: PinnedInit): Promise<Response> };
+export type Pinned = { url: string; address: string };
+export type HopGuard = { check(url: string): Promise<Pinned | null>; request(pinned: Pinned, init: PinnedInit): Promise<Response> };
 
 export class UnsafeAddress extends BrowseError {
   constructor(url: string) {
@@ -89,10 +90,6 @@ function hostOf(url: string): string {
   return new URL(url).hostname.replace(/^\[|\]$/gu, "").toLowerCase();
 }
 
-class Refused extends Error {
-  readonly unsafe = true;
-}
-
 export function hopGuard(base: string, resolve: Resolver = dnsResolve): HopGuard {
   const home = originOf(base);
   const homeHost = home === null ? "" : hostOf(base);
@@ -116,29 +113,21 @@ export function hopGuard(base: string, resolve: Resolver = dnsResolve): HopGuard
     }
     return allPublic ? (addresses[0] as string) : null;
   };
-  const check = async (url: string): Promise<boolean> => {
-    const origin = originOf(url);
-    if (origin === null) return false;
-    return (await pick(url)) !== null;
+  const check = async (url: string): Promise<Pinned | null> => {
+    if (originOf(url) === null) return null;
+    const address = await pick(url);
+    return address === null ? null : { url, address };
   };
-  const request = (url: string, init: PinnedInit): Promise<Response> =>
+  const request = (pinned: Pinned, init: PinnedInit): Promise<Response> =>
     new Promise((resolveResponse, reject) => {
+      const url = pinned.url;
       const parsed = new URL(url);
       const host = hostOf(url);
-      const pinned = pick(url);
       const lookupPinned = (_name: string, options: unknown, callback: (...args: unknown[]) => void) => {
-        pinned.then(
-          (address) => {
-            if (address === null) {
-              callback(new Refused(url));
-              return;
-            }
-            const family = net.isIPv6(address) ? 6 : 4;
-            if (options && typeof options === "object" && (options as { all?: boolean }).all) callback(null, [{ address, family }]);
-            else callback(null, address, family);
-          },
-          (error: unknown) => callback(error),
-        );
+        const address = pinned.address;
+        const family = net.isIPv6(address) ? 6 : 4;
+        if (options && typeof options === "object" && (options as { all?: boolean }).all) callback(null, [{ address, family }]);
+        else callback(null, address, family);
       };
       const transport = parsed.protocol === "https:" ? https : http;
       const options: Record<string, unknown> = { method: "GET", headers: init.headers, lookup: lookupPinned, signal: init.signal };
@@ -161,7 +150,7 @@ export function hopGuard(base: string, resolve: Resolver = dnsResolve): HopGuard
           reject(error);
         }
       });
-      outgoing.on("error", (error: unknown) => reject(error instanceof Refused || (error as { unsafe?: boolean })?.unsafe || (error as { cause?: { unsafe?: boolean } })?.cause?.unsafe ? new UnsafeAddress(url) : error));
+      outgoing.on("error", (error: unknown) => reject(error));
       outgoing.end();
     });
   return { check, request };

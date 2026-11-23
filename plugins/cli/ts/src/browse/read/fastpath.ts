@@ -62,8 +62,19 @@ export function pickReadable(readable: string, visible: string): { content: stri
   return { content: readable, method: "readability", kept };
 }
 
+function jsonBody(text: string): boolean {
+  const body = text.trim();
+  if (!(body.startsWith("{") || body.startsWith("["))) return false;
+  try {
+    JSON.parse(body);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function listedMarkdown(kind: string, text: string): boolean {
-  return !/html|xml|json/iu.test(kind) && !text.trimStart().startsWith("<");
+  return !/html|xml|json/iu.test(kind) && !text.trimStart().startsWith("<") && !jsonBody(text);
 }
 
 function isMarkdown(kind: string, text: string): boolean {

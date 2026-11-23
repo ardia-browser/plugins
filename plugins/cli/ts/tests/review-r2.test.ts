@@ -70,15 +70,15 @@ describe("pinned connections", () => {
     const site = serve(() => new Response("should not be read"));
     const answers = [["93.184.216.34"], ["127.0.0.1"]];
     const guard = hopGuard(`http://rebind.test:${site.port}/`, async () => answers.shift() ?? ["127.0.0.1"]);
-    expect(await guard.check(`http://rebind.test:${site.port}/`)).toBe(true);
+    expect(await guard.check(`http://rebind.test:${site.port}/`)).not.toBeNull();
     expect(await refusal(fetchUrl(`http://rebind.test:${site.port}/llms.txt`, 3, "text/plain", "skip", guard))).toBe("unsafe_address");
     expect(site.hits).toEqual([]);
   });
 
   test("another port on the page's own private host is not the page's origin", async () => {
     const guard = hopGuard("http://127.0.0.1:8765/", async () => []);
-    expect(await guard.check("http://127.0.0.1:8765/llms.txt")).toBe(true);
-    expect(await guard.check("http://127.0.0.1:22/")).toBe(false);
+    expect(await guard.check("http://127.0.0.1:8765/llms.txt")).toEqual({ url: "http://127.0.0.1:8765/llms.txt", address: "127.0.0.1" });
+    expect(await guard.check("http://127.0.0.1:22/")).toBeNull();
   });
 });
 
@@ -199,7 +199,7 @@ describe("recorder sensitivity", () => {
     const handlers: Record<string, (event: unknown) => void> = {};
     const sent: Record<string, any>[] = [];
     const context = vm.createContext({
-      __ardiaRecord: (payload: string) => sent.push(JSON.parse(payload)),
+      __ardiaRecordQueue: { get length() { return sent.length; }, push: (payload: string) => sent.push(JSON.parse(payload)) },
       addEventListener: (name: string, handler: (event: unknown) => void) => {
         handlers[name] = handler;
       },

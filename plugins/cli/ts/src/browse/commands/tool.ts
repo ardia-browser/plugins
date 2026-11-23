@@ -73,20 +73,29 @@ function documentGone(error: unknown): boolean {
   return error instanceof CdpError && GONE.some((marker) => error.cdpMessage.includes(marker));
 }
 
-export async function bindTools(page: Page, timeout = PROBE_TIMEOUT): Promise<BoundTools> {
-  const collected = await page.send("Runtime.evaluate", { expression: `(${COLLECT})(null)`, awaitPromise: true, returnByValue: false, userGesture: false }, { timeout, mutation: true });
-  const thrown = remoteError(collected);
-  if (thrown !== null) throw new BrowseError(`The page's tools couldn't be read: ${thrown}`, null, "page_script_error");
+export type Sender = (method: string, params: Record<string, unknown>, options?: { timeout?: number; mutation?: boolean }) => Promise<Record<string, unknown>>;
+
+export async function bindTools(send: Sender, timeout = PROBE_TIMEOUT): Promise<BoundTools> {
+  const collected = await send("Runtime.evaluate", { expression: `(${COLLECT})(null)`, awaitPromise: true, returnByValue: false, userGesture: false }, { timeout, mutation: true });
   const remote = (collected["result"] ?? {}) as Record<string, unknown>;
-  const objectId = remote["objectId"];
-  if (typeof objectId !== "string") throw new BrowseError("The page's tools couldn't be read", null, "page_script_error");
-  const listed = await page.send("Runtime.callFunctionOn", { objectId, functionDeclaration: LIST_BOUND, returnByValue: true }, { timeout });
-  return { objectId, tools: normalizeTools(((listed["result"] ?? {}) as Record<string, unknown>)["value"]) };
+  const objectId = typeof remote["objectId"] === "string" ? remote["objectId"] : null;
+  try {
+    const thrown = remoteError(collected);
+    if (thrown !== null) throw new BrowseError(`The page's tools couldn't be read: ${thrown}`, null, "page_script_error");
+    if (objectId === null) throw new BrowseError("The page's tools couldn't be read", null, "page_script_error");
+    const listed = await send("Runtime.callFunctionOn", { objectId, functionDeclaration: LIST_BOUND, returnByValue: true }, { timeout });
+    const listThrown = remoteError(listed);
+    if (listThrown !== null) throw new BrowseError(`The page's tools couldn't be listed: ${listThrown}`, null, "page_script_error");
+    return { objectId, tools: normalizeTools(((listed["result"] ?? {}) as Record<string, unknown>)["value"]) };
+  } catch (error) {
+    if (objectId !== null) await releaseWith(send, objectId);
+    throw error;
+  }
 }
 
-async function release(page: Page, objectId: string): Promise<void> {
+export async function releaseWith(send: Sender, objectId: string): Promise<void> {
   try {
-    await withSignal(null, () => page.send("Runtime.releaseObject", { objectId }));
+    await withSignal(null, () => send("Runtime.releaseObject", { objectId }));
   } catch {
     return;
   }
@@ -101,9 +110,10 @@ async function cmdTool(ctx: Ctx, argv: string[]): Promise<Result> {
   if (timeout === undefined || timeout <= 0) throw new Usage("--timeout takes 30s, 2m or milliseconds");
   const page = await ctx.state.page();
   const origin = originOf(page.url);
+  const sender: Sender = (method, params, options) => page.send(method, params, options);
   let bound: BoundTools;
   try {
-    bound = await bindTools(page);
+    bound = await bindTools(sender);
   } catch (error) {
     if (documentGone(error)) throw new BrowseError(`The page changed documents while its tools were read; nothing was called. Run it again`, null, "document_changed");
     throw error;
@@ -156,7 +166,7 @@ async function cmdTool(ctx: Ctx, argv: string[]): Promise<Result> {
     done.failed = failedOutput(result);
     return done;
   } finally {
-    await release(page, bound.objectId);
+    await releaseWith(sender, bound.objectId);
   }
 }
 

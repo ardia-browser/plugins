@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import vm from "node:vm";
-import { BINDING, RECORDER_SOURCE, recordedFlow, STOP_SOURCE, teardown } from "../src/browse/commands/record.ts";
+import { capture, DRAIN, drainFrames, drainSource, finalDrain, type Pages, RECORDER_SOURCE, recordedFlow, STOP_DRAIN } from "../src/browse/commands/record.ts";
 import { BrowseError, OutcomeUnknown, Usage } from "../src/browse/daemon-errors.ts";
 import type { Action } from "../src/browse/flows/actions.ts";
 import { compileEvents } from "../src/browse/flows/compile.ts";
@@ -47,15 +47,15 @@ describe("read --fast stays off private networks", () => {
   test("a hop is allowed on the page's own origin or on a host that resolves only to public addresses", async () => {
     const resolve = async (host: string) => ({ "public.example": ["93.184.216.34"], "rebind.example": ["93.184.216.34", "10.0.0.5"], "inside.example": ["192.168.0.10"] })[host] ?? [];
     const guard = hopGuard("http://127.0.0.1:8765/docs", resolve);
-    expect(await guard.check("http://127.0.0.1:8765/llms.txt")).toBe(true);
-    expect(await guard.check("http://127.0.0.1:9999/")).toBe(false);
-    expect(await guard.check("http://169.254.169.254/latest/meta-data")).toBe(false);
-    expect(await guard.check("http://[::ffff:a9fe:a9fe]/")).toBe(false);
-    expect(await guard.check("https://public.example/guide.md")).toBe(true);
-    expect(await guard.check("https://rebind.example/guide.md")).toBe(false);
-    expect(await guard.check("https://inside.example/guide.md")).toBe(false);
-    expect(await guard.check("http://localhost/")).toBe(false);
-    expect(await guard.check("file:///etc/passwd")).toBe(false);
+    expect(await guard.check("http://127.0.0.1:8765/llms.txt")).not.toBeNull();
+    expect(await guard.check("http://127.0.0.1:9999/")).toBeNull();
+    expect(await guard.check("http://169.254.169.254/latest/meta-data")).toBeNull();
+    expect(await guard.check("http://[::ffff:a9fe:a9fe]/")).toBeNull();
+    expect(await guard.check("https://public.example/guide.md")).not.toBeNull();
+    expect(await guard.check("https://rebind.example/guide.md")).toBeNull();
+    expect(await guard.check("https://inside.example/guide.md")).toBeNull();
+    expect(await guard.check("http://localhost/")).toBeNull();
+    expect(await guard.check("file:///etc/passwd")).toBeNull();
   });
 
   test("an ard.json entry pointing at the metadata service is never fetched", async () => {
@@ -169,34 +169,54 @@ describe("replay never guesses", () => {
   });
 });
 
-describe("recording teardown", () => {
-  function fakePage(log: string[], fail = false) {
+describe("recording drains a queue in ardia's own page world", () => {
+  const payload = (kind: string, at: number) => JSON.stringify({ kind, at, target: { tag: "button", role: "button", name: "Save" } });
+  function fakePages(script: Record<string, unknown[][]>, closed = false): Pages & { calls: string[] } {
+    const calls: string[] = [];
     return {
-      send: async (method: string, params: Record<string, unknown>) => {
-        log.push(method === "Runtime.evaluate" ? `${method} ${params["expression"] === STOP_SOURCE ? "stop" : "?"} ${params["contextId"]}` : method);
-        if (fail) throw new BrowseError("gone", null, "tab_detached");
-        return {};
+      calls,
+      frames: () => ["main", "child"],
+      call: async (fn, frame) => {
+        const kind = fn === STOP_DRAIN ? "stop" : fn === DRAIN || fn === drainSource("t0") ? "drain" : "?";
+        calls.push(`${kind} ${frame}`);
+        if (frame === "child" && kind === "drain") throw new Error("frame gone");
+        return script[kind]?.shift() ?? [];
       },
+      closed: () => closed,
     };
   }
 
-  test("stop scripts flush before the binding and script are removed, and nothing throws", async () => {
-    const log: string[] = [];
-    await teardown(fakePage(log) as never, { identifier: "7", binding: true, contexts: new Set([3, 4]), closed: false }, async () => {
-      log.push("settle");
-    });
-    expect(log).toEqual(["Page.removeScriptToEvaluateOnNewDocument", "Runtime.evaluate stop 3", "Runtime.evaluate stop 4", "settle", "Runtime.removeBinding"]);
-    const failing: string[] = [];
-    await teardown(fakePage(failing, true) as never, { identifier: "7", binding: true, contexts: new Set([3]), closed: false });
-    expect(failing).toHaveLength(3);
+  test("each drain reads every frame, skips a frame that fails, and keeps only valid events", async () => {
+    const pages = fakePages({ drain: [[payload("click", 2), "not json", JSON.stringify({ kind: "eval", at: 1 })]] });
+    const into: never[] = [];
+    expect(await drainFrames(pages, DRAIN, into)).toBe(1);
+    expect(pages.calls).toEqual(["drain main", "drain child"]);
   });
 
-  test("a closed tab is left alone, and only what was installed is removed", async () => {
-    const log: string[] = [];
-    await teardown(fakePage(log) as never, { identifier: null, binding: true, contexts: new Set(), closed: true });
-    expect(log).toEqual([]);
-    await teardown(fakePage(log) as never, { identifier: null, binding: false, contexts: new Set(), closed: false });
-    expect(log).toEqual([]);
+  test("the final drain stops the listeners and keeps what they flushed, even when the command is interrupted", async () => {
+    const pages = fakePages({ stop: [[payload("fill", 9)], [payload("fill", 10)]] });
+    const into: { kind: string }[] = [];
+    const aborted = new AbortController();
+    aborted.abort();
+    const { withSignal } = await import("../src/browse/cdp/cancel.ts");
+    await withSignal(aborted.signal, () => finalDrain(pages, into as never));
+    expect(into.map((event) => event.kind)).toEqual(["fill", "fill"]);
+    const closed = fakePages({ stop: [[payload("fill", 9)]] }, true);
+    await finalDrain(closed, []);
+    expect(closed.calls).toEqual([]);
+  });
+
+  test("capture polls until idle and ends with a stop drain, with no binding or init script", async () => {
+    const pages = fakePages({ drain: [[payload("click", 1)]], stop: [[payload("fill", 5)]] });
+    const sent: string[] = [];
+    const page = { url: "https://app.example.com/", crashed: false, refreshFrames: async () => new Map(), send: async (method: string) => sent.push(method) };
+    const ctx = { state: { listeners: [] as unknown[] } };
+    const { events, stoppedBy } = await capture(ctx as never, page as never, 5, 0.3, pages, "t0");
+    expect(stoppedBy).toBe("idle");
+    expect(events.map((event) => event.kind)).toEqual(["click", "fill"]);
+    expect(pages.calls.at(-2)).toBe("stop main");
+    expect(sent).toEqual([]);
+    expect(ctx.state.listeners).toEqual([]);
   });
 });
 
@@ -225,7 +245,7 @@ describe("recorder privacy", () => {
     const handlers: Record<string, (event: unknown) => void> = {};
     const sent: Record<string, unknown>[] = [];
     const context = vm.createContext({
-      [BINDING]: (payload: string) => sent.push(JSON.parse(payload)),
+      __ardiaRecordQueue: { get length() { return sent.length; }, push: (payload: string) => sent.push(JSON.parse(payload)) },
       addEventListener: (name: string, handler: (event: unknown) => void) => {
         handlers[name] = handler;
       },
