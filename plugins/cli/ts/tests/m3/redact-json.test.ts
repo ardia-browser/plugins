@@ -264,3 +264,38 @@ describe("JSON-aware masking round 2 (Codex r2 on #79)", () => {
     expect(performance.now() - started).toBeLessThan(3000);
   });
 });
+
+describe("JSON-aware masking round 3 (Codex r3 on #79)", () => {
+  function masked(secrets: string[], text: string): string {
+    const held = new Secrets();
+    for (const secret of secrets) held.add(secret);
+    return held.redact(text);
+  }
+
+  test("bare top-level numbers and keywords stay JSON", () => {
+    expect(JSON.parse(masked(["1"], "-0.5e+10"))).toBe("***");
+    expect(masked(["false"], "false\r\n")).toBe("false\r\n");
+  });
+
+  test("a match that takes in a string's quote masks the string", () => {
+    expect(JSON.parse(masked(['"foo'], '{"value":"foobar"}'))).toEqual({ value: "***" });
+  });
+
+  test("a secret spelled with \\u escapes is found at every level", () => {
+    expect(JSON.parse(masked(["a"], '{"q":"\\u0061"}'))).toEqual({ q: "***" });
+    const nested = JSON.parse(masked(["café"], JSON.stringify({ body: String.raw`{"q":"café"}` })));
+    expect(JSON.parse(nested.body)).toEqual({ q: "***" });
+  });
+
+  test("masking one JSON line never joins it with the next", () => {
+    const out = masked(["2"], '{"n":2} \r\n{"n":3}\r\n');
+    expect(out.split("\r\n").filter((line) => line.trim()).map((line) => JSON.parse(line))).toEqual([{ n: "***" }, { n: 3 }]);
+  });
+
+  test("dense hits on one long plain line stay near the cost of the plain replace", () => {
+    const text = `${"a".repeat(1 << 19)}\nother\n`;
+    const started = performance.now();
+    expect(masked(["a"], text).endsWith("\nother\n")).toBe(true);
+    expect(performance.now() - started).toBeLessThan(2000);
+  });
+});

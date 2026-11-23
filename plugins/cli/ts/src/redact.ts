@@ -82,7 +82,7 @@ function replaceSecrets(text: string, longestFirst: readonly string[]): string {
 
 function parsesAsJson(text: string): boolean {
   const trimmed = text.trim();
-  if (trimmed === "" || !'{["'.includes(trimmed[0] as string)) return false;
+  if (trimmed === "") return false;
   try {
     JSON.parse(trimmed);
     return true;
@@ -151,9 +151,13 @@ function decoded(raw: string): string {
 
 function maskedString(raw: string, longestFirst: readonly string[]): string {
   const value = decoded(raw);
-  if (!longestFirst.some((secret) => value.includes(secret))) return raw;
-  const masked = parsesAsJson(value) ? maskedDocument(value, longestFirst) : replaceSecrets(value, longestFirst);
-  return encodedLike(raw, masked === QUOTED_MASK ? MASK : masked);
+  const held = longestFirst.some((secret) => value.includes(secret));
+  if (!held && !value.includes("\\")) return raw;
+  const embedded = /^\s*[{["]/u.test(value) && parsesAsJson(value);
+  if (!held && !embedded) return raw;
+  const masked = embedded ? maskedDocument(value, longestFirst) : replaceSecrets(value, longestFirst);
+  if (masked === value) return raw;
+  return encodedLike(raw, masked.trim() === QUOTED_MASK ? MASK : masked);
 }
 
 function maskedLeaves(text: string, nodes: readonly JsonNode[], longestFirst: readonly string[]): string {
@@ -191,7 +195,8 @@ function widened(text: string, nodes: readonly JsonNode[], longestFirst: readonl
       const end = at + secret.length;
       let index = lastStartingBy(nodes, at);
       const leaf = nodes[index];
-      if (leaf && leaf.kind !== Kind.Container && leaf.start <= at && end <= leaf.end) continue;
+      if (leaf && leaf.kind === Kind.Keyword && leaf.start <= at && end <= leaf.end) continue;
+      if (leaf && leaf.kind === Kind.Text && leaf.start < at && end < leaf.end) continue;
       while (index >= 0 && !((nodes[index] as JsonNode).start <= at && end <= (nodes[index] as JsonNode).end)) index = (nodes[index] as JsonNode).parent;
       if (index < 0) return null;
       targets.add(index);
@@ -213,7 +218,13 @@ function widened(text: string, nodes: readonly JsonNode[], longestFirst: readonl
   return out + text.slice(copied);
 }
 
-function maskedDocument(text: string, longestFirst: readonly string[]): string {
+function maskedDocument(whole: string, longestFirst: readonly string[]): string {
+  const lead = whole.length - whole.trimStart().length;
+  const core = whole.trim();
+  return whole.slice(0, lead) + maskedCore(core, longestFirst) + whole.slice(lead + core.length);
+}
+
+function maskedCore(text: string, longestFirst: readonly string[]): string {
   const nodes = tokens(text);
   if (nodes === null) return replaceSecrets(text, longestFirst);
   let out = maskedLeaves(text, nodes, longestFirst);
@@ -229,24 +240,32 @@ function maskedDocument(text: string, longestFirst: readonly string[]): string {
 }
 
 function untouched(text: string, longestFirst: readonly string[]): boolean {
-  return longestFirst.every((secret) => PLAIN_SECRET.test(secret) && !text.includes(secret));
+  return !text.includes("\\u") && longestFirst.every((secret) => PLAIN_SECRET.test(secret) && !text.includes(secret));
 }
 
 function maskedLine(line: string, longestFirst: readonly string[]): string {
   return parsesAsJson(line) ? maskedDocument(line, longestFirst) : replaceSecrets(line, longestFirst);
 }
 
+function lineEnd(text: string, at: number): number {
+  const newline = text.indexOf("\n", at);
+  return newline < 0 ? text.length : newline + 1;
+}
+
 function maskedHitLines(text: string, longestFirst: readonly string[]): string {
-  const starts = new Set<number>();
-  for (const secret of longestFirst) {
-    for (let at = text.indexOf(secret); at >= 0; at = text.indexOf(secret, at + secret.length)) starts.add(text.lastIndexOf("\n", at - 1) + 1);
+  const escaped = text.includes("\\u");
+  const ends = new Map<number, number>();
+  let start = 0;
+  while (start < text.length) {
+    const end = lineEnd(text, start);
+    const line = text.slice(start, end);
+    if (longestFirst.some((secret) => line.includes(secret)) || (escaped && line.includes("\\u"))) ends.set(start, end);
+    start = end;
   }
   let out = "";
   let copied = 0;
-  for (const start of [...starts].sort((a, b) => a - b)) {
-    const newline = text.indexOf("\n", start);
-    const end = newline < 0 ? text.length : newline + 1;
-    out += text.slice(copied, start) + maskedLine(text.slice(start, end), longestFirst);
+  for (const [first, end] of ends) {
+    out += text.slice(copied, first) + maskedLine(text.slice(first, end), longestFirst);
     copied = end;
   }
   return out + text.slice(copied);
