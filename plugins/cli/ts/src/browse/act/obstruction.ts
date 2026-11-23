@@ -125,12 +125,12 @@ export function noteObstruction(kind: Obstruction): void {
 
 export type CoverAt = { frame: string; backend: number };
 
-async function refFor(page: Page, node: Element, facts: BlockerFacts): Promise<string> {
+async function refFor(page: Page, node: Element): Promise<string | null> {
   const known = page.state.knownRef(page, node.frame, node.backendId);
   if (known !== null) return known.id;
   const seen = await currentIdentity(page, node);
-  const identity = seen !== null && seen !== "ignored" ? seen : { role: "", name: facts.name ?? "" };
-  return page.state.addRef(page, node, identity.role, identity.name);
+  if (seen === null || seen === "ignored" || !seen.role) return null;
+  return page.state.addRef(page, node, seen.role, seen.name);
 }
 
 export async function findBlocker(page: Page, element: Element, x: number, y: number, at: CoverAt | null = null): Promise<Blocker | null> {
@@ -155,8 +155,8 @@ export async function findBlocker(page: Page, element: Element, x: number, y: nu
     const remote = await page.call(BLOCKER_AT, [probe, x, y, true, given], { frame: probe.frame, byValue: false, read: true });
     const node = await page.elementFrom(remote, probe.frame, "the element in the way");
     if (node !== null && (node.backendId !== element.backendId || node.frame !== element.frame)) {
-      ref = await refFor(page, node, facts);
-      flag("click_blocker_ref", true);
+      ref = await refFor(page, node);
+      if (ref !== null) flag("click_blocker_ref", true);
     }
   } catch (error) {
     if (!(error instanceof BrowseError) || error instanceof ConnectionLost) throw error;

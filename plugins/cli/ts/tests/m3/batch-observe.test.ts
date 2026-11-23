@@ -4,7 +4,9 @@ import { FIELD_FACTS } from "../../src/browse/act/fields.ts";
 import { fieldTarget } from "../../src/browse/commands/batch.ts";
 import { dispatch } from "../../src/browse/commands/all.ts";
 import { Ctx } from "../../src/browse/commands/ctx.ts";
-import { BrowseError } from "../../src/browse/daemon-errors.ts";
+import { BrowseError, ConnectionLost } from "../../src/browse/daemon-errors.ts";
+import { renderPlain } from "../../src/browse/daemon/render.ts";
+import { observe } from "../../src/browse/changes/observe.ts";
 import { begin } from "../../src/browse/metrics.ts";
 import { CLICKABLES } from "../../src/browse/snapshot/collect.ts";
 import { State } from "../../src/browse/state/state.ts";
@@ -277,5 +279,49 @@ describe("a dialog after the action landed", () => {
     expect(results.map((result) => (result as { code?: string }).code ?? null)).toEqual(["dialog_blocked", "dialog_blocked"]);
     expect((results[0] as { error?: string }).error).toContain("`eval` opened a JavaScript confirm dialog");
     expect((results[1] as { error?: string }).error).toContain("so `eval` wasn't sent");
+  });
+});
+
+class LosingBrowser extends FormBrowser {
+  override async send(method: string, params: Record<string, unknown> | null = null): Promise<Record<string, unknown>> {
+    if (method === "Input.dispatchMouseEvent" && params?.["type"] === "mousePressed") throw new ConnectionLost();
+    return super.send(method, params);
+  }
+}
+
+describe("a connection lost in a batch", () => {
+  test("keeps the transport exit status while the line says outcome_unknown", async () => {
+    const { state } = setup();
+    state.browser = new LosingBrowser() as never;
+    const result = await begin({ argv: ["batch"] }, async () => {
+      await state.page("T");
+      return dispatch(new Ctx(state, {}, "/", {}, null, "batch"), "batch", ["click #go", "fill #a one"]);
+    });
+    const rows = (result.data as { results: { code?: string }[] }).results;
+    expect(rows.map((row) => row.code ?? null)).toEqual(["outcome_unknown", "not_run"]);
+    expect(result.lost).toBeInstanceOf(ConnectionLost);
+    expect(renderPlain({}, result, null)[0]).toBe(2);
+  });
+});
+
+describe("a dialog in the settle-only path", () => {
+  test("reports the action that landed and the open dialog instead of hanging", async () => {
+    const { state } = setup();
+    const outcome = await begin({ argv: ["click"] }, async () => {
+      const page = await state.page("T");
+      const ctx = new Ctx(state, { settle_only: true }, "/", {}, null, "click");
+      const started = performance.now();
+      const run = async () => {
+        state.onPageEvent(page, "Network.requestWillBeSent", { requestId: "slow", type: "Fetch", request: { method: "POST", url: "https://form.example/save" } });
+        setTimeout(() => (page.dialog = { type: "confirm", message: "Leave?" }), 40);
+        return "clicked";
+      };
+      const [value, report] = await observe(ctx, page, run);
+      return { value, report, took: performance.now() - started };
+    });
+    expect(outcome.value).toBe("clicked");
+    expect(outcome.took).toBeLessThan(1400);
+    expect(outcome.report?.error).toBe("it landed, but a JavaScript confirm dialog opened afterwards and froze the page, so what it changed wasn't checked (it wasn't sent again)");
+    expect(outcome.report?.dialogs).toEqual([{ type: "confirm", message: "Leave?", handled: "open" }]);
   });
 });

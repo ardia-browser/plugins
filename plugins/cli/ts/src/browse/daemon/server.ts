@@ -583,6 +583,7 @@ export class Daemon {
       const said = thrown instanceof Error ? thrown.message : String(thrown);
       return render(options, null, new BrowseError(`${name} failed: ${type}: ${said}`), name);
     }
+    if (result.lost !== null) this.state.lost = true;
     return render(options, result, null, name);
   }
 

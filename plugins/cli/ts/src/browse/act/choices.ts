@@ -12,17 +12,7 @@ export function splitFinal(text: string): [string, string] | null {
 }
 
 export const POPUP_SELECTOR = "[role=listbox], [role=dialog], [role=menu], [role=combobox], [role=tree], [role=grid], [popover], dialog";
-export const POPUPS_BEFORE = "ardiaBrowsePopupsBefore";
-
-export const MARK_POPUPS = `(el) => {
-  const doc = el.ownerDocument;
-  const shown = Array.from(doc.querySelectorAll("${POPUP_SELECTOR}")).filter((node) => node.getClientRects().length > 0);
-  if (!Object.getOwnPropertyDescriptor(globalThis, "${POPUPS_BEFORE}")) Object.defineProperty(globalThis, "${POPUPS_BEFORE}", { value: null, writable: true, enumerable: false });
-  globalThis.${POPUPS_BEFORE} = { opener: el, shown: new WeakSet(shown) };
-  return true;
-}`;
-
-export const OVERLAY_INPUT = `(el, opened) => {
+export const OVERLAY_INPUT = `(el) => {
   const doc = el.ownerDocument;
   let active = doc.activeElement;
   while (active && active.shadowRoot && active.shadowRoot.activeElement) active = active.shadowRoot.activeElement;
@@ -31,18 +21,19 @@ export const OVERLAY_INPUT = `(el, opened) => {
   const kind = (active.type || "text").toLowerCase();
   const textual = tag === "TEXTAREA" || (tag === "INPUT" && !["checkbox", "radio", "button", "submit", "reset", "hidden", "file", "range", "color", "image"].includes(kind));
   if (!(active.isContentEditable || textual) || active.readOnly || active.disabled) return null;
-  const ids = [el.getAttribute("aria-controls"), el.getAttribute("aria-owns")].filter(Boolean).join(" ").split(/\\s+/).filter(Boolean);
+  const words = (node, name) => ((node && node.getAttribute && node.getAttribute(name)) || "").split(/\\s+/).filter(Boolean);
   const root = el.getRootNode();
-  const owned = ids.some((id) => {
-    const node = (root.getElementById ? root.getElementById(id) : null) || doc.getElementById(id);
+  const byId = (id) => (root.getElementById ? root.getElementById(id) : null) || doc.getElementById(id);
+  const owned = [...words(el, "aria-controls"), ...words(el, "aria-owns")].some((id) => {
+    const node = byId(id);
     return !!node && (node === active || node.contains(active));
   });
   if (owned) return active;
-  if (!opened) return null;
-  const before = globalThis.${POPUPS_BEFORE};
+  const widget = el.closest && el.closest("[role=combobox]");
+  if (widget && widget !== el && widget.contains(active)) return active;
   const popup = active.closest("${POPUP_SELECTOR}");
-  if (!before || before.opener !== el || !popup || before.shown.has(popup)) return null;
-  return active;
+  const labelled = !!el.id && [active, popup].some((node) => words(node, "aria-labelledby").includes(el.id));
+  return labelled ? active : null;
 }`;
 
 export const HOLDS_FOCUS = `(el) => {

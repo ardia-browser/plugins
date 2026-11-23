@@ -133,6 +133,12 @@ export async function raceDialog<T>(page: Page, run: () => Promise<T>, action: s
   const listener: Listener = (eventPage, method, params) => {
     if (eventPage === page && method === "Page.javascriptDialogOpening") latch(params);
   };
+  latch(blocking(page));
+  if (latched !== null) {
+    parent?.removeEventListener("abort", forward);
+    noteBlocked();
+    throw new DialogBlocked(latched, action, false);
+  }
   const listeners = page.state?.listeners ?? [];
   listeners.push(listener);
   const poll = setInterval(() => latch(blocking(page)), DIALOG_POLL * 1000);

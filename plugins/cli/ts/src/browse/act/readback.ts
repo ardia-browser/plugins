@@ -3,6 +3,7 @@ import { redact } from "../../redact.ts";
 import { BrowseError, ConnectionLost } from "../daemon-errors.ts";
 import { flag } from "../metrics.ts";
 import type { Element, Page } from "../state/page.ts";
+import { markSecret, secretKey } from "../state/secrets.ts";
 import { asRecord } from "./common.ts";
 
 export type ReadbackStatus = "ok" | "did_not_commit" | "unverified";
@@ -20,7 +21,13 @@ export type FieldRead = {
   combo: string | null;
 };
 
-export const SECRET_AUTOCOMPLETE = ["current-password", "new-password", "one-time-code", "cc-csc"];
+export const SECRET_AUTOCOMPLETE = ["current-password", "new-password", "one-time-code", "cc-csc", "cc-number"];
+
+export const SECRET_PROBE = `(el) => {
+  const autocomplete = (el.getAttribute("autocomplete") || "").toLowerCase().split(/\\s+/);
+  const password = el.tagName === "INPUT" && (el.type || "").toLowerCase() === "password";
+  return password || ${JSON.stringify(SECRET_AUTOCOMPLETE)}.some((word) => autocomplete.includes(word));
+}`;
 
 export const HELD_SHOWN = 80;
 
@@ -141,6 +148,19 @@ export function judgeReadback(read: FieldRead, wanted: string): Readback {
   if (read.combo === "typeahead" && held.toLowerCase().startsWith(wanted.toLowerCase())) return judged(kind, held, "ok", "the field completed it");
   if (alnum(held) !== "" && alnum(held) === alnum(wanted)) return judged(kind, held, "ok", "the field formatted it");
   return judged(kind, held, "did_not_commit", `it holds "${shown(held)}"`);
+}
+
+export async function latchSecret(page: Page, element: Element, known: boolean): Promise<boolean> {
+  let secret = known;
+  if (!secret) {
+    try {
+      secret = (await page.call(SECRET_PROBE, [element], { frame: element.frame, read: true })) === true;
+    } catch (error) {
+      if (!(error instanceof BrowseError) || error instanceof ConnectionLost) throw error;
+    }
+  }
+  if (secret) markSecret(page.state, secretKey(page.targetId, element.frame, page.loader(element.frame), element.backendId));
+  return secret;
 }
 
 export function secretField(facts: Record<string, unknown>): boolean {

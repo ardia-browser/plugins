@@ -45,6 +45,7 @@ export class Result {
   batch: unknown = undefined;
   outputCap: number | null = null;
   whole = false;
+  lost: BrowseError | null = null;
 
   constructor(
     readonly data: unknown = {},
@@ -96,7 +97,7 @@ export function renderPlain(options: Options, result: Result | null, error: Brow
     return [error.exitCode, "", `✗ ${inert(message)}\n`];
   }
   const done = result as Result;
-  const code = done.failed ? 1 : 0;
+  const code = done.lost !== null ? done.lost.exitCode : done.failed ? 1 : 0;
   if (asJson) {
     if (done.batch !== undefined && done.batch !== null) return [code, `${compactJson(done.batch)}\n`, ""];
     return [code, `${compactJson({ success: true, data: done.data, error: null })}\n`, ""];

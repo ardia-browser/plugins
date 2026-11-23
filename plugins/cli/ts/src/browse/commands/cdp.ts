@@ -52,9 +52,10 @@ function refuseRawOnBorrowed(ctx: Ctx, page: Page, method: string): void {
   }
 }
 
-function liveWhile(state: State, targetId: string): () => boolean {
+export function liveWhile(state: State, targetId: string): () => boolean {
   const session = raw.rawSessionOf(state, targetId);
-  return () => session !== null && raw.rawSessionOf(state, targetId) === session;
+  const browser = state.browser;
+  return () => session !== null && browser !== null && state.browser === browser && browser.alive && raw.rawSessionOf(state, targetId) === session;
 }
 
 export async function cmdCdp(ctx: Ctx, argv: string[]): Promise<Result> {

@@ -1,11 +1,18 @@
 import { describe, expect, test } from "bun:test";
-import { checkedFrom, HOLDS_FOCUS, listOptions, matchOptions, MAX_OPTIONS_LISTED, OVERLAY_INPUT, POPUPS_BEFORE, splitFinal } from "../../src/browse/act/choices.ts";
-import { driftBetween, driftMessage, guardDrift, identityOf, refuseDrift } from "../../src/browse/act/drift.ts";
-import { insertThenFinalKey, setChecked } from "../../src/browse/act/fields.ts";
+import { checkedFrom, HOLDS_FOCUS, listOptions, matchOptions, MAX_OPTIONS_LISTED, OVERLAY_INPUT, splitFinal } from "../../src/browse/act/choices.ts";
+import { driftBetween, driftMessage, guardDrift, identityOf, refuseDrift, sameRole } from "../../src/browse/act/drift.ts";
+import { COMMIT_CHECKS, insertThenFinalKey, setChecked } from "../../src/browse/act/fields.ts";
+import { pollTimes } from "../../src/browse/act/common.ts";
 import { click, PREPARE_ACTION } from "../../src/browse/act/pointer.ts";
 import { BLOCKER_AT, blockerPhrase, classify, findBlocker } from "../../src/browse/act/obstruction.ts";
 import { PRECISION_COUNTS, PRECISION_FLAGS } from "../../src/browse/act/precision-metrics.ts";
-import { fieldKind, type FieldRead, fieldRead, judgeReadback, READ_FIELD, readbackNote, secretField } from "../../src/browse/act/readback.ts";
+import { fieldKind, type FieldRead, fieldRead, judgeReadback, latchSecret, READ_FIELD, readbackNote, SECRET_PROBE, secretField } from "../../src/browse/act/readback.ts";
+import { maskSecretValues } from "../../src/browse/snapshot/collect.ts";
+import { Node } from "../../src/browse/snapshot/tree.ts";
+import { entriesOf } from "../../src/browse/changes/report.ts";
+import { Result, renderPlain } from "../../src/browse/daemon/render.ts";
+import { liveWhile } from "../../src/browse/commands/cdp.ts";
+import { sessionFor as rawSessionFor } from "../../src/browse/cdp/raw.ts";
 import { LostMidAction, mayRetry, refusedRetry, sideEffectful } from "../../src/browse/act/retry.ts";
 import { shield, sleep } from "../../src/browse/cdp/cancel.ts";
 import { safeCode } from "../../src/browse/codes.ts";
@@ -899,40 +906,37 @@ describe("review round 1", () => {
 
   type FakeNode = Record<string, unknown>;
 
-  function popupWorld(controls: string | null, popupShownBefore: boolean) {
-    const popup: FakeNode = { id: "pop" };
-    const active: FakeNode = { tagName: "INPUT", type: "text", readOnly: false, disabled: false, isContentEditable: false, closest: () => popup };
+  type World = { controls?: string | null; widget?: boolean; popupLabel?: string | null; id?: string };
+
+  function popupWorld(given: World = {}) {
+    const popup: FakeNode = { id: "pop", getAttribute: (name: string) => (name === "aria-labelledby" ? (given.popupLabel ?? null) : null) };
+    const active: FakeNode = { tagName: "INPUT", type: "text", readOnly: false, disabled: false, isContentEditable: false, closest: () => popup, getAttribute: () => null };
     const doc: FakeNode = { activeElement: active, body: {}, getElementById: (id: string) => (id === "pop" ? { contains: (node: unknown) => node === active } : null) };
+    const widget: FakeNode = { contains: (node: unknown) => node === active };
     const el: FakeNode = {
+      id: given.id ?? "",
       ownerDocument: doc,
       contains: () => false,
       getRootNode: () => doc,
-      getAttribute: (name: string) => (name === "aria-controls" ? controls : name === "role" ? "combobox" : null),
+      closest: () => (given.widget ? widget : null),
+      getAttribute: (name: string) => (name === "aria-controls" ? (given.controls ?? null) : name === "role" ? "combobox" : name === "aria-haspopup" ? "listbox" : null),
     };
-    const shown = new WeakSet<object>(popupShownBefore ? [popup] : []);
-    return { el, active, before: { opener: el, shown } };
+    return { el, active };
   }
 
-  function overlay(world: ReturnType<typeof popupWorld>, opened: boolean, marked = true): unknown {
-    const holder = globalThis as unknown as Record<string, unknown>;
-    holder[POPUPS_BEFORE] = marked ? world.before : null;
-    try {
-      return (new Function(`return ${OVERLAY_INPUT}`)() as (el: unknown, opened: boolean) => unknown)(world.el, opened);
-    } finally {
-      delete holder[POPUPS_BEFORE];
-    }
+  function overlay(world: ReturnType<typeof popupWorld>): unknown {
+    return (new Function(`return ${OVERLAY_INPUT}`)() as (el: unknown) => unknown)(world.el);
   }
 
-  test("focus is followed into a popup only on evidence the field owns it", () => {
-    const unowned = popupWorld(null, false);
-    expect(overlay(unowned, false)).toBeNull();
-    expect(overlay(unowned, true, false)).toBeNull();
-    const owned = popupWorld("pop", true);
-    expect(overlay(owned, false)).toBe(owned.active);
-    const freshAfterClick = popupWorld(null, false);
-    expect(overlay(freshAfterClick, true)).toBe(freshAfterClick.active);
-    const alreadyOpen = popupWorld(null, true);
-    expect(overlay(alreadyOpen, true)).toBeNull();
+  test("focus is followed into a popup only on explicit association with the field", () => {
+    expect(overlay(popupWorld())).toBeNull();
+    expect(overlay(popupWorld({ id: "picker" }))).toBeNull();
+    const owned = popupWorld({ controls: "pop" });
+    expect(overlay(owned)).toBe(owned.active);
+    const inWidget = popupWorld({ widget: true });
+    expect(overlay(inWidget)).toBe(inWidget.active);
+    const labelled = popupWorld({ id: "picker", popupLabel: "picker" });
+    expect(overlay(labelled)).toBe(labelled.active);
   });
 
   test("an unnamed container ref keeps the snapshot's generic role, and its name falls back to rendered text", async () => {
@@ -1023,7 +1027,7 @@ describe("review round 1", () => {
       state: { knownRef: () => null, addRef: () => "e60" },
     } as unknown as Page;
     const blocker = await findBlocker(page, new Element("F", "O", 3, "@e3"), 10, 10, { frame: "P", backend: 40 });
-    expect(blocker).toEqual({ kind: "overlay", ref: "e60", role: "div", name: "" });
+    expect(blocker).toEqual({ kind: "overlay", ref: null, role: "div", name: "" });
     expect(probes).toEqual([["P", true], ["P", true]]);
   });
 
@@ -1102,5 +1106,135 @@ describe("review round 1", () => {
   test("a dialog that opens while the page settles keeps the action's result and says it landed", () => {
     expect(dialogAfterwards(new DialogBlocked({ type: "confirm", message: "Leave?" }, "`click`", true))).toBe("a JavaScript confirm dialog opened afterwards and froze the page");
     expect(dialogAfterwards(new BrowseError("x", null, "covered"))).toBeNull();
+  });
+});
+
+describe("review round 2", () => {
+  test("the focus check sits inside the final dispatch, after the delivery probes", async () => {
+    const order: string[] = [];
+    class OrderedRenderer extends FakeRenderer {
+      override async call(fn: string, args: unknown[] = []): Promise<unknown> {
+        if (fn === HOLDS_FOCUS) {
+          order.push("focus check");
+          return true;
+        }
+        if (fn.includes("ardiaBrowseInputWatch")) order.push("delivery probe");
+        return super.call(fn, args);
+      }
+
+      override async send(method: string, given: Record<string, unknown> | null = null): Promise<Record<string, unknown>> {
+        if (method === "Input.insertText") this.counts["input"] = (this.counts["input"] ?? 0) + 1;
+        if (method === "Input.dispatchKeyEvent" && given?.["type"] === "keyDown") order.push("keyDown");
+        return super.send(method, given);
+      }
+    }
+    const page = new OrderedRenderer();
+    await insertThenFinalKey(page.page, new Element("F", "O", 1, "@e1"), "ab");
+    const keyAt = order.indexOf("keyDown");
+    expect(order[keyAt - 1]).toBe("focus check");
+    expect(order.slice(0, keyAt).lastIndexOf("delivery probe")).toBeLessThan(keyAt - 1);
+  });
+
+  test("every sensitive signal is latched before typing", () => {
+    const probe = new Function(`return ${SECRET_PROBE}`)() as (el: unknown) => boolean;
+    const field = (type: string, autocomplete: string | null) => ({ tagName: "INPUT", type, getAttribute: (name: string) => (name === "autocomplete" ? autocomplete : null) });
+    expect(probe(field("password", null))).toBe(true);
+    for (const word of ["current-password", "new-password", "one-time-code", "cc-csc", "cc-number"]) expect(probe(field("text", `billing ${word}`))).toBe(true);
+    expect(probe(field("text", "email"))).toBe(false);
+  });
+
+  test("a latched secret is masked wherever the snapshot reads its value, after its type is toggled", async () => {
+    const state = {};
+    const page = {
+      targetId: "T",
+      loader: () => "L",
+      state,
+      call: async () => true,
+    } as unknown as Page;
+    const field = new Element("F", "O", 21, "@e4");
+    expect(await latchSecret(page, field, false)).toBe(true);
+    const nodes = [new Node("textbox", "Password", "hunter2", new Map(), 21, [], "e4", null, null, "F"), new Node("textbox", "Email", "me@x.co", new Map(), 22, [], "e5", null, null, "F")];
+    maskSecretValues(state, page, nodes);
+    expect(nodes.map((node) => node.value)).toEqual(["•••••••", "me@x.co"]);
+    const row = entriesOf(nodes)[0];
+    expect(row?.value).toBe("•••••••");
+    expect(row?.line).not.toContain("hunter2");
+  });
+
+  test("an already-open dialog refuses before the work starts", async () => {
+    const page = dialogPage();
+    page.dialog = { type: "confirm", message: "Discard?" };
+    let started = false;
+    const error = await failure(() =>
+      raceDialog(page, async () => {
+        started = true;
+        return 1;
+      }, "`click`"),
+    );
+    expect(started).toBe(false);
+    expect(error.message).toContain("so `click` wasn't sent");
+    expect((page.state.listeners as unknown[]).length).toBe(0);
+  });
+
+  test("container roles are one class, so a scoped snapshot's group matches a generic reading", () => {
+    expect(sameRole("group", "generic")).toBe(true);
+    expect(sameRole("Section", "group")).toBe(true);
+    expect(sameRole("generic", "button")).toBe(false);
+    expect(driftBetween({ role: "group", name: "" }, { role: "generic", name: "" })).toBeNull();
+    expect(driftBetween({ role: "group", name: "" }, { role: "link", name: "" })?.field).toBe("role");
+  });
+
+  test("a blocker without an accessibility identity gets no ref rather than one the drift check can't guard", async () => {
+    const added: unknown[] = [];
+    const page = {
+      call: async (_fn: string, args: unknown[]) => (args[3] ? { objectId: "B" } : { ...VIEWPORT, found: true, modal: true, role: "div", name: "" }),
+      elementFrom: async () => new Element("F", "B", 30, "backdrop"),
+      sessionFor: () => "S",
+      send: async () => ({ nodes: [{ nodeId: "1", ignored: true, role: { value: "generic" }, backendDOMNodeId: 30 }] }),
+      state: { knownRef: () => null, addRef: (...args: unknown[]) => (added.push(args), "e70") },
+    } as unknown as Page;
+    const [blocker, values] = await measured(() => findBlocker(page, new Element("F", "O", 5, "@e5"), 10, 10));
+    expect(blocker).toEqual({ kind: "modal", ref: null, role: "div", name: "" });
+    expect(added).toEqual([]);
+    expect(values.get("click_blocker_ref")).toBeUndefined();
+  });
+
+  test("a batch result that lost the connection renders with the transport exit status", () => {
+    const result = new Result({ results: [] }, "✗ lost");
+    result.failed = true;
+    expect(renderPlain({}, result, null)[0]).toBe(1);
+    result.lost = new LostMidAction();
+    expect(renderPlain({}, result, null)[0]).toBe(2);
+    expect(renderPlain({ json: true }, result, null)[0]).toBe(2);
+  });
+
+  test("a raw throttle stops counting once its browser connection is replaced or closes", async () => {
+    const browser = { alive: true, send: async () => ({ sessionId: "RAW1" }) };
+    const state = { browser, listeners: [] as unknown[], addNotice: () => {} } as unknown as State;
+    await rawSessionFor(state, "T");
+    const live = liveWhile(state, "T");
+    expect(live()).toBe(true);
+    browser.alive = false;
+    expect(live()).toBe(false);
+    browser.alive = true;
+    (state as unknown as { browser: unknown }).browser = { alive: true, send: browser.send };
+    expect(live()).toBe(false);
+  });
+});
+
+describe("a cell commit waits a fixed number of checks", () => {
+  test("it checks the same number of times however slow each check is", async () => {
+    let checks = 0;
+    const slowCheck = async () => {
+      checks += 1;
+      await sleep(0.03);
+      return null;
+    };
+    expect(await pollTimes(slowCheck, COMMIT_CHECKS)).toBeNull();
+    expect(checks).toBe(COMMIT_CHECKS);
+    expect(COMMIT_CHECKS).toBe(11);
+    let early = 0;
+    expect(await pollTimes(async () => (++early === 3 ? "closed" : null), COMMIT_CHECKS)).toBe("closed");
+    expect(early).toBe(3);
   });
 });

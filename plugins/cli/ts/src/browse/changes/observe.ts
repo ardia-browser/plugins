@@ -477,13 +477,23 @@ export function reusable(state: State, page: Page, seen: Seen | null): View | nu
   return frame === seen.frame && loader === seen.loader && (loader || "") === seen.view.loader ? seen.view : null;
 }
 
-async function viewBefore(state: State, page: Page): Promise<View | null> {
+async function viewBefore(state: State, page: Page, action: string): Promise<View | null> {
   try {
-    return await view(state, page);
+    return await raceDialog(page, () => view(state, page), action, false);
   } catch (error) {
-    if (error instanceof ConnectionLost || !(error instanceof BrowseError)) throw error;
+    if (error instanceof ConnectionLost || !(error instanceof BrowseError) || error.code === "dialog_blocked") throw error;
     return null;
   }
+}
+
+export function dialogReport(page: Page, why: string): Report {
+  flag("action_landed_settle_lost", true);
+  const report = diff(null, errorView(page));
+  report.document = "unknown";
+  report.error = `it landed, but ${why}, so what it changed wasn't checked (it wasn't sent again)`;
+  const { dialogs } = new ReceiptWatch(page).receipt();
+  if (dialogs.length > 0) report.dialogs = dialogs;
+  return report;
 }
 
 export async function flushBatch(ctx: Ctx, batch: BatchObserve): Promise<Report | null> {
@@ -626,12 +636,25 @@ export async function observe<T>(ctx: Ctx, page: Page, run: () => Promise<T>, re
   if (ctx.options["no_changes"] || ctx.options["settle_only"]) {
     if (batch?.pending) batch.flushed = await flushBatch(ctx, batch);
     if (react !== null) await watchReaction(state, page, react);
-    const work = () => guarded(ctx, page, run);
-    return [ctx.options["no_changes"] ? await work() : await settled(page, work), null];
+    if (ctx.options["no_changes"]) return [await guarded(ctx, page, run), null];
+    let landed: { value: T } | null = null;
+    const work = async () => {
+      const value = await guarded(ctx, page, run);
+      landed = { value };
+      return value;
+    };
+    try {
+      return [await raceDialog(page, () => settled(page, work), actionName(ctx)), null];
+    } catch (error) {
+      const why = dialogAfterwards(error);
+      const done = landed as { value: T } | null;
+      if (why === null || done === null) throw error;
+      return [done.value, dialogReport(page, why)];
+    }
   }
   const group = batch?.pending ?? null;
   const reused = group === null && batch !== undefined ? reusable(state, page, batch.previous) : null;
-  const before = group !== null ? group.before : (reused ?? (await viewBefore(state, page)));
+  const before = group !== null ? group.before : (reused ?? (await viewBefore(state, page, actionName(ctx))));
   const watch = group !== null ? group.watch : new NetworkWatch(page);
   const receipts = group !== null ? group.receipts : new ReceiptWatch(page);
   const navigations = group !== null ? group.navigations : page.navigations;

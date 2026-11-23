@@ -21,9 +21,9 @@ import {
 import { add, flag } from "../metrics.ts";
 import { Element, type Page } from "../state/page.ts";
 import { monotonic } from "../state/wait.ts";
-import { asRecord, expectInput, poll, textInserted } from "./common.ts";
-import { checkedFrom, CHECK_STATE, HOLDS_FOCUS, MARK_POPUPS, matchOptions, OPTION_ROWS, type OptionRow, OVERLAY_INPUT, splitFinal } from "./choices.ts";
-import { type Readback, readBack, secretField } from "./readback.ts";
+import { asRecord, expectInput, poll, POLL, pollTimes, textInserted } from "./common.ts";
+import { checkedFrom, CHECK_STATE, HOLDS_FOCUS, matchOptions, OPTION_ROWS, type OptionRow, OVERLAY_INPUT, splitFinal } from "./choices.ts";
+import { latchSecret, type Readback, readBack, secretField } from "./readback.ts";
 import { click, scrollIntoView, targetPoint, waitEnabled } from "./pointer.ts";
 
 export const SUGGESTION_TIMEOUT = 4.0;
@@ -35,6 +35,7 @@ export const WORDS = 2;
 export const MAX_SUGGESTIONS = 8;
 export const EDITOR_WAIT = 1.0;
 export const COMMIT_WAIT = 0.5;
+export const COMMIT_CHECKS = Math.round(COMMIT_WAIT / POLL) + 1;
 export const INSERTED_INPUT_TYPES = new Set(["text", "search", "email", "url", "tel", "number"]);
 const EMAIL = /[^\s@<>()[\],;:"']+@[^\s@<>()[\],;:"']+\.[A-Za-z]{2,}/gu;
 const NOT_EDITABLE_FACTS = `(el) => ({ role: (el.getAttribute("role") || el.tagName).toLowerCase(), name: ardiaBrowse.accessibleText(el).trim().slice(0, 60),
@@ -126,9 +127,9 @@ export const OVERLAY_WAIT = 1.0;
 
 export type Filled = [boolean, Stored, (Readback | null)?];
 
-export async function overlayInput(page: Page, element: Element, opened = false): Promise<Element | null> {
+export async function overlayInput(page: Page, element: Element): Promise<Element | null> {
   try {
-    const remote = await page.call(OVERLAY_INPUT, [element, opened], { frame: element.frame, byValue: false, read: true });
+    const remote = await page.call(OVERLAY_INPUT, [element], { frame: element.frame, byValue: false, read: true });
     return remote !== null && typeof remote === "object" ? await page.elementFrom(remote, element.frame, `the field that took focus from ${element.label}`) : null;
   } catch (error) {
     if (error instanceof BrowseError && !(error instanceof ConnectionLost)) return null;
@@ -138,9 +139,8 @@ export async function overlayInput(page: Page, element: Element, opened = false)
 
 async function overlayAfterOpening(page: Page, element: Element, humanize: boolean): Promise<Element | null> {
   if ((await comboKind(page, element)) !== "button") return null;
-  await page.call(MARK_POPUPS, [element], { frame: element.frame });
   await click(page, element, humanize);
-  return poll(() => overlayInput(page, element, true), OVERLAY_WAIT);
+  return poll(() => overlayInput(page, element), OVERLAY_WAIT);
 }
 
 export async function fill(page: Page, given: Element, text: string, humanize: boolean, guard: Guard = null, known: Record<string, unknown> | null = null): Promise<Filled> {
@@ -178,6 +178,7 @@ export async function fill(page: Page, given: Element, text: string, humanize: b
     secret ||= secretField(facts);
   }
   retargeted = retargeted || replaced;
+  secret = await latchSecret(page, element, secret);
   await clearField(page, element, humanize);
   if (text && insertsAtOnce(facts, humanize, guard)) await insertThenFinalKey(page, element, text);
   else if (text) await typeInto(page, element, text, humanize, guard);
@@ -272,7 +273,7 @@ async function commitCell(page: Page, editor: Element, humanize: boolean): Promi
   const editorState = async () => asRecord(await page.call(ACTIONS_CELL_EDITOR_STATE, [editor], { frame: editor.frame, read: true }));
   if (!(await editorState())["open"]) return;
   await pressKey(page, editor.frame, "Enter", humanize);
-  if (await poll(async () => ((await editorState())["open"] ? null : true), COMMIT_WAIT)) return;
+  if (await pollTimes(async () => ((await editorState())["open"] ? null : true), COMMIT_CHECKS)) return;
   const state = await editorState();
   try {
     await pressKey(page, editor.frame, "Escape", humanize);
@@ -329,14 +330,17 @@ export async function insertThenFinalKey(page: Page, element: Element, text: str
   }
   const [head, last] = split;
   if (head) await insertText(page, element, head);
-  await refuseMovedFocus(page, element, head);
   flag("fill_final_key", true);
   const input = inputOf(page);
   const keyboard = input.keyboard();
+  const pressLast = async () => {
+    await refuseMovedFocus(page, element, head);
+    await keyboard.typeText(last, false);
+  };
   await expectInput(
     page,
     element.frame,
-    () => input.gesture("fill", () => keyboard.typeText(last, false)),
+    () => input.gesture("fill", pressLast),
     { keydown: 1, keyup: 1 },
     "The last keystroke",
     element,
@@ -382,6 +386,7 @@ export async function typeText(page: Page, given: Element, text: string, humaniz
   const loader = page.loader(given.frame);
   await focusField(page, given, facts, humanize, true);
   const [element, retargeted] = await settleFocus(page, given, loader);
+  await latchSecret(page, element, secretField(facts));
   if (text && insertsAtOnce(facts, humanize, null)) await insertThenFinalKey(page, element, text);
   else await typeInto(page, element, text, humanize);
   return retargeted;

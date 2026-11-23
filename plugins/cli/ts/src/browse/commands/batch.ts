@@ -403,6 +403,7 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
     failedStep(index, stepName(outcome.command), outcome.code);
   };
   let running = -1;
+  let lost: BrowseError | null = null;
   const observing = beginBatch(ctx.state);
   let held: { outcome: Outcome; result: Result } | null = null;
   const placeReport = (report: Report | null, partly = false) => {
@@ -514,6 +515,7 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
       for (const rest of runs.slice(index + 1)) outcomes.push({ command: rest, success: false, result: null, error: DIALOG_BAIL, code: "not_run", text: null });
       break;
     }
+    if (error instanceof ConnectionLost) lost = error;
     if (error instanceof OutcomeUnknown || error instanceof ConnectionLost) {
       for (const rest of runs.slice(index + 1)) {
         outcomes.push({ command: rest, success: false, result: null, error: "not run: an earlier command's outcome is unknown", code: "not_run", text: null });
@@ -545,6 +547,7 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
   }
   for (const outcome of outcomes) delete outcome.text;
   const result = new Result({ results: outcomes }, text);
+  result.lost = lost;
   if (notices.length > 0) result.notice = notices.join("\n");
   const batchCap = ctx.options["full"] ? 0 : ctx.options["max_output"] === undefined || ctx.options["max_output"] === null ? OUTPUT_CAP : Number(ctx.options["max_output"]);
   const shown = ctx.state.pendingShown;

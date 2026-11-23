@@ -825,16 +825,20 @@ POST http://127.0.0.1:8792/api/events → 200
 - **No blind retries.** A side-effectful command (`click`, `fill`, `type`, `select`, `check`, `drag`, `eval`, …) that
   Ardia's tab detached under after it had started answers `outcome_unknown` and is never sent again; in a `batch`,
   only read-only lines (`snapshot`, `get`, `is`, `read`, `screenshot`, …) are run once more after a detach. When the
-  connection to Ardia drops during one, the error keeps exit status 2 but its JSON `code` is `outcome_unknown`. When an
+  connection to Ardia drops during one, the error keeps exit status 2 but its JSON `code` is `outcome_unknown`; in a
+  `batch`, that line says `outcome_unknown`, the rest are `not_run`, and the batch exits 2. When an
   action landed and only following the page afterwards failed, the action stands and the report says so.
 - **Typing.** Without `--humanize`, `fill` and `type` put all but the last character in with one `Input.insertText`
   and press the last one as a real key down and up, so autocompletes, comboboxes and framework key listeners fire
   (text ending in a newline or tab is inserted whole, so no Enter submits a form). Just before that last key, focus is
-  checked again: if it moved off the field, the key isn't sent and the error is `focus_moved`. Focus is followed into a
-  popup's own search field only when the field names that popup (`aria-controls`, `aria-owns`) or the popup first
-  appeared when the combobox button was clicked. Afterwards the field is read back by kind: a password, one-time code
-  or card security code is read back as its length alone, decided before typing, so its value never leaves the page
-  even when a "show password" toggle changes its type; phone and card numbers by their digits, dates by their
+  checked again, inside the same dispatch: if it moved off the field, the key isn't sent and the error is
+  `focus_moved`. Focus is followed into a popup's own search field only when the field names that popup
+  (`aria-controls`, `aria-owns`), the popup sits inside the field's own `role=combobox` widget, or the popup is labelled
+  by the field (`aria-labelledby`). Whether a field is secret (a password input, or `autocomplete` of
+  `current-password`, `new-password`, `one-time-code`, `cc-csc` or `cc-number`) is decided before typing, and stays
+  decided for that element: it's read back as its length alone, so its value never leaves the page, and the change
+  report and snapshots show its value masked even after a "show password" toggle changes its type. Other fields are read
+  back by kind: phone and card numbers by their digits, dates by their
   numbers, a `maxlength` cut named as such. `data.verify.status` is `ok`, `did_not_commit` (with a `→` line saying
   what the field holds) or `unverified`.
 - **Choices.** A `select` value that matches no option, or two options with different values, fails with every option
@@ -844,8 +848,9 @@ POST http://127.0.0.1:8792/api/events → 200
   with one open fails at once with `dialog_blocked`, its type and message and how to answer it, instead of waiting for
   the page. An action that opens one stops at once: no more of its input is sent, its own cleanup (releasing a held
   button) finishes, and it fails the same way saying it landed, even if the dialog is answered a moment later. One
-  that opens while the page settles afterwards keeps the action's result, with the open dialog in the report. `eval`
-  that opens one fails the same way. Nothing answers them silently. `batch --bail` stops at the line that opened one and marks the rest `not_run`;
+  that opens while the page settles afterwards keeps the action's result, with the open dialog in the report, also in a
+  `script`'s light settle. A dialog already open when a command starts, or that opens while the before view is taken,
+  stops it before anything is sent. `eval` that opens one fails the same way. Nothing answers them silently. `batch --bail` stops at the line that opened one and marks the rest `not_run`;
   without `--bail`, a later `dialog accept|dismiss` line still works.
 
 ### Output cap

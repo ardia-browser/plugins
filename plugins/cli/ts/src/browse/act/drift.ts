@@ -1,7 +1,7 @@
 import { BrowseError, CdpError, ConnectionLost, Gated } from "../daemon-errors.ts";
 import { add, flag } from "../metrics.ts";
 import { INNER_TEXT } from "../snapshot/collect.ts";
-import { type AxNode, buildTree, clipped, INTERACTIVE, isAxList } from "../snapshot/tree.ts";
+import { type AxNode, buildTree, clipped, INTERACTIVE, isAxList, LIFTED } from "../snapshot/tree.ts";
 import type { Element, Page } from "../state/page.ts";
 import { parseRef, type Ref } from "../state/refs.ts";
 
@@ -15,10 +15,16 @@ function squash(text: string): string {
   return text.replace(/\s+/gu, " ").trim();
 }
 
+export const CONTAINER_ROLES: ReadonlySet<string> = new Set(["generic", ...LIFTED]);
+
+export function sameRole(was: string, now: string): boolean {
+  return was === now || (CONTAINER_ROLES.has(was) && CONTAINER_ROLES.has(now));
+}
+
 export function driftBetween(was: Identity, now: Seen): Drift | null {
   if (now === null || !was.role) return null;
   if (now === "ignored") return { field: "hidden", was, now: null };
-  const roleChanged = was.role !== now.role;
+  const roleChanged = !sameRole(was.role, now.role);
   const nameChanged = squash(was.name) !== squash(now.name);
   if (!roleChanged && !nameChanged) return null;
   return { field: roleChanged && nameChanged ? "both" : roleChanged ? "role" : "name", was, now };

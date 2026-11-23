@@ -215,6 +215,14 @@ export async function poll<T>(check: () => Promise<T>, timeout: number): Promise
   }
 }
 
+export async function pollTimes<T>(check: () => Promise<T>, checks: number): Promise<T> {
+  for (let round = 1; ; round += 1) {
+    const found = await check();
+    if (found || round >= checks) return found;
+    await sleep(POLL);
+  }
+}
+
 export function pyInt(value: number): number {
   return Math.trunc(value);
 }
