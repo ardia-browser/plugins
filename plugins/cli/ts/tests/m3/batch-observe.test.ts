@@ -435,3 +435,46 @@ describe("review round 4: reaction setup in the light modes", () => {
     });
   }
 });
+
+class ReactionLostBrowser extends FormBrowser {
+  opened: (() => void) | null = null;
+
+  override async send(method: string, params: Record<string, unknown> | null = null): Promise<Record<string, unknown>> {
+    const declaration = String(params?.["functionDeclaration"] ?? "");
+    if (method === "Runtime.callFunctionOn" && declaration.includes("api.filterField(field)") && this.opened !== null) {
+      this.opened();
+      this.opened = null;
+      throw new ConnectionLost();
+    }
+    return super.send(method, params);
+  }
+}
+
+describe("review round 5: a lost connection during light-mode reaction setup", () => {
+  for (const mode of ["no_changes", "settle_only"]) {
+    test(`under ${mode} it stays a lost connection (exit 2), not a dialog refusal`, async () => {
+      const { state } = setup();
+      const browser = new ReactionLostBrowser();
+      state.browser = browser as never;
+      const outcome = await begin({ argv: ["type"] }, async () => {
+        const page = await state.page("T");
+        browser.opened = () => {
+          page.dialog = { type: "confirm", message: "Stay?" };
+        };
+        let ran = false;
+        try {
+          await observe(new Ctx(state, { [mode]: true }, "/", {}, null, "type"), page, async () => {
+            ran = true;
+            return 1;
+          }, [null, page.mainFrame]);
+          return { error: null as BrowseError | null, ran };
+        } catch (error) {
+          return { error: error as BrowseError, ran };
+        }
+      });
+      expect(outcome.error).toBeInstanceOf(ConnectionLost);
+      expect(outcome.error?.exitCode).toBe(2);
+      expect(outcome.ran).toBe(false);
+    });
+  }
+});

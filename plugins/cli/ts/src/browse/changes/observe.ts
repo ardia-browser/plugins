@@ -367,6 +367,7 @@ export async function watchReaction(state: State, page: Page, react: Reaction): 
       started = await reactionCall(page, WATCH_REACTION_FOCUSED, [watchId, expiry], frame, REACTION_CALL_TIMEOUT);
     }
   } catch (error) {
+    if (error instanceof ConnectionLost) throw error;
     if (error instanceof BrowseError || error instanceof TimedOut) return;
     throw error;
   }

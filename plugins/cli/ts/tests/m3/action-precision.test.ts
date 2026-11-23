@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { checkedFrom, HOLDS_FOCUS, listOptions, matchOptions, MAX_OPTIONS_LISTED, OVERLAY_INPUT, splitFinal } from "../../src/browse/act/choices.ts";
 import { driftBetween, driftMessage, guardDrift, identityOf, refuseDrift, sameRole } from "../../src/browse/act/drift.ts";
-import { COMMIT_CHECKS, insertThenFinalKey, setChecked } from "../../src/browse/act/fields.ts";
+import { clearField, COMMIT_CHECKS, fill, insertThenFinalKey, setChecked, setValue } from "../../src/browse/act/fields.ts";
 import { pollTimes } from "../../src/browse/act/common.ts";
 import { click, PREPARE_ACTION } from "../../src/browse/act/pointer.ts";
 import { BLOCKER_AT, blockerPhrase, classify, findBlocker } from "../../src/browse/act/obstruction.ts";
@@ -1363,5 +1363,61 @@ describe("review round 4", () => {
     const error = await failure(() => raceDialog(page, run, "`click`"));
     expect(error).toBeInstanceOf(ConnectionLost);
     expect(refusedRetry("click", error).exitCode).toBe(2);
+  });
+});
+
+describe("review round 5", () => {
+  test("clearing a field aborts before Select All when focus already moved, so no other field is cleared", async () => {
+    class MovedBeforeClear extends FakeRenderer {
+      override async call(fn: string, args: unknown[] = []): Promise<unknown> {
+        if (fn === HOLDS_FOCUS) return false;
+        if (fn.includes("ardiaBrowse.info")) return { connected: true, value: "old text" };
+        return super.call(fn, args);
+      }
+    }
+    const page = new MovedBeforeClear();
+    const error = await failure(() => clearField(page.page, new Element("F", "O", 1, "@e1"), false));
+    expect(error.code).toBe("focus_moved");
+    expect(page.params.filter(([method]) => method.startsWith("Input."))).toEqual([]);
+  });
+
+  test("a directly set field in a fully masked document returns its value masked", async () => {
+    const state = { pages: new Map([["T", {}]]) };
+    const frames = new Map([["F", { loader: "L" }]]);
+    for (let backend = 0; backend <= SECRET_FIELDS_PER_DOCUMENT; backend += 1) markSecret(state, { targetId: "T", frames }, "F", "L", backend);
+    const page = {
+      targetId: "T",
+      frames,
+      state,
+      loader: () => "L",
+      focusElement: async () => {},
+      call: async () => ({ set: true, stored: "2024-01-05" }),
+    } as unknown as Page;
+    const facts = { tag: "input", type: "date", editable: true, disabled: false };
+    const [retargeted, stored, readback] = await fill(page, new Element("F", "O", 5000, "@e9"), "2024-01-05", false, null, facts);
+    expect([retargeted, stored, readback]).toEqual([false, "••••••••••", null]);
+    const refused = { ...page, call: async () => ({ set: false, stored: "2024-01-05" }) } as unknown as Page;
+    const error = await failure(() => setValue(refused, new Element("F", "O", 5000, "@e9"), "date", "2031-01-01", true));
+    expect(error.message).not.toContain("2024");
+    expect(error.message).not.toContain("2031");
+    expect(error.data).toEqual({ value: "••••••••••" });
+  });
+
+  test("a wrapper around a focused shadow host counts as holding focus", () => {
+    const probe = new Function(`return ${HOLDS_FOCUS}`)() as (el: unknown) => boolean;
+    const view: Record<string, unknown> = {};
+    view["parent"] = view;
+    const doc: Record<string, unknown> = { defaultView: view };
+    const wrapper: Record<string, unknown> = { ownerDocument: doc, parentNode: doc };
+    const host: Record<string, unknown> = { ownerDocument: doc, parentNode: wrapper };
+    const shadow: Record<string, unknown> = { parentNode: null, host };
+    const input: Record<string, unknown> = { parentNode: shadow };
+    shadow["activeElement"] = input;
+    host["shadowRoot"] = shadow;
+    doc["activeElement"] = host;
+    expect(probe(wrapper)).toBe(true);
+    expect(probe(host)).toBe(true);
+    const sibling: Record<string, unknown> = { ownerDocument: doc, parentNode: doc };
+    expect(probe(sibling)).toBe(false);
   });
 });

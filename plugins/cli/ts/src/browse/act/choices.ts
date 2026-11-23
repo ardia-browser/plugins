@@ -44,7 +44,11 @@ export const HOLDS_FOCUS = `(el) => {
     return node;
   };
   const holdsFocus = deepest(el.ownerDocument);
-  if (!holdsFocus || !(holdsFocus === el || (!!el.contains && el.contains(holdsFocus)) || (!!el.shadowRoot && el.shadowRoot.contains(holdsFocus)))) return false;
+  const within = (node) => {
+    for (let at = node; at; at = at.parentNode || at.host || null) if (at === el) return true;
+    return false;
+  };
+  if (!holdsFocus || !within(holdsFocus)) return false;
   try {
     for (let view = el.ownerDocument.defaultView; view && view.parent && view.parent !== view; view = view.parent) {
       const owner = view.frameElement;

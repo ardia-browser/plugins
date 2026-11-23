@@ -25,6 +25,7 @@ import { asRecord, expectInput, poll, POLL, pollTimes, textInserted } from "./co
 import { checkedFrom, CHECK_STATE, HOLDS_FOCUS, matchOptions, OPTION_ROWS, type OptionRow, OVERLAY_INPUT, splitFinal } from "./choices.ts";
 import { latchSecret, type Readback, readBack, secretField } from "./readback.ts";
 import { click, scrollIntoView, targetPoint, waitEnabled } from "./pointer.ts";
+import { masked } from "../state/secrets.ts";
 
 export const SUGGESTION_TIMEOUT = 4.0;
 export const SUGGESTION_HINT_WAIT = 1.2;
@@ -93,8 +94,12 @@ export async function typeInto(page: Page, element: Element, text: string, human
 export async function clearField(page: Page, element: Element, humanize: boolean): Promise<void> {
   if (!(await info(page, element))["value"]) return;
   const input = inputOf(page);
-  await expectInput(page, element.frame, () => input.gesture("clear", () => input.pressCombo("Meta+a", humanize)), { keydown: 2 }, "Select all", element);
-  await expectInput(page, element.frame, () => input.gesture("clear", () => input.pressCombo("Backspace", humanize)), { keydown: 1 }, "Backspace", element);
+  const guarded = (combo: string) => async () => {
+    await refuseMovedFocus(page, element, "");
+    await input.pressCombo(combo, humanize);
+  };
+  await expectInput(page, element.frame, () => input.gesture("clear", guarded("Meta+a")), { keydown: 2 }, "Select all", element);
+  await expectInput(page, element.frame, () => input.gesture("clear", guarded("Backspace")), { keydown: 1 }, "Backspace", element);
   const held = await editableText(page, element);
   if (held["text"]) throw new BrowseError(`Couldn't clear ${element.label}; it still holds text`);
   if (held["chrome"]) flag("fill_cleared_beside_chrome", true);
@@ -164,7 +169,10 @@ export async function fill(page: Page, given: Element, text: string, humanize: b
     facts = await info(page, element);
     secret ||= secretField(facts);
   }
-  if (facts["tag"] === "input" && SET_DIRECTLY.has(String(facts["type"]))) return [retargeted, await setValue(page, element, String(facts["type"]), text), null];
+  if (facts["tag"] === "input" && SET_DIRECTLY.has(String(facts["type"]))) {
+    const hidden = await latchSecret(page, element, secret);
+    return [retargeted, await setValue(page, element, String(facts["type"]), text, hidden), null];
+  }
   const loader = page.loader(element.frame);
   await focusField(page, element, facts, humanize, true);
   let replaced: boolean;
@@ -375,13 +383,15 @@ export async function insertText(page: Page, element: Element, text: string, hol
   );
 }
 
-async function setValue(page: Page, element: Element, kind: string, text: string): Promise<string> {
+export async function setValue(page: Page, element: Element, kind: string, text: string, hidden = false): Promise<string> {
   const wanted = normalize(kind, text);
   await page.focusElement(element);
   const outcome = asRecord(await page.call(SET_VALUE, [element, wanted], { frame: element.frame }));
-  const stored = outcome["stored"];
+  const raw = outcome["stored"];
+  const stored = hidden && typeof raw === "string" ? masked(raw) : raw;
   if (!outcome["set"]) {
-    throw new BrowseError(`The ${kind} input ${element.label} refused ${reprText(wanted)} (it holds ${reprValue(stored)}); ${FORMATS[kind]}`, { value: stored }, "bad_value");
+    const asked = hidden ? masked(wanted) : wanted;
+    throw new BrowseError(`The ${kind} input ${element.label} refused ${reprText(asked)} (it holds ${reprValue(stored)}); ${FORMATS[kind]}`, { value: stored }, "bad_value");
   }
   return stored as string;
 }
