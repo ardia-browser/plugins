@@ -100,6 +100,40 @@ describe("the tabs a session opened outlive its daemon and Ardia's restart", () 
     }
   });
 
+  test("a listing asked for before a tab was recorded never drops it", () => {
+    const { dir } = folder();
+    try {
+      const state = daemon(dir, "a", "rl", "instance-1");
+      const askedBefore = Date.now() / 1000 - 1;
+      state.opened.add("TARGET-NEW");
+      state.noteAppTabs(new Map([["TARGET-NEW", "tab-run1-9"]]), null);
+      state.noteAppTabs(new Map(), new Set(["tab-run1-1"]), askedBefore);
+      expect([...state.registry.sessionTabs()]).toEqual(["tab-run1-9"]);
+      state.noteAppTabs(new Map(), new Set(["tab-run1-1"]), Date.now() / 1000 + 1);
+      expect(state.registry.sessionTabs().size).toBe(0);
+    } finally {
+      closeFd(dir);
+    }
+  });
+
+  test("a tab counts as recorded only once its id is on disk, so a failed write is tried again", () => {
+    const { dir, browse } = folder();
+    try {
+      const blocker = path.join(browse, SESSION_TABS);
+      fs.mkdirSync(blocker);
+      const state = daemon(dir, "a", "rl", "instance-1");
+      state.opened.add("TARGET");
+      state.appTabs.set("TARGET", "tab-run1-4");
+      state.noteAppTabs(new Map([["TARGET", "tab-run1-4"]]), null);
+      expect(state.recorded("TARGET")).toBe(false);
+      fs.rmdirSync(blocker);
+      state.noteAppTabs(new Map([["TARGET", "tab-run1-4"]]), null);
+      expect(state.recorded("TARGET")).toBe(true);
+    } finally {
+      closeFd(dir);
+    }
+  });
+
   test("entries older than three days lapse, a session keeps its newest tabs, and a damaged file starts over", () => {
     const { dir, browse } = folder();
     try {

@@ -291,11 +291,11 @@ export class Registry {
     return this.withSessionTabs((sessions) => new Set(map(sessions.get(this.owner)).keys()));
   }
 
-  updateSessionTabs(add: readonly string[], drop: readonly string[]): void {
+  updateSessionTabs(add: readonly string[], drop: readonly string[], recordedBefore = Number.POSITIVE_INFINITY): void {
     if (this.browseFd === null || (add.length === 0 && drop.length === 0)) return;
     this.withSessionTabs((sessions) => {
       const tabs = new Map(map(sessions.get(this.owner)));
-      for (const app of drop) tabs.delete(app);
+      for (const app of drop) if (num(tabs.get(app)) < recordedBefore) tabs.delete(app);
       for (const app of add) tabs.set(app, now());
       const kept = new Map(newest(tabs, num, MAX_SESSION_TABS));
       if (kept.size > 0) sessions.set(this.owner, kept);

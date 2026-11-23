@@ -4,6 +4,7 @@ import path from "node:path";
 import { peerUid } from "../../libc.ts";
 import { LINUX, uid } from "../../paths.ts";
 import { Cancelled, currentSignal } from "../cdp/cancel.ts";
+import { wallSeconds } from "../tokens.ts";
 import { BrowseError } from "../daemon-errors.ts";
 import { announcePath, type Caller, PROTOCOL, SOCKET_FILE, wire } from "../daemon/announce.ts";
 import type { Endpoint } from "../endpoint.ts";
@@ -21,7 +22,7 @@ export type AppTabState = {
   readonly targetInfos: ReadonlyMap<string, Record<string, unknown>>;
   readonly appTabs: Map<string, string>;
   readonly appGenerations: Map<string, unknown>;
-  noteAppTabs?(paired: ReadonlyMap<string, string>, present: ReadonlySet<string> | null): void;
+  noteAppTabs?(paired: ReadonlyMap<string, string>, present: ReadonlySet<string> | null, listedAt?: number): void;
 };
 
 export type AppRow = Record<string, unknown> & { id: string };
@@ -224,6 +225,7 @@ export async function whereAppHas(state: AppTabState, targetId: string): Promise
 }
 
 export async function appTabMap(state: AppTabState): Promise<Map<string, string>> {
+  const listedAt = wallSeconds();
   const windows = await appWindows(state);
   if (windows === null) return new Map();
   const rows = appTabRows(windows);
@@ -233,7 +235,7 @@ export async function appTabMap(state: AppTabState): Promise<Map<string, string>
     state.appGenerations.set(target, entry.generation);
   }
   const apps = new Map([...paired].map(([target, entry]) => [target, entry.app]));
-  state.noteAppTabs?.(apps, new Set(rows.map((row) => row.id)));
+  state.noteAppTabs?.(apps, new Set(rows.map((row) => row.id)), listedAt);
   return apps;
 }
 

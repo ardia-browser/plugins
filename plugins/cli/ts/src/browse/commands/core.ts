@@ -276,6 +276,7 @@ export async function newTab(
   state.opened.add(targetId);
   state.registry.noteOpened(state.instance, targetId);
   if (!state.targetInfos.has(targetId)) state.targetInfos.set(targetId, { targetId, url: "about:blank", title: "", type: "page" });
+  state.pairOpenedLater(targetId);
   state.tabId(targetId);
   if (label) {
     if (state.labels.has(label)) throw new BrowseError(`The label ${label} is already used by another tab`);
@@ -287,7 +288,6 @@ export async function newTab(
   await applyOpenOptions(ctx, page);
   if (url) await navigate(ctx, page, normalizeUrl(url));
   if (show) page = await showTab(ctx, page);
-  state.pairOpenedLater(targetId);
   return page;
 }
 

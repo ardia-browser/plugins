@@ -636,7 +636,7 @@ export class Daemon {
     try {
       await state.connect();
       await state.refreshTargets();
-      await state.readoptOpenedTabs();
+      await state.pairBeforeClosing();
       await temptabs.sweep(state);
       const registry = state.registry;
       const instance = state.instance;

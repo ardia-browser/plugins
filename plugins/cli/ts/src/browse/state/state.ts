@@ -389,7 +389,7 @@ export class State extends Refs implements temptabs.TempTabState {
     this.appGenerations.delete(targetId);
   }
 
-  noteAppTabs(paired: ReadonlyMap<string, string>, present: ReadonlySet<string> | null): void {
+  noteAppTabs(paired: ReadonlyMap<string, string>, present: ReadonlySet<string> | null, listedAt = Number.POSITIVE_INFINITY): void {
     try {
       const owned = this.registry.sessionTabs();
       const add: string[] = [];
@@ -404,7 +404,7 @@ export class State extends Refs implements temptabs.TempTabState {
         }
       }
       const drop = present === null ? [] : [...owned].filter((app) => !present.has(app));
-      this.registry.updateSessionTabs(add, drop);
+      this.registry.updateSessionTabs(add, drop, listedAt);
       if (readopted) flag("tab_readopted_after_restart", true);
     } catch {}
   }
@@ -417,16 +417,32 @@ export class State extends Refs implements temptabs.TempTabState {
     }
   }
 
+  recorded(targetId: string): boolean {
+    const app = this.appTabs.get(targetId);
+    if (app === undefined) return false;
+    try {
+      return this.registry.sessionTabs().has(app);
+    } catch {
+      return false;
+    }
+  }
+
   pairOpenedLater(targetId: string): void {
     withSignal(null, () => {
       void (async () => {
         for (let attempt = 0; attempt < PAIR_TRIES; attempt += 1) {
           if (attempt > 0) await sleep(PAIR_WAIT);
-          if (!this.opened.has(targetId) || this.appTabs.has(targetId) || this.endpoint === null) return;
+          if (!this.opened.has(targetId) || this.endpoint === null || this.recorded(targetId)) return;
           await appTabMap(this).catch(() => undefined);
         }
       })().catch(() => {});
     });
+  }
+
+  async pairBeforeClosing(): Promise<void> {
+    if ([...this.opened].some((target) => this.targetInfos.has(target) && !this.recorded(target)) || this.ownsSessionTabs()) {
+      await appTabMap(this).catch(() => undefined);
+    }
   }
 
   async readoptOpenedTabs(): Promise<void> {
