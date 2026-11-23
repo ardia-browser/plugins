@@ -32,6 +32,9 @@ beforeAll(() => {
       if (url.pathname === "/untyped") return new Response(ZIP);
       if (url.pathname === "/plain-octets") return new Response("just text, mislabeled", { headers: { "content-type": "application/octet-stream" } });
       if (url.pathname === "/caf%C3%A9") return new Response("<html><title>Café</title><body><main>Un café, s'il vous plaît.</main></body></html>", { headers: { "content-type": "text/html; charset=utf-8" } });
+      if (url.pathname === "/late-binary") return new Response(Buffer.concat([Buffer.from("a".repeat(8192)), Buffer.from([0xff, 0x00, 0x80])]), { headers: { "content-type": "application/octet-stream" } });
+      if (url.pathname === "/doc.pdf") return new Response(Buffer.from("%PDF-1.4\n%\xe2\xe3\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n", "latin1"), { headers: { "content-type": "application/pdf" } });
+      if (url.pathname === "/playlist") return new Response("#EXTM3U\n#EXTINF:5,\nclip.ts\n", { headers: { "content-type": "audio/x-mpegurl" } });
       if (url.pathname === "/utf16") return new Response(Buffer.from("Hello", "utf16le"), { headers: { "content-type": "application/octet-stream; charset=utf-16le" } });
       if (url.pathname === "/pixmap") return new Response(Uint8Array.from([0x50, 0x36, 0x0a, 0x31, 0x20, 0x31, 0x0a, 0x32, 0x35, 0x35, 0x0a, 0x01, 0x02, 0x03]), { headers: { "content-type": "image/x-portable-pixmap" } });
       if (url.pathname === "/readable") return new Response("<html><title>Readable</title><body><main>A readable page with enough words in it.</main></body></html>", { headers: { "content-type": "text/html" } });
@@ -71,7 +74,7 @@ describe("read --http keeps binary bodies whole (plugins#73, FB-8EJR)", () => {
   });
 
   test("with --out the body travels outside the redacted text and saves byte for byte", async () => {
-    const result = await fetchRun(`${base}/deck.pptx`, {}, { out_only: true });
+    const result = await fetchRun(`${base}/deck.pptx`, {}, { out_body: true });
     const data = result.data as Record<string, unknown>;
     expect(data["contentType"]).toBe("application/zip");
     expect(data["bytes"]).toBe(ZIP.length);
@@ -83,8 +86,7 @@ describe("read --http keeps binary bodies whole (plugins#73, FB-8EJR)", () => {
       addSecret(encoded.slice(4, 8));
       const answer = answerOf({ json: true }, result, null);
       expect(answer.get("body")).toBe(encoded);
-      const payload = loads(answer.get("out") as string) as Map<string, Value>;
-      const body = savedBody("read", answer, payload.get("data") as Map<string, Value>);
+      const body = savedBody("read", answer);
       const target = save(join(folder, "deck.pptx"), body as Uint8Array);
       expect(Buffer.compare(readFileSync(target), Buffer.from(ZIP))).toBe(0);
     } finally {
@@ -93,11 +95,9 @@ describe("read --http keeps binary bodies whole (plugins#73, FB-8EJR)", () => {
   });
 
   test("a body that arrives altered or short is refused, never saved", () => {
-    const data = new Map<string, Value>([["bytes", BigInt(ZIP.length)]]);
     const encoded = Buffer.from(ZIP).toString("base64");
-    expect(() => savedBody("read", new Map([["body", encoded.slice(0, 8)]]), data)).toThrow(BodyDamaged);
-    expect(() => savedBody("read", new Map([["body", `${encoded.slice(0, 4)}***${encoded.slice(7)}`]]), data)).toThrow(BodyDamaged);
-    expect(savedBody("read", new Map([["body", encoded]]), data)?.length).toBe(ZIP.length);
+    expect(() => savedBody("read", new Map([["body", `${encoded.slice(0, 4)}***${encoded.slice(7)}`]]))).toThrow(BodyDamaged);
+    expect(savedBody("read", new Map([["body", encoded]]))?.length).toBe(ZIP.length);
   });
 
   test("an untyped binary body is sniffed and kept raw too", async () => {
@@ -125,13 +125,23 @@ describe("read --http keeps binary bodies whole (plugins#73, FB-8EJR)", () => {
   });
 
   test("text --out saves are unchanged", () => {
-    expect(savedBody("read", new Map(), new Map([["content", "hello"]]))).toBeNull();
-    expect(savedBody("script", new Map([["body", "aGk="]]), new Map([["bytes", 2n]]))).toBeNull();
+    expect(savedBody("read", new Map([["out", "hello"]]))).toBeNull();
+    expect(savedBody("script", new Map([["body", "aGk="]]))).toBeNull();
+  });
+
+  test("binary bytes after a long text head, a PDF with --out and an only-out_only script read (Codex r2)", async () => {
+    const late = await fetchRun(`${base}/late-binary`, {}, { out_body: true });
+    expect(late.body?.length).toBe(8192 + 3);
+    await expect(fetchRun(`${base}/late-binary`, {}, {})).rejects.toMatchObject({ code: "binary_body" });
+    const pdf = await fetchRun(`${base}/doc.pdf`, {}, { out_body: true });
+    expect(Buffer.from(pdf.body as Uint8Array).subarray(0, 5).toString()).toBe("%PDF-");
+    await expect(fetchRun(`${base}/deck.pptx`, {}, { out_only: true })).rejects.toMatchObject({ code: "binary_body" });
+    expect((await fetchRun(`${base}/playlist`, { raw: true }, {})).data).toMatchObject({ content: "#EXTM3U\n#EXTINF:5,\nclip.ts\n" });
   });
 
   test("a UTF-16 body served as octets reads as text, a pixmap saves raw", async () => {
     expect((await fetchRun(`${base}/utf16`, { raw: true }, {})).data).toMatchObject({ content: "Hello" });
-    const pixmap = await fetchRun(`${base}/pixmap`, {}, { out_only: true });
+    const pixmap = await fetchRun(`${base}/pixmap`, {}, { out_body: true });
     expect(pixmap.body?.length).toBe(14);
   });
 
@@ -141,7 +151,7 @@ describe("read --http keeps binary bodies whole (plugins#73, FB-8EJR)", () => {
   });
 
   test("--require-md refuses a binary body even with --out", async () => {
-    await expect(fetchRun(`${base}/deck.pptx`, { require_md: true }, { out_only: true })).rejects.toBeInstanceOf(BrowseError);
+    await expect(fetchRun(`${base}/deck.pptx`, { require_md: true }, { out_body: true })).rejects.toBeInstanceOf(BrowseError);
   });
 });
 

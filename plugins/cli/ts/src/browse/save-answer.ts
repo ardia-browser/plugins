@@ -26,6 +26,26 @@ function saveTo(path: string, text: string, printer: Printer): string | null {
   }
 }
 
+function saveBody(path: string, body: Uint8Array, out: string, printer: Printer, call: Call, exit: number | bigint): Outcome {
+  let target: string;
+  try {
+    target = save(path, body);
+  } catch (error) {
+    printer.err(`✗ Couldn't write ${path}: ${writeFailure(error)}\n`);
+    return { status: 1 };
+  }
+  call.metrics.set("saved_to_file", true);
+  call.metrics.set("read_binary_saved", true);
+  let data: JsonObject = new Map();
+  try {
+    const payload = loads(out);
+    const given = payload instanceof Map ? payload.get("data") : undefined;
+    if (given instanceof Map) data = given;
+  } catch {}
+  printer.out(savedBodyLine(target, body, data));
+  return { status: exit };
+}
+
 export function saveAnswer(answer: JsonObject, secrets: Secrets, printer: Printer, call: Call, command: string, path: string): Outcome {
   const code = answer.get("code");
   if (typeof code === "string") call.noteErrorCode(code);
@@ -49,6 +69,15 @@ export function saveAnswer(answer: JsonObject, secrets: Secrets, printer: Printe
     printer.out(savedLine(target, out));
     return { status: exit };
   }
+  let body: Uint8Array | null;
+  try {
+    body = savedBody(command, answer);
+  } catch (error) {
+    if (!(error instanceof BodyDamaged)) throw error;
+    printer.err(`✗ The response body didn't arrive whole, so ${path} wasn't written; run the command again\n`);
+    return { status: 1 };
+  }
+  if (body !== null) return saveBody(path, body, out, printer, call, exit);
   let payload: Value;
   try {
     payload = loads(out);
@@ -63,27 +92,6 @@ export function saveAnswer(answer: JsonObject, secrets: Secrets, printer: Printe
   }
   const given = payload.get("data");
   const data: JsonObject = given instanceof Map ? given : new Map();
-  let body: Uint8Array | null;
-  try {
-    body = savedBody(command, answer, data);
-  } catch (error) {
-    if (!(error instanceof BodyDamaged)) throw error;
-    printer.err(`✗ The response body didn't arrive whole, so ${path} wasn't written; run the command again\n`);
-    return { status: 1 };
-  }
-  if (body !== null) {
-    let target: string;
-    try {
-      target = save(path, body);
-    } catch (error) {
-      printer.err(`✗ Couldn't write ${path}: ${writeFailure(error)}\n`);
-      return { status: 1 };
-    }
-    call.metrics.set("saved_to_file", true);
-    call.metrics.set("read_binary_saved", true);
-    printer.out(savedBodyLine(target, body, data));
-    return { status: exit };
-  }
   const [text, summary] = content(command, data, path);
   if (savesAsCsv(command, data, path)) call.metrics.set("saved_as_csv", true);
   if (!pyStrip(text)) {

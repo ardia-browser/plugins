@@ -218,12 +218,11 @@ function currentUmask(): number {
   return mask;
 }
 
-export function savedBody(command: string, answer: JsonObject, data: JsonObject): Uint8Array | null {
+export function savedBody(command: string, answer: JsonObject): Uint8Array | null {
   const encoded = command === "read" ? answer.get("body") : undefined;
   if (typeof encoded !== "string") return null;
   const body = Buffer.from(encoded, "base64");
-  const size = data.get("bytes");
-  if (body.toString("base64") !== encoded || typeof size !== "bigint" || BigInt(body.length) !== size) throw new BodyDamaged();
+  if (body.toString("base64") !== encoded) throw new BodyDamaged();
   return body;
 }
 

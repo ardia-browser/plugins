@@ -20,8 +20,8 @@ const TEXT_TYPES = new Set([
   "application/json", "application/ld+json", "application/x-ndjson", "application/xml", "application/xhtml+xml", "application/rss+xml",
   "application/atom+xml", "application/javascript", "application/ecmascript", "application/x-javascript", "application/x-www-form-urlencoded",
   "application/yaml", "application/x-yaml", "application/toml", "application/x-sh", "application/sql", "image/svg+xml",
+  "audio/x-mpegurl", "audio/mpegurl", "application/x-mpegurl", "application/vnd.apple.mpegurl", "audio/x-scpls",
 ]);
-const SNIFFED = 8192;
 const BINARY_FAMILIES = ["image/", "audio/", "video/", "font/", "model/"];
 const BINARY_TYPES = new Set([
   "application/zip", "application/gzip", "application/x-gzip", "application/x-tar", "application/x-7z-compressed", "application/x-rar-compressed",
@@ -97,11 +97,11 @@ export function binaryBody(kind: string, charset: string | null, body: Uint8Arra
   if (textualType(kind)) return false;
   if (binaryType(kind)) return true;
   if (charset !== null && UNICODE_CHARSETS.test(charset)) return false;
-  const head = body.subarray(0, SNIFFED);
-  if (head.includes(0)) return true;
+  const sample = body.length > MAX_BODY ? trimmedToChar(body.subarray(0, MAX_BODY)) : body;
+  if (sample.includes(0)) return true;
   if (charset !== null && !/^utf-?8$/iu.test(charset)) return false;
   try {
-    new TextDecoder("utf-8", { fatal: true }).decode(body.length > SNIFFED ? trimmedToChar(head) : head);
+    new TextDecoder("utf-8", { fatal: true }).decode(sample);
     return false;
   } catch {
     return true;
@@ -193,7 +193,12 @@ export async function fetchUrl(url: string, timeout: number, accept = ACCEPT, bi
     const contentType = response.headers.get("content-type") ?? "";
     const final = (response as unknown as { finalUrl: string }).finalUrl;
     const kind = pyStrip(contentType.split(";")[0] as string).toLowerCase();
-    if (kind === "application/pdf" || (body[0] === 0x25 && body[1] === 0x50 && body[2] === 0x44 && body[3] === 0x46)) {
+    const pdf = kind === "application/pdf" || (body[0] === 0x25 && body[1] === 0x50 && body[2] === 0x44 && body[3] === 0x46);
+    if (pdf && binary === "keep") {
+      if (body.length > MAX_BODY) throw new BrowseError(`${url} sent a binary file over ${groupThousands(String(MAX_BODY))} bytes; read --http --out saves files up to that size`, null, "result_too_large");
+      return [response.status, "application/pdf", "", final, body];
+    }
+    if (pdf) {
       if (body.length > MAX_BODY) throw new BrowseError(`${url} is a PDF over ${MAX_BODY} bytes; read it in a tab instead (drop --http)`);
       return [response.status, "application/pdf", await textFromBytes(body), final];
     }
@@ -238,7 +243,7 @@ export async function run(given: string, options: ReadOptions, globalOptions: Re
     const content = mode === "index" ? llmsLinks(text, source, filter).join("\n") : postProcess(text, { outline: options["outline"], filter });
     return new Result({ content, source, contentType: "text/plain", url }, content, true);
   }
-  const saving = Boolean(globalOptions["out_only"]);
+  const saving = Boolean(globalOptions["out_body"]);
   let [status, kind, text, final, binary] = await fetchUrl(url, timeout, ACCEPT, saving ? "keep" : "refuse");
   if (status >= 400) throw new BrowseError(`${url} answered HTTP ${status}`);
   if (binary !== undefined) {

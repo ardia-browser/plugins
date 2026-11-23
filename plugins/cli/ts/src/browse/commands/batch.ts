@@ -409,7 +409,7 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
       const current = given === undefined || given === null ? BATCH_DEFAULT_CAP : Number(given);
       ctx.options["max_output"] = current === 0 || wider === 0 ? 0 : Math.max(current, wider);
     }
-    if (saving && ran === "read") lineOptions["out_only"] = true;
+    if (saving && ran === "read") lineOptions["out_body"] = true;
     const staged = saving && ctx.state.pendingShown !== null ? new Map(ctx.state.pendingShown) : null;
     const [result, error] = await runOne(ctx, command, lineOptions);
     const failed = error === null && Boolean(result?.failed);
