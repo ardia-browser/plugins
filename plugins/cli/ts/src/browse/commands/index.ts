@@ -52,6 +52,7 @@ export const OWNERS: Readonly<Record<string, string>> = {
   removeinitscript: "D7",
   read: "D4",
   links: "D4",
+  text: "D4",
   script: "D7",
   vitals: "D4",
   diff: "D4",

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import "./libc-loaded.ts";
-import { linksArgs } from "../src/browse/commands/read-page.ts";
+import { linksArgs, textArgs } from "../src/browse/commands/read-page.ts";
+import { guessedFind } from "../src/browse/commands/find.ts";
 import { leadingSelector, withSelector } from "../src/browse/commands/parse.ts";
 import { commandHelp } from "../src/browse/help.ts";
 import { allowedFlags, splitGlobals } from "../src/browse/args.ts";
@@ -55,4 +56,29 @@ test("telemetry knows links and the new flags", () => {
   expect(telemetrySubcommand("browse", "links")).toBe("links");
   for (const name of ["screenshot", "get", "click", "fill"]) expect(allowedFlags(name)).toEqual(expect.arrayContaining(["-s", "--selector"]));
   expect(allowedFlags("find")).toContain("--nth");
+});
+
+test("text runs read, or get text with one selector, and names the form it ran (plugins#126)", () => {
+  expect(textArgs([])).toEqual(["read", [], "text ran as `read`; ardia browse has no text command"]);
+  expect(textArgs(["--nav"])).toEqual(["read", ["--nav"], "text ran as `read --nav`; ardia browse has no text command"]);
+  expect(textArgs(["#price"])).toEqual(["get", ["text", "#price"], "text #price ran as `get text #price`; ardia browse has no text command"]);
+  expect(textArgs(["@e12"])[0]).toBe("get");
+  expect(textArgs(["https://example.com/a"])[0]).toBe("read");
+  expect(textArgs(["www.example.com"])[0]).toBe("read");
+  expect(textArgs(["https://a.test", "https://b.test"])[0]).toBe("read");
+  expect(textArgs(["-s", "main"])).toEqual(["read", ["-s", "main"], "text ran as `read -s main`; ardia browse has no text command"]);
+  expect(KNOWN_COMMANDS).toContain("text");
+  expect(allowedFlags("text")).toEqual(expect.arrayContaining(["--nav", "-s", "--selector"]));
+  expect(commandHelp("text")).toContain("runs `get text <selector>`");
+});
+
+test("find with a value and no locator runs find text, reading the match unless an action is given (plugins#126)", () => {
+  const [one, note] = guessedFind(["agnoster"]);
+  expect(one).toEqual(["text", "agnoster", "text"]);
+  expect(note).toBe("find agnoster ran as `find text agnoster text`, which only reads the match; `find text agnoster` clicks it, and find takes a locator first (text, role, label, …)");
+  expect(guessedFind(["Sign in", "click"])).toEqual([["text", "Sign in", "click"], 'find "Sign in" ran as `find text "Sign in" click`; find takes a locator first (text, role, label, …)']);
+  for (const argv of [["text", "agnoster"], ["role", "button", "click"], ["text=agnoster"], ["first", "a"], ["agnoster", "zsh"], ["--exact", "label", "Email"]]) {
+    expect(guessedFind(argv)).toEqual([argv, null]);
+  }
+  expect(guessedFind(["--exact", "agnoster"])).toEqual([["text", "--exact", "agnoster", "text"], expect.any(String)]);
 });

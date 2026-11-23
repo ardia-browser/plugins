@@ -398,7 +398,7 @@ describe("refs", () => {
 describe("the command table", () => {
   const ctx = () => new Ctx(stateWith(new FakeBrowser()), {}, "/", {}, null);
 
-  const TYPESCRIPT_ONLY = ["links"];
+  const TYPESCRIPT_ONLY = ["links", "text"];
 
   test("every Python command is in the table and served", async () => {
     const names = oracle<{ commands: string[] }>("core").commands;

@@ -222,8 +222,36 @@ export async function findRole(
   throw new BrowseError(`${found.length} ${shown}s ${kind} "${name}"${more}, so nothing was clicked. ${fix}:\n${lines}`, { candidates: listed }, "ambiguous");
 }
 
+const FIND_FLAGS = { "--name": "value", "--exact": "bool", "--partial": "bool", "--no-humanize": "bool", "--nth": "value" } as const;
+
+function namesLocator(word: string): boolean {
+  const at = word.indexOf("=");
+  return FIND_LOCATORS.includes(word) || (at >= 0 && FIND_LOCATORS.includes(word.slice(0, at)));
+}
+
+export function guessedFind(argv: readonly string[]): [string[], string | null] {
+  const [, given] = parse([...argv], FIND_FLAGS);
+  const first = given[0];
+  if (first === undefined || namesLocator(first) || (given.length > 1 && !FIND_ACTIONS.includes(given[1] as string))) return [[...argv], null];
+  if (given.length > 1) return [["text", ...argv], `find ${quotedWord(first)} ran as \`find text ${quotedWord(first)} ${given.slice(1).join(" ")}\`; find takes a locator first (text, role, label, …)`];
+  return [["text", ...argv, "text"], `find ${quotedWord(first)} ran as \`find text ${quotedWord(first)} text\`, which only reads the match; \`find text ${quotedWord(first)}\` clicks it, and find takes a locator first (text, role, label, …)`];
+}
+
+function quotedWord(word: string): string {
+  return /^[A-Za-z0-9._@#-]+$/u.test(word) ? word : JSON.stringify(word);
+}
+
 export async function cmdFind(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, given] = parse(argv, { "--name": "value", "--exact": "bool", "--partial": "bool", "--no-humanize": "bool", "--nth": "value" });
+  const [args, note] = guessedFind(argv);
+  if (note === null) return findWith(ctx, args);
+  flag("guessed_syntax", true);
+  const result = await findWith(ctx, args);
+  result.notice = [note, result.notice].filter(Boolean).join("\n");
+  return result;
+}
+
+async function findWith(ctx: Ctx, argv: string[]): Promise<Result> {
+  const [options, given] = parse(argv, FIND_FLAGS);
   need(given, 1, "find <locator> <value> [action] [text]");
   if (options["exact"] && options["partial"]) throw new Usage("find takes --exact or --partial, not both");
   const [locator, args, wantedName] = findArguments(given, (options["name"] as string | undefined) ?? null);

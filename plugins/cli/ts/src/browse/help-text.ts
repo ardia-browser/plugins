@@ -57,5 +57,6 @@ export const COMMANDS: Readonly<Record<string, string>> = {
   "diff": "ardia browse diff snapshot [-b baseline] [-s sel] [-i] [-c] [-d n] | screenshot --baseline <png> | url <u1> <u2>\n\nsnapshot compares with a file, else with this session's last snapshot.",
   "clipboard": "ardia browse clipboard read | write <text> | copy | paste\n\nReads or writes the clipboard through the page, or sends copy or paste to it.",
   "addinitscript": "ardia browse addinitscript <js> [--stdin]\n\nRegisters a script that runs in the page's main world before its own scripts, and prints its id.",
+  "text": "ardia browse text [selector]\n\nNot a command of its own: plain `text` runs `read` (the page's text) and `text <selector>` runs `get text <selector>`, each with a one-line note naming that form. Use `read` and `get text` directly.",
   "links": "ardia browse links [pattern] [--limit n]\n\nLists the links on the session's tab whose URL contains the pattern (* or none: every link), in page\norder: read's link listing as one command.",
 };

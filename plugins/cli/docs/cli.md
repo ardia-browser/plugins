@@ -910,6 +910,7 @@ The CLI also takes the forms agents typed in the bench and got `Unknown …` for
   flag (`fill -s #q -s` types `-s`). An empty selector (or `--`), a selector given both as a word and with `-s`, and a
   screenshot path given twice (or a word after `screenshot -s <sel>` that isn't a file path) are usage errors. Flows
   record `fill -s` like `fill` (typed text masked) and keep `find … --nth`.
+- `text` and a one-word `find`, the two guesses agents made most, run their real forms and say so on stderr: `text` is `read` (with its flags) and `text <selector>` is `get text <selector>`; `find <text>` with no locator is `find text <text> text`, which reads the match instead of clicking it (`find text <text>` clicks), and `find <text> <action>` is `find text <text> <action>`. Both count `guessed_syntax`; watch `error_code` `unknown_command` and `usage` on `find`, which they should lower.
 - `links [pattern]` is `read --links <pattern> --list` (every link without a pattern). It takes `--limit`; `-s`,
   `--out`, `--links`, `--timeout` and a second pattern are usage errors (use `read --links … --list` for those).
 - `find role … --nth <n>` picks match n of several (from 0, like `find nth`) instead of failing as ambiguous, and an

@@ -9,6 +9,7 @@ import { run as fetchRun } from "../read/fetch.ts";
 import { oopifText } from "../read/frames.ts";
 import * as pagedata from "../read/pagedata.ts";
 import * as pages from "../read/pages.ts";
+import { cmdGet } from "./read.ts";
 import { pageIsPdf, pageText } from "../read/pdftext.ts";
 import { postProcess } from "../read/readurl.ts";
 import { runScroll, scrolls } from "../read/scroll.ts";
@@ -131,6 +132,25 @@ export function linksArgs(argv: readonly string[]): string[] {
   if (options["limit"] !== undefined) out.push("--limit", String(options["limit"]));
   return out;
 }
+
+const URL_LIKE = /^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/|www\.)/u;
+
+export function textArgs(argv: readonly string[]): ["get" | "read", string[], string] {
+  const [options, given] = parse([...argv], pages.flags(), pages.ALIASES);
+  const sole = given.length === 1 ? (given[0] as string) : null;
+  if (sole !== null && sole !== "-" && !URL_LIKE.test(sole) && Object.keys(options).length === 0) {
+    return ["get", ["text", sole], `text ${sole} ran as \`get text ${sole}\`; ardia browse has no text command`];
+  }
+  return ["read", [...argv], `text ran as \`read${argv.length ? ` ${argv.join(" ")}` : ""}\`; ardia browse has no text command`];
+}
+
+register("text", async (ctx, argv) => {
+  flag("guessed_syntax", true);
+  const [command, args, note] = textArgs(argv);
+  const result = command === "get" ? await cmdGet(ctx, args) : await cmdRead(ctx, args);
+  result.notice = [note, result.notice].filter(Boolean).join("\n");
+  return result;
+});
 
 register("links", (ctx, argv) => {
   flag("guessed_syntax", true);
