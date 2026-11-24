@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
-import { rebound } from "../src/browse/commands/batch.ts";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { rebound, SHORT_VALUE_FLAGS, VALUE_FLAGS_TAKEN } from "../src/browse/commands/batch.ts";
 import { asksHelp } from "../src/browse/commands/index.ts";
 import { labelShaped } from "../src/browse/commands/act.ts";
 import { type Field, fieldLine, fieldSpecs, formSummary, maskedValue, rowsText, secretFacts, shownInvalid, splitTop } from "../src/browse/commands/extract.ts";
@@ -59,6 +61,11 @@ test("a stale ref is rebound only where it is a selector", () => {
   expect(rebound(["click", "--selector=#a", "--selector=@e14"], "e14", "e352")).toEqual(["click", "--selector=#a", "--selector=@e352"]);
   expect(rebound(["fill", "--no-humanize", "-s", "@e14", "@e14"], "e14", "e352")).toEqual(["fill", "--no-humanize", "-s", "@e352", "@e14"]);
   expect(rebound(["fill", "@e14", "-s", "@e14"], "e14", "e352")).toEqual(["fill", "@e352", "-s", "@e14"]);
+  expect(rebound(["diff", "snapshot", "-s", "@e14", "-b", "--selector=@e14"], "e14", "e352")).toEqual(["diff", "snapshot", "-s", "@e352", "-b", "--selector=@e14"]);
+  expect(rebound(["diff", "snapshot", "--baseline", "-s", "-s", "@e14"], "e14", "e352")).toEqual(["diff", "snapshot", "--baseline", "-s", "-s", "@e352"]);
+  expect(rebound(["snapshot", "-d", "@e14", "-s", "@e14"], "e14", "e352")).toEqual(["snapshot", "-d", "@e14", "-s", "@e352"]);
+  expect(rebound(["wait", "-t", "@e14"], "e14", "e352")).toBeNull();
+  expect(rebound(["wait", "@e14", "-t", "x"], "e14", "e352")).toEqual(["wait", "@e352", "-t", "x"]);
   expect(rebound(["type", "@e14", "--delay", "@e14"], "e14", "e352")).toEqual(["type", "@e352", "--delay", "@e14"]);
 });
 
@@ -193,6 +200,23 @@ test("a redrawn ref is followed only as a unique match in the same frame, dialog
   expect(sameScope(ref("a", { unique: false }), ref("b"))).toBe(false);
   expect(sameScope(ref("a"), ref("b", { target: "T2" }))).toBe(false);
   expect(sameScope(ref("a"), ref("b", { loader: "L2" }))).toBe(false);
+});
+
+function sources(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const full = join(dir, name);
+    return statSync(full).isDirectory() ? sources(full) : full.endsWith(".ts") ? [full] : [];
+  });
+}
+
+test("rebound knows every value-taking flag the browse commands parse, long and short", () => {
+  const text = sources(join(import.meta.dir, "..", "src", "browse")).map((file) => readFileSync(file, "utf8")).join("\n");
+  const valued = new Set([...text.matchAll(/"(--[a-z0-9-]+)": "(?:value|multi)"/gu)].map((match) => match[1] as string));
+  valued.delete("--selector");
+  expect([...valued].filter((flag) => !VALUE_FLAGS_TAKEN.has(flag)).sort()).toEqual([]);
+  const known = new Set(Object.values(SHORT_VALUE_FLAGS).flat());
+  const shorts = [...text.matchAll(/"(-[a-zA-Z])": "(--[a-z0-9-]+)"/gu)].filter((match) => valued.has(match[2] as string)).map((match) => match[1] as string);
+  expect([...new Set(shorts)].filter((flag) => !known.has(flag)).sort()).toEqual([]);
 });
 
 test("a stale ref error carries its successor and matches without changing its message", () => {

@@ -1207,7 +1207,8 @@ followed. When a single command's error names a successor (`is now @e352`) that 
 says `→ not followed for you: …; on the page now: …` (telemetry `batch_ref_not_followed`). The rebinding replaces the ref only at the
 command's selector, read as the command's own parser reads it: the last `-s`/`--selector` value when there is one
 (`scroll down 300 -s @e14`, `click -s '#a' -s @e14`), else its selector arguments (`click`'s first, `drag`'s two, `get
-text`'s second), skipping the values of flags such as `--delay` and `--button`; `fill` takes only a leading `-s`, so the
+text`'s second), skipping the values of every flag that takes one (`--delay`, `-b`/`--baseline`, …: `VALUE_FLAGS_TAKEN` and
+`SHORT_VALUE_FLAGS`, which a test keeps in step with the commands' parsers); `fill` takes only a leading `-s`, so the
 words after it stay text. Never in text or values to type, never after `--`. When none or several match, the line fails as before and lists the refs on the page now, so no extra
 snapshot is needed: `→ 2 match it now, so nothing was picked: button "Delete" [ref=e30], button "Delete" [ref=e31]`, or
 `→ on the page now:` with up to six of the same role (`--json`: `matches`). Telemetry: `batch_ref_healed`,

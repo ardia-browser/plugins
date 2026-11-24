@@ -240,10 +240,25 @@ const MAX_HEALS = 4;
 const NOT_FOLLOWED = "it wasn't the only one with its role and name, or the new one is in another frame, dialog or container, so check it before using it";
 const SELECTOR_PREFIX = "--selector=";
 const SELECTOR_FLAGS = new Set(["-s", "--selector"]);
-const VALUE_TAKING = new Set([
-  "--button", "--delay", "--count", "--timeout", "--nth", "--name", "--label", "--depth", "-d", "--out", "--property", "--duration", "--baseline",
-  "--text", "--url", "--load", "--fn", "--state", "--with-screenshot", "--screenshot-format", "--screenshot-quality", "--format", "--quality", "--steps",
+export const VALUE_FLAGS_TAKEN: ReadonlySet<string> = new Set([
+  "--baseline", "--block", "--body", "--button", "--capability", "--categories", "--column", "--concurrency", "--condition", "--content", "--content-type",
+  "--credential-provider", "--curl", "--delay", "--depth", "--description", "--domain", "--duration", "--enable", "--expires", "--field",
+  "--fields", "--filter", "--fixture", "--fn", "--format", "--from", "--headers", "--idle", "--init-script", "--item", "--kind", "--label", "--limit",
+  "--links", "--llms", "--load", "--match", "--max-chars", "--method", "--name", "--nth", "--origin", "--out", "--output", "--param", "--params",
+  "--password", "--password-selector", "--patch", "--path", "--payload", "--port", "--prefix", "--property", "--resource-type", "--role",
+  "--save", "--scope", "--screenshot-dir", "--screenshot-format", "--screenshot-quality", "--site", "--state", "--status", "--step",   "--submit-selector", "--tags", "--target", "--text", "--threshold", "--timeout", "--to", "--trace", "--type", "--url", "--username",
+  "--username-selector", "--wait-until", "--where", "--with-screenshot",
 ]);
+export const SHORT_VALUE_FLAGS: Readonly<Record<string, readonly string[]>> = {
+  snapshot: ["-d"],
+  diff: ["-b", "-d", "-o", "-t"],
+  wait: ["-t", "-u", "-l", "-f"],
+};
+
+function takesValue(command: string, word: string): boolean {
+  return VALUE_FLAGS_TAKEN.has(word) || (SHORT_VALUE_FLAGS[command] ?? []).includes(word);
+}
+
 const SELECTOR_AT: Readonly<Record<string, readonly number[]>> = {
   click: [0], dblclick: [0], hover: [0], focus: [0], fill: [0], type: [0], check: [0], uncheck: [0], select: [0], drag: [0, 1], upload: [0],
   download: [0], scrollintoview: [0], wait: [0], highlight: [0], screenshot: [0], styles: [0], frame: [0], get: [1], is: [1],
@@ -299,7 +314,7 @@ export function rebound(command: readonly string[], stale: string, fresh: string
       lastFlag = { index, inline: true };
       continue;
     }
-    if (VALUE_TAKING.has(word)) {
+    if (takesValue(name, word)) {
       index += 1;
       continue;
     }
