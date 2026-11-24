@@ -180,12 +180,26 @@ function mergeElements(first: readonly Element[], extra: readonly Element[]): El
   return out;
 }
 
+const CSS_IN_ROOTS = "(s, ...roots) => { const seen = new Set(); const out = []; for (const root of roots) for (const el of root.querySelectorAll(s)) if (!seen.has(el)) { seen.add(el); out.push(el); } return out; }";
+
+async function cssInShadowRoots(page: Page, frame: string, selector: string): Promise<Element[]> {
+  const roots = await pierce.shadowRoots(page, frame);
+  if (roots.length === 0) return [];
+  try {
+    const remote = await page.call(CSS_IN_ROOTS, [selector, ...roots], { frame, byValue: false, read: true });
+    return page.elementsFrom(remote, frame, `--within ${selector}`, 20);
+  } catch (error) {
+    if (error instanceof BrowseError && error.code === "page_script_error") return [];
+    throw error;
+  }
+}
+
 async function containerBySelector(ctx: Ctx, page: Page, frame: string, value: string): Promise<[Page, Element] | null> {
   const cssSelector = value.startsWith("css=") ? value.slice(4) : value;
   const css = await scopedMatches(page, frame, null, "css", cssSelector, false);
   if (css !== null) {
     if (css.length > 1) return ambiguousContainers(ctx, page, value, css);
-    const merged = mergeElements(css, await pierce.queryAll(page, frame, cssSelector, 20));
+    const merged = mergeElements(css, await cssInShadowRoots(page, frame, cssSelector));
     if (merged.length > 1) return ambiguousContainers(ctx, page, value, merged);
     if (merged.length === 1) return [page, merged[0] as Element];
     return null;

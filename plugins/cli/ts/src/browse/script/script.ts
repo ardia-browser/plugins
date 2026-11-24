@@ -750,7 +750,7 @@ export async function run(ctx: Ctx, source: string, seconds: number, mode: Scrip
     const steps = script === null ? [] : stepsData(script.steps, source);
     const rawCode = scriptCode(message["code"]);
     const rawMsg = String(message["message"] || "");
-    const isMissingApi = /^page\.[A-Za-z_$][\w$]* isn't part of ardia's script API:/u.test(rawMsg);
+    const isMissingApi = message["name"] === "TypeError" && /^page\.[A-Za-z_$][\w$]* isn't part of ardia's script API:/u.test(rawMsg);
     const finalCode = rawCode === "usage" && !isMissingApi ? "script_failed" : rawCode;
     throw failure(`${errorText(message, source, script?.calls ?? [])}${hint}${ran ? `\n${ran}` : ""}`, [...logs, ...notes], { ...failureData(message, script?.calls ?? []), line, steps }, finalCode);
   }
