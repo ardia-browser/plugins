@@ -112,8 +112,11 @@
         "url": "http://127.0.0.1:8821/api/check"
       },
       "deadline_s": 480,
-      "prompt": "On the Kestrel Supply store open in this tab, order 3 of the cheapest USB-C dock that can drive two 4K monitors at 60 Hz at the same time and charges a laptop at 100 W or more. Use the best promo code available. Ship them to my office: Jordan Lee, Northwind Labs, 548 Market St, Suite 1200, San Francisco, CA 94104, phone (415) 555-0198. They need to arrive by Wednesday, Nov 11, so pick the cheapest delivery option that gets there by then. Pay with my saved card and place the order.",
-      "today": "2026-11-06"
+      "prompt": "On the Kestrel Supply store open in this tab, order 3 of the cheapest USB-C dock that can drive two 4K monitors at 60 Hz at the same time and charges a laptop at 100 W or more. Use the best promo code available. Ship them to my office: Jordan Lee, Northwind Labs, 548 Market St, Suite 1200, San Francisco, CA 94104, phone (415) 555-0198. They need to arrive by {arrive_by}, so pick the cheapest delivery option that gets there by then. Pay with my saved card and place the order.",
+      "today": "live",
+      "business_days": {
+        "arrive_by": 3
+      }
     },
     {
       "id": "multitab",

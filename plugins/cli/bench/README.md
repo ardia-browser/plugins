@@ -54,7 +54,9 @@ passes, and each trap fails.
 `tasks.json` is `{version, tasks: [...]}`; each task has `id`, `title`, `server` (`{command, ports}`, run with this
 folder as cwd), `start_url` (the only tab open when the run starts), `extra_urls` (other URLs the prompt names),
 `preopen_extra` (false everywhere), `reset` and `check` (`{method, url}`), `deadline_s`, `prompt` (verbatim, the
-same for every contender) and `today` (each side's prompt ends with "Today is Friday, November 6, 2026.").
+same for every contender) and `today` (each side's prompt ends with "Today is Friday, November 6, 2026."). `today`
+`"live"` uses the run's own date (or `BENCH_TODAY`), and `business_days` fills a `{name}` in the prompt with the date
+that many business days later; `shop` uses both, and its store dates its deliveries and promos from the same clock.
 
 ## Running
 
@@ -76,7 +78,9 @@ python3 -I harness/bench.py stop
 | plan | machine | contenders |
 | --- | --- | --- |
 | `plans/daily-ardia.json` | MacBook | `ardia-codex` (GPT-6.2 Sol high), `ardia-claude` (Opus 5.5 high); 3 lanes, normal memory pressure only, one shared app copy |
-| `plans/daily-compare.json` | Mac mini | `bucloud-codex`, `bucloud-claude` (Browser Use cloud browser, 2 lanes each), `aside-sol`, `aside-opus`; lanes from 10 |
+| `plans/daily-bucloud.json` | Mac mini | `bucloud-codex`, `bucloud-claude` (Browser Use cloud browser, 2 lanes each); lanes from 10 |
+| `plans/daily-aside.json` | Mac mini | `aside-sol`, `aside-opus`; one lane, from 20 |
+| `plans/daily-compare.json` | Mac mini | the four above in one plan, paced together |
 | `plans/daily.json` | one machine | all six |
 | `plans/smoke.json` | either | `news` once with both Ardia contenders |
 
@@ -85,8 +89,10 @@ Each plan runs all eight tasks twice. Claude Code runs go through VibeProxy (`cl
 
 ```sh
 python3 -I harness/bench.py plan plans/daily-ardia.json --app ~/ardia-scratch/bench-proper/app/Ardia.app
-python3 -I harness/bench.py plan plans/daily-compare.json
-python3 -I harness/bench.py summarize ~/ardia-scratch/bench-proper/results/daily-ardia ~/mini-results/daily-compare \
+python3 -I harness/bench.py plan plans/daily-bucloud.json
+BENCH_HOME=~/ardia-scratch/bench-aside python3 -I harness/bench.py plan plans/daily-aside.json
+python3 -I harness/bench.py summarize ~/ardia-scratch/bench-proper/results/daily-ardia \
+  ~/mini-results/daily-bucloud ~/mini-results/daily-aside \
   --out ~/ardia-scratch/bench-proper/results/daily
 ```
 
@@ -112,7 +118,8 @@ Every side starts `claude -p` with `--setting-sources project --strict-mcp-confi
 ### Lanes and scheduling
 
 - Lane `k` runs its own copy of every task server at `BENCH_PORT_OFFSET=1000(k+1)` and rewrites the task's URLs
-  and prompt to match; Aside stays on +0, since its driver reads `tasks.json`. `lane_base` shifts the numbering so two
+  and prompt to match; Aside stays on +0, since its driver reads a copy of
+  `tasks.json` with every prompt already dated. `lane_base` shifts the numbering so two
   plans on one machine don't share servers (give the second its own `BENCH_HOME` too).
 - The plan refuses to start when an offset task port hits a harness port (Ardia `port + k`, Browser Use local CDP
   `9671 + k`, OpenCode `9571 + k` / `19990 + k`) or the ephemeral range; cloud-browser lanes reserve no CDP port.

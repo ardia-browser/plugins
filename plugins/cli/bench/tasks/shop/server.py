@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import datetime
 import re
 import sys
 import threading
@@ -10,9 +11,9 @@ sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE))
 from benchhttp import Handler, now_ms, serve_forever
 from catalog import CATEGORIES, COUPONS, POSTS, PRODUCTS, SHIPPING, STATES
+from livedates import add_business_days, full_date, month_day, short_day, today
 
 PORT = 8821
-TODAY = "2026-11-06"
 PAGE_SIZE = 12
 TAX_RATE = 0.08625
 SAVED_ADDRESS = {"name": "Jordan Lee", "company": "", "line1": "2290 Fulton St", "line2": "Apt 4", "city": "San Francisco",
@@ -54,8 +55,8 @@ def coupon_problem(code, lines):
     subtotal = sum(p["price"] * q for p, q in lines)
     if not c:
         return f"“{code}” isn't a valid promo code."
-    if c["ends"] < TODAY:
-        return f"Promo code {code} expired on {month_day(c['ends'])}."
+    if coupon_ends(code) < today():
+        return f"Promo code {code} expired on {full_date(coupon_ends(code))}."
     if c["cats"] and not any(p["cat"] in c["cats"] for p, _ in lines):
         return f"Promo code {code} doesn't apply to the items in your cart."
     if subtotal < c["min"]:
@@ -63,9 +64,26 @@ def coupon_problem(code, lines):
     return None
 
 
-def month_day(iso):
-    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    return f"{months[int(iso[5:7]) - 1]} {int(iso[8:])}, {iso[:4]}"
+def coupon_ends(code):
+    return today() + datetime.timedelta(days=COUPONS[code]["ends_in"])
+
+
+def days_ago(count):
+    return today() - datetime.timedelta(days=count)
+
+
+def eta(method):
+    first, last = (add_business_days(today(), n) for n in method[4])
+    if method[0] == "standard":
+        return f"Arrives {short_day(first)} – {short_day(last)}"
+    if method[0] == "overnight":
+        return f"Arrives {short_day(first)}"
+    return f"Arrives by {short_day(last)}"
+
+
+def post_paragraphs(post):
+    ends = coupon_ends("TECH20")
+    return [x.format(tech20_ends=f"{ends:%A}, {month_day(ends)}") for x in post[3]]
 
 
 def totals(shipping_id="standard"):
@@ -122,7 +140,7 @@ def layout(title, body, active=None, flash=None):
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{escape(title)} | Kestrel Supply</title><link rel="stylesheet" href="/static/shop.css"></head><body>
 <a class="skip" href="#main">Skip to content</a>
-<div class="promo-strip">Free standard shipping on orders over $99 · Take 10% off orders of $150+ with code <strong>FALL10</strong> through Nov 30</div>
+<div class="promo-strip">Free standard shipping on orders over $99 · Take 10% off orders of $150+ with code <strong>FALL10</strong> through {month_day(coupon_ends("FALL10"))}</div>
 <header class="top"><div class="wrap top-row">
 <a class="logo" href="/"><svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="7" fill="#1f3a5f"/><path d="M7 21 L14 7 L21 21 L14 16 Z" fill="#ff9f43"/></svg>Kestrel Supply</a>
 <form class="search" role="search" action="/search"><label class="sr" for="q">Search products</label><input id="q" name="q" type="search" placeholder="Search docks, monitors, cables…"><button class="btn" type="submit">Search</button></form>
@@ -130,7 +148,7 @@ def layout(title, body, active=None, flash=None):
 </div><nav class="cats wrap" aria-label="Departments">{nav}<a href="/deals" class="deals"{' aria-current="page"' if active == "deals" else ""}>Deals</a><a href="/blog"{' aria-current="page"' if active == "blog" else ""}>Guides</a></nav></header>
 <main id="main" class="wrap">{flash_html}{body}</main>
 <footer class="foot"><div class="wrap"><p><strong>Kestrel Supply</strong> · Office tech for teams and home desks · Oakland, CA</p>
-<p><a href="/help/shipping">Shipping</a> · <a href="/help/returns">30-day returns</a> · <a href="/help/contact">Contact us</a></p><p class="muted">Prices in USD. © 2026 Kestrel Supply Co.</p></div></footer>
+<p><a href="/help/shipping">Shipping</a> · <a href="/help/returns">30-day returns</a> · <a href="/help/contact">Contact us</a></p><p class="muted">Prices in USD. © {today().year} Kestrel Supply Co.</p></div></footer>
 <script src="/static/shop.js"></script></body></html>"""
 
 
@@ -151,7 +169,7 @@ def category_page(slug, q):
     next_link = f'<li><a href="{link(page + 1)}" rel="next">Next ›</a></li>' if page < pages else ""
     banner = ""
     if slug == "monitors":
-        banner = '<div class="cat-banner">Screen week: <strong>25% off monitors</strong> with code <strong>SCREENS25</strong> through Nov 22.</div>'
+        banner = f'<div class="cat-banner">Screen week: <strong>25% off monitors</strong> with code <strong>SCREENS25</strong> through {month_day(coupon_ends("SCREENS25"))}.</div>'
     first, last = (page - 1) * PAGE_SIZE + 1, (page - 1) * PAGE_SIZE + len(shown)
     body = (f'<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › {escape(CAT_NAME[slug])}</nav>'
             f'<h1>{escape(CAT_NAME[slug])}</h1><p class="muted">{escape(blurb)}</p>{banner}'
@@ -260,7 +278,7 @@ def checkout_page(form=None, errors=None):
     methods = "".join(
         f'<label class="method"><input type="radio" name="shipping" value="{m[0]}" data-cost="{cost(m)}"{" checked" if form.get("shipping") == m[0] else ""}>'
         f'<span><strong>{m[1]}</strong> · {"Free" if cost(m) == 0 else usd(cost(m))}'
-        f'<br><span class="muted">{m[4]}</span></span></label>' for m in SHIPPING)
+        f'<br><span class="muted">{eta(m)}</span></span></label>' for m in SHIPPING)
     lines = "".join(f'<li>{q} × {escape(p["name"])}<span>{usd(p["price"] * q)}</span></li>' for p, q in t["lines"])
     body = (f'<h1>Checkout</h1>{err_box}<form method="post" action="/checkout" class="checkout" novalidate><div class="co-main">'
             f'<fieldset><legend>Ship to</legend>'
@@ -269,7 +287,7 @@ def checkout_page(form=None, errors=None):
             f'<label class="method"><input type="radio" id="ship-new" name="ship_to" value="new"{" checked" if ship_new else ""}><span><strong>Ship to a new address</strong></span></label>'
             f'<div class="new-address">{"".join(field(*f) for f in FIELDS)}</div></fieldset>'
             f'<fieldset><legend>Delivery method</legend>{methods}{"<p class=err>" + escape(errors["shipping"]) + "</p>" if "shipping" in errors else ""}'
-            f'<p class="muted small">Business days only. Orders placed after 2 PM PT ship the next business day.</p></fieldset>'
+            f'<p class="muted small">Delivery dates count business days and are for orders placed today.</p></fieldset>'
             f'<fieldset><legend>Payment</legend><label class="method"><input type="radio" name="payment" value="card-4417" checked><span><strong>Visa ending 4417</strong><br><span class="muted">Jordan Lee · exp 09/28</span></span></label></fieldset></div>'
             f'<section class="summary" aria-label="Order summary"><h2>Order summary</h2><ul class="lines">{lines}</ul><dl>'
             f'<dt>Subtotal</dt><dd>{usd(t["subtotal"])}</dd>'
@@ -305,15 +323,16 @@ def order_page(number):
     method = next(m for m in SHIPPING if m[0] == o["shipping"])
     body = (f'<div class="confirm"><h1>Thanks, Jordan! Your order is placed.</h1><p>Order number <strong>{number}</strong> · a receipt is on its way to jordan@northwind.dev.</p>'
             f'<h2>Items</h2><ul>{items}</ul><h2>Shipping to</h2><p>{escape(a["name"])}<br>{escape(a.get("company", "")) + "<br>" if a.get("company") else ""}{escape(a["line1"])} {escape(a.get("line2", ""))}<br>'
-            f'{escape(a["city"])}, {escape(a["state"])} {escape(a["zip"])}</p><p>{method[1]} · {method[4]}</p>'
+            f'{escape(a["city"])}, {escape(a["state"])} {escape(a["zip"])}</p><p>{method[1]} · {eta(method)}</p>'
             f'<p>{"Promo code " + o["coupon"] + " applied · " if o["coupon"] else ""}Total charged {usd(o["total"])}</p><p><a href="/">Continue shopping</a></p></div>')
     return layout(f"Order {number}", body)
 
 
 def deals_page():
-    deals = [("DESKDAYS", "15% off docks, hubs, cables & adapters", "Desk Days: upgrade your one-cable setup. Ends Nov 15."),
-             ("SCREENS25", "25% off monitors", "Screen week on every monitor we carry. Ends Nov 22."),
-             ("FALL10", "10% off orders of $150+", "Our fall thank-you, sitewide. Ends Nov 30.")]
+    ends = {code: month_day(coupon_ends(code)) for code in ("DESKDAYS", "SCREENS25", "FALL10")}
+    deals = [("DESKDAYS", "15% off docks, hubs, cables & adapters", f"Desk Days: upgrade your one-cable setup. Ends {ends['DESKDAYS']}."),
+             ("SCREENS25", "25% off monitors", f"Screen week on every monitor we carry. Ends {ends['SCREENS25']}."),
+             ("FALL10", "10% off orders of $150+", f"Our seasonal thank-you, sitewide. Ends {ends['FALL10']}.")]
     sale = sorted([p for p in PRODUCTS if p["was"]], key=lambda p: p["price"] - p["was"])[:8]
     cards = "".join(f'<li class="deal"><p class="code">{c}</p><h3>{escape(t)}</h3><p class="muted">{escape(d)}</p></li>' for c, t, d in deals)
     body = (f'<h1>Deals</h1><p class="muted">Enter a code in your cart. One code per order.</p><ul class="deals-grid">{cards}</ul>'
@@ -323,13 +342,14 @@ def deals_page():
 
 def blog_page(slug=None):
     if slug is None:
-        items = "".join(f'<li><a href="/blog/{s}">{escape(t)}</a> <span class="muted">· {month_day(d)}</span><p>{escape(paras[0])}</p></li>' for s, t, d, paras in POSTS)
+        items = "".join(f'<li><a href="/blog/{post[0]}">{escape(post[1])}</a> <span class="muted">· {full_date(days_ago(post[2]))}</span>'
+                        f'<p>{escape(post_paragraphs(post)[0])}</p></li>' for post in POSTS)
         return layout("Guides", f'<h1>Guides &amp; news</h1><ul class="posts">{items}</ul>', "blog")
     post = next((x for x in POSTS if x[0] == slug), None)
     if not post:
         return None
-    paras = "".join(f"<p>{escape(x)}</p>" for x in post[3])
-    return layout(post[1], f'<article class="post"><p class="muted">{month_day(post[2])}</p><h1>{escape(post[1])}</h1>{paras}</article>', "blog")
+    paras = "".join(f"<p>{escape(x)}</p>" for x in post_paragraphs(post))
+    return layout(post[1], f'<article class="post"><p class="muted">{full_date(days_ago(post[2]))}</p><h1>{escape(post[1])}</h1>{paras}</article>', "blog")
 
 
 def home_page():
@@ -353,8 +373,8 @@ def account_page():
     a = SAVED_ADDRESS
     body = (f'<h1>Jordan\'s account</h1><h2>Saved address</h2><p>{a["name"]}<br>{a["line1"]}, {a["line2"]}<br>{a["city"]}, {a["state"]} {a["zip"]}</p>'
             '<h2>Past orders</h2><table class="cart"><thead><tr><th>Order</th><th>Date</th><th>Items</th><th class="num">Total</th></tr></thead><tbody>'
-            '<tr><td>KS-098412</td><td>Sep 18, 2026</td><td>1 × Kestrel 140W GaN Charger, 3 ports</td><td class="num">$97.75</td></tr>'
-            '<tr><td>KS-091207</td><td>Jul 2, 2026</td><td>2 × Kestrel USB-C to USB-C 240W Cable, 2 m</td><td class="num">$43.42</td></tr></tbody></table>')
+            f'<tr><td>KS-098412</td><td>{full_date(days_ago(49))}</td><td>1 × Kestrel 140W GaN Charger, 3 ports</td><td class="num">$97.75</td></tr>'
+            f'<tr><td>KS-091207</td><td>{full_date(days_ago(127))}</td><td>2 × Kestrel USB-C to USB-C 240W Cable, 2 m</td><td class="num">$43.42</td></tr></tbody></table>')
     return layout("Account", body)
 
 

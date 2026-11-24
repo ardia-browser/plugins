@@ -320,6 +320,21 @@ def claude_command(model, effort, prompt):
             "--no-session-persistence", prompt]
 
 
+CODEX_SHARED_FILES = ("auth.json", "auth.json.lock", "auth.lock", "config.toml", "version.json", "installation_id")
+
+
+def codex_env(fake_home):
+    config = Path(fake_home) / "codex-config"
+    if config.is_dir():
+        shutil.rmtree(config)
+    config.mkdir(parents=True)
+    real = Path.home() / ".codex"
+    for name in CODEX_SHARED_FILES:
+        if (real / name).exists():
+            (config / name).symlink_to(real / name)
+    return {"HOME": str(fake_home), "CODEX_HOME": str(config)}
+
+
 def codex_command(model, effort, workdir, prompt):
     return ["codex", "exec", "--json", "-m", model, "-c", f'model_reasoning_effort="{effort}"',
             "--ignore-user-config", "--ignore-rules", "--ephemeral", "--skip-git-repo-check",
@@ -434,8 +449,7 @@ def run(task_id, agent, run_id, results_dir, overrides=None, contender=None, on_
     if opts["humanize"]:
         extra["AGENT_BROWSER_HUMANIZE"] = "1"
     if agent == "codex":
-        codex_home.mkdir(parents=True, exist_ok=True)
-        extra.update({"HOME": str(codex_home), "CODEX_HOME": str(Path.home() / ".codex")})
+        extra.update(codex_env(codex_home))
         cmd = codex_command(model, effort, workdir, prompt)
     else:
         cmd = claude_command(model, effort, prompt)

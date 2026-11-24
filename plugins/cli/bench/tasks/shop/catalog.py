@@ -143,17 +143,17 @@ DESK = simple("desk", "DS", [
 PRODUCTS = DOCKS + MONITORS + INPUT + AUDIO + CABLES + POWER + DESK
 
 COUPONS = {
-    "DESKDAYS": {"percent": 15, "cats": {"docks-hubs", "cables-adapters"}, "ends": "2026-11-15", "min": 0},
-    "FALL10": {"percent": 10, "cats": None, "ends": "2026-11-30", "min": 15000},
-    "SCREENS25": {"percent": 25, "cats": {"monitors"}, "ends": "2026-11-22", "min": 0},
-    "TECH20": {"percent": 20, "cats": None, "ends": "2026-11-01", "min": 0},
+    "DESKDAYS": {"percent": 15, "cats": {"docks-hubs", "cables-adapters"}, "ends_in": 9, "min": 0},
+    "FALL10": {"percent": 10, "cats": None, "ends_in": 24, "min": 15000},
+    "SCREENS25": {"percent": 25, "cats": {"monitors"}, "ends_in": 16, "min": 0},
+    "TECH20": {"percent": 20, "cats": None, "ends_in": -5, "min": 0},
 }
 
 SHIPPING = [
-    ("standard", "Standard", 0, 995, "Arrives Fri, Nov 13 – Wed, Nov 18"),
-    ("expedited", "Expedited", 1295, 1295, "Arrives by Wed, Nov 11"),
-    ("twoday", "2-Day", 1995, 1995, "Arrives by Tue, Nov 10"),
-    ("overnight", "Overnight", 3495, 3495, "Arrives Mon, Nov 9"),
+    ("standard", "Standard", 0, 995, (5, 8)),
+    ("expedited", "Expedited", 1295, 1295, (3, 3)),
+    ("twoday", "2-Day", 1995, 1995, (2, 2)),
+    ("overnight", "Overnight", 3495, 3495, (1, 1)),
 ]
 
 STATES = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME",
@@ -161,14 +161,14 @@ STATES = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI"
           "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"]
 
 POSTS = [
-    ("dual-monitor-dock-guide", "How to pick a dock for two 4K monitors", "2026-10-28",
+    ("dual-monitor-dock-guide", "How to pick a dock for two 4K monitors", 9,
      ["Two 4K screens on one cable is the most common setup we get asked about, and the box art doesn't always tell the whole story.",
       "Look at the spec table, not the headline. “Dual 4K” on a box can mean both screens at 30 Hz, which feels laggy for everyday work. You want 4K @ 60 Hz listed for two displays.",
       "Check what the dock actually sends to your laptop. A dock can accept a 100 W charger but keep some of it for its own ports. The line to read is Laptop charging."]),
-    ("october-tech-sale", "Our October Tech Sale is on", "2026-10-15",
-     ["From now through Sunday, Nov 1, take 20% off almost everything with code TECH20 at checkout.",
+    ("tech-sale", "Our Tech Sale is on", 26,
+     ["From now through {tech20_ends}, take 20% off almost everything with code TECH20 at checkout.",
       "Stock up on cables, chargers and desk gear before the holidays. Some exclusions apply; see Deals for details."]),
-    ("cable-management-101", "Cable management in 20 minutes", "2026-09-30",
+    ("cable-management-101", "Cable management in 20 minutes", 41,
      ["An under-desk tray, a handful of velcro ties and a clamp-on power strip go a long way.",
       "Route the dock's power brick into the tray so only one cable reaches the laptop."]),
 ]

@@ -1,0 +1,33 @@
+{
+  "name": "daily-bucloud",
+  "repeats": 2,
+  "tasks": "all",
+  "max_lanes": 3,
+  "clean_run_scratch": true,
+  "claude_base_url": "http://127.0.0.1:8317",
+  "claude_auth_token": "local",
+  "lane_base": 10,
+  "results": "~/ardia-scratch/bench-proper/results/daily-bucloud",
+  "contenders": [
+    {
+      "id": "bucloud-codex",
+      "label": "Browser Use cloud browser + Codex (GPT-6.2 Sol high)",
+      "kind": "browseruse",
+      "browser": "cloud",
+      "agent": "codex",
+      "model": "gpt-6.2-sol",
+      "effort": "high",
+      "max_lanes": 2
+    },
+    {
+      "id": "bucloud-claude",
+      "label": "Browser Use cloud browser + Claude Code (Opus 5.5 high)",
+      "kind": "browseruse",
+      "browser": "cloud",
+      "agent": "claude",
+      "model": "claude-opus-5-5",
+      "effort": "high",
+      "max_lanes": 2
+    }
+  ]
+}

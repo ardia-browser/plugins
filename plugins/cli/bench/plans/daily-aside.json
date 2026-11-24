@@ -1,0 +1,29 @@
+{
+  "name": "daily-aside",
+  "repeats": 2,
+  "tasks": "all",
+  "clean_run_scratch": true,
+  "claude_base_url": "http://127.0.0.1:8317",
+  "claude_auth_token": "local",
+  "max_lanes": 1,
+  "lane_base": 20,
+  "results": "~/ardia-scratch/bench-proper/results/daily-aside",
+  "contenders": [
+    {
+      "id": "aside-sol",
+      "label": "Aside agent (GPT-6.2 Sol High)",
+      "kind": "aside",
+      "model": "GPT-6.2 Sol",
+      "effort": "High",
+      "visibility": "covered"
+    },
+    {
+      "id": "aside-opus",
+      "label": "Aside agent (Opus 5.5 High)",
+      "kind": "aside",
+      "model": "Opus 5.5",
+      "effort": "High",
+      "visibility": "covered"
+    }
+  ]
+}

@@ -377,9 +377,7 @@ def run(task_id, agent, run_id, results_dir, overrides=None, contender=None, on_
         server = mcp_server(opts, home)
         prompt = f"{task['prompt']}\n\n{opts['reach_line']}" if opts.get("reach_line") else task["prompt"]
         if agent == "codex":
-            codex_home = home / "codex-home"
-            codex_home.mkdir(parents=True, exist_ok=True)
-            env = agent_env({"HOME": str(codex_home), "CODEX_HOME": str(Path.home() / ".codex")}, opts)
+            env = agent_env(ardia_side.codex_env(home / "codex-home"), opts)
             cmd = codex_command(model, effort, workdir, prompt, server)
             mcp_config = None
         else:

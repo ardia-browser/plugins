@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
+import datetime
 import json
+import re
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 from urllib.parse import urlencode
 
-BASE = "http://127.0.0.1:8821"
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from benchclient import base
+from livedates import add_business_days, month_day, short_day, today
+
+BASE = base(8821)
 SECRETS = ["DK-2814", "DESKDAYS", "expedited", "548", "94104"]
 OFFICE = {"ship_to": "new", "name": "Jordan Lee", "company": "Northwind Labs", "line1": "548 Market St", "line2": "Suite 1200",
           "city": "San Francisco", "state": "CA", "zip": "94104", "phone": "(415) 555-0198", "shipping": "expedited", "payment": "card-4417"}
@@ -47,7 +54,8 @@ def report(name, ok, extra=""):
 
 call("POST", "/api/reset")
 c = check()
-report("initial check fails and leaks nothing", not c["pass"] and c["completed_at_ms"] is None and not any(s in json.dumps(c) for s in SECRETS))
+shown = json.dumps({k: v for k, v in c.items() if not k.endswith("_ms")})
+report("initial check fails and leaks nothing", not c["pass"] and c["completed_at_ms"] is None and not any(s in shown for s in SECRETS))
 
 call("POST", "/api/reset")
 page1 = call("GET", "/c/docks-hubs")[1]
@@ -59,6 +67,18 @@ other = call("POST", "/cart/coupon", {"code": "SCREENS25"})[1]
 report("expired and wrong-category codes are refused", "expired on" in expired and "apply to the items" in other)
 status, body, _ = call("POST", "/checkout", dict(OFFICE, zip="9410", phone="+1 415 555 0198", line1=""))
 report("checkout shows inline errors", status == 422 and body.count('class="err"') == 3 and "error-summary" in body)
+
+call("POST", "/api/reset")
+call("POST", "/cart/add", {"sku": "DK-2814", "qty": "3"})
+checkout = call("GET", "/checkout")[1]
+etas = dict(re.findall(r'value="(\w+)" data-cost="\d+"[^>]*>.*?<span class="muted">([^<]+)</span>', checkout))
+deadline = short_day(add_business_days(today(), 3))
+standard_first = short_day(add_business_days(today(), 5))
+report("delivery dates follow today's date", etas.get("expedited") == f"Arrives by {deadline}"
+       and etas.get("standard", "").startswith(f"Arrives {standard_first} – ")
+       and etas.get("twoday") == f"Arrives by {short_day(add_business_days(today(), 2))}", json.dumps(etas))
+deskdays_ends = today() + datetime.timedelta(days=9)
+report("promo end dates follow today's date", f"Ends {month_day(deskdays_ends)}." in call("GET", "/deals")[1])
 
 for name in ("correct", "correct again after reset"):
     call("POST", "/api/reset")

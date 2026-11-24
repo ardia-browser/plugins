@@ -101,9 +101,7 @@ def run(task_id, agent, run_id, results_dir, overrides=None, contender=None, on_
         prompt = f"{task['prompt']}\n\n{opts['reach_line']}"
         extra = {"ARDIA_DATA_DIR": str(data), "ARDIA_WS": browser["ws"], "AGENT_BROWSER_SHOW_TAB": "1"}
         if agent == "codex":
-            codex_home = home / "codex-home"
-            codex_home.mkdir(parents=True, exist_ok=True)
-            extra.update({"HOME": str(codex_home), "CODEX_HOME": str(Path.home() / ".codex")})
+            extra.update(ardia_side.codex_env(home / "codex-home"))
             cmd = ardia_side.codex_command(model, effort, workdir, prompt)
         else:
             cmd = ardia_side.claude_command(model, effort, prompt)

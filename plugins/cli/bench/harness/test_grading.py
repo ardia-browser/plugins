@@ -54,6 +54,29 @@ class PassRule(unittest.TestCase):
                         self.assertEqual(record["pass"], passed and not reset and status != "timeout")
 
 
+class AsideQuotaIsAHarnessError(unittest.TestCase):
+    def aside(self, final_message, passed=False):
+        return {"side": "aside", "pass": passed, "status": "done", "final_message": final_message}
+
+    def test_usage_limit_in_the_final_message(self):
+        message = "You've hit your usage limit. Upgrade for more, or wait until your credits reset on Nov 24."
+        self.assertIn("usage limit", runner.rate_limit_reason(self.aside(message)).lower())
+
+    def test_credits_reset_alone(self):
+        self.assertIsNotNone(runner.rate_limit_reason(self.aside("Your credits will reset at 9:00 PM.")))
+
+    def test_an_ordinary_wrong_answer_is_not_a_quota(self):
+        self.assertIsNone(runner.rate_limit_reason(self.aside("The Team plan rate limit is 1,200 requests per minute.")))
+
+    def test_a_pass_is_never_a_quota(self):
+        self.assertIsNone(runner.rate_limit_reason(self.aside("You've hit your usage limit.", passed=True)))
+
+    def test_normalized_records_keep_the_final_message(self):
+        raw = {"status": "done", "final_message": "You've hit your usage limit.", "check": {"pass": False}}
+        record = runner.normalize_aside(raw, "shop", {"id": "aside-sol"}, "shop--aside-sol--r1")
+        self.assertIn("usage limit", runner.rate_limit_reason(record))
+
+
 class FailedWaitsStopTheProcess(unittest.TestCase):
     def setUp(self):
         self.dir = Path(tempfile.mkdtemp())

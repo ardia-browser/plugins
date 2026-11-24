@@ -63,6 +63,7 @@ def normalize_aside(raw, task_id, contender, run_id):
         "effort": raw.get("effort_used") or contender.get("effort"),
         "wall_s": raw.get("duration_s") if raw.get("duration_s") is not None else raw.get("wall_s"),
         "timed_out": timed_out, "status": raw.get("status"), "error": raw.get("error"),
+        "final_message": raw.get("final_message"),
         "pass": passed, "reset_by_agent": reset_by_agent,
         "time_to_correct_s": raw.get("time_to_correct_s"),
         "commands": raw.get("steps"),
@@ -83,7 +84,9 @@ def normalize_aside(raw, task_id, contender, run_id):
 
 
 
-RATE_LIMIT = re.compile(r"rate[ _-]?limit|overloaded|too many requests|usage limit|\b429\b|\b529\b", re.I)
+RATE_LIMIT = re.compile(r"rate[ _-]?limit|overloaded|too many requests|usage limit|credits? (?:will )?reset|out of credits"
+                        r"|\b429\b|\b529\b", re.I)
+QUOTA = re.compile(r"usage limit|credits? (?:will )?reset|out of credits|hit your [\w ]{0,30}limit", re.I)
 TICK_S = 2.0
 SAMPLE_S = 3.0
 STALL_S = 900.0
@@ -107,7 +110,8 @@ def run_aside(item, results_dir, on_start=None):
     servers.start(task)
     raw_dir = Path(results_dir) / "aside-raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
-    cmd = [opencode_side.node_bin(), str(aside_driver()), item["run_id"], "--task", item["task"], "--registry", str(registry.REGISTRY),
+    cmd = [opencode_side.node_bin(), str(aside_driver()), item["run_id"], "--task", item["task"],
+           "--registry", str(registry.write_resolved(raw_dir / f"{item['run_id']}.registry.json")),
            "--out", str(raw_dir), "--model", c.get("model", "GPT-6 Astra"),
            "--visibility", c.get("visibility", "covered")]
     if c.get("effort"):
@@ -181,6 +185,10 @@ def rate_limit_reason(rec):
     if rec.get("pass"):
         return None
     texts = [str(rec.get("harness_error") or ""), str(rec.get("error") or ""), str(rec.get("status") or "")]
+    if rec.get("side") == "aside":
+        quota = QUOTA.search(str(rec.get("final_message") or ""))
+        if quota:
+            return quota.group(0)
     if rec.get("side") in ("ardia", "opencode", "browseruse", "betterwright", "browserharness", "ardiacloud",
                            "browseragent"):
         failed_cli = rec.get("cli_is_error") or rec.get("errors") or rec.get("exit_code") not in (0, None) or not rec.get("tokens")

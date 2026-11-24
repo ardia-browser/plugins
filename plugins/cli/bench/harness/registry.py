@@ -11,25 +11,51 @@ HOME = Path(os.environ.get("BENCH_HOME", Path.home() / "ardia-scratch/bench-prop
 STATE_DIR = HOME / "state"
 
 
-def load_benchhttp():
-    spec = importlib.util.spec_from_file_location("bench_task_http", BENCH_DIR / "tasks/benchhttp.py")
+def load_task_module(name, filename):
+    spec = importlib.util.spec_from_file_location(name, BENCH_DIR / "tasks" / filename)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-benchhttp = load_benchhttp()
+benchhttp = load_task_module("bench_task_http", "benchhttp.py")
+livedates = load_task_module("bench_task_livedates", "livedates.py")
 
 
 def load():
     return json.loads(REGISTRY.read_text())["tasks"]
 
 
+def task_day(task):
+    value = task.get("today")
+    if not value:
+        return None
+    return livedates.today() if value == "live" else datetime.date.fromisoformat(value)
+
+
+def resolved(task):
+    out = {k: v for k, v in task.items() if k != "business_days"}
+    day = task_day(task)
+    if day is None:
+        return out
+    for key, count in task.get("business_days", {}).items():
+        out["prompt"] = out["prompt"].replace("{" + key + "}", livedates.long_day(livedates.add_business_days(day, count)))
+    out["today"] = day.isoformat()
+    return out
+
+
 def dated_prompt(task):
-    if not task.get("today"):
-        return task["prompt"]
-    day = datetime.date.fromisoformat(task["today"])
-    return f"{task['prompt']}\n\nToday is {day:%A}, {day:%B} {day.day}, {day.year}."
+    out = resolved(task)
+    if not out.get("today"):
+        return out["prompt"]
+    return f"{out['prompt']}\n\nToday is {livedates.long_date(task_day(out))}."
+
+
+def write_resolved(path):
+    raw = json.loads(REGISTRY.read_text())
+    raw["tasks"] = [dict(resolved(t), prompt=dated_prompt(t)) for t in raw["tasks"]]
+    Path(path).write_text(json.dumps(raw, indent=2) + "\n")
+    return Path(path)
 
 
 def task(task_id, port_offset=0):
