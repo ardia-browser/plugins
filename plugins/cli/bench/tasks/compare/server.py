@@ -62,7 +62,7 @@ def items_for(req):
         return dict.fromkeys(("vendor", "tier", "cycle", "seats", "annual_total", "soc2_date", "eu_residency", "eu_region"), False)
     region = req["eu_region"].lower()
     return {
-        "vendor": re.sub(r"[^a-z]", "", req["vendor"].lower()) in ("vantage", "vantageinc", "vantagehq"),
+        "vendor": re.sub(r"[^a-z]", "", req["vendor"].lower()) in ("vantage", "vantageinc", "vantagehq", "vantagesoftware", "vantagesoftwareinc"),
         "tier": req["tier"] == "Business",
         "cycle": req["cycle"] == "annual",
         "seats": req["seats"].strip() == "25",
