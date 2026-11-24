@@ -2,16 +2,14 @@ const SHARED_VALUE_FLAGS = ["--data-dir", "--timeout", "--port", "--ws"];
 const SHARED_BOOL_FLAGS = ["--json"];
 const HELP = ["--help", "-h"];
 const ALLOWED: Readonly<Record<string, readonly string[] | undefined>> = {
-  feedback: undefined,
   commands: undefined,
   methods: undefined,
-  config: ["list", "get", "set"],
   plugins: ["list", "check"],
   triage: ["file"],
 };
 
 export const TRIAGE_MODE_REFUSAL =
-  "ardia: this is a triage session (ARDIA_TRIAGE=1), so only triage file, feedback, config list, get and set, plugins list and check, commands, methods, --version and --help run here\n";
+  "ardia: this is a triage session (ARDIA_TRIAGE=1), so only triage file, plugins list and check, commands, methods, --version and --help run here\n";
 
 export function inTriageMode(): boolean {
   return process.env.ARDIA_TRIAGE === "1";

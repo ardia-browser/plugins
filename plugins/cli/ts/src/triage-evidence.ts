@@ -3,7 +3,6 @@ import { createConnection } from "node:net";
 import { iso } from "./clock.ts";
 import { places } from "./config-files.ts";
 import { chromiumDir } from "./control-file.ts";
-import { agentPaths, logPath } from "./hooks/agent.ts";
 import { type JsonObject } from "./json.ts";
 import { home, join, LINUX } from "./paths.ts";
 import { closeDir, type Dir, O_NOFOLLOW, O_NONBLOCK, O_RDONLY, writePrivate } from "./privatefs.ts";
@@ -22,7 +21,6 @@ const CRASH_SCAN_LIMIT = 200;
 const CRASH_HEAD_BYTES = 64 * KIB;
 const MAC_CRASH_PREFIXES = ["Ardia-", "Chromium Helper"];
 const MAC_CRASH_MARKS = ["/Ardia.app/Contents/", "\"bundleID\":\"com.ardia.", "\"bundleID\" : \"com.ardia."];
-const LOG_TAIL = 256 * KIB;
 const CONFIG_CAP = 1 * MIB;
 const LINUX_DUMP_LIST = 10;
 const SOCKET_WAIT_MS = 1000;
@@ -185,19 +183,6 @@ function collectLinuxDumps(collector: Collector, dataRoot: string): void {
   });
 }
 
-function collectLogs(collector: Collector): void {
-  const main = logPath(agentPaths());
-  for (const [path, name] of [[main, "hooks.log"], [`${main}.1`, "hooks.log.1"]] as const) {
-    const read = readTail(path, LOG_TAIL, true);
-    if ("missing" in read) {
-      collector.skipped.push({ what: `the hooks log ${shownPath(path)}`, why: read.missing });
-      continue;
-    }
-    const cut = read.kept < read.size ? `kept the last ${read.lines} lines (${read.kept} of ${read.size} bytes)` : undefined;
-    collector.keep(name, "the output of the programs ardia hooks runs (docs: automation)", path, read, cut);
-  }
-}
-
 function collectConfig(collector: Collector, dataDir: string | undefined): void {
   const path = places(dataDir).config;
   const read = readTail(path, CONFIG_CAP, false);
@@ -248,7 +233,6 @@ export function collectEvidence(dir: Dir, dataRoot: string, dataDir: string | un
   const steps: [string, () => void][] = [
     ["the local usage log", () => collectTelemetry(collector, dataRoot)],
     ["crash reports", () => (linux ? collectLinuxDumps(collector, dataRoot) : collectMacCrashes(collector, join(home(), "Library", "Logs", "DiagnosticReports")))],
-    ["the hooks log", () => collectLogs(collector)],
     ["settings", () => collectConfig(collector, dataDir)],
   ];
   for (const [what, step] of steps) {
@@ -289,35 +273,13 @@ export function ardiaRunning(dataRoot: string): Promise<boolean> {
   });
 }
 
-export function neverRead(dataRoot: string, linux: boolean = LINUX): { files: string[]; folders: string[]; other: string[] } {
-  const profiles = chromiumDir(dataRoot);
-  const profileGlob = join(profiles, "<profile>");
-  const files = [
-    "Cookies",
-    "Network/Cookies",
-    "Login Data",
-    "Login Data For Account",
-    "Web Data",
-    "History",
-    "Bookmarks",
-    "Favicons",
-    "Top Sites",
-    "Visited Links",
-    "Shortcuts",
-    "Preferences",
-    "Secure Preferences",
-  ].map((name) => join(profileGlob, name));
-  const folders = ["Sessions", "Local Storage", "IndexedDB", "Session Storage", "Service Worker", "File System", "Cache", "Code Cache", "GPUCache"].map((name) =>
-    join(profileGlob, name),
-  );
-  if (linux) files.push(join(profileGlob, "Ardia", "linux-session.json"));
-  else files.push(join(dataRoot, "session.json"));
-  folders.push(join(dataRoot, "Crash Reports"));
-  const other = linux
-    ? ["the keyring: Secret Service, KWallet or the secret portal (Chromium's Safe Storage key, the Ardia Sync Key and stored tokens)"]
-    : ["the login keychain, above all its \"Ardia Safe Storage\" item, which encrypts saved passwords and cookies"];
-  other.push(`any other file under ${profiles}/<profile>/ (a profile is Default, Profile 1, Profile 2 and so on)`);
-  return { files, folders, other };
+export function neverRead(dataRoot: string, linux: boolean = LINUX): { folders: string[]; other: string[] } {
+  if (linux) return { folders: [dataRoot], other: ["the keyring: Secret Service, KWallet or the secret portal (Chromium's Safe Storage key, the Ardia Sync Key and stored tokens)"] };
+  const library = join(home(), "Library");
+  return {
+    folders: [dataRoot, join(library, "WebKit"), join(library, "HTTPStorages"), join(library, "Cookies"), join(library, "Caches", "com.ardia.browser")],
+    other: ["the login keychain, above all its \"Ardia Safe Storage\" item, which encrypts saved passwords and cookies"],
+  };
 }
 
 export type ContextFacts = {
@@ -374,13 +336,12 @@ export function contextText(facts: ContextFacts): string {
     "",
     "## Never read",
     "",
-    "These hold the user's private browsing data. Don't open, copy, list the contents of or search them, with any tool:",
+    "Ardia's own folders hold the user's private browsing data: cookies, saved passwords, history, bookmarks, open tabs, downloads, site storage and caches. Don't open, copy, list or search anything in them, with any tool:",
     "",
-    ...never.files.map((path) => `- \`${path}\``),
     ...never.folders.map((path) => `- \`${path}/\` and everything in it`),
     ...never.other.map((text) => `- ${text}`),
     "",
-    "`<profile>` stands for every profile folder. If the investigation seems to need one of these, ask the user for the one fact you need instead.",
+    "What triage may use from there is already in `evidence/`, scrubbed. If the investigation seems to need anything else, ask the user for the one fact you need instead.",
     "",
   );
   return lines.join("\n");

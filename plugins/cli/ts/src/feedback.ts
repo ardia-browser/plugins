@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { readFileSync, readSync, realpathSync, statSync } from "node:fs";
+import { openSync, readSync, realpathSync, statSync } from "node:fs";
 import { isatty } from "node:tty";
 import { now } from "./clock.ts";
 import { dataRoot } from "./control.ts";
@@ -49,7 +49,7 @@ const CALLER_FALLBACK = "unknown";
 type Kind = [string, number, string];
 type Attachment = { path: string; name: string; bytes: number; type: string };
 type Outcome = { sent: boolean; reason: string; reference?: string; name?: string; issueUrl?: string };
-export type FeedbackArgs = { text: string[]; title: string | undefined; kind: string; attach: string[]; about: string | undefined; dataDir: string | undefined };
+export type FeedbackArgs = { text: string[]; title: string | undefined; kind: string; attach: string[]; about: string | undefined; dataDir: string | undefined; via?: string };
 
 class Refused extends Error {}
 
@@ -259,6 +259,7 @@ function body(args: FeedbackArgs, title: string, description: string, truncated:
         ["recent_commands", home !== undefined ? recentCommands(home) : []],
         ["description_truncated", truncated],
         ["environment", environment],
+        ...(args.via === undefined ? [] : ([["via", args.via]] as [string, Value][])),
       ]),
     ],
     ["attachments", found.map((item) => object([["name", item.name], ["bytes", BigInt(item.bytes)], ["type", item.type]]))],
@@ -340,7 +341,15 @@ function postJson(url: string, payload: JsonObject, token?: string): Promise<[nu
 
 async function upload(url: string, item: Attachment, token: string): Promise<[number, string]> {
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": item.type, "Content-Length": String(item.bytes) };
-  const [status, , failure] = await request("PUT", `${url}/files/${encodeURIComponent(item.name)}`, readFileSync(item.path), headers, UPLOAD_TIMEOUT_MS);
+  const fd = openSync(item.path, O_RDONLY);
+  let bytes: Buffer;
+  try {
+    bytes = readFd(fd, item.bytes + 1);
+  } finally {
+    close(fd);
+  }
+  if (bytes.length !== item.bytes) return [0, "the file changed while it was being sent"];
+  const [status, , failure] = await request("PUT", `${url}/files/${encodeURIComponent(item.name)}`, bytes, headers, UPLOAD_TIMEOUT_MS);
   return [status, failure];
 }
 

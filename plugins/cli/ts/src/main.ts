@@ -120,19 +120,23 @@ async function runFlusher(): Promise<number> {
   process.exit(0);
 }
 
+function refusedInTriage(): number {
+  try {
+    writeSync(2, TRIAGE_MODE_REFUSAL);
+  } catch {}
+  return 2;
+}
+
 async function main(words: string[]): Promise<number> {
-  if (words[0] === "daemon") process.exit(await (await import("./browse/daemon/main.ts")).daemonMain(words.slice(1)));
   if (words.length === 1 && words[0] === FLUSH_ARGUMENT) return runFlusher();
+  const internalEntry = words[0] === "daemon" || (words.length === 1 && words[0] === HISTORY_ARGUMENT) || (words.length === 2 && words[0] === SCRIPT_RUNNER_ARGUMENT);
+  if (internalEntry && inTriageMode()) return refusedInTriage();
+  if (words[0] === "daemon") process.exit(await (await import("./browse/daemon/main.ts")).daemonMain(words.slice(1)));
   if (words.length === 1 && words[0] === HISTORY_ARGUMENT) return (await import("./browsing.ts")).historyChild();
   if (words.length === 2 && words[0] === SCRIPT_RUNNER_ARGUMENT) return (await import("./browse/script/runner.ts")).runnerMain(words[1] as string);
   const routed = takeMarker(words);
   const argv = routed?.argv ?? words;
-  if (inTriageMode() && !allowedInTriage(argv)) {
-    try {
-      writeSync(2, TRIAGE_MODE_REFUSAL);
-    } catch {}
-    return 2;
-  }
+  if (inTriageMode() && !allowedInTriage(argv)) return refusedInTriage();
   try {
     loadLibc();
   } catch (error) {

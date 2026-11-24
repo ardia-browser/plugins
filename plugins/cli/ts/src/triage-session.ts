@@ -121,10 +121,10 @@ export function newSession(home: string): Session {
     const name = attempt === 0 ? stamp : `${stamp}-${attempt + 1}`;
     const dir = join(triageRoot(home), name);
     try {
-      lstatSync(dir);
-      continue;
+      mkdirSync(dir, { mode: 0o700 });
     } catch (error) {
-      if (!notFound(error)) throw error;
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") continue;
+      throw error;
     }
     closeDir(openTriage(home, [name]));
     return { home, dir, name };

@@ -50,13 +50,11 @@ export function newestReleaseTag(refs: unknown): string | undefined {
 }
 
 function bases(): { api: string; raw: string } | undefined {
+  if (!isDevBuild()) return { api: API, raw: RAW };
   const override = envSet(TEST_URL_ENV);
-  if (override !== undefined) {
-    const base = override.replace(/\/+$/, "");
-    return loopbackUrl(`${base}/`) ? { api: base, raw: base } : undefined;
-  }
-  if (isDevBuild()) return undefined;
-  return { api: API, raw: RAW };
+  if (override === undefined) return undefined;
+  const base = override.replace(/\/+$/, "");
+  return loopbackUrl(`${base}/`) ? { api: base, raw: base } : undefined;
 }
 
 async function limited(response: Response, limit: number): Promise<Buffer | undefined> {
@@ -78,7 +76,7 @@ async function limited(response: Response, limit: number): Promise<Buffer | unde
 }
 
 async function get(url: string, limit: number, signal: AbortSignal): Promise<Buffer | undefined> {
-  const response = await fetch(url, { signal, redirect: "follow", headers: { Accept: "application/vnd.github+json", "User-Agent": "ardia-triage" } });
+  const response = await fetch(url, { signal, redirect: "error", headers: { Accept: "application/vnd.github+json", "User-Agent": "ardia-triage" } });
   if (response.status !== 200) {
     await response.body?.cancel().catch(() => {});
     return undefined;

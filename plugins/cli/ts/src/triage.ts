@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { accessSync, constants as fsConstants, readSync, statSync } from "node:fs";
 import { isatty } from "node:tty";
 import { iso, now } from "./clock.ts";
@@ -48,7 +48,8 @@ const AGENTS: readonly Agent[] = [
   { id: "codex", label: "Codex" },
 ];
 const PROMPT = "Read playbook.md in this folder and follow it.";
-const ONE_LINE = "Triage reads Ardia's version, settings, crash reports and logs and sends them to your agent's provider. --reset-consent shows the details.";
+const ONE_LINE = "Triage reads Ardia's version, settings, crash reports and local usage log and sends them to your agent's provider. --reset-consent shows the details.";
+const HELP_TIMEOUT_MS = 5000;
 const MAX_ANSWER = 64;
 const ASKS = 3;
 
@@ -137,8 +138,8 @@ function consentText(agent: Agent | undefined): string {
   return [
     opening,
     "",
-    "It reads:        Ardia's version and settings, crash reports, logs, and the",
-    "                 local usage log (counts and timings, no sites)",
+    "It reads:        Ardia's version and settings, crash reports, and the local",
+    "                 usage log (counts and timings, no sites)",
     "It doesn't read: cookies, passwords, history, or what's on your pages",
     "Where it goes:   to the company behind the agent you pick, through your own",
     "                 account with them. Ardia itself sends nothing.",
@@ -161,22 +162,28 @@ function consent(home: string, args: TriageArgs, agent: Agent | undefined): bool
     return true;
   }
   if (!interactive()) throw new TriageRefused("ardia triage asks before it reads anything, and there's no terminal to ask on; read ardia triage --help and pass --yes to agree");
-  const answer = ask(`${consentText(agent)}\n${CLOSING} Continue? [Y/n] `, (text) => (text === "" || text === "y" || text === "yes" ? true : text === "n" || text === "no" ? false : undefined));
+  const answer = ask(`${consentText(agent)}\n${CLOSING} Continue? [y/N] `, (text) => (text === "y" || text === "yes" ? true : text === "" || text === "n" || text === "no" ? false : undefined));
   if (answer !== true) return false;
   saveConsent(home);
   return true;
 }
 
+const CLAUDE_ASKS: readonly string[] = ["Bash(ardia triage file --post *)", "Bash(gh *)"];
+const CLAUDE_DENIED_COMMANDS: readonly string[] = ["Bash(security *)", "Bash(secret-tool *)"];
+
 function claudeSettings(root: string): string {
-  const never = neverRead(root);
-  const rule = (path: string) => `Read(/${path.replaceAll("<profile>", "*")})`;
-  const deny = [...never.files.map(rule), ...never.folders.map((path) => rule(`${path}/**`)), "Bash(security *)", "Bash(secret-tool *)"];
-  return JSON.stringify({ permissions: { deny } });
+  const deny = [...neverRead(root).folders.map((folder) => `Read(/${folder}/**)`), ...CLAUDE_DENIED_COMMANDS];
+  return JSON.stringify({ permissions: { deny, ask: CLAUDE_ASKS } });
 }
 
-function launchArgs(agent: Agent, prompt: string, model: string | undefined, root: string, cache: string): string[] {
+function claudeAskFirstMode(path: string): string {
+  const help = spawnSync(path, ["--help"], { encoding: "utf8", timeout: HELP_TIMEOUT_MS, killSignal: "SIGKILL", stdio: ["ignore", "pipe", "ignore"] }).stdout ?? "";
+  return help.includes('"default"') && !help.includes('"manual"') ? "default" : "manual";
+}
+
+function launchArgs(agent: Agent, path: string, prompt: string, model: string | undefined, root: string, cache: string): string[] {
   const chosenModel = model === undefined ? [] : agent.id === "claude" ? ["--model", model] : ["-m", model];
-  if (agent.id === "claude") return ["--permission-mode", "manual", "--settings", claudeSettings(root), ...chosenModel, prompt];
+  if (agent.id === "claude") return ["--permission-mode", claudeAskFirstMode(path), "--settings", claudeSettings(root), ...chosenModel, prompt];
   return ["--sandbox", "workspace-write", "--ask-for-approval", "on-request", "--add-dir", cache, ...chosenModel, prompt];
 }
 
@@ -296,7 +303,7 @@ async function triage(args: TriageArgs, call: Call): Promise<Said> {
   if (args.dataDir !== undefined) extra.ARDIA_DATA_DIR = abspath(args.dataDir);
   say(`Starting ${agent.label} in ${session.dir}. It will ask what went wrong.\n`);
   flag(call, "triage_launched");
-  const ended = await launch(path, launchArgs(agent, prompt, args.model, abspath(dataRoot(args.dataDir)), sourceCache(home)), session.dir, extra);
+  const ended = await launch(path, launchArgs(agent, path, prompt, args.model, abspath(dataRoot(args.dataDir)), sourceCache(home)), session.dir, extra);
   if (typeof ended === "number" && ended === 0) return { status: 0, out: [], err: [] };
   const why = typeof ended === "number" ? `${agent.label} exited with code ${ended}.` : `${agent.label} couldn't be started (${ended.message}).`;
   return { status: typeof ended === "number" ? ended : 1, out: ["", why, "", ...sessionLines(session, prompt, agent.id)], err: [] };

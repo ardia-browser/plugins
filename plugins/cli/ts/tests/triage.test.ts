@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "bun:test";
-import { hostOnlyUrls, triageScrub } from "../src/triage-scrub.ts";
+import { homeNameSegments, hostOnlyUrls, triageScrub } from "../src/triage-scrub.ts";
 import { buildReport, formUrl, parseSections } from "../src/triage-report.ts";
 import { newestReleaseTag } from "../src/triage-playbook.ts";
 import { allowedInTriage } from "../src/triage-mode.ts";
@@ -44,6 +44,7 @@ function cleanup(box: Sandbox): void {
 
 function standIn(box: Sandbox, name: string, body = ""): void {
   const script = `#!${box.tools}/sh
+case "$1" in --help) printf '%s\\n' "\${STANDIN_HELP:-}"; exit 0;; esac
 n=$(ls "${box.record}" | grep -c "^${name}\\.[0-9]*\\.argv$")
 out="${box.record}/${name}.$n"
 for a in "$@"; do printf '%s\\n----\\n' "$a"; done > "$out.argv"
@@ -244,7 +245,7 @@ test("a no on the terminal exits 1 having collected nothing", async () => {
     const ran = await onTerminal(box, ["triage"], "n\n");
     assert.equal(ran.status, 1, ran.out);
     assert.match(ran.out, /It reads: {8}Ardia's version and settings/);
-    assert.match(ran.out, /Continue\? \[Y\/n\]/);
+    assert.match(ran.out, /Continue\? \[y\/N\]/);
     assert.match(ran.out, /Nothing was read/);
     assert.deepEqual(sessions(box), []);
     assert.equal(fs.existsSync(path.join(triageDir(box), "consent.json")), false);
@@ -258,14 +259,18 @@ test("a yes is saved: the next run prints one line, and --reset-consent asks aga
   const box = sandbox();
   try {
     standIn(box, "claude");
-    const first = await onTerminal(box, ["triage"], "\n");
+    const enter = await onTerminal(box, ["triage"], "\n");
+    assert.equal(enter.status, 1, enter.out);
+    assert.match(enter.out, /Nothing was read/);
+    assert.deepEqual(sessions(box), []);
+    const first = await onTerminal(box, ["triage"], "y\n");
     assert.equal(first.status, 0, first.out);
     assert.match(first.out, MAC ? /changing anything on this Mac/ : /changing anything on this computer/);
     assert.equal(fs.statSync(path.join(triageDir(box), "consent.json")).mode & 0o777, 0o600);
     assert.equal(fs.statSync(triageDir(box)).mode & 0o777, 0o700);
     const second = await run(box, ["triage"]);
     assert.equal(second.status, 0, second.err);
-    assert.match(second.out, /^Triage reads Ardia's version, settings, crash reports and logs and sends them to your agent's provider\. --reset-consent shows the details\.$/m);
+    assert.match(second.out, /^Triage reads Ardia's version, settings, crash reports and local usage log and sends them to your agent's provider\. --reset-consent shows the details\.$/m);
     assert.doesNotMatch(second.out, /It reads:/);
     assert.equal(recorded(box, "claude"), 2);
     const reset = await run(box, ["triage", "--reset-consent"]);
@@ -288,9 +293,10 @@ test("claude starts in the session folder in ask-first mode with read-deny rules
     assert.deepEqual(argv.slice(0, 2), ["--permission-mode", "manual"]);
     assert.equal(argv[2], "--settings");
     const deny = JSON.parse(argv[3] as string).permissions.deny as string[];
-    assert.ok(deny.some((rule) => rule.endsWith("/*/Cookies)")), deny.join(" "));
-    assert.ok(deny.some((rule) => rule.includes("/*/Local Storage/**")));
+    assert.ok(deny.includes(`Read(/${box.data}/**)`), deny.join(" "));
     assert.ok(deny.every((rule) => !rule.startsWith("Read(") || rule.startsWith("Read(//")));
+    assert.ok(deny.includes("Bash(security *)") && deny.includes("Bash(secret-tool *)"));
+    assert.deepEqual(JSON.parse(argv[3] as string).permissions.ask, ["Bash(ardia triage file --post *)", "Bash(gh *)"]);
     assert.deepEqual(argv.slice(4, 6), ["--model", "opus"]);
     assert.equal(argv[6], "Read playbook.md in this folder and follow it. What went wrong, in the user's words: tabs vanish");
     assert.equal(fs.readFileSync(path.join(box.record, "claude.0.cwd"), "utf8").trim(), session);
@@ -304,7 +310,8 @@ test("claude starts in the session folder in ask-first mode with read-deny rules
     const context = fs.readFileSync(path.join(session, "context.md"), "utf8");
     assert.match(context, /> tabs vanish/);
     assert.match(context, /Never read/);
-    assert.match(context, /Login Data/);
+    assert.match(context, new RegExp(`- \`${box.data}/\` and everything in it`));
+    assert.match(context, /cookies, saved passwords, history, bookmarks, open tabs/);
     assert.match(context, /Ardia running now: no/);
     assert.match(context, new RegExp(`Source cache .*: ${path.join(triageDir(box), "source")}`));
   } finally {
@@ -407,9 +414,9 @@ test("evidence is copied scrubbed: a planted secret, email, home path and URL pa
     assert.match(text, /https:\/\/mail\.example\.org\/<path>/);
     assert.match(text, /<email>/);
     const names = fs.readdirSync(path.join(session, "evidence")).sort();
-    assert.deepEqual(names, ["README.md", "config.json", "hooks.log", "usage-2026-11-24.jsonl", "usage-cli-2026-11-24.jsonl"]);
+    assert.deepEqual(names, ["README.md", "config.json", "usage-2026-11-24.jsonl", "usage-cli-2026-11-24.jsonl"]);
     const readme = fs.readFileSync(path.join(session, "evidence", "README.md"), "utf8");
-    assert.match(readme, /hooks\.log\.1.*not there/);
+    assert.doesNotMatch(readme, /hooks/);
     assert.match(readme, /usage-2026-11-24\.jsonl/);
     const context = fs.readFileSync(path.join(session, "context.md"), "utf8");
     assert.match(context, /Ardia version: 0\.2\.48/);
@@ -512,12 +519,12 @@ test("newestReleaseTag orders versions and puts a stable after its nightlies", (
 test("triage mode refuses everything outside the allowlist, at dispatch", async () => {
   const box = sandbox();
   try {
-    for (const argv of [["tabs"], ["windows", "--json"], ["browse", "snapshot"], ["call", "run"], ["pinned"], ["history"], ["triage"], ["triage", "my", "tabs"], ["config", "edit"], ["plugins", "install", "x"], ["--data-dir", box.data, "tabs"], ["notes"], ["--skill"]]) {
+    for (const argv of [["tabs"], ["windows", "--json"], ["browse", "snapshot"], ["call", "run"], ["pinned"], ["history"], ["triage"], ["triage", "my", "tabs"], ["config", "edit"], ["config", "list"], ["config", "get", "theme"], ["config", "set", "theme", "x"], ["feedback", "--title", "t", "x"], ["daemon"], ["daemon", "--help"], ["--ardia-history-read"], ["--ardia-script-runner", "x"], ["plugins", "install", "x"], ["--data-dir", box.data, "tabs"], ["notes"], ["--skill"]]) {
       const ran = await run(box, argv, { ARDIA_TRIAGE: "1" });
       assert.equal(ran.status, 2, argv.join(" "));
       assert.match(ran.err, /^ardia: this is a triage session \(ARDIA_TRIAGE=1\), so only triage file/, argv.join(" "));
     }
-    for (const argv of [["--version"], ["--help"], ["config", "list"], ["config", "get", "theme"], ["triage", "file", "--help"], ["plugins", "list"]]) {
+    for (const argv of [["--version"], ["--help"], ["triage", "file", "--help"], ["plugins", "list"]]) {
       const ran = await run(box, argv, { ARDIA_TRIAGE: "1" });
       assert.doesNotMatch(ran.err, /triage session/, argv.join(" "));
     }
@@ -531,10 +538,10 @@ test("triage mode refuses everything outside the allowlist, at dispatch", async 
 });
 
 test("the allowlist is small and exact", () => {
-  for (const argv of [[], ["--version"], ["-h"], ["triage", "file", "--post", "x"], ["feedback", "--title", "t"], ["config", "list"], ["config", "get", "a"], ["config", "set", "a", "b"], ["plugins", "list"], ["plugins", "check", "."], ["commands"], ["methods"], ["--json", "commands"], ["config", "--help"]]) {
+  for (const argv of [[], ["--version"], ["-h"], ["triage", "file", "--post", "x"], ["plugins", "list"], ["plugins", "check", "."], ["commands"], ["methods"], ["--json", "commands"], ["plugins", "--help"]]) {
     assert.ok(allowedInTriage(argv), argv.join(" "));
   }
-  for (const argv of [["triage"], ["config", "unset", "a"], ["config", "edit"], ["plugins", "call", "x"], ["tabs"], ["run", "newTab"], ["events"], ["apply"], ["mcp"], ["computer"], ["--port", "9", "browse", "open", "x"]]) {
+  for (const argv of [["triage"], ["feedback", "--title", "t"], ["config", "list"], ["config", "get", "a"], ["config", "set", "a", "b"], ["config", "--help"], ["plugins", "call", "x"], ["tabs"], ["run", "newTab"], ["events"], ["apply"], ["mcp"], ["computer"], ["--port", "9", "browse", "open", "x"]]) {
     assert.ok(!allowedInTriage(argv), argv.join(" "));
   }
 });
@@ -581,7 +588,7 @@ test("prepare prints the exact text, the counts it removed and a code, and files
     const { session, code, prepared } = await preparedSession(box);
     assert.equal(prepared.status, 0, prepared.err);
     assert.match(code, /^[0-9a-f]{8}$/);
-    const text = fs.readFileSync(path.join(session, "report.md"), "utf8");
+    const text = fs.readFileSync(path.join(session, "prepared-report.md"), "utf8");
     assert.ok(prepared.out.includes(text.trimEnd()));
     for (const planted of [EMAIL, SECRET, URL_PATH, URL_QUERY, "alice"]) assert.ok(!text.includes(planted), planted);
     assert.match(text, /^Title: Sidebar blank after wake with two windows\n\n### What happened\n/);
@@ -649,9 +656,9 @@ test("--post refuses a wrong code and a stale one, and preparing again replaces 
     assert.equal(stale.status, 2);
     assert.match(stale.err, /stale or mistyped/);
     assert.equal(recorded(box, "gh"), 0);
-    const tampered = JSON.parse(fs.readFileSync(path.join(session, "report.json"), "utf8"));
+    const tampered = JSON.parse(fs.readFileSync(path.join(session, "prepared-report.json"), "utf8"));
     tampered.body = `${tampered.body}extra`;
-    fs.writeFileSync(path.join(session, "report.json"), JSON.stringify(tampered));
+    fs.writeFileSync(path.join(session, "prepared-report.json"), JSON.stringify(tampered));
     const changed = await run(box, ["triage", "file", "--post", newer as string], inSession(session));
     assert.equal(changed.status, 2);
     assert.match(changed.err, /changed after it was prepared/);
@@ -674,7 +681,7 @@ test("--post with gh signed in files through the Triage report form, once", asyn
     const create = args(box, "gh", 2);
     assert.deepEqual(create.slice(0, 8), ["api", "--hostname", "github.com", "graphql", "-f", "repo=R_kgTest", "-f", "template=Triage report"]);
     assert.match(create.at(-1) as string, /^query=mutation.*createIssue\(input:\{repositoryId:\$repo,issueTemplate:\$template/);
-    const report = fs.readFileSync(path.join(session, "report.md"), "utf8");
+    const report = fs.readFileSync(path.join(session, "prepared-report.md"), "utf8");
     assert.equal(fs.readFileSync(path.join(box.record, "gh.2.title"), "utf8"), "Sidebar blank after wake with two windows");
     assert.equal(`Title: Sidebar blank after wake with two windows\n\n${fs.readFileSync(path.join(box.record, "gh.2.body"), "utf8")}`, report);
     const again = await run(box, ["triage", "file", "--post", code], inSession(session));
@@ -799,10 +806,11 @@ test("--via feedback sends the report privately with the full text attached, and
       assert.equal(payload.kind, "bug");
       assert.equal(payload.title, "Sidebar blank after wake with two windows");
       assert.match(payload.description, /### What happened/);
-      const report = fs.readFileSync(path.join(session, "report.md"), "utf8");
+      const report = fs.readFileSync(path.join(session, "prepared-report.md"), "utf8");
       assert.equal(uploads.get("attachment-1.md")?.toString("utf8"), report);
       assert.ok(uploads.size >= 4, [...uploads.keys()].join(","));
       for (const body of uploads.values()) assert.ok(!body.toString("utf8").includes(SECRET));
+      assert.equal((posted[0] as { diagnostics: { via?: string } }).diagnostics.via, "triage");
       const again = await run(box, ["triage", "file", "--post", code, "--via", "feedback"], inSession(session, { ARDIA_FEEDBACK_URL: base }));
       assert.match(again.out, /^Already filed: FB-TR1A$/m);
       assert.equal(posted.length, 1);
@@ -914,6 +922,151 @@ test("use is counted through the cli_command event, with the agent and outcome a
     assert.match(properties, /"triage_agent_claude": ?true/);
     assert.match(properties, /"triage_launched": ?true/);
     assert.doesNotMatch(properties, /sidebar|playbook\.md/);
+  } finally {
+    cleanup(box);
+  }
+});
+
+test("a draft the agent keeps in the session folder as report.md is left as it wrote it, and prepares twice", async () => {
+  const box = sandbox();
+  try {
+    const launched = await run(box, ["triage", "--print", "--yes"]);
+    assert.equal(launched.status, 0, launched.err);
+    const session = sessions(box)[0] as string;
+    const draft = path.join(session, "report.md");
+    fs.writeFileSync(draft, REPORT);
+    const first = await run(box, ["triage", "file", "--title", "Sidebar blank after wake", "--body", draft], inSession(session));
+    assert.equal(first.status, 0, first.err);
+    assert.equal(fs.readFileSync(draft, "utf8"), REPORT);
+    assert.match(fs.readFileSync(path.join(session, "prepared-report.md"), "utf8"), /^Title: Sidebar blank after wake\n\n### What happened/);
+    const second = await run(box, ["triage", "file", "--title", "Sidebar blank after wake", "--body", "report.md"], inSession(session), undefined, session);
+    assert.equal(second.status, 0, second.err);
+    assert.equal(/^Code: ([0-9a-f]{8})$/m.exec(second.out)?.[1], /^Code: ([0-9a-f]{8})$/m.exec(first.out)?.[1]);
+    const own = await run(box, ["triage", "file", "--title", "Sidebar blank after wake", "--body", path.join(session, "prepared-report.md")], inSession(session));
+    assert.equal(own.status, 2);
+    assert.match(own.err, /is the copy ardia triage file writes/);
+  } finally {
+    cleanup(box);
+  }
+});
+
+test("a form field changed after preparing is refused, though the title and body still match the code", async () => {
+  const box = sandbox();
+  try {
+    standIn(box, "xdg-open");
+    standIn(box, "open");
+    const { session, code } = await preparedSession(box);
+    const stored = path.join(session, "prepared-report.json");
+    const tampered = JSON.parse(fs.readFileSync(stored, "utf8"));
+    tampered.fields.diagnosis = "something the user never saw";
+    fs.writeFileSync(stored, JSON.stringify(tampered));
+    const posted = await run(box, ["triage", "file", "--post", code, "--via", "form"], inSession(session));
+    assert.equal(posted.status, 2);
+    assert.match(posted.err, /changed after it was prepared/);
+    assert.equal(recorded(box, "xdg-open") + recorded(box, "open"), 0);
+  } finally {
+    cleanup(box);
+  }
+});
+
+test("an older Claude Code that calls its ask-first mode default is started with that name", async () => {
+  const box = sandbox();
+  try {
+    standIn(box, "claude");
+    const older = await run(box, ["triage", "--yes"], { STANDIN_HELP: '--permission-mode <mode>  (choices: "acceptEdits", "bypassPermissions", "default", "plan")' });
+    assert.equal(older.status, 0, older.err);
+    assert.deepEqual(args(box, "claude").slice(0, 2), ["--permission-mode", "default"]);
+    const newer = await run(box, ["triage", "--yes"], { STANDIN_HELP: '--permission-mode <mode>  (choices: "acceptEdits", "auto", "manual", "plan")' });
+    assert.equal(newer.status, 0, newer.err);
+    assert.deepEqual(args(box, "claude", 1).slice(0, 2), ["--permission-mode", "manual"]);
+  } finally {
+    cleanup(box);
+  }
+});
+
+test("the playbook fetch doesn't follow a redirect", async () => {
+  const got = await playbookWith((url, response) => {
+    if (url.endsWith("/tags/v")) response.end(JSON.stringify(TAGS));
+    else if (url.endsWith("/elsewhere")) response.end("# From somewhere else\n");
+    else response.writeHead(302, { Location: "/elsewhere" }).end();
+  });
+  assert.equal(got.playbook, BUNDLED);
+});
+
+test("triage scrub cuts the path of an address written without its scheme, and the home folder's name in other paths", () => {
+  const done = triageScrub(`it broke on mail.example.org${URL_PATH}?${URL_QUERY} and docs.example.com/d/1abc but not in engine/ardiacore/src/window.mm or README.md or 0.2.48/notes`);
+  assert.equal(done.text, "it broke on mail.example.org/<path> and docs.example.com/<path> but not in engine/ardiacore/src/window.mm or README.md or 0.2.48/notes");
+  assert.equal(done.removed.get("URL logins, paths and queries"), 2);
+  assert.equal(triageScrub("see https://www.example.org/<path> again").text, "see https://www.example.org/<path> again");
+  assert.equal(homeNameSegments("/Volumes/Data/alice/x and ~alice and /srv/alice: but malice/x and /alicette", "alice"), "/Volumes/Data/<user>/x and ~<user> and /srv/<user>: but malice/x and /alicette");
+});
+
+test("--attach-evidence sends only the files triage collected, scrubbed again", async () => {
+  const box = sandbox();
+  try {
+    plantEvidence(box);
+    const { session, code } = await preparedSession(box);
+    fs.writeFileSync(path.join(session, "evidence", "notes.txt"), "something else entirely\n");
+    fs.appendFileSync(path.join(session, "evidence", "config.json"), `\n{"added":"${SECRET}","to":"${EMAIL}"}\n`);
+    await feedbackService(async (base, _seen, uploads) => {
+      const sent = await run(box, ["triage", "file", "--post", code, "--via", "feedback", "--attach-evidence"], inSession(session, { ARDIA_FEEDBACK_URL: base }));
+      assert.equal(sent.status, 0, sent.out + sent.err);
+      assert.match(sent.out, /Not attached: notes\.txt \(not a file triage collected\)/);
+      const all = [...uploads.values()].map((body) => body.toString("utf8")).join("\n");
+      assert.ok(!all.includes("something else entirely"));
+      assert.ok(!all.includes(SECRET) && !all.includes(EMAIL));
+      assert.match(all, /"added":"<secret>"/);
+    });
+  } finally {
+    cleanup(box);
+  }
+});
+
+test("two posts at once file one issue", async () => {
+  const box = sandbox();
+  try {
+    fs.symlinkSync("/bin/sleep", path.join(box.tools, "sleep"));
+    standIn(
+      box,
+      "gh",
+      `case "$1 $2" in
+"auth status") exit 0;;
+esac
+case "$*" in
+*"--jq .node_id"*) echo R_kgTest; exit 0;;
+*graphql*) sleep 1; echo '{"data":{"createIssue":{"issue":{"url":"https://github.com/test/repo/issues/77","labels":{"nodes":[{"name":"via-triage"}]}}}}}'; exit 0;;
+esac
+exit 1`,
+    );
+    const { session, code } = await preparedSession(box);
+    const both = await Promise.all([run(box, ["triage", "file", "--post", code], inSession(session)), run(box, ["triage", "file", "--post", code], inSession(session))]);
+    const filed = both.filter((ran) => /^Filed: https:\/\/github\.com\/test\/repo\/issues\/77$/m.test(ran.out));
+    const waited = both.filter((ran) => /another ardia triage file --post is running/.test(ran.err) || /^Already filed:/m.test(ran.out));
+    assert.equal(filed.length, 1, both.map((ran) => ran.out + ran.err).join("|"));
+    assert.equal(waited.length, 1, both.map((ran) => ran.out + ran.err).join("|"));
+    const creates = fs.readdirSync(box.record).filter((file) => file.startsWith("gh.") && file.endsWith(".argv") && fs.readFileSync(path.join(box.record, file), "utf8").includes("graphql"));
+    assert.equal(creates.length, 1);
+  } finally {
+    cleanup(box);
+  }
+});
+
+test("a checkout build can't be pointed at the real repository, and --via form with --comment-on never posts through gh", async () => {
+  const box = sandbox();
+  try {
+    ghStandIn(box);
+    standIn(box, "xdg-open");
+    standIn(box, "open");
+    const { session, code } = await preparedSession(box);
+    const real = await run(box, ["triage", "file", "--post", code], inSession(session, { ARDIA_TRIAGE_REPO: "ardia-browser/ardia" }));
+    assert.equal(real.status, 2);
+    assert.match(real.err, /never files to ardia-browser\/ardia/);
+    const before = recorded(box, "gh");
+    const pasted = await run(box, ["triage", "file", "--post", code, "--comment-on", "12", "--via", "form"], inSession(session));
+    assert.equal(pasted.status, 0, pasted.err);
+    assert.match(pasted.out, /https:\/\/github\.com\/test\/repo\/issues\/12/);
+    assert.match(pasted.out, /[Pp]aste this as a comment/);
+    assert.equal(recorded(box, "gh"), before);
   } finally {
     cleanup(box);
   }

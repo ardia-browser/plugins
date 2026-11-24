@@ -1,12 +1,15 @@
+import { home } from "./paths.ts";
 import { scrub } from "./scrub.ts";
 
 export const PATH_PLACEHOLDER = "/<path>";
 const WHOLE_URL = /\b([a-zA-Z][a-zA-Z0-9+.-]{1,15}:\/\/)([^\s/?#<>"'`@]*@)?([^\s/?#<>"'`]*)([^\s<>"'`]*)/g;
+const BARE_URL = /(?<![\w@/.:-])((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,24})([/?][^\s<>"'`]+)/gi;
+const HOME_NAME = /^[A-Za-z0-9._-]{3,64}$/;
 const CATEGORIES: readonly (readonly [string, RegExp])[] = [
   ["secrets", /<(?:redacted|secret)>/g],
   ["emails", /<email>/g],
   ["card numbers", /<number>/g],
-  ["home folder names", /\/<user>/g],
+  ["home folder names", /[/~]<user>/g],
 ];
 export const URL_CATEGORY = "URL logins, paths and queries";
 export const CATEGORY_ORDER: readonly string[] = [...CATEGORIES.map(([name]) => name), URL_CATEGORY];
@@ -36,12 +39,34 @@ export function hostOnlyUrls(text: string): [string, number] {
   return [out, cut];
 }
 
+export function bareUrlPaths(text: string): [string, number] {
+  let cut = 0;
+  const out = text.replace(BARE_URL, (_whole, host: string) => {
+    cut += 1;
+    return `${host}${PATH_PLACEHOLDER}`;
+  });
+  return [out, cut];
+}
+
+function homeName(): string | undefined {
+  const mine = home().replace(/\/+$/, "");
+  const name = mine.slice(mine.lastIndexOf("/") + 1);
+  return HOME_NAME.test(name) ? name : undefined;
+}
+
+export function homeNameSegments(text: string, name: string | undefined = homeName()): string {
+  if (name === undefined) return text;
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return text.replace(new RegExp(`(?<=[/~])${escaped}(?=[/\\s"'\`:,;)\\]]|$)`, "gm"), "<user>");
+}
+
 export function triageScrub(text: string): { text: string; removed: Removed } {
   const [hosted, urls] = hostOnlyUrls(text);
-  const scrubbed = scrub(hosted);
+  const [pathless, bareUrls] = bareUrlPaths(hosted);
+  const scrubbed = homeNameSegments(scrub(pathless));
   const removed = emptyRemoved();
-  for (const [name, pattern] of CATEGORIES) removed.set(name, Math.max(0, occurrences(scrubbed, pattern) - occurrences(hosted, pattern)));
-  removed.set(URL_CATEGORY, urls);
+  for (const [name, pattern] of CATEGORIES) removed.set(name, Math.max(0, occurrences(scrubbed, pattern) - occurrences(text, pattern)));
+  removed.set(URL_CATEGORY, urls + bareUrls);
   return { text: scrubbed, removed };
 }
 

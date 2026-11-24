@@ -16,7 +16,7 @@ export const TRIAGE_HELP = `usage: ardia triage [WHAT WENT WRONG ...] [--agent c
 
 Look into a problem with Ardia with your own coding agent. ardia triage asks once
 what it may read, collects scrubbed evidence (Ardia's version and settings, crash
-reports, logs and the local usage log) into a private session folder, and starts
+reports and the local usage log) into a private session folder, and starts
 Claude Code or Codex there with a playbook. The agent investigates and drafts a
 report; ardia triage file scrubs it, shows the exact text and files it only with
 --post and the code it printed. The agent's rules are guard rails, not a lock.

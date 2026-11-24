@@ -1,29 +1,31 @@
 import { spawn, spawnSync } from "node:child_process";
-import { accessSync, constants as fsConstants, readdirSync, readFileSync, statSync } from "node:fs";
+import { accessSync, constants as fsConstants, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { iso, now } from "./clock.ts";
 import { call as callControl, dataRoot } from "./control.ts";
 import type { Said } from "./deliver.ts";
 import { attachableName, FEEDBACK_ATTACHMENT_LIMIT, FEEDBACK_DESCRIPTION_LIMIT, FEEDBACK_FILE_BYTES, sendFeedback } from "./feedback.ts";
 import { type JsonObject, object, parse, type Value } from "./json.ts";
 import { abspath, env, envSet, expandUser, join, LINUX } from "./paths.ts";
-import { closeDir, type Dir, writePrivate } from "./privatefs.ts";
+import { close, closeDir, type Dir, takeLock, writePrivate } from "./privatefs.ts";
 import { codePoints, joinCodePoints, utf8 } from "./pystr.ts";
 import { wholeWords } from "./scrub.ts";
 import type { Call } from "./telemetry.ts";
 import { ardiaRunning } from "./triage-evidence.ts";
-import { buildReport, codeOf, formUrl } from "./triage-report.ts";
-import { removedLines } from "./triage-scrub.ts";
+import { buildReport, codeOf, formUrl, renderBody } from "./triage-report.ts";
+import { removedLines, triageScrub } from "./triage-scrub.ts";
 import { openExistingSession, readJsonIn, stringIn, TriageRefused, writeJsonIn } from "./triage-session.ts";
 import { cliVersion, isDevBuild } from "./version.ts";
 
 const REPOSITORY = "ardia-browser/ardia";
 const TEST_REPOSITORY_ENV = "ARDIA_TRIAGE_REPO";
 const TEMPLATE_NAME = "Triage report";
-const REPORT_JSON = "report.json";
-const REPORT_TEXT = "report.md";
+const REPORT_JSON = "prepared-report.json";
+const REPORT_TEXT = "prepared-report.md";
 const FILED_JSON = "filed.json";
-const POST_TITLE = "post-title.txt";
-const POST_BODY = "post-body.md";
+const POST_PREFIX = "post-";
+const POST_LOCK = "post.lock";
+const OWN_FILES: readonly string[] = [REPORT_JSON, REPORT_TEXT, FILED_JSON, POST_LOCK, "session.json", "context.md", "playbook.md"];
+const EVIDENCE_NAME = /^(?:README\.md|config\.json|usage-(?:cli-)?\d{4}-\d{2}-\d{2}\.jsonl|crash-[1-9]\.ips)$/;
 const GH_TIMEOUT_MS = 60_000;
 const GH_OUTPUT_BYTES = 4 * 1024 * 1024;
 const MAX_BODY_FILE = 256 * 1024;
@@ -50,7 +52,7 @@ function flag(call: Call, name: string): void {
 function repository(): string {
   if (!isDevBuild()) return REPOSITORY;
   const given = envSet(TEST_REPOSITORY_ENV);
-  if (given === undefined || !/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(given)) {
+  if (given === undefined || given.toLowerCase() === REPOSITORY || !/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(given)) {
     throw new TriageRefused(`this ardia is a checkout build (${cliVersion()}), which never files to ${REPOSITORY}; set ${TEST_REPOSITORY_ENV} to a test repository`);
   }
   return given;
@@ -64,7 +66,15 @@ function filedBy(record: JsonObject): string {
   return `${who} via ardia triage ${cliVersion()}${shownModel}`;
 }
 
-function readBody(path: string): string {
+function sameFile(one: string, other: string): boolean {
+  try {
+    return realpathSync(one) === realpathSync(other);
+  } catch {
+    return false;
+  }
+}
+
+function readBody(path: string, sessionDir: string): string {
   const full = abspath(expandUser(path));
   let info;
   try {
@@ -73,6 +83,9 @@ function readBody(path: string): string {
     throw new TriageRefused(`${path}: there's no such file`);
   }
   if (!info.isFile()) throw new TriageRefused(`${path}: not a file`);
+  const name = full.slice(full.lastIndexOf("/") + 1);
+  const own = sameFile(full.slice(0, full.lastIndexOf("/")) || "/", sessionDir) && (OWN_FILES.includes(name) || name.startsWith(POST_PREFIX));
+  if (own) throw new TriageRefused(`${path} is the copy ardia triage file writes; write the report in a file of your own, such as report.md`);
   if (info.size > MAX_BODY_FILE) throw new TriageRefused(`${path}: over ${MAX_BODY_FILE / 1024} KB; keep only the lines that matter`);
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(readFileSync(full));
@@ -83,7 +96,7 @@ function readBody(path: string): string {
 
 function prepare(args: TriageFileArgs, dir: Dir, record: JsonObject, sessionDir: string, call: Call): Said {
   if (args.title === undefined || args.body === undefined) throw new TriageRefused('ardia triage file needs --title "…" and --body FILE, or --post CODE');
-  const report = buildReport(args.title, readBody(args.body), filedBy(record));
+  const report = buildReport(args.title, readBody(args.body, sessionDir), filedBy(record));
   const fields: [string, Value][] = [...report.fields].map(([id, text]) => [id, text]);
   writeJsonIn(dir, REPORT_JSON, object([["code", report.code], ["title", report.title], ["body", report.body], ["fields", object(fields)], ["prepared_at", iso(now())]]));
   writePrivate(REPORT_TEXT, dir, utf8(report.text));
@@ -183,11 +196,6 @@ function dig(value: Value | undefined, ...keys: string[]): Value | undefined {
   return current;
 }
 
-function writePostFiles(dir: Dir, title: string, body: string): void {
-  writePrivate(POST_TITLE, dir, utf8(title));
-  writePrivate(POST_BODY, dir, utf8(body));
-}
-
 function postWithGh(gh: string, repo: string, report: Stored, dir: Dir, sessionDir: string, call: Call): Said {
   const node = run(gh, ["api", "--hostname", "github.com", `repos/${repo}`, "--jq", ".node_id"]);
   const nodeId = node.stdout.trim();
@@ -195,13 +203,16 @@ function postWithGh(gh: string, repo: string, report: Stored, dir: Dir, sessionD
     flag(call, "triage_refused");
     return { status: 1, out: [], err: [`ardia triage: gh couldn't look up ${repo} (${firstLine(node.stderr) || "no answer"}); nothing was filed. Try again, or use --via form.`] };
   }
-  writePostFiles(dir, report.title, report.body);
+  const titleFile = `${POST_PREFIX}title-${report.code}.txt`;
+  const bodyFile = `${POST_PREFIX}body-${report.code}.md`;
+  writePrivate(titleFile, dir, utf8(report.title));
+  writePrivate(bodyFile, dir, utf8(report.body));
   const created = run(gh, [
     "api", "--hostname", "github.com", "graphql",
     "-f", `repo=${nodeId}`,
     "-f", `template=${TEMPLATE_NAME}`,
-    "-F", `title=@${join(sessionDir, POST_TITLE)}`,
-    "-F", `body=@${join(sessionDir, POST_BODY)}`,
+    "-F", `title=@${join(sessionDir, titleFile)}`,
+    "-F", `body=@${join(sessionDir, bodyFile)}`,
     "-f", `query=${CREATE_ISSUE}`,
   ]);
   const answer = jsonOf(created.stdout);
@@ -257,7 +268,7 @@ async function postWithForm(repo: string, report: Stored, dir: Dir, sessionDir: 
   return { status: 0, out, err: [] };
 }
 
-function evidenceAttachments(sessionDir: string, room: number): { paths: string[]; left: string[] } {
+function evidenceAttachments(dir: Dir, sessionDir: string, code: string, room: number): { paths: string[]; left: string[] } {
   const folder = join(sessionDir, "evidence");
   const paths: string[] = [];
   const left: string[] = [];
@@ -269,15 +280,23 @@ function evidenceAttachments(sessionDir: string, room: number): { paths: string[
     const path = join(folder, name);
     let size = 0;
     try {
-      size = statSync(path).size;
+      const info = lstatSync(path);
+      if (!info.isFile()) continue;
+      size = info.size;
     } catch {
       continue;
     }
     if (size === 0) continue;
-    if (!attachableName(name)) left.push(`${name} (not a kind of file feedback takes)`);
+    if (!EVIDENCE_NAME.test(name) || !attachableName(name)) left.push(`${name} (not a file triage collected)`);
     else if (size > FEEDBACK_FILE_BYTES) left.push(`${name} (over ${FEEDBACK_FILE_BYTES / (1024 * 1024)} MB)`);
     else if (paths.length >= room) left.push(`${name} (at most ${FEEDBACK_ATTACHMENT_LIMIT} files go with a report)`);
-    else paths.push(path);
+    else {
+      const scrubbed = triageScrub(new TextDecoder("utf-8").decode(readFileSync(path))).text;
+      if (scrubbed === "") continue;
+      const copy = `${POST_PREFIX}evidence-${code}-${name}`;
+      writePrivate(copy, dir, utf8(`${scrubbed}\n`));
+      paths.push(join(sessionDir, copy));
+    }
   }
   return { paths, left };
 }
@@ -289,9 +308,9 @@ function feedbackDescription(body: string): string {
 }
 
 async function postWithFeedback(args: TriageFileArgs, report: Stored, dir: Dir, sessionDir: string, dataDir: string | undefined, call: Call): Promise<Said> {
-  const extra = args.attachEvidence ? evidenceAttachments(sessionDir, FEEDBACK_ATTACHMENT_LIMIT - 1) : { paths: [], left: [] };
+  const extra = args.attachEvidence ? evidenceAttachments(dir, sessionDir, report.code, FEEDBACK_ATTACHMENT_LIMIT - 1) : { paths: [], left: [] };
   const sent = await sendFeedback(
-    { text: [], title: report.title, kind: "bug", attach: [join(sessionDir, REPORT_TEXT), ...extra.paths], about: undefined, dataDir },
+    { text: [], title: report.title, kind: "bug", attach: [join(sessionDir, REPORT_TEXT), ...extra.paths], about: undefined, dataDir, via: "triage" },
     feedbackDescription(report.body),
   );
   if (sent.reference === undefined || sent.said.status !== 0) {
@@ -315,9 +334,10 @@ function commentText(report: Stored): string {
   return `**${report.title}**\n\nAnother report of this from \`ardia triage\`:\n\n${report.body}`;
 }
 
-async function comment(number: number, repo: string, report: Stored, dir: Dir, sessionDir: string, dataDir: string | undefined, call: Call): Promise<Said> {
-  const gh = which("gh");
+async function comment(number: number, via: string | undefined, repo: string, report: Stored, dir: Dir, sessionDir: string, dataDir: string | undefined, call: Call): Promise<Said> {
+  const gh = via === "form" ? undefined : which("gh");
   const page = `https://github.com/${repo}/issues/${number}`;
+  if (via === "gh" && (gh === undefined || !signedIn(gh))) throw new TriageRefused("gh isn't installed or is signed out; drop --via gh to open the issue in a browser instead");
   if (gh !== undefined && signedIn(gh)) {
     const looked = run(gh, ["api", "--hostname", "github.com", `repos/${repo}/issues/${number}`]);
     const issue = jsonOf(looked.stdout);
@@ -327,8 +347,9 @@ async function comment(number: number, repo: string, report: Stored, dir: Dir, s
     }
     if (issue.has("pull_request")) throw new TriageRefused(`#${number} is a pull request, not an issue; nothing was posted`);
     if (issue.get("state") !== "open") throw new TriageRefused(`#${number} is closed; file a new report instead (drop --comment-on)`);
-    writePrivate(POST_BODY, dir, utf8(commentText(report)));
-    const posted = run(gh, ["api", "--hostname", "github.com", `repos/${repo}/issues/${number}/comments`, "-F", `body=@${join(sessionDir, POST_BODY)}`]);
+    const commentFile = `${POST_PREFIX}comment-${report.code}-${number}.md`;
+    writePrivate(commentFile, dir, utf8(commentText(report)));
+    const posted = run(gh, ["api", "--hostname", "github.com", `repos/${repo}/issues/${number}/comments`, "-F", `body=@${join(sessionDir, commentFile)}`]);
     const url = dig(jsonOf(posted.stdout), "html_url");
     if (posted.status !== 0 || typeof url !== "string") {
       if (posted.timedOut) remember(dir, { code: report.code, via: `comment-${number}`, where: `unknown: gh timed out; check ${page}`, state: "uncertain" });
@@ -368,9 +389,10 @@ async function post(args: TriageFileArgs, code: string, dir: Dir, record: JsonOb
   const report = stored(dir);
   if (report === undefined) throw new TriageRefused('there\'s no prepared report in this session; run ardia triage file --title "…" --body FILE first');
   if (report.code !== code) throw new TriageRefused(`${code} isn't the code of the prepared report (it's stale or mistyped); show the user the newest text and use its code`);
-  if (codeOf(report.title, report.body) !== code) throw new TriageRefused("the prepared report was changed after it was prepared; prepare it again");
+  if (codeOf(report.title, report.body) !== code || renderBody(report.fields) !== report.body) throw new TriageRefused("the prepared report was changed after it was prepared; prepare it again");
+  writePrivate(REPORT_TEXT, dir, utf8(`Title: ${report.title}\n\n${report.body}`));
   const dataDir = stringIn(record, "data_dir");
-  if (args.commentOn !== undefined) return comment(issueNumber(args.commentOn), repository(), report, dir, sessionDir, dataDir, call);
+  if (args.commentOn !== undefined) return comment(issueNumber(args.commentOn), via, repository(), report, dir, sessionDir, dataDir, call);
   if (via === "feedback") return postWithFeedback(args, report, dir, sessionDir, dataDir, call);
   if (via === "form") return postWithForm(repository(), report, dir, sessionDir, dataDir, call);
   const gh = which("gh");
@@ -398,7 +420,15 @@ export async function runTriageFile(args: TriageFileArgs, call: Call): Promise<S
     throw error;
   }
   try {
-    if (args.post !== undefined) return await post(args, args.post, opened.dir, opened.record, opened.session.dir, call);
+    if (args.post !== undefined) {
+      const lock = takeLock(POST_LOCK, opened.dir);
+      if (lock === undefined) throw new TriageRefused("another ardia triage file --post is running in this session; wait for it, then check what it said before trying again", 1);
+      try {
+        return await post(args, args.post, opened.dir, opened.record, opened.session.dir, call);
+      } finally {
+        close(lock);
+      }
+    }
     if (args.via !== undefined || args.attachEvidence || args.commentOn !== undefined) throw new TriageRefused("--via, --attach-evidence and --comment-on go with --post CODE");
     return prepare(args, opened.dir, opened.record, opened.session.dir, call);
   } catch (error) {
