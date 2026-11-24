@@ -248,8 +248,16 @@ export function actCall(args: Record<string, unknown>): ActCall {
   };
 }
 
+function refenceError(text: string, nonce: string, failed: boolean): string {
+  const trimmed = stripLoneSurrogates(text).replace(/\n+$/u, "");
+  if (trimmed === "") return "";
+  DAEMON_FENCE.lastIndex = 0;
+  if (DAEMON_FENCE.test(trimmed)) return refence(trimmed, nonce);
+  return failed ? fence(trimmed, nonce) : neutralizeFence(trimmed);
+}
+
 export function answerText(answer: DaemonAnswer, nonce: string): string {
-  const parts = [refence(answer.out, nonce).replace(/\n+$/u, ""), refence(answer.err, nonce).replace(/\n+$/u, "")].filter((part) => part !== "");
+  const parts = [refence(answer.out, nonce).replace(/\n+$/u, ""), refenceError(answer.err, nonce, answer.exit !== 0)].filter((part) => part !== "");
   if (parts.length === 0) return answer.exit === 0 ? "✓ done" : `✗ failed${answer.code ? ` (${answer.code})` : ""}`;
   return parts.join("\n");
 }

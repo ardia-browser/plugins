@@ -234,7 +234,7 @@ describe("tools/call", () => {
     const server = new McpServer({ daemon, version: "1" });
     const failed = resultOf(await call(server, "tools/call", { name: "browser_act", arguments: { command: "click", args: ["@e99"] } }));
     expect(failed["isError"]).toBe(true);
-    expect(textOf(failed)).toBe("✗ No element @e99 in the last snapshot");
+    expect(textOf(failed)).toMatch(/^<page-data nonce="[0-9a-f]+">\n✗ No element @e99 in the last snapshot\n<\/page-data>$/u);
     const invalid = resultOf(await call(server, "tools/call", { name: "browser_repl", arguments: {} }));
     expect(invalid["isError"]).toBe(true);
     expect(textOf(invalid)).toBe("code is required");

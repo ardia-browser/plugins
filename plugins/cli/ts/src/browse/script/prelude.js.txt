@@ -234,7 +234,11 @@
   const changesIn = (body) => {
     const at = body.indexOf("\nchanges");
     const block = at >= 0 ? body.slice(at + 1) : body.startsWith("changes") ? body : "";
-    return block.replace(/^changes[^\n]*\n?/, "");
+    return block
+      .replace(/^changes[^\n]*\n?/, "")
+      .split("\n")
+      .filter((line) => !/^\s*-\s/.test(line))
+      .join("\n");
   };
   class Receipt {
     toString() { return String(this.text); }
@@ -735,7 +739,7 @@
     const fold = options.ignoreCase === true ? (value) => norm(value).toLowerCase() : norm;
     const has = (value) => fold(value).includes(fold(wanted));
     const receipt = lastReceipt;
-    if (!options.selector && receipt && (has(receipt.changedText) || has(receipt.text))) return true;
+    if (!options.selector && receipt && has(receipt.changedText)) return true;
     const deadline = Date.now() + Math.min(Math.max(Number(options.timeout) || 0, 0), 600000);
     let seen = "";
     for (;;) {

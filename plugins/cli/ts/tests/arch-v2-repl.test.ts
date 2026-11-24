@@ -249,6 +249,19 @@ describe("persistent repl runner", () => {
       const afterHere = await turn(runner, "await page.click('#save', { receipt: true }); await page.here(); return await page.assertText('changes were saved');", { answer: RECEIPT });
       expect(afterHere.result["kind"]).toBe("error");
       expect(afterHere.result["code"]).toBe("assertion");
+      const removedOnly = await turn(runner, "await page.click('#dismiss', { receipt: true }); return await page.assertText('Success');", {
+        answer: (request) => {
+          const argv = request["argv"] as string[];
+          if (argv[0] === "get" && argv[1] === "text") return { ok: true, text: "Gone", data: { text: "Gone" } };
+          return {
+            ok: true,
+            text: '✓ Done\nchanges:\n- status "Success"',
+            data: { changes: { added: [], removed: [{ role: "status", name: "Success" }], changed: [], text: { lines: [], more: false, where: null } } },
+          };
+        },
+      });
+      expect(removedOnly.result["kind"]).toBe("error");
+      expect(removedOnly.result["code"]).toBe("assertion");
       const concurrent = await turn(runner, "await Promise.all([page.click('#save', { receipt: true }), useTab('t2')]); return await page.assertText('changes were saved');", { answer: RECEIPT });
       expect(concurrent.result["kind"]).toBe("error");
       expect(concurrent.result["code"]).toBe("assertion");

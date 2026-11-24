@@ -57,10 +57,20 @@ export const CONTAINERS_BY_TEXT = `(wanted) => {
   return innermost(lifted).slice(0, 20);
 }`;
 
-export const SCOPED_MATCH = `(root, kind, value, exact, role) => {
+export const SCOPED_MATCH = `(root, kind, value, exact, role, ...extraRoots) => {
   ${WALKER}
   const scope = root || document.documentElement;
-  const all = descendants(scope);
+  const seen = new Set();
+  const all = [];
+  const collectRoot = (start) => {
+    for (const el of descendants(start)) {
+      if (seen.has(el)) continue;
+      seen.add(el);
+      all.push(el);
+    }
+  };
+  collectRoot(scope);
+  for (const extra of extraRoots) if (extra) collectRoot(extra);
   const ROLE_SELECTORS = {
     button: "button,[role=button],input[type=button],input[type=submit],input[type=reset],input[type=image],summary",
     link: "a[href],area[href],[role=link]",
@@ -250,8 +260,39 @@ export function inScope(scope: Scope | null, element: Element): boolean {
   return scope === null || (element.frame === scope.container.frame && scope.backends.has(element.backendId));
 }
 
+function collectClosedRoots(node: Record<string, unknown>, into: number[]): void {
+  const roots = node["shadowRoots"];
+  for (const raw of Array.isArray(roots) ? roots : []) {
+    if (raw === null || typeof raw !== "object") continue;
+    const root = raw as Record<string, unknown>;
+    if (root["shadowRootType"] === "closed" && typeof root["backendNodeId"] === "number" && into.length < pierce.MAX_ROOTS) into.push(root["backendNodeId"]);
+    collectClosedRoots(root, into);
+  }
+  const children = node["children"];
+  for (const child of Array.isArray(children) ? children : []) {
+    if (child !== null && typeof child === "object") collectClosedRoots(child as Record<string, unknown>, into);
+  }
+}
+
+async function closedShadowRootsIn(page: Page, container: Element): Promise<Element[]> {
+  let described: Record<string, unknown>;
+  try {
+    described = await sendIn(page, container.frame, "DOM.describeNode", { backendNodeId: container.backendId, depth: -1, pierce: true });
+  } catch {
+    return [];
+  }
+  const node = described["node"];
+  if (node === null || typeof node !== "object") return [];
+  const ids: number[] = [];
+  collectClosedRoots(node as Record<string, unknown>, ids);
+  if (ids.length === 0) return [];
+  const resolved = await Promise.all(ids.map((backend) => page.resolveBackend(backend, container.frame, "shadow root")));
+  return resolved.filter((element): element is Element => element !== null);
+}
+
 export async function scopedMatches(page: Page, frame: string, root: Element | null, kind: string, value: string, exact: boolean, role = ""): Promise<Element[] | null> {
-  const remote = await page.call(SCOPED_MATCH, [root, kind, value, exact, role], { frame: root?.frame ?? frame, byValue: false, read: true });
+  const extraRoots = root === null ? [] : await closedShadowRootsIn(page, root);
+  const remote = await page.call(SCOPED_MATCH, [root, kind, value, exact, role, ...extraRoots], { frame: root?.frame ?? frame, byValue: false, read: true });
   const found = remote !== null && typeof remote === "object" ? (remote as Record<string, unknown>) : {};
   if (found["subtype"] === "null") return null;
   return page.elementsFrom(remote, root?.frame ?? frame, `${kind}=${value}`, 50);
