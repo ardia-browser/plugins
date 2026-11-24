@@ -2584,16 +2584,17 @@ In order, `ardia triage`:
      running (its control socket answers within a second); the data dir; the source cache, `<CLI home>/triage/source`,
      where the playbook clones release tags; the agent; where the playbook came from; and the never-read list:
      Ardia's whole data dir (cookies, saved passwords, history, bookmarks, open tabs, downloads, site storage and
-     caches all live in it); on macOS also `~/Library/WebKit`, `~/Library/HTTPStorages`, `~/Library/Cookies` and
-     `~/Library/Caches/com.ardia.browser`, where WebKit pages keep theirs; and the keychain's "Ardia Safe Storage"
-     item (macOS) or the Secret Service, KWallet or secret portal (Linux). What triage may use from there is already
-     in `evidence/`.
+     caches all live in it); the folder of `ardia hooks`' log; on macOS also the settings folder `~/.config/ardia`
+     and `~/Library/WebKit`, `~/Library/HTTPStorages`, `~/Library/Cookies` and `~/Library/Caches/com.ardia.browser`,
+     where WebKit pages keep theirs; and the keychain's "Ardia Safe Storage" item (macOS) or the Secret Service,
+     KWallet or secret portal (Linux). What triage may use from there is already in `evidence/`. A CLI home inside
+     one of those folders is refused, since the session would be out of the agent's reach.
    - `evidence/`: copied through the same scrub as a report (below), with `evidence/README.md` saying what each file
      is, where it came from, how much was cut and removed, and what was skipped or missing (normal on an install
      Ardia never ran on: nothing fails for it). The sources: the local usage log,
      `<data dir>/Telemetry/local/<UTC day>.jsonl` and the CLI's `cli-<UTC day>.jsonl` (the last 1 MB of each in
-     whole lines, newest days first, 6 MB in all); on macOS the newest five `.ips` crash and hang reports in
-     `~/Library/Logs/DiagnosticReports` named `Ardia-…` or `Chromium Helper…` whose header or path says they are
+     whole lines, newest days first, 6 MB in all, and only files dated in the last 8 days); on macOS the newest five `.ips` crash and hang reports in
+     `~/Library/Logs/DiagnosticReports` named `Ardia-…` or `Chromium Helper…` whose first 64 KB say they are
      Ardia's (2 MB each, as `packages/shell/ios/CrashReports.swift` picks them); and `config.json`, which can name
      sites the user set something up for (a search provider, a rule). `ardia hooks`' log is not copied: it holds
      whatever the user's hook programs print, which can be the pages they ran on. Linux crash reports are Chromium minidumps in `<data dir>/Crash Reports`: they hold the
@@ -2613,9 +2614,11 @@ In order, `ardia triage`:
    - Claude Code: `claude --permission-mode manual --settings '{"permissions":{"deny":[…],"ask":[…]}}' [--model M]
      <prompt>`: ask-first mode (`default` on a Claude Code whose `--help` lists that name and not `manual`). `deny`
      has a `Read(//<folder>/**)` rule for each never-read folder, and `Bash(security *)` and `Bash(secret-tool *)`.
-     `ask` has `Bash(ardia triage file --post *)` and `Bash(gh *)`, so Claude Code asks the user before either runs
-     even when their own settings allow `ardia` or `gh` commands without asking.
-   - Codex: `codex --sandbox workspace-write --ask-for-approval on-request --add-dir <source cache> [-m M] <prompt>`:
+     `ask` has `Bash(ardia triage file *)` and `Bash(gh *)`, so Claude Code asks the user before either runs even
+     when their own settings allow `ardia` or `gh` commands without asking (checked against Claude Code 2.1.331: the
+     read is refused, and an allowed `ardia *` still asks for `ardia triage file`).
+   - Codex: `codex --sandbox workspace-write --ask-for-approval on-request --add-dir <source cache> [-m M] <prompt>`
+     (the source cache folder is made first):
      writes only in the session folder and the source cache, no network without asking, and it asks before anything
      else. Codex has no per-path read rule on the command line, so the never-read list is a rule in `context.md`
      only.
@@ -2624,10 +2627,10 @@ In order, `ardia triage`:
    and the prompt.
 5. **Triage mode.** While `ARDIA_TRIAGE=1` is set, `ardia` itself (`ts/src/triage-mode.ts`, checked once in
    `main.ts` before any command runs, the internal `daemon`, history-reader and script-runner entry points included)
-   refuses everything but `triage file`, `plugins list`, `plugins check`, `commands`, `methods`, `--version` and
+   refuses everything but `triage file`, `plugins list`, `commands`, `methods`, `--version` and
    `--help` (also `<one of those> --help`), with one line on stderr and exit 2. Everything that could show pages,
-   tabs, cookies, windows or settings, change a setting, send feedback outside `triage file`, or run page scripts is
-   refused; a setting the agent wants changed is a command it gives the user to run. Unset, nothing changes.
+   tabs, cookies, windows or settings, read a file it is pointed at (`plugins check`), change a setting, send feedback
+   outside `triage file`, or run page scripts is refused; a setting the agent wants changed is a command it gives the user to run. Unset, nothing changes.
 
 ### Filing the report
 
@@ -2637,9 +2640,11 @@ first: What happened, Diagnosis, Steps to reproduce, Version and Environment are
 and Fix applied or workaround are optional; any other heading is an error that names the allowed ones (a heading
 inside a code fence is text). The title (1-67 characters after scrubbing) and every section go through `scrub.ts` and
 rules for triage only: a URL keeps its scheme and host, its login goes and its path and query become `/<path>`; an
-address written without a scheme (`mail.example.org/inbox/1`) loses its path the same way; and the home folder's
-name is replaced wherever it is a path segment, not only under `/Users` and `/home` (`ts/src/triage-scrub.ts`;
-`scrub()` and `ardia feedback` are unchanged). A required section with nothing left is
+address written without a scheme (`mail.example.org/inbox/1`, `//host/x`, `192.0.2.8/x`, `localhost:3000/x`, with
+or without a port) loses its path the same way, while reversed names and file names (`com.ardia.browser/…`,
+`ArdiaCore.framework/…`, `index.js/…`) are left as they are; and the home folder's name is replaced wherever it is
+a path segment, not only under `/Users` and `/home` (`ts/src/triage-scrub.ts`; `scrub()` and `ardia feedback` are
+unchanged). These are patterns, so a best effort: the user reads the text before it goes anywhere. A required section with nothing left is
 refused. The command adds the "Filed by" line itself from the session: `<claude|codex|a coding agent> via ardia triage
 <version>`, plus `, model M` when `--model` was given. It writes the final text to `prepared-report.md` in the session, prints
 it in full, then a count per category of what was removed (never the values), then a code: the first 8 hex digits of
@@ -2649,8 +2654,8 @@ the SHA-256 of the final title and text, stored with it in `prepared-report.json
 `ardia triage file --post CODE` files exactly the stored text whose code matches; a wrong code, the code of a replaced
 draft, or a `prepared-report.json` edited since (the form's fields included: they must still make up the stored
 text) is refused with exit 2. Each outcome is kept in the session's `filed.json`, so a second `--post` of a filed code
-answers `Already filed: <where>` and files nothing, and one `--post` runs at a time in a session (`post.lock`): a
-second one started meanwhile exits 1. What `gh` reads is written to files named for the code (`post-title-<code>.txt`,
+answers `Already filed: <where>` and files nothing, and one `ardia triage file` runs at a time in a session
+(`post.lock`): a second one started meanwhile, to post or to prepare another draft, exits 1. What `gh` reads is written to files named for the code (`post-title-<code>.txt`,
 `post-body-<code>.md`). The ladder:
 
 - `gh` on `PATH` and `gh auth status --hostname github.com` passing: the issue is created in ardia-browser/ardia
@@ -2669,10 +2674,13 @@ second one started meanwhile exits 1. What `gh` reads is written to files named 
   Ardia is running (`apply` `open`), else in the default browser (`open` or `xdg-open`), and the address is always
   printed. The user submits it.
 - `--via feedback`: the private report path of `ardia feedback` (`sendFeedback` in `ts/src/feedback.ts`, shared, not
-  run as a child), kind `bug`, the text cut to its 4,000 characters with a note, `prepared-report.md` attached, and
-  `diagnostics.via: "triage"`, which tells the feedback service never to open a public issue for it;
-  `--attach-evidence` adds the evidence files: only the ones triage collected, by name, scrubbed again as they are
-  sent, within feedback's kinds and its ten-file limit, and it says what was left out.
+  run as a child), kind `bug`, the text cut to its 4,000 characters with a note, the approved text attached from a
+  copy made for that code (`post-report-<code>.md`), and `diagnostics.via: "triage"`, which tells the feedback
+  service never to open a public issue for it. Like any `ardia feedback` it also carries Ardia's and the command's
+  versions, the OS and CPU, the caller's name and the names and exit codes of the last few `ardia` commands; the
+  playbook has the agent say so first. `--attach-evidence` adds what is in `evidence/` then: only files with the
+  names triage collects, scrubbed again as they are sent, within feedback's kinds and its ten-file limit, and it
+  says what was left out.
   Every refusal of `ardia feedback` (`DO_NOT_TRACK`, `ARDIA_TELEMETRY=0`, a checkout build, the daily limit) holds.
   It prints the `FB-…` reference.
 - `--comment-on N`: with `gh` signed in, it checks issue N exists, is an issue and is open, then comments the text

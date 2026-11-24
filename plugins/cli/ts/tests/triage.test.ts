@@ -10,6 +10,7 @@ import { homeNameSegments, hostOnlyUrls, triageScrub } from "../src/triage-scrub
 import { buildReport, formUrl, parseSections } from "../src/triage-report.ts";
 import { newestReleaseTag } from "../src/triage-playbook.ts";
 import { allowedInTriage } from "../src/triage-mode.ts";
+import { looksLikeArdia } from "../src/triage-evidence.ts";
 
 const TS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PROGRAM = process.env.ARDIA_TS_CLI ?? path.join(TS, "dist", "ardia-ts");
@@ -22,6 +23,7 @@ const API_KEY = ["sk", "livekeyabcdefghijklmnop"].join("-");
 const EMAIL = "someone.private@example.org";
 const URL_PATH = "/inbox/8812/thread";
 const URL_QUERY = "q=bankstatement";
+const TODAY = new Date().toISOString().slice(0, 10);
 
 type Sandbox = { root: string; bin: string; tools: string; home: string; cli: string; data: string; record: string };
 const TOOLS = ["sh", "ls", "grep", "env", "sort", "pwd", "cp", "cat", "printf"];
@@ -107,7 +109,7 @@ function run(box: Sandbox, argv: string[], extra: Record<string, string> = {}, i
     child.stderr?.on("data", (chunk) => (err += chunk));
     if (input !== undefined) child.stdin?.end(input);
     const timer = setTimeout(() => child.kill("SIGKILL"), RUN_TIMEOUT_MS);
-    child.on("exit", (status) => {
+    child.on("close", (status) => {
       clearTimeout(timer);
       resolve({ status, out, err });
     });
@@ -128,7 +130,7 @@ function onTerminal(box: Sandbox, argv: string[], answers: string, extra: Record
     child.stderr?.on("data", (chunk) => (out += chunk));
     child.stdin?.write(answers);
     const timer = setTimeout(() => child.kill("SIGKILL"), RUN_TIMEOUT_MS);
-    child.on("exit", (status) => {
+    child.on("close", (status) => {
       clearTimeout(timer);
       resolve({ status, out: out.replaceAll("\r", ""), err: "" });
     });
@@ -148,8 +150,9 @@ function plantEvidence(box: Sandbox): void {
   const local = path.join(box.data, "Telemetry", "local");
   fs.mkdirSync(local, { recursive: true });
   const event = { event: "page_failed", token: SECRET, contact: EMAIL, file: `${box.home}/Downloads/statement.pdf`, link: `https://mail.example.org${URL_PATH}?${URL_QUERY}` };
-  fs.writeFileSync(path.join(local, "2026-11-24.jsonl"), `${JSON.stringify(event)}\n`);
-  fs.writeFileSync(path.join(local, "cli-2026-11-24.jsonl"), `${JSON.stringify({ event: "cli_command", api_key: API_KEY })}\n`);
+  fs.writeFileSync(path.join(local, `${TODAY}.jsonl`), `${JSON.stringify(event)}\n`);
+  fs.writeFileSync(path.join(local, `cli-${TODAY}.jsonl`), `${JSON.stringify({ event: "cli_command", api_key: API_KEY })}\n`);
+  fs.writeFileSync(path.join(local, "2000-01-01.jsonl"), `${JSON.stringify({ event: "long_ago" })}\n`);
   const config = MAC ? path.join(box.home, ".config", "ardia") : path.join(box.data, "config");
   fs.mkdirSync(config, { recursive: true });
   fs.mkdirSync(path.join(box.data, "config"), { recursive: true });
@@ -296,7 +299,7 @@ test("claude starts in the session folder in ask-first mode with read-deny rules
     assert.ok(deny.includes(`Read(/${box.data}/**)`), deny.join(" "));
     assert.ok(deny.every((rule) => !rule.startsWith("Read(") || rule.startsWith("Read(//")));
     assert.ok(deny.includes("Bash(security *)") && deny.includes("Bash(secret-tool *)"));
-    assert.deepEqual(JSON.parse(argv[3] as string).permissions.ask, ["Bash(ardia triage file --post *)", "Bash(gh *)"]);
+    assert.deepEqual(JSON.parse(argv[3] as string).permissions.ask, ["Bash(ardia triage file *)", "Bash(gh *)"]);
     assert.deepEqual(argv.slice(4, 6), ["--model", "opus"]);
     assert.equal(argv[6], "Read playbook.md in this folder and follow it. What went wrong, in the user's words: tabs vanish");
     assert.equal(fs.readFileSync(path.join(box.record, "claude.0.cwd"), "utf8").trim(), session);
@@ -414,10 +417,11 @@ test("evidence is copied scrubbed: a planted secret, email, home path and URL pa
     assert.match(text, /https:\/\/mail\.example\.org\/<path>/);
     assert.match(text, /<email>/);
     const names = fs.readdirSync(path.join(session, "evidence")).sort();
-    assert.deepEqual(names, ["README.md", "config.json", "usage-2026-11-24.jsonl", "usage-cli-2026-11-24.jsonl"]);
+    assert.deepEqual(names, ["README.md", "config.json", `usage-${TODAY}.jsonl`, `usage-cli-${TODAY}.jsonl`]);
+    assert.ok(!text.includes("long_ago"));
     const readme = fs.readFileSync(path.join(session, "evidence", "README.md"), "utf8");
     assert.doesNotMatch(readme, /hooks/);
-    assert.match(readme, /usage-2026-11-24\.jsonl/);
+    assert.ok(readme.includes(`usage-${TODAY}.jsonl`));
     const context = fs.readFileSync(path.join(session, "context.md"), "utf8");
     assert.match(context, /Ardia version: 0\.2\.48/);
     assert.match(context, /Update channel: nightly/);
@@ -538,10 +542,10 @@ test("triage mode refuses everything outside the allowlist, at dispatch", async 
 });
 
 test("the allowlist is small and exact", () => {
-  for (const argv of [[], ["--version"], ["-h"], ["triage", "file", "--post", "x"], ["plugins", "list"], ["plugins", "check", "."], ["commands"], ["methods"], ["--json", "commands"], ["plugins", "--help"]]) {
+  for (const argv of [[], ["--version"], ["-h"], ["triage", "file", "--post", "x"], ["plugins", "list"], ["commands"], ["methods"], ["--json", "commands"], ["plugins", "--help"]]) {
     assert.ok(allowedInTriage(argv), argv.join(" "));
   }
-  for (const argv of [["triage"], ["feedback", "--title", "t"], ["config", "list"], ["config", "get", "a"], ["config", "set", "a", "b"], ["config", "--help"], ["plugins", "call", "x"], ["tabs"], ["run", "newTab"], ["events"], ["apply"], ["mcp"], ["computer"], ["--port", "9", "browse", "open", "x"]]) {
+  for (const argv of [["triage"], ["plugins", "check", "."], ["feedback", "--title", "t"], ["config", "list"], ["config", "get", "a"], ["config", "set", "a", "b"], ["config", "--help"], ["plugins", "call", "x"], ["tabs"], ["run", "newTab"], ["events"], ["apply"], ["mcp"], ["computer"], ["--port", "9", "browse", "open", "x"]]) {
     assert.ok(!allowedInTriage(argv), argv.join(" "));
   }
 });
@@ -1115,3 +1119,87 @@ exit 1`,
     }
   });
 }
+
+test("the private route attaches the text the code is for, and a draft can't be prepared while a post is running", async () => {
+  const box = sandbox();
+  try {
+    const { session, code } = await preparedSession(box);
+    const approved = fs.readFileSync(path.join(session, "prepared-report.md"), "utf8");
+    const uploads = new Map<string, string>();
+    let whilePosting: Ran | undefined;
+    await withServer(
+      (request, response, body) => {
+        const url = request.url ?? "";
+        response.setHeader("Content-Type", "application/json");
+        if (request.method === "POST" && url === "/api/feedback") {
+          fs.writeFileSync(path.join(box.root, "other.md"), REPORT.replace("Open two windows", "Open nine windows"));
+          void run(box, ["triage", "file", "--title", "Another report entirely", "--body", "other.md"], inSession(session)).then((ran) => {
+            whilePosting = ran;
+            response.writeHead(201).end(JSON.stringify({ id: "FB-RACE", name: "Quiet Otter", upload_token: "token-12345678" }));
+          });
+        } else if (request.method === "PUT") {
+          uploads.set(decodeURIComponent(url.slice(url.lastIndexOf("/") + 1)), body.toString("utf8"));
+          response.writeHead(200).end("{}");
+        } else response.writeHead(200).end(JSON.stringify({ id: "FB-RACE", name: "Quiet Otter" }));
+      },
+      async (base) => {
+        const sent = await run(box, ["triage", "file", "--post", code, "--via", "feedback"], inSession(session, { ARDIA_FEEDBACK_URL: base }));
+        assert.equal(sent.status, 0, sent.out + sent.err);
+      },
+    );
+    assert.equal(whilePosting?.status, 1, `${whilePosting?.out}${whilePosting?.err}`);
+    assert.match(whilePosting?.err ?? "", /another ardia triage file --post is running/);
+    assert.equal(uploads.get("attachment-1.md"), approved);
+    assert.equal(fs.readFileSync(path.join(session, `post-report-${code}.md`), "utf8"), approved);
+  } finally {
+    cleanup(box);
+  }
+});
+
+test("triage scrub cuts addresses with a port, an IP or no scheme at all, and leaves stack frames alone", () => {
+  for (const [given, expected] of [
+    ["example.test:8080/account/123?q=private", "example.test:8080/<path>"],
+    ["see //example.test/path?q=private here", "see //example.test/<path> here"],
+    ["192.0.2.8/private/page", "192.0.2.8/<path>"],
+    ["localhost:3000/admin/users", "localhost:3000/<path>"],
+    ["com.ardia.browser/AppDelegate.swift:42", "com.ardia.browser/AppDelegate.swift:42"],
+    ["at ArdiaCore.framework/Versions/A/ArdiaCore + 1234", "at ArdiaCore.framework/Versions/A/ArdiaCore + 1234"],
+    ["engine/ardiacore/src/ac_window_host.mm:120 in node_modules/foo/index.js", "engine/ardiacore/src/ac_window_host.mm:120 in node_modules/foo/index.js"],
+    ["version 0.2.48-nightly.3 and 3/4", "version 0.2.48-nightly.3 and 3/4"],
+  ] as [string, string][]) assert.equal(triageScrub(given).text, expected);
+  assert.equal(homeNameSegments("/Volumes/x/josé/file", "josé"), "/Volumes/x/<user>/file");
+});
+
+test("a crash report is recognised by its header, however long the report", () => {
+  const box = sandbox();
+  try {
+    const long = path.join(box.root, "Ardia-long.ips");
+    fs.writeFileSync(long, `{"bundleID":"com.ardia.browser","app_name":"Ardia"}\n${"frame\n".repeat(20000)}`);
+    const other = path.join(box.root, "Other.ips");
+    fs.writeFileSync(other, `{"bundleID":"com.example.other"}\n${"frame\n".repeat(20000)}`);
+    assert.equal(looksLikeArdia(long), true);
+    assert.equal(looksLikeArdia(other), false);
+  } finally {
+    cleanup(box);
+  }
+});
+
+test("a relative ARDIA_CLI_HOME still makes a session triage file accepts, the source cache exists, and a CLI home inside Ardia's data folder is refused", async () => {
+  const box = sandbox();
+  try {
+    standIn(box, "codex");
+    const launched = await run(box, ["triage", "--yes"], { ARDIA_CLI_HOME: "cli" });
+    assert.equal(launched.status, 0, launched.err);
+    const session = sessions(box)[0] as string;
+    assert.ok(fs.statSync(path.join(triageDir(box), "source")).isDirectory());
+    assert.ok(args(box, "codex").includes(path.join(triageDir(box), "source")));
+    fs.writeFileSync(path.join(box.root, "report.md"), REPORT);
+    const prepared = await run(box, ["triage", "file", "--session", session, "--title", "Sidebar blank", "--body", "report.md"], { ARDIA_CLI_HOME: "cli" });
+    assert.equal(prepared.status, 0, prepared.err);
+    const inside = await run(box, ["triage", "--yes", "--print"], { ARDIA_CLI_HOME: path.join(box.data, "cli") });
+    assert.equal(inside.status, 2);
+    assert.match(inside.err, /which triage keeps the agent out of/);
+  } finally {
+    cleanup(box);
+  }
+});

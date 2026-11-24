@@ -1,8 +1,8 @@
 import { closeSync, fstatSync, openSync, readdirSync, readSync, statSync } from "node:fs";
 import { createConnection } from "node:net";
-import { iso } from "./clock.ts";
+import { iso, now } from "./clock.ts";
 import { places } from "./config-files.ts";
-import { chromiumDir } from "./control-file.ts";
+import { agentPaths, logPath } from "./hooks/agent.ts";
 import { type JsonObject } from "./json.ts";
 import { home, join, LINUX } from "./paths.ts";
 import { closeDir, type Dir, O_NOFOLLOW, O_NONBLOCK, O_RDONLY, writePrivate } from "./privatefs.ts";
@@ -14,6 +14,7 @@ const KIB = 1024;
 const MIB = 1024 * KIB;
 const TELEMETRY_FILE_CAP = 1 * MIB;
 const TELEMETRY_TOTAL_CAP = 6 * MIB;
+const TELEMETRY_DAYS = 8;
 const TELEMETRY_FILE = /^(?:cli-)?\d{4}-\d{2}-\d{2}\.jsonl$/;
 const CRASH_COUNT = 5;
 const CRASH_FILE_CAP = 2 * MIB;
@@ -106,7 +107,8 @@ class Collector {
 
 function collectTelemetry(collector: Collector, dataRoot: string): void {
   const folder = join(dataRoot, "Telemetry", "local");
-  const files = listFiles(folder).filter((file) => TELEMETRY_FILE.test(file.name));
+  const oldest = iso(now() - TELEMETRY_DAYS * 24 * 60 * 60).slice(0, 10);
+  const files = listFiles(folder).filter((file) => TELEMETRY_FILE.test(file.name) && file.name.replace(/^cli-/, "").slice(0, 10) >= oldest);
   if (files.length === 0) {
     collector.skipped.push({ what: "the local usage log", why: `no files in ${shownPath(folder)}` });
     return;
@@ -136,10 +138,22 @@ export function macCrashCandidates(folder: string): { name: string; path: string
     .slice(0, CRASH_SCAN_LIMIT);
 }
 
-function looksLikeArdia(path: string): boolean {
-  const head = readTail(path, CRASH_HEAD_BYTES, false);
-  if ("missing" in head) return false;
-  return MAC_CRASH_MARKS.some((mark) => head.text.includes(mark));
+export function looksLikeArdia(path: string): boolean {
+  let fd: number;
+  try {
+    fd = openSync(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
+  } catch {
+    return false;
+  }
+  try {
+    if (!fstatSync(fd).isFile()) return false;
+    const buffer = Buffer.alloc(CRASH_HEAD_BYTES);
+    const got = readSync(fd, buffer, 0, buffer.length, 0);
+    const head = new TextDecoder("utf-8").decode(buffer.subarray(0, got));
+    return MAC_CRASH_MARKS.some((mark) => head.includes(mark));
+  } finally {
+    closeSync(fd);
+  }
 }
 
 function collectMacCrashes(collector: Collector, folder: string): void {
@@ -274,10 +288,12 @@ export function ardiaRunning(dataRoot: string): Promise<boolean> {
 }
 
 export function neverRead(dataRoot: string, linux: boolean = LINUX): { folders: string[]; other: string[] } {
-  if (linux) return { folders: [dataRoot], other: ["the keyring: Secret Service, KWallet or the secret portal (Chromium's Safe Storage key, the Ardia Sync Key and stored tokens)"] };
+  const hooksLog = logPath(agentPaths(linux));
+  const logs = hooksLog.slice(0, hooksLog.lastIndexOf("/"));
+  if (linux) return { folders: [dataRoot, logs], other: ["the keyring: Secret Service, KWallet or the secret portal (Chromium's Safe Storage key, the Ardia Sync Key and stored tokens)"] };
   const library = join(home(), "Library");
   return {
-    folders: [dataRoot, join(library, "WebKit"), join(library, "HTTPStorages"), join(library, "Cookies"), join(library, "Caches", "com.ardia.browser")],
+    folders: [dataRoot, join(home(), ".config", "ardia"), logs, join(library, "WebKit"), join(library, "HTTPStorages"), join(library, "Cookies"), join(library, "Caches", "com.ardia.browser")],
     other: ["the login keychain, above all its \"Ardia Safe Storage\" item, which encrypts saved passwords and cookies"],
   };
 }
@@ -336,7 +352,7 @@ export function contextText(facts: ContextFacts): string {
     "",
     "## Never read",
     "",
-    "Ardia's own folders hold the user's private browsing data: cookies, saved passwords, history, bookmarks, open tabs, downloads, site storage and caches. Don't open, copy, list or search anything in them, with any tool:",
+    "Ardia's own folders hold the user's private browsing data: cookies, saved passwords, history, bookmarks, open tabs, downloads, site storage and caches, and its settings and hook logs can name the sites they are for. Don't open, copy, list or search anything in them, with any tool:",
     "",
     ...never.folders.map((path) => `- \`${path}/\` and everything in it`),
     ...never.other.map((text) => `- ${text}`),

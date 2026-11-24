@@ -4,12 +4,12 @@ const HELP = ["--help", "-h"];
 const ALLOWED: Readonly<Record<string, readonly string[] | undefined>> = {
   commands: undefined,
   methods: undefined,
-  plugins: ["list", "check"],
+  plugins: ["list"],
   triage: ["file"],
 };
 
 export const TRIAGE_MODE_REFUSAL =
-  "ardia: this is a triage session (ARDIA_TRIAGE=1), so only triage file, plugins list and check, commands, methods, --version and --help run here\n";
+  "ardia: this is a triage session (ARDIA_TRIAGE=1), so only triage file, plugins list, commands, methods, --version and --help run here\n";
 
 export function inTriageMode(): boolean {
   return process.env.ARDIA_TRIAGE === "1";

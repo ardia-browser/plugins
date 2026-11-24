@@ -49,7 +49,7 @@ const CALLER_FALLBACK = "unknown";
 type Kind = [string, number, string];
 type Attachment = { path: string; name: string; bytes: number; type: string };
 type Outcome = { sent: boolean; reason: string; reference?: string; name?: string; issueUrl?: string };
-export type FeedbackArgs = { text: string[]; title: string | undefined; kind: string; attach: string[]; about: string | undefined; dataDir: string | undefined; via?: string };
+export type FeedbackArgs = { text: string[]; title: string | undefined; kind: string; attach: string[]; about: string | undefined; dataDir: string | undefined; via?: string; fingerprint?: string };
 
 class Refused extends Error {}
 
@@ -500,7 +500,7 @@ export async function sendFeedback(args: FeedbackArgs, text: string): Promise<Fe
   const [base, urlProblem] = feedbackUrl();
   const reason = blockedReason() || urlProblem;
   if (reason || base === undefined) return { said: keep(home, entry, reason) };
-  const digest = createHash("sha256").update(utf8(`${args.kind}\0${title}\0${description}`)).digest("hex").slice(0, 16);
+  const digest = createHash("sha256").update(utf8(`${args.kind}\0${title}\0${description}${args.fingerprint === undefined ? "" : `\0${args.fingerprint}`}`)).digest("hex").slice(0, 16);
   const slot = home !== undefined ? takeFeedbackSlot(home, digest, DAILY_LIMIT, WINDOW_S, now()) : "ok";
   if (slot === "duplicate") return { said: { status: 0, out: ["Not sent again: the same report already went out in the last day."], err: [] } };
   if (slot === "limited") return { said: keep(home, entry, `${DAILY_LIMIT} reports already went out in the last day`) };

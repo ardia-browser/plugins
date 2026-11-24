@@ -201,8 +201,11 @@ After the yes:
   clicks Submit; you cannot do that for them.
 - `--via feedback` sends a private report to Ardia's developer instead, for a user with no
   GitHub account or one who doesn't want a public issue. It gives back a reference like
-  `FB-AB12`. Add `--attach-evidence` only if the user says yes to sending the evidence files
-  too; ask that as its own question.
+  `FB-AB12`. Tell the user first that, as with any `ardia feedback`, the report carries
+  Ardia's and the command's versions, the OS, and the names of the last few `ardia` commands
+  run on this machine. Add `--attach-evidence` only if the user says yes to sending the
+  evidence files too; ask that as its own question and name the files (`evidence/README.md`
+  lists them).
 - `--comment-on <number>` adds the report to the open issue from step 6 instead of opening a
   new one.
 

@@ -32,7 +32,7 @@ export function machineWord(): string {
 export function triageHome(): string {
   const home = recordingHome();
   if (home === undefined) throw new TriageRefused("this ardia is a checkout build, which keeps triage sessions only with ARDIA_CLI_HOME set");
-  return home;
+  return abspath(home);
 }
 
 export function triageRoot(home: string): string {
@@ -76,6 +76,10 @@ function existingTriage(home: string): Dir | undefined {
     throw error;
   }
   return openTriage(home);
+}
+
+export function makeSourceCache(home: string): void {
+  closeDir(openTriage(home, [SOURCE_FOLDER]));
 }
 
 export function consentSaved(home: string): boolean {

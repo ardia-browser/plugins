@@ -3,8 +3,16 @@ import { scrub } from "./scrub.ts";
 
 export const PATH_PLACEHOLDER = "/<path>";
 const WHOLE_URL = /\b([a-zA-Z][a-zA-Z0-9+.-]{1,15}:\/\/)([^\s/?#<>"'`]*@)?([^\s/?#<>"'`]*)([^\s<>"'`]*)/g;
-const BARE_URL = /(?<![\w@/.:-])((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,24})([/?][^\s<>"'`]+)/gi;
-const HOME_NAME = /^[A-Za-z0-9._-]{3,64}$/;
+const HOST = String.raw`(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,24}|\d{1,3}(?:\.\d{1,3}){3}|localhost)(?::\d{1,5})?`;
+const REST = String.raw`[^\s<>"'` + "`" + "]";
+const BARE_URL = new RegExp(String.raw`(?<![\w@/.:-])(${HOST})([/?]${REST}+)`, "gi");
+const SCHEMELESS_URL = new RegExp(String.raw`(?<![\w:/])//(${HOST})([/?]${REST}*)`, "gi");
+const REVERSED_NAME = /^(?:com|org|net|io|dev|app|co|me)\./i;
+const FILE_ENDINGS: readonly string[] = [
+  "framework", "dylib", "bundle", "xpc", "json", "jsonl", "tsx", "jsx", "ts", "js", "mjs", "cjs", "cpp", "hpp", "html", "css", "log", "txt", "lock", "yml",
+  "yaml", "toml", "plist", "ips", "png", "jpg", "gif", "gz", "tar", "kt", "rb", "go", "php",
+];
+const HOME_NAME = /^[\p{L}\p{N}._-]{3,64}$/u;
 const CATEGORIES: readonly (readonly [string, RegExp])[] = [
   ["secrets", /<(?:redacted|secret)>/g],
   ["emails", /<email>/g],
@@ -39,9 +47,20 @@ export function hostOnlyUrls(text: string): [string, number] {
   return [out, cut];
 }
 
+function looksLikeFile(host: string): boolean {
+  const name = host.replace(/:\d+$/, "").toLowerCase();
+  return REVERSED_NAME.test(name) || FILE_ENDINGS.includes(name.slice(name.lastIndexOf(".") + 1));
+}
+
 export function bareUrlPaths(text: string): [string, number] {
   let cut = 0;
-  const out = text.replace(BARE_URL, (_whole, host: string) => {
+  const relative = text.replace(SCHEMELESS_URL, (whole, host: string, rest: string) => {
+    if (rest === "/" || rest === PATH_PLACEHOLDER) return whole;
+    cut += 1;
+    return `//${host}${PATH_PLACEHOLDER}`;
+  });
+  const out = relative.replace(BARE_URL, (whole, host: string) => {
+    if (looksLikeFile(host)) return whole;
     cut += 1;
     return `${host}${PATH_PLACEHOLDER}`;
   });
@@ -57,7 +76,7 @@ function homeName(): string | undefined {
 export function homeNameSegments(text: string, name: string | undefined = homeName()): string {
   if (name === undefined) return text;
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return text.replace(new RegExp(`(?<=[/~])${escaped}(?=[/\\s"'\`:,;)\\]]|$)`, "gm"), "<user>");
+  return text.replace(new RegExp(`(?<=[/~])${escaped}(?=[/\\s"'\`:,;)\\]]|$)`, "gmu"), "<user>");
 }
 
 export function triageScrub(text: string): { text: string; removed: Removed } {

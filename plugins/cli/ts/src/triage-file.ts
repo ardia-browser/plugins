@@ -315,8 +315,10 @@ function feedbackDescription(body: string): string {
 
 async function postWithFeedback(args: TriageFileArgs, report: Stored, dir: Dir, sessionDir: string, dataDir: string | undefined, call: Call): Promise<Said> {
   const extra = args.attachEvidence ? evidenceAttachments(dir, sessionDir, report.code, FEEDBACK_ATTACHMENT_LIMIT - 1) : { paths: [], left: [] };
+  const approved = `${POST_PREFIX}report-${report.code}.md`;
+  writePrivate(approved, dir, utf8(`Title: ${report.title}\n\n${report.body}`));
   const sent = await sendFeedback(
-    { text: [], title: report.title, kind: "bug", attach: [join(sessionDir, REPORT_TEXT), ...extra.paths], about: undefined, dataDir, via: "triage" },
+    { text: [], title: report.title, kind: "bug", attach: [join(sessionDir, approved), ...extra.paths], about: undefined, dataDir, via: "triage", fingerprint: report.code },
     feedbackDescription(report.body),
   );
   if (sent.reference === undefined || sent.said.status !== 0) {
@@ -396,7 +398,6 @@ async function post(args: TriageFileArgs, code: string, dir: Dir, record: JsonOb
   if (report === undefined) throw new TriageRefused('there\'s no prepared report in this session; run ardia triage file --title "…" --body FILE first');
   if (report.code !== code) throw new TriageRefused(`${code} isn't the code of the prepared report (it's stale or mistyped); show the user the newest text and use its code`);
   if (codeOf(report.title, report.body) !== code || renderBody(report.fields) !== report.body) throw new TriageRefused("the prepared report was changed after it was prepared; prepare it again");
-  writePrivate(REPORT_TEXT, dir, utf8(`Title: ${report.title}\n\n${report.body}`));
   const dataDir = stringIn(record, "data_dir");
   if (args.commentOn !== undefined) return comment(issueNumber(args.commentOn), via, repository(), report, dir, sessionDir, dataDir, call);
   if (via === "feedback") return postWithFeedback(args, report, dir, sessionDir, dataDir, call);
@@ -426,17 +427,15 @@ export async function runTriageFile(args: TriageFileArgs, call: Call): Promise<S
     throw error;
   }
   try {
-    if (args.post !== undefined) {
-      const lock = takeLock(POST_LOCK, opened.dir);
-      if (lock === undefined) throw new TriageRefused("another ardia triage file --post is running in this session; wait for it, then check what it said before trying again", 1);
-      try {
-        return await post(args, args.post, opened.dir, opened.record, opened.session.dir, call);
-      } finally {
-        close(lock);
-      }
+    if (args.post === undefined && (args.via !== undefined || args.attachEvidence || args.commentOn !== undefined)) throw new TriageRefused("--via, --attach-evidence and --comment-on go with --post CODE");
+    const lock = takeLock(POST_LOCK, opened.dir);
+    if (lock === undefined) throw new TriageRefused("another ardia triage file --post is running in this session; wait for it, then check what it said before trying again", 1);
+    try {
+      if (args.post !== undefined) return await post(args, args.post, opened.dir, opened.record, opened.session.dir, call);
+      return prepare(args, opened.dir, opened.record, opened.session.dir, call);
+    } finally {
+      close(lock);
     }
-    if (args.via !== undefined || args.attachEvidence || args.commentOn !== undefined) throw new TriageRefused("--via, --attach-evidence and --comment-on go with --post CODE");
-    return prepare(args, opened.dir, opened.record, opened.session.dir, call);
   } catch (error) {
     if (error instanceof TriageRefused) {
       flag(call, "triage_refused");

@@ -18,6 +18,7 @@ import {
   consentSaved,
   forgetConsent,
   machineWord,
+  makeSourceCache,
   MODE_ENV,
   newSession,
   openSessionPart,
@@ -168,7 +169,7 @@ function consent(home: string, args: TriageArgs, agent: Agent | undefined): bool
   return true;
 }
 
-const CLAUDE_ASKS: readonly string[] = ["Bash(ardia triage file --post *)", "Bash(gh *)"];
+const CLAUDE_ASKS: readonly string[] = ["Bash(ardia triage file *)", "Bash(gh *)"];
 const CLAUDE_DENIED_COMMANDS: readonly string[] = ["Bash(security *)", "Bash(secret-tool *)"];
 
 function claudeSettings(root: string): string {
@@ -222,7 +223,10 @@ function launch(path: string, args: string[], cwd: string, extra: Record<string,
 
 async function prepareSession(home: string, args: TriageArgs, agent: Agent | undefined, description: string | undefined): Promise<Session> {
   const root = abspath(dataRoot(args.dataDir));
+  const inside = neverRead(root).folders.find((folder) => home === folder || home.startsWith(`${folder}/`));
+  if (inside !== undefined) throw new TriageRefused(`the ardia command keeps its files in ${home}, inside ${inside}, which triage keeps the agent out of; set ARDIA_CLI_HOME to a folder somewhere else`);
   const session = newSession(home);
+  makeSourceCache(home);
   const evidenceDir = openSessionPart(session, ["evidence"]);
   let collected;
   try {
