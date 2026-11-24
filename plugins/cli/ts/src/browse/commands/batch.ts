@@ -434,7 +434,28 @@ export function trimSupersededChanges(text: string, hasRead: boolean, hasSnapsho
   return [...head, "changes:", ...kept].join("\n");
 }
 
-function compactBatchLines(outcomes: Outcome[]): void {
+function inspectMatchesAllowlist(words: readonly string[], boolFlags: ReadonlySet<string>, valueFlags: ReadonlySet<string>): boolean {
+  for (let i = 1; i < words.length; i += 1) {
+    const w = words[i] as string;
+    if (boolFlags.has(w)) continue;
+    if (valueFlags.has(w)) {
+      if (i + 1 >= words.length) return false;
+      i += 1;
+      continue;
+    }
+    const eq = w.indexOf("=");
+    if (eq > 0 && valueFlags.has(w.slice(0, eq))) continue;
+    return false;
+  }
+  return true;
+}
+
+const READ_FULL_FLAGS = new Set(["--nav", "--full", "--raw"]);
+const SNAPSHOT_FULL_FLAGS = new Set(["-c", "--compact", "-u", "--urls", "--full", "--all", "--no-modal-scope", "--tools"]);
+const FORM_FULL_FLAGS = new Set(["--full"]);
+const INSPECT_VALUE_FLAGS = new Set(["--timeout"]);
+
+export function compactBatchLines(outcomes: Outcome[]): void {
   const succeeded = outcomes.flatMap((outcome, index) => (outcome.success ? [index] : []));
   if (succeeded.length < 2) return;
   let compacted = 0;
@@ -462,28 +483,13 @@ function compactBatchLines(outcomes: Outcome[]): void {
       const scopedFlag = fWords.some((w) => w === "-s" || w === "--selector" || w.startsWith("--selector="));
       if (scopedFlag) continue;
       if (fName === "read") {
-        const READ_FULL_FLAGS = new Set(["--nav", "--full", "--raw"]);
-        const READ_VALUE_FLAGS = new Set(["--max-output", "--timeout"]);
-        let fullRead = true;
-        for (let i = 1; i < fWords.length; i += 1) {
-          const w = fWords[i] as string;
-          if (READ_FULL_FLAGS.has(w)) continue;
-          if (READ_VALUE_FLAGS.has(w)) {
-            i += 1;
-            continue;
-          }
-          if (w.startsWith("--max-output=") || w.startsWith("--timeout=")) continue;
-          fullRead = false;
-          break;
-        }
+        const fullRead = inspectMatchesAllowlist(fWords, READ_FULL_FLAGS, INSPECT_VALUE_FLAGS);
         const isDelta = Boolean(follow.text && (follow.text.includes("unchanged since last read") || follow.text.includes("unchanged lines omitted")));
         if (fullRead && !isDelta) hasRead = true;
       } else if (fName === "snapshot") {
-        const hasPositional = fWords.slice(1).some((w, idx, arr) => !w.startsWith("-") && (idx === 0 || !["-d", "--depth", "--max-output"].includes(arr[idx - 1] as string)));
-        if (!hasPositional) hasSnapshot = true;
+        if (inspectMatchesAllowlist(fWords, SNAPSHOT_FULL_FLAGS, INSPECT_VALUE_FLAGS)) hasSnapshot = true;
       } else if (fName === "form") {
-        const hasPositional = fWords.slice(1).some((w) => !w.startsWith("-"));
-        if (!hasPositional) hasForm = true;
+        if (inspectMatchesAllowlist(fWords, FORM_FULL_FLAGS, INSPECT_VALUE_FLAGS)) hasForm = true;
       }
     }
     if (hasRead || hasSnapshot || hasForm) {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { preferLabelFirst } from "../src/browse/commands/act.ts";
-import { trimSupersededChanges } from "../src/browse/commands/batch.ts";
+import { compactBatchLines, trimSupersededChanges } from "../src/browse/commands/batch.ts";
 import { liveFormLabelUpdate } from "../src/browse/act/drift.ts";
 import { dedupeChrome } from "../src/browse/read/chrome.ts";
 import { deltaRead } from "../src/browse/read/delta.ts";
@@ -114,5 +114,30 @@ describe("Codex review hardening regressions", () => {
     const trimmed = trimSupersededChanges(output, false, false, true);
     expect(trimmed).toContain("Saved successfully");
     expect(trimmed).not.toContain('textbox "Name"');
+  });
+
+  test("compactBatchLines preserves change reports before depth-limited, interactive, or scoped snapshots", () => {
+    const initial = "✓ Clicked\nchanges:\n+ button \"Confirm\" [ref=e9]\ntext:\n  Order ready";
+    for (const followCmd of [
+      ["snapshot", "-d", "1"],
+      ["snapshot", "--depth=2"],
+      ["snapshot", "-i"],
+      ["snapshot", "--diff"],
+      ["snapshot", "find", "Confirm"],
+      ["snapshot", "--out", "/tmp/snap.txt"],
+    ]) {
+      const outcomes = [
+        { command: ["click", "@e1"], success: true, text: initial, result: null, error: null },
+        { command: followCmd, success: true, text: "partial snapshot", result: null, error: null },
+      ];
+      compactBatchLines(outcomes);
+      expect(outcomes[0]?.text).toBe(initial);
+    }
+    const fullOutcomes = [
+      { command: ["click", "@e1"], success: true, text: initial, result: null, error: null },
+      { command: ["snapshot", "-c"], success: true, text: "full snapshot", result: null, error: null },
+    ];
+    compactBatchLines(fullOutcomes);
+    expect(fullOutcomes[0]?.text).toBe("✓ Clicked");
   });
 });

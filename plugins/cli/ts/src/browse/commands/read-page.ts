@@ -139,7 +139,7 @@ export async function cmdRead(ctx: Ctx, argv: string[]): Promise<Result> {
   shown = shown ? `${shown}\n[read ${readTime}]` : shown;
   const cap = ctx.options["full"] ? 0 : ctx.options["max_output"] === undefined || ctx.options["max_output"] === null ? OUTPUT_CAP : Number(ctx.options["max_output"]);
   const shownFits = cap <= 0 || shown.length <= cap;
-  if (content && shownFits && !options["outline"] && !options["filter"] && !options["raw"]) {
+  if (content && shownFits && !ctx.options["out_body"] && !options["outline"] && !options["filter"] && !options["raw"]) {
     ctx.state.rememberRead(readKey, origin, content);
   }
   return new Result(
