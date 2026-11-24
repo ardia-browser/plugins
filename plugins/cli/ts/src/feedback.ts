@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { openAsBlob, readSync, realpathSync, statSync } from "node:fs";
+import { readFileSync, readSync, realpathSync, statSync } from "node:fs";
 import { isatty } from "node:tty";
 import { now } from "./clock.ts";
 import { dataRoot } from "./control.ts";
@@ -329,7 +329,7 @@ function postJson(url: string, payload: JsonObject, token?: string): Promise<[nu
 
 async function upload(url: string, item: Attachment, token: string): Promise<[number, string]> {
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": item.type, "Content-Length": String(item.bytes) };
-  const [status, , failure] = await request("PUT", `${url}/files/${encodeURIComponent(item.name)}`, await openAsBlob(item.path), headers, UPLOAD_TIMEOUT_MS);
+  const [status, , failure] = await request("PUT", `${url}/files/${encodeURIComponent(item.name)}`, readFileSync(item.path), headers, UPLOAD_TIMEOUT_MS);
   return [status, failure];
 }
 
