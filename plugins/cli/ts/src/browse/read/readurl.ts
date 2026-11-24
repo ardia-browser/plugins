@@ -38,6 +38,7 @@ export class TextExtractor {
   private heading: number | null = null;
   private rowCells: string[] | null = null;
   private cellBuf: string[] | null = null;
+  private nestedTable = 0;
   title = "";
   private inTitle = false;
   private readonly readable: boolean;
@@ -85,6 +86,21 @@ export class TextExtractor {
       return;
     }
     if (this.readable && this.skip) return;
+    if (this.readable && this.cellBuf !== null) {
+      if (tag === "table") {
+        this.nestedTable += 1;
+        this.cellBuf.push(" ");
+        return;
+      }
+      if (this.nestedTable > 0) {
+        if (tag === "tr" || tag === "td" || tag === "th" || BLOCK.has(tag) || HEADING.test(tag) || tag === "li") this.cellBuf.push(" ");
+        return;
+      }
+      if (tag !== "tr" && tag !== "td" && tag !== "th") {
+        if (BLOCK.has(tag) || HEADING.test(tag) || tag === "li") this.cellBuf.push(" ");
+        return;
+      }
+    }
     if (this.readable && tag === "tr") {
       this.finishRow();
       this.flush();
@@ -98,10 +114,6 @@ export class TextExtractor {
       }
       this.finishCell();
       this.cellBuf = [];
-      return;
-    }
-    if (this.readable && this.cellBuf !== null) {
-      if (BLOCK.has(tag) || HEADING.test(tag) || tag === "li") this.cellBuf.push(" ");
       return;
     }
     if (HEADING.test(tag)) {
@@ -120,6 +132,11 @@ export class TextExtractor {
       return;
     }
     if (this.readable && this.skip) return;
+    if (this.readable && this.cellBuf !== null && this.nestedTable > 0) {
+      if (tag === "table") this.nestedTable -= 1;
+      if (tag === "tr" || tag === "td" || tag === "th" || BLOCK.has(tag) || HEADING.test(tag) || tag === "li") this.cellBuf.push(" ");
+      return;
+    }
     if (this.readable && (tag === "td" || tag === "th")) {
       this.finishCell();
       return;

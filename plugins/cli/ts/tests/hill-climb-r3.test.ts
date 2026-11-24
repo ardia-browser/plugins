@@ -47,6 +47,8 @@ describe("extractHtml table formatting", () => {
     expect(content).toBe("| 100\nLine 1 Line 2 | 200");
     const footer = extractHtml(`<footer id="contact"><p>Support: 555-0100</p></footer>`, true, true);
     expect(footer.content).toBe("Support: 555-0100");
+    const nested = extractHtml(`<table><tr><td>Account A</td><td><table><tr><td>Detail</td><td>Extra</td></tr></table></td><td>$100</td></tr></table>`, true);
+    expect(nested.content).toBe("Account A | Detail Extra | $100");
   });
 });
 
