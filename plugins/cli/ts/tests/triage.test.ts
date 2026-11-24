@@ -1283,7 +1283,68 @@ test("the agent is handed absolute paths when the CLI home and data dir were giv
     assert.match(env, new RegExp(`^ARDIA_CLI_HOME=${box.cli}$`, "m"));
     assert.match(env, new RegExp(`^ARDIA_DATA_DIR=${path.join(box.root, "profile")}$`, "m"));
     const printed = await run(box, ["triage", "--yes", "--print"], { ARDIA_CLI_HOME: "cli", ARDIA_DATA_DIR: "profile" });
-    assert.ok(printed.out.includes(`ARDIA_CLI_HOME=${JSON.stringify(box.cli)}`), printed.out);
+    assert.ok(printed.out.includes(`ARDIA_CLI_HOME=${box.cli} `), printed.out);
+  } finally {
+    cleanup(box);
+  }
+});
+
+test("an address after // loses its login whatever the host, and a long run takes the rest of its word with it", () => {
+  const long = "a".repeat(512);
+  for (const [given, expected] of [
+    ["//alice:open-sesame@host/private?q=demo", "//host/<path>"],
+    ["see //alice:pw@[::1]:3000/private?q=1 here", "see //[::1]:3000/<path> here"],
+    ["code // a comment with a/b and //cdn.example.org/", "code // a comment with a/b and //cdn.example.org/"],
+    [`password=${long}$synthetic-tail next`, "<removed> next"],
+    [`{"icon":"${long}AAAA==","theme":"nord"}`, '{"icon":"<removed>","theme":"nord"}'],
+  ] as [string, string][]) assert.equal(triageScrub(given).text, expected);
+  const counted = triageScrub(`${"=".repeat(600)} heading`).removed;
+  assert.equal(counted.get("long unbroken runs"), 1);
+  assert.equal(counted.get("secrets"), 0);
+});
+
+test("the printed command is quoted for a shell and carries the agent's ask-first settings", async () => {
+  const box = sandbox();
+  try {
+    const odd = path.join(box.root, "data-$NOPE and 'more'");
+    fs.mkdirSync(odd, { recursive: true });
+    const printed = await run(box, ["triage", "--yes", "--print", "--agent", "claude"], { ARDIA_DATA_DIR: odd });
+    assert.equal(printed.status, 0, printed.err);
+    const line = printed.out.split("\n").find((text) => text.includes("ARDIA_TRIAGE=1")) as string;
+    assert.ok(line.includes(`ARDIA_DATA_DIR='${odd.replaceAll("'", `'"'"'`)}'`), line);
+    assert.match(line, / claude --permission-mode manual --settings '\{"permissions":/);
+    assert.match(line, /Bash\(ardia triage file \*\)/);
+  } finally {
+    cleanup(box);
+  }
+});
+
+test("a gh that can't be run for the create leaves the report free to send, by gh again or another way", async () => {
+  const box = sandbox();
+  try {
+    const gh = path.join(box.bin, "gh");
+    standIn(
+      box,
+      "gh",
+      `case "$1 $2" in
+"auth status") exit 0;;
+esac
+case "$*" in
+*"--jq .node_id"*) echo R_kgTest; cp "${path.join(box.root, "broken")}" "${gh}"; exit 0;;
+esac
+exit 1`,
+    );
+    fs.writeFileSync(path.join(box.root, "broken"), "");
+    fs.chmodSync(path.join(box.root, "broken"), 0o644);
+    standIn(box, "xdg-open");
+    standIn(box, "open");
+    const { session, code } = await preparedSession(box);
+    const first = await run(box, ["triage", "file", "--post", code], inSession(session));
+    assert.equal(first.status, 1, first.out + first.err);
+    assert.match(first.err, /nothing was filed/);
+    const form = await run(box, ["triage", "file", "--post", code, "--via", "form"], inSession(session));
+    assert.equal(form.status, 0, form.out + form.err);
+    assert.match(form.out, /issues\/new\?template=via-triage\.yml/);
   } finally {
     cleanup(box);
   }

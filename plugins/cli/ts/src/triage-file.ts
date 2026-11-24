@@ -171,12 +171,14 @@ function which(program: string): string | undefined {
   return undefined;
 }
 
-type Ran = { status: number | null; stdout: string; stderr: string; timedOut: boolean };
+type Ran = { status: number | null; stdout: string; stderr: string; timedOut: boolean; neverRan: boolean };
 
 function run(program: string, args: string[]): Ran {
   const done = spawnSync(program, args, { encoding: "utf8", timeout: GH_TIMEOUT_MS, killSignal: "SIGKILL", maxBuffer: GH_OUTPUT_BYTES, stdio: ["ignore", "pipe", "pipe"] });
-  const timedOut = (done.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT";
-  return { status: done.status, stdout: done.stdout ?? "", stderr: done.stderr ?? "", timedOut };
+  const failure = (done.error as NodeJS.ErrnoException | undefined)?.code;
+  const timedOut = failure === "ETIMEDOUT";
+  const neverRan = done.pid === 0 || failure === "ENOENT" || failure === "EACCES" || failure === "ENOEXEC";
+  return { status: done.status, stdout: done.stdout ?? "", stderr: done.stderr ?? "", timedOut, neverRan };
 }
 
 function firstLine(text: string): string {
@@ -185,7 +187,16 @@ function firstLine(text: string): string {
 }
 
 function turnedDown(ran: Ran): boolean {
-  return !ran.timedOut && /\(HTTP 4\d\d\)/.test(ran.stderr);
+  return ran.neverRan || (!ran.timedOut && /\(HTTP 4\d\d\)/.test(ran.stderr));
+}
+
+function rememberFiled(dir: Dir, entry: Filed): string[] {
+  try {
+    remember(dir, entry);
+    return [];
+  } catch {
+    return ["This couldn't be written to the session's record, so note the address: don't file it again."];
+  }
 }
 
 function signedIn(gh: string): boolean {
@@ -240,14 +251,14 @@ function postWithGh(gh: string, repo: string, report: Stored, dir: Dir, sessionD
       return { status: 1, out: [], err: [`ardia triage: ${what}, so the issue may or may not exist. Check ${mine} before filing again.`] };
     }
     forget(dir, report.code, "gh");
-    const why = refused && errors[0] instanceof Map && typeof errors[0].get("message") === "string" ? (errors[0].get("message") as string) : firstLine(created.stderr);
+    const why = refused && errors[0] instanceof Map && typeof errors[0].get("message") === "string" ? (errors[0].get("message") as string) : created.neverRan ? "gh couldn't be run" : firstLine(created.stderr);
     return { status: 1, out: [], err: [`ardia triage: GitHub refused the issue (${why || "no reason given"}); nothing was filed. Try --via form, or --via feedback.`] };
   }
   const labels = dig(issue, "labels", "nodes");
   const names = Array.isArray(labels) ? labels.map((label) => dig(label, "name")).filter((name): name is string => typeof name === "string") : [];
-  remember(dir, { code: report.code, via: "gh", where: url, state: "filed" });
+  const unrecorded = rememberFiled(dir, { code: report.code, via: "gh", where: url, state: "filed" });
   flag(call, "triage_filed_gh");
-  return { status: 0, out: [`Filed: ${url}`, names.includes("via-triage") ? "It has the via-triage label." : "It doesn't show the via-triage label; a maintainer will add it. Don't file it again."], err: [] };
+  return { status: 0, out: [`Filed: ${url}`, names.includes("via-triage") ? "It has the via-triage label." : "It doesn't show the via-triage label; a maintainer will add it. Don't file it again.", ...unrecorded], err: [] };
 }
 
 async function openUrl(url: string, dataDir: string | undefined): Promise<string> {
@@ -374,9 +385,9 @@ async function comment(number: number, via: string | undefined, repo: string, re
       flag(call, "triage_refused");
       return { status: 1, out: [], err: [`ardia triage: the comment didn't go through (${firstLine(posted.stderr) || "no answer"}). Check ${page} before trying again.`] };
     }
-    remember(dir, { code: report.code, via: `comment-${number}`, where: url, state: "filed" });
+    const unrecorded = rememberFiled(dir, { code: report.code, via: `comment-${number}`, where: url, state: "filed" });
     flag(call, "triage_commented");
-    return { status: 0, out: [`Commented: ${url}`], err: [] };
+    return { status: 0, out: [`Commented: ${url}`, ...unrecorded], err: [] };
   }
   const where = await openUrl(page, dataDir);
   remember(dir, { code: report.code, via: `comment-${number}`, where: page, state: "opened" });
@@ -402,7 +413,7 @@ async function post(args: TriageFileArgs, code: string, dir: Dir, record: JsonOb
   const done = filedEntries(dir).find((entry) => entry.code === code && entry.state !== "opened" && (commentVia === undefined ? !entry.via.startsWith("comment-") : entry.via === commentVia));
   if (done !== undefined) {
     flag(call, "triage_refused");
-    return { status: 0, out: [done.state === "uncertain" ? `Not sent again: the last try may have gone out (${done.where}).` : `Already filed: ${done.where}`], err: [] };
+    return { status: 0, out: [done.state === "uncertain" ? `Not sent again: the last try may have gone out (${done.where}). If it isn't there, start a new session with ardia triage --print and file the report from that one.` : `Already filed: ${done.where}`], err: [] };
   }
   const report = stored(dir);
   if (report === undefined) throw new TriageRefused('there\'s no prepared report in this session; run ardia triage file --title "…" --body FILE first');

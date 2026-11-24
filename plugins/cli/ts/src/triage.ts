@@ -9,6 +9,7 @@ import { abspath, env, envSet, join, LINUX } from "./paths.ts";
 import { writeAll } from "./printable.ts";
 import { closeDir, writePrivate } from "./privatefs.ts";
 import { utf8 } from "./pystr.ts";
+import { shellJoin, shellQuote } from "./pystrings.ts";
 import { systemInfo } from "./system-info.ts";
 import { type Call, readConsent } from "./telemetry.ts";
 import { ardiaRunning, collectEvidence, contextText, neverRead } from "./triage-evidence.ts";
@@ -143,7 +144,7 @@ function consentText(agent: Agent | undefined): string {
     "                 usage log (counts and timings, no sites)",
     "It doesn't read: cookies, passwords, history, or what's on your pages",
     "Where it goes:   to the company behind the agent you pick, through your own",
-    "                 account with them. Ardia itself sends nothing.",
+    "                 account with them. None of it goes to Ardia.",
     `It asks before changing anything on ${machineWord()}, and nothing is posted`,
     "until you approve the exact text.",
     "",
@@ -177,12 +178,13 @@ function claudeSettings(root: string): string {
   return JSON.stringify({ permissions: { deny, ask: CLAUDE_ASKS } });
 }
 
-function claudeAskFirstMode(path: string): string {
+function claudeAskFirstMode(path: string | undefined): string {
+  if (path === undefined) return "manual";
   const help = spawnSync(path, ["--help"], { encoding: "utf8", timeout: HELP_TIMEOUT_MS, killSignal: "SIGKILL", stdio: ["ignore", "pipe", "ignore"] }).stdout ?? "";
   return help.includes('"default"') && !help.includes('"manual"') ? "default" : "manual";
 }
 
-function launchArgs(agent: Agent, path: string, prompt: string, model: string | undefined, root: string, cache: string): string[] {
+function launchArgs(agent: Agent, path: string | undefined, prompt: string, model: string | undefined, root: string, cache: string): string[] {
   const chosenModel = model === undefined ? [] : agent.id === "claude" ? ["--model", model] : ["-m", model];
   if (agent.id === "claude") return ["--permission-mode", claudeAskFirstMode(path), "--settings", claudeSettings(root), ...chosenModel, prompt];
   return ["--sandbox", "workspace-write", "--ask-for-approval", "on-request", "--add-dir", cache, ...chosenModel, prompt];
@@ -215,8 +217,10 @@ function sessionEnv(session: Session, args: TriageArgs): Record<string, string> 
   return extra;
 }
 
-function sessionLines(session: Session, args: TriageArgs, prompt: string, agentCommand: string): string[] {
-  const variables = Object.entries(sessionEnv(session, args)).map(([name, value]) => `${name}=${name === MODE_ENV ? value : JSON.stringify(value)}`).join(" ");
+function sessionLines(session: Session, args: TriageArgs, prompt: string, agent: Agent | undefined, path: string | undefined): string[] {
+  const variables = Object.entries(sessionEnv(session, args)).map(([name, value]) => `${name}=${shellQuote(value)}`).join(" ");
+  const agentCommand =
+    agent === undefined ? "<your agent, in its ask-first mode>" : shellJoin([agent.id, ...launchArgs(agent, path, prompt, args.model, abspath(dataRoot(args.dataDir)), sourceCache(session.home))]);
   return [
     `Session folder: ${session.dir}`,
     "  context.md   the facts about this install and the files never to read",
@@ -227,7 +231,7 @@ function sessionLines(session: Session, args: TriageArgs, prompt: string, agentC
     `  ${prompt}`,
     "",
     "and these variables, so ardia knows it's a triage session:",
-    `  cd ${JSON.stringify(session.dir)} && ${variables} ${agentCommand}`,
+    `  cd ${shellQuote(session.dir)} && ${variables} ${agentCommand}`,
   ];
 }
 
@@ -326,7 +330,7 @@ async function triage(args: TriageArgs, call: Call): Promise<Said> {
   if (agent === undefined || path === undefined || args.print) {
     flag(call, "triage_printed");
     const lead = args.print ? [] : ["Neither claude nor codex is on PATH, so no agent was started.", ""];
-    return { status: 0, out: [...lead, ...sessionLines(session, args, prompt, agent?.id ?? "<your agent>")], err: [] };
+    return { status: 0, out: [...lead, ...sessionLines(session, args, prompt, agent, path)], err: [] };
   }
   const extra: Record<string, string> = { ...sessionEnv(session, args), [AGENT_ENV]: agent.id };
   say(`Starting ${agent.label} in ${session.dir}. It will ask what went wrong.\n`);
@@ -334,5 +338,5 @@ async function triage(args: TriageArgs, call: Call): Promise<Said> {
   const ended = await launch(path, launchArgs(agent, path, prompt, args.model, abspath(dataRoot(args.dataDir)), sourceCache(home)), session.dir, extra);
   if (typeof ended === "number" && ended === 0) return { status: 0, out: [], err: [] };
   const why = typeof ended === "number" ? `${agent.label} exited with code ${ended}.` : `${agent.label} couldn't be started (${ended.message}).`;
-  return { status: typeof ended === "number" ? ended : 1, out: ["", why, "", ...sessionLines(session, args, prompt, agent.id)], err: [] };
+  return { status: typeof ended === "number" ? ended : 1, out: ["", why, "", ...sessionLines(session, args, prompt, agent, path)], err: [] };
 }

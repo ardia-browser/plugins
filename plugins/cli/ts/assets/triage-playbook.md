@@ -175,7 +175,7 @@ above the first:
   and version, and the CPU.
 - **Evidence** is only the lines that matter: a crashed thread, a few log lines, the events
   around the failure. Never paste a whole file.
-- The last two are optional. Leave a heading out when you have nothing for it.
+- Evidence and the last two are optional. Leave a heading out when you have nothing for it.
 
 Use a plain, specific title of at most 67 characters, with no prefix: "Sidebar stays blank
 after waking from sleep with two windows open", not "Bug: sidebar".
@@ -212,5 +212,6 @@ After the yes:
 Tell the user where the report went and give them the address or the reference. If they
 pasted screenshots, remind them to add the images to the issue themselves.
 
-Never file twice. If you can't tell whether the report went out, ask the command or the user
-before you try again.
+Never file twice. If the command says the last try may have gone out, have the user look
+where it points. Only if the report isn't there, ask them to run `ardia triage` again in
+their own terminal and file it from the new session.

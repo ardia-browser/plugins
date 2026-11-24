@@ -6,8 +6,10 @@ const WHOLE_URL = /\b([a-zA-Z][a-zA-Z0-9+.-]{1,15}:\/\/)([^\s/?#<>"'`]*@)?([^\s/
 const HOST = String.raw`(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,24}|\d{1,3}(?:\.\d{1,3}){3}|localhost)(?::\d{1,5})?`;
 const REST = String.raw`[^\s<>"'` + "`" + "]";
 const BARE_URL = new RegExp(String.raw`(?<![\w@/.:-])(${HOST})([/?]${REST}+)`, "gi");
-const SCHEMELESS_URL = new RegExp(String.raw`(?<![\w:/])//((?:[^\s/?#<>"'` + "`" + String.raw`]*@)?)(${HOST})((?:[/?]${REST}*)?)`, "gi");
-const LONG_RUN = /[A-Za-z0-9._%+~\/=-]{512,}/g;
+const ANY_HOST = String.raw`(?:\[[0-9a-f:.]+\]|[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)(?::\d{1,5})?`;
+const SCHEMELESS_URL = new RegExp(String.raw`(?<![\w:/])//((?:[^\s/?#<>"'` + "`" + String.raw`]*@)?)(${ANY_HOST})((?:[/?#]${REST}*)?)(?=[\s<>"'` + "`" + String.raw`]|$)`, "gim");
+const LONG_RUN = /[A-Za-z0-9._%+~\/=-]{512,}[^\s<>"'`]*/g;
+export const LONG_PLACEHOLDER = "<removed>";
 const REVERSED_NAME = /^(?:com|org|net|io|dev|app|co|me)\./i;
 const FILE_ENDINGS: readonly string[] = [
   "framework", "dylib", "bundle", "xpc", "json", "jsonl", "tsx", "jsx", "ts", "js", "mjs", "cjs", "cpp", "hpp", "html", "css", "log", "txt", "lock", "yml",
@@ -19,6 +21,7 @@ const CATEGORIES: readonly (readonly [string, RegExp])[] = [
   ["emails", /<email>/g],
   ["card numbers", /<number>/g],
   ["home folder names", /[/~]<user>/g],
+  ["long unbroken runs", /<removed>/g],
 ];
 export const URL_CATEGORY = "URL logins, paths and queries";
 export const CATEGORY_ORDER: readonly string[] = [...CATEGORIES.map(([name]) => name), URL_CATEGORY];
@@ -85,7 +88,7 @@ export function homeNameSegments(text: string, name: string | undefined = homeNa
 export function triageScrub(text: string): { text: string; removed: Removed } {
   const [hosted, urls] = hostOnlyUrls(text);
   const [pathless, bareUrls] = bareUrlPaths(hosted);
-  const scrubbed = homeNameSegments(scrub(pathless.replace(LONG_RUN, "<secret>")));
+  const scrubbed = homeNameSegments(scrub(pathless.replace(LONG_RUN, LONG_PLACEHOLDER)));
   const removed = emptyRemoved();
   for (const [name, pattern] of CATEGORIES) removed.set(name, Math.max(0, occurrences(scrubbed, pattern) - occurrences(text, pattern)));
   removed.set(URL_CATEGORY, urls + bareUrls);

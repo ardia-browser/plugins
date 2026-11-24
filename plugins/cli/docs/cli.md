@@ -2566,7 +2566,7 @@ In order, `ardia triage`:
                     usage log (counts and timings, no sites)
    It doesn't read: cookies, passwords, history, or what's on your pages
    Where it goes:   to the company behind the agent you pick, through your own
-                    account with them. Ardia itself sends nothing.
+                    account with them. None of it goes to Ardia.
    It asks before changing anything on this Mac, and nothing is posted
    until you approve the exact text.
 
@@ -2625,8 +2625,9 @@ In order, `ardia triage`:
      else. Codex has no per-path read rule on the command line, so the never-read list is a rule in `context.md`
      only.
 
-   It exits with the agent's exit code. When the agent can't start or exits non-zero, it prints the session folder
-   and the prompt.
+   It exits with the agent's exit code. When the agent can't start or exits non-zero, and with `--print`, it prints
+   the session folder, the prompt, and the command to start the agent by hand: quoted for a shell, with the same
+   variables and, when the agent is known, the same ask-first arguments.
 5. **Triage mode.** While `ARDIA_TRIAGE=1` is set, `ardia` itself (`ts/src/triage-mode.ts`, checked once in
    `main.ts` before any command runs, the internal `daemon`, history-reader and script-runner entry points included)
    refuses everything but `triage file`, `plugins list`, `commands`, `methods`, `--version` and
@@ -2642,11 +2643,13 @@ first: What happened, Diagnosis, Steps to reproduce, Version and Environment are
 and Fix applied or workaround are optional; any other heading is an error that names the allowed ones (a heading
 inside a code fence is text). The title (1-67 characters after scrubbing) and every section go through `scrub.ts` and
 rules for triage only: a URL keeps its scheme and host, its login goes and its path and query become `/<path>`; an
-address written without a scheme (`mail.example.org/inbox/1`, `//user:pw@host/x`, `192.0.2.8/x`,
-`localhost:3000/x`, with or without a port) loses its login and path the same way, while reversed names and file
+address written without a scheme (`mail.example.org/inbox/1`, `192.0.2.8/x`, `localhost:3000/x`, with or without a
+port, and after `//` any host at all, `//user:pw@host/x` and `//[::1]:3000/x` included) loses its login and path
+the same way, while reversed names and file
 names with no port and no query (`com.ardia.browser/…`, `ArdiaCore.framework/…`, `index.js/…`) are left as they
-are; an unbroken run of 512 or more letters, digits and `._%+~/=-` (an encoded image, a key) becomes `<secret>`,
-which also keeps the scrub's time bounded on long lines; and the home folder's name is replaced wherever it is
+are; an unbroken run of 512 or more letters, digits and `._%+~/=-` (an encoded image, a key) is replaced, together
+with the rest of its word, by `<removed>` and counted as "long unbroken runs", which also keeps the scrub's time
+bounded on long lines; and the home folder's name is replaced wherever it is
 a path segment, not only under `/Users` and `/home` (`ts/src/triage-scrub.ts`; `scrub()` and `ardia feedback` are
 unchanged). These are patterns, so a best effort: the user reads the text before it goes anywhere. A required section with nothing left is
 refused. The command adds the "Filed by" line itself from the session: `<claude|codex|a coding agent> via ardia triage
@@ -2670,7 +2673,9 @@ answers `Already filed: <where>` and files nothing, and one `ardia triage file` 
   address and whether it has the label. An answer that carries the issue's address counts as filed whatever `gh`'s
   exit code. The try is written to `filed.json` as uncertain before `gh` runs: a request GitHub turns down (a
   GraphQL error with no issue, or `gh` reporting HTTP 4xx) clears it and can be tried again; one that times out,
-  ends with no clear answer or is cut short stays uncertain and is not sent again, since the issue may exist.
+  ends with no clear answer or is cut short stays uncertain and is not sent again, since the issue may exist: the
+  message says where to look, and to file from a new session if it isn't there. A `gh` that couldn't be run at all
+  counts as turned down.
 - `gh` installed but signed out, and no `--via`: nothing is posted; one line says so and names `--via form` and
   `--via feedback`; exit 3. The playbook has the agent offer `gh auth login` once.
 - No `gh`, or `--via form`: `https://github.com/ardia-browser/ardia/issues/new?template=via-triage.yml&title=…&<field
