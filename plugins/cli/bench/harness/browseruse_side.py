@@ -8,10 +8,12 @@ import time
 from pathlib import Path
 
 import ardia_side
+import browsers
 import opencode_side
 import grading
 import registry
 import servers
+import tunnel
 from procs import front_pid, http, kill_group, spawn_agent, kill_on_failure, listener_pids, proc_info, read_json, read_jsonl, sh, terminate, write_json
 
 ROOT = Path(os.environ.get("BENCH_BROWSERUSE_HOME", Path.home() / "ardia-scratch/browser-use"))
@@ -22,6 +24,8 @@ DEFAULTS = {
     "window_size": "1440,900",
     "reach_line": "Use the `browser-use` command to reach this browser.",
     "tool": "cli",
+    "browser": "local",
+    "cloud_country": "us",
 }
 MCP_REACH_LINE = "Use the `browser-use` MCP tools to reach this browser."
 MCP_SERVER = "browser-use"
@@ -40,6 +44,8 @@ def options(overrides=None):
     index = int(opts.get("lane_index") or 0)
     opts["cdp_port"] = int(opts["cdp_port"]) + index
     opts["lane"] = opts.get("lane") or "lane0"
+    if opts["browser"] not in ("local", "cloud"):
+        raise SystemExit(f"browser must be local or cloud, not {opts['browser']}")
     return opts
 
 
@@ -72,8 +78,9 @@ def bin_dir(opts):
 
 
 def harness_env(opts, home):
+    endpoint = {"BU_CDP_WS": opts["cdp_ws"]} if opts.get("cdp_ws") else {"BU_CDP_URL": f"http://127.0.0.1:{opts['cdp_port']}"}
     return {
-        "BU_CDP_URL": f"http://127.0.0.1:{opts['cdp_port']}",
+        **endpoint,
         "BU_NAME": opts["lane"],
         "BH_HOME": str(home / "bh"),
         "BH_TELEMETRY": "0",
@@ -82,7 +89,7 @@ def harness_env(opts, home):
 
 
 def agent_env(opts, home, extra=None):
-    env = ardia_side.agent_env({"cli": "installed"}, extra)
+    env = ardia_side.agent_env({"cli": "installed", **ardia_side.route_opts(opts)}, extra)
     env = {k: v for k, v in env.items() if not k.startswith(STRIPPED_ENV_PREFIXES)}
     keep = [p for p in env["PATH"].split(":") if p and Path(p) not in (ardia_side.DEV_BIN, ardia_side.INSTALLED_ARDIA.parent)]
     if opts.get("tool") == "mcp":
@@ -153,6 +160,10 @@ def stop_lane(opts):
     rec = state.get("chrome")
     if rec and terminate(rec, grace=10):
         stopped.append(f"chrome {rec['pid']}")
+    cloud = state.get("browser")
+    if cloud and cloud.get("kind") == "cloud":
+        out = browsers.cloud_stop(cloud)
+        stopped.append(f"cloud {cloud['id']} {'stopped' if out.get('stopped') else out.get('stop_error')}")
     state_path(opts).unlink(missing_ok=True)
     return stopped
 
@@ -179,16 +190,26 @@ def versions(opts):
     return (r.stdout or r.stderr).strip()
 
 
+def prepare_cloud(opts, local_task, home, deadline):
+    t0 = time.monotonic()
+    exposure = tunnel.Exposure(local_task, f"bu-{opts['lane']}", home).start()
+    task = exposure.public_task()
+    try:
+        browser = browsers.cloud_start(f"bu-{opts['lane']}", deadline // 60 + 10, opts["cloud_country"])
+        state = {"browser": browser}
+        write_json(state_path(opts), state)
+        opened = browsers.open_only_tab(browser["ws"], task["start_url"])
+    except BaseException:
+        exposure.stop()
+        raise
+    opts["cdp_ws"] = browser["ws"]
+    state["setup_s"] = round(time.monotonic() - t0, 2)
+    write_json(state_path(opts), state)
+    log(f"{opts['lane']}: cloud browser {browser['id']}, ready in {state['setup_s']} s")
+    return state, {"tab": opened}, task, exposure
+
+
 def prepare(opts, task, home):
-    stale = stop_lane(opts)
-    if stale:
-        log(f"{opts['lane']}: stopped leftovers {stale}")
-    busy = listener_pids(opts["cdp_port"])
-    if busy:
-        raise SystemExit(f"port {opts['cdp_port']} is used by pid {busy}, not by this harness")
-    if home.exists():
-        shutil.rmtree(home)
-    (home / "bh").mkdir(parents=True)
     t0 = time.monotonic()
     state = {}
     with open(home / "chrome.log", "ab") as chrome_log:
@@ -230,11 +251,27 @@ def run(task_id, agent, run_id, results_dir, overrides=None, contender=None, on_
     events = runs_dir / f"{run_id}.events.jsonl"
     stderr = runs_dir / f"{run_id}.stderr.log"
     home = lane_dir(opts)
-    servers.start(task)
+    local_task = task
+    servers.start(local_task)
     daemon = None
+    exposure = None
+    cloud = {}
+    stale = stop_lane(opts)
+    if stale:
+        log(f"{opts['lane']}: stopped leftovers {stale}")
     try:
-        baseline = ardia_side.reset_task(task)
-        state, setup = prepare(opts, task, home)
+        baseline = ardia_side.reset_task(local_task)
+        busy = [] if opts["browser"] == "cloud" else listener_pids(opts["cdp_port"])
+        if busy:
+            raise SystemExit(f"port {opts['cdp_port']} is used by pid {busy}, not by this harness")
+        if home.exists():
+            shutil.rmtree(home)
+        (home / "bh").mkdir(parents=True)
+        if opts["browser"] == "cloud":
+            state, setup, task, exposure = prepare_cloud(opts, local_task, home, deadline)
+        else:
+            state, setup = prepare(opts, local_task, home)
+        browser_pid = (state.get("chrome") or {}).get("pid", -1)
         workdir = ardia_side.WORK / run_id
         if workdir.exists():
             shutil.rmtree(workdir)
@@ -262,7 +299,7 @@ def run(task_id, agent, run_id, results_dir, overrides=None, contender=None, on_
         front_before = front_pid()
         started_at = datetime.datetime.now().astimezone()
         log(f"{run_id}: {agent} on {task_id} ({opts['lane']}, CDP {opts['cdp_port']})")
-        with open(events, "wb") as fo, open(stderr, "wb") as fe, opencode_side.FrontSampler(state["chrome"]["pid"]) as front:
+        with open(events, "wb") as fo, open(stderr, "wb") as fe, opencode_side.FrontSampler(browser_pid) as front:
             if on_agent_start:
                 on_agent_start()
             start_epoch = time.time()
@@ -279,12 +316,20 @@ def run(task_id, agent, run_id, results_dir, overrides=None, contender=None, on_
         front_after = front_pid()
         kill_group(proc, grace=2)
         try:
-            check = http(task["check"]["method"], task["check"]["url"])
+            check = http(local_task["check"]["method"], local_task["check"]["url"])
         except Exception as e:
             check = {"pass": False, "error": str(e)}
         daemon = daemon_record(home, opts["lane"])
     finally:
+        if exposure:
+            tunnel_summary = exposure.summary()
+        cloud_rec = (read_json(state_path(opts)) or {}).get("browser")
+        if cloud_rec:
+            cloud = browsers.cloud_stop(cloud_rec)
+            write_json(state_path(opts), {k: v for k, v in (read_json(state_path(opts)) or {}).items() if k != "browser"})
         stopped = stop_lane(opts)
+        if exposure:
+            exposure.stop()
     passed, reset_by_agent = grading.grade(check, timed_out, baseline_reset_at_ms=baseline.get("reset_at_ms"))
     completed = check.get("completed_at_ms")
     lines = read_jsonl(events)
@@ -298,7 +343,9 @@ def run(task_id, agent, run_id, results_dir, overrides=None, contender=None, on_
     record = {
         "run_id": run_id, "side": "browseruse", "contender": contender or f"browseruse-{agent}", "agent": agent,
         "task": task_id, "started_at": started_at.isoformat(timespec="milliseconds"),
-        "model": model, "effort": effort, "lane": opts["lane"], "port_offset": task["port_offset"],
+        "model": model, "effort": effort, "browser": opts["browser"],
+        "claude_route": ardia_side.claude_route_label(opts) if agent == "claude" else None,
+        "lane": opts["lane"], "port_offset": local_task["port_offset"],
         "wall_s": round(wall, 3), "timed_out": timed_out, "deadline_s": deadline, "exit_code": code,
         "pass": passed, "reset_by_agent": reset_by_agent,
         "time_to_correct_s": round(completed / 1000 - start_epoch, 3) if passed and completed else None,
@@ -311,11 +358,15 @@ def run(task_id, agent, run_id, results_dir, overrides=None, contender=None, on_
         "check": check, "check_details": check.get("details"), **parsed,
         "agent_saw": opencode_side.tools_seen_claude(lines) if agent == "claude" else None,
         "prompt": prompt, "command": cmd, "workdir": str(workdir), "skill": skill, "mcp_server": server,
-        "instance": {"chrome": {k: state["chrome"][k] for k in ("pid", "browser", "user_agent", "args")},
-                     "cdp_port": opts["cdp_port"], "setup_s": state.get("setup_s"), "home": str(home),
-                     "browser_use": versions(opts), "daemon": daemon, **setup},
+        "instance": {"chrome": {k: state["chrome"][k] for k in ("pid", "browser", "user_agent", "args")}
+                     if state.get("chrome") else None,
+                     "cloud_browser": {k: state["browser"].get(k) for k in ("kind", "id", "browser", "user_agent", "launch_s")}
+                     if state.get("browser") else None,
+                     "cdp_port": None if opts["browser"] == "cloud" else opts["cdp_port"],
+                     "setup_s": state.get("setup_s"), "home": str(home), "browser_use": versions(opts),
+                     "daemon": daemon, "tunnel": tunnel_summary if exposure else None, "cloud": cloud or None, **setup},
         "focus": {"front_pid_before": front_before, "front_pid_after": front_after,
-                  "ours_in_front": state["chrome"]["pid"] in (front_before, front_after),
+                  "ours_in_front": browser_pid in (front_before, front_after) if browser_pid > 0 else False,
                   "front_samples": front.samples},
         "frontmost_during_run": front.ours,
         "stopped_after": stopped, "events_file": str(events), "stderr_file": str(stderr),

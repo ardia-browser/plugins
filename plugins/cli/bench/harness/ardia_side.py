@@ -33,7 +33,8 @@ DEFAULTS = {
     "humanize": False,
     "keep_notes": False,
 }
-MODELS = {"claude": ("claude-opus-5-5", "high"), "codex": ("gpt-6.1-sol", "high")}
+MODELS = {"claude": ("claude-opus-5-5", "high"), "codex": ("gpt-6.2-sol", "high")}
+CLAUDE_ROUTE_KEYS = ("claude_base_url", "claude_auth_token")
 STRIPPED_ENV_PREFIXES = ("CLAUDECODE", "CLAUDE_CODE_", "CLAUDE_PID", "CLAUDE_EFFORT", "CLAUDE_AGENT_SDK", "AI_AGENT",
                          "T3CODE_", "ARDIA_", "AGENT_BROWSER_", "CODEX_")
 KEPT_ENV = {"CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK",
@@ -89,8 +90,26 @@ def agent_env(opts, extra=None):
     if dev_name(opts) is not None:
         path = f"{dev_bin(dev_name(opts))}:{path}"
     env["PATH"] = path
+    route = claude_route(opts)
+    if "ANTHROPIC_AUTH_TOKEN" in route:
+        env.pop("ANTHROPIC_API_KEY", None)
+    env.update(route)
     env.update(extra or {})
     return env
+
+
+def claude_route(opts):
+    base = (opts or {}).get("claude_base_url") or os.environ.get("BENCH_CLAUDE_BASE_URL")
+    token = (opts or {}).get("claude_auth_token") or os.environ.get("BENCH_CLAUDE_AUTH_TOKEN")
+    return {k: v for k, v in (("ANTHROPIC_BASE_URL", base), ("ANTHROPIC_AUTH_TOKEN", token)) if v}
+
+
+def route_opts(opts):
+    return {k: opts.get(k) for k in CLAUDE_ROUTE_KEYS if opts.get(k)}
+
+
+def claude_route_label(opts):
+    return claude_route(opts).get("ANTHROPIC_BASE_URL") or "anthropic"
 
 
 def freeze_cli(src, name=""):
@@ -451,7 +470,8 @@ def run(task_id, agent, run_id, results_dir, overrides=None, contender=None, on_
     record = {
         "run_id": run_id, "side": "ardia", "contender": contender or f"ardia-{agent}", "agent": agent,
         "task": task_id, "started_at": started_at.isoformat(timespec="milliseconds"),
-        "model": model, "effort": effort, "cli": cli, "humanize": opts["humanize"], "notes_kept": opts["keep_notes"],
+        "model": model, "effort": effort, "claude_route": claude_route_label(opts) if agent == "claude" else None,
+        "cli": cli, "humanize": opts["humanize"], "notes_kept": opts["keep_notes"],
         "notes_after": notes_snapshot(data), "lane": opts.get("lane"), "port_offset": task["port_offset"],
         "wall_s": round(wall, 3), "timed_out": timed_out, "deadline_s": deadline, "exit_code": code,
         "pass": passed, "reset_by_agent": reset_by_agent,

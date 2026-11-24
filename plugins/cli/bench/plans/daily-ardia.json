@@ -1,0 +1,30 @@
+{
+  "name": "daily-ardia",
+  "repeats": 2,
+  "tasks": "all",
+  "max_lanes": 3,
+  "normal_pressure_only": true,
+  "clean_run_scratch": true,
+  "shared_app": true,
+  "claude_base_url": "http://127.0.0.1:8317",
+  "claude_auth_token": "local",
+  "results": "~/ardia-scratch/bench-proper/results/daily-ardia",
+  "contenders": [
+    {
+      "id": "ardia-codex",
+      "label": "Ardia + Codex (GPT-6.2 Sol high)",
+      "kind": "ardia",
+      "agent": "codex",
+      "model": "gpt-6.2-sol",
+      "effort": "high"
+    },
+    {
+      "id": "ardia-claude",
+      "label": "Ardia + Claude Code (Opus 5.5 high)",
+      "kind": "ardia",
+      "agent": "claude",
+      "model": "claude-opus-5-5",
+      "effort": "high"
+    }
+  ]
+}

@@ -20,6 +20,7 @@ STATIC_TYPES = {
     ".png": "image/png",
     ".json": "application/json; charset=utf-8",
 }
+SHARED_FILES = {"/realism.js": Path(__file__).resolve().parent / "realism.js"}
 
 
 def now_ms():
@@ -104,6 +105,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def static(self, path=None):
         path = self.path_only if path is None else path
+        if path in SHARED_FILES:
+            return self.send(200, SHARED_FILES[path].read_bytes(), STATIC_TYPES[".js"])
         rel = "index.html" if path in ("", "/") else path.lstrip("/")
         root = Path(self.root).resolve()
         target = (root / rel).resolve()

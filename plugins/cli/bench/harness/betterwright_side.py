@@ -80,7 +80,7 @@ def harness_env(opts):
 
 
 def agent_env(opts, extra=None):
-    env = ardia_side.agent_env({"cli": "installed"}, extra)
+    env = ardia_side.agent_env({"cli": "installed", **ardia_side.route_opts(opts)}, extra)
     env = {k: v for k, v in env.items() if not k.startswith(STRIPPED_ENV_PREFIXES)}
     keep = [p for p in env["PATH"].split(":") if p and Path(p) not in (ardia_side.DEV_BIN, ardia_side.INSTALLED_ARDIA.parent)]
     env["PATH"] = ":".join([str(lane_dir(opts) / "bin"), opts["bin"]] + keep)

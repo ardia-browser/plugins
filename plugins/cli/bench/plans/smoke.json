@@ -1,8 +1,27 @@
 {
   "name": "smoke",
   "repeats": 1,
-  "tasks": ["calendar"],
+  "tasks": [
+    "news"
+  ],
+  "claude_base_url": "http://127.0.0.1:8317",
+  "claude_auth_token": "local",
   "contenders": [
-    {"id": "ardia-claude", "label": "Ardia + Claude Code (Opus 5.5)", "kind": "ardia", "agent": "claude", "model": "claude-opus-5-5", "effort": "high"}
+    {
+      "id": "ardia-codex",
+      "label": "Ardia + Codex (GPT-6.2 Sol high)",
+      "kind": "ardia",
+      "agent": "codex",
+      "model": "gpt-6.2-sol",
+      "effort": "high"
+    },
+    {
+      "id": "ardia-claude",
+      "label": "Ardia + Claude Code (Opus 5.5 high)",
+      "kind": "ardia",
+      "agent": "claude",
+      "model": "claude-opus-5-5",
+      "effort": "high"
+    }
   ]
 }

@@ -20,7 +20,8 @@ import summary
 import tunnel
 from procs import write_json
 
-HELP = f"""Browser-agent bench: Claude Code and Codex driving Ardia through `ardia browse`, against Aside's agent.
+HELP = f"""Browser-agent bench: Claude Code and Codex driving Ardia through `ardia browse`, against Aside's agent and
+Browser Use, on eight everyday web tasks.
 
 Commands:
   tasks                         list the registry ({registry.REGISTRY})
@@ -31,17 +32,23 @@ Commands:
   run TASK claude|codex RUN_ID  one cold run against the hidden Ardia instance, record in --results/runs/RUN_ID.json;
                                 --port-offset N runs against the task's copy on its ports + N;
                                 --side opencode drives a fresh headless Chrome for Testing through OpenCode Browse's MCP;
-                                --side browseruse drives one through Browser Use's `browser-use` CLI and skill;
+                                --side browseruse drives one through Browser Use's `browser-use` CLI and skill
+                                (--browser cloud uses a Browser Use cloud browser instead);
                                 --side betterwright drives a headless BetterChromium through the `betterwright` CLI and skill;
                                 --side browserharness has Codex write browser-harness code (--browser chrome|cloud|ardia);
                                 --side browseragent runs Browser Use 1.0's own agent (--browser ardia|chrome);
                                 --side ardiacloud drives a Browser Use cloud browser with `ardia browse` (ARDIA_WS);
-                                cloud browsers reach the task servers through temporary cloudflared tunnels
-  plan PLAN.json [--max-lanes N] [--dry-run]
+                                cloud browsers reach the task servers through temporary cloudflared tunnels;
+                                --claude-base-url URL --claude-auth-token T route Claude Code (e.g. VibeProxy on
+                                http://127.0.0.1:8317), else BENCH_CLAUDE_BASE_URL / BENCH_CLAUDE_AUTH_TOKEN
+  plan PLAN.json [--max-lanes N] [--app PATH] [--dry-run]
                                 run tasks x contenders x repeats in parallel lanes gated on memory (--max-lanes, else
                                 the plan's max_lanes, else 6; 1 is serial); lane k gets its own task servers on
-                                ports + 1000(k+1); --dry-run checks the ports and prints the simulated timeline
-  summarize RESULTS_DIR         rewrite RESULTS_DIR/summary.json from its run records
+                                ports + 1000(k+1); --app overrides the plan's Ardia build for this machine;
+                                --dry-run checks the ports and prints the simulated timeline
+  summarize RESULTS_DIR [MORE...] [--out DIR]
+                                rewrite summary.json from the run records of one or more results dirs (e.g. one per
+                                machine), into --out or the first dir
   stop                          quit the hidden Ardia instance, every side's lanes, cloud browsers and tunnels and every task
                                 server this harness started
 
@@ -80,13 +87,17 @@ def main():
     rn.add_argument("--tool", choices=["cli", "mcp"])
     rn.add_argument("--venv")
     rn.add_argument("--port-offset", type=int)
+    rn.add_argument("--claude-base-url")
+    rn.add_argument("--claude-auth-token")
     pl = sub.add_parser("plan")
     pl.add_argument("plan")
     pl.add_argument("--results")
     pl.add_argument("--dry-run", action="store_true")
     pl.add_argument("--max-lanes", type=int)
+    pl.add_argument("--app")
     sm = sub.add_parser("summarize")
-    sm.add_argument("results")
+    sm.add_argument("results", nargs="+")
+    sm.add_argument("--out")
     sub.add_parser("stop")
     a = ap.parse_args()
 
@@ -106,14 +117,17 @@ def main():
     elif a.cmd == "run":
         overrides = {"app": a.app, "port": a.port, "cli": a.cli, "ardia_test": a.ardia_test, "model": a.model,
                      "effort": a.effort, "deadline_s": a.deadline_s, "humanize": a.humanize, "keep_notes": a.keep_notes,
-                     "port_offset": a.port_offset}
+                     "port_offset": a.port_offset, "claude_base_url": a.claude_base_url,
+                     "claude_auth_token": a.claude_auth_token}
         browser_overrides = {"model": a.model, "effort": a.effort, "deadline_s": a.deadline_s,
-                             "port_offset": a.port_offset}
+                             "port_offset": a.port_offset, "claude_base_url": a.claude_base_url,
+                             "claude_auth_token": a.claude_auth_token}
         if a.side == "opencode" and not a.browser:
             rec = opencode_side.run(a.task, a.agent, a.run_id, a.results, browser_overrides)
         elif a.side == "browseruse":
             rec = browseruse_side.run(a.task, a.agent, a.run_id, a.results,
-                                      dict(browser_overrides, tool=a.tool, venv=a.venv))
+                                      dict(browser_overrides, tool=a.tool, venv=a.venv,
+                                           browser="cloud" if a.browser == "cloud" else None))
         elif a.side == "betterwright":
             rec = betterwright_side.run(a.task, a.agent, a.run_id, a.results, browser_overrides)
         elif a.side == "browserharness":
@@ -131,12 +145,13 @@ def main():
                                               "timed_out", "matched", "total")}
                          | {"tokens": (rec["tokens"] or {}).get("total")}))
     elif a.cmd == "plan":
-        out = runner.execute(a.plan, a.results, a.dry_run, a.max_lanes)
+        out = runner.execute(a.plan, a.results, a.dry_run, a.max_lanes, a.app)
         if out:
             print(out / "summary.json")
     elif a.cmd == "summarize":
-        write_json(Path(a.results) / "summary.json", summary.build(a.results))
-        print(Path(a.results) / "summary.json")
+        out = Path(a.out or a.results[0]).expanduser() / "summary.json"
+        write_json(out, summary.build(a.results))
+        print(out)
     elif a.cmd == "stop":
         ardia_side.quit_instance()
         print(f"opencode stopped: {opencode_side.stop_all() or 'none'}")

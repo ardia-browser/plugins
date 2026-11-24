@@ -96,9 +96,13 @@ def mcp_env(opts, home):
 
 
 def node_bin():
-    path = shutil.which("node")
+    path = os.environ.get("BENCH_NODE") or shutil.which("node")
     if not path:
-        raise SystemExit("node is not on PATH")
+        local = sorted(Path.home().glob(".local/node*/bin/node")) + [Path(p) for p in ("/opt/homebrew/bin/node",
+                                                                                         "/usr/local/bin/node")]
+        path = next((str(p) for p in local if p.exists()), None)
+    if not path:
+        raise SystemExit("node is not on PATH, in ~/.local/node*/bin or in BENCH_NODE")
     return str(Path(path).resolve())
 
 
@@ -272,8 +276,8 @@ def codex_command(model, effort, workdir, prompt, server):
     return cmd[:-1] + flags + [prompt]
 
 
-def agent_env(extra):
-    env = ardia_side.agent_env({"cli": "installed"}, extra)
+def agent_env(extra, opts=None):
+    env = ardia_side.agent_env({"cli": "installed", **ardia_side.route_opts(opts or {})}, extra)
     env = {k: v for k, v in env.items() if not k.startswith(STRIPPED_ENV_PREFIXES)}
     env["PATH"] = ":".join(p for p in env["PATH"].split(":") if p and Path(p) != ardia_side.DEV_BIN)
     return env
@@ -375,13 +379,13 @@ def run(task_id, agent, run_id, results_dir, overrides=None, contender=None, on_
         if agent == "codex":
             codex_home = home / "codex-home"
             codex_home.mkdir(parents=True, exist_ok=True)
-            env = agent_env({"HOME": str(codex_home), "CODEX_HOME": str(Path.home() / ".codex")})
+            env = agent_env({"HOME": str(codex_home), "CODEX_HOME": str(Path.home() / ".codex")}, opts)
             cmd = codex_command(model, effort, workdir, prompt, server)
             mcp_config = None
         else:
             mcp_config = home / "mcp.json"
             write_json(mcp_config, {"mcpServers": {"browse": {"type": "stdio", **server}}})
-            env = agent_env({})
+            env = agent_env({}, opts)
             cmd = claude_command(model, effort, prompt, mcp_config)
         front_before = front_pid()
         started_at = datetime.datetime.now().astimezone()

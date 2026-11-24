@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pricing · Vantage</title>
+<link rel="stylesheet" href="/vendor.css">
+</head>
+<body data-page="pricing">
+<main class="wrap">
+  <div class="center">
+    <h1 class="page-title">Simple pricing that scales with you</h1>
+    <p class="sub">Every plan includes unlimited projects. Pay per seat, cancel anytime.</p>
+    <div class="billing" role="group" aria-label="Billing cycle">
+      <button type="button" data-cycle="monthly" aria-pressed="true">Monthly</button>
+      <button type="button" data-cycle="annual" aria-pressed="false">Annual <span class="save">save up to 18%</span></button>
+    </div>
+  </div>
+  <div class="tiers" id="tiers"></div>
+  <section class="calc" id="calculator">
+    <div>
+      <h2>Estimate your cost</h2>
+      <p class="sub" style="font-size:15px;margin:0">Pick a plan and a seat count. The billing cycle follows the toggle above.</p>
+      <label for="calc-plan">Plan</label>
+      <select id="calc-plan">
+        <option value="starter">Starter</option>
+        <option value="team" selected>Team</option>
+        <option value="business">Business</option>
+      </select>
+      <label for="calc-seats">Seats</label>
+      <div class="stepper"><button type="button" id="seats-minus" aria-label="Remove a seat">−</button><input id="calc-seats" inputmode="numeric" value="10" aria-label="Seats"><button type="button" id="seats-plus" aria-label="Add a seat">+</button></div>
+    </div>
+    <div class="receipt" id="receipt" aria-live="polite"></div>
+  </section>
+  <h2>Compare features</h2>
+  <p class="sub" style="font-size:15px">Click a feature for the details on each plan.</p>
+  <table class="matrix">
+    <thead><tr><th>Feature</th><th>Starter</th><th>Team</th><th>Business</th><th>Enterprise</th></tr></thead>
+    <tbody id="matrix-body"></tbody>
+  </table>
+  <section class="faq">
+    <h2>Questions</h2>
+    <div class="disclosure"><button type="button" aria-expanded="false">Do you offer volume pricing?</button><div class="panel" hidden>Yes. From the 11th seat on, every seat is billed at a lower rate on all self-serve plans. The calculator shows the exact total.</div></div>
+    <div class="disclosure"><button type="button" aria-expanded="false">Can I switch between monthly and annual billing?</button><div class="panel" hidden>Yes, at your next renewal. Annual plans are invoiced once a year up front.</div></div>
+    <div class="disclosure"><button type="button" aria-expanded="false">Is there a free trial?</button><div class="panel" hidden>Every plan starts with a 14-day trial of Business features. No card needed.</div></div>
+  </section>
+</main>
+<script src="/vendor.js"></script>
+</body>
+</html>

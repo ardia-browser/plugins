@@ -7,12 +7,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import scheduler
 from scheduler import Scheduler
 
-TASKS = ["calendar", "expenses", "research", "booking", "shop", "grid", "kanban", "multitab"]
+TASKS = ["calendar", "research", "booking", "shop", "multitab", "news", "triage", "compare"]
 CONTENDERS = [{"id": "ardia-claude", "kind": "ardia"}, {"id": "ardia-codex", "kind": "ardia"},
               {"id": "aside-opus", "kind": "aside"}, {"id": "aside-sol", "kind": "aside"}]
-REALISM_TASKS = ["expenses", "kanban", "bulk"]
-REALISM_CONTENDERS = CONTENDERS + [{"id": f"{side}-{agent}", "kind": side}
-                                   for side in ("opencode", "browseruse") for agent in ("claude", "codex")]
+MIXED_TASKS = ["news", "triage", "compare"]
+MIXED_CONTENDERS = CONTENDERS + [{"id": f"{side}-{agent}", "kind": side}
+                                 for side in ("opencode", "browseruse") for agent in ("claude", "codex")]
 
 
 def plan_items(repeats=3, task_list=TASKS, contender_list=CONTENDERS):
@@ -81,7 +81,7 @@ class SchedulerTest(unittest.TestCase):
 
     def test_no_two_runs_share_a_task_server_and_lanes_stay_capped(self):
         for seed in range(20):
-            for max_lanes, tasks, contenders in ((6, TASKS, CONTENDERS), (12, REALISM_TASKS, REALISM_CONTENDERS)):
+            for max_lanes, tasks, contenders in ((6, TASKS, CONTENDERS), (12, MIXED_TASKS, MIXED_CONTENDERS)):
                 _, _, log = simulate(seed, max_lanes=max_lanes, task_list=tasks, contender_list=contenders)
                 for running in overlapping(log):
                     slots = [(e[3], e[11]) for e in running]
@@ -92,7 +92,7 @@ class SchedulerTest(unittest.TestCase):
                     self.assertEqual(len(lanes), len(set(lanes)))
 
     def test_lane_offsets_follow_the_lane_index(self):
-        _, _, log = simulate(2, max_lanes=12, task_list=REALISM_TASKS, contender_list=REALISM_CONTENDERS)
+        _, _, log = simulate(2, max_lanes=12, task_list=MIXED_TASKS, contender_list=MIXED_CONTENDERS)
         for e in (e for e in log if e[0] == "start"):
             if e[5] == "aside":
                 self.assertEqual(e[11], 0)
@@ -103,24 +103,24 @@ class SchedulerTest(unittest.TestCase):
     def test_one_task_runs_on_many_lanes_at_once(self):
         peaks, per_task = [], []
         for seed in range(10):
-            s, items, log = simulate(seed, max_lanes=12, task_list=REALISM_TASKS, contender_list=REALISM_CONTENDERS)
+            s, items, log = simulate(seed, max_lanes=12, task_list=MIXED_TASKS, contender_list=MIXED_CONTENDERS)
             self.assertTrue(s.done())
             self.assertEqual(sorted(e[2] for e in log if e[0] == "start"), sorted(it["run_id"] for it in items))
             windows = overlapping(log)
             peaks.append(max(len(w) for w in windows))
-            per_task.append(max(max(sum(1 for e in w if e[3] == t) for t in REALISM_TASKS) for w in windows))
+            per_task.append(max(max(sum(1 for e in w if e[3] == t) for t in MIXED_TASKS) for w in windows))
         self.assertGreater(max(peaks), 8)
         self.assertLessEqual(max(peaks), 12)
         self.assertGreater(max(per_task), 1)
 
     def test_pinned_tasks_share_one_server(self):
         for seed in range(10):
-            _, _, log = simulate(seed, max_lanes=12, task_list=REALISM_TASKS, contender_list=REALISM_CONTENDERS,
-                                 pinned=["expenses"])
-            for e in (e for e in log if e[0] == "start" and e[3] == "expenses"):
+            _, _, log = simulate(seed, max_lanes=12, task_list=MIXED_TASKS, contender_list=MIXED_CONTENDERS,
+                                 pinned=["compare"])
+            for e in (e for e in log if e[0] == "start" and e[3] == "compare"):
                 self.assertEqual(e[11], 0)
             for running in overlapping(log):
-                self.assertLessEqual(sum(1 for e in running if e[3] == "expenses"), 1)
+                self.assertLessEqual(sum(1 for e in running if e[3] == "compare"), 1)
 
     def test_each_cell_keeps_its_round_order(self):
         for seed in range(10):
@@ -152,7 +152,7 @@ class SchedulerTest(unittest.TestCase):
             self.assertGreaterEqual(b - a, scheduler.SETTLE_S)
 
     def test_retried_runs_run_again_and_rate_limits_drop_to_one_lane(self):
-        limited = "grid--ardia-codex--r1"
+        limited = "triage--ardia-codex--r1"
         s, items, log = simulate(5, retry_ids=["shop--ardia-claude--r1"], rate_limit_ids=[limited])
         starts = [e[2] for e in log if e[0] == "start"]
         self.assertEqual(starts.count("shop--ardia-claude--r1"), 2)

@@ -12,7 +12,7 @@ import servers
 import tunnel
 from procs import http, kill_group, read_json, read_jsonl, sh, spawn_agent, write_json
 
-DEFAULTS = {"cli": "dev", "model": "gpt-6.1-terra", "effort": "medium", "cloud_country": "us",
+DEFAULTS = {"cli": "dev", "cloud_country": "us",
             "reach_line": "The `ardia` command already reaches the browser for this task; don't pass `--port` or `--ws`."}
 
 
@@ -60,7 +60,8 @@ def run(task_id, agent, run_id, results_dir, overrides=None, contender=None, on_
     if agent not in ardia_side.MODELS:
         raise SystemExit("agent must be claude or codex")
     local_task = registry.task(task_id, int(opts.get("port_offset") or 0))
-    model, effort = opts["model"], opts["effort"]
+    model = opts.get("model") or ardia_side.MODELS[agent][0]
+    effort = opts.get("effort") or ardia_side.MODELS[agent][1]
     deadline = int(opts.get("deadline_s") or local_task["deadline_s"])
     results_dir = Path(results_dir)
     runs_dir = results_dir / "runs"

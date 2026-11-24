@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>New purchase request · Northwind Procurement</title>
+<link rel="stylesheet" href="/procure.css">
+</head>
+<body>
+<aside class="rail">
+  <div class="org"><span class="org-mark">N</span><div><strong>Northwind</strong><small>Procurement</small></div></div>
+  <nav>
+    <a href="/new" data-view="new">＋ New request</a>
+    <a href="/requests" data-view="requests">My requests</a>
+    <a class="off" aria-disabled="true">Approvals</a>
+    <a class="off" aria-disabled="true">Vendors</a>
+    <a class="off" aria-disabled="true">Policies</a>
+  </nav>
+  <div class="who"><span class="avatar">SR</span><div><strong>Sam Rivera</strong><small>Operations · Cost center 4120</small></div></div>
+</aside>
+<main id="view"></main>
+<template id="form-template">
+  <header class="page-head"><div><p class="crumb">Requests / New</p><h1>New software purchase request</h1></div><span class="step">Draft</span></header>
+  <div class="policy">Software over $5,000 a year needs a security review. Fill in the vendor's SOC 2 Type II report date and data residency so Finance can route it without a call. Vendor's site for reference: <a href="http://127.0.0.1:8891/" target="_blank" rel="noopener">Vantage</a>.</div>
+  <form id="request-form" novalidate>
+    <section class="card"><h2>Vendor</h2>
+      <div class="grid2">
+        <label>Vendor name<input name="vendor" autocomplete="off" placeholder="Company name"><span class="err" data-err="vendor"></span></label>
+        <label>Vendor website<input name="website" autocomplete="off" placeholder="https://"><span class="err" data-err="website"></span></label>
+      </div>
+    </section>
+    <section class="card"><h2>Plan and cost</h2>
+      <div class="grid3">
+        <label>Plan tier<select name="tier"><option value="">Select…</option><option>Starter</option><option>Team</option><option>Business</option><option>Enterprise</option></select><span class="err" data-err="tier"></span></label>
+        <div class="field"><span class="label">Billing cycle</span><div class="seg" role="radiogroup" aria-label="Billing cycle">
+          <label><input type="radio" name="cycle" value="monthly"><span>Monthly</span></label><label><input type="radio" name="cycle" value="annual"><span>Annual</span></label></div><span class="err" data-err="cycle"></span></div>
+        <label>Seats<input name="seats" inputmode="numeric" placeholder="0"><span class="err" data-err="seats"></span></label>
+      </div>
+      <label>Annual total (USD)<span class="hint">Total cost for one year at the plan, cycle and seats above, before tax</span><div class="money"><span>$</span><input name="annual_total" inputmode="decimal" placeholder="0.00"></div><span class="err" data-err="annual_total"></span></label>
+    </section>
+    <section class="card"><h2>Security review</h2>
+      <div class="grid2">
+        <label>SOC 2 Type II report date<span class="hint">The date the report was issued</span><input name="soc2_date" type="date"><span class="err" data-err="soc2_date"></span></label>
+        <div class="field"><span class="label">EU data residency available on this plan?</span><div class="seg" role="radiogroup" aria-label="EU data residency">
+          <label><input type="radio" name="eu_residency" value="yes"><span>Yes</span></label><label><input type="radio" name="eu_residency" value="no"><span>No</span></label></div><span class="err" data-err="eu_residency"></span></div>
+      </div>
+      <label id="region-field" hidden>EU region<span class="hint">City and region code, as the vendor lists it today</span><input name="eu_region" autocomplete="off" placeholder="e.g. Paris (eu-west-3)"><span class="err" data-err="eu_region"></span></label>
+    </section>
+    <section class="card"><h2>Justification <span class="opt">optional</span></h2><textarea name="justification" placeholder="Why does the team need this?"></textarea></section>
+    <div class="actions"><p class="form-error" id="form-error" hidden></p><button class="btn ghost" type="reset">Clear</button><button class="btn primary" type="submit">Submit for approval</button></div>
+  </form>
+</template>
+<script type="module" src="/procure.js"></script>
+</body>
+</html>

@@ -3,6 +3,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import statistics
 import subprocess
 import threading
@@ -26,8 +27,10 @@ from procs import kill_agents, read_json, sh, write_json
 from scheduler import LANE_PORT_STRIDE, Scheduler
 
 
-ASIDE_DRIVER = Path(os.environ.get("BENCH_ASIDE_DRIVER", Path.home() / "ardia-scratch/aside-bench/bin/aside_run.mjs"))
+ASIDE_DRIVER_CANDIDATES = (Path.home() / "ardia-scratch/bench-others/aside-driver/aside_run.mjs",
+                           Path.home() / "ardia-scratch/aside-bench/bin/aside_run.mjs")
 ASIDE_GRACE_S = 180
+HOST = socket.gethostname().split(".")[0]
 DEFAULT_MAX_LANES = 6
 EPHEMERAL_PORTS_FROM = 49152
 
@@ -86,12 +89,25 @@ SAMPLE_S = 3.0
 STALL_S = 900.0
 
 
+def aside_driver():
+    if os.environ.get("BENCH_ASIDE_DRIVER"):
+        return Path(os.environ["BENCH_ASIDE_DRIVER"]).expanduser()
+    found = next((p for p in ASIDE_DRIVER_CANDIDATES if p.exists()), None)
+    if not found:
+        raise SystemExit(f"no Aside driver at {' or '.join(map(str, ASIDE_DRIVER_CANDIDATES))}; set BENCH_ASIDE_DRIVER")
+    return found
+
+
+def route_keys(plan, contender):
+    return {k: contender.get(k, plan.get(k)) for k in ardia_side.CLAUDE_ROUTE_KEYS}
+
+
 def run_aside(item, results_dir, on_start=None):
     c, task = item["contender"], registry.task(item["task"])
     servers.start(task)
     raw_dir = Path(results_dir) / "aside-raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
-    cmd = ["node", str(ASIDE_DRIVER), item["run_id"], "--task", item["task"], "--registry", str(registry.REGISTRY),
+    cmd = [opencode_side.node_bin(), str(aside_driver()), item["run_id"], "--task", item["task"], "--registry", str(registry.REGISTRY),
            "--out", str(raw_dir), "--model", c.get("model", "GPT-6 Astra"),
            "--visibility", c.get("visibility", "covered")]
     if c.get("effort"):
@@ -113,7 +129,7 @@ def run_aside(item, results_dir, on_start=None):
 
 def restore_aside_memory():
     try:
-        r = subprocess.run(["node", str(ASIDE_DRIVER), "--restore-memory"], capture_output=True, text=True, timeout=180)
+        r = subprocess.run([opencode_side.node_bin(), str(aside_driver()), "--restore-memory"], capture_output=True, text=True, timeout=180)
         ardia_side.log(f"aside --restore-memory exited {r.returncode}")
     except Exception as e:
         ardia_side.log(f"aside --restore-memory failed: {e}")
@@ -138,7 +154,8 @@ def memory_pressure_level():
 
 
 def lane_overrides(plan, contender, lane, port_offset=0):
-    keys = ("app", "port", "cli", "ardia_test", "humanize", "keep_notes", "model", "effort")
+    keys = ("app", "port", "cli", "ardia_test", "humanize", "keep_notes", "model", "effort",
+            *ardia_side.CLAUDE_ROUTE_KEYS)
     o = {k: contender.get(k, plan.get(k)) for k in keys}
     o["port_offset"] = port_offset
     base_app = Path(o.get("app") or ardia_side.DEFAULTS["app"]).expanduser()
@@ -181,25 +198,26 @@ def rate_limit_reason(rec):
 def opencode_overrides(plan, contender, lane, port_offset=0):
     keys = ("model", "effort", "browse_entry", "extension", "chrome", "cdp_port", "relay_port", "reach_line", "browser",
             "app")
-    return dict({k: contender.get(k) for k in keys}, lane=f"lane{lane.index}", lane_index=lane.index,
-                port_offset=port_offset)
+    return dict({k: contender.get(k) for k in keys}, **route_keys(plan, contender), lane=f"lane{lane.index}",
+                lane_index=lane.index, port_offset=port_offset)
 
 
 def browseruse_overrides(plan, contender, lane, port_offset=0):
-    keys = ("model", "effort", "venv", "chrome", "cdp_port", "reach_line", "tool")
-    return dict({k: contender.get(k) for k in keys}, lane=f"lane{lane.index}", lane_index=lane.index,
-                port_offset=port_offset)
+    keys = ("model", "effort", "venv", "chrome", "cdp_port", "reach_line", "tool", "browser", "cloud_country")
+    return dict({k: contender.get(k) for k in keys}, **route_keys(plan, contender), lane=f"lane{lane.index}",
+                lane_index=lane.index, port_offset=port_offset)
 
 
 def betterwright_overrides(plan, contender, lane, port_offset=0):
     keys = ("model", "effort", "bin", "chromium_root", "reach_line")
-    return dict({k: contender.get(k) for k in keys}, lane=f"lane{lane.index}", port_offset=port_offset)
+    return dict({k: contender.get(k) for k in keys}, **route_keys(plan, contender), lane=f"lane{lane.index}",
+                port_offset=port_offset)
 
 
 def browserharness_overrides(plan, contender, lane, port_offset=0):
     keys = ("browser", "model", "effort", "venv", "repo", "chrome", "app", "cdp_port", "cloud_country")
-    return dict({k: contender.get(k) for k in keys}, lane=f"lane{lane.index}", lane_index=lane.index,
-                port_offset=port_offset)
+    return dict({k: contender.get(k) for k in keys}, **route_keys(plan, contender), lane=f"lane{lane.index}",
+                lane_index=lane.index, port_offset=port_offset)
 
 
 def browseragent_overrides(plan, contender, lane, port_offset=0):
@@ -209,7 +227,7 @@ def browseragent_overrides(plan, contender, lane, port_offset=0):
 
 
 def ardiacloud_overrides(plan, contender, lane, port_offset=0):
-    keys = ("cli", "model", "effort", "cloud_country", "reach_line")
+    keys = ("cli", "model", "effort", "cloud_country", "reach_line", *ardia_side.CLAUDE_ROUTE_KEYS)
     o = {k: contender.get(k, plan.get(k)) for k in keys}
     return dict(o, lane=f"lane{lane.index}", port_offset=port_offset)
 
@@ -338,7 +356,7 @@ class Executor:
             concurrent = sorted(rid for rid, (a, b) in self.intervals.items()
                                 if rid != run_id and a < t1 and (b is None or b > t0))
             self.sched.finish(run_id, t1, "retry" if rec.get("harness_error") else "done", rate_limited=bool(reason))
-            rec.update({"lane": lane.id, "port_offset": item.get("port_offset", 0), "admitted": mode,
+            rec.update({"host": HOST, "lane": lane.id, "port_offset": item.get("port_offset", 0), "admitted": mode,
                         "lanes_active": lanes_active,
                         "memory_used_pct_at_start": used, "load_1m_at_start": load, "concurrent_runs": concurrent,
                         "run_started_epoch": round(t0, 3), "run_ended_epoch": round(t1, 3)})
@@ -482,7 +500,7 @@ def reserved_ports(plan, max_lanes):
         if c["kind"] == "opencode":
             bases += [("OpenCode CDP", int(c.get("cdp_port") or opencode_side.DEFAULTS["cdp_port"])),
                       ("OpenCode relay", int(c.get("relay_port") or opencode_side.DEFAULTS["relay_port"]))]
-        if c["kind"] == "browseruse":
+        if c["kind"] == "browseruse" and c.get("browser") != "cloud":
             bases.append(("Browser Use CDP", int(c.get("cdp_port") or browseruse_side.DEFAULTS["cdp_port"])))
         if c["kind"] == "browserharness" and c.get("browser") != "cloud":
             bases.append(("Browser Harness CDP", int(c.get("cdp_port") or browserharness_side.DEFAULTS["cdp_port"])))
@@ -532,8 +550,10 @@ def pin_offsetless_tasks(plan):
     return pinned
 
 
-def execute(plan_path, results_dir=None, dry_run=False, max_lanes=None):
+def execute(plan_path, results_dir=None, dry_run=False, max_lanes=None, app=None):
     plan = json.loads(Path(plan_path).read_text())
+    if app:
+        plan["app"] = app
     max_lanes = resolve_max_lanes(plan, max_lanes)
     results_dir = Path(results_dir or plan.get("results") or
                        registry.HOME / "results" / datetime.datetime.now().strftime("%Y%m%d-%H%M%S")).expanduser()

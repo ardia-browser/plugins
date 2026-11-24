@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signal Daily</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="masthead">
+  <div class="masthead-inner">
+    <a class="brand" href="/" data-link><span class="brand-mark">S</span>Signal<span class="brand-thin">Daily</span></a>
+    <nav class="sections" aria-label="Sections">
+      <a href="/section/reviews" data-link>Reviews</a>
+      <a href="/section/guides" data-link>Guides</a>
+      <a href="/section/features" data-link>Features</a>
+    </nav>
+    <div class="masthead-tools">
+      <label class="search"><span class="visually-hidden">Search articles</span><input id="search" type="search" placeholder="Search Signal" autocomplete="off"></label>
+      <div class="account">
+        <button id="account-button" class="avatar" aria-haspopup="menu" aria-expanded="false" title="My Signal">SR</button>
+        <div id="account-menu" class="menu" role="menu" hidden>
+          <div class="menu-head"><strong>Sam Rivera</strong><span>sam.rivera@fastmail.test</span></div>
+          <a role="menuitem" href="/reading-list" data-link>Reading list <span id="reading-count" class="pill">0</span></a>
+          <a role="menuitem" href="/notes" data-link>Research notes</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="search-results" class="search-results" hidden></div>
+</header>
+<main id="view" tabindex="-1"></main>
+<footer class="site-footer">
+  <p>&copy; 2026 Signal Media. Independent reviews since 2011. We may earn a commission when you buy through links on our site.</p>
+</footer>
+<div id="newsletter" class="overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="newsletter-title">
+    <button class="modal-close" id="newsletter-close" aria-label="Close">&times;</button>
+    <div class="modal-art"></div>
+    <h2 id="newsletter-title">Get The Signal in your inbox</h2>
+    <p>Our editors' five best reads, every weekday at 7 AM. Join 480,000 readers.</p>
+    <form id="newsletter-form" class="inline-form">
+      <input id="newsletter-email" type="email" placeholder="you@example.com" aria-label="Email address">
+      <button class="btn primary" type="submit">Subscribe</button>
+    </form>
+    <p id="newsletter-error" class="form-error" hidden></p>
+    <button class="link-button" id="newsletter-dismiss">No thanks, maybe later</button>
+  </div>
+</div>
+<div id="consent" class="consent" hidden>
+  <div class="consent-inner">
+    <div class="consent-copy">
+      <h2>We value your privacy</h2>
+      <p>Signal Daily and our 214 partners use cookies to measure audiences, personalise ads and improve the site. You can accept, reject non-essential cookies, or choose per purpose.</p>
+      <div id="consent-prefs" class="consent-prefs" hidden>
+        <label><input type="checkbox" checked disabled> Strictly necessary</label>
+        <label><input type="checkbox" id="pref-analytics"> Audience measurement</label>
+        <label><input type="checkbox" id="pref-ads"> Personalised advertising</label>
+        <button class="btn" id="consent-save">Save choices</button>
+      </div>
+    </div>
+    <div class="consent-actions">
+      <button class="btn primary" id="consent-accept">Accept all</button>
+      <button class="btn" id="consent-reject">Reject non-essential</button>
+      <button class="link-button" id="consent-manage">Manage preferences</button>
+    </div>
+  </div>
+</div>
+<div id="toast" class="toast" role="status" hidden></div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

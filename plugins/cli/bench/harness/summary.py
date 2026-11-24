@@ -79,8 +79,8 @@ def serial_vs_parallel(runs):
     return {"serial": brief(serial), "parallel": brief(parallel)} if serial and parallel else None
 
 
-def parallel_block(results_dir, runs):
-    samples = read_jsonl(Path(results_dir) / "memory.jsonl")
+def parallel_block(results_dirs, runs):
+    samples = [s for d in results_dirs for s in read_jsonl(Path(d) / "memory.jsonl")]
     sessions = {}
     for s in samples:
         sessions.setdefault(s.get("session"), []).append(s)
@@ -99,14 +99,51 @@ def parallel_block(results_dir, runs):
     }
 
 
-def build(results_dir):
-    results_dir = Path(results_dir)
-    plan = read_json(results_dir / "plan.json", {})
-    runs = [r for r in (read_json(p) for p in sorted((results_dir / "runs").glob("*.json"))) if r]
+def as_dirs(results_dirs):
+    if isinstance(results_dirs, (str, Path)):
+        results_dirs = [results_dirs]
+    return [Path(d).expanduser() for d in results_dirs]
+
+
+def better_run(a, b):
+    if bool(a.get("harness_error")) != bool(b.get("harness_error")):
+        return b if a.get("harness_error") else a
+    return max(a, b, key=lambda r: r.get("run_ended_epoch") or 0)
+
+
+def merged_runs(dirs):
+    runs = {}
+    for d in dirs:
+        for path in sorted((d / "runs").glob("*.json")):
+            r = read_json(path)
+            if r and r.get("run_id") and r.get("task") and r.get("contender"):
+                runs[r["run_id"]] = better_run(runs[r["run_id"]], r) if r["run_id"] in runs else r
+    return sorted(runs.values(), key=lambda r: r["run_id"])
+
+
+def planned_tasks(plan, known):
+    selection = plan.get("tasks", "all")
+    if selection in ("all", ["all"], None):
+        return list(known)
+    return [selection] if isinstance(selection, str) else list(selection)
+
+
+def build(results_dirs):
+    dirs = as_dirs(results_dirs)
+    plans = [p for p in (read_json(d / "plan.json", {}) for d in dirs) if p]
+    runs = merged_runs(dirs)
     task_meta = {t["id"]: t for t in registry.load()}
-    plan_contenders = plan.get("contenders") or []
-    contender_ids = [c["id"] for c in plan_contenders] or sorted({r["contender"] for r in runs})
-    task_ids = [t for t in registry.task_ids(plan.get("tasks", "all"))] if plan else sorted({r["task"] for r in runs})
+    plan_contenders = []
+    for c in (c for p in plans for c in p.get("contenders") or []):
+        if all(c["id"] != x["id"] for x in plan_contenders):
+            plan_contenders.append(c)
+    contender_ids = list(dict.fromkeys([c["id"] for c in plan_contenders] + sorted({r["contender"] for r in runs})))
+    task_ids = list(dict.fromkeys([t for p in plans for t in planned_tasks(p, task_meta)] +
+                                  [t for t in task_meta if any(r["task"] == t for r in runs)] +
+                                  sorted({r["task"] for r in runs})))
+    task_ids = [t for t in task_ids if t in task_meta or any(r["task"] == t for r in runs)]
+    known_contenders = {c["id"] for c in plan_contenders}
+    plan_contenders += [{"id": c} for c in contender_ids if c not in known_contenders]
     by = {}
     for r in runs:
         by.setdefault((r["task"], r["contender"]), []).append(r)
@@ -120,7 +157,10 @@ def build(results_dir):
         per_task = [x for x in cells if x["contender"] == c]
         overall.append(dict(contender=c, tasks=len(per_task),
                             tasks_all_passed=sum(1 for x in per_task if x["runs"] and x["passes"] == x["runs"]),
+                            hosts=sorted({r["host"] for r in mine if r.get("host")}),
                             **{k: v for k, v in cell(mine).items() if k != "run_ids"}))
+    plan = plans[0] if len(plans) == 1 else {"name": " + ".join(dict.fromkeys(str(p.get("name")) for p in plans)) or None,
+                                             "repeats": max((p.get("repeats") or 0 for p in plans), default=None)}
     return {
         "schema": 1,
         "generated_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -128,12 +168,13 @@ def build(results_dir):
         "repeats": plan.get("repeats"),
         "tasks": [{"id": t, "title": task_meta.get(t, {}).get("title", t),
                    "deadline_s": task_meta.get(t, {}).get("deadline_s")} for t in task_ids],
+        "sources": [str(d) for d in dirs],
         "contenders": [{"id": c.get("id"), "label": c.get("label", c.get("id")), "side": c.get("kind"),
-                        "agent": c.get("agent"), "model": c.get("model"), "effort": c.get("effort")}
-                       for c in plan_contenders] or [{"id": c} for c in contender_ids],
+                        "agent": c.get("agent"), "model": c.get("model"), "effort": c.get("effort"),
+                        "browser": c.get("browser")} for c in plan_contenders],
         "cells": cells,
         "overall": overall,
-        "parallel": parallel_block(results_dir, runs),
+        "parallel": parallel_block(dirs, runs),
         "metrics": {
             "pass_rate": "passing runs / runs (harness errors excluded)",
             "median_time_s": "median wall time of the agent, all runs",

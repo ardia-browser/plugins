@@ -33,6 +33,11 @@ LOCK = threading.Lock()
 STATE = {}
 
 
+CURRENT_TRUE = ' aria-current="true"'
+CURRENT_TRUE_ON = ' aria-current="true" class="on"'
+CURRENT_PAGE_ON = ' aria-current="page" class="on"'
+
+
 def reset_state():
     with LOCK:
         STATE.update(submissions=[], rejected=0, errors_shown=0, reset_at_ms=now_ms())
@@ -199,7 +204,7 @@ def layout(title, v, body, current=None, q=""):
     other = [x for x in VERSIONS if x != v]
     switch_links = "".join(
         f'<li><a href="/{x}/{current if current and current in DOCS[x]["pages"] else ""}"'
-        f'{" aria-current=\"true\"" if x == v else ""}>{x}{" (latest)" if x == LATEST else " (maintenance)"}</a></li>'
+        f'{CURRENT_TRUE if x == v else ""}>{x}{" (latest)" if x == LATEST else " (maintenance)"}</a></li>'
         for x in VERSIONS)
     banner = ""
     if v != LATEST:
@@ -313,7 +318,7 @@ def search_html(q, version, page_no):
         return "/search?" + urlencode({k: val for k, val in params.items() if val not in ("", None, 1) or k == "q"})
 
     filters = "".join(
-        f'<a href="{link(v=val, page=1)}"{" aria-current=\"true\" class=\"on\"" if version == val else ""}>{label} '
+        f'<a href="{link(v=val, page=1)}"{CURRENT_TRUE_ON if version == val else ""}>{label} '
         f'<span class="n">{sum(1 for h in all_hits if val in ("", h[0]))}</span></a>'
         for val, label in (("", "All versions"), ("v3", "v3"), ("v2", "v2")))
     items = "".join(
@@ -322,7 +327,7 @@ def search_html(q, version, page_no):
         f'<p>{snippet(p["text"], terms)}</p></li>' for v, p in shown)
     pager = ""
     if pages > 1:
-        nums = "".join(f'<a href="{link(page=n)}"{" aria-current=\"page\" class=\"on\"" if n == page_no else ""}>{n}</a>' for n in range(1, pages + 1))
+        nums = "".join(f'<a href="{link(page=n)}"{CURRENT_PAGE_ON if n == page_no else ""}>{n}</a>' for n in range(1, pages + 1))
         prev = f'<a href="{link(page=page_no - 1)}" rel="prev">Previous</a>' if page_no > 1 else '<span class="disabled">Previous</span>'
         nxt = f'<a href="{link(page=page_no + 1)}" rel="next">Next</a>' if page_no < pages else '<span class="disabled">Next</span>'
         pager = f'<nav class="search-pager" aria-label="Search results pages">{prev}{nums}{nxt}</nav>'

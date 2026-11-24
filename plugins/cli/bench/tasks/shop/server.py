@@ -26,6 +26,9 @@ LOCK = threading.Lock()
 STATE = {}
 
 
+CURRENT_PAGE = ' aria-current="page"'
+
+
 def reset_state():
     STATE.update(cart=[], coupon=None, orders=[], flash=None, coupon_attempts=0, coupon_rejections=0,
                  checkout_attempts=0, checkout_errors=0, reset_at_ms=now_ms())
@@ -113,7 +116,7 @@ def layout(title, body, active=None, flash=None):
         count = sum(q for _, q in STATE["cart"])
         flash = flash or STATE["flash"]
         STATE["flash"] = None
-    nav = "".join(f'<a href="/c/{slug}"{" aria-current=\"page\"" if slug == active else ""}>{escape(name)}</a>' for slug, name, _ in CATEGORIES)
+    nav = "".join(f'<a href="/c/{slug}"{CURRENT_PAGE if slug == active else ""}>{escape(name)}</a>' for slug, name, _ in CATEGORIES)
     flash_html = f'<div class="flash {flash[0]}" role="status">{flash[1]}</div>' if flash else ""
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -143,7 +146,7 @@ def category_page(slug, q):
     blurb = next(b for s, _, b in CATEGORIES if s == slug)
     options = "".join(f'<option value="{v}"{" selected" if v == sort else ""}>{t}</option>' for v, t in SORTS)
     link = lambda n: f"/c/{slug}?sort={sort}&amp;page={n}"
-    pager = "".join(f'<li><a href="{link(n)}"{" aria-current=\"page\"" if n == page else ""}>{n}</a></li>' for n in range(1, pages + 1))
+    pager = "".join(f'<li><a href="{link(n)}"{CURRENT_PAGE if n == page else ""}>{n}</a></li>' for n in range(1, pages + 1))
     prev_link = f'<li><a href="{link(page - 1)}" rel="prev">‹ Previous</a></li>' if page > 1 else ""
     next_link = f'<li><a href="{link(page + 1)}" rel="next">Next ›</a></li>' if page < pages else ""
     banner = ""
