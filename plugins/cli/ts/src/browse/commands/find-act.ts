@@ -57,7 +57,7 @@ export const CONTAINERS_BY_TEXT = `(wanted) => {
   return innermost(lifted).slice(0, 20);
 }`;
 
-export const SCOPED_MATCH = `(root, kind, value, exact, role, ...extraRoots) => {
+export const SCOPED_MATCH = `(root, kind, value, exact, role, pos, ...extraRoots) => {
   ${WALKER}
   const scope = root || document.documentElement;
   const seen = new Set();
@@ -107,12 +107,17 @@ export const SCOPED_MATCH = `(root, kind, value, exact, role, ...extraRoots) => 
     } catch (error) {
       return null;
     }
-    return all.filter((el) => el.matches(value)).slice(0, 50);
+    const matched = all.filter((el) => el.matches(value));
+    if (typeof pos === "number") {
+      const picked = matched.at(pos);
+      return picked ? [picked] : [];
+    }
+    return matched.slice(0, 50);
   }
   if (kind === "role") {
     let selector = ROLE_SELECTORS[role];
     if (!selector) selector = "[role=" + JSON.stringify(String(role)) + "]";
-    return pick(all.filter((el) => el.matches(selector) && visible(el)), fields).slice(0, 50);
+    return pick(all.filter((el) => el.matches(selector) && visible(el)), (el) => [shown(el)]).slice(0, 50);
   }
   if (kind === "text") {
     const shownOnly = all.filter((el) => visible(el));
@@ -290,9 +295,10 @@ async function closedShadowRootsIn(page: Page, container: Element): Promise<Elem
   return resolved.filter((element): element is Element => element !== null);
 }
 
-export async function scopedMatches(page: Page, frame: string, root: Element | null, kind: string, value: string, exact: boolean, role = ""): Promise<Element[] | null> {
+export async function scopedMatches(page: Page, frame: string, root: Element | null, kind: string, value: string, exact: boolean, role = "", position: number | null = null): Promise<Element[] | null> {
   const extraRoots = root === null ? [] : await closedShadowRootsIn(page, root);
-  const remote = await page.call(SCOPED_MATCH, [root, kind, value, exact, role, ...extraRoots], { frame: root?.frame ?? frame, byValue: false, read: true });
+  const args = position === null && extraRoots.length === 0 ? [root, kind, value, exact, role] : [root, kind, value, exact, role, position, ...extraRoots];
+  const remote = await page.call(SCOPED_MATCH, args, { frame: root?.frame ?? frame, byValue: false, read: true });
   const found = remote !== null && typeof remote === "object" ? (remote as Record<string, unknown>) : {};
   if (found["subtype"] === "null") return null;
   return page.elementsFrom(remote, root?.frame ?? frame, `${kind}=${value}`, 50);
@@ -307,6 +313,8 @@ export async function listAmbiguous(ctx: Ctx, page: Page, matches: Element[], ro
   return listed;
 }
 
+const FIELD_ACTIONS = new Set(["fill", "type", "select", "check", "uncheck"]);
+
 export async function resolveWithin(ctx: Ctx, selector: string, within: string): Promise<[Page, Element]> {
   const scope = await scopeOf(ctx, within);
   const { page, container } = scope;
@@ -318,6 +326,9 @@ export async function resolveWithin(ctx: Ctx, selector: string, within: string):
     return [refPage, element];
   }
   let matches = CSS_SHAPED.test(selector) ? await scopedMatches(page, container.frame, container, "css", selector, false) : null;
+  if ((matches === null || matches.length === 0) && FIELD_ACTIONS.has(ctx.command)) {
+    matches = await scopedMatches(page, container.frame, container, "label", selector, false);
+  }
   if (matches === null || matches.length === 0) matches = await scopedMatches(page, container.frame, container, "text", selector, false);
   const found = matches ?? [];
   if (found.length === 0) {

@@ -70,8 +70,9 @@ export class FrameReader {
   private detect(): boolean {
     let at = 0;
     while (at < this.pending.length && LEADING_SPACE.has(this.pending[at] as number)) at += 1;
-    if (at === this.pending.length) return false;
-    const head = this.pending.subarray(at, at + 16).toString("latin1");
+    if (at > 0) this.pending = at === this.pending.length ? Buffer.alloc(0) : this.pending.subarray(at);
+    if (this.pending.length === 0) return false;
+    const head = this.pending.subarray(0, 16).toString("latin1");
     if (HEADER_START.test(head)) this.framing = "content-length";
     else if (head.length < HEADER_PREFIX.length && HEADER_PREFIX.startsWith(head.toLowerCase())) return false;
     else this.framing = "ndjson";
@@ -116,21 +117,23 @@ export class FrameReader {
   private nextSized(): Frame | undefined {
     let start = 0;
     while (start < this.pending.length && LEADING_SPACE.has(this.pending[start] as number)) start += 1;
-    const crlf = this.pending.indexOf(HEADER_END, start);
-    const lf = this.pending.indexOf(BARE_HEADER_END, start);
+    if (start > 0) this.pending = start === this.pending.length ? Buffer.alloc(0) : this.pending.subarray(start);
+    if (this.pending.length === 0) return undefined;
+    const crlf = this.pending.indexOf(HEADER_END, 0);
+    const lf = this.pending.indexOf(BARE_HEADER_END, 0);
     const [end, gap] = crlf >= 0 && (lf < 0 || crlf <= lf) ? [crlf, HEADER_END.length] : lf >= 0 ? [lf, BARE_HEADER_END.length] : [-1, 0];
     if (end < 0) {
-      if (this.pending.length - start > MAX_HEADER_BYTES + HEADER_END.length - 1) {
+      if (this.pending.length > MAX_HEADER_BYTES + HEADER_END.length - 1) {
         this.pending = Buffer.alloc(0);
         return { kind: "invalid", reason: "header too large" };
       }
       return undefined;
     }
-    if (end - start > MAX_HEADER_BYTES) {
+    if (end > MAX_HEADER_BYTES) {
       this.pending = this.pending.subarray(end + gap);
       return { kind: "invalid", reason: "header too large" };
     }
-    const header = this.pending.subarray(start, end).toString("latin1");
+    const header = this.pending.subarray(0, end).toString("latin1");
     const length = CONTENT_LENGTH.exec(header);
     if (length === null) {
       this.pending = this.pending.subarray(end + gap);

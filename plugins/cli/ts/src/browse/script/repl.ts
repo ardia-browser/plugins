@@ -26,7 +26,7 @@ const CONTINUATION_PUNCT = new Set([
 const CONTINUATION_WORDS = new Set(["in", "instanceof"]);
 
 const KEYWORDS_BEFORE_EXPRESSION = new Set([
-  "return", "typeof", "instanceof", "in", "of", "new", "delete", "void", "throw", "case", "do", "else", "yield", "await",
+  "return", "typeof", "instanceof", "in", "new", "delete", "void", "throw", "case", "do", "else", "yield", "await",
 ]);
 const STATEMENT_WORDS = new Set([
   "const", "let", "var", "function", "class", "return", "if", "for", "while", "do", "try", "switch", "throw", "break", "continue", "async",
@@ -35,10 +35,13 @@ const IDENTIFIER_START = /[\p{L}\p{Nl}$_]/u;
 const IDENTIFIER_PART = /[\p{L}\p{Nl}\p{Mn}\p{Mc}\p{Nd}\p{Pc}$_‌‍]/u;
 const PUNCTUATORS = [">>>=", "...", "===", "!==", "**=", "<<=", ">>=", ">>>", "&&=", "||=", "??=", "=>", "==", "!=", "<=", ">=", "&&", "||", "??", "?.", "**", "++", "--", "+=", "-=", "*=", "%=", "&=", "|=", "^=", "<<", ">>"];
 
-function endsExpression(token: Token | undefined): boolean {
+function endsExpression(token: Token | undefined, beforePrevious?: Token | undefined): boolean {
   if (token === undefined) return false;
   if (token.kind === "num" || token.kind === "str" || token.kind === "tpl" || token.kind === "re") return true;
-  if (token.kind === "id") return !KEYWORDS_BEFORE_EXPRESSION.has(token.value);
+  if (token.kind === "id") {
+    if (beforePrevious !== undefined && beforePrevious.kind === "punct" && (beforePrevious.value === "." || beforePrevious.value === "?.")) return true;
+    return !KEYWORDS_BEFORE_EXPRESSION.has(token.value);
+  }
   return token.value === ")" || token.value === "]" || token.value === "}" || token.value === "++" || token.value === "--";
 }
 
@@ -64,11 +67,13 @@ function skipBraces(source: string, start: number): number {
   let depth = 1;
   let index = start;
   let previous: Token | undefined;
+  let beforePrevious: Token | undefined;
   while (index < source.length && depth > 0) {
-    const [token, next] = readToken(source, index, previous);
+    const [token, next] = readToken(source, index, previous, beforePrevious);
     if (token === null) return next;
     if (token.kind === "punct" && token.value === "{") depth += 1;
     else if (token.kind === "punct" && token.value === "}") depth -= 1;
+    beforePrevious = previous;
     previous = token;
     index = next;
   }
@@ -110,7 +115,7 @@ function skipRegex(source: string, start: number): number {
   return index;
 }
 
-function readToken(source: string, start: number, previous: Token | undefined): [Token | null, number] {
+function readToken(source: string, start: number, previous: Token | undefined, beforePrevious?: Token | undefined): [Token | null, number] {
   let index = start;
   let newline = false;
   while (index < source.length) {
@@ -148,7 +153,7 @@ function readToken(source: string, start: number, previous: Token | undefined): 
     while (end < source.length && IDENTIFIER_PART.test(source[end] as string)) end += 1;
     return [{ kind: "id", value: source.slice(index, end), newline, start: index, end }, end];
   }
-  if (char === "/" && !(endsExpression(previous) && !(newline && previous?.kind === "punct" && previous.value === "}"))) {
+  if (char === "/" && !(endsExpression(previous, beforePrevious) && !(newline && previous?.kind === "punct" && previous.value === "}"))) {
     const end = skipRegex(source, index);
     return [{ kind: "re", value: source.slice(index, end), newline, start: index, end }, end];
   }
@@ -162,7 +167,7 @@ export function tokenize(source: string): Token[] {
   const tokens: Token[] = [];
   let index = 0;
   for (;;) {
-    const [token, next] = readToken(source, index, tokens[tokens.length - 1]);
+    const [token, next] = readToken(source, index, tokens[tokens.length - 1], tokens[tokens.length - 2]);
     if (token === null) return tokens;
     tokens.push(token);
     index = next;
@@ -422,9 +427,13 @@ function hoistTopLevelBindings(source: string): string {
           continue;
         }
         anyHoisted = true;
-        const assign = eq < 0 ? `${raw} = undefined` : isPunct(tokens[a], "{") ? `(${raw})` : raw;
         const unique = JSON.stringify([...new Set(partNames)]);
-        chunks.push(`void (${REPL_INIT}(${unique}), ${assign});`);
+        if (eq < 0 && token.value === "var") {
+          chunks.push(`void (${REPL_INIT}(${unique}));`);
+        } else {
+          const assign = eq < 0 ? `${raw} = undefined` : isPunct(tokens[a], "{") ? `(${raw})` : raw;
+          chunks.push(`void (${REPL_INIT}(${unique}), ${assign});`);
+        }
       }
       if (ok && anyHoisted) {
         const endOff = (tokens[end - 1] as Token).end;

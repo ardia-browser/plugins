@@ -784,15 +784,23 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
       [result, error] = await runOne(ctx, command, lineOptions);
     }
     if (healNav && error instanceof StaleRef && error.code === SUPERSEDED && heals.length < MAX_HEALS) {
-      const fresh = await navSuccessor(ctx.state, error, ran, origins, liveAtStart);
-      const swapped = fresh === null ? null : rebound(command, error.staleRef, fresh.id);
-      if (fresh !== null && swapped !== null) {
-        heals.push(`↻ @${error.staleRef}→@${fresh.id} (the page reloaded; same ${fresh.role} "${fresh.name}" on the same site)`);
-        command = swapped;
-        add("batch_refs_healed");
-        flag("followed_ref_after_reload", true);
-        [result, error] = await runOne(ctx, command, lineOptions);
-      } else flag("batch_ref_not_followed", true);
+      let fresh: Ref | null = null;
+      try {
+        fresh = await navSuccessor(ctx.state, error, ran, origins, liveAtStart);
+      } catch (caught) {
+        if (caught instanceof ConnectionLost) error = caught;
+        else throw caught;
+      }
+      if (error instanceof StaleRef) {
+        const swapped = fresh === null ? null : rebound(command, error.staleRef, fresh.id);
+        if (fresh !== null && swapped !== null) {
+          heals.push(`↻ @${error.staleRef}→@${fresh.id} (the page reloaded; same ${fresh.role} "${fresh.name}" on the same site)`);
+          command = swapped;
+          add("batch_refs_healed");
+          flag("followed_ref_after_reload", true);
+          [result, error] = await runOne(ctx, command, lineOptions);
+        } else flag("batch_ref_not_followed", true);
+      }
     }
     observing.defer = false;
     if (observing.flushed !== null) {

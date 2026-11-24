@@ -18,7 +18,7 @@ import { need, parse } from "./parse.ts";
 import { shlexQuote } from "../../pylib/shlex.ts";
 import { frameOrMain } from "./shared.ts";
 import { checkedState, ELEMENT_STATES, elementIs } from "./read.ts";
-import { inScope, type Scope, scopedMatches, scopeOf, WITHIN_FLAG } from "./find-act.ts";
+import { descendantsOf, inScope, type Scope, scopedMatches, scopeOf, WITHIN_FLAG } from "./find-act.ts";
 import { tracksBorrowedNav } from "./borrowed.ts";
 
 export const FIND_ACTIONS = ["click", "fill", "type", "press", "check", "uncheck", "select", "hover", "focus", "dblclick", "text", "is"];
@@ -368,11 +368,15 @@ async function findWith(ctx: Ctx, argv: string[]): Promise<Result> {
     const container = (scope as Scope).container;
     const kind = locator === "first" || locator === "last" || locator === "nth" ? "css" : locator;
     if (!["css", "text", "label", "placeholder", "alt", "title", "testid"].includes(kind)) throw new Usage(`Unknown locator: ${locator} (role, text, label, placeholder, alt, title, testid, first, last, nth)`);
-    const all = ((await scopedMatches(page, container.frame, container, kind, value, kind === "testid" ? true : exact)) ?? []).filter((candidate) => inScope(scope, candidate));
     const position = locator === "last" ? -1 : locator === "nth" ? index : 0;
-    return all.at(position) ?? null;
+    const posArg = kind === "css" ? position : null;
+    const all = ((await scopedMatches(page, container.frame, container, kind, value, kind === "testid" ? true : exact, "", posArg)) ?? []).filter((candidate) => inScope(scope, candidate));
+    return posArg === null ? (all.at(position) ?? null) : (all[0] ?? null);
   };
+  let attempt = 0;
   const locate = async (): Promise<[Element, string, string]> => {
+    if (scope !== null && attempt > 0) scope.backends = await descendantsOf(page, scope.container);
+    attempt += 1;
     let element: Element | null = null;
     let role = "";
     let name = "";

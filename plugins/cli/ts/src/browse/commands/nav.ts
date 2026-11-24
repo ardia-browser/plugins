@@ -38,29 +38,37 @@ export async function cmdHistory(ctx: Ctx, _argv: string[]): Promise<Result> {
   const history = await page.send("Page.getNavigationHistory");
   const index = typeof history["currentIndex"] === "number" ? history["currentIndex"] : 0;
   const entries = Array.isArray(history["entries"]) ? history["entries"] : [];
+  let trailBefore: ReturnType<typeof historyFrom> | null = null;
   if (borrowed !== null) {
-    const trail = historyFrom(history);
-    if (!borrowedStepAllowed(ctx.state, borrowed, step, trail) || !(0 <= index + step && index + step < entries.length)) refuseOnBorrowed(ctx, page, `go ${ctx.command} in`);
-    noteBorrowedStep(ctx.state, borrowed, step, trail);
+    trailBefore = historyFrom(history);
+    if (!borrowedStepAllowed(ctx.state, borrowed, step, trailBefore) || !(0 <= index + step && index + step < entries.length)) refuseOnBorrowed(ctx, page, `go ${ctx.command} in`);
   }
   if (!(0 <= index + step && index + step < entries.length) || (index + step === 0 && entryUrl(entries[0]) === "about:blank" && ctx.state.opened.has(page.targetId))) {
     return new Result({ url: page.url }, page.url);
   }
   const before = page.navigations;
   const beforeUrl = page.url;
-  await page.call(`() => { history.go(${step}); return true; }`, [], { frame: page.mainFrame });
-  const moved = async (): Promise<boolean> => {
-    if (page.navigations !== before) {
-      try {
-        return Boolean(await page.call("() => document.readyState === 'complete'", [], { frame: page.mainFrame, read: true }));
-      } catch (error) {
-        if (error instanceof ConnectionLost || !(error instanceof BrowseError)) throw error;
-        return false;
+  try {
+    await page.call(`() => { history.go(${step}); return true; }`, [], { frame: page.mainFrame });
+    const moved = async (): Promise<boolean> => {
+      if (page.navigations !== before) {
+        try {
+          return Boolean(await page.call("() => document.readyState === 'complete'", [], { frame: page.mainFrame, read: true }));
+        } catch (error) {
+          if (error instanceof ConnectionLost || !(error instanceof BrowseError)) throw error;
+          return false;
+        }
       }
+      return page.url !== beforeUrl;
+    };
+    await waitUntil(moved, ctx.timeout, 0.05, "the history navigation");
+  } catch (error) {
+    if (borrowed !== null && trailBefore !== null && (page.navigations !== before || page.url !== beforeUrl)) {
+      noteBorrowedStep(ctx.state, borrowed, step, trailBefore);
     }
-    return page.url !== beforeUrl;
-  };
-  await waitUntil(moved, ctx.timeout, 0.05, "the history navigation");
+    throw error;
+  }
+  if (borrowed !== null && trailBefore !== null) noteBorrowedStep(ctx.state, borrowed, step, trailBefore);
   await page.refreshFrames();
   return new Result({ url: page.url }, page.url);
 }

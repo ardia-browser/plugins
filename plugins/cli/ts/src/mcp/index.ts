@@ -212,7 +212,15 @@ export class SessionDaemon implements Daemon {
   }
 
   private payload(request: DaemonRequest): { line: Buffer; timeout: Value } {
-    const { entries, timeout } = optionsFrom(this.found);
+    const { entries, timeout: defaultTimeout } = optionsFrom(this.found);
+    let timeout: Value = defaultTimeout;
+    const givenTimeout = this.found.value("timeout");
+    if (givenTimeout !== undefined) {
+      const parsed = Number(givenTimeout);
+      if (!Number.isInteger(parsed) || parsed <= 0) throw new BrowseError("--timeout takes a positive whole number of milliseconds", 2, "usage");
+      timeout = BigInt(parsed);
+      entries.set("timeout_ms", timeout);
+    }
     entries.set("json", request.json);
     entries.set("full", request.full);
     if (request.maxOutput !== null) entries.set("max_output", BigInt(request.maxOutput));

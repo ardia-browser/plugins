@@ -388,8 +388,22 @@ def result_text(content):
     return "" if content is None else str(content)
 
 
+def mcp_input_text(tool, args):
+    if not isinstance(args, dict):
+        return ""
+    if tool == "browser_repl":
+        return str(args.get("code") or "")
+    parts = [str(args.get("command") or "")]
+    if isinstance(args.get("args"), list):
+        parts.extend(str(a) for a in args["args"])
+    if args.get("stdin"):
+        parts.append(str(args["stdin"]))
+    return " ".join(p for p in parts if p)
+
+
 def mcp_stats(agent, lines):
     calls, by_tool, errors, out_chars, shell = 0, {}, 0, 0, 0
+    source_peeks, direct_api = 0, 0
     claude_prefix = f"mcp__{MCP_SERVER}__"
     pending = set()
     for e in lines:
@@ -404,6 +418,11 @@ def mcp_stats(agent, lines):
                         tool = name[len(claude_prefix):]
                         calls += 1
                         by_tool[tool] = by_tool.get(tool, 0) + 1
+                        inp_text = mcp_input_text(tool, block.get("input"))
+                        if SOURCE_PEEK.search(inp_text):
+                            source_peeks += 1
+                        if DIRECT_API.search(inp_text):
+                            direct_api += 1
                         if block.get("id"):
                             pending.add(block["id"])
                     elif name in SHELL_TOOLS:
@@ -420,6 +439,11 @@ def mcp_stats(agent, lines):
                 tool = item.get("tool") or ""
                 calls += 1
                 by_tool[tool] = by_tool.get(tool, 0) + 1
+                inp_text = mcp_input_text(tool, item.get("arguments"))
+                if SOURCE_PEEK.search(inp_text):
+                    source_peeks += 1
+                if DIRECT_API.search(inp_text):
+                    direct_api += 1
                 out_chars += len(result_text(item.get("result")))
                 result = item.get("result") if isinstance(item.get("result"), dict) else {}
                 failed = item.get("status") == "failed" or bool(item.get("error")) or bool(result.get("isError"))
@@ -427,7 +451,7 @@ def mcp_stats(agent, lines):
             elif item.get("type") in SHELL_TOOLS:
                 shell += 1
     return {"mcp_calls": calls, "mcp_by_tool": by_tool, "mcp_errors": errors, "mcp_output_chars": out_chars,
-            "shell_commands": shell}
+            "mcp_source_peeks": source_peeks, "mcp_direct_api": direct_api, "shell_commands": shell}
 
 
 def claude_command(model, effort, prompt):
@@ -672,6 +696,11 @@ def run(task_id, agent, run_id, results_dir, overrides=None, contender=None, on_
     }
     if via:
         record.update(via, via="mcp", mcp_server=server)
+        record["output_chars"] = (record.get("output_chars") or 0) + via["mcp_output_chars"]
+        shortcuts = dict(record.get("shortcuts") or {})
+        shortcuts["source_peeks"] = shortcuts.get("source_peeks", 0) + via["mcp_source_peeks"]
+        shortcuts["direct_api"] = shortcuts.get("direct_api", 0) + via["mcp_direct_api"]
+        record["shortcuts"] = shortcuts
     write_json(out_json, record)
     log(f"{run_id}: pass={passed} wall={record['wall_s']} s tokens={(record['tokens'] or {}).get('total')} "
         f"commands={record['commands']} -> {out_json}")

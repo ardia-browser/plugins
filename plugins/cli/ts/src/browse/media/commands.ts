@@ -300,6 +300,7 @@ type Framed = {
 };
 
 async function framedScreenshot(ctx: Ctx, want: Framed): Promise<Result> {
+  if (want.full && want.selector !== null) throw new Usage("screenshot --full captures the whole page, so it doesn't go with a selector");
   let page = await ctx.state.page();
   let layout = await layoutOf(page);
   let area: Region;

@@ -20,6 +20,8 @@ export type CoordinateFrame = {
   viewport: Size;
   image: Size;
   scale: number;
+  scaleX?: number;
+  scaleY?: number;
   region: Region;
   dpr: number;
 };
@@ -94,8 +96,9 @@ export function clipScale(scale: number, dpr: number): number {
 
 export function frameOf(viewport: Size, region: Region, image: Size | null, dpr: number): CoordinateFrame {
   const shown = image ?? { width: Math.round(region.width), height: Math.round(region.height) };
-  const scale = region.width > 0 ? Math.round((shown.width / region.width) * 1000) / 1000 : 1;
-  return { viewport, image: shown, scale, region, dpr };
+  const scaleX = region.width > 0 ? Math.round((shown.width / region.width) * 1000) / 1000 : 1;
+  const scaleY = region.height > 0 ? Math.round((shown.height / region.height) * 1000) / 1000 : 1;
+  return { viewport, image: shown, scale: scaleX, scaleX, scaleY, region, dpr };
 }
 
 export function regionText(region: Region): string {
@@ -103,16 +106,20 @@ export function regionText(region: Region): string {
 }
 
 export function frameLines(frame: CoordinateFrame, wholeViewport: boolean): string[] {
-  const head = `   viewport: ${shortNumber(frame.viewport.width)}×${shortNumber(frame.viewport.height)}, image: ${frame.image.width}×${frame.image.height}, scale: ${shortNumber(frame.scale)} (use viewport CSS coordinates for click --xy)`;
+  const sx = frame.scaleX ?? frame.scale;
+  const sy = frame.scaleY ?? frame.scale;
+  const scaleLabel = sx === sy ? shortNumber(sx) : `${shortNumber(sx)}×${shortNumber(sy)}`;
+  const head = `   viewport: ${shortNumber(frame.viewport.width)}×${shortNumber(frame.viewport.height)}, image: ${frame.image.width}×${frame.image.height}, scale: ${scaleLabel} (use viewport CSS coordinates for click --xy)`;
   if (wholeViewport) return [head];
   const { x, y } = frame.region;
-  const map = `viewport x = ${shortNumber(x)} + image x / ${shortNumber(frame.scale)}, y = ${shortNumber(y)} + image y / ${shortNumber(frame.scale)}`;
+  const map = `viewport x = ${shortNumber(x)} + image x / ${shortNumber(sx)}, y = ${shortNumber(y)} + image y / ${shortNumber(sy)}`;
   return [head, `   region: ${regionText(frame.region)} (${map})`];
 }
 
 export function markOf(row: { number: number; ref: string; role: string; name?: string; box: Box }, frame: CoordinateFrame): Mark {
   const { box } = row;
-  const s = frame.scale;
+  const sx = frame.scaleX ?? frame.scale;
+  const sy = frame.scaleY ?? frame.scale;
   const mark: Mark = {
     number: row.number,
     ref: row.ref,
@@ -120,10 +127,10 @@ export function markOf(row: { number: number; ref: string; role: string; name?: 
     box,
     center: { x: roundHalfEven(box.x + box.width / 2), y: roundHalfEven(box.y + box.height / 2) },
     image: {
-      x: Math.round((box.x - frame.region.x) * s),
-      y: Math.round((box.y - frame.region.y) * s),
-      width: Math.round(box.width * s),
-      height: Math.round(box.height * s),
+      x: Math.round((box.x - frame.region.x) * sx),
+      y: Math.round((box.y - frame.region.y) * sy),
+      width: Math.round(box.width * sx),
+      height: Math.round(box.height * sy),
     },
   };
   if (row.name) mark.name = row.name;

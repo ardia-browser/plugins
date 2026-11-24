@@ -50,8 +50,8 @@
   let nextId = 1;
   let nextTimer = 1;
   let stateSent = "";
+  let stateSynced = config.state;
   let stateCheckedAt = 0;
-  let stateGiven = config.state;
   let spillAt = 0;
   let previewChars = 2000;
   let outCount = 0;
@@ -104,6 +104,7 @@
     }
     if (typeof text !== "string" || text === stateSent || text.length > STATE_LIMIT) return;
     stateSent = text;
+    stateSynced = text;
     send("state", text);
   };
   const log = (...args) => {
@@ -638,14 +639,16 @@
         const pattern = parsePattern(options.name, options.exact === true);
         if (pattern.isRegex) {
           const test = (node) => xpathPattern(node, pattern);
-          selector = chained(base, `xpath=self::*[${["@aria-label", ".", "@title", "@value", "@alt", "@placeholder"].map(test).join(" or ")}]`);
+          const preds = [...["@aria-label", ".", "@title", "@value", "@alt", "@placeholder"].map(test), `(@aria-labelledby and @aria-labelledby = //*[${test(".")}]/@id)`];
+          selector = chained(base, `xpath=self::*[${preds.join(" or ")}]`);
         } else {
           const name = pattern.branches[0].text;
           const exact = options.exact === true;
           const quoted = bareQuote(name);
           if (exact || quoted === null) {
             const test = (node) => (exact ? `normalize-space(${node})=${xpathString(name)}` : xpathText(node, name, false));
-            selector = chained(base, `xpath=self::*[${["@aria-label", ".", "@title", "@value", "@alt", "@placeholder"].map(test).join(" or ")}]`);
+            const preds = [...["@aria-label", ".", "@title", "@value", "@alt", "@placeholder"].map(test), `(@aria-labelledby and @aria-labelledby = //*[${test(".")}]/@id)`];
+            selector = chained(base, `xpath=self::*[${preds.join(" or ")}]`);
           } else selector = `${base}[name=${quoted}]`;
         }
       }
@@ -1307,12 +1310,13 @@
     waiting.clear();
     timers.clear();
     if (typeof given.state === "string") {
-      if (REPL && given.state !== stateGiven && given.state !== stateSent) {
+      if (REPL && given.state !== stateSynced) {
         try {
           globalThis.state = JSON.parse(given.state);
+          stateSent = given.state;
         } catch (e) {}
       }
-      stateGiven = given.state;
+      stateSynced = given.state;
     }
   };
   const run = (fn, runText) => {

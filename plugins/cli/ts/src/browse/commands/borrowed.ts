@@ -106,7 +106,8 @@ export function recordBorrowedNav(state: State, target: string, history: History
     return pushed;
   }
   if (depth > 0 && trail !== undefined && trail.index === history.index && (typeof from === "string" || trail.entry === from.entry)) {
-    trails.set(target, { index: history.index, entry, ahead: 0 });
+    const maxAhead = Math.max(0, history.entries.length - 1 - history.index);
+    trails.set(target, { index: history.index, entry, ahead: Math.min(trail.ahead, maxAhead) });
     return 0;
   }
   forgetBorrowedNav(state, target);

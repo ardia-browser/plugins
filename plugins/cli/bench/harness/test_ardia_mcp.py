@@ -83,7 +83,7 @@ class McpStats(unittest.TestCase):
         lines = [
             {"type": "assistant", "message": {"content": [
                 {"type": "tool_use", "id": "a", "name": "mcp__ardia__browser_act", "input": {"command": "here"}},
-                {"type": "tool_use", "id": "b", "name": "mcp__ardia__browser_repl", "input": {"code": "1"}},
+                {"type": "tool_use", "id": "b", "name": "mcp__ardia__browser_repl", "input": {"code": "page.fetch('/api/check')"}},
                 {"type": "tool_use", "id": "c", "name": "Bash", "input": {"command": "ls"}},
                 {"type": "tool_use", "id": "d", "name": "mcp__other__x", "input": {}}]}},
             {"type": "assistant", "parent_tool_use_id": "z", "message": {"content": [
@@ -95,7 +95,7 @@ class McpStats(unittest.TestCase):
         ]
         self.assertEqual(ardia_side.mcp_stats("claude", lines), {
             "mcp_calls": 2, "mcp_by_tool": {"browser_act": 1, "browser_repl": 1}, "mcp_errors": 1,
-            "mcp_output_chars": 9, "shell_commands": 1})
+            "mcp_output_chars": 9, "mcp_source_peeks": 0, "mcp_direct_api": 1, "shell_commands": 1})
 
     def test_codex_counts_only_the_ardia_server(self):
         lines = [
@@ -110,7 +110,7 @@ class McpStats(unittest.TestCase):
         ]
         self.assertEqual(ardia_side.mcp_stats("codex", lines), {
             "mcp_calls": 3, "mcp_by_tool": {"browser_repl": 1, "browser_act": 2}, "mcp_errors": 2,
-            "mcp_output_chars": 3, "shell_commands": 1})
+            "mcp_output_chars": 3, "mcp_source_peeks": 0, "mcp_direct_api": 0, "shell_commands": 1})
 
 
 if __name__ == "__main__":
