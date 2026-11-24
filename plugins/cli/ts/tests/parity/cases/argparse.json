@@ -29806,48 +29806,6 @@
   }
  },
  {
-  "id": "argparse--port-9-star-c80",
-  "command": "star",
-  "argv": [
-   "--port",
-   "9",
-   "star"
-  ],
-  "env": {
-   "COLUMNS": "80"
-  },
-  "expected": {
-   "status": 2,
-   "stdout": {
-    "text": ""
-   },
-   "stderr": {
-    "text": "ardia: star doesn't take --port\n"
-   },
-   "requests": [],
-   "daemon_requests": [],
-   "telemetry": [],
-   "queued": [
-    {
-     "event": "cli_command",
-     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
-     "timestamp": "2026-01-01T00:00:00.000Z",
-     "properties": {
-      "command": "earlier"
-     }
-    }
-   ],
-   "usage": null,
-   "flush": {
-    "failures": 0,
-    "next_at": 9000000000000.0
-   },
-   "files": {},
-   "helpers": [],
-   "timed_out": false
-  }
- },
- {
   "id": "argparse--timeout-3-theme-list-c80",
   "command": "theme list",
   "argv": [

@@ -15,6 +15,7 @@ export const COUNTS = new Set([
   "batch_lines_compacted", "read_tabs_reopened", "skills_installed", "skills_skipped", "failed_step_index", "batch_lines_held", "read_nav_hidden", "read_nav_chars_hidden",
   "script_calls", "script_concurrent_peak", "script_receipts_skipped",
   "snapshot_oopif_count", "snapshot_lines_dropped", "snapshot_new_lines", "snapshot_find_matches",
+  "batch_refs_healed", "form_fields", "query_rows", "read_urls_count", "read_urls_failed", "snapshot_lean_lines",
 ]);
 export const READ_FLAGS = new Set([
   "read_data", "read_data_shaped", "read_scrolled", "read_matched", "read_virtualized_grid", "read_pdf", "read_waited_for_content", "read_beside_busy",
@@ -55,6 +56,7 @@ export const FLAGS = new Set([
   "script_runner_crashed", "script_memory_limit", "script_sandbox_hint",
   "snapshot_budget_trimmed", "snapshot_modal_scoped", "snapshot_hidden_text_dropped", "snapshot_closed_shadow", "snapshot_dom_depth_retry", "snapshot_find", "snapshot_paired", "snapshot_paired_unstable",
   "did_you_mean", "perf_crux", "logpoint_source_mapped",
+  "batch_ref_healed", "batch_ref_ambiguous", "batch_ref_missing", "here", "here_read", "form", "query", "query_fields", "read_urls", "find_is", "field_label_fallback", "script_steps_shown", "snapshot_lean_trimmed", "help_in_daemon",
 ]);
 export const SAFETY_FLAGS = new Set([
   "boundary_marker_removed", "notes_promoted", "notes_quarantined_shown", "otp_not_asked", "otp_split_boxes", "otp_typed", "scheduler_parallel", "scheduler_read_lane", "session_auto", "session_reset", "snapshot_masked_fields",

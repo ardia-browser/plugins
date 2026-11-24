@@ -26,9 +26,11 @@ entry. Generated from that help and the command table by `bun src/skill-gen.ts -
 - **find**: `ardia browse find <role|text|label|placeholder|alt|title|testid|first|last|nth> <value> [action] [text] [--name n] [--exact|--partial]`
 - **flow**: `ardia browse flow steps [--all]` · `ardia browse flow save <name> [--from n] [--to n] [--param k=v]... [--output s2r1] [--description text]` · `ardia browse flow run <name> [--param k=v]... [--fields a,b.c] [--where field=value]... [--limit n]` · `[--site s] [--timeout 60s]` · `ardia browse flow list [site] | show <name> [--site s] | rm <name> [--site s]`
 - **focus**: `ardia browse focus <sel>`
+- **form**: `ardia browse form [<sel>] [-s <sel>] [--all]`
 - **forward**: `ardia browse forward | back`
 - **frame**: `ardia browse frame <sel|@ref|name|url> | frame main`
 - **get**: `ardia browse get text|html|value|title|url|count|box|styles <sel> | attr <sel> <name>`
+- **here**: `ardia browse here [--read] [--all]`
 - **highlight**: `ardia browse highlight <sel>`
 - **hover**: `ardia browse hover <sel> [--humanize] [--no-changes]`
 - **is**: `ardia browse is visible|enabled|checked <sel>`
@@ -48,8 +50,10 @@ entry. Generated from that help and the command table by `bun src/skill-gen.ts -
 - **press** (also key): `ardia browse press [<sel>] <key> [--no-humanize]`
 - **profiler**: `ardia browse profiler start [--categories c1,c2] | stop [path]`
 - **pushstate**: `ardia browse pushstate <url>`
+- **query**: `ardia browse query <sel> [--fields name=<sel>,price=<sel>,url=<sel>@href] [--field k=<sel>] [--limit n] [--all]`
 - **react**: `ardia browse react tree | inspect <id> | renders start | renders stop | suspense [--only-dynamic]`
 - **read**: `ardia browse read [url] --fast [--outline] [--filter <pattern>]` · `ardia browse read [url...] [--links <pattern>] [-s <selector>] [--stdin] [--limit n] [--timeout ms] [--http] [--list] [--out <file>] [--nav]` · `ardia browse read [-s <list>] --scroll [--limit rows] [--match <text>] [--timeout ms]` · `ardia browse read --data [--block n|id] [--fields a,b.c] [--where field=value] [--limit n]`
+- **read-urls**: `ardia browse read-urls <url> [url...] [--concurrency n] [--timeout s] [--max-chars n]`
 - **record**: `ardia browse record start <path.webm> [url] | stop | restart <path.webm> [url]`
 - **reload** (also refresh): `ardia browse reload`
 - **removeinitscript**: `ardia browse removeinitscript <id>`

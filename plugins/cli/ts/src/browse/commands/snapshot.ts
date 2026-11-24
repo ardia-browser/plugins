@@ -114,6 +114,7 @@ type Plan = {
   limit: number;
   notes: Header[];
   shaping: boolean;
+  lean: boolean;
   pairedPath: string | null;
 };
 
@@ -136,6 +137,7 @@ async function planOf(ctx: Ctx, page: Page, options: Record<string, unknown>, se
     limit: limitOf(ctx),
     notes: await siteHeaders(ctx, page, Boolean(options["tools"])),
     shaping: !options["diff"],
+    lean: !options["diff"] && !fullListing,
     pairedPath,
   };
 }
@@ -225,6 +227,7 @@ async function shotOf(ctx: Ctx, page: Page, plan: Plan): Promise<Shot> {
     modal: plan.shaping && !options["all"] && !options["no_modal_scope"] && !selector,
     visible: plan.shaping,
     tidy: plan.shaping,
+    lean: plan.lean,
   });
 }
 

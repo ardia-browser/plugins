@@ -3007,54 +3007,6 @@
   }
  },
  {
-  "id": "feedback--port-before",
-  "command": "feedback",
-  "argv": [
-   "--port",
-   "9222",
-   "feedback",
-   "--title",
-   "t",
-   "d"
-  ],
-  "normalize": [
-   [
-    "\"at\": \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"",
-    "\"at\": \"<at>\""
-   ]
-  ],
-  "expected": {
-   "status": 2,
-   "stdout": {
-    "text": ""
-   },
-   "stderr": {
-    "text": "ardia: feedback doesn't take --port\n"
-   },
-   "requests": [],
-   "daemon_requests": [],
-   "telemetry": [],
-   "queued": [
-    {
-     "event": "cli_command",
-     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
-     "timestamp": "2026-01-01T00:00:00.000Z",
-     "properties": {
-      "command": "earlier"
-     }
-    }
-   ],
-   "usage": null,
-   "flush": {
-    "failures": 0,
-    "next_at": 9000000000000.0
-   },
-   "files": {},
-   "helpers": [],
-   "timed_out": false
-  }
- },
- {
   "id": "feedback--data-dir-before",
   "command": "feedback",
   "argv": [

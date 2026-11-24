@@ -17,8 +17,9 @@ import { findAct } from "../act/find-act.ts";
 import { need, parse } from "./parse.ts";
 import { shlexQuote } from "../../pylib/shlex.ts";
 import { frameOrMain } from "./shared.ts";
+import { checkedState, ELEMENT_STATES, elementIs } from "./read.ts";
 
-export const FIND_ACTIONS = ["click", "fill", "type", "press", "check", "uncheck", "select", "hover", "focus", "dblclick", "text"];
+export const FIND_ACTIONS = ["click", "fill", "type", "press", "check", "uncheck", "select", "hover", "focus", "dblclick", "text", "is"];
 export const FIND_LOCATORS = ["role", "text", "label", "placeholder", "alt", "title", "testid", "first", "last", "nth"];
 export const MAX_CANDIDATES = 8;
 export const CLOSE_ENOUGH = 0.6;
@@ -276,6 +277,11 @@ async function findWith(ctx: Ctx, argv: string[]): Promise<Result> {
     value = args[0] as string;
     rest = args.slice(1);
   }
+  const asked = rest[0] === "is" ? (rest[1] ?? null) : null;
+  if (rest[0] === "is") {
+    if (asked === null) throw new Usage(`Usage: ardia browse find <locator> <value> is <${ELEMENT_STATES.join("|")}>`);
+    checkedState(asked, "state for find … is");
+  }
   const fromRemote = async (fn: string, values: unknown[], label: string) =>
     page.elementFrom(await page.call(fn, values, { frame, byValue: false, read: true }), frame, label);
   const locate = async (): Promise<[Element, string, string]> => {
@@ -303,6 +309,10 @@ async function findWith(ctx: Ctx, argv: string[]): Promise<Result> {
       break;
     } catch (error) {
       if (!(error instanceof BrowseError) || error.code !== "not_found") throw error;
+      if (asked === "hidden" && monotonic() >= deadline) {
+        flag("find_is", true);
+        return new Result({ ref: null, state: asked, hidden: true, found: false }, "true");
+      }
       if (monotonic() >= deadline) throw error instanceof RoleMiss ? await withClosest(ctx, page, error) : error;
     }
     await sleep(0.15);
@@ -312,6 +322,11 @@ async function findWith(ctx: Ctx, argv: string[]): Promise<Result> {
   if (!FIND_ACTIONS.includes(action)) throw new Usage(`Unknown action '${action}' for find. Valid actions: ${FIND_ACTIONS.join(", ")}.`);
   const ref = ctx.state.addRef(page, element, role, name);
   element.label = `@${ref}`;
+  if (asked !== null) {
+    flag("find_is", true);
+    const value = await elementIs(page, element, asked);
+    return new Result({ ref: `@${ref}`, state: asked, [asked]: value }, value ? "true" : "false");
+  }
   if (action !== "text") {
     return findActions.act(ctx, page, element, ref, action, rest, ctx.humanize && !options["no_humanize"]);
   }

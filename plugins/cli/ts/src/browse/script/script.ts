@@ -227,6 +227,25 @@ async function answerCall(ctx: Ctx, argv: string[], index: number, light: boolea
 }
 
 type Tracked = { argv: unknown; call: number | null; line: unknown; type: string };
+export type Step = { call: number; command: string; line: unknown; ok: boolean };
+export const SHOWN_STEPS = 12;
+
+export function stepsText(steps: readonly Step[], source: string): string {
+  if (steps.length === 0) return "";
+  const ordered = [...steps].sort((a, b) => a.call - b.call);
+  const shown = ordered.slice(-SHOWN_STEPS);
+  const earlier = ordered.length - shown.length;
+  const parts = shown.map((step) => {
+    const line = sourceLine(source, step.line);
+    return `${line ? `line ${line} ` : ""}${step.command} ${step.ok ? "✓" : "✗"}`;
+  });
+  const passed = ordered.filter((step) => step.ok).length;
+  return `calls before it stopped (${passed} of ${ordered.length} ok${earlier ? `, ${earlier} earlier not shown` : ""}): ${parts.join(" · ")}`;
+}
+
+export function stepsData(steps: readonly Step[], source: string): Record<string, unknown>[] {
+  return [...steps].sort((a, b) => a.call - b.call).map((step) => ({ call: step.call, command: step.command, line: sourceLine(source, step.line), ok: step.ok }));
+}
 type Request = Record<string, unknown> & { id: number; op: string };
 
 function fatalError(error: unknown): boolean {
@@ -243,6 +262,7 @@ class ScriptRun {
   readonly gate = new Gate();
   readonly calls: unknown[][] = [];
   readonly done: string[] = [];
+  readonly steps: Step[] = [];
   readonly inflight = new Map<number, Tracked>();
   readonly running = new Set<Promise<void>>();
   readonly logs: string[] = [];
@@ -356,6 +376,7 @@ async function serveCall(run: ScriptRun, request: Request): Promise<Answer> {
   const exclusive = !CONCURRENT_CALLS.has(name) || words.some((word) => word === "--scroll" || word.startsWith("--scroll="));
   const light = request["light"] === true && request["receipt"] !== true && LIGHT_CALLS.has(name);
   if (light) run.receiptsSkipped += 1;
+  let ok = false;
   try {
     const answer = await run.gate.run(exclusive, () => run.admitted(async () => {
       run.started.add(request.id);
@@ -363,9 +384,11 @@ async function serveCall(run: ScriptRun, request: Request): Promise<Answer> {
       if (!exclusive) await run.settle(name, words.slice(1));
       return answerCall(run.ctx, words, index, light);
     }));
+    ok = answer.ok;
     return answer.ok ? answer : { ...answer, call: index };
   } finally {
     run.done.push(commandName(given));
+    run.steps.push({ call: index, command: commandName(given), line: request["line"], ok });
   }
 }
 
@@ -378,8 +401,9 @@ async function servePage(run: ScriptRun, request: Request): Promise<Answer> {
   if (op === "$eval" || op === "$$eval") flag("script_selector_eval", true);
   if (request["via"] === "page.eval") flag("script_eval_alias", true);
   const frame = typeof request["frame"] === "string" && request["frame"] ? request["frame"] : null;
+  let ok = false;
   try {
-    return await run.gate.run(false, () => run.admitted(async () => {
+    const answer = await run.gate.run(false, () => run.admitted(async (): Promise<Answer> => {
       run.started.add(request.id);
       if (op !== "frames") run.mutating.add(request.id);
       await run.settle("eval", []);
@@ -404,8 +428,11 @@ async function servePage(run: ScriptRun, request: Request): Promise<Answer> {
         return pageFailure(error, index);
       }
     }));
+    ok = answer.ok;
+    return answer;
   } finally {
     run.done.push("eval");
+    run.steps.push({ call: index, command: "eval", line: request["line"], ok });
   }
 }
 
@@ -647,9 +674,10 @@ export async function run(ctx: Ctx, source: string, seconds: number): Promise<Re
     const late = script.error;
     if (message["kind"] !== "error" || late instanceof ConnectionLost || !(late instanceof BrowseError)) throw late;
     const line = sourceLine(source, message["line"]);
+    const ran = stepsText(script.steps, source);
     throw new BrowseError(
-      `${errorText(message, source, script.calls)}\nA call the script didn't await then failed too: ${late.text}`,
-      { ...failureData(message, script.calls), line },
+      `${errorText(message, source, script.calls)}\nA call the script didn't await then failed too: ${late.text}${ran ? `\n${ran}` : ""}`,
+      { ...failureData(message, script.calls), line, steps: stepsData(script.steps, source) },
       late.code ?? "script_failed",
     );
   }
@@ -670,7 +698,10 @@ export async function run(ctx: Ctx, source: string, seconds: number): Promise<Re
       if (hint) flag("script_sandbox_hint", true);
     }
     hint = hint ? `\n${hint}` : "";
-    throw failure(`${errorText(message, source, script?.calls ?? [])}${hint}`, [...logs, ...notes], { ...failureData(message, script?.calls ?? []), line }, scriptCode(message["code"]));
+    const ran = script === null ? "" : stepsText(script.steps, source);
+    if (ran) flag("script_steps_shown", true);
+    const steps = script === null ? [] : stepsData(script.steps, source);
+    throw failure(`${errorText(message, source, script?.calls ?? [])}${hint}${ran ? `\n${ran}` : ""}`, [...logs, ...notes], { ...failureData(message, script?.calls ?? []), line, steps }, scriptCode(message["code"]));
   }
   const value = renderValue(message);
   const parts = [...logs, ...(value !== null ? [value] : []), ...notes];

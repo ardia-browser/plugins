@@ -118,19 +118,36 @@ export async function cmdGet(ctx: Ctx, argv: string[]): Promise<Result> {
   throw new Usage(`Unknown get subcommand: ${what}`);
 }
 
+export const ELEMENT_STATES = ["visible", "hidden", "enabled", "disabled", "checked", "unchecked", "editable", "required"];
+const REQUIRED = "(el) => el.required === true || el.getAttribute('aria-required') === 'true'";
+
+export function checkedState(what: string, context: string): void {
+  if (!ELEMENT_STATES.includes(what)) throw new Usage(`Unknown ${context}: ${what} (${ELEMENT_STATES.join(", ")})`);
+}
+
+export async function elementIs(page: Page, element: Element, what: string): Promise<boolean> {
+  if (what === "visible" || what === "hidden") {
+    const visible = Boolean(await page.call("(el) => ardiaBrowse.visible(el)", [element], { frame: element.frame }));
+    return what === "visible" ? visible : !visible;
+  }
+  if (what === "required") return Boolean(await page.call(REQUIRED, [element], { frame: element.frame }));
+  const facts = record(await page.call("(el) => ardiaBrowse.info(el)", [element], { frame: element.frame }));
+  if (what === "enabled") return !facts["disabled"];
+  if (what === "disabled") return Boolean(facts["disabled"]);
+  if (what === "checked") return Boolean(facts["checked"]);
+  if (what === "unchecked") return !facts["checked"];
+  return Boolean(facts["editable"]) && !facts["disabled"];
+}
+
 export async function cmdIs(ctx: Ctx, argv: string[]): Promise<Result> {
   const [, args] = parse(argv);
   need(args, 2, "is visible|enabled|checked <selector>");
   const what = args[0] as string;
+  checkedState(what, "is subcommand");
   const [page, element] = await resolve(ctx, args[1] as string);
   const origin = originOf(page, element.frame);
-  let value: unknown;
-  if (what === "visible") value = await page.call("(el) => ardiaBrowse.visible(el)", [element], { frame: element.frame });
-  else if (what === "enabled" || what === "checked") {
-    const info = record(await page.call("(el) => ardiaBrowse.info(el)", [element], { frame: element.frame }));
-    value = what === "enabled" ? !info["disabled"] : info["checked"];
-  } else throw new Usage(`Unknown is subcommand: ${what} (visible, enabled, checked)`);
-  return new Result({ origin: origin ? `${origin}/` : origin, [what]: Boolean(value) }, value ? "true" : "false");
+  const value = await elementIs(page, element, what);
+  return new Result({ origin: origin ? `${origin}/` : origin, [what]: value }, value ? "true" : "false");
 }
 
 function ms(value: unknown): string {

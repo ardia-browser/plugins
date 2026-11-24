@@ -7,7 +7,7 @@ import { pyLen, splitlines } from "../../pylib/str.ts";
 import { shlexSplit } from "../../pylib/shlex.ts";
 import { codeLine } from "./batch-line.ts";
 import { redact, redactJson } from "../../redact.ts";
-import { BrowseError, ConnectionLost, OutcomeUnknown, Usage } from "../daemon-errors.ts";
+import { BrowseError, ConnectionLost, OutcomeUnknown, StaleRef, Usage } from "../daemon-errors.ts";
 import type { JsonObject } from "../../json.ts";
 import { OUTPUT_CAP, pyValue, Result } from "../daemon/render.ts";
 import { content, savedBodyLine } from "../outfile.ts";
@@ -233,7 +233,38 @@ function saveBatchLine(ctx: Ctx, name: string, result: Result, target: string): 
   return [`✓ Saved to ${saved} (${groupThousands(String(pyLen(text)))} characters): ${summary}`, true];
 }
 
-type Outcome = { command: unknown; success: boolean; result: unknown; error: string | null; code?: string | null; text?: string | null; remedy?: string };
+type Outcome = { command: unknown; success: boolean; result: unknown; error: string | null; code?: string | null; text?: string | null; remedy?: string; healed?: string[]; matches?: string[] };
+
+const MAX_HEALS = 4;
+const SELECTOR_PREFIX = "--selector=";
+
+export function rebound(command: readonly string[], stale: string, fresh: string): string[] | null {
+  let swapped = false;
+  const forms: [string, string][] = [[`@${stale}`, `@${fresh}`], [`ref=${stale}`, `ref=${fresh}`], [`[ref=${stale}]`, `[ref=${fresh}]`]];
+  const swap = (word: string, index: number): string => {
+    if (word.startsWith(SELECTOR_PREFIX)) return `${SELECTOR_PREFIX}${swap(word.slice(SELECTOR_PREFIX.length), 1)}`;
+    for (const [from, to] of forms) {
+      if (word !== from) continue;
+      swapped = true;
+      return to;
+    }
+    if (index === 1 && word === stale) {
+      swapped = true;
+      return fresh;
+    }
+    return word;
+  };
+  const out = command.map(swap);
+  return swapped ? out : null;
+}
+
+function staleMatches(state: State, error: StaleRef): string {
+  const listed = error.matches.map((id) => {
+    const ref = state.refs.get(id);
+    return ref === undefined ? `[ref=${id}]` : `${ref.role}${ref.name ? ` "${ref.name}"` : ""} [ref=${id}]`;
+  });
+  return error.ambiguous ? `→ ${listed.length} match it now, so nothing was picked: ${listed.join(", ")}` : `→ on the page now: ${listed.join(", ")}`;
+}
 
 export function failureMeta(outcome: Outcome): { code: string | undefined; remedy: string | undefined } {
   const code = inferredCode(outcome.code ?? undefined, outcome.error ?? "");
@@ -506,6 +537,16 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
       noteReadRetry();
       [result, error] = await runOne(ctx, command, lineOptions);
     }
+    const heals: string[] = [];
+    while (error instanceof StaleRef && error.successor !== null && heals.length < MAX_HEALS) {
+      const swapped = rebound(command, error.staleRef, error.successor);
+      if (swapped === null) break;
+      heals.push(`↻ @${error.staleRef}→@${error.successor}`);
+      command = swapped;
+      add("batch_refs_healed");
+      flag("batch_ref_healed", true);
+      [result, error] = await runOne(ctx, command, lineOptions);
+    }
     observing.defer = false;
     if (observing.flushed !== null) {
       placeReport(observing.flushed, observing.flushedPartly);
@@ -523,6 +564,15 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
     };
     if (error !== null && error.code) outcome.code = error.code;
     if (result?.notice && outcome.text?.endsWith(result.notice)) outcome.text = outcome.text.slice(0, outcome.text.length - result.notice.length).replace(/\n$/u, "");
+    if (heals.length > 0) {
+      outcome.healed = heals.map((heal) => heal.slice(2));
+      if (outcome.success) outcome.text = `${heals.join("\n")}\n${outcome.text || "✓ Done"}`;
+    }
+    if (error instanceof StaleRef && error.successor === null && error.matches.length > 0) {
+      outcome.matches = [...error.matches];
+      outcome.text = `${failureLine(outcome)}\n${staleMatches(ctx.state, error)}`;
+      flag(error.ambiguous ? "batch_ref_ambiguous" : "batch_ref_missing", true);
+    }
     let wrote = false;
     if (saving && outcome.success && result) {
       [outcome.text, wrote] = saveBatchLine(ctx, name, result, saving);

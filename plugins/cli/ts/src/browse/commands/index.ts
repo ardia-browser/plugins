@@ -1,6 +1,7 @@
 import { BrowseError, Usage } from "../daemon-errors.ts";
 import { ALIASES, canonical, MUTATING, SKIPPED } from "../daemon/names.ts";
-import type { Result } from "../daemon/render.ts";
+import { Result } from "../daemon/render.ts";
+import { commandHelp } from "../help.ts";
 import type { Ctx, Handler } from "./ctx.ts";
 import { flag } from "../metrics.ts";
 import { closest } from "../suggest.ts";
@@ -80,6 +81,10 @@ export const OWNERS: Readonly<Record<string, string>> = {
   styles: "D8",
   issues: "D8",
   logpoint: "D8",
+  here: "tabs",
+  form: "D4",
+  query: "D4",
+  "read-urls": "D4",
 };
 
 export type Step = unknown;
@@ -121,7 +126,21 @@ export function unknownCommand(name: string): Usage {
   return new Usage(`Unknown command: ${name}. Did you mean \`ardia browse ${guess}\`? Run \`ardia browse --help\` for the rest`);
 }
 
+const HELP_WORDS = new Set(["--help", "-h"]);
+const FREE_TEXT = new Set(["fill", "type", "eval", "keyboard", "notes", "script", "addinitscript", "clipboard", "dialog", "tool", "press", "select", "upload", "cdp"]);
+
+export function asksHelp(name: string, argv: readonly string[]): boolean {
+  if (argv.length > 0 && HELP_WORDS.has(argv[0] as string)) return true;
+  if (FREE_TEXT.has(name)) return false;
+  const end = argv.indexOf("--");
+  return (end < 0 ? argv : argv.slice(0, end)).some((word) => HELP_WORDS.has(word));
+}
+
 export async function dispatch(ctx: Ctx, name: string, argv: string[]): Promise<Result> {
+  if ((Object.hasOwn(OWNERS, name) || Object.hasOwn(SKIPPED, name)) && asksHelp(name, argv)) {
+    flag("help_in_daemon", true);
+    return new Result({ help: commandHelp(name) }, commandHelp(name));
+  }
   if (name === "auth") {
     if (argv[0] !== "login") throw new Usage("auth save|list|show|delete run without the daemon");
     return (COMMANDS.get("auth") as Handler)(ctx, argv.slice(1));

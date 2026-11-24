@@ -4,16 +4,28 @@ import { METRIC_COUNTS, METRIC_DURATIONS, METRIC_FLAGS, METRIC_MAX_COUNT, METRIC
 import { SAFETY_FLAGS } from "./browse/metrics.ts";
 
 export const TS_ONLY_FLAGS: readonly string[] = [
+  "batch_ref_ambiguous",
+  "batch_ref_healed",
+  "batch_ref_missing",
   "dialog_dismissed_after_failure",
   "eval_isolated_reference_error",
   "eval_main_world",
+  "field_label_fallback",
   "find_closest_ref",
+  "find_is",
+  "form",
   "guessed_syntax",
+  "help_in_daemon",
+  "here",
+  "here_read",
   "offscreen_handoff_rolled_back",
   "oopif_attach_refused",
   "open_here",
   "permission_granted",
+  "query",
+  "query_fields",
   "read_oopif_frames",
+  "read_urls",
   "route_enable_undone",
   "script_eval_args",
   "script_frame_eval",
@@ -25,6 +37,7 @@ export const TS_ONLY_FLAGS: readonly string[] = [
   "script_runner_warm",
   "script_sandbox_hint",
   "script_selector_eval",
+  "script_steps_shown",
   "select_retyped",
   "select_word_match",
   "selector_in_shadow_root",
@@ -37,6 +50,7 @@ export const TS_ONLY_FLAGS: readonly string[] = [
   "snapshot_dom_depth_retry",
   "snapshot_find",
   "snapshot_hidden_text_dropped",
+  "snapshot_lean_trimmed",
   "snapshot_modal_scoped",
   "snapshot_oopif_frames",
   "snapshot_paired",
@@ -46,7 +60,7 @@ export const TS_ONLY_FLAGS: readonly string[] = [
   "tab_readopted_after_restart",
 ];
 
-export const TS_ONLY_COUNTS: readonly string[] = ["failed_step_index", "script_calls", "script_concurrent_peak", "script_receipts_skipped", "snapshot_find_matches", "snapshot_lines_dropped", "snapshot_new_lines", "snapshot_oopif_count"];
+export const TS_ONLY_COUNTS: readonly string[] = ["batch_refs_healed", "failed_step_index", "form_fields", "query_rows", "read_urls_count", "read_urls_failed", "script_calls", "script_concurrent_peak", "script_receipts_skipped", "snapshot_find_matches", "snapshot_lean_lines", "snapshot_lines_dropped", "snapshot_new_lines", "snapshot_oopif_count"];
 
 const FLAGS = new Set([...METRIC_FLAGS, ...TS_ONLY_FLAGS, ...PRECISION_FLAGS, ...SAFETY_FLAGS]);
 const DURATIONS = new Set(METRIC_DURATIONS);

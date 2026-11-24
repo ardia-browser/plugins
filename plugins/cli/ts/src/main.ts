@@ -147,6 +147,11 @@ async function main(words: string[]): Promise<number> {
     if (recovered === undefined) return handBack();
     argv.splice(0, argv.length, ...recovered);
   }
+  if (!process.env.ARDIA_BROWSE_FOR_PLUGIN) {
+    const placed = (await import("./endpoint-flags.ts")).placeEndpointFlags(argv);
+    if (placed.dropped.includes("--port")) (await import("./telemetry.ts")).noteDroppedEndpoint();
+    argv.splice(0, argv.length, ...placed.argv);
+  }
   if (asksForVersion(argv) && servesNatively("--version") && !process.env.ARDIA_BROWSE_FOR_PLUGIN) {
     try {
       writeWhole(1, Buffer.from(`ardia ${cliVersion()}\n`));

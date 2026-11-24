@@ -44,9 +44,18 @@ function capitalized(text: string): string {
 export const SUPERSEDED = "vocab_superseded";
 
 export class StaleRef extends BrowseError {
-  constructor(ref: string, why: string, given: string | null = null, code = "stale_ref") {
+  successor: string | null = null;
+  matches: readonly string[] = [];
+  ambiguous = false;
+
+  constructor(
+    readonly staleRef: string,
+    why: string,
+    given: string | null = null,
+    code = "stale_ref",
+  ) {
     const fix = given ?? (why.includes("is now @") ? "use that ref" : "Run `ardia browse snapshot -i` again and use the new refs");
-    super(`Stale ref @${ref}: ${why}. ${capitalized(fix)}`, null, code);
+    super(`Stale ref @${staleRef}: ${why}. ${capitalized(fix)}`, null, code);
   }
 }
 

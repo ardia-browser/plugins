@@ -7,7 +7,8 @@ import type { State } from "../state/state.ts";
 import { type Tier, tierOf } from "./budget.ts";
 import { type Collected, collect, collectedInfo, linkUrls, refsOf, sameIdentity, settledAll, verifyIdentity } from "./collect.ts";
 export { verifyIdentity } from "./collect.ts";
-import { ambiguousControls, type Clue, CLUE_OF, compactTree, noteOf } from "./compact.ts";
+import { ambiguousControls, type Clue, CLUE_OF, compactTree, noteOf, type Trimmed } from "./compact.ts";
+import { add, flag } from "../metrics.ts";
 import { advance } from "./epoch.ts";
 import { interactiveRows, labelsForRepeats, type Listed, render, renderListed, renderRows } from "./render.ts";
 import { type Node, walk } from "./tree.ts";
@@ -15,7 +16,7 @@ import { type Node, walk } from "./tree.ts";
 export const MAX_CLUES = 24;
 
 export type TakeOptions = { interactive?: boolean; compact?: boolean; depth?: number | null; selector?: string | null; urls?: boolean; cursor?: boolean };
-export type ShootOptions = TakeOptions & { modal?: boolean; visible?: boolean; tidy?: boolean };
+export type ShootOptions = TakeOptions & { modal?: boolean; visible?: boolean; tidy?: boolean; lean?: boolean };
 export type Line = { text: string; level: number; ref: string | null; node: Node | null; tier: Tier };
 export type Shot = {
   nodes: Node[];
@@ -77,11 +78,16 @@ export async function disambiguators(page: Page, shown: readonly Node[], interac
 }
 
 export async function shoot(state: State, page: Page, options: ShootOptions = {}): Promise<Shot> {
-  const { interactive = false, compact = false, depth = null, selector = null, urls = false, cursor = true, modal = false, visible = false, tidy = false } = options;
+  const { interactive = false, compact = false, depth = null, selector = null, urls = false, cursor = true, modal = false, visible = false, tidy = false, lean = false } = options;
   const nodes = await collect(state, page, selector, cursor, { modal: modal && !selector, visible });
   if (urls) await linkAll(page, nodes);
   const info = collectedInfo.get(nodes) ?? null;
-  const shown = tidy ? compactTree(nodes) : nodes;
+  const trimmed: Trimmed = { lines: 0 };
+  const shown = tidy ? compactTree(nodes, lean && !interactive, trimmed) : nodes;
+  if (trimmed.lines > 0) {
+    flag("snapshot_lean_trimmed", true);
+    add("snapshot_lean_lines", trimmed.lines);
+  }
   const notes = tidy ? await disambiguators(page, shown, interactive) : new Map<Node, string>();
   let lines: Line[];
   let listed: Listed[] | null = null;

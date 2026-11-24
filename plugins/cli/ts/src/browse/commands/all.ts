@@ -23,5 +23,8 @@ import "./tabs.ts";
 import "./nav.ts";
 import "./reading.ts";
 import "./tool.ts";
+import "./here.ts";
+import "./extract.ts";
+import "./read-urls.ts";
 
 export { dispatch, hooks, OWNERS, register, served } from "./index.ts";

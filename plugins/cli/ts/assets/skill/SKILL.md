@@ -13,12 +13,13 @@ that re-reads all output before it: do the most per call, print the least. Nativ
 ## Start
 
 ```sh
+ardia browse here               # the user's own page: picks their tab, lists what to act on
 ardia browse open <url> --read  # opens a site, prints its text
-ardia browse batch "tab active" "snapshot -i"  # the user's own page
 ```
 
-A session starts with no tab: run one of these first. `snapshot -i` lists what you can act on with refs
-(`textbox "Name" [ref=e11]`); if it starts with `# notes` or `# saved flows`, use them.
+A session starts with no tab: run one of these first (`here --read`: the page's text). `here` and `snapshot -i`
+list what you can act on with refs (`textbox "Name" [ref=e11]`); if it starts with `# notes` or `# saved flows`,
+use them.
 
 ## Read
 
@@ -26,6 +27,9 @@ A session starts with no tab: run one of these first. `snapshot -i` lists what y
   `read <url> <url> …`, or every link here whose URL matches: `read --links /p/ -s table.specs` (`--list` or
   `links <pattern>`: just the URLs). They load in background tabs, logged in. Site menus print as
   one `[navigation hidden, …]` line; `read --nav` shows them.
+- Same-site pages, logged in, in parallel, without leaving this page: `read-urls <url> <url> …` (other sites:
+  `read <url>`).
+- A list of cards or table rows: `query .card --fields name=h2,price=.price,url=a@href`, or `query table`.
 - A page's data: `read --data` (JSON it embeds), `network requests --reload --type xhr,fetch`
   (JSON it loads); `read --http <url>` gets it.
 - A long or scroll-loaded list (`1–40 of 200`): `read --scroll` (the main list, or `-s <list>`; `--match <text>`).
@@ -51,8 +55,11 @@ EOF
   new page after a navigation. Plan and verify from that; end a batch with `read` to get the page too;
   a repeated `snapshot -i` lists only what changed.
 - Put every step you can name in one `batch`, repeated rounds and dependent fields (To after From) included: each
-  line runs once the last took effect, and a ref lasts as long as its element. `find label "Title" fill "…"` and
-  `find role button click --name Save` need no refs.
+  line runs once the last took effect, and a ref lasts as long as its element; when a redraw replaces it with one
+  of the same role and name, the line follows it (`↻ @e14→@e352`). `find label "Title" fill "…"`,
+  `find role button click --name Save` and `fill "Full name" "…"` need no refs; `find label "Terms" is checked`
+  prints true or false.
+- Forms: `form` lists every field with its label, value, required, invalid message and ref.
 - `fill` types, and sets date (`YYYY-MM-DD`), time, color and range inputs; on a grid cell it opens, sets and
   commits. `select` picks in a `<select>`, typeahead, chip input or custom dropdown.
 - `open <url>` uses its own tab (`--here`: the `tab active` one); `tab new <url>` adds one; `tab t<N>` switches.
@@ -121,7 +128,7 @@ EOF
 
 ## Commands
 
-`ardia browse` takes a11y, addinitscript, auth, back, batch, cdp, check, click, clipboard, close, console, cookies, dblclick, dialog, diff, download, drag, errors, eval, fill, find, flow, focus, forward, frame, get, highlight, hover, is, issues, keyboard, keydown, keyup, links, logpoint, mouse, network, notes, open, pdf, perf, plugin, press, profiler, pushstate, react, read, record, reload, removeinitscript, screenshot, script, scroll, scrollintoview, select, session, set, snapshot, state, storage, stream, styles, tab, text, tool, tools, trace, type, uncheck, upload, vitals, wait, window.
+`ardia browse` takes a11y, addinitscript, auth, back, batch, cdp, check, click, clipboard, close, console, cookies, dblclick, dialog, diff, download, drag, errors, eval, fill, find, flow, focus, form, forward, frame, get, here, highlight, hover, is, issues, keyboard, keydown, keyup, links, logpoint, mouse, network, notes, open, pdf, perf, plugin, press, profiler, pushstate, query, react, read, read-urls, record, reload, removeinitscript, screenshot, script, scroll, scrollintoview, select, session, set, snapshot, state, storage, stream, styles, tab, text, tool, tools, trace, type, uncheck, upload, vitals, wait, window.
 Aliases: exit, quit = close; evaluate, js = eval; goto, navigate, visit = open; key = press; refresh = reload; shot = screenshot; scrollinto = scrollintoview; snap = snapshot. Every form and flag: `references/commands.md`.
 
 A mistyped command or flag names the closest one. A failure ends with its stable `(code)`, and when one command fixes

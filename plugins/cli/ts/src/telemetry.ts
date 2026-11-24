@@ -27,6 +27,11 @@ export const TEST_ENDPOINT_ENV = ["ARDIA_WS", "ARDIA_PORT", "ARDIA_CDP_URL", "AG
 const OFF_VALUES = ["0", "false", "off", "no"];
 
 let typedArgv: string[] | undefined;
+let endpointDropped = false;
+
+export function noteDroppedEndpoint(): void {
+  endpointDropped = true;
+}
 
 export function recordFlagsAsTyped(argv: string[]): void {
   typedArgv = argv;
@@ -109,7 +114,7 @@ export function namesTestEndpoint(tokens: string[]): boolean {
 
 export function cliTarget(argv: string[]): Target | undefined {
   const tokens = leadingTokens(argv);
-  if (namesTestEndpoint(tokens) || optedOut() || TEST_ENDPOINT_ENV.some((name) => envSet(name) !== undefined)) return undefined;
+  if (endpointDropped || namesTestEndpoint(tokens) || optedOut() || TEST_ENDPOINT_ENV.some((name) => envSet(name) !== undefined)) return undefined;
   const url = logsUrl();
   if (url === undefined) return undefined;
   const root = abspath(dataRoot(dataDirArg(tokens)));

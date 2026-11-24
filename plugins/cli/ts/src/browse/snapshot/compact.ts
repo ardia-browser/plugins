@@ -22,7 +22,45 @@ function onlyText(nodes: readonly Node[]): boolean {
   return nodes.length > 0 && nodes.every((child) => child.role === "StaticText" || (WRAPPERS.has(child.role) && plainContainer(child) && !child.name && onlyText(child.children)));
 }
 
-export function compactTree(nodes: readonly Node[]): Node[] {
+export const LEAN_LIFTED = new Set(["LabelText", "MenuListPopup", "rowgroup"]);
+const LABEL_TAIL = /[\s:*]+$/u;
+
+export type Trimmed = { lines: number };
+
+function labelKey(text: string): string {
+  return joinedWords(text).replace(LABEL_TAIL, "").toLowerCase();
+}
+
+function lineCount(node: Node): number {
+  return 1 + node.children.reduce((sum, child) => sum + lineCount(child), 0);
+}
+
+function echoesControl(node: Node, controls: ReadonlySet<string>): boolean {
+  if (node.ref || (node.hints && node.hints.length)) return false;
+  if (node.role === "StaticText") return controls.has(labelKey(node.name));
+  return node.role === "LabelText" && plainContainer(node) && onlyText(node.children) && controls.has(labelKey(textOf(node)));
+}
+
+function withoutEchoes(node: Node, children: Node[], trimmed: Trimmed): Node[] {
+  const value = joinedWords(node.value);
+  let kept = children;
+  if (value && (node.ref || INTERACTIVE.has(node.role))) {
+    kept = kept.filter((child) => {
+      const echo = child.role === "StaticText" && !child.ref && joinedWords(child.name) === value;
+      if (echo) trimmed.lines += 1;
+      return !echo;
+    });
+  }
+  const controls = new Set(kept.filter((child) => child.ref && INTERACTIVE.has(child.role) && joinedWords(child.name)).map((child) => labelKey(child.name)));
+  if (controls.size === 0) return kept;
+  return kept.filter((child) => {
+    const echo = echoesControl(child, controls);
+    if (echo) trimmed.lines += lineCount(child);
+    return !echo;
+  });
+}
+
+export function compactTree(nodes: readonly Node[], lean = false, trimmed: Trimmed = { lines: 0 }): Node[] {
   const visit = (node: Node, insideRef: boolean): Node[] => {
     let ref = node.ref;
     let hints = node.hints;
@@ -32,6 +70,13 @@ export function compactTree(nodes: readonly Node[]): Node[] {
     }
     const holdsRef = insideRef || Boolean(ref);
     let children = node.children.flatMap((child) => visit(child, holdsRef));
+    if (lean) {
+      children = withoutEchoes(node, children, trimmed);
+      if (!node.name && !ref && !(hints && hints.length) && !node.value && LEAN_LIFTED.has(node.role) && node.props.get("level") === undefined) {
+        trimmed.lines += 1;
+        return children;
+      }
+    }
     let name = node.name;
     const squashedName = joinedWords(name);
     if (squashedName && children.length > 0) {

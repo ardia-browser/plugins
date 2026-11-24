@@ -5,6 +5,9 @@ import type { Element, Page } from "./page.ts";
 export const NAVIGATED_REFS_KEPT = 4000;
 export const OPEN_REPLACED_KEPT = 16;
 export const OPEN_TITLE_SHOWN = 80;
+export const SHOWN_MATCHES = 6;
+
+export type Redrawn = { unique: Ref | null; same: string[]; sameRole: string[] };
 
 export type OpenReplaced = { target: string; documents: Set<string>; from: string; to: string };
 
@@ -245,12 +248,19 @@ export abstract class Refs {
     if (element === null) gone = "the element is no longer in the page";
     else if (!(await page.call("(el) => el.isConnected", [element], { frame: ref.frame }))) gone = "the element was removed from the page";
     else return [page, element];
-    const successor = await this.redrawn(page, ref);
+    const found = await this.redrawnAll(page, ref);
+    const successor = found.unique;
     if (successor === null) {
       const code = this.elementCode(ref);
-      throw new StaleRef(refId, code === SUPERSEDED ? `${gone}, and the page has nothing in common with that snapshot any more` : gone, null, code);
+      const missing = new StaleRef(refId, code === SUPERSEDED ? `${gone}, and the page has nothing in common with that snapshot any more` : gone, null, code);
+      const named = found.same.filter((id) => this.refs.has(id));
+      missing.ambiguous = named.length > 1;
+      missing.matches = (named.length > 1 ? named : code === SUPERSEDED ? [] : found.sameRole.filter((id) => this.refs.has(id))).slice(0, SHOWN_MATCHES);
+      throw missing;
     }
-    throw new StaleRef(refId, `${gone}; the page redrew it, and the same ${ref.role} "${ref.name}" is now @${successor.id}`);
+    const redrawn = new StaleRef(refId, `${gone}; the page redrew it, and the same ${ref.role} "${ref.name}" is now @${successor.id}`);
+    redrawn.successor = successor.id;
+    throw redrawn;
   }
 
   async afterNavigation(old: Ref): Promise<string> {
@@ -270,8 +280,13 @@ export abstract class Refs {
   }
 
   async redrawn(page: Page, ref: Ref): Promise<Ref | null> {
+    return (await this.redrawnAll(page, ref)).unique;
+  }
+
+  async redrawnAll(page: Page, ref: Ref): Promise<Redrawn> {
+    const none: Redrawn = { unique: null, same: [], sameRole: [] };
     const snapshots = Refs.snapshots;
-    if (!ref.role || !ref.name || snapshots === null) return null;
+    if (!ref.role || !ref.name || snapshots === null) return none;
     let nodes: unknown;
     try {
       nodes = await snapshots.collect(this, page);
@@ -279,10 +294,13 @@ export abstract class Refs {
     } catch (error) {
       if (error instanceof ConnectionLost) throw error;
       if (error instanceof Error && error.name === "CancelledError") throw error;
-      return null;
+      return none;
     }
-    const same = [...snapshots.walk(nodes)].filter((node) => (node.ref || node.boxless) && node.role === ref.role && node.name === ref.name).map((node) => node.ref ?? null);
-    return same.length === 1 && same[0] ? (this.refs.get(same[0]) ?? null) : null;
+    const walked = [...snapshots.walk(nodes)];
+    const same = walked.filter((node) => (node.ref || node.boxless) && node.role === ref.role && node.name === ref.name).map((node) => node.ref ?? null);
+    const sameRole = walked.filter((node) => node.ref && node.role === ref.role && node.name).map((node) => node.ref as string);
+    const unique = same.length === 1 && same[0] ? (this.refs.get(same[0]) ?? null) : null;
+    return { unique, same: same.filter((id): id is string => id !== null), sameRole };
   }
 
   refsJson(): Record<string, { name: string; role: string }> {

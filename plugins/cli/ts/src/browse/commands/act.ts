@@ -21,6 +21,7 @@ import { Result } from "../daemon/render.ts";
 import { inputOf } from "../input/input.ts";
 import { COMMANDS_FETCH_BYTES, COMMANDS_PAGE_TEXT_MARK } from "../js/index.ts";
 import { flag } from "../metrics.ts";
+import { parseRef } from "../state/refs.ts";
 import type { Element, Page } from "../state/page.ts";
 import type { Json } from "../state/records.ts";
 import { newTab } from "./core.ts";
@@ -34,10 +35,54 @@ export const NO_REACTION_HINT =
   "\n→ Nothing else on the page changed yet. Some fields only apply when you press Enter or leave them: " + "`press Enter` or `press Tab`, then check again";
 export const DOWNLOAD_FETCH_LIMIT = 50 * 1024 * 1024;
 
+export const LABEL_FALLBACK: ReadonlySet<string> = new Set(["fill", "select", "check", "uncheck"]);
+const NOT_A_LABEL = /^[#.[/(*>~+:@]|^[a-z-]+=|^-/u;
+const BY_LABEL = "(t) => ardiaBrowse.findLabel(t, true) || ardiaBrowse.findLabel(t, false) || ardiaBrowse.findAttr('placeholder', t, false) || ardiaBrowse.findAttr('name', t, true)";
+
+export function labelShaped(selector: string): boolean {
+  return parseRef(selector) === null && !NOT_A_LABEL.test(selector) && /\p{L}/u.test(selector);
+}
+
+async function byLabel(ctx: Ctx, label: string): Promise<[Page, Element] | null> {
+  const page = await ctx.state.page();
+  const frame = (ctx.state.frameFor(page) || page.mainFrame) as string;
+  const element = await page.elementFrom(await page.call(BY_LABEL, [label], { frame, byValue: false, read: true }), frame, label);
+  if (element === null) return null;
+  flag("field_label_fallback", true);
+  return [page, element];
+}
+
+function missed(error: unknown): boolean {
+  return error instanceof BrowseError && (error.code === "not_found" || (!error.code && error.text.startsWith("Invalid selector")));
+}
+
+async function located(ctx: Ctx, selector: string, wait: number): Promise<[Page, Element]> {
+  if (!LABEL_FALLBACK.has(ctx.command) || !labelShaped(selector)) return ctx.state.locate(selector, null, wait);
+  try {
+    return await ctx.state.locate(selector, null, 0);
+  } catch (error) {
+    if (!missed(error)) throw error;
+  }
+  const labelled = await byLabel(ctx, selector);
+  if (labelled !== null) return labelled;
+  try {
+    return await ctx.state.locate(selector, null, wait);
+  } catch (error) {
+    if (!missed(error)) throw error;
+    const late = await byLabel(ctx, selector);
+    if (late !== null) return late;
+    throw new BrowseError(
+      `Element not found: ${selector} (no CSS match, and no field is labelled, named or has the placeholder "${selector}"). Use an @ref from \`ardia browse form\` or \`snapshot -i\``,
+      null,
+      "not_found",
+    );
+  }
+}
+
 export async function resolve(ctx: Ctx, selector: string): Promise<[Page, Element]> {
   const reading = CHECKS_PRESENCE.has(ctx.command);
   if (!reading) await refuseIfDialogFor(ctx.state, selector, `\`${ctx.command}\``);
-  const [page, element] = await ctx.state.locate(selector, null, reading ? 0 : APPEAR_WAIT);
+  const [page, element] = await located(ctx, selector, reading ? 0 : APPEAR_WAIT);
   if (!reading) await guardDrift(page, element, selector, ctx.command);
   return [page, element];
 }
