@@ -14,7 +14,7 @@ const KIB = 1024;
 const MIB = 1024 * KIB;
 const TELEMETRY_FILE_CAP = 1 * MIB;
 const TELEMETRY_TOTAL_CAP = 6 * MIB;
-const TELEMETRY_DAYS = 8;
+const TELEMETRY_DAYS_BACK = 7;
 const TELEMETRY_FILE = /^(?:cli-)?\d{4}-\d{2}-\d{2}\.jsonl$/;
 const CRASH_COUNT = 5;
 const CRASH_FILE_CAP = 2 * MIB;
@@ -107,8 +107,10 @@ class Collector {
 
 function collectTelemetry(collector: Collector, dataRoot: string): void {
   const folder = join(dataRoot, "Telemetry", "local");
-  const oldest = iso(now() - TELEMETRY_DAYS * 24 * 60 * 60).slice(0, 10);
-  const files = listFiles(folder).filter((file) => TELEMETRY_FILE.test(file.name) && file.name.replace(/^cli-/, "").slice(0, 10) >= oldest);
+  const today = iso(now()).slice(0, 10);
+  const oldest = iso(now() - TELEMETRY_DAYS_BACK * 24 * 60 * 60).slice(0, 10);
+  const dated = (name: string) => name.replace(/^cli-/, "").slice(0, 10);
+  const files = listFiles(folder).filter((file) => TELEMETRY_FILE.test(file.name) && dated(file.name) >= oldest && dated(file.name) <= today);
   if (files.length === 0) {
     collector.skipped.push({ what: "the local usage log", why: `no files in ${shownPath(folder)}` });
     return;

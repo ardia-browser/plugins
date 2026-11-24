@@ -6,11 +6,12 @@ const WHOLE_URL = /\b([a-zA-Z][a-zA-Z0-9+.-]{1,15}:\/\/)([^\s/?#<>"'`]*@)?([^\s/
 const HOST = String.raw`(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,24}|\d{1,3}(?:\.\d{1,3}){3}|localhost)(?::\d{1,5})?`;
 const REST = String.raw`[^\s<>"'` + "`" + "]";
 const BARE_URL = new RegExp(String.raw`(?<![\w@/.:-])(${HOST})([/?]${REST}+)`, "gi");
-const SCHEMELESS_URL = new RegExp(String.raw`(?<![\w:/])//(${HOST})([/?]${REST}*)`, "gi");
+const SCHEMELESS_URL = new RegExp(String.raw`(?<![\w:/])//((?:[^\s/?#<>"'` + "`" + String.raw`]*@)?)(${HOST})((?:[/?]${REST}*)?)`, "gi");
+const LONG_RUN = /[A-Za-z0-9._%+~\/=-]{512,}/g;
 const REVERSED_NAME = /^(?:com|org|net|io|dev|app|co|me)\./i;
 const FILE_ENDINGS: readonly string[] = [
   "framework", "dylib", "bundle", "xpc", "json", "jsonl", "tsx", "jsx", "ts", "js", "mjs", "cjs", "cpp", "hpp", "html", "css", "log", "txt", "lock", "yml",
-  "yaml", "toml", "plist", "ips", "png", "jpg", "gif", "gz", "tar", "kt", "rb", "go", "php",
+  "yaml", "toml", "plist", "ips", "png", "jpg", "gif", "gz", "tar", "kt", "rb", "go", "php", "swift", "mm",
 ];
 const HOME_NAME = /^[\p{L}\p{N}._-]{3,64}$/u;
 const CATEGORIES: readonly (readonly [string, RegExp])[] = [
@@ -47,20 +48,22 @@ export function hostOnlyUrls(text: string): [string, number] {
   return [out, cut];
 }
 
-function looksLikeFile(host: string): boolean {
-  const name = host.replace(/:\d+$/, "").toLowerCase();
+function looksLikeFile(host: string, rest: string): boolean {
+  if (/:\d+$/.test(host) || rest.includes("?")) return false;
+  const name = host.toLowerCase();
   return REVERSED_NAME.test(name) || FILE_ENDINGS.includes(name.slice(name.lastIndexOf(".") + 1));
 }
 
 export function bareUrlPaths(text: string): [string, number] {
   let cut = 0;
-  const relative = text.replace(SCHEMELESS_URL, (whole, host: string, rest: string) => {
-    if (rest === "/" || rest === PATH_PLACEHOLDER) return whole;
+  const relative = text.replace(SCHEMELESS_URL, (whole, login: string, host: string, rest: string) => {
+    const keepsRest = rest === "" || rest === "/" || rest === PATH_PLACEHOLDER;
+    if (login === "" && keepsRest) return whole;
     cut += 1;
-    return `//${host}${PATH_PLACEHOLDER}`;
+    return `//${host}${keepsRest ? rest : PATH_PLACEHOLDER}`;
   });
-  const out = relative.replace(BARE_URL, (whole, host: string) => {
-    if (looksLikeFile(host)) return whole;
+  const out = relative.replace(BARE_URL, (whole, host: string, rest: string) => {
+    if (looksLikeFile(host, rest)) return whole;
     cut += 1;
     return `${host}${PATH_PLACEHOLDER}`;
   });
@@ -82,7 +85,7 @@ export function homeNameSegments(text: string, name: string | undefined = homeNa
 export function triageScrub(text: string): { text: string; removed: Removed } {
   const [hosted, urls] = hostOnlyUrls(text);
   const [pathless, bareUrls] = bareUrlPaths(hosted);
-  const scrubbed = homeNameSegments(scrub(pathless));
+  const scrubbed = homeNameSegments(scrub(pathless.replace(LONG_RUN, "<secret>")));
   const removed = emptyRemoved();
   for (const [name, pattern] of CATEGORIES) removed.set(name, Math.max(0, occurrences(scrubbed, pattern) - occurrences(text, pattern)));
   removed.set(URL_CATEGORY, urls + bareUrls);

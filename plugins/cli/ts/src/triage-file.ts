@@ -153,6 +153,12 @@ function remember(dir: Dir, entry: Filed): void {
   writeJsonIn(dir, FILED_JSON, object([["filed", rows]]));
 }
 
+function forget(dir: Dir, code: string, via: string): void {
+  const entries = filedEntries(dir).filter((item) => !(item.code === code && item.via === via));
+  const rows: Value[] = entries.map((item) => object([["code", item.code], ["via", item.via], ["where", item.where], ["state", item.state], ["at", iso(now())]]));
+  writeJsonIn(dir, FILED_JSON, object([["filed", rows]]));
+}
+
 function which(program: string): string | undefined {
   for (const folder of (env("PATH") ?? "").split(":")) {
     if (folder === "") continue;
@@ -211,6 +217,8 @@ function postWithGh(gh: string, repo: string, report: Stored, dir: Dir, sessionD
   const bodyFile = `${POST_PREFIX}body-${report.code}.md`;
   writePrivate(titleFile, dir, utf8(report.title));
   writePrivate(bodyFile, dir, utf8(report.body));
+  const mine = `https://github.com/${repo}/issues?q=author%3A%40me`;
+  remember(dir, { code: report.code, via: "gh", where: `unknown: the last try didn't finish; check ${mine} before trying again`, state: "uncertain" });
   const created = run(gh, [
     "api", "--hostname", "github.com", "graphql",
     "-f", `repo=${nodeId}`,
@@ -222,16 +230,16 @@ function postWithGh(gh: string, repo: string, report: Stored, dir: Dir, sessionD
   const answer = jsonOf(created.stdout);
   const issue = dig(answer, "data", "createIssue", "issue");
   const url = dig(issue, "url");
-  if (created.status !== 0 || typeof url !== "string" || !url.startsWith("https://")) {
+  if (typeof url !== "string" || !url.startsWith("https://")) {
     flag(call, "triage_refused");
     const errors = dig(answer, "errors");
     const refused = Array.isArray(errors) && errors.length > 0;
     if (!refused && !turnedDown(created)) {
-      const mine = `https://github.com/${repo}/issues?q=author%3A%40me`;
       remember(dir, { code: report.code, via: "gh", where: `unknown: gh gave no clear answer; check ${mine} before trying again`, state: "uncertain" });
       const what = created.timedOut ? `gh didn't answer in ${GH_TIMEOUT_MS / 1000} s` : `gh stopped without a clear answer (${firstLine(created.stderr) || "no message"})`;
       return { status: 1, out: [], err: [`ardia triage: ${what}, so the issue may or may not exist. Check ${mine} before filing again.`] };
     }
+    forget(dir, report.code, "gh");
     const why = refused && errors[0] instanceof Map && typeof errors[0].get("message") === "string" ? (errors[0].get("message") as string) : firstLine(created.stderr);
     return { status: 1, out: [], err: [`ardia triage: GitHub refused the issue (${why || "no reason given"}); nothing was filed. Try --via form, or --via feedback.`] };
   }
@@ -357,10 +365,12 @@ async function comment(number: number, via: string | undefined, repo: string, re
     if (issue.get("state") !== "open") throw new TriageRefused(`#${number} is closed; file a new report instead (drop --comment-on)`);
     const commentFile = `${POST_PREFIX}comment-${report.code}-${number}.md`;
     writePrivate(commentFile, dir, utf8(commentText(report)));
+    remember(dir, { code: report.code, via: `comment-${number}`, where: `unknown: the last try didn't finish; check ${page}`, state: "uncertain" });
     const posted = run(gh, ["api", "--hostname", "github.com", `repos/${repo}/issues/${number}/comments`, "-F", `body=@${join(sessionDir, commentFile)}`]);
     const url = dig(jsonOf(posted.stdout), "html_url");
-    if (posted.status !== 0 || typeof url !== "string") {
-      if (!turnedDown(posted)) remember(dir, { code: report.code, via: `comment-${number}`, where: `unknown: gh gave no clear answer; check ${page}`, state: "uncertain" });
+    if (typeof url !== "string" || !url.startsWith("https://")) {
+      if (turnedDown(posted)) forget(dir, report.code, `comment-${number}`);
+      else remember(dir, { code: report.code, via: `comment-${number}`, where: `unknown: gh gave no clear answer; check ${page}`, state: "uncertain" });
       flag(call, "triage_refused");
       return { status: 1, out: [], err: [`ardia triage: the comment didn't go through (${firstLine(posted.stderr) || "no answer"}). Check ${page} before trying again.`] };
     }

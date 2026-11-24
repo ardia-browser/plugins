@@ -153,6 +153,8 @@ function plantEvidence(box: Sandbox): void {
   fs.writeFileSync(path.join(local, `${TODAY}.jsonl`), `${JSON.stringify(event)}\n`);
   fs.writeFileSync(path.join(local, `cli-${TODAY}.jsonl`), `${JSON.stringify({ event: "cli_command", api_key: API_KEY })}\n`);
   fs.writeFileSync(path.join(local, "2000-01-01.jsonl"), `${JSON.stringify({ event: "long_ago" })}\n`);
+  fs.writeFileSync(path.join(local, `${new Date(Date.now() - 9 * 86400000).toISOString().slice(0, 10)}.jsonl`), `${JSON.stringify({ event: "nine_days_ago" })}\n`);
+  fs.writeFileSync(path.join(local, "2099-01-01.jsonl"), `${JSON.stringify({ event: "far_future" })}\n`);
   const config = MAC ? path.join(box.home, ".config", "ardia") : path.join(box.data, "config");
   fs.mkdirSync(config, { recursive: true });
   fs.mkdirSync(path.join(box.data, "config"), { recursive: true });
@@ -249,7 +251,7 @@ test("a no on the terminal exits 1 having collected nothing", async () => {
     assert.equal(ran.status, 1, ran.out);
     assert.match(ran.out, /It reads: {8}Ardia's version and settings/);
     assert.match(ran.out, /Continue\? \[y\/N\]/);
-    assert.match(ran.out, /Nothing was read/);
+    assert.match(ran.out, /Nothing was collected/);
     assert.deepEqual(sessions(box), []);
     assert.equal(fs.existsSync(path.join(triageDir(box), "consent.json")), false);
     assert.equal(recorded(box, "claude"), 0);
@@ -264,7 +266,7 @@ test("a yes is saved: the next run prints one line, and --reset-consent asks aga
     standIn(box, "claude");
     const enter = await onTerminal(box, ["triage"], "\n");
     assert.equal(enter.status, 1, enter.out);
-    assert.match(enter.out, /Nothing was read/);
+    assert.match(enter.out, /Nothing was collected/);
     assert.deepEqual(sessions(box), []);
     const first = await onTerminal(box, ["triage"], "y\n");
     assert.equal(first.status, 0, first.out);
@@ -418,7 +420,7 @@ test("evidence is copied scrubbed: a planted secret, email, home path and URL pa
     assert.match(text, /<email>/);
     const names = fs.readdirSync(path.join(session, "evidence")).sort();
     assert.deepEqual(names, ["README.md", "config.json", `usage-${TODAY}.jsonl`, `usage-cli-${TODAY}.jsonl`]);
-    assert.ok(!text.includes("long_ago"));
+    for (const left of ["long_ago", "nine_days_ago", "far_future"]) assert.ok(!text.includes(left), left);
     const readme = fs.readFileSync(path.join(session, "evidence", "README.md"), "utf8");
     assert.doesNotMatch(readme, /hooks/);
     assert.ok(readme.includes(`usage-${TODAY}.jsonl`));
@@ -1199,6 +1201,89 @@ test("a relative ARDIA_CLI_HOME still makes a session triage file accepts, the s
     const inside = await run(box, ["triage", "--yes", "--print"], { ARDIA_CLI_HOME: path.join(box.data, "cli") });
     assert.equal(inside.status, 2);
     assert.match(inside.err, /which triage keeps the agent out of/);
+  } finally {
+    cleanup(box);
+  }
+});
+
+test("a login on an address that starts with // goes, and a port or a query makes a reversed name an address", () => {
+  for (const [given, expected] of [
+    ["//alice:open-sesame@localhost:3000/private?q=alice", "//localhost:3000/<path>"],
+    ["org.example.net:8443/private?q=alice", "org.example.net:8443/<path>"],
+    ["org.example.net/private?q=alice", "org.example.net/<path>"],
+    ["FocusHandoff.swift/handoff and window_host.mm/reattach", "FocusHandoff.swift/handoff and window_host.mm/reattach"],
+    ["//cdn.example.org/", "//cdn.example.org/"],
+  ] as [string, string][]) assert.equal(triageScrub(given).text, expected);
+});
+
+test("a settings file with a very long encoded value is collected quickly, without the value", async () => {
+  const box = sandbox();
+  try {
+    plantEvidence(box);
+    const blob = Buffer.from(Uint8Array.from({ length: 192 * 1024 }, (_, index) => (index * 31 + 7) % 251)).toString("base64");
+    for (const folder of [MAC ? path.join(box.home, ".config", "ardia") : path.join(box.data, "config"), path.join(box.data, "config")]) {
+      fs.writeFileSync(path.join(folder, "config.json"), JSON.stringify({ theme: "nord", icon: blob }));
+    }
+    const started = Date.now();
+    const ran = await run(box, ["triage", "--yes", "--print"]);
+    assert.equal(ran.status, 0, ran.err);
+    assert.ok(Date.now() - started < 5000, `took ${Date.now() - started} ms`);
+    const config = fs.readFileSync(path.join(sessions(box)[0] as string, "evidence", "config.json"), "utf8");
+    assert.ok(config.length < 200 && config.includes('"theme":"nord"'), config.slice(0, 200));
+  } finally {
+    cleanup(box);
+  }
+});
+
+test("an issue gh created is filed even when gh exits 1, and a post cut short is not sent again", async () => {
+  const box = sandbox();
+  try {
+    standIn(
+      box,
+      "gh",
+      `case "$1 $2" in
+"auth status") exit 0;;
+esac
+case "$*" in
+*"--jq .node_id"*) echo R_kgTest; exit 0;;
+*graphql*) if [ -n "$GH_DIES" ]; then kill -9 $PPID; exit 0; fi; echo '{"data":{"createIssue":{"issue":{"url":"https://github.com/test/repo/issues/88","labels":null}}},"errors":[{"message":"labels unavailable"}]}'; exit 1;;
+esac
+exit 1`,
+    );
+    const creates = () => fs.readdirSync(box.record).filter((file) => file.startsWith("gh.") && file.endsWith(".argv") && fs.readFileSync(path.join(box.record, file), "utf8").includes("graphql")).length;
+    const first = await preparedSession(box);
+    const filed = await run(box, ["triage", "file", "--post", first.code], inSession(first.session));
+    assert.equal(filed.status, 0, filed.out + filed.err);
+    assert.match(filed.out, /^Filed: https:\/\/github\.com\/test\/repo\/issues\/88$/m);
+    const again = await run(box, ["triage", "file", "--post", first.code], inSession(first.session));
+    assert.match(again.out, /^Already filed: https:\/\/github\.com\/test\/repo\/issues\/88$/m);
+    assert.equal(creates(), 1);
+    fs.writeFileSync(path.join(box.root, "second.md"), REPORT.replace("Open two windows", "Open four windows"));
+    const prepared = await run(box, ["triage", "file", "--title", "A second report", "--body", "second.md"], inSession(first.session));
+    const code = /^Code: ([0-9a-f]{8})$/m.exec(prepared.out)?.[1] as string;
+    const killed = await run(box, ["triage", "file", "--post", code], inSession(first.session, { GH_DIES: "1" }));
+    assert.notEqual(killed.status, 0);
+    assert.equal(creates(), 2);
+    const retried = await run(box, ["triage", "file", "--post", code], inSession(first.session));
+    assert.match(retried.out, /^Not sent again: the last try may have gone out/m);
+    assert.equal(creates(), 2);
+  } finally {
+    cleanup(box);
+  }
+});
+
+test("the agent is handed absolute paths when the CLI home and data dir were given as relative ones", async () => {
+  const box = sandbox();
+  try {
+    standIn(box, "claude");
+    fs.mkdirSync(path.join(box.root, "profile"), { recursive: true });
+    const ran = await run(box, ["triage", "--yes"], { ARDIA_CLI_HOME: "cli", ARDIA_DATA_DIR: "profile" });
+    assert.equal(ran.status, 0, ran.err);
+    const env = fs.readFileSync(path.join(box.record, "claude.0.env"), "utf8");
+    assert.match(env, new RegExp(`^ARDIA_CLI_HOME=${box.cli}$`, "m"));
+    assert.match(env, new RegExp(`^ARDIA_DATA_DIR=${path.join(box.root, "profile")}$`, "m"));
+    const printed = await run(box, ["triage", "--yes", "--print"], { ARDIA_CLI_HOME: "cli", ARDIA_DATA_DIR: "profile" });
+    assert.ok(printed.out.includes(`ARDIA_CLI_HOME=${JSON.stringify(box.cli)}`), printed.out);
   } finally {
     cleanup(box);
   }

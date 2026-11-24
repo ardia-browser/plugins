@@ -2575,7 +2575,8 @@ In order, `ardia triage`:
 
    A yes is saved in `<CLI home>/triage/consent.json` (0600, in a 0700 folder); later runs print one line instead.
    `--reset-consent` forgets it and asks again. With no terminal and no saved yes it needs `--yes`, which agrees for
-   that run only and isn't saved. A no exits 1 having collected nothing.
+   that run only and isn't saved. A no exits 1 having collected nothing; the run is still counted like any `ardia`
+   command (`triage_declined`), under the usual sharing consent.
 3. **Makes the session folder**, only after the yes: `<CLI home>/triage/<UTC time>/` (0700), never inside Ardia's
    data dir. It holds `session.json` (the agent, model, versions and data dir, for `triage file`), `context.md`,
    `evidence/` and `playbook.md`.
@@ -2593,7 +2594,7 @@ In order, `ardia triage`:
      is, where it came from, how much was cut and removed, and what was skipped or missing (normal on an install
      Ardia never ran on: nothing fails for it). The sources: the local usage log,
      `<data dir>/Telemetry/local/<UTC day>.jsonl` and the CLI's `cli-<UTC day>.jsonl` (the last 1 MB of each in
-     whole lines, newest days first, 6 MB in all, and only files dated in the last 8 days); on macOS the newest five `.ips` crash and hang reports in
+     whole lines, newest days first, 6 MB in all, and only files dated today or in the seven days before); on macOS the newest five `.ips` crash and hang reports in
      `~/Library/Logs/DiagnosticReports` named `Ardia-…` or `Chromium Helper…` whose first 64 KB say they are
      Ardia's (2 MB each, as `packages/shell/ios/CrashReports.swift` picks them); and `config.json`, which can name
      sites the user set something up for (a search provider, a rule). `ardia hooks`' log is not copied: it holds
@@ -2609,7 +2610,8 @@ In order, `ardia triage`:
      `ARDIA_TRIAGE_PLAYBOOK_URL` (loopback only, read by checkout builds alone) points both requests at a test server.
 4. **Starts the agent** interactively in the session folder with the terminal handed over, `ARDIA_TRIAGE=1`,
    `ARDIA_TRIAGE_SESSION=<folder>` and `ARDIA_TRIAGE_AGENT=claude|codex` added to its environment (and
-   `ARDIA_DATA_DIR` when `--data-dir` was given), and the prompt "Read playbook.md in this folder and follow it." plus
+   `ARDIA_CLI_HOME` and `ARDIA_DATA_DIR` as absolute paths when either was set, since the agent runs in another
+   folder), and the prompt "Read playbook.md in this folder and follow it." plus
    the user's description:
    - Claude Code: `claude --permission-mode manual --settings '{"permissions":{"deny":[…],"ask":[…]}}' [--model M]
      <prompt>`: ask-first mode (`default` on a Claude Code whose `--help` lists that name and not `manual`). `deny`
@@ -2640,9 +2642,11 @@ first: What happened, Diagnosis, Steps to reproduce, Version and Environment are
 and Fix applied or workaround are optional; any other heading is an error that names the allowed ones (a heading
 inside a code fence is text). The title (1-67 characters after scrubbing) and every section go through `scrub.ts` and
 rules for triage only: a URL keeps its scheme and host, its login goes and its path and query become `/<path>`; an
-address written without a scheme (`mail.example.org/inbox/1`, `//host/x`, `192.0.2.8/x`, `localhost:3000/x`, with
-or without a port) loses its path the same way, while reversed names and file names (`com.ardia.browser/…`,
-`ArdiaCore.framework/…`, `index.js/…`) are left as they are; and the home folder's name is replaced wherever it is
+address written without a scheme (`mail.example.org/inbox/1`, `//user:pw@host/x`, `192.0.2.8/x`,
+`localhost:3000/x`, with or without a port) loses its login and path the same way, while reversed names and file
+names with no port and no query (`com.ardia.browser/…`, `ArdiaCore.framework/…`, `index.js/…`) are left as they
+are; an unbroken run of 512 or more letters, digits and `._%+~/=-` (an encoded image, a key) becomes `<secret>`,
+which also keeps the scrub's time bounded on long lines; and the home folder's name is replaced wherever it is
 a path segment, not only under `/Users` and `/home` (`ts/src/triage-scrub.ts`; `scrub()` and `ardia feedback` are
 unchanged). These are patterns, so a best effort: the user reads the text before it goes anywhere. A required section with nothing left is
 refused. The command adds the "Filed by" line itself from the session: `<claude|codex|a coding agent> via ardia triage
@@ -2663,9 +2667,10 @@ answers `Already filed: <where>` and files nothing, and one `ardia triage file` 
   reporter: `gh api graphql` `createIssue` with `issueTemplate: "Triage report"`, the title and body passed as
   `-F title=@file` and `-F body=@file` so no shell parses them. The body is the sections under `### <label>` headings
   matching the form (`.github/ISSUE_TEMPLATE/via-triage.yml`), Evidence in a `shell` fence. It prints the issue's
-  address and whether it has the label. A request GitHub turns down (a GraphQL error, or `gh` reporting HTTP 4xx)
-  files nothing and can be tried again; one that times out or ends with no clear answer is kept as uncertain and
-  not sent again, since the issue may exist.
+  address and whether it has the label. An answer that carries the issue's address counts as filed whatever `gh`'s
+  exit code. The try is written to `filed.json` as uncertain before `gh` runs: a request GitHub turns down (a
+  GraphQL error with no issue, or `gh` reporting HTTP 4xx) clears it and can be tried again; one that times out,
+  ends with no clear answer or is cut short stays uncertain and is not sent again, since the issue may exist.
 - `gh` installed but signed out, and no `--via`: nothing is posted; one line says so and names `--via form` and
   `--via feedback`; exit 3. The playbook has the agent offer `gh auth login` once.
 - No `gh`, or `--via form`: `https://github.com/ardia-browser/ardia/issues/new?template=via-triage.yml&title=…&<field

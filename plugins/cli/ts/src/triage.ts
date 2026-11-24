@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { accessSync, constants as fsConstants, readSync, statSync } from "node:fs";
+import { accessSync, constants as fsConstants, readSync, realpathSync, statSync } from "node:fs";
 import { isatty } from "node:tty";
 import { iso, now } from "./clock.ts";
 import { dataRoot } from "./control.ts";
@@ -192,7 +192,31 @@ function promptFor(description: string | undefined): string {
   return description === undefined ? PROMPT : `${PROMPT} What went wrong, in the user's words: ${description}`;
 }
 
-function sessionLines(session: Session, prompt: string, agentCommand: string): string[] {
+function resolved(path: string): string {
+  let rest = "";
+  let current = path;
+  for (;;) {
+    try {
+      return `${realpathSync(current)}${rest}`;
+    } catch {
+      const cut = current.lastIndexOf("/");
+      if (cut <= 0) return path;
+      rest = `${current.slice(cut)}${rest}`;
+      current = current.slice(0, cut);
+    }
+  }
+}
+
+function sessionEnv(session: Session, args: TriageArgs): Record<string, string> {
+  const extra: Record<string, string> = { [MODE_ENV]: "1", [SESSION_ENV]: session.dir };
+  if (envSet("ARDIA_CLI_HOME") !== undefined) extra.ARDIA_CLI_HOME = session.home;
+  const dataDir = args.dataDir ?? envSet("ARDIA_DATA_DIR");
+  if (dataDir !== undefined) extra.ARDIA_DATA_DIR = abspath(dataRoot(dataDir));
+  return extra;
+}
+
+function sessionLines(session: Session, args: TriageArgs, prompt: string, agentCommand: string): string[] {
+  const variables = Object.entries(sessionEnv(session, args)).map(([name, value]) => `${name}=${name === MODE_ENV ? value : JSON.stringify(value)}`).join(" ");
   return [
     `Session folder: ${session.dir}`,
     "  context.md   the facts about this install and the files never to read",
@@ -203,7 +227,7 @@ function sessionLines(session: Session, prompt: string, agentCommand: string): s
     `  ${prompt}`,
     "",
     "and these variables, so ardia knows it's a triage session:",
-    `  cd ${JSON.stringify(session.dir)} && ${MODE_ENV}=1 ${SESSION_ENV}=${JSON.stringify(session.dir)} ${agentCommand}`,
+    `  cd ${JSON.stringify(session.dir)} && ${variables} ${agentCommand}`,
   ];
 }
 
@@ -223,7 +247,8 @@ function launch(path: string, args: string[], cwd: string, extra: Record<string,
 
 async function prepareSession(home: string, args: TriageArgs, agent: Agent | undefined, description: string | undefined): Promise<Session> {
   const root = abspath(dataRoot(args.dataDir));
-  const inside = neverRead(root).folders.find((folder) => home === folder || home.startsWith(`${folder}/`));
+  const realHome = resolved(home);
+  const inside = neverRead(root).folders.find((folder) => realHome === resolved(folder) || realHome.startsWith(`${resolved(folder)}/`));
   if (inside !== undefined) throw new TriageRefused(`the ardia command keeps its files in ${home}, inside ${inside}, which triage keeps the agent out of; set ARDIA_CLI_HOME to a folder somewhere else`);
   const session = newSession(home);
   makeSourceCache(home);
@@ -270,7 +295,7 @@ async function prepareSession(home: string, args: TriageArgs, agent: Agent | und
       ["model", args.model ?? null],
       ["cli_version", cliVersion()],
       ["created_at", iso(now())],
-      ["data_dir", args.dataDir ?? envSet("ARDIA_DATA_DIR") ?? null],
+      ["data_dir", args.dataDir !== undefined || envSet("ARDIA_DATA_DIR") !== undefined ? root : null],
       ["data_root", root],
       ["playbook", playbook.source],
     ]),
@@ -293,7 +318,7 @@ async function triage(args: TriageArgs, call: Call): Promise<Said> {
   flag(call, `triage_agent_${agent === undefined || args.print ? "none" : agent.id}`);
   if (!consent(home, args, agent)) {
     flag(call, "triage_declined");
-    return { status: 1, out: ["Nothing was read. Run ardia triage again whenever you like."], err: [] };
+    return { status: 1, out: ["Nothing was collected. Run ardia triage again whenever you like."], err: [] };
   }
   const description = args.what.join(" ").trim() || undefined;
   const session = await prepareSession(home, args, agent, description);
@@ -301,14 +326,13 @@ async function triage(args: TriageArgs, call: Call): Promise<Said> {
   if (agent === undefined || path === undefined || args.print) {
     flag(call, "triage_printed");
     const lead = args.print ? [] : ["Neither claude nor codex is on PATH, so no agent was started.", ""];
-    return { status: 0, out: [...lead, ...sessionLines(session, prompt, agent?.id ?? "<your agent>")], err: [] };
+    return { status: 0, out: [...lead, ...sessionLines(session, args, prompt, agent?.id ?? "<your agent>")], err: [] };
   }
-  const extra: Record<string, string> = { [MODE_ENV]: "1", [SESSION_ENV]: session.dir, [AGENT_ENV]: agent.id };
-  if (args.dataDir !== undefined) extra.ARDIA_DATA_DIR = abspath(args.dataDir);
+  const extra: Record<string, string> = { ...sessionEnv(session, args), [AGENT_ENV]: agent.id };
   say(`Starting ${agent.label} in ${session.dir}. It will ask what went wrong.\n`);
   flag(call, "triage_launched");
   const ended = await launch(path, launchArgs(agent, path, prompt, args.model, abspath(dataRoot(args.dataDir)), sourceCache(home)), session.dir, extra);
   if (typeof ended === "number" && ended === 0) return { status: 0, out: [], err: [] };
   const why = typeof ended === "number" ? `${agent.label} exited with code ${ended}.` : `${agent.label} couldn't be started (${ended.message}).`;
-  return { status: typeof ended === "number" ? ended : 1, out: ["", why, "", ...sessionLines(session, prompt, agent.id)], err: [] };
+  return { status: typeof ended === "number" ? ended : 1, out: ["", why, "", ...sessionLines(session, args, prompt, agent.id)], err: [] };
 }
