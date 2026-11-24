@@ -89,6 +89,7 @@ describe("borrowed-tab navigation depth", () => {
     state.current = "USER";
     expect(openTarget(state, ["--here", "http://x/"])).toBe("USER");
     expect(openTarget(state, ["--here=true", "http://x/"])).toBe("USER");
+    expect(openTarget(state, ["--label", "--", "--here", "http://x/"])).toBe("USER");
     expect(openTarget(state, ["--", "--here", "http://x/"])).toBeNull();
     expect(openTarget(state, ["http://x/"])).toBeNull();
   });

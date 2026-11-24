@@ -217,7 +217,7 @@ export function replArgv(call: ReplCall, repl: boolean): string[] {
   return ["script", ...(repl ? ["--repl"] : []), ...(repl && call.reset ? ["--reset"] : []), ...(call.timeoutMs !== undefined ? ["--timeout", String(call.timeoutMs)] : []), "-"];
 }
 
-const UNKNOWN_REPL_FLAG = /^(?:✗\s*)?Unknown flag: --(?:repl|reset)(?:\. Did you mean [^\r\n]+)?(?:\s*\[code=[^\]]+\])?$/u;
+const UNKNOWN_REPL_FLAG = /^(?:✗\s*)?Unknown flag: --(?:repl|reset)(?:\. Did you mean --[a-z0-9-]+\??)?(?:\s*\[code=[^\]]+\])?$/u;
 
 export function replUnsupported(answer: DaemonAnswer): boolean {
   if (answer.exit === 0 || answer.out.trim() !== "") return false;

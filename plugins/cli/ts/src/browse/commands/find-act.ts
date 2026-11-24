@@ -167,22 +167,36 @@ async function ambiguousContainers(ctx: Ctx, page: Page, value: string, containe
   );
 }
 
+function mergeElements(first: readonly Element[], extra: readonly Element[]): Element[] {
+  if (extra.length === 0) return [...first];
+  const out = [...first];
+  const seen = new Set(first.map((element) => `${element.frame}:${element.backendId}`));
+  for (const element of extra) {
+    const key = `${element.frame}:${element.backendId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(element);
+  }
+  return out;
+}
+
 async function containerBySelector(ctx: Ctx, page: Page, frame: string, value: string): Promise<[Page, Element] | null> {
   const cssSelector = value.startsWith("css=") ? value.slice(4) : value;
   const css = await scopedMatches(page, frame, null, "css", cssSelector, false);
   if (css !== null) {
     if (css.length > 1) return ambiguousContainers(ctx, page, value, css);
-    if (css.length === 1) return [page, css[0] as Element];
+    const merged = mergeElements(css, await pierce.queryAll(page, frame, cssSelector, 20));
+    if (merged.length > 1) return ambiguousContainers(ctx, page, value, merged);
+    if (merged.length === 1) return [page, merged[0] as Element];
     return null;
   }
   try {
     const remote = await page.call("(s) => ardiaBrowse.queryAll(s)", [value], { frame, byValue: false, read: true });
     const matches = await page.elementsFrom(remote, frame, `--within ${value}`, 20);
     if (matches.length > 1) return ambiguousContainers(ctx, page, value, matches);
-    if (matches.length === 1) return [page, matches[0] as Element];
-    const pierced = await pierce.queryAll(page, frame, value, 20);
-    if (pierced.length > 1) return ambiguousContainers(ctx, page, value, pierced);
-    if (pierced.length === 1) return [page, pierced[0] as Element];
+    const merged = mergeElements(matches, await pierce.queryAll(page, frame, value, 20));
+    if (merged.length > 1) return ambiguousContainers(ctx, page, value, merged);
+    if (merged.length === 1) return [page, merged[0] as Element];
     return null;
   } catch (error) {
     if (!(error instanceof BrowseError) || error.code !== "page_script_error") throw error;

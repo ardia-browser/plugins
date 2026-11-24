@@ -4,6 +4,7 @@ import { flag } from "../metrics.ts";
 import type { Page } from "../state/page.ts";
 import type { State } from "../state/state.ts";
 import type { Ctx, Handler } from "./ctx.ts";
+import { type Flags, parse } from "./parse.ts";
 
 export function borrowedTab(state: State): string | null {
   const attached = state.attached;
@@ -179,12 +180,22 @@ export function tracksBorrowedNav(handler: Handler, targetOf: (state: State, arg
   return async (ctx: Ctx, argv: string[]): Promise<Result> => trackBorrowedNav(ctx.state, ctx.state ? targetOf(ctx.state, argv) : null, () => handler(ctx, argv));
 }
 
-const HERE_FLAG = /^--here(?:=(?:true|1|yes|on))?$/iu;
+export const OPEN_FLAGS: Flags = {
+  "--enable": "multi",
+  "--init-script": "multi",
+  "--capture-console": "bool",
+  "--headers": "value",
+  "--label": "value",
+  "--show": "bool",
+  "--read": "bool",
+  "--here": "bool",
+};
 
 export function openTarget(state: State, argv: readonly string[]): string | null {
-  for (const token of argv) {
-    if (token === "--") break;
-    if (HERE_FLAG.test(token)) return state.attached;
+  try {
+    const [options] = parse(argv, OPEN_FLAGS);
+    return options["here"] ? state.attached : null;
+  } catch {
+    return null;
   }
-  return null;
 }
