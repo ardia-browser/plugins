@@ -1,7 +1,7 @@
 export const PLACED_VALUE_FLAGS: readonly string[] = ["--port", "--session"];
 const SHARED_VALUE_FLAGS: readonly string[] = ["--port", "--ws", "--data-dir", "--timeout", "--session"];
 const BROWSE_LIKE = new Set(["browse", "notes"]);
-const UNTOUCHED = new Set(["computer"]);
+const UNTOUCHED = new Set(["computer", "triage"]);
 const KEEPS_PORT = new Set(["scripts"]);
 
 export type Placed = { argv: string[]; dropped: string[] };

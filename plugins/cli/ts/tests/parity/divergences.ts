@@ -17,6 +17,8 @@ const MARKER_HASH = /^ {2}"hash": "[0-9a-f]{64}",\n/mu;
 const METRIC_TEXT = new RegExp(`(?:,\\s*"(?:${TS_ONLY_METRICS.join("|")})":\\s*(?:true|false)|"(?:${TS_ONLY_METRICS.join("|")})":\\s*(?:true|false),\\s*)`, "gu");
 const SKILL_FOLDER = /(?:^|\/)(?:\.agents|\.claude|\.cursor|\.config\/opencode|\.opencode)\/skills\/ardia\/(.+)$/u;
 const TELEMETRY_COPY = /^data\/Telemetry\/local\/cli-[^/]+\.jsonl$/u;
+const TOP_HELP_USAGE = "usage: ardia [-h] [--version] [--skill] <command> ...";
+const NEW_COMMAND_ENTRY = /^ {4}triage(?: [^\n]*)?\n(?: {5,}[^\n]*\n)*/mu;
 
 export const RULES: Record<string, string> = {
   "error-remedy":
@@ -24,6 +26,7 @@ export const RULES: Record<string, string> = {
   "skill-docs":
     "the shipped skill's generated parts changed (the command index in SKILL.md, the error code table in references/troubleshooting.md, the new references/commands.md and the marker's content hash): the current text reads as the captured one (fixtures/frozen), commands.md and the marker's `hash` are dropped, and `output_chars` moves by the difference",
   "help-text": "the browse overview and the command help entries that changed read as the captured ones (fixtures/frozen/browse-help.json), with `output_chars` moved by the difference",
+  "new-commands": "the top-level help (`ardia --help`) lists `ardia triage`, which the captured outcomes predate: its entry, and the lines it wraps onto, are dropped from that help only",
 };
 
 type Swap = { now: string; then: string };
@@ -78,9 +81,13 @@ export function withoutRemedies(text: string): string {
     .replace(REMEDY_LINE, "");
 }
 
+function withoutNewCommands(text: string): string {
+  return text.startsWith(TOP_HELP_USAGE) ? text.replace(NEW_COMMAND_ENTRY, "") : text;
+}
+
 export function designedText(text: string): { text: string; delta: number } {
   const plain = withoutRemedies(text);
-  const out = swapped(withoutNewSkillSections(plain));
+  const out = withoutNewCommands(swapped(withoutNewSkillSections(plain)));
   return { text: out, delta: codePoints(out).length - codePoints(plain).length };
 }
 

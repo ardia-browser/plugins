@@ -164,6 +164,17 @@ jobs:
           fi
           diff -u "$RUNNER_TEMP/ardia-plugin.schema.json" plugins/cli/ts/assets/plugin.schema.json \
             || { echo "::error::plugins/cli/ts/assets/plugin.schema.json isn't ardia $ardia_ref's docs/plugin.schema.json: copy it over"; exit 1; }
+      - name: Compare with ardia main's .github/triage/PLAYBOOK.md
+        run: |
+          ardia_ref=main
+          set -euo pipefail
+          url=https://raw.githubusercontent.com/ardia-browser/ardia/$ardia_ref/.github/triage/PLAYBOOK.md
+          if ! curl -fsSL "$url" -o "$RUNNER_TEMP/ardia-triage-playbook.md"; then
+            echo "::warning::ardia $ardia_ref doesn't publish .github/triage/PLAYBOOK.md yet: the bundled triage playbook wasn't compared"
+            exit 0
+          fi
+          diff -u "$RUNNER_TEMP/ardia-triage-playbook.md" plugins/cli/ts/assets/triage-playbook.md \
+            || { echo "::error::plugins/cli/ts/assets/triage-playbook.md isn't ardia $ardia_ref's .github/triage/PLAYBOOK.md: copy it over"; exit 1; }
 
   main:
     name: Manifest v2 main on ubuntu-24.04

@@ -45,3 +45,9 @@ test("a remedy inside a successful payload or a successful batch row is never dr
   const okRow = '[{"command":["read"],"success":true,"result":null,"error":null,"remedy":"ardia keep"},{"command":["click"],"success":false,"result":null,"error":"e","code":"stale_ref","remedy":"ardia browse snapshot -i"}]';
   expect(withoutRemedies(okRow)).toBe('[{"command":["read"],"success":true,"result":null,"error":null,"remedy":"ardia keep"},{"command":["click"],"success":false,"result":null,"error":"e","code":"stale_ref"}]');
 });
+
+test("new-commands drops triage's entry from the top-level help only", () => {
+  const help = "usage: ardia [-h] [--version] [--skill] <command> ...\n\npositional arguments:\n  <command>\n    feedback            report\n    triage              start your coding agent to look into a\n                        problem with Ardia\n    star                star\n";
+  expect(designedText(help).text).toBe("usage: ardia [-h] [--version] [--skill] <command> ...\n\npositional arguments:\n  <command>\n    feedback            report\n    star                star\n");
+  expect(designedText("    triage              kept elsewhere\n").text).toBe("    triage              kept elsewhere\n");
+});

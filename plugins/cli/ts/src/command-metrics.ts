@@ -65,6 +65,18 @@ export const TS_ONLY_FLAGS: readonly string[] = [
   "stale_ref_after_open",
   "tab_close_interrupted",
   "tab_readopted_after_restart",
+  "triage_agent_claude",
+  "triage_agent_codex",
+  "triage_agent_none",
+  "triage_commented",
+  "triage_declined",
+  "triage_filed_feedback",
+  "triage_filed_form",
+  "triage_filed_gh",
+  "triage_launched",
+  "triage_prepared",
+  "triage_printed",
+  "triage_refused",
 ];
 
 export const TS_ONLY_COUNTS: readonly string[] = ["batch_refs_healed", "failed_step_index", "form_fields", "query_rows", "read_urls_count", "read_urls_failed", "script_calls", "script_concurrent_peak", "script_receipts_skipped", "script_repl_runs", "snapshot_find_matches", "snapshot_lean_lines", "snapshot_lines_dropped", "snapshot_new_lines", "snapshot_oopif_count"];

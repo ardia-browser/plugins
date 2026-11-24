@@ -65,6 +65,8 @@ scripts install ts
 scripts uninstall ts
 scripts list ts
 feedback ts
+triage ts
+triage file ts
 star ts
 notes ts
 pinned ts

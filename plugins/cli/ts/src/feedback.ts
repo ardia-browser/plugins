@@ -139,6 +139,17 @@ function attachmentKind(path: string, counts: Map<string, number>): Kind {
   return [`attachment-${bump("other")}.${extension}`, OTHER_FILE_BYTES, type];
 }
 
+export const FEEDBACK_DESCRIPTION_LIMIT = MAX_DESCRIPTION;
+export const FEEDBACK_ATTACHMENT_LIMIT = MAX_ATTACHMENTS;
+export const FEEDBACK_FILE_BYTES = OTHER_FILE_BYTES;
+
+export function attachableName(path: string): boolean {
+  const lower = baseName(path).toLowerCase();
+  if (lower.endsWith(".ips")) return true;
+  const extension = lower.includes(".") ? lower.slice(lower.lastIndexOf(".") + 1) : "";
+  return Object.hasOwn(OTHER_TYPES, extension);
+}
+
 function attachments(files: string[]): Attachment[] {
   if (files.length > MAX_ATTACHMENTS) throw new Refused(`at most ${MAX_ATTACHMENTS} files can be attached`);
   const counts = new Map<string, number>();
@@ -441,7 +452,12 @@ function utcStamp(): string {
 }
 
 export async function runFeedback(args: FeedbackArgs): Promise<Said> {
-  const text = readText(args.text);
+  return (await sendFeedback(args, readText(args.text))).said;
+}
+
+export type FeedbackSent = { said: Said; reference?: string };
+
+export async function sendFeedback(args: FeedbackArgs, text: string): Promise<FeedbackSent> {
   let title: string;
   let description: string;
   let truncated: boolean;
@@ -451,7 +467,7 @@ export async function runFeedback(args: FeedbackArgs): Promise<Said> {
     [description, truncated] = cleanDescription(text);
     found = attachments(args.attach);
   } catch (error) {
-    if (error instanceof Refused) return { status: 2, out: [], err: [`ardia feedback: ${error.message}`] };
+    if (error instanceof Refused) return { said: { status: 2, out: [], err: [`ardia feedback: ${error.message}`] } };
     throw error;
   }
   const home = recordingHome();
@@ -474,12 +490,12 @@ export async function runFeedback(args: FeedbackArgs): Promise<Said> {
   ]);
   const [base, urlProblem] = feedbackUrl();
   const reason = blockedReason() || urlProblem;
-  if (reason || base === undefined) return keep(home, entry, reason);
+  if (reason || base === undefined) return { said: keep(home, entry, reason) };
   const digest = createHash("sha256").update(utf8(`${args.kind}\0${title}\0${description}`)).digest("hex").slice(0, 16);
   const slot = home !== undefined ? takeFeedbackSlot(home, digest, DAILY_LIMIT, WINDOW_S, now()) : "ok";
-  if (slot === "duplicate") return { status: 0, out: ["Not sent again: the same report already went out in the last day."], err: [] };
-  if (slot === "limited") return keep(home, entry, `${DAILY_LIMIT} reports already went out in the last day`);
-  if (slot !== "ok") return keep(home, entry, "another ardia was updating the report count (try again)");
+  if (slot === "duplicate") return { said: { status: 0, out: ["Not sent again: the same report already went out in the last day."], err: [] } };
+  if (slot === "limited") return { said: keep(home, entry, `${DAILY_LIMIT} reports already went out in the last day`) };
+  if (slot !== "ok") return { said: keep(home, entry, "another ardia was updating the report count (try again)") };
   let outcome: Outcome;
   try {
     outcome = await submit(base, payload, found);
@@ -490,11 +506,12 @@ export async function runFeedback(args: FeedbackArgs): Promise<Said> {
     if (home !== undefined) releaseFeedbackSlot(home, digest);
     const kept = new Map(entry);
     if (outcome.reference) kept.set("reference", outcome.reference);
-    return keep(home, kept, outcome.reason);
+    return { said: keep(home, kept, outcome.reason) };
   }
   const out = [`Sent. Reference ${outcome.reference}.`];
   out.push(outcome.issueUrl ? `Issue: ${outcome.issueUrl}` : "No public issue was opened for it; the developer still has it.");
   if (outcome.name) out.push(`You appear to us as ${outcome.name}${sharedId !== undefined ? "" : " (a one-time id: sharing is off)"}.`);
-  return { status: 0, out, err: [] };
+  const said: Said = { status: 0, out, err: [] };
+  return outcome.reference === undefined ? { said } : { said, reference: outcome.reference };
 }
 

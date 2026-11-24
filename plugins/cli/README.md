@@ -55,7 +55,8 @@ bun run test:parity
 `bun run test` runs every file under `ts/tests` except `ts/tests/parity`, in parallel. `bun run test:parity` runs the
 parity cases: each `ardia` call in `ts/tests/parity/cases` checked against its captured result (`docs/cli.md` › Test).
 Both need the built `ts/dist/ardia-ts`. No test needs Python. `ts/assets/plugin.schema.json` is ardia's published
-`docs/plugin.schema.json`; CI compares it with ardia main and fails when they differ, so copy it over.
+`docs/plugin.schema.json`; CI compares it with ardia main and fails when they differ, so copy it over. `ts/assets/triage-playbook.md` is
+ardia's `.github/triage/PLAYBOOK.md`, checked the same way (only a warning while ardia main doesn't have it yet).
 
 The command and Ardia talk over the control socket, whose protocol both sides check at `hello`
 (`ts/src/protocol.ts` `PROTOCOL`, `MIN_APP_PROTOCOL`; ardia's `automationMethods.ts` `PROTOCOL`,

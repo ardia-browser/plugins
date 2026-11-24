@@ -7,6 +7,7 @@ import { bundledPython, installRoot } from "./install.ts";
 import { abandonedOutput, settleStderr } from "./printable.ts";
 import { HAND_BACK, takeMarker } from "./routed.ts";
 import { servesNatively } from "./served.ts";
+import { allowedInTriage, inTriageMode, TRIAGE_MODE_REFUSAL } from "./triage-mode.ts";
 import { cliVersion } from "./version.ts";
 
 const LOSSY = "\ufffd";
@@ -126,6 +127,12 @@ async function main(words: string[]): Promise<number> {
   if (words.length === 2 && words[0] === SCRIPT_RUNNER_ARGUMENT) return (await import("./browse/script/runner.ts")).runnerMain(words[1] as string);
   const routed = takeMarker(words);
   const argv = routed?.argv ?? words;
+  if (inTriageMode() && !allowedInTriage(argv)) {
+    try {
+      writeSync(2, TRIAGE_MODE_REFUSAL);
+    } catch {}
+    return 2;
+  }
   try {
     loadLibc();
   } catch (error) {
