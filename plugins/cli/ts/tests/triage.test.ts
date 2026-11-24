@@ -1071,3 +1071,47 @@ test("a checkout build can't be pointed at the real repository, and --via form w
     cleanup(box);
   }
 });
+
+test("a login with several @ in a URL is cut whole", () => {
+  assert.equal(triageScrub("at https://alice:p@ss@word@localhost/private?x=1 now").text, "at https://localhost/<path> now");
+});
+
+for (const [name, answer, expected] of [
+  ["a GraphQL error", `echo '{"errors":[{"message":"Could not resolve to an issue template"}]}'; exit 1`, "refused"],
+  ["an HTTP 4xx from gh", `echo 'gh: Bad credentials (HTTP 401)' >&2; exit 1`, "refused"],
+  ["no clear answer", `echo 'unexpected EOF' >&2; exit 1`, "uncertain"],
+] as [string, string, string][]) {
+  test(`gh failing with ${name} is ${expected === "refused" ? "a refusal that can be tried again" : "kept as uncertain and not sent again"}`, async () => {
+    const box = sandbox();
+    try {
+      standIn(
+        box,
+        "gh",
+        `case "$1 $2" in
+"auth status") exit 0;;
+esac
+case "$*" in
+*"--jq .node_id"*) echo R_kgTest; exit 0;;
+*graphql*) ${answer};;
+esac
+exit 1`,
+      );
+      const { session, code } = await preparedSession(box);
+      const first = await run(box, ["triage", "file", "--post", code], inSession(session));
+      assert.equal(first.status, 1, first.out + first.err);
+      const creates = () => fs.readdirSync(box.record).filter((file) => file.startsWith("gh.") && file.endsWith(".argv") && fs.readFileSync(path.join(box.record, file), "utf8").includes("graphql")).length;
+      assert.equal(creates(), 1);
+      const second = await run(box, ["triage", "file", "--post", code], inSession(session));
+      if (expected === "refused") {
+        assert.match(first.err, /GitHub refused the issue .*nothing was filed/);
+        assert.equal(creates(), 2);
+      } else {
+        assert.match(first.err, /may or may not exist/);
+        assert.match(second.out, /^Not sent again: the last try may have gone out/m);
+        assert.equal(creates(), 1);
+      }
+    } finally {
+      cleanup(box);
+    }
+  });
+}

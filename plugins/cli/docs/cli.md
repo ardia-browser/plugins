@@ -2658,7 +2658,9 @@ second one started meanwhile exits 1. What `gh` reads is written to files named 
   reporter: `gh api graphql` `createIssue` with `issueTemplate: "Triage report"`, the title and body passed as
   `-F title=@file` and `-F body=@file` so no shell parses them. The body is the sections under `### <label>` headings
   matching the form (`.github/ISSUE_TEMPLATE/via-triage.yml`), Evidence in a `shell` fence. It prints the issue's
-  address and whether it has the label. A request that times out is kept as uncertain and not retried.
+  address and whether it has the label. A request GitHub turns down (a GraphQL error, or `gh` reporting HTTP 4xx)
+  files nothing and can be tried again; one that times out or ends with no clear answer is kept as uncertain and
+  not sent again, since the issue may exist.
 - `gh` installed but signed out, and no `--via`: nothing is posted; one line says so and names `--via form` and
   `--via feedback`; exit 3. The playbook has the agent offer `gh auth login` once.
 - No `gh`, or `--via form`: `https://github.com/ardia-browser/ardia/issues/new?template=via-triage.yml&title=…&<field

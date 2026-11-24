@@ -178,6 +178,10 @@ function firstLine(text: string): string {
   return joinCodePoints(codePoints(line).slice(0, 300));
 }
 
+function turnedDown(ran: Ran): boolean {
+  return !ran.timedOut && /\(HTTP 4\d\d\)/.test(ran.stderr);
+}
+
 function signedIn(gh: string): boolean {
   return run(gh, ["auth", "status", "--hostname", "github.com"]).status === 0;
 }
@@ -219,14 +223,16 @@ function postWithGh(gh: string, repo: string, report: Stored, dir: Dir, sessionD
   const issue = dig(answer, "data", "createIssue", "issue");
   const url = dig(issue, "url");
   if (created.status !== 0 || typeof url !== "string" || !url.startsWith("https://")) {
-    if (created.timedOut) {
-      remember(dir, { code: report.code, via: "gh", where: `unknown: gh timed out; check https://github.com/${repo}/issues before trying again`, state: "uncertain" });
-      flag(call, "triage_refused");
-      return { status: 1, out: [], err: [`ardia triage: gh didn't answer in ${GH_TIMEOUT_MS / 1000} s, so the issue may or may not exist. Check https://github.com/${repo}/issues?q=author%3A%40me before filing again.`] };
-    }
     flag(call, "triage_refused");
     const errors = dig(answer, "errors");
-    const why = Array.isArray(errors) && errors[0] instanceof Map && typeof errors[0].get("message") === "string" ? (errors[0].get("message") as string) : firstLine(created.stderr);
+    const refused = Array.isArray(errors) && errors.length > 0;
+    if (!refused && !turnedDown(created)) {
+      const mine = `https://github.com/${repo}/issues?q=author%3A%40me`;
+      remember(dir, { code: report.code, via: "gh", where: `unknown: gh gave no clear answer; check ${mine} before trying again`, state: "uncertain" });
+      const what = created.timedOut ? `gh didn't answer in ${GH_TIMEOUT_MS / 1000} s` : `gh stopped without a clear answer (${firstLine(created.stderr) || "no message"})`;
+      return { status: 1, out: [], err: [`ardia triage: ${what}, so the issue may or may not exist. Check ${mine} before filing again.`] };
+    }
+    const why = refused && errors[0] instanceof Map && typeof errors[0].get("message") === "string" ? (errors[0].get("message") as string) : firstLine(created.stderr);
     return { status: 1, out: [], err: [`ardia triage: GitHub refused the issue (${why || "no reason given"}); nothing was filed. Try --via form, or --via feedback.`] };
   }
   const labels = dig(issue, "labels", "nodes");
@@ -352,7 +358,7 @@ async function comment(number: number, via: string | undefined, repo: string, re
     const posted = run(gh, ["api", "--hostname", "github.com", `repos/${repo}/issues/${number}/comments`, "-F", `body=@${join(sessionDir, commentFile)}`]);
     const url = dig(jsonOf(posted.stdout), "html_url");
     if (posted.status !== 0 || typeof url !== "string") {
-      if (posted.timedOut) remember(dir, { code: report.code, via: `comment-${number}`, where: `unknown: gh timed out; check ${page}`, state: "uncertain" });
+      if (!turnedDown(posted)) remember(dir, { code: report.code, via: `comment-${number}`, where: `unknown: gh gave no clear answer; check ${page}`, state: "uncertain" });
       flag(call, "triage_refused");
       return { status: 1, out: [], err: [`ardia triage: the comment didn't go through (${firstLine(posted.stderr) || "no answer"}). Check ${page} before trying again.`] };
     }

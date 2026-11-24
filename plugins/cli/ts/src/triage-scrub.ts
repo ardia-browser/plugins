@@ -2,7 +2,7 @@ import { home } from "./paths.ts";
 import { scrub } from "./scrub.ts";
 
 export const PATH_PLACEHOLDER = "/<path>";
-const WHOLE_URL = /\b([a-zA-Z][a-zA-Z0-9+.-]{1,15}:\/\/)([^\s/?#<>"'`@]*@)?([^\s/?#<>"'`]*)([^\s<>"'`]*)/g;
+const WHOLE_URL = /\b([a-zA-Z][a-zA-Z0-9+.-]{1,15}:\/\/)([^\s/?#<>"'`]*@)?([^\s/?#<>"'`]*)([^\s<>"'`]*)/g;
 const BARE_URL = /(?<![\w@/.:-])((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,24})([/?][^\s<>"'`]+)/gi;
 const HOME_NAME = /^[A-Za-z0-9._-]{3,64}$/;
 const CATEGORIES: readonly (readonly [string, RegExp])[] = [
