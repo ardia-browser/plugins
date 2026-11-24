@@ -161,5 +161,18 @@ describe("Codex review hardening regressions", () => {
     ];
     compactBatchLines(fullOutcomes);
     expect(fullOutcomes[0]?.text).toBe("✓ Clicked");
+    for (const [cmd, res] of [
+      [["snapshot"], { fit: true }],
+      [["snapshot"], { modal: { name: "Dialog" } }],
+      [["form"], { more: true }],
+      [["read"], { truncated: true }],
+    ] as const) {
+      const partial = [
+        { command: ["click", "@e1"], success: true, text: initial, result: null, error: null },
+        { command: [...cmd], success: true, text: "partial", result: res as Record<string, unknown>, error: null },
+      ];
+      compactBatchLines(partial);
+      expect(partial[0]?.text).toBe(initial);
+    }
   });
 });

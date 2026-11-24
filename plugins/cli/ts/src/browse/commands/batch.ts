@@ -482,14 +482,17 @@ export function compactBatchLines(outcomes: Outcome[]): void {
       if (!PASS_THROUGH_INSPECT.has(fName)) break;
       const scopedFlag = fWords.some((w) => w === "-s" || w === "--selector" || w.startsWith("--selector="));
       if (scopedFlag) continue;
+      const followData = follow.result && typeof follow.result === "object" && !Array.isArray(follow.result)
+        ? (follow.result as Record<string, unknown>)
+        : null;
       if (fName === "read") {
         const fullRead = inspectMatchesAllowlist(fWords, READ_FULL_FLAGS, INSPECT_VALUE_FLAGS);
         const isDelta = Boolean(follow.text && (follow.text.includes("unchanged since last read") || follow.text.includes("unchanged lines omitted")));
-        if (fullRead && !isDelta) hasRead = true;
+        if (fullRead && !isDelta && !followData?.["truncated"]) hasRead = true;
       } else if (fName === "snapshot") {
-        if (inspectMatchesAllowlist(fWords, SNAPSHOT_FULL_FLAGS, INSPECT_VALUE_FLAGS)) hasSnapshot = true;
+        if (inspectMatchesAllowlist(fWords, SNAPSHOT_FULL_FLAGS, INSPECT_VALUE_FLAGS) && !followData?.["fit"] && !followData?.["modal"]) hasSnapshot = true;
       } else if (fName === "form") {
-        if (inspectMatchesAllowlist(fWords, FORM_FULL_FLAGS, INSPECT_VALUE_FLAGS)) hasForm = true;
+        if (inspectMatchesAllowlist(fWords, FORM_FULL_FLAGS, INSPECT_VALUE_FLAGS) && !followData?.["more"]) hasForm = true;
       }
     }
     if (hasRead || hasSnapshot || hasForm) {
