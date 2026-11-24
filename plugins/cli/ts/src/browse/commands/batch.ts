@@ -455,7 +455,7 @@ const SNAPSHOT_FULL_FLAGS = new Set(["-c", "--compact", "-u", "--urls", "--full"
 const FORM_FULL_FLAGS = new Set(["--full"]);
 const INSPECT_VALUE_FLAGS = new Set(["--timeout"]);
 
-export function compactBatchLines(outcomes: Outcome[]): void {
+export function compactBatchLines(outcomes: Outcome[], batchCap = BATCH_DEFAULT_CAP): void {
   const succeeded = outcomes.flatMap((outcome, index) => (outcome.success ? [index] : []));
   if (succeeded.length < 2) return;
   let compacted = 0;
@@ -488,7 +488,8 @@ export function compactBatchLines(outcomes: Outcome[]): void {
       if (fName === "read") {
         const fullRead = inspectMatchesAllowlist(fWords, READ_FULL_FLAGS, INSPECT_VALUE_FLAGS);
         const isDelta = Boolean(follow.text && (follow.text.includes("unchanged since last read") || follow.text.includes("unchanged lines omitted")));
-        if (fullRead && !isDelta && !followData?.["truncated"]) hasRead = true;
+        const fitsCap = batchCap <= 0 || pyLen(outcomes.map((o) => (o.success ? o.text : failedText(o)) || "").join("\n\n")) <= batchCap;
+        if (fullRead && !isDelta && !followData?.["truncated"] && fitsCap) hasRead = true;
       } else if (fName === "snapshot") {
         if (inspectMatchesAllowlist(fWords, SNAPSHOT_FULL_FLAGS, INSPECT_VALUE_FLAGS) && !followData?.["fit"] && !followData?.["modal"]) hasSnapshot = true;
       } else if (fName === "form") {
@@ -793,7 +794,8 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
       });
     }
   }
-  compactBatchLines(outcomes);
+  const batchCap = ctx.options["full"] ? 0 : ctx.options["max_output"] === undefined || ctx.options["max_output"] === null ? OUTPUT_CAP : Number(ctx.options["max_output"]);
+  compactBatchLines(outcomes, batchCap);
   let text = outcomes.map((outcome) => (outcome.success ? outcome.text : failedText(outcome)) || "").join("\n\n");
   let savedWhole = false;
   if (options["out"]) {
@@ -804,7 +806,6 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
   const result = new Result({ results: outcomes }, text, fromPage);
   result.lost = lost;
   if (notices.length > 0) result.notice = notices.join("\n");
-  const batchCap = ctx.options["full"] ? 0 : ctx.options["max_output"] === undefined || ctx.options["max_output"] === null ? OUTPUT_CAP : Number(ctx.options["max_output"]);
   const shown = ctx.state.pendingShown;
   ctx.state.pendingShown = null;
   if (shown !== null && !savedWhole && !(batchCap > 0 && pyLen(text) > batchCap)) commitShown(ctx.state, shown);

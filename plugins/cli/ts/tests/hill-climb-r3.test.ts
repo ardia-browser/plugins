@@ -176,5 +176,11 @@ describe("Codex review hardening regressions", () => {
       compactBatchLines(partial);
       expect(partial[0]?.text).toBe(initial);
     }
+    const overCapRead = [
+      { command: ["click", "@e1"], success: true, text: initial, result: null, error: null },
+      { command: ["read"], success: true, text: "x".repeat(13_000), result: { truncated: false, source: "active-tab-html" }, error: null },
+    ];
+    compactBatchLines(overCapRead);
+    expect(overCapRead[0]?.text).toBe(initial);
   });
 });
