@@ -31,18 +31,19 @@ const WALKER = `const fold = (s) => String(s == null ? "" : s).replace(/\\s+/g, 
     walk(root);
     return out;
   };
-  const svgText = (node) => {
-    if (node.nodeType === 3) return node.nodeValue || "";
+  const svgText = (node, hidden) => {
+    if (node.nodeType === 3) return hidden ? "" : (node.nodeValue || "");
     if (node.nodeType !== 1) return "";
     const tag = (node.localName || "").toLowerCase();
     if (tag === "defs" || tag === "style" || tag === "script" || tag === "title" || tag === "desc") return "";
     const style = getComputedStyle(node);
-    if (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse") return "";
+    if (style.display === "none") return "";
+    const nextHidden = style.visibility === "hidden" || style.visibility === "collapse";
     let out = "";
-    for (const child of node.childNodes) out += svgText(child);
+    for (const child of node.childNodes) out += svgText(child, nextHidden);
     return out;
   };
-  const shown = (el) => fold(el.innerText != null ? el.innerText : svgText(el));
+  const shown = (el) => fold(el.innerText != null ? el.innerText : svgText(el, false));
   const INTERACTIVE = "a[href],area[href],button,input:not([type=hidden]),select,textarea,summary,[role=button],[role=link],[role=checkbox],[role=radio],[role=switch],[role=tab],[role=menuitem],[role=menuitemcheckbox],[role=menuitemradio],[role=option],[role=combobox],[role=textbox],[role=searchbox],[role=slider],[role=spinbutton],[contenteditable=''],[contenteditable=true],[tabindex]:not([tabindex='-1'])";`;
 
 export const CONTAINERS_BY_TEXT = `(wanted) => {
