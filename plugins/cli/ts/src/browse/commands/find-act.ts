@@ -31,7 +31,7 @@ const WALKER = `const fold = (s) => String(s == null ? "" : s).replace(/\\s+/g, 
     walk(root);
     return out;
   };
-  const shown = (el) => fold(el.innerText != null && el.innerText !== "" ? el.innerText : el.textContent);
+  const shown = (el) => fold(el.innerText != null ? el.innerText : el.textContent);
   const INTERACTIVE = "a[href],area[href],button,input:not([type=hidden]),select,textarea,summary,[role=button],[role=link],[role=checkbox],[role=radio],[role=switch],[role=tab],[role=menuitem],[role=menuitemcheckbox],[role=menuitemradio],[role=option],[role=combobox],[role=textbox],[role=searchbox],[role=slider],[role=spinbutton],[contenteditable=''],[contenteditable=true],[tabindex]:not([tabindex='-1'])";`;
 
 export const CONTAINERS_BY_TEXT = `(wanted) => {

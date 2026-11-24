@@ -98,6 +98,10 @@ describe("repl source rewriting", () => {
     expect(replSource("const a = 1;\na + 2")).toContain("\nreturn a + 2");
     expect(replSource("const a = 1;\nreturn a;")).not.toContain("return return");
     expect(replSource("for (let i = 0; i < 3; i += 1) {}")).not.toContain("return for");
+    expect(replSource("for (const c of /[{]/.source) {} 42")).toContain("return 42");
+    expect(replSource("for await (const c of /[{]/.source) {} 42")).toContain("return 42");
+    expect(replSource("const of = 8; const half = of / 2; half")).toContain("return half");
+    expect(replSource("const of = 8; for (let i = of / 2; i < 1; i += 1) {} 42")).toContain("return 42");
   });
 });
 
@@ -272,6 +276,15 @@ describe("persistent repl runner", () => {
       const afterDollarEval = await turn(runner, "await page.click('#save', { receipt: true }); await page.$eval('#save', (el) => el); return await page.assertText('changes were saved');", { answer: evalAnswer });
       expect(afterDollarEval.result["kind"]).toBe("error");
       expect(afterDollarEval.result["code"]).toBe("assertion");
+      const afterFillForm = await turn(runner, "await page.click('#save', { receipt: true }); await page.fillForm({ '#name': 'Ada' }); return await page.assertText('changes were saved');", { answer: RECEIPT });
+      expect(afterFillForm.result["kind"]).toBe("error");
+      expect(afterFillForm.result["code"]).toBe("assertion");
+      const afterBrowseFill = await turn(runner, "await page.click('#save', { receipt: true }); await browse('fill', '#name', 'Ada'); return await page.assertText('changes were saved');", { answer: RECEIPT });
+      expect(afterBrowseFill.result["kind"]).toBe("error");
+      expect(afterBrowseFill.result["code"]).toBe("assertion");
+      const afterBrowseClick = await turn(runner, "await page.click('#save', { receipt: true }); await browse('click', '#other'); return await page.assertText('changes were saved');", { answer: RECEIPT });
+      expect(afterBrowseClick.result["kind"]).toBe("error");
+      expect(afterBrowseClick.result["code"]).toBe("assertion");
     } finally {
       runner.kill();
     }

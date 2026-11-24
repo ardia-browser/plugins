@@ -10,9 +10,9 @@
   const FETCH_LIMIT = 2 * 1024 * 1024;
   const MAX_SPILL_ENTRIES = 12;
   const MAX_SPILL_CHARS = 2 * 1024 * 1024;
-  const RECEIPT_STALE_CMDS = new Set([
-    "open", "goto", "navigate", "go", "visit", "back", "forward", "reload", "refresh",
-    "tab", "tabs", "window", "frame", "close", "exit", "quit", "pushstate", "here",
+  const RECEIPT_READONLY_CMDS = new Set([
+    "get", "is", "read", "read-urls", "snapshot", "form", "query", "screenshot",
+    "wait", "pdf", "console", "errors", "network", "status", "health", "version", "help",
   ]);
   const BridgeError = Error;
   const send = (kind, payload) => {
@@ -128,7 +128,7 @@
       const parts = first.split(/\s+/);
       const cmd = parts[0].toLowerCase();
       const sub = (parts[1] || (payload.argv.length > 1 ? String(payload.argv[1]) : "")).toLowerCase();
-      if (RECEIPT_STALE_CMDS.has(cmd) && !(cmd === "tab" && (sub === "list" || sub === ""))) {
+      if (!RECEIPT_READONLY_CMDS.has(cmd) && !(cmd === "tab" && (sub === "list" || sub === ""))) {
         receiptEpoch += 1;
         lastReceipt = null;
       }
@@ -289,8 +289,9 @@
     return answer.text;
   };
   const runAct = (argv, options) => {
+    const pending = call(argv, options);
     const epoch = receiptEpoch;
-    return call(argv, options).then(acted(options, epoch));
+    return pending.then(acted(options, epoch));
   };
   const keyboard = (value, options) => runAct(["keyboard", "type", String(value)], options);
   keyboard.type = keyboard;
@@ -305,6 +306,8 @@
     reload: () => browse("reload").then(data("url")),
     fillForm: async (entries) => {
       const pairs = Array.isArray(entries) ? entries : Object.entries(entries || {});
+      receiptEpoch += 1;
+      lastReceipt = null;
       for (const [sel, val] of pairs) await call(["fill", sel, String(val)], undefined);
       return pairs.length;
     },

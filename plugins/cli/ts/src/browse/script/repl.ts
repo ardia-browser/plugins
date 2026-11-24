@@ -35,14 +35,36 @@ const IDENTIFIER_START = /[\p{L}\p{Nl}$_]/u;
 const IDENTIFIER_PART = /[\p{L}\p{Nl}\p{Mn}\p{Mc}\p{Nd}\p{Pc}$_‌‍]/u;
 const PUNCTUATORS = [">>>=", "...", "===", "!==", "**=", "<<=", ">>=", ">>>", "&&=", "||=", "??=", "=>", "==", "!=", "<=", ">=", "&&", "||", "??", "?.", "**", "++", "--", "+=", "-=", "*=", "%=", "&=", "|=", "^=", "<<", ">>"];
 
-function endsExpression(token: Token | undefined, beforePrevious?: Token | undefined): boolean {
+function endsExpression(token: Token | undefined, beforePrevious?: Token | undefined, inForOfLhs = false): boolean {
   if (token === undefined) return false;
   if (token.kind === "num" || token.kind === "str" || token.kind === "tpl" || token.kind === "re") return true;
   if (token.kind === "id") {
     if (beforePrevious !== undefined && beforePrevious.kind === "punct" && (beforePrevious.value === "." || beforePrevious.value === "?.")) return true;
+    if (inForOfLhs && token.value === "of") return false;
     return !KEYWORDS_BEFORE_EXPRESSION.has(token.value);
   }
   return token.value === ")" || token.value === "]" || token.value === "}" || token.value === "++" || token.value === "--";
+}
+
+type GroupState = "for-lhs" | "for-of" | "for-classic" | "other";
+
+function nextScanState(stack: GroupState[], afterFor: boolean, token: Token, previous: Token | undefined): boolean {
+  const top = stack[stack.length - 1];
+  if (top === "for-of") stack[stack.length - 1] = "for-classic";
+  if (token.kind === "punct") {
+    if (token.value === "(") stack.push(afterFor ? "for-lhs" : "other");
+    else if (token.value === "[" || token.value === "{") stack.push("other");
+    else if (token.value === ")" || token.value === "]" || token.value === "}") stack.pop();
+    else if (top === "for-lhs" && (token.value === "=" || token.value === ";" || token.value === ",")) stack[stack.length - 1] = "for-classic";
+    return false;
+  }
+  if (token.kind === "id") {
+    const member = previous !== undefined && previous.kind === "punct" && (previous.value === "." || previous.value === "?.");
+    if (!member && top === "for-lhs" && token.value === "of") stack[stack.length - 1] = "for-of";
+    if (!member && token.value === "for") return true;
+    if (afterFor && !member && token.value === "await") return true;
+  }
+  return false;
 }
 
 function skipTemplate(source: string, start: number): number {
@@ -68,11 +90,14 @@ function skipBraces(source: string, start: number): number {
   let index = start;
   let previous: Token | undefined;
   let beforePrevious: Token | undefined;
+  const groups: GroupState[] = [];
+  let afterFor = false;
   while (index < source.length && depth > 0) {
-    const [token, next] = readToken(source, index, previous, beforePrevious);
+    const [token, next] = readToken(source, index, previous, beforePrevious, groups[groups.length - 1] === "for-of");
     if (token === null) return next;
     if (token.kind === "punct" && token.value === "{") depth += 1;
     else if (token.kind === "punct" && token.value === "}") depth -= 1;
+    afterFor = nextScanState(groups, afterFor, token, previous);
     beforePrevious = previous;
     previous = token;
     index = next;
@@ -115,7 +140,7 @@ function skipRegex(source: string, start: number): number {
   return index;
 }
 
-function readToken(source: string, start: number, previous: Token | undefined, beforePrevious?: Token | undefined): [Token | null, number] {
+function readToken(source: string, start: number, previous: Token | undefined, beforePrevious?: Token | undefined, inForOfLhs = false): [Token | null, number] {
   let index = start;
   let newline = false;
   while (index < source.length) {
@@ -153,7 +178,7 @@ function readToken(source: string, start: number, previous: Token | undefined, b
     while (end < source.length && IDENTIFIER_PART.test(source[end] as string)) end += 1;
     return [{ kind: "id", value: source.slice(index, end), newline, start: index, end }, end];
   }
-  if (char === "/" && !(endsExpression(previous, beforePrevious) && !(newline && previous?.kind === "punct" && previous.value === "}"))) {
+  if (char === "/" && !(endsExpression(previous, beforePrevious, inForOfLhs) && !(newline && previous?.kind === "punct" && previous.value === "}"))) {
     const end = skipRegex(source, index);
     return [{ kind: "re", value: source.slice(index, end), newline, start: index, end }, end];
   }
@@ -165,10 +190,14 @@ function readToken(source: string, start: number, previous: Token | undefined, b
 
 export function tokenize(source: string): Token[] {
   const tokens: Token[] = [];
+  const groups: GroupState[] = [];
+  let afterFor = false;
   let index = 0;
   for (;;) {
-    const [token, next] = readToken(source, index, tokens[tokens.length - 1], tokens[tokens.length - 2]);
+    const previous = tokens[tokens.length - 1];
+    const [token, next] = readToken(source, index, previous, tokens[tokens.length - 2], groups[groups.length - 1] === "for-of");
     if (token === null) return tokens;
+    afterFor = nextScanState(groups, afterFor, token, previous);
     tokens.push(token);
     index = next;
   }
