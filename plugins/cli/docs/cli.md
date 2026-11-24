@@ -3538,8 +3538,11 @@ the `js/*` recordings:
   LaunchAgent, an `ARDIA_FEEDBACK_URL` with a line break, and an environment path or working directory that isn't valid
   UTF-8 (Python reads those with surrogateescape). Under `ARDIA_BROWSE_FOR_PLUGIN` the same shapes are refused with
   `plugin_refused`.
-- `plugins check` on a manifest 2 runs Ardia's own manifest checker, vendored unchanged from ardia's
-  `apps/browser/src/lib` into `ts/src/app-manifest`, after the schema, plus the manifest-only app rules driven by the
+- `plugins check` (and `plugins install`) on a manifest 2 runs Ardia's own manifest checker, vendored from ardia main's
+  `apps/browser/src/lib` into `ts/src/app-manifest` with `.ts` on its relative imports, a few helpers exported for the
+  CLI (and `networkLabel`), and `packages/core/src/idn.ts` beside it for `urlParts.ts`'s `@ardia/core` import; it reads
+  `permissions.state` (state events and tab intents) and the `siteSwitches` and `pageBar` contributions as the app does,
+  after the schema, plus the manifest-only app rules driven by the
   schema's `x-ardia-rules` (approved settings, hooks that need tabs) and `contributes.settings.defaults` against
   config.schema.json. Python checks a manifest 2 only against the schema and two rules (main or sidecar, not both;
   activationEvents only go with a main), so it can call ok a manifest Ardia refuses. Neither side checks what depends on
