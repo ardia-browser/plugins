@@ -12,7 +12,7 @@
   const MAX_SPILL_CHARS = 2 * 1024 * 1024;
   const RECEIPT_READONLY_CMDS = new Set([
     "get", "is", "read", "read-urls", "snapshot", "form", "query", "screenshot",
-    "wait", "pdf", "console", "errors", "network", "status", "health", "version", "help",
+    "pdf", "console", "errors", "network", "status", "health", "version", "help",
   ]);
   const BridgeError = Error;
   const send = (kind, payload) => {
@@ -120,7 +120,7 @@
     const origin = new Error();
     const line = lineOf(origin.stack);
     const id = nextId++;
-    if (op === "evaluate" || op === "$eval" || op === "$$eval") {
+    if (op === "evaluate" || op === "$eval" || op === "$$eval" || op === "sleep") {
       receiptEpoch += 1;
       lastReceipt = null;
     } else if (op === "call" && Array.isArray(payload.argv) && payload.argv.length > 0) {

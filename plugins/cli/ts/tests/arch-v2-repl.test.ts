@@ -285,6 +285,9 @@ describe("persistent repl runner", () => {
       const afterBrowseClick = await turn(runner, "await page.click('#save', { receipt: true }); await browse('click', '#other'); return await page.assertText('changes were saved');", { answer: RECEIPT });
       expect(afterBrowseClick.result["kind"]).toBe("error");
       expect(afterBrowseClick.result["code"]).toBe("assertion");
+      const afterWait = await turn(runner, "await page.click('#save', { receipt: true }); await page.waitForURL('/done'); return await page.assertText('changes were saved');", { answer: RECEIPT });
+      expect(afterWait.result["kind"]).toBe("error");
+      expect(afterWait.result["code"]).toBe("assertion");
     } finally {
       runner.kill();
     }
