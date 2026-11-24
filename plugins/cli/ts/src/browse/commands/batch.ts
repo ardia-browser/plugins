@@ -6,6 +6,7 @@ import { groupThousands } from "../../pylib/format.ts";
 import { pyLen, splitlines } from "../../pylib/str.ts";
 import { shlexSplit } from "../../pylib/shlex.ts";
 import { codeLine } from "./batch-line.ts";
+import { opaqueSlot } from "../opaque.ts";
 import { redact, redactJson } from "../../redact.ts";
 import { BrowseError, ConnectionLost, OutcomeUnknown, StaleRef, Usage } from "../daemon-errors.ts";
 import type { JsonObject } from "../../json.ts";
@@ -252,37 +253,51 @@ function refForms(stale: string, fresh: string): [string, string][] {
   return [[`@${stale}`, `@${fresh}`], [`ref=${stale}`, `ref=${fresh}`], [`[ref=${stale}]`, `[ref=${fresh}]`], [stale, fresh]];
 }
 
+function fillRebound(command: readonly string[], swapped: (word: string) => string | null): string[] | null {
+  for (let index = 1; index < command.length; index += 1) {
+    const word = command[index] as string;
+    if (word === "--") return null;
+    if (SELECTOR_FLAGS.has(word)) return replacedAt(command, index + 1, swapped);
+    if (word.startsWith(SELECTOR_PREFIX)) {
+      const value = swapped(word.slice(SELECTOR_PREFIX.length));
+      return value === null ? null : command.map((item, at) => (at === index ? `${SELECTOR_PREFIX}${value}` : item));
+    }
+    if (word.startsWith("-") && word.length > 1) continue;
+    return replacedAt(command, index, swapped);
+  }
+  return null;
+}
+
+function replacedAt(command: readonly string[], index: number, swapped: (word: string) => string | null): string[] | null {
+  const word = command[index];
+  const value = word === undefined || word === "--" ? null : swapped(word);
+  return value === null ? null : command.map((item, at) => (at === index ? value : item));
+}
+
 export function rebound(command: readonly string[], stale: string, fresh: string): string[] | null {
   const name = command.length > 0 ? (ALIASES[command[0] as string] ?? (command[0] as string)) : "";
-  const positions = new Set(SELECTOR_AT[name] ?? []);
   const forms = refForms(stale, fresh);
   const swapped = (word: string): string | null => forms.find(([from]) => from === word)?.[1] ?? null;
-  const out = [...command];
-  const last = name === "press" ? 1 : Math.max(-1, ...positions);
-  let changed = false;
-  let flagged = false;
+  if (name === "fill") return fillRebound(command, swapped);
+  const positions = new Set(SELECTOR_AT[name] ?? []);
   const positionals: number[] = [];
+  let lastFlag: { index: number; inline: boolean } | null = null;
   for (let index = 1; index < command.length; index += 1) {
     const word = command[index] as string;
     if (word === "--") break;
+    if (opaqueSlot(name, positionals.map((at) => command[at] as string))) {
+      positionals.push(index);
+      continue;
+    }
     if (SELECTOR_FLAGS.has(word)) {
-      flagged = true;
       const next = command[index + 1];
-      const value = next === undefined || next === "--" ? null : swapped(next);
-      if (value !== null) {
-        out[index + 1] = value;
-        changed = true;
-      }
-      break;
+      if (next !== undefined && next !== "--") lastFlag = { index: index + 1, inline: false };
+      index += 1;
+      continue;
     }
     if (word.startsWith(SELECTOR_PREFIX)) {
-      flagged = true;
-      const value = swapped(word.slice(SELECTOR_PREFIX.length));
-      if (value !== null) {
-        out[index] = `${SELECTOR_PREFIX}${value}`;
-        changed = true;
-      }
-      break;
+      lastFlag = { index, inline: true };
+      continue;
     }
     if (VALUE_TAKING.has(word)) {
       index += 1;
@@ -290,12 +305,18 @@ export function rebound(command: readonly string[], stale: string, fresh: string
     }
     if (word.startsWith("-") && word.length > 1) continue;
     positionals.push(index);
-    if (positionals.length > last) break;
+  }
+  if (lastFlag !== null) {
+    if (!lastFlag.inline) return replacedAt(command, lastFlag.index, swapped);
+    const value = swapped((command[lastFlag.index] as string).slice(SELECTOR_PREFIX.length));
+    const at = lastFlag.index;
+    return value === null ? null : command.map((item, position) => (position === at ? `${SELECTOR_PREFIX}${value}` : item));
   }
   if (name === "press" && positionals.length >= 2) positions.add(0);
-  if (flagged) positions.clear();
-  for (const at of positions) {
-    const index = positionals[at];
+  const out = [...command];
+  let changed = false;
+  for (const slot of positions) {
+    const index = positionals[slot];
     if (index === undefined) continue;
     const value = swapped(command[index] as string);
     if (value === null) continue;

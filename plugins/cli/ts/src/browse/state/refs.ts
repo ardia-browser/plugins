@@ -213,11 +213,11 @@ export abstract class Refs {
     return this.currentRefs.filter((id) => this.refs.has(id)).map((id) => this.refs.get(id) as Ref);
   }
 
-  addRef(page: Page, element: Element, role = "", name = ""): string {
+  addRef(page: Page, element: Element, role?: string, name?: string): string {
     const id = this.refForNode(page, element.frame, element.backendId);
     const found = this.refs.get(id);
-    const nextRole = role || (found?.role ?? "");
-    const nextName = name || (found?.name ?? "");
+    const nextRole = role === undefined ? (found?.role ?? "") : role;
+    const nextName = name === undefined ? (found?.name ?? "") : name;
     const verified = found !== undefined && found.role === nextRole && found.name === nextName && found.loader === (page.loader(element.frame) || "");
     const known = verified ? found : undefined;
     this.refs.set(id, {

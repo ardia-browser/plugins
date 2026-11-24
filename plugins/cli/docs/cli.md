@@ -1202,11 +1202,13 @@ still the only one, in the same frame, the same dialog instance (the same dialog
 another with the same name opened) and the same named containers (`sameScope` in `ts/src/browse/state/refs.ts`), so a
 `Delete` removed with its dialog never turns into the page's own `Delete` behind it or one in a reopened dialog. A ref
 another command hands out (`form`, `find`) or renames keeps that verified uniqueness and scope only while its role, name
-and document stay the same; otherwise it starts unverified and is never followed. When a single command's error names a successor (`is now @e352`) that fails those checks, the batch line fails and
+and document stay the same (a name cleared to empty counts as a change); otherwise it starts unverified and is never
+followed. When a single command's error names a successor (`is now @e352`) that fails those checks, the batch line fails and
 says `→ not followed for you: …; on the page now: …` (telemetry `batch_ref_not_followed`). The rebinding replaces the ref only at the
-command's selector arguments (`click`'s first, `drag`'s two, `get text`'s second, or the first `-s`/`--selector`'s value,
-after which the rest is the command's own), skipping the values of flags such as `--delay` and `--button`, never in text
-or values to type and never after `--`. When none or several match, the line fails as before and lists the refs on the page now, so no extra
+command's selector, read as the command's own parser reads it: the last `-s`/`--selector` value when there is one
+(`scroll down 300 -s @e14`, `click -s '#a' -s @e14`), else its selector arguments (`click`'s first, `drag`'s two, `get
+text`'s second), skipping the values of flags such as `--delay` and `--button`; `fill` takes only a leading `-s`, so the
+words after it stay text. Never in text or values to type, never after `--`. When none or several match, the line fails as before and lists the refs on the page now, so no extra
 snapshot is needed: `→ 2 match it now, so nothing was picked: button "Delete" [ref=e30], button "Delete" [ref=e31]`, or
 `→ on the page now:` with up to six of the same role (`--json`: `matches`). Telemetry: `batch_ref_healed`,
 `batch_refs_healed` (lines rebound), `batch_ref_ambiguous`, `batch_ref_missing`; watch `error_code` `stale_ref` on
@@ -1555,7 +1557,7 @@ never share one allowance). The whole
 run has one limit, the per-address timeout times the rounds the queue needs, at most 75 s, kept under the page call's
 own deadline: at that limit every request still running is aborted, the queue stops, and the answer keeps what
 finished, with `stopped at the … limit` or `not fetched` on the rest (telemetry `read_urls_deadline`). One address's
-text, title included (a title stops at 300 characters), is cut at 200,000 characters even with `--full` or `--json`. HTML becomes text with Markdown headings
+text, title included (a title stops at 300 characters, or at `--max-chars` when that is smaller), is cut at 200,000 characters even with `--full` or `--json`. HTML becomes text with Markdown headings
 (scripts, styles, menus and footers left out, the title line moved into the header); text, JSON and Markdown print
 as they are; a binary body is skipped with the `read --http … --out` that saves it. Each address gets an equal share
 of the output cap (`--max-chars` sets it, `--full` lifts it) under `## [n] <title> — <url> (<status>, <type>)`, and

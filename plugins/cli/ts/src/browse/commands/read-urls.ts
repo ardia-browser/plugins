@@ -198,10 +198,12 @@ export function fetchedOf(raw: Record<string, unknown>, origin: string, perUrl: 
   }
   const extracted = contentOf(neutralize(stripLoneSurrogates(String(raw["body"] ?? ""))), type);
   const content = extracted.content;
-  const titleCut = pyLen(extracted.title) > MAX_TITLE;
-  const title = titleCut ? `${safeHead(extracted.title, MAX_TITLE - 1)}…` : extracted.title;
+  const budget = perUrl > 0 ? Math.min(perUrl, MAX_CHARS) : MAX_CHARS;
+  const titleLimit = Math.min(MAX_TITLE, budget);
+  const titleCut = pyLen(extracted.title) > titleLimit;
+  const title = titleCut ? (titleLimit > 1 ? `${safeHead(extracted.title, titleLimit - 1)}…` : "") : extracted.title;
   const chars = pyLen(content);
-  const limit = Math.max(0, (perUrl > 0 ? Math.min(perUrl, MAX_CHARS) : MAX_CHARS) - pyLen(title));
+  const limit = Math.max(0, budget - pyLen(title));
   const cut = chars > limit;
   const shown = cut ? safeHead(content, limit) : content;
   const failed = status !== null && status >= 400;

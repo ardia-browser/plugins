@@ -320,7 +320,7 @@ async function findWith(ctx: Ctx, argv: string[]): Promise<Result> {
   const [element, role, name] = found;
   const action = rest[0] ?? "click";
   if (!FIND_ACTIONS.includes(action)) throw new Usage(`Unknown action '${action}' for find. Valid actions: ${FIND_ACTIONS.join(", ")}.`);
-  const ref = ctx.state.addRef(page, element, role, name);
+  const ref = locator === "role" ? ctx.state.addRef(page, element, role, name) : ctx.state.addRef(page, element);
   element.label = `@${ref}`;
   if (asked !== null) {
     flag("find_is", true);

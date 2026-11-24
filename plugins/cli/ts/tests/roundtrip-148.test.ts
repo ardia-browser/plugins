@@ -9,6 +9,7 @@ import { type Ref, Refs, sameScope, type Snapshots } from "../src/browse/state/r
 import { Element, type Page } from "../src/browse/state/page.ts";
 import { checkedState } from "../src/browse/commands/read.ts";
 import { StaleRef, Usage } from "../src/browse/daemon-errors.ts";
+import { MAX_TITLE } from "../src/browse/commands/read-urls.ts";
 import { stepsData, stepsText } from "../src/browse/script/script.ts";
 import { compactTree, type Trimmed } from "../src/browse/snapshot/compact.ts";
 import { Node } from "../src/browse/snapshot/tree.ts";
@@ -51,6 +52,13 @@ test("a stale ref is rebound only where it is a selector", () => {
   expect(rebound(["fill", "-s", "@e14", "-s", "@e14"], "e14", "e352")).toEqual(["fill", "-s", "@e352", "-s", "@e14"]);
   expect(rebound(["type", "--delay", "10", "@e14", "hello"], "e14", "e352")).toEqual(["type", "--delay", "10", "@e352", "hello"]);
   expect(rebound(["click", "--button", "right", "@e14"], "e14", "e352")).toEqual(["click", "--button", "right", "@e352"]);
+  expect(rebound(["scroll", "down", "300", "-s", "@e14"], "e14", "e352")).toEqual(["scroll", "down", "300", "-s", "@e352"]);
+  expect(rebound(["get", "attr", "name", "-s", "@e14"], "e14", "e352")).toEqual(["get", "attr", "name", "-s", "@e352"]);
+  expect(rebound(["click", "-s", "#current", "-s", "@e14"], "e14", "e352")).toEqual(["click", "-s", "#current", "-s", "@e352"]);
+  expect(rebound(["click", "-s", "@e14", "-s", "#current"], "e14", "e352")).toBeNull();
+  expect(rebound(["click", "--selector=#a", "--selector=@e14"], "e14", "e352")).toEqual(["click", "--selector=#a", "--selector=@e352"]);
+  expect(rebound(["fill", "--no-humanize", "-s", "@e14", "@e14"], "e14", "e352")).toEqual(["fill", "--no-humanize", "-s", "@e352", "@e14"]);
+  expect(rebound(["fill", "@e14", "-s", "@e14"], "e14", "e352")).toEqual(["fill", "@e352", "-s", "@e14"]);
   expect(rebound(["type", "@e14", "--delay", "@e14"], "e14", "e352")).toEqual(["type", "@e352", "--delay", "@e14"]);
 });
 
@@ -88,6 +96,44 @@ test("addRef keeps verified uniqueness and scope only for the same role and name
   expect(state.refs.get(id)?.unique).toBe(false);
   expect(state.refs.get(id)?.scope).toBeUndefined();
   expect(sameScope(state.refs.get(id) as Ref, { ...renamed, unique: true, scope: "[]" })).toBe(false);
+  state.refs.set(id, { ...(state.refs.get(id) as Ref), role: "button", name: "Delete", unique: true, scope: "[]" });
+  state.addRef(FAKE_PAGE, element, "button", "");
+  expect(state.refs.get(id)?.name).toBe("");
+  expect(state.refs.get(id)?.unique).toBe(false);
+  expect(state.refs.get(id)?.scope).toBeUndefined();
+  state.refs.set(id, { ...(state.refs.get(id) as Ref), name: "Delete", unique: true, scope: "[]" });
+  state.addRef(FAKE_PAGE, element);
+  expect(state.refs.get(id)?.name).toBe("Delete");
+  expect(state.refs.get(id)?.unique).toBe(true);
+});
+
+class LivePageRefs extends FakeRefs {
+  override targetInfos = new Map<string, Record<string, unknown>>([["T", {}]]);
+  override async page(): Promise<Page> {
+    return { ...FAKE_PAGE, refreshFrames: async () => {}, resolveBackend: async () => null } as unknown as Page;
+  }
+}
+
+test("a ref whose name was cleared never follows another button with its old name", async () => {
+  const state = new LivePageRefs();
+  const element = new Element("F", "OBJ", 21, "@x");
+  const id = state.addRef(FAKE_PAGE, element, "button", "Delete");
+  state.refs.set(id, { ...(state.refs.get(id) as Ref), unique: true, scope: "[]", context: [] });
+  state.addRef(FAKE_PAGE, element, "button", "");
+  const other = framed(new Node("main", "", "", new Map(), 30, [control("button", "Delete", "e40")]), "F");
+  await withTree([other], async () => {
+    const error = await state.resolveRef(id).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(StaleRef);
+    expect((error as StaleRef).successor).toBeNull();
+    expect((error as StaleRef).text).not.toContain("is now @");
+  });
+  const kept = new LivePageRefs();
+  const keptId = kept.addRef(FAKE_PAGE, new Element("F", "OBJ2", 22, "@y"), "button", "Delete");
+  kept.refs.set(keptId, { ...(kept.refs.get(keptId) as Ref), unique: true, scope: "[]", context: [] });
+  await withTree([other], async () => {
+    const error = (await kept.resolveRef(keptId).catch((caught: unknown) => caught)) as StaleRef;
+    expect(error.successor).toBe("e40");
+  });
 });
 
 function withTree(tree: Node[], run: () => Promise<void>): Promise<void> {
@@ -263,6 +309,10 @@ test("read-urls resolves addresses, turns HTML into text and reports each failur
   expect(titled.title.length).toBeLessThanOrEqual(300);
   expect(titled.truncated).toBe(true);
   expect(titled.content).toBe("body");
+  const narrow = fetchedOf({ url: "http://x/n", status: 200, contentType: "text/html", body: `<title>${"t".repeat(MAX_TITLE)}</title><p>body</p>`, binary: false }, "http://x", 20);
+  expect(narrow.title.length).toBeLessThanOrEqual(20);
+  expect(narrow.title.length + narrow.content.length).toBeLessThanOrEqual(20);
+  expect(narrow.truncated).toBe(true);
   const long = fetchedOf({ url: "http://x/l", status: 200, contentType: "text/html", body: `<title>${"t".repeat(250)}</title><p>${"b".repeat(MAX_CHARS)}</p>`, binary: false }, "http://x", 0);
   expect(long.title.length + long.content.length).toBeLessThanOrEqual(MAX_CHARS);
   expect(long.truncated).toBe(true);
