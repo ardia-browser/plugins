@@ -6,7 +6,7 @@ export const MIN_COLLAPSE_RUN = 4;
 export const MIN_SAVED_LINES = 6;
 const MAX_LCS_CELLS = 250_000;
 
-function alignedPrevIndex(prevNorm: readonly string[], currNorm: readonly string[]): Int32Array {
+function alignedPrevIndex(prevNorm: readonly string[], currNorm: readonly string[]): Int32Array | null {
   const m = prevNorm.length;
   const n = currNorm.length;
   const prevPos = new Int32Array(n).fill(-1);
@@ -22,7 +22,8 @@ function alignedPrevIndex(prevNorm: readonly string[], currNorm: readonly string
   }
   const midM = m - prefix - suffix;
   const midN = n - prefix - suffix;
-  if (midM <= 0 || midN <= 0 || midM * midN > MAX_LCS_CELLS) return prevPos;
+  if (midM <= 0 || midN <= 0) return prevPos;
+  if (midM * midN > MAX_LCS_CELLS) return null;
   const stride = midN + 1;
   const dp = new Uint32Array((midM + 1) * stride);
   for (let i = midM - 1; i >= 0; i -= 1) {
@@ -75,6 +76,7 @@ export function deltaRead(previous: string, current: string): { text: string; om
   const nonEmpty = currNorm.length;
   if (nonEmpty === 0 || prevNorm.length === 0) return { text: current, omitted: 0, unchanged: false };
   const prevPos = alignedPrevIndex(prevNorm, currNorm);
+  if (prevPos === null) return { text: current, omitted: 0, unchanged: false };
   let matched = 0;
   const linePrev = new Int32Array(currLines.length).fill(-2);
   currLines.forEach((raw, idx) => {

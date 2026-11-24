@@ -7,7 +7,8 @@ export const FLAGS: Readonly<Record<string, string>> = { "--raw": "bool", "--req
 export const MAX_BODY = 8 * 1024 * 1024;
 export const MARKDOWN_TYPES = ["text/markdown", "text/x-markdown"];
 const LINK = new RegExp(`\\[([^\\]]+)\\]\\(([^)${PY_SPACE_CLASS}]+)\\)`, "g");
-const SKIP = new Set(["script", "style", "noscript", "template", "svg", "head", "nav", "footer"]);
+const SKIP_BASE = new Set(["script", "style", "noscript", "template", "svg", "head"]);
+const SKIP = new Set([...SKIP_BASE, "nav", "footer"]);
 const BLOCK = new Set(["p", "div", "section", "article", "main", "header", "ul", "ol", "table", "tr", "blockquote", "pre", "br", "hr", "form", "dl", "dt", "dd"]);
 const HEADING = /^h[1-6]$/;
 const MARKDOWN_HEADING = /^#{1,6} /;
@@ -35,18 +36,21 @@ export class TextExtractor {
   private buffer: string[] = [];
   private skip = 0;
   private heading: number | null = null;
-  private cell = false;
+  private rowCells: string[] | null = null;
+  private cellBuf: string[] | null = null;
   title = "";
   private inTitle = false;
   private readonly readable: boolean;
+  private readonly skipTags: ReadonlySet<string>;
   private readonly parser = new HTMLParser({
     starttag: (tag) => this.starttag(tag),
     endtag: (tag) => this.endtag(tag),
     data: (text) => this.data(text),
   });
 
-  constructor(readable = false) {
+  constructor(readable = false, keepChrome = false) {
     this.readable = readable;
+    this.skipTags = keepChrome ? SKIP_BASE : SKIP;
   }
 
   feed(text: string): void {
@@ -59,21 +63,45 @@ export class TextExtractor {
     this.buffer = [];
   }
 
+  private finishCell(): void {
+    if (this.cellBuf !== null && this.rowCells !== null) {
+      this.rowCells.push(pyStrip(collapseSpaces(this.cellBuf.join(""))));
+      this.cellBuf = null;
+    }
+  }
+
+  private finishRow(): void {
+    this.finishCell();
+    if (this.rowCells !== null) {
+      if (this.rowCells.some((cell) => cell !== "")) this.lines.push(this.rowCells.join(" | "));
+      this.rowCells = null;
+    }
+  }
+
   private starttag(tag: string): void {
     if (tag === "title") this.inTitle = true;
-    if (SKIP.has(tag)) {
+    if (this.skipTags.has(tag)) {
       this.skip += 1;
       return;
     }
     if (this.readable && this.skip) return;
-    if (this.readable && (tag === "td" || tag === "th")) {
-      if (this.cell && this.buffer.some((part) => part.trim() !== "")) this.buffer.push(" | ");
-      this.cell = true;
+    if (this.readable && tag === "tr") {
+      this.finishRow();
+      this.flush();
+      this.rowCells = [];
       return;
     }
-    if (this.readable && tag === "tr") {
-      this.flush();
-      this.cell = false;
+    if (this.readable && (tag === "td" || tag === "th")) {
+      if (this.rowCells === null) {
+        this.flush();
+        this.rowCells = [];
+      }
+      this.finishCell();
+      this.cellBuf = [];
+      return;
+    }
+    if (this.readable && this.cellBuf !== null) {
+      if (BLOCK.has(tag) || HEADING.test(tag) || tag === "li") this.cellBuf.push(" ");
       return;
     }
     if (HEADING.test(tag)) {
@@ -87,14 +115,21 @@ export class TextExtractor {
 
   private endtag(tag: string): void {
     if (tag === "title") this.inTitle = false;
-    if (SKIP.has(tag)) {
+    if (this.skipTags.has(tag)) {
       this.skip = Math.max(0, this.skip - 1);
       return;
     }
     if (this.readable && this.skip) return;
-    if (this.readable && tag === "tr") {
-      this.flush();
-      this.cell = false;
+    if (this.readable && (tag === "td" || tag === "th")) {
+      this.finishCell();
+      return;
+    }
+    if (this.readable && (tag === "tr" || tag === "table")) {
+      this.finishRow();
+      return;
+    }
+    if (this.readable && this.cellBuf !== null) {
+      if (BLOCK.has(tag) || HEADING.test(tag) || tag === "li") this.cellBuf.push(" ");
       return;
     }
     if (HEADING.test(tag) && this.heading) {
@@ -107,10 +142,14 @@ export class TextExtractor {
 
   private data(text: string): void {
     if (this.inTitle) this.title += text;
-    if (!this.skip) this.buffer.push(text);
+    if (!this.skip) {
+      if (this.readable && this.cellBuf !== null) this.cellBuf.push(text);
+      else this.buffer.push(text);
+    }
   }
 
   text(): string {
+    if (this.readable) this.finishRow();
     this.flush();
     const out: string[] = [];
     for (const line of this.lines) {
@@ -121,8 +160,8 @@ export class TextExtractor {
   }
 }
 
-export function extractHtml(html: string, readable = false): { content: string; title: string } {
-  const extractor = new TextExtractor(readable);
+export function extractHtml(html: string, readable = false, keepChrome = false): { content: string; title: string } {
+  const extractor = new TextExtractor(readable, keepChrome);
   extractor.feed(html);
   const content = extractor.text();
   return { content, title: pyStrip(collapseSpaces(extractor.title)) };

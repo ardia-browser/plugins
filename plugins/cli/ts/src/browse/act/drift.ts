@@ -18,6 +18,7 @@ function squash(text: string): string {
 
 const STATUS_TOKEN = /^(?:\d+(?:[.,/:%-]\d+)*[%+]?|selected|chosen|applied|active|required|optional|invalid|valid|error|loading|saving|saved|items?|results?|matches?|count|added|total|empty|none|of|to|h|hr|hrs|min|mins|sec|secs|s)$/iu;
 const PLACEHOLDER_HEAD = /^(?:passenger|traveler|traveller|guest|attendee|seat|person|member|adult|child|infant|item|entry|row)\s+\d+$/iu;
+const FORM_PURPOSE_WORD = /\b(?:address|billing|shipping|payment|card|cvv|cvc|iban|routing|account|email|mail|phone|mobile|tel|password|passcode|pin|secret|token|otp|code|ssn|tax|zip|postal|country|state|city|street|company|org|coupon|promo|discount|amount|price|total|budget|date|time|url|link|subject|title|message|notes?|comment|description|reason|summary|search|query|filter|login|username|recovery)\b/iu;
 const STATUS_SEPARATOR = /\s+[—–·]\s+/u;
 
 function matchedIndices(shorter: readonly string[], longer: readonly string[]): number[] | null {
@@ -57,7 +58,11 @@ export function liveFormLabelUpdate(was: string, now: string): boolean {
     const headB = (partsB[0] as string).trim();
     const tailA = partsA.slice(1).join(" · ").toLowerCase();
     const tailB = partsB.slice(1).join(" · ").toLowerCase();
-    if (tailA.length >= 6 && tailA === tailB && PLACEHOLDER_HEAD.test(headA) !== PLACEHOLDER_HEAD.test(headB)) return true;
+    const tailWords = tailA.split(/\s+/u).filter(Boolean).length;
+    if (tailA.length >= 6 && tailWords >= 2 && tailA === tailB && PLACEHOLDER_HEAD.test(headA) !== PLACEHOLDER_HEAD.test(headB)) {
+      const replacement = PLACEHOLDER_HEAD.test(headA) ? headB : headA;
+      if (!FORM_PURPOSE_WORD.test(replacement)) return true;
+    }
   }
   const wa = a.split(" ");
   const wb = b.split(" ");

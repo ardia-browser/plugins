@@ -9,6 +9,12 @@ function nonEmptyLines(text: string): string[] {
   return text.split("\n").map(pyStrip).filter((line) => line !== "");
 }
 
+const DATA_LINE = /^(?:[A-Za-z][A-Za-z0-9 _/-]{0,36}:\s+\S|[$€£¥]?\d[\d,.:/%-]*$)/u;
+
+function chromeCandidate(line: string): boolean {
+  return line.length > 0 && !DATA_LINE.test(line);
+}
+
 function sharedPrefix(pages: readonly (readonly string[])[], threshold: number): string[] {
   const prefix: string[] = [];
   for (let pos = 0; pos < CHROME_EDGE_LINES; pos += 1) {
@@ -26,7 +32,7 @@ function sharedPrefix(pages: readonly (readonly string[])[], threshold: number):
         bestCount = count;
       }
     }
-    if (bestCount < threshold) break;
+    if (bestCount < threshold || !chromeCandidate(bestLine)) break;
     prefix.push(bestLine);
   }
   return prefix;
@@ -50,7 +56,7 @@ function sharedSuffix(pages: readonly (readonly string[])[], threshold: number):
         bestCount = count;
       }
     }
-    if (bestCount < threshold) break;
+    if (bestCount < threshold || !chromeCandidate(bestLine)) break;
     suffix.push(bestLine);
   }
   return suffix;

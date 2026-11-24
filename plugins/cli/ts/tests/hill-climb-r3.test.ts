@@ -41,14 +41,26 @@ describe("extractHtml table formatting", () => {
     expect(content).toBe("Plan | Price | Burst\nStarter | Free | 10/s\nTeam | $99 | 50/s");
   });
 
-  test("does not emit leading pipes for empty first cells or skipped nav tables", () => {
-    const html = `<html><body><nav><table><tr><td>NavA</td><td>NavB</td></tr></table></nav><table><tr><td></td><td>Only</td></tr></table></body></html>`;
+  test("preserves column alignment for empty cells, collapses cell paragraphs, and supports keepChrome", () => {
+    const html = `<html><body><nav><table><tr><td>NavA</td><td>NavB</td></tr></table></nav><table><tr><td></td><td>100</td></tr><tr><td><p>Line 1</p><p>Line 2</p></td><td>200</td></tr></table></body></html>`;
     const { content } = extractHtml(html, true);
-    expect(content).toBe("Only");
+    expect(content).toBe("| 100\nLine 1 Line 2 | 200");
+    const footer = extractHtml(`<footer id="contact"><p>Support: 555-0100</p></footer>`, true, true);
+    expect(footer.content).toBe("Support: 555-0100");
   });
 });
 
 describe("Codex review hardening regressions", () => {
+  test("deltaRead returns full text instead of claiming removal when middle exceeds LCS budget", () => {
+    const end = Array.from({ length: 180 }, (_, i) => `Shared edge ${i}`);
+    const middle = Array.from({ length: 500 }, (_, i) => `Row ${i}`);
+    const before = [...end, "Heading A", ...middle, "Total A", ...end].join("\n");
+    const after = [...end, "Heading B", ...middle, "Total B", ...end].join("\n");
+    const result = deltaRead(before, after);
+    expect(result.omitted).toBe(0);
+    expect(result.text).toBe(after);
+    expect(result.text).not.toContain("removed");
+  });
   test("deltaRead preserves order and never suppresses reversed lines", () => {
     const lines = Array.from({ length: 10 }, (_, i) => `Line ${i + 1} with distinct content`);
     const forward = lines.join("\n");
@@ -85,6 +97,8 @@ describe("Codex review hardening regressions", () => {
     expect(liveFormLabelUpdate("Primary contact email", "Primary contact phone")).toBe(false);
     expect(liveFormLabelUpdate("Billing email — required", "Recovery phone — required")).toBe(false);
     expect(liveFormLabelUpdate("Passenger 1 — no seat yet", "Passenger 2 — no seat yet")).toBe(false);
+    expect(liveFormLabelUpdate("Guest 1 — required", "Billing address — required")).toBe(false);
+    expect(liveFormLabelUpdate("Guest 1 — no seat yet", "Billing address — no seat yet")).toBe(false);
     expect(liveFormLabelUpdate("Email", "Email (password)")).toBe(false);
     expect(liveFormLabelUpdate("Email", "Email password")).toBe(false);
     expect(liveFormLabelUpdate("Passenger 1 — no seat yet", "Jordan Lee — no seat yet")).toBe(true);
@@ -107,6 +121,14 @@ describe("Codex review hardening regressions", () => {
     expect(kept.texts).toEqual(identicalShort);
     const crossOrigin = dedupeChrome(shortPages, ["https://a.example", "https://b.example", "https://c.example"]);
     expect(crossOrigin.omitted).toBe(0);
+    const invoices = [
+      ["Payment status: overdue", "Invoice #101", "Amount: $120"].join("\n"),
+      ["Payment status: overdue", "Invoice #102", "Amount: $240"].join("\n"),
+      ["Payment status: overdue", "Invoice #103", "Amount: $360"].join("\n"),
+    ];
+    const keptInvoices = dedupeChrome(invoices, ["https://a.example", "https://a.example", "https://a.example"]);
+    expect(keptInvoices.omitted).toBe(0);
+    expect(keptInvoices.texts).toEqual(invoices);
   });
 
   test("trimSupersededChanges preserves text confirmations before form", () => {

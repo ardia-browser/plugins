@@ -84,7 +84,9 @@ export const FETCH_ALL = `async (urls, maxBytes, totalBytes, concurrency, timeou
     const title = doc.title ? String(doc.title).replace(/\\s+/g, " ").trim() : "";
     const mains = [...doc.querySelectorAll("main")];
     if (mains.length !== 1) return null;
-    const text = (mains[0].textContent || "").trim();
+    const clone = mains[0].cloneNode(true);
+    for (const ignored of clone.querySelectorAll("script,style,noscript,template,svg,nav,footer")) ignored.remove();
+    const text = (clone.textContent || "").replace(/\\s+/g, " ").trim();
     if (text.length < 120) return null;
     return { body: mains[0].outerHTML, title };
   };
@@ -143,6 +145,7 @@ export const FETCH_ALL = `async (urls, maxBytes, totalBytes, concurrency, timeou
       }
       let parsedTitle = null;
       let selectorMatched = null;
+      let mainScoped = false;
       const htmlDetected = isHtml(type, body);
       if (selector && htmlDetected) {
         try {
@@ -160,9 +163,10 @@ export const FETCH_ALL = `async (urls, maxBytes, totalBytes, concurrency, timeou
         if (main) {
           body = main.body;
           parsedTitle = main.title;
+          mainScoped = true;
         }
       }
-      if (!stopped) out[index] = { ...base, binary: false, body, truncated, ...(htmlDetected ? { wasHtml: true } : {}), ...(parsedTitle !== null ? { parsedTitle } : {}), ...(selectorMatched !== null ? { selectorMatched } : {}) };
+      if (!stopped) out[index] = { ...base, binary: false, body, truncated, ...(htmlDetected ? { wasHtml: true } : {}), ...(mainScoped ? { mainScoped: true } : {}), ...(parsedTitle !== null ? { parsedTitle } : {}), ...(selectorMatched !== null ? { selectorMatched } : {}) };
     } catch (error) {
       if (!stopped) out[index] = { url, error: timedOut ? "timeout" : String((error && error.message) || error) };
     } finally {
@@ -240,10 +244,10 @@ function blockedReason(error: string, origin: string, overall: number): string {
   return error;
 }
 
-export function contentOf(body: string, type: string, wasHtml = false): { content: string; title: string } {
+export function contentOf(body: string, type: string, wasHtml = false, keepChrome = false): { content: string; title: string } {
   const lower = type.toLowerCase();
   if (wasHtml || lower.includes("html") || (lower === "" && /^\s*<(?:!doctype|html|head|body)/iu.test(body))) {
-    const { content, title } = extractHtml(body, true);
+    const { content, title } = extractHtml(body, true, keepChrome);
     const lines = content.split("\n");
     return { content: title && lines[0] === title ? lines.slice(1).join("\n").trim() : content, title };
   }
@@ -267,7 +271,7 @@ export function fetchedOf(raw: Record<string, unknown>, origin: string, perUrl: 
   if (raw["binary"]) {
     return { url, finalUrl, status, ok: false, contentType: type, title: "", content: "", chars: 0, truncated: false, error: `${type || "the body"} isn't text; \`ardia browse read --http ${url} --out <file>\` saves it` };
   }
-  const extracted = contentOf(neutralize(stripLoneSurrogates(String(raw["body"] ?? ""))), type, Boolean(raw["wasHtml"]));
+  const extracted = contentOf(neutralize(stripLoneSurrogates(String(raw["body"] ?? ""))), type, Boolean(raw["wasHtml"]), raw["selectorMatched"] !== undefined && raw["selectorMatched"] !== null);
   const content = extracted.content;
   const rawTitle = typeof raw["parsedTitle"] === "string" && raw["parsedTitle"] ? neutralize(stripLoneSurrogates(raw["parsedTitle"])) : extracted.title;
   const budget = perUrl > 0 ? Math.min(perUrl, MAX_CHARS) : MAX_CHARS;
@@ -352,8 +356,9 @@ export async function cmdReadUrls(ctx: Ctx, argv: string[]): Promise<Result> {
   let omitted = 0;
   let displayContents: string[] | undefined;
   if (!ctx.options["full"] && !selector) {
-    const itemOrigins = fetched.map((item) => {
+    const itemOrigins = fetched.map((item, idx) => {
       if (item.error !== null) return "";
+      if (record(raw[idx])["mainScoped"]) return "";
       try {
         return new URL(item.finalUrl || item.url).origin;
       } catch {

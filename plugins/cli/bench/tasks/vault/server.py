@@ -280,13 +280,12 @@ class VaultHandler(Handler):
                 if not entry:
                     return self.redirect(LOGIN_URL)
                 STATE["auth_sessions_issued"] += 1
-                is_first = STATE["auth_sessions_issued"] == 1
                 if STATE["expiry_triggered"]:
                     STATE["reauth_count"] += 1
                 token = secrets.token_hex(20)
                 STATE["active_tokens"][token] = {
                     "email": entry["email"],
-                    "expires_after_first_write": is_first,
+                    "expires_after_first_write": not STATE["expiry_triggered"],
                     "created_at_ms": now_ms(),
                 }
             return self.redirect_with_cookie("/", f"vault_auth={token}; Path=/; HttpOnly; SameSite=Lax")
