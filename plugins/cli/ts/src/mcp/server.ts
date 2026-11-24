@@ -1,4 +1,6 @@
-import { lstat, readFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { open } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import {
   encodeFrame,
@@ -46,6 +48,7 @@ export const DEFAULT_PROTOCOL = "2025-03-26";
 export const ACTIVE_TAB_URI = "ardia://tabs/active";
 const CONTEXT_PROBE_MS = 4000;
 const SCREENSHOT_COMMANDS = new Set(["screenshot", "shot"]);
+const TRANSPORT_ERRORS = new Set(["daemon_unreachable", "socket_refused", "interrupted", "request_too_large", "invalid_name", "internal_error"]);
 
 export type ServerOptions = { daemon: Daemon; version: string; log?: (line: string) => void };
 
@@ -183,7 +186,9 @@ export class McpServer {
     const send = (repl: boolean) => this.daemon.run({ argv: replArgv(call, repl), stdin: call.code, json: false, full: call.full, maxOutput: call.full ? 0 : null }, signal);
     if (!this.replSupported) return send(false);
     const answer = await send(true);
-    if (this.replConfirmed || !replUnsupported(answer)) {
+    if (this.replConfirmed) return answer;
+    if (answer.code !== null && TRANSPORT_ERRORS.has(answer.code)) return answer;
+    if (!replUnsupported(answer)) {
       this.replConfirmed = true;
       return answer;
     }
@@ -246,18 +251,28 @@ function validImageMagic(bytes: Buffer, mimeType: string): boolean {
   return false;
 }
 
+function expandUser(given: string): string {
+  if (given === "~") return os.homedir();
+  if (given.startsWith("~/")) return path.join(os.homedir(), given.slice(2));
+  return given;
+}
+
 async function inlineImage(out: string): Promise<ToolContent | null> {
   const found = imagePath(out);
   if (found === null) return null;
-  const resolved = path.resolve(found.path);
+  const resolved = path.resolve(expandUser(found.path));
+  let handle;
   try {
-    const info = await lstat(resolved);
+    handle = await open(resolved, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    const info = await handle.stat();
     if (!info.isFile() || info.size > MAX_INLINE_IMAGE_BYTES) return null;
-    const bytes = await readFile(resolved);
+    const bytes = await handle.readFile();
     if (bytes.length > MAX_INLINE_IMAGE_BYTES || !validImageMagic(bytes, found.mimeType)) return null;
     return { type: "image", data: bytes.toString("base64"), mimeType: found.mimeType };
   } catch {
     return null;
+  } finally {
+    await handle?.close().catch(() => undefined);
   }
 }
 

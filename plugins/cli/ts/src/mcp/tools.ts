@@ -141,10 +141,11 @@ export function tabHeader(tab: TabInfo, nonce: string): string {
 }
 
 export function fencedTab(tab: TabInfo, nonce: string): TabInfo {
+  const url = sanitizeUrl(tab.url);
   return {
     id: oneLine(tab.id, 40).replace(/[^\w.-]/gu, ""),
     title: fenceInline(tab.title, nonce),
-    url: sanitizeUrl(tab.url),
+    url: url === "" ? "" : `<page-data nonce="${nonce}">${url}</page-data>`,
   };
 }
 

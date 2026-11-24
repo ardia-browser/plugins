@@ -10,7 +10,10 @@
   const FETCH_LIMIT = 2 * 1024 * 1024;
   const MAX_SPILL_ENTRIES = 12;
   const MAX_SPILL_CHARS = 2 * 1024 * 1024;
-  const RECEIPT_STALE_CMDS = new Set(["open", "goto", "back", "forward", "reload", "tab", "window", "frame", "close", "pushstate"]);
+  const RECEIPT_STALE_CMDS = new Set([
+    "open", "goto", "navigate", "go", "visit", "back", "forward", "reload", "refresh",
+    "tab", "tabs", "window", "frame", "close", "exit", "quit", "pushstate",
+  ]);
   const BridgeError = Error;
   const send = (kind, payload) => {
     let answer;
@@ -56,6 +59,8 @@
   let runLogs = [];
   let runLogChars = 0;
   let lastReceipt = null;
+  let receiptEpoch = 0;
+  const internalCodes = new WeakMap();
   const replNames = new Set();
   const spilledEntries = [];
   let spilledChars = 0;
@@ -109,7 +114,10 @@
       const parts = first.split(/\s+/);
       const cmd = parts[0].toLowerCase();
       const sub = (parts[1] || (payload.argv.length > 1 ? String(payload.argv[1]) : "")).toLowerCase();
-      if (RECEIPT_STALE_CMDS.has(cmd) && !(cmd === "tab" && (sub === "list" || sub === ""))) lastReceipt = null;
+      if (RECEIPT_STALE_CMDS.has(cmd) && !(cmd === "tab" && (sub === "list" || sub === ""))) {
+        receiptEpoch += 1;
+        lastReceipt = null;
+      }
     }
     syncState(false);
     return new Promise((resolve, reject) => {
@@ -142,6 +150,7 @@
     const error = entry.origin;
     error.message = String(answer.error || "failed");
     error.code = answer.code || null;
+    if (error.code) internalCodes.set(error, String(error.code));
     error.argv = entry.argv;
     error.call = typeof answer.call === "number" ? answer.call : null;
     entry.reject(error);
@@ -252,18 +261,23 @@
     });
     return receipt;
   };
-  const acted = (options) => (answer) => {
+  const acted = (options, epoch) => (answer) => {
     if (options && options.receipt === true) {
-      lastReceipt = parseReceipt(answer.text, answer.data);
-      return lastReceipt;
+      const receipt = parseReceipt(answer.text, answer.data);
+      if (epoch === receiptEpoch) lastReceipt = receipt;
+      return receipt;
     }
-    lastReceipt = null;
+    if (epoch === receiptEpoch) lastReceipt = null;
     return answer.text;
   };
-  const keyboard = (value, options) => call(["keyboard", "type", String(value)], options).then(acted(options));
+  const runAct = (argv, options) => {
+    const epoch = receiptEpoch;
+    return call(argv, options).then(acted(options, epoch));
+  };
+  const keyboard = (value, options) => runAct(["keyboard", "type", String(value)], options);
   keyboard.type = keyboard;
-  keyboard.press = (key, options) => call(["press", String(key)], options).then(acted(options));
-  keyboard.insertText = (value, options) => call(["keyboard", "inserttext", String(value)], options).then(acted(options));
+  keyboard.press = (key, options) => runAct(["press", String(key)], options);
+  keyboard.insertText = (value, options) => runAct(["keyboard", "inserttext", String(value)], options);
 
   const api = {
     here: () => browse("here").then(text),
@@ -276,24 +290,24 @@
       for (const [sel, val] of pairs) await call(["fill", sel, String(val)], undefined);
       return pairs.length;
     },
-    click: (selector, options) => call(["click", selector, flags(options, { newTab: "--new-tab", button: "--button" })], options).then(acted(options)),
-    dblclick: (selector, options) => call(["dblclick", selector], options).then(acted(options)),
-    focus: (selector, options) => call(["focus", selector], options).then(acted(options)),
-    fill: (selector, value, options) => call(["fill", selector, String(value)], options).then(acted(options)),
-    type: (selector, value, options) => call(["type", selector, String(value)], options).then(acted(options)),
+    click: (selector, options) => runAct(["click", selector, flags(options, { newTab: "--new-tab", button: "--button" })], options),
+    dblclick: (selector, options) => runAct(["dblclick", selector], options),
+    focus: (selector, options) => runAct(["focus", selector], options),
+    fill: (selector, value, options) => runAct(["fill", selector, String(value)], options),
+    type: (selector, value, options) => runAct(["type", selector, String(value)], options),
     press: (...given) => {
       const [args, options] = trailing(given);
-      return call(["press", ...args.slice(-2)], options).then(acted(options));
+      return runAct(["press", ...args.slice(-2)], options);
     },
     keyboard,
     select: (selector, ...given) => {
       const [values, options] = trailing(given);
-      return call(["select", selector, ...values.flat()], options).then(acted(options));
+      return runAct(["select", selector, ...values.flat()], options);
     },
-    check: (selector, options) => call(["check", selector], options).then(acted(options)),
-    uncheck: (selector, options) => call(["uncheck", selector], options).then(acted(options)),
-    hover: (selector, options) => call(["hover", selector], options).then(acted(options)),
-    scroll: (direction, pixels, options) => call(["scroll", ...words(direction), ...words(pixels)], options).then(acted(options)),
+    check: (selector, options) => runAct(["check", selector], options),
+    uncheck: (selector, options) => runAct(["uncheck", selector], options),
+    hover: (selector, options) => runAct(["hover", selector], options),
+    scroll: (direction, pixels, options) => runAct(["scroll", ...words(direction), ...words(pixels)], options),
     waitForTimeout: (ms) => request("sleep", { ms: Number(ms) || 0 }).then(() => undefined),
     text: (selector) => (selector == null ? browse("read").then(data("content")) : browse("get", "text", selector).then(data("text"))),
     value: (selector) => browse("get", "value", selector).then(data("value")),
@@ -554,6 +568,10 @@
       return { isRegex: false, ignoreCase: !exactFlag, branches: [{ text: norm(value), starts: exactFlag, ends: exactFlag }] };
     }
     const whole = String(value);
+    const badFlags = value.flags.replace(/[iu]/g, "");
+    if (badFlags !== "") {
+      throw new TypeError(`locator regex ${whole} uses unsupported flag(s) "${badFlags}"; locators support /i and /u only`);
+    }
     let src = value.source;
     let outerStart = false;
     let outerEnd = false;
@@ -578,7 +596,20 @@
     return { isRegex: true, ignoreCase: value.ignoreCase, branches };
   };
   const xpathBranch = (node, branch, ignoreCase) => {
-    const subject = ignoreCase ? `translate(normalize-space(${node}), "${UPPER}", "${LOWER}")` : `normalize-space(${node})`;
+    let upper = UPPER;
+    let lower = LOWER;
+    if (ignoreCase) {
+      for (const ch of branch.text) {
+        if (ch.charCodeAt(0) <= 0x7f) continue;
+        const lo = ch.toLowerCase();
+        const up = ch.toUpperCase();
+        if (lo.length === 1 && up.length === 1 && lo !== up && !upper.includes(up)) {
+          upper += up;
+          lower += lo;
+        }
+      }
+    }
+    const subject = ignoreCase ? `translate(normalize-space(${node}), ${xpathString(upper)}, ${xpathString(lower)})` : `normalize-space(${node})`;
     const needle = ignoreCase ? branch.text.toLowerCase() : branch.text;
     const quoted = xpathString(needle);
     if (branch.starts && branch.ends) return `${subject}=${quoted}`;
@@ -694,6 +725,7 @@
     const error = new Error(message);
     error.name = "AssertionError";
     error.code = "assertion";
+    internalCodes.set(error, "assertion");
     return error;
   };
   const assertText = async (expected, options) => {
@@ -826,6 +858,7 @@
       `page.${name} isn't part of ardia's script API: read with page.$$eval(sel, els => …) or page.evaluate(fn, ...args), act with page.click(sel), page.fill(sel, value) or page.locator(sel).click(). page has: ${known.join(", ")}`,
     );
     error.code = "usage";
+    internalCodes.set(error, "usage");
     return error;
   };
   const page = new Proxy(Object.freeze(api), {
@@ -1182,28 +1215,34 @@
     return `${typeof value}, ${size}`;
   };
   const stash = (value, chars) => {
+    if (chars > MAX_SPILL_CHARS) return null;
+    while (spilledEntries.length > 0 && (spilledEntries.length >= MAX_SPILL_ENTRIES || spilledChars + chars > MAX_SPILL_CHARS)) {
+      const old = spilledEntries.shift();
+      spilledChars -= old.chars;
+      try { delete globalThis[old.name]; } catch (e) {}
+      replNames.delete(old.name);
+    }
     outCount += 1;
     const name = "$out" + outCount;
     try {
-      globalThis[name] = value;
+      Object.defineProperty(globalThis, name, { value, writable: true, configurable: true, enumerable: true });
       replNames.add(name);
       spilledEntries.push({ name, chars });
       spilledChars += chars;
-      while (spilledEntries.length > 1 && (spilledEntries.length > MAX_SPILL_ENTRIES || spilledChars > MAX_SPILL_CHARS)) {
-        const old = spilledEntries.shift();
-        spilledChars -= old.chars;
-        try { delete globalThis[old.name]; } catch (e) {}
-        replNames.delete(old.name);
-      }
-    } catch (e) {}
+    } catch (e) {
+      return null;
+    }
     return name;
   };
   const spilledValue = (value) => {
     if (!REPL || spillAt <= 0 || value === undefined) return null;
     const shown = previewOf(value);
     if (typeof shown !== "string" || shown.length <= spillAt) return null;
-    const name = stash(value, shown.length);
     const head = shown.slice(0, previewChars);
+    const name = stash(value, shown.length);
+    if (name === null) {
+      return { value: `${head}${shown.length > previewChars ? "…" : ""}\n[too large to retain in $outN (${described(value, shown.length)}); filter inside the script]` };
+    }
     return { value: `${head}${shown.length > previewChars ? "…" : ""}\n[stored in ${name} (${described(value, shown.length)}); inspect or filter in next repl call]`, spilled: name };
   };
   const spilledLogs = () => {
@@ -1226,6 +1265,10 @@
     const kept = [];
     for (const name of Object.keys(values || {})) {
       if (BUILTIN.has(name) && !replNames.has(name)) continue;
+      if (replNames.has(name) && Object.prototype.hasOwnProperty.call(globalThis, name) && Object.is(globalThis[name], values[name])) {
+        kept.push(name);
+        continue;
+      }
       try {
         globalThis[name] = values[name];
         replNames.add(name);
@@ -1246,6 +1289,7 @@
     runLogs = [];
     runLogChars = 0;
     replCapture = null;
+    receiptEpoch += 1;
     lastReceipt = null;
     stateCheckedAt = 0;
     waiting.clear();
@@ -1266,18 +1310,24 @@
       try {
         const value = await fn();
         const kept = harvest();
+        const spilled = spilledValue(value);
         const logSpill = spilledLogs();
-        result = { kind: "done", ...(spilledValue(value) || clean(value)) };
+        if (spilled && spilled.spilled && !spilledEntries.some((entry) => entry.name === spilled.spilled)) {
+          delete spilled.spilled;
+          spilled.value = spilled.value.replace(/\[stored in \$out\d+ \(([^)]+)\); inspect or filter in next repl call\]$/, "[evicted by spill memory limit ($1); filter inside the script]");
+        }
+        result = { kind: "done", ...(spilled || clean(value)) };
         if (REPL) result.kept = kept;
         if (logSpill) result.logSpill = logSpill;
       } catch (error) {
         harvest();
+        const safeCode = error && typeof error === "object" ? (internalCodes.get(error) || null) : null;
         result = {
           kind: "error",
           message: error && error.message !== undefined ? String(error.message) : show(error),
           name: error && error.name ? String(error.name) : "Error",
           line: lineOf(error && error.stack),
-          code: error && error.code ? String(error.code) : null,
+          code: safeCode,
           command: error && Array.isArray(error.argv) ? error.argv : null,
           call: error && typeof error.call === "number" ? error.call : null,
         };

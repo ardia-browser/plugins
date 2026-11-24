@@ -394,12 +394,12 @@ function hoistTopLevelBindings(source: string): string {
     }
     if (depth !== 0 || token.kind !== "id" || !statementStart(tokens, index)) continue;
     const next = tokens[index + 1];
-    if (token.value === "const" || token.value === "var" || (token.value === "let" && next !== undefined && (next.kind === "id" || isPunct(next, "[") || isPunct(next, "{")))) {
+    if (token.value === "var" || (token.value === "let" && next !== undefined && (next.kind === "id" || isPunct(next, "[") || isPunct(next, "{")))) {
       const end = declarationEnd(tokens, index + 1);
       if (end <= index + 1) continue;
-      const declNames: string[] = [];
       const parts = splitTopLevel(tokens, index + 1, end);
-      const exprs: string[] = [];
+      const chunks: string[] = [];
+      let anyHoisted = false;
       let ok = true;
       for (const [a, b] of parts) {
         if (a >= b) {
@@ -414,21 +414,24 @@ function hoistTopLevelBindings(source: string): string {
           ok = false;
           break;
         }
-        declNames.push(...partNames);
         const startOff = (tokens[a] as Token).start;
         const endOff = (tokens[b - 1] as Token).end;
         const raw = source.slice(startOff, endOff);
-        if (eq < 0) exprs.push(`${raw} = undefined`);
-        else if (isPunct(tokens[a], "{")) exprs.push(`(${raw})`);
-        else exprs.push(raw);
+        if (partNames.some((name) => RESERVED.has(name) || PROTECTED_BUILTINS.has(name))) {
+          chunks.push(`${token.value} ${raw};`);
+          continue;
+        }
+        anyHoisted = true;
+        const assign = eq < 0 ? `${raw} = undefined` : isPunct(tokens[a], "{") ? `(${raw})` : raw;
+        const unique = JSON.stringify([...new Set(partNames)]);
+        chunks.push(`void (${REPL_INIT}(${unique}), ${assign});`);
       }
-      if (ok && declNames.length > 0 && !declNames.some((name) => RESERVED.has(name) || PROTECTED_BUILTINS.has(name))) {
+      if (ok && anyHoisted) {
         const endOff = (tokens[end - 1] as Token).end;
-        const hasSemi = isPunct(tokens[end], ";");
         edits.push({
           start: token.start,
           end: endOff,
-          text: `void (${REPL_INIT}(${JSON.stringify([...new Set(declNames)])}), ${exprs.join(", ")})${hasSemi ? "" : ";"}`,
+          text: chunks.join(" "),
         });
       }
       index = end - 1;

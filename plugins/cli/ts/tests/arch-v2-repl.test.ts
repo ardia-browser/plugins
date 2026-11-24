@@ -206,20 +206,36 @@ describe("persistent repl runner", () => {
     }
   });
 
-  test("closures and top-level variables stay synchronized across REPL turns, and multiline binary continuations stay intact", async () => {
+  test("closures and top-level variables stay synchronized across REPL turns, const stays immutable, and multiline binary continuations stay intact", async () => {
     const runner = await session();
     try {
-      await turn(runner, "let n = 0; const getN = () => n;");
+      await turn(runner, "let n = 0, page = 0; const getN = () => n;");
       const second = await turn(runner, "n++; [n, getN()]");
       expect(second.result["value"]).toEqual([1, 1]);
       const third = await turn(runner, "let x = 1\nx\n+ 2");
       expect(third.result["value"]).toBe(3);
+      const constErr = await turn(runner, "const k = 1; k = 2; k");
+      expect(constErr.result["kind"]).toBe("error");
+      expect(constErr.result["name"]).toBe("TypeError");
+      const redeclare = await turn(runner, "const k = 5; k");
+      expect(redeclare.result["value"]).toBe(5);
     } finally {
       runner.kill();
     }
   });
 
-  test("assertText does not reuse a receipt after switching tabs or starting a new REPL turn", async () => {
+  test("user-thrown errors cannot forge internal error codes like usage", async () => {
+    const runner = await session();
+    try {
+      const forged = await turn(runner, "const e = new Error('Unknown flag: --repl'); e.code = 'usage'; throw e;");
+      expect(forged.result["kind"]).toBe("error");
+      expect(forged.result["code"]).toBeNull();
+    } finally {
+      runner.kill();
+    }
+  });
+
+  test("assertText does not reuse a receipt after refresh, tab switch, concurrent tab switch, or a new REPL turn", async () => {
     const runner = await session();
     try {
       const first = await turn(runner, "await page.click('#save', { receipt: true }); return await page.assertText('changes were saved');", { answer: RECEIPT });
@@ -227,26 +243,33 @@ describe("persistent repl runner", () => {
       const second = await turn(runner, "return await page.assertText('changes were saved');", { answer: RECEIPT });
       expect(second.result["kind"]).toBe("error");
       expect(second.result["code"]).toBe("assertion");
-      const sameTurnSwitch = await turn(runner, "await page.click('#save', { receipt: true }); await useTab('t2'); return await page.assertText('changes were saved');", { answer: RECEIPT });
-      expect(sameTurnSwitch.result["kind"]).toBe("error");
-      expect(sameTurnSwitch.result["code"]).toBe("assertion");
+      const afterRefresh = await turn(runner, "await page.click('#save', { receipt: true }); await browse('refresh'); return await page.assertText('changes were saved');", { answer: RECEIPT });
+      expect(afterRefresh.result["kind"]).toBe("error");
+      expect(afterRefresh.result["code"]).toBe("assertion");
+      const concurrent = await turn(runner, "await Promise.all([page.click('#save', { receipt: true }), useTab('t2')]); return await page.assertText('changes were saved');", { answer: RECEIPT });
+      expect(concurrent.result["kind"]).toBe("error");
+      expect(concurrent.result["code"]).toBe("assertion");
     } finally {
       runner.kill();
     }
   });
 
-  test("locator regexes respect /i, anchors, and alternation, and reject unsupported syntax", async () => {
+  test("locator regexes respect /i (including non-ASCII), anchors, and alternation, and reject unsupported syntax or flags", async () => {
     const { requests, result } = await once(`
       await page.getByRole('button', { name: /^save$/i }).click();
       await page.getByRole('button', { name: /save|cancel/i }).click();
+      await page.getByRole('button', { name: /^Édit$/i }).click();
       let rejected = null;
+      let badFlag = null;
       try { page.getByRole('button', { name: /item \\d+/i }); } catch (e) { rejected = e.name; }
-      return rejected;
+      try { page.getByText(/^save$/m); } catch (e) { badFlag = e.name; }
+      return [rejected, badFlag];
     `);
-    expect(result["value"]).toBe("TypeError");
+    expect(result["value"]).toEqual(["TypeError", "TypeError"]);
     const selectors = (argvOf(requests) as string[][]).map((row) => row[1]);
     expect(selectors[0]).toContain('translate(normalize-space(@aria-label), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")="save"');
     expect(selectors[1]).toContain('contains(translate(normalize-space(@aria-label), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "save") or contains(translate(normalize-space(@aria-label), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "cancel")');
+    expect(selectors[2]).toContain('translate(normalize-space(@aria-label), "ABCDEFGHIJKLMNOPQRSTUVWXYZÉ", "abcdefghijklmnopqrstuvwxyzé")="édit"');
   });
 
   test("a non-repl runner still takes exactly one script", async () => {

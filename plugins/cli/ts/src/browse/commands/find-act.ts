@@ -167,10 +167,20 @@ async function ambiguousContainers(ctx: Ctx, page: Page, value: string, containe
 }
 
 async function containerBySelector(ctx: Ctx, page: Page, frame: string, value: string): Promise<[Page, Element] | null> {
-  const css = await scopedMatches(page, frame, null, "css", value, false);
+  const cssSelector = value.startsWith("css=") ? value.slice(4) : value;
+  const css = await scopedMatches(page, frame, null, "css", cssSelector, false);
   if (css !== null) {
     if (css.length > 1) return ambiguousContainers(ctx, page, value, css);
     if (css.length === 1) return [page, css[0] as Element];
+    return null;
+  }
+  try {
+    const remote = await page.call("(s) => ardiaBrowse.queryAll(s)", [value], { frame, byValue: false, read: true });
+    const matches = await page.elementsFrom(remote, frame, `--within ${value}`, 20);
+    if (matches.length > 1) return ambiguousContainers(ctx, page, value, matches);
+    if (matches.length === 1) return [page, matches[0] as Element];
+  } catch (error) {
+    if (!(error instanceof BrowseError) || error.code !== "page_script_error") throw error;
     return null;
   }
   try {

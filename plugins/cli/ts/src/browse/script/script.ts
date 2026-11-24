@@ -722,7 +722,11 @@ export async function run(ctx: Ctx, source: string, seconds: number, mode: Scrip
   if (repl && message["kind"] !== "error" && logSpill !== null && typeof logSpill === "object" && !Array.isArray(logSpill)) {
     const spilled = logSpill as Record<string, unknown>;
     flag("script_repl_logs_spilled", true);
-    logs = [String(spilled["preview"] ?? ""), `[logs stored in ${String(spilled["name"])} (${groupThousands(String(Number(spilled["lines"]) || 0))} lines, ${groupThousands(String(Number(spilled["chars"]) || 0))} chars); inspect or filter in next repl call]`];
+    const note =
+      typeof spilled["name"] === "string"
+        ? `[logs stored in ${spilled["name"]} (${groupThousands(String(Number(spilled["lines"]) || 0))} lines, ${groupThousands(String(Number(spilled["chars"]) || 0))} chars); inspect or filter in next repl call]`
+        : `[logs over spill limit (${groupThousands(String(Number(spilled["lines"]) || 0))} lines, ${groupThousands(String(Number(spilled["chars"]) || 0))} chars); filter inside the script]`;
+    logs = [String(spilled["preview"] ?? ""), note];
   }
   if (message["logsDropped"]) logs.push(`[${String(message["logsDropped"])} more log lines dropped past ${Math.floor(LOG_LIMIT / 1024)} KB]`);
   const notes: string[] = [];

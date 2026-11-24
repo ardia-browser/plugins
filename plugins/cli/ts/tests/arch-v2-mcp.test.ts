@@ -164,6 +164,25 @@ describe("tools/call", () => {
     expect(imagePath(`${wrapUntrusted('✓ Screenshot saved to /tmp/a.png\n   [1] @e1 button "/tmp/b.png"', "abc")}`)).toEqual({ path: "/tmp/a.png", mimeType: "image/png" });
   });
 
+  test("a transport error never confirms REPL support before the daemon answers", async () => {
+    let attempt = 0;
+    const daemon: Daemon = {
+      async run(request) {
+        if (request.argv[0] === "tab") return { exit: 1, out: "", err: "", code: null };
+        attempt += 1;
+        if (attempt === 1) return { exit: 1, out: "", err: "✗ daemon down\n", code: "daemon_unreachable" };
+        if (request.argv.includes("--repl")) return { exit: 1, out: "", err: "✗ Unknown flag: --repl\n", code: "usage" };
+        return { exit: 0, out: "ran fallback\n", err: "", code: null };
+      },
+    };
+    const server = new McpServer({ daemon, version: "1" });
+    const first = resultOf(await call(server, "tools/call", { name: "browser_repl", arguments: { code: "1" } }));
+    expect(first["isError"]).toBe(true);
+    const second = resultOf(await call(server, "tools/call", { name: "browser_repl", arguments: { code: "2" } }));
+    expect(second["isError"]).toBeUndefined();
+    expect(textOf(second)).toContain("ran fallback");
+  });
+
   test("browser_act passes argv, stdin and output options straight through", async () => {
     const daemon = new MockDaemon();
     const server = new McpServer({ daemon, version: "1" });
@@ -249,8 +268,10 @@ describe("resources", () => {
     const content = (read["contents"] as { uri: string; text: string }[])[0] as { uri: string; text: string };
     const body = JSON.parse(content.text) as Record<string, unknown>;
     expect(body["reachable"]).toBe(true);
-    expect(body["active"]).toMatchObject({ id: "t1", url: "https://example.com/" });
-    expect(String((body["active"] as Record<string, unknown>)["title"])).toMatch(/^<page-data nonce="[0-9a-f]+">Example Domain<\/page-data>$/u);
+    const active = body["active"] as Record<string, unknown>;
+    expect(active["id"]).toBe("t1");
+    expect(String(active["title"])).toMatch(/^<page-data nonce="[0-9a-f]+">Example Domain<\/page-data>$/u);
+    expect(String(active["url"])).toMatch(/^<page-data nonce="[0-9a-f]+">https:\/\/example\.com\/<\/page-data>$/u);
     expect(String(body["header"])).toMatch(/^\[tab t1 \| <page-data/u);
     expect((body["tabs"] as unknown[]).length).toBe(1);
     expect((await call(server, "resources/read", { uri: "ardia://nope" }))["error"]).toMatchObject({ code: -32002 });
@@ -382,8 +403,9 @@ describe.skipIf(!fs.existsSync(BINARY))("built binary over stdio", () => {
       expect(repl).toContain("[tab t1 | <page-data");
       expect(repl).toContain("no persistent REPL yet");
       const resActive = JSON.parse(((replies.get(4)?.["result"] as Record<string, unknown>)["contents"] as { text: string }[])[0]?.text ?? "{}")["active"] as Record<string, unknown>;
-      expect(resActive).toMatchObject({ id: "t1", url: "https://mock.test/" });
+      expect(resActive["id"]).toBe("t1");
       expect(String(resActive["title"])).toMatch(/^<page-data nonce="[0-9a-f]+">Mock<\/page-data>$/u);
+      expect(String(resActive["url"])).toMatch(/^<page-data nonce="[0-9a-f]+">https:\/\/mock\.test\/<\/page-data>$/u);
       const script = daemon.requests.find((request) => (request["argv"] as string[])[0] === "script" && !(request["argv"] as string[]).includes("--repl")) as Record<string, unknown>;
       expect(script["stdin"]).toBe("return document.title");
       expect((script["options"] as Record<string, unknown>)["_session"]).toBe("mcp-test");

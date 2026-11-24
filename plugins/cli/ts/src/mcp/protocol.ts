@@ -19,6 +19,7 @@ export const INTERNAL_ERROR = -32603;
 export const RESOURCE_NOT_FOUND = -32002;
 
 export const MAX_FRAME_BYTES = 64 * 1024 * 1024;
+const MAX_HEADER_BYTES = 8192;
 
 const HEADER_END = Buffer.from("\r\n\r\n");
 const BARE_HEADER_END = Buffer.from("\n\n");
@@ -32,6 +33,7 @@ export type Frame = { kind: "message"; text: string } | { kind: "invalid"; reaso
 export class FrameReader {
   framing: Framing | undefined;
   private pending: Buffer = Buffer.alloc(0);
+  private discardingLine = false;
 
   push(chunk: Uint8Array): Frame[] {
     this.pending = this.pending.length === 0 ? Buffer.from(chunk) : Buffer.concat([this.pending, chunk]);
@@ -45,6 +47,11 @@ export class FrameReader {
   }
 
   finish(): Frame[] {
+    if (this.discardingLine) {
+      this.discardingLine = false;
+      this.pending = Buffer.alloc(0);
+      return [];
+    }
     if (this.pending.length === 0) return [];
     if (this.framing === "content-length") {
       let at = 0;
@@ -79,9 +86,19 @@ export class FrameReader {
   private nextLine(): Frame | undefined {
     for (;;) {
       const end = this.pending.indexOf(0x0a);
+      if (this.discardingLine) {
+        if (end < 0) {
+          this.pending = Buffer.alloc(0);
+          return undefined;
+        }
+        this.pending = this.pending.subarray(end + 1);
+        this.discardingLine = false;
+        continue;
+      }
       if (end < 0) {
         if (this.pending.length > MAX_FRAME_BYTES) {
           this.pending = Buffer.alloc(0);
+          this.discardingLine = true;
           return { kind: "invalid", reason: "message too large" };
         }
         return undefined;
@@ -103,13 +120,13 @@ export class FrameReader {
     const lf = this.pending.indexOf(BARE_HEADER_END, start);
     const [end, gap] = crlf >= 0 && (lf < 0 || crlf <= lf) ? [crlf, HEADER_END.length] : lf >= 0 ? [lf, BARE_HEADER_END.length] : [-1, 0];
     if (end < 0) {
-      if (this.pending.length - start > 8192) {
+      if (this.pending.length - start > MAX_HEADER_BYTES + HEADER_END.length - 1) {
         this.pending = Buffer.alloc(0);
         return { kind: "invalid", reason: "header too large" };
       }
       return undefined;
     }
-    if (end - start > 8192) {
+    if (end - start > MAX_HEADER_BYTES) {
       this.pending = this.pending.subarray(end + gap);
       return { kind: "invalid", reason: "header too large" };
     }
