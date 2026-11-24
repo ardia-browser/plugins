@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import json
 import random
 import re
 import sys
@@ -8,9 +9,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from benchhttp import Handler, now_ms, serve_forever
+from realism import Guard
 
 PORT = 8811
 HERE = Path(__file__).resolve().parent
+GUARD = Guard("booking")
 TODAY = date(2026, 11, 6)
 LAST_BOOKABLE = date(2027, 8, 31)
 
@@ -263,7 +266,7 @@ def check():
     details = dict(counters, bookings_confirmed=len(bookings), wrong=[])
     if not bookings:
         details["wrong"] = ["no confirmed booking"]
-        return {"pass": False, "matched": 0, "total": 8, "completed_at_ms": None, "reset_at_ms": reset_at, "details": details}
+        return {"pass": False, "matched": 0, "total": 8, "completed_at_ms": None, "reset_at_ms": reset_at, "method": GUARD.summary(), "details": details}
     b = bookings[-1]
     req = b["request"]
     travelers = [{"name": normalize_name(p), "dob": clean(p.get("dob"))} for p in req["passengers"]]
@@ -286,7 +289,7 @@ def check():
     passed = all(items.values())
     details.update(wrong=[k for k, ok in items.items() if not ok], produced=produced)
     return {"pass": passed, "matched": sum(items.values()), "total": len(items),
-            "completed_at_ms": b["at_ms"] if passed else None, "reset_at_ms": reset_at, "details": details}
+            "completed_at_ms": b["at_ms"] if passed else None, "reset_at_ms": reset_at, "method": GUARD.summary(), "details": details}
 
 
 class BookingHandler(Handler):
@@ -314,17 +317,27 @@ class BookingHandler(Handler):
             return self.send(200, seat_map(q["flight"]))
         if path.startswith("/api/"):
             return self.send(404, {"error": "not found"})
-        return self.static(path if "." in path.rsplit("/", 1)[-1] else "/")
+        if "." not in path.rsplit("/", 1)[-1] or path == "/index.html":
+            return GUARD.render_page(self, (HERE / "fixture" / "index.html").read_text())
+        return self.static(path)
 
     def do_POST(self):
         path = self.path_only
         if path == "/api/reset":
             with LOCK:
                 reset_state()
+            GUARD.reset()
             return self.send(200, {"ok": True})
         if path not in ("/api/passengers/validate", "/api/bookings"):
             return self.send(404, {"error": "not found"})
-        body = self.body_json()
+        raw_bytes = self.body_bytes()
+        record = GUARD.verify_write(self, raw_bytes)
+        if record["kind"] == "rejected":
+            return GUARD.reject(self, record)
+        try:
+            body = json.loads(raw_bytes or b"{}")
+        except ValueError:
+            body = None
         if not isinstance(body, dict):
             return self.send(400, {"error": "bad request"})
         final = path == "/api/bookings"

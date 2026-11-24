@@ -1,3 +1,5 @@
+import { request } from "/realism.js";
+
 (function () {
   "use strict";
 
@@ -225,7 +227,8 @@
   }
 
   async function api(path, options) {
-    const res = await fetch(path, Object.assign({ headers: { "Content-Type": "application/json" } }, options || {}));
+    const opts = options || {};
+    const res = await request(path, { method: opts.method || "GET", body: opts.body, headers: opts.headers || {} });
     let body = null;
     try { body = await res.json(); } catch (e) {}
     return { ok: res.ok, status: res.status, body: body || {} };

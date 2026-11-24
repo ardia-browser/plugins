@@ -10,9 +10,11 @@ from urllib.parse import quote, urlencode
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from benchhttp import Handler, now_ms, serve_forever
+from realism import Guard
 
 DOCS_PORT, REVIEW_PORT = 8801, 8802
 HERE = Path(__file__).resolve().parent
+GUARD = Guard("research")
 CONTENT = HERE / "content"
 VERSIONS = ("v3", "v2")
 LATEST = "v3"
@@ -441,12 +443,14 @@ def check():
     counters = {"submissions": len(subs), "rejected_submissions": rejected, "validation_errors_shown": shown}
     if not subs:
         return {"pass": False, "matched": 0, "total": total, "completed_at_ms": None, "reset_at_ms": reset_at,
+                "method": GUARD.summary(),
                 "details": dict(counters, wrong_fields=sorted(EXPECTED), submitted=None)}
     latest = subs[-1]
     result = grade(latest["values"])
     passed = all(result.values())
     return {"pass": passed, "matched": sum(result.values()), "total": total,
             "completed_at_ms": latest["at_ms"] if passed else None, "reset_at_ms": reset_at,
+            "method": GUARD.summary(),
             "details": dict(counters, wrong_fields=sorted(k for k, ok in result.items() if not ok),
                             submitted=latest["raw"], submitted_at_ms=latest["at_ms"])}
 
@@ -478,14 +482,24 @@ class ReviewHandler(Handler):
     def do_GET(self):
         if self.path_only == "/api/check":
             return self.send(200, check())
+        if self.path_only in ("/", "/index.html"):
+            return GUARD.render_page(self, (HERE / "fixture" / "review" / "index.html").read_text())
         return self.static()
 
     def do_POST(self):
         if self.path_only == "/api/reset":
             reset_state()
+            GUARD.reset()
             return self.send(200, {"ok": True})
         if self.path_only == "/api/review":
-            form = self.body_json()
+            raw_bytes = self.body_bytes()
+            record = GUARD.verify_write(self, raw_bytes)
+            if record["kind"] == "rejected":
+                return GUARD.reject(self, record)
+            try:
+                form = json.loads(raw_bytes or b"{}")
+            except ValueError:
+                form = None
             if not isinstance(form, dict):
                 return self.send(400, {"error": "Invalid request."})
             vals, errors = validate(form)

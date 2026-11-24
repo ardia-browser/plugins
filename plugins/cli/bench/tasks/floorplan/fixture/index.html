@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atrium Desk Booking · Northwind HQ</title>
+<link rel="stylesheet" href="/floorplan.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="mark">A</span>
+    <div>
+      <strong>Atrium Desk Booking</strong>
+      <small>Floor 4 · San Francisco HQ</small>
+    </div>
+  </div>
+  <div class="active-pill" id="active-slot-pill">Active slot: 09:00-11:00</div>
+</header>
+
+<main class="shell">
+  <section class="panel chart-panel">
+    <div class="panel-head">
+      <div>
+        <h1>Floor utilization by time slot</h1>
+        <p class="sub">Click a bar below to inspect desk availability for that two-hour window.</p>
+      </div>
+    </div>
+    <div class="chart-wrap">
+      <svg id="utilization-chart" width="680" height="170" viewBox="0 0 680 170"></svg>
+    </div>
+  </section>
+
+  <section class="workspace">
+    <div class="panel map-panel">
+      <div class="panel-head">
+        <div>
+          <h2>Floor 4 seating map</h2>
+          <p class="sub" id="map-hint">Click an available green desk on the floorplan to select it.</p>
+        </div>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="floorplan" width="760" height="440"></canvas>
+      </div>
+    </div>
+
+    <aside class="panel sidebar">
+      <h2>Reservation details</h2>
+      <div class="selection-box" id="selection-display">No desk selected</div>
+      <p class="map-msg" id="map-msg" hidden></p>
+
+      <form id="reserve-form" novalidate>
+        <label>
+          Guest name
+          <input id="guest-name" name="name" type="text" autocomplete="off" placeholder="Full name">
+          <span class="err" data-err="name"></span>
+        </label>
+
+        <label>
+          Notes <span class="opt">(optional)</span>
+          <textarea id="guest-notes" name="notes" rows="3" placeholder="Monitor preference, visitor badge, etc."></textarea>
+        </label>
+
+        <p class="form-err" id="form-err" hidden></p>
+        <div class="done-box" id="done-box" hidden></div>
+
+        <button id="reserve-btn" type="submit" disabled>Reserve desk</button>
+      </form>
+    </aside>
+  </section>
+</main>
+
+<script type="module" src="/floorplan.js"></script>
+</body>
+</html>

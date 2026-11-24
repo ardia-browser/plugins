@@ -8,9 +8,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from benchhttp import Handler, now_ms, serve_forever
+from realism import Guard
 
 INBOX_PORT, DIRECTORY_PORT, SCHEDULER_PORT = 8851, 8852, 8853
 HERE = Path(__file__).resolve().parent
+GUARD = Guard("multitab")
 DATA = json.loads((HERE / "data.json").read_text())
 ORGANIZER = "jordan@northwind.dev"
 EXPECTED = {
@@ -123,6 +125,7 @@ def check():
     total = 6
     if not mine:
         return {"pass": False, "matched": 0, "total": total, "completed_at_ms": None, "reset_at_ms": reset_at,
+                "method": GUARD.summary(),
                 "details": dict(counters, meetings_now=0, wrong=["no meeting created"], meeting=None)}
     m = max(mine, key=lambda x: x["saved_at_ms"])
     got = set(m["attendees"])
@@ -138,6 +141,7 @@ def check():
     passed = all(results.values())
     return {"pass": passed, "matched": sum(results.values()), "total": total,
             "completed_at_ms": m["saved_at_ms"] if passed else None, "reset_at_ms": reset_at,
+            "method": GUARD.summary(),
             "details": dict(counters, meetings_now=len(mine), wrong=sorted(k for k, ok in results.items() if not ok),
                             attendees_missing=len(EXPECTED["attendees"] - got), attendees_unexpected=sorted(got - EXPECTED["attendees"]),
                             room_busy=busy,
@@ -231,10 +235,19 @@ class SchedulerHandler(Handler):
                 return self.send(400, {"error": "Choose a date and time first."})
             ignore = self.query.get("meeting")
             return self.send(200, [dict(r, available=not room_busy(r["id"], date, start, duration, ignore)) for r in DATA["rooms"]])
+        if path in ("/", "/index.html"):
+            return GUARD.render_page(self, (HERE / "fixture" / "scheduler" / "index.html").read_text())
         return self.static()
 
     def save(self, meeting_id=None):
-        body = self.body_json()
+        raw_bytes = self.body_bytes()
+        record = GUARD.verify_write(self, raw_bytes)
+        if record["kind"] == "rejected":
+            return GUARD.reject(self, record)
+        try:
+            body = json.loads(raw_bytes or b"{}")
+        except ValueError:
+            body = None
         if not isinstance(body, dict):
             return self.send(400, {"error": "Invalid request."})
         errors, meeting = validate_meeting(body)
@@ -260,6 +273,7 @@ class SchedulerHandler(Handler):
     def do_POST(self):
         if self.path_only == "/api/reset":
             reset_state()
+            GUARD.reset()
             return self.send(200, {"ok": True})
         if self.path_only == "/api/meetings":
             return self.save()
@@ -270,6 +284,10 @@ class SchedulerHandler(Handler):
         return self.save(m.group(1)) if m else self.send(404, {"error": "not found"})
 
     def do_DELETE(self):
+        raw_bytes = self.body_bytes()
+        record = GUARD.verify_write(self, raw_bytes)
+        if record["kind"] == "rejected":
+            return GUARD.reject(self, record)
         m = re.fullmatch(r"/api/meetings/(mtg_\d+)", self.path_only)
         with LOCK:
             before = len(STATE["meetings"])

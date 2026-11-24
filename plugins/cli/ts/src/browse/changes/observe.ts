@@ -627,7 +627,7 @@ async function finish(
     const frame = viewFrame(state, page);
     batch.current = { page, view: after, frame, loader: page.loader(frame), navigations: page.navigations };
   }
-  const report = diff(before, after, watch.writes());
+  const report = diff(before, after, watch.writes(), true);
   report.notes = report.document === "new" ? arrivalNotes(state, before, after) : null;
   markShown(state, report, after);
   if (!settledNow) report.unsettled = true;

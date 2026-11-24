@@ -5,6 +5,7 @@ import re
 import secrets
 import urllib.error
 import urllib.request
+from urllib.parse import urlencode
 
 CLICK = "click:1:50"
 PORT_OFFSET = int(os.environ.get("BENCH_PORT_OFFSET") or 0)
@@ -52,6 +53,26 @@ class Session:
         data = json.dumps(body).encode()
         status, raw, _ = http("POST", self.origin + path, data, self.signed("POST", path, data, event))
         return status, json.loads(raw or b"null")
+
+    def post_form(self, path, form, event=CLICK):
+        fields = {k: str(v) for k, v in form.items()}
+        pairs = [[k, fields[k]] for k in sorted(fields)]
+        payload = json.dumps(pairs, separators=(",", ":"), ensure_ascii=False).encode()
+        nonce = secrets.token_hex(8)
+        sig = sha256_hex(f"{self.key}|{self.csrf}|{nonce}|POST|{path}|{sha256_hex(payload)}|{event}")[:32]
+        signed_form = dict(fields, _csrf=self.csrf, _nonce=nonce, _sig=sig, _evt=event)
+        data = urlencode(signed_form).encode()
+        req = urllib.request.Request(
+            self.origin + path,
+            data=data,
+            method="POST",
+            headers={"Cookie": self.cookie, "Content-Type": "application/x-www-form-urlencoded"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as r:
+                return r.status, r.read().decode(), r.geturl()
+        except urllib.error.HTTPError as e:
+            return e.code, e.read().decode(), path
 
 
 def unsigned_post(url, body):

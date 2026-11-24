@@ -2,7 +2,8 @@ import { fixed } from "../../py.ts";
 import { formatG } from "../../pylib/format.ts";
 import { rng } from "../../pylib/random.ts";
 import { shield, sleep } from "../cdp/cancel.ts";
-import { BrowseError, CdpError, Gated } from "../daemon-errors.ts";
+import { BrowseError, CdpError, ConnectionLost, Gated, OutcomeUnknown } from "../daemon-errors.ts";
+import { roundCoordinate } from "../input/human.ts";
 import { humanScroll } from "../input/mouse.ts";
 import { inputOf } from "../input/input.ts";
 import {
@@ -565,15 +566,173 @@ export async function closeControl(page: Page, element: Element, x: number, y: n
   return `@${page.state.refForNode(page, element.frame, control.backendId)} "${String(name)}"`;
 }
 
+const FIND_CONSENT = `(x, y) => {
+  const about = /\\b(cookies?|consent|gdpr|ccpa)\\b/i;
+  const vendor = "[id*=cookie i],[class*=cookie i],[id*=consent i],[class*=consent i],[id*=onetrust i],[class*=onetrust i],[id*=osano i],[class*=osano i],[id*=didomi i],[class*=didomi i],[id*=usercentrics i],[class*=usercentrics i],[id*=truste i],[class*=truste i],[class*=qc-cmp i],[id*=sp_message i],[class*=cmp-],[id*=cmpbox i],[class*=cmpbox i],[id*=cookiebot i],[class*=cookiebot i],[id*=iubenda i],[class*=iubenda i],[id*=termly i],[class*=termly i],[id*=klaro i],[class*=klaro i],[id*=cmplz i],[class*=cmplz i],[class*=cky-consent i]";
+  const reject = /^(reject|decline|refuse)( all| optional| non-essential)?( cookies)?$|^(only|strictly) (essential|necessary)( cookies)?$|^(necessary|essential) (cookies )?only$|^use (only )?necessary cookies$|^just (necessary|essential)( cookies)?$|^(use|allow|accept) (only )?(necessary|essential)( cookies)?( only)?$|^deny( all)?$|^continue without accepting$/i;
+  const accept = /^(accept|allow)( all)?( cookies)?$|^(i agree|agree|got it|ok|okay)$/i;
+  const close = /^(close|dismiss)$|^(×|✕)$/i;
+  const layerOf = (node) => {
+    for (let el = node; el && el !== document.body && el !== document.documentElement; el = el.parentElement) {
+      const position = getComputedStyle(el).position;
+      if (el.matches(vendor) || position === "fixed" || position === "sticky" || el.getAttribute("role") === "dialog" ||
+          el.getAttribute("role") === "alertdialog" || el.getAttribute("aria-modal") === "true") return el;
+    }
+    return null;
+  };
+  const hit = document.elementFromPoint(x, y);
+  const roots = [];
+  const layer = hit && layerOf(hit);
+  if (layer) roots.push(layer);
+  const box = hit ? hit.getBoundingClientRect() : null;
+  const backdrop = box && getComputedStyle(hit).position === "fixed" && box.width * box.height >= innerWidth * innerHeight * 0.5 && !hit.querySelector("button, a, [role=button]");
+  if (backdrop) for (const el of document.querySelectorAll(vendor)) roots.push(el);
+  let best = null;
+  for (const root of roots) {
+    if (!ardiaBrowse.visible(root)) continue;
+    const names = root.id + " " + (typeof root.className === "string" ? root.className : "") + " " + (root.getAttribute("aria-label") || "");
+    const declared = /cookie|consent|gdpr|ccpa|onetrust|didomi|usercentrics|truste|osano|qc-cmp|sp_message|cmpbox|cookiebot|iubenda|termly|klaro|cmplz|cky-/i.test(names);
+    const platform = /onetrust|didomi|usercentrics|truste|osano|qc-cmp|sp_message|cmpbox|cookiebot|iubenda|termly|klaro|cmplz|cky-/i.test(names);
+    const text = (root.innerText || "").slice(0, 20001);
+    if (text.length > (platform ? 20000 : 3000) || !(declared || about.test(text))) continue;
+    for (const button of root.querySelectorAll("button, a, [role=button], input[type=button], input[type=submit]")) {
+      if (!ardiaBrowse.visible(button) || button.disabled) continue;
+      const label = ((button.innerText || button.value || button.getAttribute("aria-label") || button.getAttribute("title") || "").trim()).replace(/\\s+/g, " ");
+      if (!label || label.length > 60) continue;
+      const rank = reject.test(label) ? 0 : accept.test(label) ? 1 : close.test(label) ? 2 : 9;
+      if (rank < 9 && (!best || rank < best.rank)) best = { rank, button, name: label, root };
+    }
+  }
+  const store = (found) => {
+    if (!globalThis.__ardiaConsentMeta) globalThis.__ardiaConsentMeta = new WeakMap();
+    globalThis.__ardiaConsentMeta.set(found.button, { name: found.name, choice: found.choice, kind: found.kind, layer: found.layer });
+    return found.button;
+  };
+  if (!best) {
+    const promo = /\\b(newsletter|subscribe|sign up|join our|get \\d+%|off your first|first order|enter your email|updates? (?:in|to) your inbox|mailing list|special offers?)\\b/i;
+    const dismiss = /^(no thanks|no,?\\s*thanks|not now|maybe later|skip|continue without|dismiss|close|×|✕|x)$/i;
+    for (const root of roots) {
+      if (!ardiaBrowse.visible(root)) continue;
+      const text = (root.innerText || "").slice(0, 2001);
+      if (text.length > 2000 || !promo.test(text)) continue;
+      if (!root.querySelector("input[type=email], input[placeholder*=email i], input[name*=email i]")) continue;
+      for (const button of root.querySelectorAll("button, a, [role=button]")) {
+        if (!ardiaBrowse.visible(button) || button.disabled) continue;
+        const shown = ((button.innerText || button.value || "").trim()).replace(/\\s+/g, " ");
+        const label = (button.getAttribute("aria-label") || button.getAttribute("title") || "").trim();
+        const name = shown || label;
+        if (dismiss.test(shown) || (shown.length <= 2 && /^(close|dismiss)\\b/i.test(label))) {
+          return store({ button, name: name || "close", choice: "close", kind: "popup", layer: ardiaBrowse.describe(root) });
+        }
+      }
+    }
+    const closeLabel = /^(close|dismiss|close dialog|close modal|×|✕)$/i;
+    for (const root of roots) {
+      if (!ardiaBrowse.visible(root)) continue;
+      if (root.getAttribute("role") !== "dialog" && root.getAttribute("aria-modal") !== "true") continue;
+      const text = (root.innerText || "").slice(0, 1501);
+      if (text.length > 1500 || root.querySelector("input:not([type=hidden]), textarea, select")) continue;
+      for (const button of root.querySelectorAll("button, [role=button]")) {
+        if (!ardiaBrowse.visible(button) || button.disabled) continue;
+        const shown = ((button.innerText || button.value || "").trim()).replace(/\\s+/g, " ");
+        const label = (button.getAttribute("aria-label") || button.getAttribute("title") || "").trim();
+        if (closeLabel.test(shown) || (shown.length <= 2 && closeLabel.test(label))) {
+          return store({ button, name: shown || label || "close", choice: "close", kind: "modal", layer: ardiaBrowse.describe(root) });
+        }
+      }
+    }
+    return null;
+  }
+  return store({ button: best.button, name: best.name, choice: ["reject", "accept", "close"][best.rank], kind: "consent", layer: ardiaBrowse.describe(best.root) });
+}`;
+
+async function enclosingHitConfirmed(page: Page, button: Element, x: number, y: number): Promise<boolean> {
+  if (button.frame === page.mainFrame) return true;
+  if (page.sessionFor(button.frame) !== page.session) return false;
+  let hit: Record<string, unknown>;
+  try {
+    hit = await page.send("DOM.getNodeForLocation", { x: roundCoordinate(x), y: roundCoordinate(y), includeUserAgentShadowDOM: false });
+  } catch (error) {
+    if (error instanceof CdpError || error instanceof Gated) return false;
+    throw error;
+  }
+  const frame = typeof hit["frameId"] === "string" && hit["frameId"] ? hit["frameId"] : button.frame;
+  const backend = hit["backendNodeId"];
+  if (frame !== button.frame) {
+    return typeof backend === "number" && (await frameOwners(page, button.frame)).has(JSON.stringify([frame, backend]));
+  }
+  if (typeof backend !== "number") return false;
+  if (backend === button.backendId) return true;
+  const node = await page.resolveBackend(backend, button.frame, "the node at the click point");
+  return node !== null && Boolean(await page.call(HOLDS_HIT, [button, node], { frame: button.frame, read: true }));
+}
+
 export async function dismissedConsent(page: Page, element: Element, x: number, y: number): Promise<boolean> {
+  let remote: unknown;
+  try {
+    remote = await page.call(FIND_CONSENT, [x, y], { frame: element.frame, byValue: false, read: true });
+  } catch (error) {
+    if (error instanceof ConnectionLost || error instanceof OutcomeUnknown) throw error;
+    if (error instanceof BrowseError) return false;
+    throw error;
+  }
+  const button = await page.elementFrom(remote, element.frame, "consent button");
+  if (button === null) return false;
   let done: unknown;
   try {
-    done = await page.call("(x, y) => ardiaBrowse.dismissConsent(x, y)", [x, y], { frame: element.frame });
+    done = await page.call("(el) => (el.isConnected && ardiaBrowse.visible(el) && globalThis.__ardiaConsentMeta && globalThis.__ardiaConsentMeta.get(el)) || null", [button], { frame: element.frame, read: true });
   } catch (error) {
+    if (error instanceof ConnectionLost || error instanceof OutcomeUnknown) throw error;
     if (error instanceof BrowseError) return false;
     throw error;
   }
   if (!done) return false;
+  const hidden = await page.hidden();
+  if (hidden) {
+    await page.call("(el) => el.click()", [button], { frame: element.frame });
+  } else {
+    let facts: Facts;
+    try {
+      facts = await prepareAction(page, button, 0.5, 0.5, false, false);
+    } catch (error) {
+      if (error instanceof ConnectionLost || error instanceof OutcomeUnknown) throw error;
+      if (error instanceof BrowseError) return false;
+      throw error;
+    }
+    if (!facts.box || facts.cover) return false;
+    let tx: number;
+    let ty: number;
+    try {
+      [[tx, ty]] = await aimAt(page, button, null, facts, 0.5, 0.5);
+    } catch (error) {
+      if (error instanceof ConnectionLost || error instanceof OutcomeUnknown) throw error;
+      if (error instanceof BrowseError) return false;
+      throw error;
+    }
+    tx = roundCoordinate(tx);
+    ty = roundCoordinate(ty);
+    if (!(await enclosingHitConfirmed(page, button, tx, ty))) return false;
+    const input = inputOf(page);
+    let clicked = false;
+    try {
+      await input.gesture("click", async () => {
+        await input.pointer.move(tx, ty, false);
+        const afterMove = await prepareAction(page, button, 0.5, 0.5, false, false);
+        if (!afterMove.box || afterMove.cover) return;
+        const [[rx, ry]] = await aimAt(page, button, null, afterMove, 0.5, 0.5);
+        if (roundCoordinate(rx) !== tx || roundCoordinate(ry) !== ty) return;
+        if (!(await enclosingHitConfirmed(page, button, tx, ty))) return;
+        await input.pointer.down("left");
+        await input.pointer.up("left");
+        clicked = true;
+      });
+    } catch (error) {
+      if (error instanceof ConnectionLost || error instanceof OutcomeUnknown) throw error;
+      if (error instanceof BrowseError) return false;
+      throw error;
+    }
+    if (!clicked) return false;
+  }
   const facts = asRecord(done);
   const kind = facts["kind"];
   flag(kind === "popup" ? "popup_dismissed" : kind === "modal" ? "modal_dismissed" : "consent_dismissed", true);

@@ -282,7 +282,7 @@ export async function fastRead(
   if (page[1] !== "text/html" && page[1] !== "application/xhtml+xml") {
     return done({ content: page[2], method: "raw", source: page[3], finalUrl: page[3], title: "", tried, contentType: page[1] }, options);
   }
-  const extracted = extractHtml(page[2]);
+  const extracted = extractHtml(page[2], true);
   const picked = pickReadable(extracted.content, rawText(page[2]));
   if (picked.method === "raw") tried.push("raw");
   return done({ content: picked.content, method: picked.method, source: page[3], finalUrl: page[3], title: extracted.title, tried, contentType: page[1] }, options);

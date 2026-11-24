@@ -1,3 +1,5 @@
+import { request } from "/realism.js";
+
 (() => {
   const TODAY = "2026-11-06";
   const NOW_MINUTES = 9 * 60 + 30;
@@ -162,7 +164,7 @@
           remove.textContent = "Click again to delete";
           return;
         }
-        const response = await fetch(`/api/meetings/${m.id}`, { method: "DELETE" });
+        const response = await request(`/api/meetings/${m.id}`, { method: "DELETE" });
         details.hidden = true;
         flash(response.ok ? "Meeting deleted. Guests were notified." : "Couldn’t delete the meeting.");
         loadWeek();
@@ -352,10 +354,9 @@
     save.disabled = true;
     $("saving").textContent = "Saving…";
     try {
-      const response = await fetch(state.editing ? `/api/meetings/${state.editing}` : "/api/meetings", {
+      const response = await request(state.editing ? `/api/meetings/${state.editing}` : "/api/meetings", {
         method: state.editing ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: payload,
       });
       const result = await response.json();
       if (response.status === 422) {

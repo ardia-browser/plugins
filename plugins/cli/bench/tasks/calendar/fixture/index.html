@@ -66,7 +66,8 @@
     </div>
   </form>
 </dialog>
-<script>
+<script type="module">
+import { request } from "/realism.js";
 const CALENDARS = [
   { id: "home", name: "Home", color: "#3b82f6" },
   { id: "work", name: "Work", color: "#22c55e" },
@@ -142,7 +143,7 @@ document.getElementById("form").addEventListener("submit", async ev => {
   const f = new FormData(ev.target);
   const e = Object.fromEntries(f.entries());
   if (minutes(e.end) <= minutes(e.start)) { document.getElementById("err").textContent = "End time must be after the start time."; return; }
-  const res = await fetch("/api/events", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(e) });
+  const res = await request("/api/events", { method: "POST", body: e });
   if (!res.ok) { document.getElementById("err").textContent = "Couldn't save the event."; return; }
   dlg.close();
   await load();

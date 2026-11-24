@@ -4,6 +4,7 @@ import { urljoin, urlsplit } from "../../pylib/urllib.ts";
 import { BrowseError, Usage } from "../daemon-errors.ts";
 import { OUTPUT_CAP, Result } from "../daemon/render.ts";
 import { add, count, flag } from "../metrics.ts";
+import { dedupeChrome } from "../read/chrome.ts";
 import { extractHtml } from "../read/readurl.ts";
 import { record } from "../state/records.ts";
 import { clock } from "../metrics.ts";
@@ -31,13 +32,62 @@ export const MAX_TITLE = 300;
 export const DEADLINE = "deadline";
 export const NOT_STARTED = "not_started";
 
-export const FETCH_ALL = `async (urls, maxBytes, totalBytes, concurrency, timeoutMs, deadlineMs) => {
+export const FETCH_ALL = `async (urls, maxBytes, totalBytes, concurrency, timeoutMs, deadlineMs, selector, autoMain) => {
   const out = new Array(urls.length).fill(null);
   const controls = new Set();
   let next = 0;
   let budget = totalBytes;
   let stopped = false;
   const textual = (type) => type === "" || /^text\\/|json|xml|javascript|markdown|x-www-form-urlencoded/i.test(type);
+  const isHtml = (type, body) => type.toLowerCase().includes("html") || (type === "" && /^\\s*<(?:!doctype|html|head|body)/i.test(body));
+  const sliceHtml = (body, sel, limitBytes) => {
+    const doc = new DOMParser().parseFromString(body, "text/html");
+    const title = doc.title ? String(doc.title).replace(/\\s+/g, " ").trim() : "";
+    const allHits = [...doc.querySelectorAll(sel)];
+    const hitSet = new Set(allHits);
+    const hits = [];
+    for (const el of allHits) {
+      let nested = false;
+      for (let p = el.parentElement; p; p = p.parentElement) {
+        if (hitSet.has(p)) {
+          nested = true;
+          break;
+        }
+      }
+      if (!nested) hits.push(el);
+    }
+    if (hits.length === 0) return { body: "", title, matched: 0, cut: false };
+    const enc = new TextEncoder();
+    const dec = new TextDecoder("utf-8", { fatal: false });
+    let out = "";
+    let used = 0;
+    let cut = false;
+    for (const el of hits) {
+      const piece = el.outerHTML;
+      const sep = out ? "\\n" : "";
+      const encoded = enc.encode(sep + piece);
+      if (limitBytes > 0 && used + encoded.byteLength > limitBytes) {
+        let room = Math.max(0, limitBytes - used);
+        while (room > 0 && (encoded[room] & 0xc0) === 0x80) room -= 1;
+        if (room > 0) out += dec.decode(encoded.subarray(0, room));
+        cut = true;
+        break;
+      }
+      out += sep + piece;
+      used += encoded.byteLength;
+    }
+    return { body: out, title, matched: hits.length, cut };
+  };
+  const mainHtml = (body) => {
+    if (typeof DOMParser !== "function") return null;
+    const doc = new DOMParser().parseFromString(body, "text/html");
+    const title = doc.title ? String(doc.title).replace(/\\s+/g, " ").trim() : "";
+    const mains = [...doc.querySelectorAll("main")];
+    if (mains.length !== 1) return null;
+    const text = (mains[0].textContent || "").trim();
+    if (text.length < 120) return null;
+    return { body: mains[0].outerHTML, title };
+  };
   const decoderFor = (type) => {
     const named = /charset=([^;\\s]+)/i.exec(type);
     try { return new TextDecoder(named ? named[1].replace(/["']/g, "") : "utf-8"); } catch (error) { return new TextDecoder("utf-8"); }
@@ -91,7 +141,28 @@ export const FETCH_ALL = `async (urls, maxBytes, totalBytes, concurrency, timeou
         body = decoder.decode(piece);
         truncated = piece.byteLength < whole.byteLength;
       }
-      if (!stopped) out[index] = { ...base, binary: false, body, truncated };
+      let parsedTitle = null;
+      let selectorMatched = null;
+      const htmlDetected = isHtml(type, body);
+      if (selector && htmlDetected) {
+        try {
+          const sliced = sliceHtml(body, selector, maxBytes);
+          body = sliced.body;
+          parsedTitle = sliced.title;
+          selectorMatched = sliced.matched;
+          if (sliced.cut) truncated = true;
+        } catch (error) {
+          if (!stopped) out[index] = { ...base, error: "bad selector " + JSON.stringify(selector) + ": " + String((error && error.message) || error) };
+          return;
+        }
+      } else if (autoMain && htmlDetected) {
+        const main = mainHtml(body);
+        if (main) {
+          body = main.body;
+          parsedTitle = main.title;
+        }
+      }
+      if (!stopped) out[index] = { ...base, binary: false, body, truncated, ...(htmlDetected ? { wasHtml: true } : {}), ...(parsedTitle !== null ? { parsedTitle } : {}), ...(selectorMatched !== null ? { selectorMatched } : {}) };
     } catch (error) {
       if (!stopped) out[index] = { url, error: timedOut ? "timeout" : String((error && error.message) || error) };
     } finally {
@@ -169,10 +240,10 @@ function blockedReason(error: string, origin: string, overall: number): string {
   return error;
 }
 
-export function contentOf(body: string, type: string): { content: string; title: string } {
+export function contentOf(body: string, type: string, wasHtml = false): { content: string; title: string } {
   const lower = type.toLowerCase();
-  if (lower.includes("html") || (lower === "" && /^\s*<(?:!doctype|html|head|body)/iu.test(body))) {
-    const { content, title } = extractHtml(body);
+  if (wasHtml || lower.includes("html") || (lower === "" && /^\s*<(?:!doctype|html|head|body)/iu.test(body))) {
+    const { content, title } = extractHtml(body, true);
     const lines = content.split("\n");
     return { content: title && lines[0] === title ? lines.slice(1).join("\n").trim() : content, title };
   }
@@ -196,12 +267,13 @@ export function fetchedOf(raw: Record<string, unknown>, origin: string, perUrl: 
   if (raw["binary"]) {
     return { url, finalUrl, status, ok: false, contentType: type, title: "", content: "", chars: 0, truncated: false, error: `${type || "the body"} isn't text; \`ardia browse read --http ${url} --out <file>\` saves it` };
   }
-  const extracted = contentOf(neutralize(stripLoneSurrogates(String(raw["body"] ?? ""))), type);
+  const extracted = contentOf(neutralize(stripLoneSurrogates(String(raw["body"] ?? ""))), type, Boolean(raw["wasHtml"]));
   const content = extracted.content;
+  const rawTitle = typeof raw["parsedTitle"] === "string" && raw["parsedTitle"] ? neutralize(stripLoneSurrogates(raw["parsedTitle"])) : extracted.title;
   const budget = perUrl > 0 ? Math.min(perUrl, MAX_CHARS) : MAX_CHARS;
   const titleLimit = Math.min(MAX_TITLE, budget);
-  const titleCut = pyLen(extracted.title) > titleLimit;
-  const title = titleCut ? (titleLimit > 1 ? `${safeHead(extracted.title, titleLimit - 1)}…` : "") : extracted.title;
+  const titleCut = pyLen(rawTitle) > titleLimit;
+  const title = titleCut ? (titleLimit > 1 ? `${safeHead(rawTitle, titleLimit - 1)}…` : "") : rawTitle;
   const chars = pyLen(content);
   const limit = Math.max(0, budget - pyLen(title));
   const cut = chars > limit;
@@ -221,10 +293,11 @@ export function fetchedOf(raw: Record<string, unknown>, origin: string, perUrl: 
   };
 }
 
-export function fetchedText(fetched: readonly Fetched[], origin: string, seconds: number): string {
+export function fetchedText(fetched: readonly Fetched[], origin: string, seconds: number, omitted = 0, displayContents?: readonly string[]): string {
   const good = fetched.filter((item) => item.error === null).length;
   const took = seconds < 1 ? `${Math.round(seconds * 1000)} ms` : `${formatG(Math.round(seconds * 10) / 10)} s`;
-  const lines = [`read-urls: ${good} of ${fetched.length} read in ${took}, from ${origin || "this tab"} with its cookies`];
+  const chrome = omitted > 0 ? `; ${omitted} shared chrome line${omitted === 1 ? "" : "s"} omitted` : "";
+  const lines = [`read-urls: ${good} of ${fetched.length} read in ${took}, from ${origin || "this tab"} with its cookies${chrome}`];
   fetched.forEach((item, index) => {
     const where = item.finalUrl && item.finalUrl !== item.url ? `${item.url} → ${item.finalUrl}` : item.url;
     if (item.error !== null) {
@@ -234,16 +307,18 @@ export function fetchedText(fetched: readonly Fetched[], origin: string, seconds
     }
     const kind = item.contentType ? `, ${item.contentType.split(";")[0]}` : "";
     lines.push("", `## [${index + 1}] ${item.title ? `${item.title} — ` : ""}${where} (${item.status ?? "?"}${kind})`);
-    lines.push(item.content || "(no text)");
+    const shown = displayContents ? (displayContents[index] ?? item.content) : item.content;
+    lines.push(shown || "(no text)");
     if (item.truncated) lines.push(`[cut at ${groupThousands(String(pyLen(item.content)))} of ${groupThousands(String(item.chars))} characters; --max-chars or --full shows more]`);
   });
   return lines.join("\n");
 }
 
 export async function cmdReadUrls(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, args] = parse(argv, { "--concurrency": "value", "--timeout": "value", "--max-chars": "value" });
-  if (args.length === 0) throw new Usage("Usage: ardia browse read-urls <url> [url...] [--concurrency n] [--timeout s] [--max-chars n]");
+  const [options, args] = parse(argv, { "--concurrency": "value", "--timeout": "value", "--max-chars": "value", "--selector": "value" }, { "-s": "--selector" });
+  if (args.length === 0) throw new Usage("Usage: ardia browse read-urls <url> [url...] [-s <selector>] [--concurrency n] [--timeout s] [--max-chars n]");
   if (args.length > MAX_URLS) throw new Usage(`read-urls takes up to ${MAX_URLS} addresses at once; split the list`);
+  const selector = options["selector"] === undefined ? null : String(options["selector"]);
   const givenConcurrency = options["concurrency"];
   if (givenConcurrency !== undefined && !/^[0-9]+$/u.test(String(givenConcurrency))) throw new Usage(`--concurrency takes a whole number of requests at once, not ${String(givenConcurrency)}`);
   const concurrency = intFlag(givenConcurrency, "--concurrency", DEFAULT_CONCURRENCY, 1, MAX_CONCURRENCY);
@@ -268,17 +343,35 @@ export async function cmdReadUrls(ctx: Ctx, argv: string[]): Promise<Result> {
   })();
   const started = clock();
   const overall = overallSeconds(urls.length, concurrency, timeout);
-  const raw = await page.call(FETCH_ALL, [urls, MAX_BYTES, TOTAL_BYTES, concurrency, timeout * 1000, overall * 1000], { frame: page.mainFrame, read: true, timeout: overall + CALL_MARGIN });
+  const raw = await page.call(FETCH_ALL, [urls, MAX_BYTES, TOTAL_BYTES, concurrency, timeout * 1000, overall * 1000, selector, !selector && !ctx.options["full"]], { frame: page.mainFrame, read: true, timeout: overall + CALL_MARGIN });
   const seconds = clock() - started;
   if (!Array.isArray(raw)) throw new BrowseError("read-urls got no answer from the page", null, "page_script_error");
   const cap = ctx.options["full"] ? 0 : ctx.options["max_output"] === undefined || ctx.options["max_output"] === null ? OUTPUT_CAP : Number(ctx.options["max_output"]);
   const perUrl = share(cap - urls.length * 120, urls.length, given);
   const fetched = raw.map((item) => fetchedOf(record(item), origin === "null" ? "" : origin, cap === 0 && given === null ? 0 : perUrl, overall));
+  let omitted = 0;
+  let displayContents: string[] | undefined;
+  if (!ctx.options["full"] && !selector) {
+    const itemOrigins = fetched.map((item) => {
+      if (item.error !== null) return "";
+      try {
+        return new URL(item.finalUrl || item.url).origin;
+      } catch {
+        return "";
+      }
+    });
+    const deduped = dedupeChrome(
+      fetched.map((item) => (item.error === null ? item.content : "")),
+      itemOrigins,
+    );
+    omitted = deduped.omitted;
+    if (omitted > 0) displayContents = deduped.texts;
+  }
   if (fetched.some((item) => item.error !== null && (item.error.includes(`${overall} s limit`)))) flag("read_urls_deadline", true);
   flag("read_urls", true);
   count("read_urls_count", urls.length);
   add("read_urls_failed", fetched.filter((item) => item.error !== null).length);
-  const result = new Result({ origin, results: fetched }, fetchedText(fetched, origin === "null" ? "" : origin, seconds), true);
+  const result = new Result({ origin, results: fetched }, fetchedText(fetched, origin === "null" ? "" : origin, seconds, omitted, displayContents), true);
   if (fetched.every((item) => item.error !== null)) result.failed = true;
   result.notice = notice;
   return result;

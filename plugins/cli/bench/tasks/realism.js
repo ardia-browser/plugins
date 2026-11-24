@@ -38,3 +38,42 @@ export async function request(path, { method = "GET", body, headers = {} } = {})
   }
   return fetch(path, init);
 }
+
+const FORM_GUARD_FIELDS = new Set(["_csrf", "_nonce", "_sig", "_evt"]);
+
+export async function signForm(form) {
+  const csrf = meta("csrf-token");
+  const key = meta("app-build").split("").reverse().join("");
+  const nonce = crypto.getRandomValues(new Uint32Array(2)).join("-");
+  const evt = eventTag();
+  const method = (form.getAttribute("method") || "POST").toUpperCase();
+  const action = form.getAttribute("action") || location.href;
+  const url = new URL(action, location.href);
+  const fields = new Map();
+  for (const [k, v] of new FormData(form).entries()) {
+    if (!FORM_GUARD_FIELDS.has(k) && !fields.has(k)) fields.set(k, String(v));
+  }
+  const pairs = [...fields.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  const payload = JSON.stringify(pairs);
+  const sig = (await digest(`${key}|${csrf}|${nonce}|${method}|${url.pathname}|${await digest(payload)}|${evt}`)).slice(0, 32);
+  const snapshot = document.createElement("form");
+  snapshot.method = method;
+  snapshot.action = action;
+  snapshot.style.display = "none";
+  for (const [name, value] of pairs) {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = value;
+    snapshot.appendChild(input);
+  }
+  const vals = { _csrf: csrf, _nonce: nonce, _sig: sig, _evt: evt };
+  for (const [name, value] of Object.entries(vals)) {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = value;
+    snapshot.appendChild(input);
+  }
+  return snapshot;
+}

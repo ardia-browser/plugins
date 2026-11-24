@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Billing &amp; Plan Upgrade · Verve Cloud</title>
+<link rel="stylesheet" href="/portal.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">V</span>
+    <div>
+      <strong>Verve Cloud</strong>
+      <small>Workspace Billing · Northwind Labs</small>
+    </div>
+  </div>
+  <div class="account-pill">Current plan: Starter (5 seats · Monthly)</div>
+</header>
+
+<main class="shell">
+  <section class="intro">
+    <p class="eyebrow">Organization Billing</p>
+    <h1>Upgrade workspace subscription</h1>
+    <p class="sub">Choose your plan, billing frequency, seat allocation, and purchase order reference, then authorize payment via ClearPay before finalizing.</p>
+  </section>
+
+  <div class="layout">
+    <div class="primary-col">
+      <plan-selector id="plan-selector"></plan-selector>
+
+      <section class="card pay-card">
+        <div class="card-head">
+          <div>
+            <h2>Payment method</h2>
+            <p class="muted">Processed securely in an isolated ClearPay checkout frame.</p>
+          </div>
+          <span class="badge" id="pay-badge">Awaiting authorization</span>
+        </div>
+        <iframe
+          id="pay-frame"
+          title="Payment details"
+          src="http://127.0.0.1:8922/embed/pay?amount=120&plan=starter&seats=5&cycle=monthly"
+        ></iframe>
+      </section>
+    </div>
+
+    <aside class="side-col">
+      <confirm-upgrade id="confirm-upgrade"></confirm-upgrade>
+    </aside>
+  </div>
+</main>
+
+<script type="module" src="/portal.js"></script>
+</body>
+</html>

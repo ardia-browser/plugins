@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ClearPay Embedded Checkout</title>
+<link rel="stylesheet" href="/pay.css">
+</head>
+<body>
+<div class="embed">
+  <header class="cp-head">
+    <div class="cp-brand">
+      <span class="cp-dot"></span>
+      <strong>ClearPay</strong>
+      <span class="cp-tag">Secure Checkout</span>
+    </div>
+    <div class="cp-amount" id="charge-summary"></div>
+  </header>
+
+  <form id="pay-form" novalidate>
+    <label>
+      Cardholder name
+      <input id="cardholder" name="cardholder" type="text" autocomplete="cc-name" placeholder="Full name on card">
+      <span class="err" data-err="cardholder"></span>
+    </label>
+
+    <label>
+      Card number
+      <input id="card-number" name="card_number" type="text" inputmode="numeric" autocomplete="cc-number" placeholder="0000 0000 0000 0000">
+      <span class="err" data-err="card_number"></span>
+    </label>
+
+    <div class="row3">
+      <label>
+        Expiry
+        <input id="expiry" name="expiry" type="text" autocomplete="cc-exp" placeholder="MM/YY">
+        <span class="err" data-err="expiry"></span>
+      </label>
+      <label>
+        CVC
+        <input id="cvc" name="cvc" type="text" inputmode="numeric" autocomplete="cc-csc" placeholder="123">
+        <span class="err" data-err="cvc"></span>
+      </label>
+      <label>
+        Billing ZIP
+        <input id="zip" name="zip" type="text" inputmode="numeric" autocomplete="postal-code" placeholder="10001">
+        <span class="err" data-err="zip"></span>
+      </label>
+    </div>
+
+    <p class="form-err" id="form-err" hidden></p>
+    <div class="auth-ok" id="auth-ok" hidden></div>
+
+    <button id="authorize-btn" type="submit">Authorize payment</button>
+  </form>
+</div>
+<script type="module" src="/pay.js"></script>
+</body>
+</html>

@@ -9,7 +9,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from benchclient import base
+from benchclient import Session, base
 from livedates import add_business_days, month_day, short_day, today
 
 BASE = base(8821)
@@ -35,12 +35,12 @@ def check():
 
 
 def order(sku="DK-2814", qty=3, codes=("DESKDAYS",), address=None):
-    call("GET", "/c/docks-hubs?sort=featured&page=2")
-    call("POST", "/cart/add", {"sku": sku, "qty": str(qty)})
+    sess = Session(BASE, "/c/docks-hubs?sort=featured&page=2")
+    sess.post_form("/cart/add", {"sku": sku, "qty": str(qty)})
     for code in codes:
-        call("POST", "/cart/coupon", {"code": code})
+        sess.post_form("/cart/coupon", {"code": code})
     call("GET", "/checkout")
-    return call("POST", "/checkout", address or OFFICE)
+    return sess.post_form("/checkout", address or OFFICE)
 
 
 failures = 0
@@ -57,19 +57,25 @@ c = check()
 shown = json.dumps({k: v for k, v in c.items() if not k.endswith("_ms")})
 report("initial check fails and leaks nothing", not c["pass"] and c["completed_at_ms"] is None and not any(s in shown for s in SECRETS))
 
+report("unsigned form POSTs are rejected with 403",
+       call("POST", "/cart/add", {"sku": "DK-2814", "qty": "1"})[0] == 403
+       and call("POST", "/checkout", OFFICE)[0] == 403)
+
 call("POST", "/api/reset")
+sess = Session(BASE, "/")
 page1 = call("GET", "/c/docks-hubs")[1]
 page2 = call("GET", "/c/docks-hubs?sort=featured&page=2")[1]
 report("answer is on page 2, not page 1", "DK-2814" not in page1 and "harbor-h12" in page2)
-call("POST", "/cart/add", {"sku": "DK-2814", "qty": "3"})
-expired = call("POST", "/cart/coupon", {"code": "TECH20"})[1]
-other = call("POST", "/cart/coupon", {"code": "SCREENS25"})[1]
+sess.post_form("/cart/add", {"sku": "DK-2814", "qty": "3"})
+expired = sess.post_form("/cart/coupon", {"code": "TECH20"})[1]
+other = sess.post_form("/cart/coupon", {"code": "SCREENS25"})[1]
 report("expired and wrong-category codes are refused", "expired on" in expired and "apply to the items" in other)
-status, body, _ = call("POST", "/checkout", dict(OFFICE, zip="9410", phone="+1 415 555 0198", line1=""))
+status, body, _ = sess.post_form("/checkout", dict(OFFICE, zip="9410", phone="+1 415 555 0198", line1=""))
 report("checkout shows inline errors", status == 422 and body.count('class="err"') == 3 and "error-summary" in body)
 
 call("POST", "/api/reset")
-call("POST", "/cart/add", {"sku": "DK-2814", "qty": "3"})
+sess = Session(BASE, "/")
+sess.post_form("/cart/add", {"sku": "DK-2814", "qty": "3"})
 checkout = call("GET", "/checkout")[1]
 etas = dict(re.findall(r'value="(\w+)" data-cost="\d+"[^>]*>.*?<span class="muted">([^<]+)</span>', checkout))
 deadline = short_day(add_business_days(today(), 3))
@@ -84,7 +90,9 @@ for name in ("correct", "correct again after reset"):
     call("POST", "/api/reset")
     status, body, url = order()
     c = check()
-    report(name, status == 200 and "/orders/" in url and c["pass"] and c["completed_at_ms"] and c["matched"] == c["total"], json.dumps(c["details"]["wrong"]))
+    report(name, status == 200 and "/orders/" in url and c["pass"] and c["completed_at_ms"]
+           and c["matched"] == c["total"] and c["method"]["label"] == "ui",
+           json.dumps({"wrong": c["details"]["wrong"], "method": c["method"]}))
 
 traps = {
     "decoy 4K at 30 Hz": dict(sku="DK-3317"),

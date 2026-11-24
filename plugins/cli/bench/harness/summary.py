@@ -16,6 +16,29 @@ def tokens_total(rec):
     return t.get("total") if isinstance(t, dict) else None
 
 
+def tokens_uncached(rec):
+    t = rec.get("tokens")
+    if not isinstance(t, dict):
+        return None
+    if isinstance(t.get("uncached_input"), (int, float)):
+        return t["uncached_input"]
+    inp, cached = t.get("input"), t.get("cached_input")
+    if isinstance(inp, (int, float)) and isinstance(cached, (int, float)):
+        return max(0, inp - cached)
+    return None
+
+
+def shortcut_counts(runs):
+    seen = [r.get("shortcuts") for r in runs if isinstance(r.get("shortcuts"), dict)]
+    if not seen:
+        return None
+    return {
+        "source_peeks": sum(int(s.get("source_peeks") or 0) for s in seen),
+        "direct_api": sum(int(s.get("direct_api") or 0) for s in seen),
+        "runs": sum(1 for s in seen if (s.get("source_peeks") or 0) + (s.get("direct_api") or 0) > 0),
+    }
+
+
 def counts(values):
     out = {}
     for v in values:
@@ -52,7 +75,14 @@ def cell(runs):
         "median_time_s_passing": median(r.get("wall_s") for r in passed),
         "median_time_to_correct_s": median(r.get("time_to_correct_s") for r in passed),
         "median_tokens": median(tokens_total(r) for r in valid),
+        "median_uncached_input": median(tokens_uncached(r) for r in valid),
+        "median_output_chars": median(r.get("output_chars") for r in valid),
         "median_commands": median(r.get("commands") for r in valid),
+        "total_wall_s": round(sum(r["wall_s"] for r in valid if isinstance(r.get("wall_s"), (int, float))), 2) if valid else None,
+        "total_tokens": sum(t for t in (tokens_total(r) for r in valid) if isinstance(t, (int, float))) or None,
+        "total_cli_errors": sum(r["cli_errors"] for r in valid if isinstance(r.get("cli_errors"), int))
+        if any(isinstance(r.get("cli_errors"), int) for r in valid) else None,
+        "shortcuts": shortcut_counts(valid),
         "harness_errors": len(runs) - len(valid),
         "frontmost_during_run": [r.get("frontmost_during_run") for r in valid if "frontmost_during_run" in r] or None,
         "screenshot_timeouts": [r.get("screenshot_timeouts") for r in valid if "screenshot_timeouts" in r] or None,

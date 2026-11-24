@@ -327,7 +327,7 @@ export async function run(given: string, options: ReadOptions, globalOptions: Re
   let content = text;
   let title = "";
   if (!options["raw"] && kind === "text/html") {
-    const extracted = extractHtml(text);
+    const extracted = extractHtml(text, true);
     content = extracted.content;
     title = extracted.title;
     source = "html-extract";

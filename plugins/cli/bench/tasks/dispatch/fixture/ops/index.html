@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Northwind Live Ops Console</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">Northwind Live Ops Console</div>
+      <div class="ext-links">
+        <a href="http://127.0.0.1:8951/">Incident Wiki</a>
+        <a href="http://127.0.0.1:8952/">Service Catalog</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h1>Regional Failover Dispatch</h1>
+          <p class="subtitle">Execute controlled regional failover and page the designated incident responder.</p>
+        </div>
+        <div id="status-badge" class="status-badge status-draft" role="status">Draft</div>
+      </div>
+
+      <div id="alert-banner" class="alert-banner hidden" role="alert"></div>
+
+      <form id="failover-form" class="ops-form">
+        <div class="field-grid">
+          <label class="field">
+            <span>Service</span>
+            <select id="service" name="service" required>
+              <option value="">Select service...</option>
+              <option value="svc-pay-01">Payments Core (svc-pay-01)</option>
+              <option value="svc-pay-legacy">Payments Legacy Gateway (svc-pay-legacy)</option>
+              <option value="svc-auth-02">Auth Platform (svc-auth-02)</option>
+              <option value="svc-ledger-01">Ledger Core (svc-ledger-01)</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Target Region</span>
+            <select id="region" name="region" required>
+              <option value="">Select target region...</option>
+              <option value="us-east-1">us-east-1</option>
+              <option value="eu-central-1">eu-central-1</option>
+              <option value="eu-west-1">eu-west-1</option>
+              <option value="eu-west-3">eu-west-3</option>
+              <option value="ap-northeast-1">ap-northeast-1</option>
+              <option value="uk-south-1">uk-south-1</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Failover Mode</span>
+            <select id="mode" name="mode" required>
+              <option value="">Select failover mode...</option>
+              <option value="active-passive">active-passive</option>
+              <option value="active-active">active-active</option>
+              <option value="read-only">read-only</option>
+            </select>
+          </label>
+
+          <div class="field autocomplete-field">
+            <label for="responder-input">Responder</label>
+            <input
+              id="responder-input"
+              name="responder"
+              type="text"
+              autocomplete="off"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-controls="responder-listbox"
+              aria-expanded="false"
+              placeholder="Search responder by name..."
+              required
+            >
+            <input id="responder-id" name="responder_id" type="hidden" value="">
+            <ul id="responder-listbox" class="listbox hidden" role="listbox"></ul>
+          </div>
+
+          <label class="field">
+            <span>Escalation Code</span>
+            <input id="escalation-code" name="escalation_code" type="text" placeholder="ESC-00-XX" autocomplete="off">
+          </label>
+        </div>
+
+        <label class="checkbox-field">
+          <input id="owner-confirmed" name="owner_confirmed" type="checkbox">
+          <span>Incident owner confirmed</span>
+        </label>
+
+        <div class="actions">
+          <button id="dispatch-btn" type="submit" class="btn-primary">Dispatch failover</button>
+        </div>
+      </form>
+
+      <div id="receipt" class="receipt hidden"></div>
+    </section>
+  </main>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

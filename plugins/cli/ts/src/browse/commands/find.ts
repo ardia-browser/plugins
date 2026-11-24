@@ -192,17 +192,31 @@ export async function findRole(
   const nodes = Array.isArray(tree["nodes"]) ? tree["nodes"] : [];
   const [found, how] = roleCandidates(nodes, role, name, exact);
   const shown = ROLE_NAMES[role] ?? role;
-  const miss = (): RoleMiss => {
+  const miss = async (): Promise<RoleMiss> => {
     const ofRole = roleCandidates(nodes, role, null, false)[0];
     const names = [...new Set(ofRole.map(([, text]) => text).filter((text) => text))];
     const close = name !== null ? closestNames(name, names) : names.slice(0, MAX_CANDIDATES);
     const named = name !== null ? ` named "${name}"` : "";
-    const hint = close.length && name !== null ? `; the ${shown}s here are: ${close.map((text) => `"${shownName(text)}"`).join(", ")}` : "";
+    let altHint = "";
+    if (name !== null && (role === "button" || role === "link")) {
+      const altRole = role === "button" ? "link" : "button";
+      const altFound = roleCandidates(nodes, altRole, name, exact)[0];
+      if (altFound.length > 0) {
+        const [altNode, altName] = altFound[0] as [Record<string, unknown>, string];
+        const altEl = await page.resolveBackend(Number(altNode["backendDOMNodeId"]), frame, `role=${altRole}`);
+        if (altEl !== null) {
+          const altShown = ROLE_NAMES[altRole] ?? altRole;
+          const altRef = ctx.state.addRef(page, altEl, altShown, altName);
+          altHint = `; found ${altShown} "${shownName(altName)}" @${altRef} instead`;
+        }
+      }
+    }
+    const hint = (altHint || "") + (close.length && name !== null ? `; the ${shown}s here are: ${close.map((text) => `"${shownName(text)}"`).join(", ")}` : "");
     return new RoleMiss(`No ${shown}${named} on this page`, hint, { candidates: close }, ofRole, role, shown, name, frame);
   };
   if (nth !== null) {
     const picked = await nthOfRole(page, frame, role, found, nth, shown);
-    if (picked === null) throw miss();
+    if (picked === null) throw await miss();
     return picked;
   }
   const resolved: [Element, string][] = [];
@@ -214,7 +228,7 @@ export async function findRole(
     const [element, nodeName] = resolved[0] as [Element, string];
     return [element, shown, nodeName];
   }
-  if (resolved.length === 0) throw miss();
+  if (resolved.length === 0) throw await miss();
   const listed = resolved.slice(0, MAX_CANDIDATES).map(([element, nodeName]) => ({ ref: `@${ctx.state.addRef(page, element, shown, nodeName)}`, name: nodeName }));
   const more = found.length > MAX_CANDIDATES ? ` (and ${found.length - MAX_CANDIDATES} more)` : "";
   const kind = how === "exact" ? "are named exactly" : "have names containing";

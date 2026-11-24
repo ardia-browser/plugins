@@ -192,6 +192,36 @@ export class State extends Refs implements temptabs.TempTabState {
   readonly offscreen = new Set<string>();
   readonly views = new Map<string, unknown>();
   readonly snapshotsShown = new Map<string, unknown>();
+  readonly readsShown = new Map<string, { origin: string; text: string }>();
+  private readsShownChars = 0;
+
+  rememberRead(key: string, origin: string, text: string): void {
+    const existing = this.readsShown.get(key);
+    if (existing !== undefined) {
+      this.readsShownChars -= existing.text.length;
+      this.readsShown.delete(key);
+    }
+    if (text.length > 200_000) return;
+    this.readsShown.set(key, { origin, text });
+    this.readsShownChars += text.length;
+    while (this.readsShown.size > 24 || this.readsShownChars > 200_000) {
+      const oldest = this.readsShown.keys().next().value;
+      if (oldest === undefined) break;
+      const entry = this.readsShown.get(oldest);
+      if (entry !== undefined) this.readsShownChars -= entry.text.length;
+      this.readsShown.delete(oldest);
+    }
+  }
+
+  forgetReads(targetId: string): void {
+    const prefix = `${targetId}|`;
+    for (const [key, entry] of [...this.readsShown]) {
+      if (key.startsWith(prefix)) {
+        this.readsShownChars -= entry.text.length;
+        this.readsShown.delete(key);
+      }
+    }
+  }
   pendingShown: Map<string, unknown | null> | null = null;
   scriptsRunning = 0;
   commandsRun = 0;
@@ -390,6 +420,7 @@ export class State extends Refs implements temptabs.TempTabState {
     this.targetInfos.delete(targetId);
     this.views.delete(targetId);
     this.snapshotsShown.delete(targetId);
+    this.forgetReads(targetId);
     this.pendingShown?.delete(targetId);
     this.forgetTabFrames(targetId);
     this.setOffscreen(targetId, false);

@@ -1,5 +1,5 @@
 import { attach, observe } from "../changes/observe.ts";
-import { checkedResult, filledResult, selectIn, typedResult } from "../commands/act.ts";
+import { checkedResult, consentNote, filledResult, selectIn, typedResult } from "../commands/act.ts";
 import type { Ctx } from "../commands/ctx.ts";
 import { Result } from "../daemon/render.ts";
 import { inputOf } from "../input/input.ts";
@@ -12,11 +12,11 @@ export async function findAct(ctx: Ctx, page: Page, element: Element, ref: strin
   const label = `@${ref}`;
   if (action === "click") {
     const [, report] = await observe(ctx, page, () => click(page, element, humanize));
-    return attach(new Result({ clicked: label }), report);
+    return consentNote(ctx, attach(new Result({ clicked: label }), report));
   }
   if (action === "dblclick") {
     const [, report] = await observe(ctx, page, () => click(page, element, humanize, 2));
-    return attach(new Result({ clicked: label, count: 2 }), report);
+    return consentNote(ctx, attach(new Result({ clicked: label, count: 2 }), report));
   }
   if (action === "fill") {
     const text = rest.slice(1).join(" ");

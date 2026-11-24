@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Meridian Ledger</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">M</span>
+    <div>
+      <h1>Meridian Ledger</h1>
+      <p class="subtitle">FY 2026 Corporate Expense Register</p>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <a class="btn" id="export-csv" href="/api/export.csv" download="meridian-ledger-2026.csv">Export CSV</a>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="panel ledger-panel" aria-label="Expense transactions">
+    <div class="toolbar">
+      <div class="filters">
+        <label class="filter-field">
+          <span>Quarter</span>
+          <select id="filter-quarter">
+            <option value="">All quarters</option>
+            <option value="Q2 2026">Q2 2026</option>
+            <option value="Q3 2026">Q3 2026</option>
+            <option value="Q4 2026">Q4 2026</option>
+          </select>
+        </label>
+        <label class="filter-field">
+          <span>Category</span>
+          <select id="filter-category">
+            <option value="">All categories</option>
+            <option value="Infrastructure">Infrastructure</option>
+            <option value="Software">Software</option>
+            <option value="Travel">Travel</option>
+            <option value="Recruiting">Recruiting</option>
+            <option value="Facilities">Facilities</option>
+          </select>
+        </label>
+        <label class="filter-field">
+          <span>Status</span>
+          <select id="filter-status">
+            <option value="">All statuses</option>
+            <option value="Approved">Approved</option>
+            <option value="Pending">Pending</option>
+            <option value="VOID">VOID</option>
+          </select>
+        </label>
+        <label class="filter-field search-field">
+          <span>Search</span>
+          <input id="filter-q" type="search" placeholder="Invoice ID or vendor...">
+        </label>
+      </div>
+      <div class="scope-bar">
+        <span id="scope-text" class="scope-text">Showing 0 of 0 transactions</span>
+        <button type="button" class="btn ghost" id="clear-filters">Reset filters</button>
+      </div>
+    </div>
+
+    <div class="table-scroll" id="ledger-scroll" tabindex="0" aria-label="Transactions list">
+      <table class="ledger-table">
+        <thead>
+          <tr>
+            <th>Invoice ID</th>
+            <th>Date</th>
+            <th>Quarter</th>
+            <th>Vendor</th>
+            <th>Category</th>
+            <th>Status</th>
+            <th class="num">Amount</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="ledger-body"></tbody>
+      </table>
+      <div id="scroll-sentinel" class="sentinel"></div>
+      <div class="load-more-wrap" id="load-more-wrap">
+        <button type="button" class="btn" id="load-more">Load more</button>
+      </div>
+    </div>
+  </section>
+
+  <aside class="panel reconcile-panel" aria-label="Quarterly reconciliation">
+    <h2>Quarterly Reconciliation</h2>
+    <p class="panel-note">Submit reconciled totals for Q3 2026 Approved, non-duplicate Infrastructure expenses.</p>
+    <form id="reconcile-form">
+      <label class="field" for="f-count">
+        <span>Qualifying invoice count</span>
+        <input id="f-count" name="count" type="text" inputmode="numeric" placeholder="e.g. 24" required>
+      </label>
+      <label class="field" for="f-total">
+        <span>Total spend (USD)</span>
+        <input id="f-total" name="total_usd" type="text" placeholder="e.g. $142,500.00" required>
+      </label>
+      <label class="field" for="f-invoice">
+        <span>Highest single invoice ID</span>
+        <input id="f-invoice" name="top_invoice" type="text" placeholder="e.g. INV-260001" required>
+      </label>
+      <label class="field" for="f-vendor">
+        <span>Top vendor by total spend</span>
+        <input id="f-vendor" name="top_vendor" type="text" placeholder="e.g. Nimbus Cloud" required>
+      </label>
+      <div class="form-msg" id="form-msg" role="status" aria-live="polite"></div>
+      <button type="submit" class="btn primary full" id="submit-reconcile">Submit reconciliation</button>
+    </form>
+  </aside>
+</main>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

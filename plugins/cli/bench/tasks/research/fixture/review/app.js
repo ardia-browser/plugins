@@ -1,3 +1,5 @@
+import { request } from "/realism.js";
+
 (() => {
   const form = document.getElementById("review");
   const summary = document.getElementById("summary");
@@ -108,7 +110,7 @@
     submit.disabled = true;
     status.textContent = "Submitting…";
     try {
-      const response = await fetch("/api/review", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sent) });
+      const response = await request("/api/review", { method: "POST", body: sent });
       const result = await response.json();
       if (response.status === 422) {
         status.textContent = "";

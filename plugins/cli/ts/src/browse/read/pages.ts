@@ -19,6 +19,7 @@ import { REATTACH_TRIES } from "../state/state.ts";
 import * as temptabs from "../state/temptabs.ts";
 import { monotonic } from "../state/wait.ts";
 import { FLAGS as URL_FLAGS, postProcess } from "./readurl.ts";
+import { dedupeChrome } from "./chrome.ts";
 import { run as fetchRun } from "./fetch.ts";
 import { pageIsPdf, pageText } from "./pdftext.ts";
 import { afterSameDocument, arrivedText, beforeNavigating, settle, SETTLE_LIMIT } from "./settle.ts";
@@ -137,6 +138,13 @@ function escapeRegex(text: string): string {
 }
 
 export function linkMatcher(pattern: string): (url: string) => boolean {
+  if (pattern.includes("|")) {
+    const parts = pattern.split("|").map((part) => part.trim()).filter((part) => part !== "");
+    if (parts.length > 1) {
+      const matchers = parts.map(linkMatcher);
+      return (url) => matchers.some((match) => match(url));
+    }
+  }
   if (!pattern.includes("*")) return (url) => url.includes(pattern);
   const regex = new RegExp(pattern.split("*").map(escapeRegex).join("[\\s\\S]*"), "u");
   return (url) => regex.test(url);
@@ -286,8 +294,18 @@ export function fit(heads: string[], texts: string[], hidden: number, limit: num
 
 export function render(records: readonly PageRecord[], options: Options, extra = ""): string {
   const heads = records.map((page, index) => redact(header(page, index + 1, records.length)));
-  const texts = records.map((page) => redact(String(page["text"] || (page["error"] ? "" : emptyNote(page)))));
-  const tail = redact(extra);
+  const rawTexts = records.map((page) => redact(String(page["text"] || (page["error"] ? "" : emptyNote(page)))));
+  const pageOrigins = records.map((page) => {
+    try {
+      return new URL(String(page["finalUrl"] || page["url"] || "")).origin;
+    } catch {
+      return "";
+    }
+  });
+  const deduped = options["full"] || options["raw"] || options["selector"] ? { texts: rawTexts, omitted: 0 } : dedupeChrome(rawTexts, pageOrigins);
+  const texts = deduped.texts;
+  const chromeNote = deduped.omitted > 0 ? `[shared site chrome omitted: ${deduped.omitted} repeated line${deduped.omitted === 1 ? "" : "s"}; --full shows all]` : "";
+  const tail = redact([extra, chromeNote].filter((part) => part).join("\n"));
   const limit = options["full"] ? null : options["max_output"] === undefined || options["max_output"] === null ? pagesCap(records.length) : Number(options["max_output"]);
   const whole = join(heads, texts, [tail]);
   const size = len(whole);

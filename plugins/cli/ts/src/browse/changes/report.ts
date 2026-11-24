@@ -41,6 +41,8 @@ export type Report = {
   changed: [Row, Row][];
   network: Write[];
   context: Row[];
+  chromePrefix?: number;
+  chromeSuffix?: number;
   back?: string[];
   text?: TextBlock | null;
   notes?: string | null;
@@ -99,13 +101,53 @@ export function rerendered(added: readonly Row[], removed: readonly Row[]): [Row
   return pairs;
 }
 
-export function diff(before: View | null, after: View, writes: readonly Write[] | null = null): Report {
+const CHROME_ROLES = new Set(["link", "button", "menuitem", "tab", "searchbox", "textbox"]);
+
+function sameOrigin(a: string, b: string): boolean {
+  try {
+    const ua = new URL(a);
+    const ub = new URL(b);
+    return ua.origin !== "null" && ua.origin === ub.origin;
+  } catch {
+    return false;
+  }
+}
+
+function sameChromeRow(a: Row, b: Row): boolean {
+  return (
+    a.role === b.role &&
+    a.name === b.name &&
+    a.value === b.value &&
+    a.attrs.length === b.attrs.length &&
+    a.attrs.every((item, index) => item === b.attrs[index]) &&
+    CHROME_ROLES.has(a.role)
+  );
+}
+
+export function diff(before: View | null, after: View, writes: readonly Write[] | null = null, foldChrome = false): Report {
   const newDocument = before === null || before.loader !== after.loader;
   const old = new Map<string, Row>();
   if (!newDocument) for (const row of before.entries) old.set(row.ref, row);
   const now = new Map<string, Row>();
   for (const row of after.entries) now.set(row.ref, row);
   const added = after.entries.filter((row) => !old.has(row.ref));
+  let chromePrefix = 0;
+  let chromeSuffix = 0;
+  if (foldChrome && newDocument && before !== null && sameOrigin(before.url, after.url) && before.entries.length > 0 && added.length > 0) {
+    let prefix = 0;
+    const maxPrefix = Math.min(before.entries.length, added.length);
+    while (prefix < maxPrefix && sameChromeRow(before.entries[prefix] as Row, added[prefix] as Row)) prefix += 1;
+    if (prefix < 3) prefix = 0;
+    let suffix = 0;
+    const maxSuffix = Math.min(before.entries.length - prefix, added.length - prefix);
+    while (
+      suffix < maxSuffix &&
+      sameChromeRow(before.entries[before.entries.length - 1 - suffix] as Row, added[added.length - 1 - suffix] as Row)
+    ) suffix += 1;
+    if (suffix < 2) suffix = 0;
+    chromePrefix = prefix;
+    chromeSuffix = suffix;
+  }
   const removed = newDocument ? [] : before.entries.filter((row) => !now.has(row.ref));
   const changed: [Row, Row][] = [];
   for (const row of after.entries) {
@@ -122,6 +164,8 @@ export function diff(before: View | null, after: View, writes: readonly Write[] 
     changed,
     network: [...(writes ?? [])],
     context: after.entries,
+    ...(chromePrefix > 0 ? { chromePrefix } : {}),
+    ...(chromeSuffix > 0 ? { chromeSuffix } : {}),
   };
 }
 

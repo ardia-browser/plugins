@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Harbor Workspace</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">H</span>
+    <div>
+      <h1>Harbor Workspace</h1>
+      <p class="subtitle">v4.2 Release Coordination</p>
+    </div>
+  </div>
+  <nav class="tabs" role="tablist" aria-label="Workspace sections">
+    <button type="button" class="tab active" role="tab" id="tab-kanban" aria-controls="panel-kanban" aria-selected="true" data-tab="kanban">Kanban</button>
+    <button type="button" class="tab" role="tab" id="tab-budget" aria-controls="panel-budget" aria-selected="false" data-tab="budget">Budget</button>
+    <button type="button" class="tab" role="tab" id="tab-brief" aria-controls="panel-brief" aria-selected="false" data-tab="brief">Release Brief</button>
+    <button type="button" class="tab" role="tab" id="tab-files" aria-controls="panel-files" aria-selected="false" data-tab="files">Files</button>
+  </nav>
+</header>
+
+<main class="container">
+  <section id="panel-kanban" class="panel" role="tabpanel" aria-labelledby="tab-kanban">
+    <div class="section-head">
+      <div>
+        <h2>Release Board</h2>
+        <p class="muted">Drag cards across columns to update release task status.</p>
+      </div>
+      <div class="status-pill" id="kanban-status" role="status" aria-live="polite"></div>
+    </div>
+    <div class="board" id="kanban-board"></div>
+  </section>
+
+  <section id="panel-budget" class="panel" role="tabpanel" aria-labelledby="tab-budget" hidden>
+    <div class="section-head">
+      <div>
+        <h2>Launch Budget</h2>
+        <p class="muted">Double-click a value cell or press Enter / F2 to edit inline. Press Enter or click outside to save.</p>
+      </div>
+      <div class="status-pill" id="budget-status" role="status" aria-live="polite"></div>
+    </div>
+    <div id="budget-grid" class="sheet" role="grid" aria-label="Launch budget spreadsheet"></div>
+  </section>
+
+  <section id="panel-brief" class="panel" role="tabpanel" aria-labelledby="tab-brief" hidden>
+    <div class="section-head">
+      <div>
+        <h2>Release Brief</h2>
+        <p class="muted">Update the release brief with the final budget total and launch date, then set status and save.</p>
+      </div>
+      <div class="status-pill" id="brief-msg" role="status" aria-live="polite"></div>
+    </div>
+    <div class="editor-card">
+      <div class="editor-toolbar" role="toolbar" aria-label="Text formatting">
+        <button type="button" class="tool-btn" data-cmd="bold" aria-label="Bold"><strong>Bold</strong></button>
+        <button type="button" class="tool-btn" data-cmd="heading" aria-label="Heading">Heading</button>
+        <button type="button" class="tool-btn" data-cmd="bullet" aria-label="Bullet">Bullet</button>
+        <div class="toolbar-spacer"></div>
+        <label class="status-select-wrap" for="brief-status">
+          <span>Status</span>
+          <select id="brief-status" aria-label="Brief status">
+            <option value="Draft">Draft</option>
+            <option value="In Review">In Review</option>
+            <option value="Ready for sign-off">Ready for sign-off</option>
+          </select>
+        </label>
+        <button type="button" class="btn primary" id="save-brief">Save brief</button>
+      </div>
+      <div
+        id="brief-editor"
+        class="brief-editor"
+        contenteditable="true"
+        role="textbox"
+        aria-multiline="true"
+        aria-label="Release brief editor"
+      ></div>
+    </div>
+  </section>
+
+  <section id="panel-files" class="panel" role="tabpanel" aria-labelledby="tab-files" hidden>
+    <div class="section-head">
+      <div>
+        <h2>Compliance Files</h2>
+        <p class="muted">Download the vendor checklist CSV, update it, and upload the revised CSV.</p>
+      </div>
+      <div class="status-pill" id="files-status" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="files-grid">
+      <div class="card">
+        <div class="file-row">
+          <div>
+            <div class="file-name" id="current-filename">vendor-checklist.csv</div>
+            <div class="muted" id="file-meta">4 compliance items</div>
+          </div>
+          <a class="btn" id="download-checklist" href="/api/files/vendor-checklist.csv" download="vendor-checklist.csv">Download CSV</a>
+        </div>
+        <table class="csv-table">
+          <thead id="csv-head"></thead>
+          <tbody id="csv-body"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h3>Upload updated checklist</h3>
+        <p class="muted">Choose a revised <code>.csv</code> file and click Upload CSV to replace the active checklist.</p>
+        <form id="upload-form" class="upload-form">
+          <input id="csv-upload" type="file" accept=".csv" aria-label="Upload updated vendor checklist CSV">
+          <div class="muted" id="selected-file-label">No file selected</div>
+          <button type="submit" class="btn primary" id="upload-btn">Upload CSV</button>
+        </form>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

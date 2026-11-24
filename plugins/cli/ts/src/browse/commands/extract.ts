@@ -69,17 +69,47 @@ const FIELDS_OF = `(scope, all) => {
 
 const FACTS_OF = `(...els) => els.map((el) => {
   const clean = (text) => String(text || "").replace(/\\s+/g, " ").trim();
+  const ownText = (root, skip) => {
+    const chunks = [];
+    const walk = (node) => {
+      if (!node || node === skip) return;
+      if (node.nodeType === 3) {
+        if (node.nodeValue) chunks.push(node.nodeValue);
+        return;
+      }
+      if (node.nodeType !== 1) return;
+      if (["SELECT", "INPUT", "TEXTAREA", "BUTTON", "METER", "OUTPUT", "PROGRESS", "SCRIPT", "STYLE"].includes(node.tagName)) return;
+      const style = getComputedStyle(node);
+      if (style.display === "none" || style.visibility === "hidden") return;
+      for (const child of node.childNodes) walk(child);
+    };
+    walk(root);
+    return clean(chunks.join(" "));
+  };
+  const labelParts = () => {
+    const parts = [];
+    if (el.getAttribute("aria-label")) parts.push(el.getAttribute("aria-label"));
+    const ids = (el.getAttribute("aria-labelledby") || "").split(/\\s+/).filter(Boolean);
+    for (const id of ids) {
+      const ref = document.getElementById(id);
+      if (ref) parts.push(ownText(ref, el) || ref.innerText || ref.textContent);
+    }
+    if (el.labels) for (const lbl of el.labels) parts.push(ownText(lbl, el) || lbl.innerText || lbl.textContent);
+    return parts.map(clean).filter(Boolean);
+  };
   const tag = el.tagName.toLowerCase();
   const role = el.getAttribute("role") || "";
   const type = tag === "input" ? (el.type || "text") : tag === "select" ? (el.multiple ? "select-multiple" : "select") : tag === "textarea" ? "textarea" : role || (el.isContentEditable ? "contenteditable" : tag);
-  const labels = ardiaBrowse.labelText(el).map(clean).filter(Boolean);
+  const labels = labelParts();
   const label = labels[0] || clean(el.getAttribute("placeholder")) || clean(el.getAttribute("title")) || clean(el.getAttribute("name")) || el.id || "";
   const checkable = type === "checkbox" || type === "radio" || ["checkbox", "radio", "switch"].includes(role);
   let value = null;
   let options = null;
+  let optionLabels = null;
   if (tag === "select") {
     value = [...el.selectedOptions].map((option) => clean(option.label || option.text)).join(", ");
     options = el.options.length;
+    if (el.options.length <= 12) optionLabels = [...el.options].map((option) => clean(option.label || option.text)).filter(Boolean);
   } else if (!checkable && tag !== "input" && tag !== "textarea" && el.isContentEditable) value = el.innerText;
   else if (!checkable && "value" in el && (tag === "input" || tag === "textarea")) value = type === "file" ? [...(el.files || [])].map((file) => file.name).join(", ") : el.value;
   else if (!checkable) value = el.getAttribute("aria-valuetext") || el.getAttribute("aria-valuenow") || clean(el.textContent);
@@ -100,7 +130,28 @@ const FACTS_OF = `(...els) => els.map((el) => {
     invalid: clean(invalid),
     autocomplete: el.getAttribute("autocomplete") || "",
     options,
+    optionLabels,
   };
+})`;
+
+const SUBMITS_OF = `(scope) => {
+  const root = scope ? ardiaBrowse.query(scope) : document;
+  if (!root) return [];
+  const out = [];
+  const seen = new Set();
+  for (const el of root.querySelectorAll("button[type=submit], input[type=submit], form button:not([type])")) {
+    if (seen.has(el) || !ardiaBrowse.visible(el)) continue;
+    seen.add(el);
+    out.push(el);
+    if (out.length >= 6) break;
+  }
+  return out;
+}`;
+
+const SUBMIT_FACTS = `(...els) => els.map((el) => {
+  const clean = (text) => String(text || "").replace(/\\s+/g, " ").trim();
+  const label = clean(el.tagName === "INPUT" ? el.value : el.innerText) || clean(el.getAttribute("aria-label")) || clean(el.getAttribute("title")) || "";
+  return { label, disabled: el.matches(":disabled") || el.getAttribute("aria-disabled") === "true" };
 })`;
 
 const ROLE_OF_TYPE: Readonly<Record<string, string>> = {
@@ -128,7 +179,10 @@ export type Field = {
   readonly: boolean;
   invalid: string;
   options: number | null;
+  optionLabels?: string[] | null;
 };
+
+export type SubmitControl = { ref: string; label: string; disabled: boolean };
 
 function roleOf(facts: Record<string, unknown>): string {
   const role = String(facts["role"] || "");
@@ -177,7 +231,8 @@ export function fieldLine(field: Field): string {
   let value = "";
   if (field.checked === null && field.value !== null) {
     value = field.value === "" ? ": (empty)" : `: ${shownValue(field.value)}`;
-    if (field.options !== null) value += ` (of ${field.options})`;
+    if (field.optionLabels && field.optionLabels.length > 0) value += ` [options: ${field.optionLabels.map((item) => quoted(shownValue(item))).join(", ")}]`;
+    else if (field.options !== null) value += ` (of ${field.options})`;
   }
   return `- ${field.role}${label} [${marks.join(", ")}]${value}`;
 }
@@ -232,9 +287,28 @@ async function fieldsOf(ctx: Ctx, page: Page, frame: string, scope: string | nul
       readonly: Boolean(row["readonly"]),
       invalid: shownInvalid(row, secret),
       options: typeof row["options"] === "number" ? row["options"] : null,
+      optionLabels: !secret && Array.isArray(row["optionLabels"]) ? row["optionLabels"].map((item) => (luhnCard(String(item)) ? MASKED : String(item))) : null,
     };
   });
   return { fields, stop };
+}
+
+async function submitsOf(ctx: Ctx, page: Page, frame: string, scope: string | null): Promise<SubmitControl[]> {
+  const remote = await page.call(SUBMITS_OF, [scope], { frame, byValue: false, read: true });
+  const elements = await page.elementsFrom(remote, frame, "submit button", 6);
+  if (elements.length === 0) return [];
+  const facts = await page.call(SUBMIT_FACTS, elements, { frame, read: true });
+  const rows = Array.isArray(facts) ? facts.map(record) : [];
+  return rows.map((row, index) => {
+    const label = String(row["label"] ?? "");
+    const ref = ctx.state.addRef(page, elements[index] as Element, "button", label);
+    return { ref, label, disabled: Boolean(row["disabled"]) };
+  });
+}
+
+function submitLine(submits: readonly SubmitControl[]): string {
+  const items = submits.map((item) => `button${item.label ? ` ${quoted(shownValue(item.label))}` : ""} [${item.disabled ? "disabled, " : ""}ref=${item.ref}]`);
+  return `submit: ${items.join(", ")}`;
 }
 
 export async function cmdForm(ctx: Ctx, argv: string[]): Promise<Result> {
@@ -245,14 +319,16 @@ export async function cmdForm(ctx: Ctx, argv: string[]): Promise<Result> {
   await page.refreshFrames();
   const frame = frameOrMain(ctx, page);
   const { fields, stop } = await fieldsOf(ctx, page, frame, scope, Boolean(options["all"]));
+  const submits = fields.length > 0 ? await submitsOf(ctx, page, frame, scope) : [];
   flag("form", true);
   count("form_fields", fields.length);
-  const data = { url: page.url, count: fields.length, more: stop !== null, stopped: stop, fields };
+  const data = { url: page.url, count: fields.length, more: stop !== null, stopped: stop, fields, ...(submits.length > 0 ? { submits } : {}) };
   if (fields.length === 0) {
     const none = scope ? `No form fields in ${scope}` : "No form fields on this page";
     return new Result(data, stop === null ? none : `${none} among the first ${groupThousands(String(MAX_EXAMINED))} candidates; ${stopNote(stop)}`, true);
   }
-  return new Result(data, [formSummary(fields, stop), ...fields.map(fieldLine)].join("\n"), true);
+  const lines = [formSummary(fields, stop), ...fields.map(fieldLine), ...(submits.length > 0 ? [submitLine(submits)] : [])];
+  return new Result(data, lines.join("\n"), true);
 }
 
 export type FieldSpec = { key: string; selector: string | null; attribute: string | null };

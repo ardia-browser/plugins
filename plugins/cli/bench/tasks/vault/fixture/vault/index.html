@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Keystone Admin Vault</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-badge">KV</span>
+        <span>Keystone Admin Vault</span>
+      </div>
+      <div class="user-pill" id="user-email">Signed in</div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="session-banner" class="session-banner hidden" role="alert">
+      <span id="session-banner-text">Your session expired. Sign in again to continue.</span>
+      <a id="reauth-link" class="btn-primary" href="#">Sign in again</a>
+    </div>
+
+    <div id="status-banner" class="status-banner hidden" role="status"></div>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Signing Keys</h2>
+          <p class="panel-desc">Rotating a signing key promotes the next version immediately and expires previous signatures after 5 minutes.</p>
+        </div>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Key ID</th>
+            <th>Version</th>
+            <th>Status</th>
+            <th>Scope</th>
+            <th>Updated</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="keys-body"></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>API Tokens</h2>
+          <p class="panel-desc">Revoking an API token immediately invalidates all requests authenticating with that credential.</p>
+        </div>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Token ID</th>
+            <th>Status</th>
+            <th>Purpose</th>
+            <th>Last Used</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="tokens-body"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

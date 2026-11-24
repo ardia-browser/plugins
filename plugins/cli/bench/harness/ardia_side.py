@@ -2,6 +2,7 @@ import datetime
 import fcntl
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -344,8 +345,34 @@ def codex_command(model, effort, workdir, prompt):
             "--disable", "memories", "-C", str(workdir), prompt]
 
 
+SOURCE_PEEK = re.compile(r"(?:\b(?:curl|wget|python3?|node)\b[^\n]*(?:127\.0\.0\.1|localhost)[^\n]*\.js\b|document\.scripts)", re.I)
+DIRECT_API = re.compile(r"(?:\b(?:curl|wget)\b[^\n]*(?:127\.0\.0\.1|localhost)[^\n]*/api/|fetch\(\s*['\"][^'\"]*/api/)", re.I)
+
+
+def inspect_trace(cmds_and_outs):
+    out_chars = 0
+    cli_errors = 0
+    source_peeks = 0
+    direct_api = 0
+    for cmd, out, exit_code in cmds_and_outs:
+        text = out or ""
+        out_chars += len(text)
+        if exit_code not in (0, None) or "Exit code 1" in text or "\n✗ " in f"\n{text}":
+            cli_errors += 1
+        if SOURCE_PEEK.search(cmd or ""):
+            source_peeks += 1
+        if DIRECT_API.search(cmd or ""):
+            direct_api += 1
+    return {
+        "output_chars": out_chars,
+        "cli_errors": cli_errors,
+        "shortcuts": {"source_peeks": source_peeks, "direct_api": direct_api},
+    }
+
+
 def parse_claude(lines):
     tools, turns, final, result, init = [], 0, None, None, None
+    pending, trace = {}, []
     for e in lines:
         kind = e.get("type")
         if kind == "system" and e.get("subtype") == "init":
@@ -355,10 +382,22 @@ def parse_claude(lines):
             for block in e.get("message", {}).get("content", []):
                 if block.get("type") == "tool_use":
                     inp = block.get("input", {})
-                    tools.append({"name": block.get("name"),
-                                  "input": (inp.get("command") or inp.get("skill") or json.dumps(inp))[:400]})
+                    text_in = inp.get("command") or inp.get("skill") or json.dumps(inp)
+                    tools.append({"name": block.get("name"), "input": text_in[:400]})
+                    if block.get("id"):
+                        pending[block["id"]] = (block.get("name"), text_in)
                 elif block.get("type") == "text":
                     final = block.get("text")
+        elif kind == "user":
+            for block in e.get("message", {}).get("content", []):
+                if block.get("type") == "tool_result":
+                    tid = block.get("tool_use_id")
+                    name, cmd = pending.pop(tid, (None, ""))
+                    content = block.get("content", "")
+                    if isinstance(content, list):
+                        content = "\n".join(x.get("text", "") for x in content if isinstance(x, dict))
+                    if name in SHELL_TOOLS:
+                        trace.append((cmd, str(content), 1 if block.get("is_error") else None))
         elif kind == "result":
             result = e
     tokens = cost = None
@@ -378,11 +417,12 @@ def parse_claude(lines):
             "cli_duration_ms": result.get("duration_ms") if result else None,
             "cli_duration_api_ms": result.get("duration_api_ms") if result else None,
             "cli_result_subtype": result.get("subtype") if result else None,
-            "cli_is_error": result.get("is_error") if result else None, "init": init}
+            "cli_is_error": result.get("is_error") if result else None, "init": init,
+            **inspect_trace(trace)}
 
 
 def parse_codex(lines):
-    tools, final, usage, turns, errors = [], None, {}, 0, []
+    tools, final, usage, turns, errors, trace = [], None, {}, 0, [], []
     for e in lines:
         kind = e.get("type")
         if kind == "turn.completed":
@@ -398,16 +438,20 @@ def parse_codex(lines):
             elif t == "error":
                 errors.append(item.get("message", "")[:400])
             elif t not in ("reasoning", "todo_list"):
-                tools.append({"name": t, "input": (item.get("command") or item.get("tool") or json.dumps(
-                    {k: v for k, v in item.items() if k != "aggregated_output"}))[:400], "exit_code": item.get("exit_code")})
+                cmd = item.get("command") or item.get("tool") or json.dumps(
+                    {k: v for k, v in item.items() if k != "aggregated_output"})
+                tools.append({"name": t, "input": cmd[:400], "exit_code": item.get("exit_code")})
+                if t in SHELL_TOOLS:
+                    trace.append((cmd, item.get("aggregated_output", ""), item.get("exit_code")))
         elif kind in ("turn.failed", "error"):
             errors.append(json.dumps(e)[:400])
     inp, out = usage.get("input_tokens", 0), usage.get("output_tokens", 0)
-    tokens = {"input": inp, "cached_input": usage.get("cached_input_tokens", 0), "output": out,
+    cached = usage.get("cached_input_tokens", 0)
+    tokens = {"input": inp, "cached_input": cached, "uncached_input": max(0, inp - cached), "output": out,
               "reasoning_output": usage.get("reasoning_output_tokens", 0), "total": inp + out,
               "raw_usage": usage} if usage else None
     return {"tokens": tokens, "cost_usd": None, "tool_calls": len(tools), "tools": tools, "turns": turns,
-            "final_message": final, "errors": errors}
+            "final_message": final, "errors": errors, **inspect_trace(trace)}
 
 
 def notes_snapshot(data):

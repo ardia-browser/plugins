@@ -135,14 +135,21 @@ export function renderReportLines(report: Report, beforeKnown = true): ReportLin
   const fresh = new Set(again.map(([, now]) => now.ref));
   const text = report.text;
   const inline = new Set(text ? text.refs : []);
-  const added = report.added.filter((row) => !back.has(row.ref) && !fresh.has(row.ref) && !(inline.has(row.ref) && plainRow(row)));
+  const chromePrefix = report.chromePrefix ?? 0;
+  const chromeSuffix = report.chromeSuffix ?? 0;
+  const chromeCount = chromePrefix + chromeSuffix;
+  const visibleAdded = chromeCount > 0 && chromeCount <= report.added.length ? report.added.slice(chromePrefix, report.added.length - chromeSuffix) : report.added;
+  const added = visibleAdded.filter((row) => !back.has(row.ref) && !fresh.has(row.ref) && !(inline.has(row.ref) && plainRow(row)));
   const context = report.context && report.context.length ? report.context : [...report.added, ...report.changed.map(([, now]) => now)];
   const parents = parentsOf(context);
   const navigated = moved(report);
   if (report.notes) plain(report.notes);
   if (report.document === "new" && beforeKnown) {
-    const where = text && added.length < report.added.length ? "; the ones marked [@e…] in its text below aren't repeated here" : "";
-    plain(`new document, ${report.added.length} interactive nodes (its snapshot -i, so no need to take one${where}):`);
+    const where = text && added.length < visibleAdded.length ? "; the ones marked [@e…] in its text below aren't repeated here" : "";
+    plain(`new document, ${visibleAdded.length} interactive nodes (its snapshot -i, so no need to take one${where}):`);
+  }
+  if (chromeCount > 0) {
+    plain(`+ ${chromeCount} unchanged site header/footer refs (\`snapshot -i\` lists all)`);
   }
   if (back.size) {
     const refs = report.added.filter((row) => back.has(row.ref)).map((row) => row.ref);

@@ -53,7 +53,7 @@ entry. Generated from that help and the command table by `bun src/skill-gen.ts -
 - **query**: `ardia browse query <sel> [--fields name=<sel>,price=<sel>,url=<sel>@href] [--field k=<sel>] [--limit n] [--all]`
 - **react**: `ardia browse react tree | inspect <id> | renders start | renders stop | suspense [--only-dynamic]`
 - **read**: `ardia browse read [url] --fast [--outline] [--filter <pattern>]` · `ardia browse read [url...] [--links <pattern>] [-s <selector>] [--stdin] [--limit n] [--timeout ms] [--http] [--list] [--out <file>] [--nav]` · `ardia browse read [-s <list>] --scroll [--limit rows] [--match <text>] [--timeout ms]` · `ardia browse read --data [--block n|id] [--fields a,b.c] [--where field=value] [--limit n]`
-- **read-urls**: `ardia browse read-urls <url> [url...] [--concurrency n] [--timeout s] [--max-chars n]`
+- **read-urls**: `ardia browse read-urls <url> [url...] [-s <selector>] [--concurrency n] [--timeout s] [--max-chars n]`
 - **record**: `ardia browse record start <path.webm> [url] | stop | restart <path.webm> [url]`
 - **reload** (also refresh): `ardia browse reload`
 - **removeinitscript**: `ardia browse removeinitscript <id>`

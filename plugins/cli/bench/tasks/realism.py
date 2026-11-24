@@ -1,4 +1,5 @@
 import hashlib
+import json
 import secrets
 import threading
 from http.cookies import SimpleCookie
@@ -6,10 +7,16 @@ from http.cookies import SimpleCookie
 from benchhttp import now_ms
 
 UI_EVENT_MAX_AGE_MS = 2000
+FORM_GUARD_FIELDS = frozenset(("_csrf", "_nonce", "_sig", "_evt"))
 
 
 def sha256_hex(data):
     return hashlib.sha256(data if isinstance(data, bytes) else data.encode()).hexdigest()
+
+
+def form_payload(form):
+    pairs = [[k, str(form[k])] for k in sorted(form) if k not in FORM_GUARD_FIELDS]
+    return json.dumps(pairs, separators=(",", ":"), ensure_ascii=False).encode()
 
 
 def signature(key, csrf, nonce, method, path, body, event):
@@ -68,25 +75,21 @@ class Guard:
             self.sessions[sid] = {"csrf": secrets.token_hex(16), "key": secrets.token_hex(12)}
             return sid, self.sessions[sid], f"{self.cookie}={sid}; Path=/; HttpOnly; SameSite=Lax"
 
-    def render_page(self, handler, html):
+    def render_page(self, handler, html, status=200):
         _, sess, set_cookie = self.session_for(handler, create=True)
         key_attr = sess["key"][::-1]
         meta = (f'<meta name="csrf-token" content="{sess["csrf"]}">'
                 f'<meta name="app-build" content="{key_attr}">')
         page = html.replace("</head>", f"{meta}</head>", 1) if "</head>" in html else meta + html
         headers = {"Set-Cookie": set_cookie} if set_cookie else {}
-        handler.send(200, page.encode(), "text/html; charset=utf-8", headers=headers)
+        handler.send(status, page.encode(), "text/html; charset=utf-8", headers=headers)
 
-    def verify_write(self, handler, body):
+    def _verify(self, handler, body, csrf, nonce, sig, event_raw):
         method = handler.command
         path = handler.path_only
-        event_raw = handler.headers.get("X-UI-Evt") or "none"
         event = parse_event(event_raw)
         record = {"t": now_ms(), "method": method, "path": path, "event": event, "kind": None, "reason": None}
         _, sess, _ = self.session_for(handler)
-        csrf = handler.headers.get("X-CSRF-Token")
-        nonce = handler.headers.get("X-Req-Nonce") or ""
-        sig = handler.headers.get("X-Req-Sig") or ""
         with self.lock:
             if sess is None:
                 record["reason"] = "no_session"
@@ -103,6 +106,26 @@ class Guard:
                 self.nonces.add(nonce)
             self.writes.append(record)
         return record
+
+    def verify_write(self, handler, body):
+        return self._verify(
+            handler,
+            body,
+            handler.headers.get("X-CSRF-Token"),
+            handler.headers.get("X-Req-Nonce") or "",
+            handler.headers.get("X-Req-Sig") or "",
+            handler.headers.get("X-UI-Evt") or "none",
+        )
+
+    def verify_form(self, handler, form):
+        return self._verify(
+            handler,
+            form_payload(form),
+            form.get("_csrf"),
+            form.get("_nonce") or "",
+            form.get("_sig") or "",
+            form.get("_evt") or "none",
+        )
 
     def reject(self, handler, record):
         handler.send(403, {"error": "forbidden", "reason": "request could not be verified"})

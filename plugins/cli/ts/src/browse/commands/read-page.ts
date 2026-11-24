@@ -2,7 +2,7 @@ import { urljoin } from "../../pylib/urllib.ts";
 import { formatG } from "../../pylib/format.ts";
 import { sleep } from "../cdp/cancel.ts";
 import { BrowseError, Usage } from "../daemon-errors.ts";
-import { Result } from "../daemon/render.ts";
+import { OUTPUT_CAP, Result } from "../daemon/render.ts";
 import { COMMANDS_READ_SCOPED } from "../js/index.ts";
 import { flag } from "../metrics.ts";
 import { fastResult, fetchUrl, run as fetchRun } from "../read/fetch.ts";
@@ -10,6 +10,7 @@ import { BODY_TEXT, fastRead, pickReadable, type Probe } from "../read/fastpath.
 import { oopifText } from "../read/frames.ts";
 import * as pagedata from "../read/pagedata.ts";
 import * as pages from "../read/pages.ts";
+import { deltaRead } from "../read/delta.ts";
 import { cmdGet } from "./read.ts";
 import { pageIsPdf, pageText } from "../read/pdftext.ts";
 import { postProcess } from "../read/readurl.ts";
@@ -119,8 +120,28 @@ export async function cmdRead(ctx: Ctx, argv: string[]): Promise<Result> {
   pages.noteVirtualized(content);
   const scope = options["selector"] ? "" : await pageScope(page, frame);
   const readTime = pages.readAt();
-  let shown = scope ? `${content}\n[scope: ${scope}]` : content || emptyNote;
+  let displayed = content;
+  const canDelta = !ctx.options["full"] && !ctx.options["out_body"] && !options["raw"] && !options["outline"] && !options["filter"];
+  const origin = (() => {
+    try {
+      return new URL(page.url).origin;
+    } catch {
+      return "";
+    }
+  })();
+  const readKey = `${page.targetId}|${frame}|${selector ?? ""}|${Boolean(options["nav"])}`;
+  const previous = ctx.state.readsShown.get(readKey);
+  if (canDelta && previous !== undefined && previous.origin === origin && content) {
+    const diffed = deltaRead(previous.text, content);
+    if (diffed.omitted > 0) displayed = diffed.text;
+  }
+  let shown = scope ? `${displayed}\n[scope: ${scope}]` : displayed || emptyNote;
   shown = shown ? `${shown}\n[read ${readTime}]` : shown;
+  const cap = ctx.options["full"] ? 0 : ctx.options["max_output"] === undefined || ctx.options["max_output"] === null ? OUTPUT_CAP : Number(ctx.options["max_output"]);
+  const shownFits = cap <= 0 || shown.length <= cap;
+  if (content && shownFits && !options["outline"] && !options["filter"] && !options["raw"]) {
+    ctx.state.rememberRead(readKey, origin, content);
+  }
   return new Result(
     { content, contentType: "text/html", finalUrl: page.url, source: "active-tab-html", truncated: false, url: page.url, scope: scope || null, readAt: readTime },
     shown,

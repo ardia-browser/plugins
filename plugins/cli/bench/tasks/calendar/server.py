@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
+import json
 import sys
 import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from benchhttp import Handler, now_ms, serve_forever
+from realism import Guard
 
 PORT = 8791
 HERE = Path(__file__).resolve().parent
+GUARD = Guard("calendar")
 EXPECTED = [
     {"title": "Pipeline review", "calendar": "board", "date": "2026-11-09", "start": "10:00", "end": "11:00"},
     {"title": "Design partner call", "calendar": "board", "date": "2026-11-10", "start": "14:00", "end": "15:00"},
@@ -42,6 +45,7 @@ def check():
         "extra": len([k for k in have if k not in want]),
         "completed_at_ms": max(e["saved_at_ms"] for e in got) if passed else None,
         "reset_at_ms": reset_at,
+        "method": GUARD.summary(),
         "details": {"total_events": len(have), "missing": len(want - set(have)),
                     "extra": [k for k in have if k not in want], "events": got},
     }
@@ -54,6 +58,8 @@ class CalendarHandler(Handler):
                 return self.send(200, list(STATE["events"]))
         if self.path_only == "/api/check":
             return self.send(200, check())
+        if self.path_only in ("/", "/index.html"):
+            return GUARD.render_page(self, (HERE / "fixture" / "index.html").read_text())
         return self.static()
 
     def do_POST(self):
@@ -61,9 +67,17 @@ class CalendarHandler(Handler):
             with LOCK:
                 STATE["events"] = []
                 STATE["reset_at_ms"] = now_ms()
+            GUARD.reset()
             return self.send(200, {"ok": True})
         if self.path_only == "/api/events":
-            body = self.body_json()
+            raw = self.body_bytes()
+            record = GUARD.verify_write(self, raw)
+            if record["kind"] == "rejected":
+                return GUARD.reject(self, record)
+            try:
+                body = json.loads(raw or b"{}")
+            except ValueError:
+                body = None
             if not isinstance(body, dict):
                 return self.send(400, {"error": "bad json"})
             e = normalize(body)

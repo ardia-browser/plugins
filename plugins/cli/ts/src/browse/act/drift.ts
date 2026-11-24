@@ -10,9 +10,62 @@ export type Seen = Identity | "ignored" | null;
 export type Drift = { field: "role" | "name" | "both" | "hidden"; was: Identity; now: Identity | null };
 
 export const DRIFT_GUARDED = new Set(["click", "dblclick", "fill", "type", "press", "check", "uncheck", "select", "drag", "upload", "download", "hover", "focus", "tap"]);
+export const FORM_DRIFT_ACTIONS = new Set(["fill", "type", "select", "check", "uncheck"]);
 
 function squash(text: string): string {
   return text.replace(/\s+/gu, " ").trim();
+}
+
+const STATUS_TOKEN = /^(?:\d+(?:[.,/:%-]\d+)*[%+]?|selected|chosen|applied|active|required|optional|invalid|valid|error|loading|saving|saved|items?|results?|matches?|count|added|total|empty|none|of|to|h|hr|hrs|min|mins|sec|secs|s)$/iu;
+const PLACEHOLDER_HEAD = /^(?:passenger|traveler|traveller|guest|attendee|seat|person|member|adult|child|infant|item|entry|row)\s+\d+$/iu;
+const STATUS_SEPARATOR = /\s+[—–·]\s+/u;
+
+function matchedIndices(shorter: readonly string[], longer: readonly string[]): number[] | null {
+  const out: number[] = [];
+  let cursor = 0;
+  for (let i = 0; i < longer.length && cursor < shorter.length; i += 1) {
+    if ((longer[i] as string).toLowerCase() === (shorter[cursor] as string).toLowerCase()) {
+      out.push(i);
+      cursor += 1;
+    }
+  }
+  return cursor === shorter.length ? out : null;
+}
+
+function isDynamicToken(raw: string): boolean {
+  const bare = raw.replace(/^[([{\s]+|[)\]}.,:;\s]+$/gu, "");
+  if (!bare) return true;
+  return STATUS_TOKEN.test(bare);
+}
+
+function extraTokensDynamic(longer: readonly string[], kept: ReadonlySet<number>): boolean {
+  for (let i = 0; i < longer.length; i += 1) {
+    if (kept.has(i)) continue;
+    if (!isDynamicToken(longer[i] as string)) return false;
+  }
+  return true;
+}
+
+export function liveFormLabelUpdate(was: string, now: string): boolean {
+  const a = squash(was);
+  const b = squash(now);
+  if (!a || !b) return false;
+  const partsA = a.split(STATUS_SEPARATOR);
+  const partsB = b.split(STATUS_SEPARATOR);
+  if (partsA.length >= 2 && partsB.length >= 2) {
+    const headA = (partsA[0] as string).trim();
+    const headB = (partsB[0] as string).trim();
+    const tailA = partsA.slice(1).join(" · ").toLowerCase();
+    const tailB = partsB.slice(1).join(" · ").toLowerCase();
+    if (tailA.length >= 6 && tailA === tailB && PLACEHOLDER_HEAD.test(headA) !== PLACEHOLDER_HEAD.test(headB)) return true;
+  }
+  const wa = a.split(" ");
+  const wb = b.split(" ");
+  const [shorter, longer] = wa.length <= wb.length ? [wa, wb] : [wb, wa];
+  if (shorter.join(" ").length < 4 || shorter.length === longer.length) return false;
+  const hits = matchedIndices(shorter, longer);
+  if (hits === null) return false;
+  return extraTokensDynamic(longer, new Set(hits));
 }
 
 export const CONTAINER_ROLES: ReadonlySet<string> = new Set(["generic", ...LIFTED]);
@@ -95,6 +148,7 @@ export async function refuseDrift(page: Page, element: Element, ref: Ref | undef
   }
   const drift = driftBetween({ role: ref.role, name: ref.name }, now);
   if (drift === null) return;
+  if (drift.field === "name" && drift.now !== null && FORM_DRIFT_ACTIONS.has(action) && liveFormLabelUpdate(drift.was.name, drift.now.name)) return;
   flag("ref_drift_refused", true);
   add("drift_refusals");
   throw new BrowseError(driftMessage(ref.id, action, drift), { ref: `@${ref.id}`, was: drift.was, now: drift.now, field: drift.field }, "ref_drifted");

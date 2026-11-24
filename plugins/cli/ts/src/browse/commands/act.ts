@@ -37,10 +37,16 @@ export const DOWNLOAD_FETCH_LIMIT = 50 * 1024 * 1024;
 
 export const LABEL_FALLBACK: ReadonlySet<string> = new Set(["fill", "select", "check", "uncheck"]);
 const NOT_A_LABEL = /^[#.[/(*>~+:@]|^[a-z-]+=|^-|^[a-z][\w-]*(?:\[|[.#:][a-z_-]|\s*[>~+]\s*\S)|\[[\w-]+\s*[~|^$*]?=/iu;
-const BY_LABEL = "(t) => ardiaBrowse.findLabel(t, true) || ardiaBrowse.findLabel(t, false) || ardiaBrowse.findAttr('placeholder', t, false) || ardiaBrowse.findAttr('name', t, true)";
+const FORM_CONTROL_TAG = /^(?:input|textarea|select)$/iu;
+const FIELD_CONTROL_SELECTOR = 'input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]):not([type=image]), textarea, select, [contenteditable=""], [contenteditable="true"], [role=textbox], [role=combobox], [role=searchbox], [role=spinbutton], [role=checkbox], [role=radio], [role=switch], [role=listbox]';
+const BY_LABEL = `(t) => { const ok = (el) => el && el.matches && el.matches(${JSON.stringify(FIELD_CONTROL_SELECTOR)}) ? el : null; return ok(ardiaBrowse.findLabel(t, true)) || ok(ardiaBrowse.findLabel(t, false)) || ok(ardiaBrowse.findAttr('placeholder', t, false)) || ok(ardiaBrowse.findAttr('name', t, true)); }`;
 
 export function labelShaped(selector: string): boolean {
   return parseRef(selector) === null && !NOT_A_LABEL.test(selector) && /\p{L}/u.test(selector);
+}
+
+export function preferLabelFirst(selector: string, explicitSelector = false): boolean {
+  return !explicitSelector && labelShaped(selector) && !FORM_CONTROL_TAG.test(selector);
 }
 
 async function byLabel(ctx: Ctx, label: string): Promise<[Page, Element] | null> {
@@ -56,15 +62,22 @@ function missed(error: unknown): boolean {
   return error instanceof BrowseError && (error.code === "not_found" || (!error.code && error.text.startsWith("Invalid selector")));
 }
 
-async function located(ctx: Ctx, selector: string, wait: number): Promise<[Page, Element]> {
+async function located(ctx: Ctx, selector: string, wait: number, explicitSelector = false): Promise<[Page, Element]> {
   if (!LABEL_FALLBACK.has(ctx.command) || !labelShaped(selector)) return ctx.state.locate(selector, null, wait);
+  const labelFirst = preferLabelFirst(selector, explicitSelector);
+  if (labelFirst) {
+    const labelled = await byLabel(ctx, selector);
+    if (labelled !== null) return labelled;
+  }
   try {
     return await ctx.state.locate(selector, null, 0);
   } catch (error) {
     if (!missed(error)) throw error;
   }
-  const labelled = await byLabel(ctx, selector);
-  if (labelled !== null) return labelled;
+  if (!labelFirst) {
+    const labelled = await byLabel(ctx, selector);
+    if (labelled !== null) return labelled;
+  }
   try {
     return await ctx.state.locate(selector, null, wait);
   } catch (error) {
@@ -79,10 +92,10 @@ async function located(ctx: Ctx, selector: string, wait: number): Promise<[Page,
   }
 }
 
-export async function resolve(ctx: Ctx, selector: string): Promise<[Page, Element]> {
+export async function resolve(ctx: Ctx, selector: string, explicitSelector = false): Promise<[Page, Element]> {
   const reading = CHECKS_PRESENCE.has(ctx.command);
   if (!reading) await refuseIfDialogFor(ctx.state, selector, `\`${ctx.command}\``);
-  const [page, element] = await located(ctx, selector, reading ? 0 : APPEAR_WAIT);
+  const [page, element] = await located(ctx, selector, reading ? 0 : APPEAR_WAIT, explicitSelector);
   if (!reading) await guardDrift(page, element, selector, ctx.command);
   return [page, element];
 }
@@ -212,10 +225,11 @@ function samePair(a: unknown, b: unknown): boolean {
 }
 
 async function cmdFill(ctx: Ctx, argv: string[]): Promise<Result> {
+  const explicitSelector = argv.some((token) => token === "-s" || token === "--selector" || token.startsWith("--selector="));
   const [options, args] = parse(leadingSelector(argv), { "--no-humanize": "bool" }, {}, (positionals) => opaqueSlot("fill", positionals));
   need(args, 2, "fill <selector> <text>");
   const selector = args[0] as string;
-  const [page, element] = await resolve(ctx, selector);
+  const [page, element] = await resolve(ctx, selector, explicitSelector);
   const text = args.slice(1).join(" ");
   const humanize = humanizing(ctx, options);
   const facts = await fieldFacts(page, element);

@@ -35,13 +35,19 @@ export class TextExtractor {
   private buffer: string[] = [];
   private skip = 0;
   private heading: number | null = null;
+  private cell = false;
   title = "";
   private inTitle = false;
+  private readonly readable: boolean;
   private readonly parser = new HTMLParser({
     starttag: (tag) => this.starttag(tag),
     endtag: (tag) => this.endtag(tag),
     data: (text) => this.data(text),
   });
+
+  constructor(readable = false) {
+    this.readable = readable;
+  }
 
   feed(text: string): void {
     this.parser.feed(text);
@@ -59,6 +65,17 @@ export class TextExtractor {
       this.skip += 1;
       return;
     }
+    if (this.readable && this.skip) return;
+    if (this.readable && (tag === "td" || tag === "th")) {
+      if (this.cell && this.buffer.some((part) => part.trim() !== "")) this.buffer.push(" | ");
+      this.cell = true;
+      return;
+    }
+    if (this.readable && tag === "tr") {
+      this.flush();
+      this.cell = false;
+      return;
+    }
     if (HEADING.test(tag)) {
       this.flush();
       this.heading = Number(tag[1]);
@@ -72,6 +89,12 @@ export class TextExtractor {
     if (tag === "title") this.inTitle = false;
     if (SKIP.has(tag)) {
       this.skip = Math.max(0, this.skip - 1);
+      return;
+    }
+    if (this.readable && this.skip) return;
+    if (this.readable && tag === "tr") {
+      this.flush();
+      this.cell = false;
       return;
     }
     if (HEADING.test(tag) && this.heading) {
@@ -98,8 +121,8 @@ export class TextExtractor {
   }
 }
 
-export function extractHtml(html: string): { content: string; title: string } {
-  const extractor = new TextExtractor();
+export function extractHtml(html: string, readable = false): { content: string; title: string } {
+  const extractor = new TextExtractor(readable);
   extractor.feed(html);
   const content = extractor.text();
   return { content, title: pyStrip(collapseSpaces(extractor.title)) };

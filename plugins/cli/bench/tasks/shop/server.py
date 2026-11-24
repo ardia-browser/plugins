@@ -12,6 +12,9 @@ sys.path.insert(0, str(HERE))
 from benchhttp import Handler, now_ms, serve_forever
 from catalog import CATEGORIES, COUPONS, POSTS, PRODUCTS, SHIPPING, STATES
 from livedates import add_business_days, full_date, month_day, short_day, today
+from realism import Guard
+
+GUARD = Guard("shop")
 
 PORT = 8821
 PAGE_SIZE = 12
@@ -33,6 +36,7 @@ CURRENT_PAGE = ' aria-current="page"'
 def reset_state():
     STATE.update(cart=[], coupon=None, orders=[], flash=None, coupon_attempts=0, coupon_rejections=0,
                  checkout_attempts=0, checkout_errors=0, reset_at_ms=now_ms())
+    GUARD.reset()
 
 
 def slug_of(p):
@@ -149,7 +153,7 @@ def layout(title, body, active=None, flash=None):
 <main id="main" class="wrap">{flash_html}{body}</main>
 <footer class="foot"><div class="wrap"><p><strong>Kestrel Supply</strong> · Office tech for teams and home desks · Oakland, CA</p>
 <p><a href="/help/shipping">Shipping</a> · <a href="/help/returns">30-day returns</a> · <a href="/help/contact">Contact us</a></p><p class="muted">Prices in USD. © {today().year} Kestrel Supply Co.</p></div></footer>
-<script src="/static/shop.js"></script></body></html>"""
+<script type="module" src="/static/shop.js"></script></body></html>"""
 
 
 def category_page(slug, q):
@@ -390,7 +394,7 @@ def check():
     details = dict(counters, orders_placed=len(orders))
     if not orders:
         details["wrong"] = ["no order placed"]
-        return {"pass": False, "matched": 0, "total": 6, "completed_at_ms": None, "reset_at_ms": reset_at, "details": details}
+        return {"pass": False, "matched": 0, "total": 6, "completed_at_ms": None, "reset_at_ms": reset_at, "method": GUARD.summary(), "details": details}
     o = orders[-1]
     a = o["address"]
     street = norm(a.get("line1", "") + " " + a.get("line2", "")).replace("street", "st").replace("suite", "ste")
@@ -407,17 +411,21 @@ def check():
     details.update(wrong=[k for k, v in items.items() if not v],
                    produced={"order": o["number"], "items": o["items"], "coupon": o["coupon"], "address": a, "shipping": o["shipping"]})
     return {"pass": passed, "matched": sum(items.values()), "total": len(items), "completed_at_ms": o["at_ms"] if passed else None,
-            "reset_at_ms": reset_at, "details": details}
+            "reset_at_ms": reset_at, "method": GUARD.summary(), "details": details}
 
 
 class ShopHandler(Handler):
-    def page(self, text):
-        return self.html(200, text) if text else self.html(404, layout("Not found", "<h1>Page not found</h1><p><a href=\"/\">Back to the store</a></p>"))
+    def page(self, text, status=200):
+        if text:
+            return GUARD.render_page(self, text, status=status)
+        return GUARD.render_page(self, layout("Not found", "<h1>Page not found</h1><p><a href=\"/\">Back to the store</a></p>"), status=404)
 
     def do_GET(self):
         path, q = self.path_only, self.query
         if path == "/api/check":
             return self.send(200, check())
+        if path == "/realism.js":
+            return self.static("/realism.js")
         if path.startswith("/static/"):
             return self.static(path[len("/static"):])
         if path == "/":
@@ -452,12 +460,15 @@ class ShopHandler(Handler):
                 reset_state()
             return self.send(200, {"ok": True})
         form = self.body_form()
+        rec = GUARD.verify_form(self, form)
+        if rec["kind"] == "rejected":
+            return GUARD.reject(self, rec)
         if path == "/checkout":
             number, errors = place_order(form)
             if number:
                 return self.redirect(f"/orders/{number}")
             text = checkout_page(form, errors)
-            return self.html(422, text) if text else self.redirect("/cart")
+            return self.page(text, status=422) if text else self.redirect("/cart")
         sku = form.get("sku", "")
         qty = int(form["qty"]) if form.get("qty", "").strip().isdigit() else None
         with LOCK:

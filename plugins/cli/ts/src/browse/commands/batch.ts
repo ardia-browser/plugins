@@ -403,6 +403,37 @@ function quoteWord(word: string): string {
   return PLAIN_WORD.test(word) ? word : JSON.stringify(word).replace(/[\u007f-￿]/gu, (char) => char);
 }
 
+const PASS_THROUGH_INSPECT = new Set(["wait", "read", "snapshot", "form", "links", "query"]);
+const FIELD_DIFF_LINE = /^[+~] \s*(textbox|combobox|checkbox|radio|spinbutton|slider|listbox|switch|searchbox)\b/u;
+
+export function trimSupersededChanges(text: string, hasRead: boolean, hasSnapshot: boolean, hasForm: boolean): string {
+  const lines = text.split("\n");
+  const at = lines.findIndex((line) => strip(line, isSpace) === "changes:");
+  if (at < 0) return text;
+  const head = lines.slice(0, at);
+  const kept: string[] = [];
+  let inText = false;
+  for (let index = at + 1; index < lines.length; index += 1) {
+    const raw = lines[index] as string;
+    const trimmed = strip(raw, isSpace);
+    if (inText) {
+      if (raw.startsWith("  ")) continue;
+      inText = false;
+    }
+    if (trimmed === "text:" && (hasRead || hasSnapshot)) {
+      inText = true;
+      continue;
+    }
+    if (hasSnapshot && (trimmed.startsWith("new document,") || trimmed.startsWith("+ ") || trimmed.startsWith("- ") || trimmed.startsWith("~ "))) continue;
+    if (hasRead && trimmed.startsWith("- ")) continue;
+    if (hasForm && FIELD_DIFF_LINE.test(trimmed)) continue;
+    kept.push(raw);
+  }
+  const rest = kept.filter((line) => strip(line, isSpace) !== "");
+  if (rest.length === 0) return head.join("\n").replace(/\n+$/u, "");
+  return [...head, "changes:", ...kept].join("\n");
+}
+
 function compactBatchLines(outcomes: Outcome[]): void {
   const succeeded = outcomes.flatMap((outcome, index) => (outcome.success ? [index] : []));
   if (succeeded.length < 2) return;
@@ -413,9 +444,55 @@ function compactBatchLines(outcomes: Outcome[]): void {
     const words = Array.isArray(command) ? (command as string[]) : shlexSplit(String(command));
     let name = words[0] ?? "";
     if (words[0] === "find" && words.length >= 4) name = (["role", "text", "label", "placeholder", "alt", "title", "testid"].includes(words[1] as string) ? words[3] : words[2]) as string;
-    if (!COMPACTED_COMMANDS.has(name) || !valueOnly(outcome.text)) continue;
-    outcome.text = `✓ ${words.map(quoteWord).join(" ")}`;
-    compacted += 1;
+    if (COMPACTED_COMMANDS.has(name) && valueOnly(outcome.text)) {
+      outcome.text = `✓ ${words.map(quoteWord).join(" ")}`;
+      compacted += 1;
+      continue;
+    }
+    if (!outcome.text || !outcome.text.includes("changes:\n")) continue;
+    let hasRead = false;
+    let hasSnapshot = false;
+    let hasForm = false;
+    for (let next = index + 1; next < outcomes.length; next += 1) {
+      const follow = outcomes[next] as Outcome;
+      if (!follow.success) break;
+      const fWords = Array.isArray(follow.command) ? (follow.command as string[]) : shlexSplit(String(follow.command));
+      const fName = ALIASES[fWords[0] ?? ""] ?? (fWords[0] ?? "");
+      if (!PASS_THROUGH_INSPECT.has(fName)) break;
+      const scopedFlag = fWords.some((w) => w === "-s" || w === "--selector" || w.startsWith("--selector="));
+      if (scopedFlag) continue;
+      if (fName === "read") {
+        const READ_FULL_FLAGS = new Set(["--nav", "--full", "--raw"]);
+        const READ_VALUE_FLAGS = new Set(["--max-output", "--timeout"]);
+        let fullRead = true;
+        for (let i = 1; i < fWords.length; i += 1) {
+          const w = fWords[i] as string;
+          if (READ_FULL_FLAGS.has(w)) continue;
+          if (READ_VALUE_FLAGS.has(w)) {
+            i += 1;
+            continue;
+          }
+          if (w.startsWith("--max-output=") || w.startsWith("--timeout=")) continue;
+          fullRead = false;
+          break;
+        }
+        const isDelta = Boolean(follow.text && (follow.text.includes("unchanged since last read") || follow.text.includes("unchanged lines omitted")));
+        if (fullRead && !isDelta) hasRead = true;
+      } else if (fName === "snapshot") {
+        const hasPositional = fWords.slice(1).some((w, idx, arr) => !w.startsWith("-") && (idx === 0 || !["-d", "--depth", "--max-output"].includes(arr[idx - 1] as string)));
+        if (!hasPositional) hasSnapshot = true;
+      } else if (fName === "form") {
+        const hasPositional = fWords.slice(1).some((w) => !w.startsWith("-"));
+        if (!hasPositional) hasForm = true;
+      }
+    }
+    if (hasRead || hasSnapshot || hasForm) {
+      const trimmed = trimSupersededChanges(outcome.text, hasRead, hasSnapshot, hasForm);
+      if (trimmed !== outcome.text) {
+        outcome.text = trimmed;
+        compacted += 1;
+      }
+    }
   }
   if (compacted) add("batch_lines_compacted", compacted);
 }

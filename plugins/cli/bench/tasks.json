@@ -237,6 +237,185 @@
       "deadline_s": 600,
       "prompt": "We're evaluating Vantage (its website is open in this tab). Work out the annual total for 25 seats on the cheapest Vantage plan that includes both SSO and Audit Logs, billed annually. Check Vantage's Security page and changelog for the date its SOC 2 Type II report was issued, and whether that plan offers EU data residency and in which region today. Then submit a software purchase request with all of that in our Northwind Procurement portal at http://127.0.0.1:8892/.",
       "today": "2026-11-06"
+    },
+    {
+      "id": "ledger",
+      "title": "Expense ledger: infinite-scroll 240-row reconciliation & CSV",
+      "server": {
+        "command": [
+          "python3",
+          "-I",
+          "tasks/ledger/server.py"
+        ],
+        "ports": [
+          8901
+        ]
+      },
+      "start_url": "http://127.0.0.1:8901/",
+      "extra_urls": [],
+      "preopen_extra": false,
+      "reset": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8901/api/reset"
+      },
+      "check": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8901/api/check"
+      },
+      "deadline_s": 600,
+      "prompt": "In Meridian Ledger (open in this tab), reconcile all Q3 2026 Approved, non-duplicate Infrastructure expenses across the entire 240-transaction ledger (exclude VOID, Pending, and rows with a duplicate_of reference). Submit the qualifying invoice count, exact total spend in USD, highest single qualifying invoice ID, and top vendor by combined qualifying spend using the Quarterly Reconciliation form on the page.",
+      "today": "2026-11-06"
+    },
+    {
+      "id": "workspace",
+      "title": "Workspace: kanban drag-and-drop, grid formulas, rich doc & CSV upload",
+      "server": {
+        "command": [
+          "python3",
+          "-I",
+          "tasks/workspace/server.py"
+        ],
+        "ports": [
+          8911
+        ]
+      },
+      "start_url": "http://127.0.0.1:8911/",
+      "extra_urls": [],
+      "preopen_extra": false,
+      "reset": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8911/api/reset"
+      },
+      "check": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8911/api/check"
+      },
+      "deadline_s": 600,
+      "prompt": "In Harbor Workspace (open in this tab), complete all four tabs for the v4.2 release: (1) Kanban: drag \"Migrate billing webhook\" from To Do to In Review and drag \"Rotate API signing key\" from In Review to Done (leave all other cards where they are). (2) Budget: change Q4 Cloud from 11000 to 14500 and Contingency % from 10 to 12 (leave the other line items unchanged) and note the updated Total Budget. (3) Release Brief: edit the brief editor to include the new Total Budget and launch date 2026-12-15, set status to Ready for sign-off, and save. (4) Files: download vendor-checklist.csv, change SOC2-Audit's status from Pending to Complete while keeping the header and all four rows intact, and upload the updated CSV.",
+      "today": "2026-11-06"
+    },
+    {
+      "id": "portal",
+      "title": "Billing portal: nested Shadow DOM & cross-origin payment iframe",
+      "server": {
+        "command": [
+          "python3",
+          "-I",
+          "tasks/portal/server.py"
+        ],
+        "ports": [
+          8921,
+          8922
+        ]
+      },
+      "start_url": "http://127.0.0.1:8921/",
+      "extra_urls": [
+        "http://127.0.0.1:8922/"
+      ],
+      "preopen_extra": false,
+      "reset": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8921/api/reset"
+      },
+      "check": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8921/api/check"
+      },
+      "deadline_s": 600,
+      "prompt": "In the Verve Cloud Billing Portal open in this tab, upgrade our workspace to the Scale plan billed annually for 15 seats with Purchase Order PO-2026-8841. Authorize the $8,640 payment in the embedded ClearPay checkout using cardholder Jordan Lee, card 4242 4242 4242 4242, expiry 09/28, CVC 842, and billing ZIP 94104, then finalize the upgrade.",
+      "today": "2026-11-06"
+    },
+    {
+      "id": "floorplan",
+      "title": "Floorplan: unlabeled SVG chart & interactive canvas desk picker",
+      "server": {
+        "command": [
+          "python3",
+          "-I",
+          "tasks/floorplan/server.py"
+        ],
+        "ports": [
+          8931
+        ]
+      },
+      "start_url": "http://127.0.0.1:8931/",
+      "extra_urls": [],
+      "preopen_extra": false,
+      "reset": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8931/api/reset"
+      },
+      "check": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8931/api/check"
+      },
+      "deadline_s": 600,
+      "prompt": "In Atrium Desk Booking (open in this tab), switch to the time slot with the lowest floor utilization in the chart, then reserve an available Quiet Zone desk along the north Window Wall that has a power outlet for Jordan Lee.",
+      "today": "2026-11-06"
+    },
+    {
+      "id": "vault",
+      "title": "Admin vault: SSO + MFA, native dialogs & session-expiry recovery",
+      "server": {
+        "command": [
+          "python3",
+          "-I",
+          "tasks/vault/server.py"
+        ],
+        "ports": [
+          8941,
+          8942
+        ]
+      },
+      "start_url": "http://127.0.0.1:8941/",
+      "extra_urls": [
+        "http://127.0.0.1:8942/"
+      ],
+      "preopen_extra": false,
+      "reset": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8941/api/reset"
+      },
+      "check": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8941/api/check"
+      },
+      "deadline_s": 600,
+      "prompt": "In Keystone Admin Vault (open in this tab), sign in via Northwind SSO using jordan@northwind.dev and password Northwind!2026 (complete 2FA with the Authenticator app preview on the page). Rotate the prod-webhook-signing key once and revoke the deprecated tok_legacy_09 API token. If your session expires mid-way, sign in again and finish both actions. Do not modify any other keys or tokens.",
+      "today": "2026-11-06"
+    },
+    {
+      "id": "dispatch",
+      "title": "Incident dispatch: multi-origin constraint synthesis & flaky ops UI",
+      "server": {
+        "command": [
+          "python3",
+          "-I",
+          "tasks/dispatch/server.py"
+        ],
+        "ports": [
+          8951,
+          8952,
+          8953
+        ]
+      },
+      "start_url": "http://127.0.0.1:8951/",
+      "extra_urls": [
+        "http://127.0.0.1:8952/",
+        "http://127.0.0.1:8953/"
+      ],
+      "preopen_extra": false,
+      "reset": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8953/api/reset"
+      },
+      "check": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8953/api/check"
+      },
+      "deadline_s": 600,
+      "prompt": "We have an active EU outage affecting Payments Core today (2026-11-06). Check the Northwind Incident Wiki (open in this tab) and any updated failover policies, cross-check the Service Catalog at http://127.0.0.1:8952/, and dispatch the compliant regional failover in the Live Ops Console at http://127.0.0.1:8953/. Confirm the incident owner checkbox and make sure the failover actually commits as Dispatched.",
+      "today": "2026-11-06"
     }
   ]
 }
