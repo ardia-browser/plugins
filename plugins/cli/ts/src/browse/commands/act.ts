@@ -28,6 +28,8 @@ import { newTab } from "./core.ts";
 import type { Ctx } from "./ctx.ts";
 import { register } from "./index.ts";
 import { leadingSelector, need, parse, SELECTOR_ALIAS, SELECTOR_FLAG, withSelector } from "./parse.ts";
+import { resolveWithin, WITHIN_FLAG } from "./find-act.ts";
+import { tracksBorrowedNav } from "./borrowed.ts";
 
 export const APPEAR_WAIT = 3.0;
 const CHECKS_PRESENCE = new Set(["is"]);
@@ -92,10 +94,17 @@ async function located(ctx: Ctx, selector: string, wait: number, explicitSelecto
   }
 }
 
-export async function resolve(ctx: Ctx, selector: string, explicitSelector = false): Promise<[Page, Element]> {
+function withinOf(options: Record<string, unknown>): string | null {
+  if (options["within"] === undefined) return null;
+  const within = String(options["within"]);
+  if (!within.trim()) throw new Usage("--within takes a container: an @ref, a CSS selector, or text shown in the row, card or dialog");
+  return within;
+}
+
+export async function resolve(ctx: Ctx, selector: string, explicitSelector = false, within: string | null = null): Promise<[Page, Element]> {
   const reading = CHECKS_PRESENCE.has(ctx.command);
   if (!reading) await refuseIfDialogFor(ctx.state, selector, `\`${ctx.command}\``);
-  const [page, element] = await located(ctx, selector, reading ? 0 : APPEAR_WAIT, explicitSelector);
+  const [page, element] = within !== null ? await resolveWithin(ctx, selector, within) : await located(ctx, selector, reading ? 0 : APPEAR_WAIT, explicitSelector);
   if (!reading) await guardDrift(page, element, selector, ctx.command);
   return [page, element];
 }
@@ -122,11 +131,11 @@ export function consentNote(ctx: Ctx, given: Result): Result {
 }
 
 async function cmdClick(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, given] = parse(argv, { "--new-tab": "bool", "--button": "value", "--no-humanize": "bool", "--touch": "bool", ...SELECTOR_FLAG }, SELECTOR_ALIAS);
+  const [options, given] = parse(argv, { "--new-tab": "bool", "--button": "value", "--no-humanize": "bool", "--touch": "bool", ...SELECTOR_FLAG, ...WITHIN_FLAG }, SELECTOR_ALIAS);
   const args = withSelector(options, given, 0, 0);
   need(args, 1, "click <selector> [--new-tab]");
   const selector = args[0] as string;
-  const [page, element] = await resolve(ctx, selector);
+  const [page, element] = await resolve(ctx, selector, false, withinOf(options));
   const humanize = humanizing(ctx, options);
   if (options["new_tab"]) {
     const href = await page.call("(el) => { const a = el.closest('a[href]'); return a ? a.href : null; }", [element], { frame: element.frame });
@@ -146,25 +155,25 @@ async function cmdClick(ctx: Ctx, argv: string[]): Promise<Result> {
 }
 
 async function cmdDblclick(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, args] = parse(argv, { "--no-humanize": "bool" });
+  const [options, args] = parse(argv, { "--no-humanize": "bool", ...WITHIN_FLAG });
   need(args, 1, "dblclick <selector>");
-  const [page, element] = await resolve(ctx, args[0] as string);
+  const [page, element] = await resolve(ctx, args[0] as string, false, withinOf(options));
   const [, report] = await observe(ctx, page, () => click(page, element, humanizing(ctx, options), 2));
   return consentNote(ctx, attach(new Result({ clicked: args[0], count: 2 }), report));
 }
 
 async function cmdHover(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, args] = parse(argv, { "--no-humanize": "bool" });
+  const [options, args] = parse(argv, { "--no-humanize": "bool", ...WITHIN_FLAG });
   need(args, 1, "hover <selector>");
-  const [page, element] = await resolve(ctx, args[0] as string);
+  const [page, element] = await resolve(ctx, args[0] as string, false, withinOf(options));
   const [, report] = await observe(ctx, page, () => hover(page, element, humanizing(ctx, options)));
   return attach(new Result({ hovered: args[0] }), report);
 }
 
 async function cmdFocus(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [, args] = parse(argv, { "--no-humanize": "bool" });
+  const [options, args] = parse(argv, { "--no-humanize": "bool", ...WITHIN_FLAG });
   need(args, 1, "focus <selector>");
-  const [page, element] = await resolve(ctx, args[0] as string);
+  const [page, element] = await resolve(ctx, args[0] as string, false, withinOf(options));
   const [, report] = await observe(ctx, page, () => page.focusElement(element));
   return attach(new Result({ focused: args[0] }), report);
 }
@@ -226,10 +235,10 @@ function samePair(a: unknown, b: unknown): boolean {
 
 async function cmdFill(ctx: Ctx, argv: string[]): Promise<Result> {
   const explicitSelector = argv.some((token) => token === "-s" || token === "--selector" || token.startsWith("--selector="));
-  const [options, args] = parse(leadingSelector(argv), { "--no-humanize": "bool" }, {}, (positionals) => opaqueSlot("fill", positionals));
+  const [options, args] = parse(leadingSelector(argv), { "--no-humanize": "bool", ...WITHIN_FLAG }, {}, (positionals) => opaqueSlot("fill", positionals));
   need(args, 2, "fill <selector> <text>");
   const selector = args[0] as string;
-  const [page, element] = await resolve(ctx, selector, explicitSelector);
+  const [page, element] = await resolve(ctx, selector, explicitSelector, withinOf(options));
   const text = args.slice(1).join(" ");
   const humanize = humanizing(ctx, options);
   const facts = await fieldFacts(page, element);
@@ -274,9 +283,9 @@ async function cmdFill(ctx: Ctx, argv: string[]): Promise<Result> {
 }
 
 async function cmdType(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, args] = parse(argv, { "--no-humanize": "bool", "--delay": "value" }, {}, (positionals) => opaqueSlot("type", positionals));
+  const [options, args] = parse(argv, { "--no-humanize": "bool", "--delay": "value", ...WITHIN_FLAG }, {}, (positionals) => opaqueSlot("type", positionals));
   need(args, 2, "type <selector> <text>");
-  const [page, element] = await resolve(ctx, args[0] as string);
+  const [page, element] = await resolve(ctx, args[0] as string, false, withinOf(options));
   const [retargeted, report] = await observe(ctx, page, () => typeText(page, element, args.slice(1).join(" "), humanizing(ctx, options)), [element, null]);
   return attach(typedResult("typed", args[0] as string, retargeted), report);
 }
@@ -367,9 +376,9 @@ async function cmdKeyboard(ctx: Ctx, argv: string[]): Promise<Result> {
 }
 
 async function cmdCheck(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, args] = parse(argv, { "--no-humanize": "bool" });
+  const [options, args] = parse(argv, { "--no-humanize": "bool", ...WITHIN_FLAG });
   need(args, 1, `${ctx.command} <selector>`);
-  const [page, element] = await resolve(ctx, args[0] as string);
+  const [page, element] = await resolve(ctx, args[0] as string, false, withinOf(options));
   const wanted = ctx.command === "check";
   const [changed, report] = await observe(ctx, page, () => setChecked(page, element, wanted, humanizing(ctx, options)));
   return attach(checkedResult(wanted, args[0] as string, changed), report);
@@ -399,9 +408,9 @@ export async function selectIn(ctx: Ctx, page: Page, element: Element, selector:
 }
 
 async function cmdSelect(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, args] = parse(argv, { "--no-humanize": "bool" });
+  const [options, args] = parse(argv, { "--no-humanize": "bool", ...WITHIN_FLAG });
   need(args, 2, "select <selector> <value...>");
-  const [page, element] = await resolve(ctx, args[0] as string);
+  const [page, element] = await resolve(ctx, args[0] as string, false, withinOf(options));
   return selectIn(ctx, page, element, args[0] as string, args.slice(1), humanizing(ctx, options));
 }
 
@@ -612,17 +621,17 @@ async function cmdDownload(ctx: Ctx, argv: string[]): Promise<Result> {
   return new Result({ path: args[1] }, `✓ Downloaded to ${args[1]}`);
 }
 
-register("click", cmdClick);
-register("dblclick", cmdDblclick);
+register("click", tracksBorrowedNav(cmdClick));
+register("dblclick", tracksBorrowedNav(cmdDblclick));
 register("hover", cmdHover);
 register("focus", cmdFocus);
-register("fill", cmdFill);
-register("type", cmdType);
-register("press", cmdPress);
-register(["keydown", "keyup"], cmdKeydown);
-register("keyboard", cmdKeyboard);
-register(["check", "uncheck"], cmdCheck);
-register("select", cmdSelect);
+register("fill", tracksBorrowedNav(cmdFill));
+register("type", tracksBorrowedNav(cmdType));
+register("press", tracksBorrowedNav(cmdPress));
+register(["keydown", "keyup"], tracksBorrowedNav(cmdKeydown));
+register("keyboard", tracksBorrowedNav(cmdKeyboard));
+register(["check", "uncheck"], tracksBorrowedNav(cmdCheck));
+register("select", tracksBorrowedNav(cmdSelect));
 register("drag", cmdDrag);
 register("upload", cmdUpload);
 register("scroll", cmdScroll);

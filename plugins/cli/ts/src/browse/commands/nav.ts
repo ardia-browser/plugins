@@ -5,6 +5,7 @@ import { waitUntil } from "../state/wait.ts";
 import { type Ctx } from "./ctx.ts";
 import { register } from "./index.ts";
 import { need, parse } from "./parse.ts";
+import { borrowedAhead, borrowedDepth, borrowedStepAllowed, historyFrom, noteBorrowedStep } from "./borrowed.ts";
 
 export function borrowedTab(ctx: Ctx): string | null {
   const state = ctx.state;
@@ -30,11 +31,18 @@ function entryUrl(entry: unknown): unknown {
 
 export async function cmdHistory(ctx: Ctx, _argv: string[]): Promise<Result> {
   const page = await ctx.state.page();
-  refuseOnBorrowed(ctx, page, `go ${ctx.command} in`);
+  const step = ctx.command === "back" ? -1 : 1;
+  const borrowed = borrowedTab(ctx) === page.targetId ? page.targetId : null;
+  const ours = borrowed !== null && (step < 0 ? borrowedDepth(ctx.state, borrowed) > 0 : borrowedAhead(ctx.state, borrowed) > 0);
+  if (!ours) refuseOnBorrowed(ctx, page, `go ${ctx.command} in`);
   const history = await page.send("Page.getNavigationHistory");
   const index = typeof history["currentIndex"] === "number" ? history["currentIndex"] : 0;
   const entries = Array.isArray(history["entries"]) ? history["entries"] : [];
-  const step = ctx.command === "back" ? -1 : 1;
+  if (borrowed !== null) {
+    const trail = historyFrom(history);
+    if (!borrowedStepAllowed(ctx.state, borrowed, step, trail) || !(0 <= index + step && index + step < entries.length)) refuseOnBorrowed(ctx, page, `go ${ctx.command} in`);
+    noteBorrowedStep(ctx.state, borrowed, step, trail);
+  }
   if (!(0 <= index + step && index + step < entries.length) || (index + step === 0 && entryUrl(entries[0]) === "about:blank" && ctx.state.opened.has(page.targetId))) {
     return new Result({ url: page.url }, page.url);
   }

@@ -171,8 +171,8 @@ function inlineCode(text: string): boolean {
 }
 
 export function scriptSource(args: string[], cwd: string, expand: (path: string) => string): string {
-  const [options, positional] = parse(args, { "--timeout": "value", "--stdin": "bool" });
-  if (positional.length > 1) throw new Usage("Usage: ardia browse script [file.js] [--timeout 90s]; quote the script in a heredoc on stdin, or put it in a file");
+  const [options, positional] = parse(args, { "--timeout": "value", "--stdin": "bool", "--repl": "bool", "--persist": "bool", "--reset": "bool" });
+  if (positional.length > 1) throw new Usage("Usage: ardia browse script [file.js] [--timeout 90s] [--repl] [--reset]; quote the script in a heredoc on stdin, or put it in a file");
   let source: string;
   const first = positional[0];
   if (first !== undefined && first !== "-") {
@@ -191,6 +191,7 @@ export function scriptSource(args: string[], cwd: string, expand: (path: string)
       source = first;
     }
   } else if (first !== undefined || options["stdin"] || !isatty(0)) source = readStdin(MAX_SCRIPT_SOURCE + 1);
+  else if (options["reset"]) source = "";
   else throw new Usage("ardia browse script reads the script from a file or stdin: ardia browse script <<'EOF' … EOF");
   if (codePointLength(source) > MAX_SCRIPT_SOURCE) throw new Usage(`The script is over ${MAX_SCRIPT_SOURCE / 1024} KB`);
   void cwd;

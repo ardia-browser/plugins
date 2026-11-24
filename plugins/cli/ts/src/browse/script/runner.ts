@@ -1,6 +1,7 @@
 import vm from "node:vm";
 import { confineProcess, loadLibc, watchLifeline } from "../../libc.ts";
 import PRELUDE from "./prelude.js.txt" with { type: "text" };
+import { replSource } from "./repl.ts";
 
 export { SCRIPT_RUNNER_ARGUMENT } from "../../flush-argument.ts";
 export const SOURCE_URL = "ardia-script.js";
@@ -17,7 +18,9 @@ export function overBytes(text: string, limit: number): boolean {
 export const RESULT_LIMIT = 64 * 1024 * 1024;
 export const STATE_LIMIT = 16 * 1024 * 1024;
 
-export type StartMessage = { type: "start"; source: string; state: string; readBatch: number; stateLimit: number };
+export type StartMessage = { type: "start"; source: string; state: string; readBatch: number; stateLimit: number; repl?: boolean; spill?: number };
+export const SPILL_CHARS = 8192;
+export const SPILL_PREVIEW_CHARS = 2000;
 export type ReplyMessage = { type: "reply"; id: number; answer: string };
 export type RunnerInbound = StartMessage | ReplyMessage;
 export type RunnerOutbound =
@@ -90,6 +93,7 @@ export function startRunner(link: RunnerLink): void {
   let logged = 0;
   let started = false;
   let finished = false;
+  let replMode = false;
   const deliver = (kind: string, first: unknown, second?: unknown) => {
     if (inbound === null || finished) return;
     try {
@@ -174,25 +178,32 @@ export function startRunner(link: RunnerLink): void {
       if (typeof message.id === "number" && typeof message.answer === "string") deliver("reply", message.id, message.answer);
       return;
     }
-    if (message.type !== "start" || started) return;
+    if (message.type !== "start") return;
+    const again = started && replMode && finished && message.repl === true && inbound !== null;
+    if (started && !again) return;
     started = true;
-    let install: (bridge: unknown, config: string) => Inbound;
+    finished = false;
+    logged = 0;
     let fn: unknown;
-    try {
-      install = new vm.Script(PRELUDE, { filename: PRELUDE_URL, importModuleDynamically: refuseImport as never }).runInContext(context) as typeof install;
-      inbound = install(bridge, JSON.stringify({ source: SOURCE_URL, readBatch: message.readBatch, stateLimit: message.stateLimit, argsLimit: ARGS_LIMIT, state: message.state }));
-    } catch {
-      fail("the script's API didn't start", "Error", null, null);
-      return;
+    if (!again) {
+      replMode = message.repl === true;
+      try {
+        const install = new vm.Script(PRELUDE, { filename: PRELUDE_URL, importModuleDynamically: refuseImport as never }).runInContext(context) as (bridge: unknown, config: string) => Inbound;
+        inbound = install(bridge, JSON.stringify({ source: SOURCE_URL, readBatch: message.readBatch, stateLimit: message.stateLimit, argsLimit: ARGS_LIMIT, state: message.state, repl: replMode }));
+      } catch {
+        fail("the script's API didn't start", "Error", null, null);
+        return;
+      }
     }
     try {
-      fn = new vm.Script(scriptSource(message.source), { filename: SOURCE_URL, importModuleDynamically: refuseImport as never }).runInContext(context);
+      fn = new vm.Script(replMode ? replSource(message.source) : scriptSource(message.source), { filename: SOURCE_URL, importModuleDynamically: refuseImport as never }).runInContext(context);
     } catch (error) {
       const [text, line] = syntaxError(error);
       fail(text, "", line, "script_syntax");
       return;
     }
-    deliver("run", fn);
+    const spill = typeof message.spill === "number" && Number.isFinite(message.spill) && message.spill > 0 ? message.spill : 0;
+    deliver("run", fn, JSON.stringify({ state: message.state, spill, preview: SPILL_PREVIEW_CHARS }));
   });
 }
 
@@ -221,11 +232,17 @@ export async function runnerMain(libcFile: string): Promise<number> {
     setTimeout(() => process.exit(3), 100);
     return new Promise(() => {});
   }
-  setTimeout(() => process.exit(4), RUNNER_LIFETIME_MS).unref();
+  let lifetime = setTimeout(() => process.exit(4), RUNNER_LIFETIME_MS);
+  lifetime.unref();
   process.on("disconnect", () => process.exit(0));
   const listeners: ((message: RunnerInbound) => void)[] = [];
   process.on("message", (message: unknown) => {
     if (message === null || typeof message !== "object") return;
+    if ((message as RunnerInbound).type === "start") {
+      clearTimeout(lifetime);
+      lifetime = setTimeout(() => process.exit(4), RUNNER_LIFETIME_MS);
+      lifetime.unref();
+    }
     for (const listener of listeners) listener(message as RunnerInbound);
   });
   startRunner({

@@ -226,3 +226,29 @@ export function wrapUntrusted(text: string, fresh: string = nonce()): string {
 export function untrustedText(text: string): string {
   return neutralize(stripLoneSurrogates(text));
 }
+
+export const COMPACT_TAG = "page-data";
+export const COMPACT_TAG_REPLACEMENT = "[page-data tag removed]";
+const COMPACT_TAG_SHAPES: readonly RegExp[] = [/<\s*\/?\s*page[\s_-]*data\b[^<>]*>?/giu];
+const QUICK_COMPACT_TAG = /data/iu;
+
+export function neutralizeCompactTags(text: string): string {
+  if (text === "") return text;
+  if (!NON_ASCII.test(text) && !QUICK_COMPACT_TAG.test(text)) return text;
+  const { folded, origin } = skeleton(text);
+  const found = spans(folded, COMPACT_TAG_SHAPES);
+  if (found.length === 0) return text;
+  let out = "";
+  let copied = 0;
+  for (const [start, end] of found) {
+    const from = origin[start] as number;
+    if (from < copied) continue;
+    out += text.slice(copied, from) + COMPACT_TAG_REPLACEMENT;
+    copied = originalEnd(text, origin, end);
+  }
+  return out + text.slice(copied);
+}
+
+export function wrapCompactUntrusted(text: string, fresh: string = nonce()): string {
+  return `<${COMPACT_TAG} nonce="${fresh}">\n${neutralizeCompactTags(untrustedText(text))}\n</${COMPACT_TAG}>`;
+}

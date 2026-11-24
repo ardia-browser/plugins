@@ -41,6 +41,10 @@ STRIPPED_ENV_PREFIXES = ("CLAUDECODE", "CLAUDE_CODE_", "CLAUDE_PID", "CLAUDE_EFF
 KEPT_ENV = {"CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK",
             "CLAUDE_CODE_USE_VERTEX"}
 SHELL_TOOLS = {"Bash", "command_execution"}
+MCP_PREFIX = "mcp-"
+MCP_SERVER = "ardia"
+MCP_TOOLS = ("browser_repl", "browser_act")
+MCP_TOOL_TIMEOUT_S = 600
 
 
 def log(msg):
@@ -277,12 +281,25 @@ def stop_browse_daemons(data):
 
 def prepare_tab(opts, task):
     extras = task.get("extra_urls", []) if task.get("preopen_extra") else []
+    extra_set = set(extras)
+    allowed_ports = set((task.get("server") or {}).get("ports") or [])
     seen = []
+
+    def is_start(tab):
+        url = tab.get("url") or ""
+        if not tab.get("title"):
+            return False
+        if url == task["start_url"]:
+            return True
+        if url in extra_set or not allowed_ports:
+            return False
+        parsed = urllib.parse.urlparse(url)
+        return parsed.hostname in ("127.0.0.1", "localhost") and parsed.port in allowed_ports
 
     def ready():
         current = pages(opts)
         seen[:] = [[t.get("url"), t.get("title")] for t in current]
-        starts = [t for t in current if t.get("url") == task["start_url"] and t.get("title")]
+        starts = [t for t in current if is_start(t)]
         return seen if len(current) == 1 + len(extras) and starts else None
 
     for attempt in range(3):
@@ -313,6 +330,104 @@ def reset_task(task):
 
 def reach_line(opts):
     return f"Use the `ardia` command with `--port {opts['port']}` to reach this Ardia instance."
+
+
+def split_agent(agent):
+    agent = str(agent or "")
+    if agent.startswith(MCP_PREFIX):
+        return agent[len(MCP_PREFIX):], True
+    return agent, False
+
+
+def mcp_line(opts):
+    return (f"Drive this Ardia instance (DevTools port {opts['port']}) only through the `{MCP_SERVER}` MCP server, "
+            "not the shell `ardia` command. Default to `browser_repl` (persistent JS REPL; top-level const/let survive "
+            "calls; no shell quoting). Use fast `page.*` methods instead of `browse(...)`: `page.here()`, "
+            "`page.snapshot({interactive:true})`, `page.read()`, `page.form()`, `page.click(sel, {receipt:true})`, "
+            "`page.fill(sel, val)`, `page.fillForm(pairs)`, `page.select(sel, val)`, `page.locator(sel)` / "
+            "`page.getByRole(role, {name, within})` / `page.getByLabel(lbl)`, `page.fetch(url)` (with page cookies), "
+            "`readUrls(urls)`, `openTab(url)`, `listTabs()`, `useTab(id)`, `page.assertText(s)`. "
+            "Put loops, multi-field fills, JS filtering of long snapshots/lists, and final verification inside ONE "
+            "`browser_repl` call and return only compact results. Use `browser_act` for `screenshot --scale 0.5 --marks`.")
+
+
+def mcp_server(opts, data):
+    env = {"ARDIA_DATA_DIR": str(data), "PATH": agent_env(opts)["PATH"]}
+    if opts.get("humanize"):
+        env["AGENT_BROWSER_HUMANIZE"] = "1"
+    return {"command": ardia_bin(opts), "args": ["--port", str(opts["port"]), "mcp"], "env": env}
+
+
+def write_mcp_config(path, server):
+    config = {"mcpServers": {MCP_SERVER: {"type": "stdio", "command": server["command"], "args": server["args"],
+                                          "env": server["env"]}}}
+    Path(path).write_text(json.dumps(config, indent=2) + "\n")
+    return Path(path)
+
+
+def mcp_claude_command(model, effort, prompt, config_path):
+    cmd = claude_command(model, effort, prompt)
+    return cmd[:2] + ["--mcp-config", str(config_path), "--tools", "Read,Write"] + cmd[2:]
+
+
+def mcp_codex_command(model, effort, workdir, prompt, server):
+    cmd = codex_command(model, effort, workdir, prompt)
+    key = f"mcp_servers.{MCP_SERVER}"
+    env = ", ".join(f"{k} = {json.dumps(v)}" for k, v in server["env"].items())
+    flags = ["-c", f"{key}.command={json.dumps(server['command'])}", "-c", f"{key}.args={json.dumps(server['args'])}",
+             "-c", f"{key}.env={{ {env} }}", "-c", f"{key}.tool_timeout_sec={MCP_TOOL_TIMEOUT_S}",
+             "-c", f"{key}.startup_timeout_sec=60"]
+    return cmd[:-1] + flags + [prompt]
+
+
+def result_text(content):
+    if isinstance(content, dict):
+        content = content.get("content", content.get("text", ""))
+    if isinstance(content, list):
+        return "\n".join(str(x.get("text", "")) for x in content if isinstance(x, dict))
+    return "" if content is None else str(content)
+
+
+def mcp_stats(agent, lines):
+    calls, by_tool, errors, out_chars, shell = 0, {}, 0, 0, 0
+    claude_prefix = f"mcp__{MCP_SERVER}__"
+    pending = set()
+    for e in lines:
+        kind = e.get("type")
+        if agent == "claude":
+            if kind == "assistant" and not e.get("parent_tool_use_id"):
+                for block in e.get("message", {}).get("content", []):
+                    if block.get("type") != "tool_use":
+                        continue
+                    name = block.get("name") or ""
+                    if name.startswith(claude_prefix):
+                        tool = name[len(claude_prefix):]
+                        calls += 1
+                        by_tool[tool] = by_tool.get(tool, 0) + 1
+                        if block.get("id"):
+                            pending.add(block["id"])
+                    elif name in SHELL_TOOLS:
+                        shell += 1
+            elif kind == "user":
+                for block in e.get("message", {}).get("content", []):
+                    if block.get("type") == "tool_result" and block.get("tool_use_id") in pending:
+                        pending.discard(block.get("tool_use_id"))
+                        out_chars += len(result_text(block.get("content")))
+                        errors += 1 if block.get("is_error") else 0
+        elif kind == "item.completed":
+            item = e.get("item", {})
+            if item.get("type") == "mcp_tool_call" and item.get("server") == MCP_SERVER:
+                tool = item.get("tool") or ""
+                calls += 1
+                by_tool[tool] = by_tool.get(tool, 0) + 1
+                out_chars += len(result_text(item.get("result")))
+                result = item.get("result") if isinstance(item.get("result"), dict) else {}
+                failed = item.get("status") == "failed" or bool(item.get("error")) or bool(result.get("isError"))
+                errors += 1 if failed else 0
+            elif item.get("type") in SHELL_TOOLS:
+                shell += 1
+    return {"mcp_calls": calls, "mcp_by_tool": by_tool, "mcp_errors": errors, "mcp_output_chars": out_chars,
+            "shell_commands": shell}
 
 
 def claude_command(model, effort, prompt):
@@ -460,8 +575,10 @@ def notes_snapshot(data):
 
 
 def run(task_id, agent, run_id, results_dir, overrides=None, contender=None, on_agent_start=None):
+    named = agent
+    agent, via_mcp = split_agent(agent)
     if agent not in MODELS:
-        raise SystemExit("agent must be claude or codex")
+        raise SystemExit("agent must be claude, codex, mcp-claude or mcp-codex")
     opts = options(overrides)
     data, _, codex_home = lane_paths(opts)
     task = registry.task(task_id, int(opts.get("port_offset") or 0))
@@ -486,15 +603,20 @@ def run(task_id, agent, run_id, results_dir, overrides=None, contender=None, on_
         shutil.rmtree(workdir)
     workdir.mkdir(parents=True)
     target = "claude-code" if agent == "claude" else "codex"
-    sh([ardia_bin(opts), "skills", "install", "--target", target, "--project"], cwd=workdir,
-       env=agent_env(opts)).check_returncode()
-    prompt = f"{task['prompt']}\n\n{reach_line(opts)}"
+    if not via_mcp:
+        sh([ardia_bin(opts), "skills", "install", "--target", target, "--project"], cwd=workdir,
+           env=agent_env(opts)).check_returncode()
+    prompt = f"{task['prompt']}\n\n{mcp_line(opts) if via_mcp else reach_line(opts)}"
     extra = {"ARDIA_DATA_DIR": str(data)}
     if opts["humanize"]:
         extra["AGENT_BROWSER_HUMANIZE"] = "1"
+    server = mcp_server(opts, data) if via_mcp else None
     if agent == "codex":
         extra.update(codex_env(codex_home))
-        cmd = codex_command(model, effort, workdir, prompt)
+        cmd = mcp_codex_command(model, effort, workdir, prompt, server) if via_mcp else codex_command(model, effort, workdir, prompt)
+    elif via_mcp:
+        extra["ENABLE_TOOL_SEARCH"] = "false"
+        cmd = mcp_claude_command(model, effort, prompt, write_mcp_config(workdir / "ardia-mcp.json", server))
     else:
         cmd = claude_command(model, effort, prompt)
     env = agent_env(opts, extra)
@@ -524,9 +646,12 @@ def run(task_id, agent, run_id, results_dir, overrides=None, contender=None, on_
         check = {"pass": False, "error": str(e)}
     passed, reset_by_agent = grading.grade(check, timed_out, baseline_reset_at_ms=baseline.get("reset_at_ms"))
     completed = check.get("completed_at_ms")
-    parsed = (parse_claude if agent == "claude" else parse_codex)(read_jsonl(events))
+    lines = read_jsonl(events)
+    parsed = (parse_claude if agent == "claude" else parse_codex)(lines)
+    via = mcp_stats(agent, lines) if via_mcp else None
+    shell_count = sum(1 for t in parsed["tools"] if t["name"] in SHELL_TOOLS)
     record = {
-        "run_id": run_id, "side": "ardia", "contender": contender or f"ardia-{agent}", "agent": agent,
+        "run_id": run_id, "side": "ardia", "contender": contender or f"ardia-{named}", "agent": agent,
         "task": task_id, "started_at": started_at.isoformat(timespec="milliseconds"),
         "model": model, "effort": effort, "claude_route": claude_route_label(opts) if agent == "claude" else None,
         "cli": cli, "humanize": opts["humanize"], "notes_kept": opts["keep_notes"],
@@ -534,7 +659,7 @@ def run(task_id, agent, run_id, results_dir, overrides=None, contender=None, on_
         "wall_s": round(wall, 3), "timed_out": timed_out, "deadline_s": deadline, "exit_code": code,
         "pass": passed, "reset_by_agent": reset_by_agent,
         "time_to_correct_s": round(completed / 1000 - start_epoch, 3) if passed and completed else None,
-        "commands": sum(1 for t in parsed["tools"] if t["name"] in SHELL_TOOLS),
+        "commands": shell_count + via["mcp_calls"] if via else shell_count,
         "matched": check.get("matched"), "total": check.get("total"), "extra": check.get("extra"),
         "method": check.get("method"), "invariants": check.get("invariants"),
         "check": check, "check_details": check.get("details"), **parsed,
@@ -545,6 +670,8 @@ def run(task_id, agent, run_id, results_dir, overrides=None, contender=None, on_
                   "ours_in_front": state["pid"] in (front_before, front_after)},
         "browse_daemons_stopped": daemons, "events_file": str(events), "stderr_file": str(stderr),
     }
+    if via:
+        record.update(via, via="mcp", mcp_server=server)
     write_json(out_json, record)
     log(f"{run_id}: pass={passed} wall={record['wall_s']} s tokens={(record['tokens'] or {}).get('total')} "
         f"commands={record['commands']} -> {out_json}")

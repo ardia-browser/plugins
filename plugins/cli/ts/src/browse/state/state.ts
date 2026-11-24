@@ -226,6 +226,7 @@ export class State extends Refs implements temptabs.TempTabState {
   scriptsRunning = 0;
   commandsRun = 0;
   readonly failedNavigations = new Map<string, number>();
+  readonly borrowedNavDepth = new Map<string, number>();
   readonly initSources = new Map<string, string>();
   readonly listeners: Listener[] = [];
   targetInfos = new Map<string, Json>();
@@ -420,6 +421,7 @@ export class State extends Refs implements temptabs.TempTabState {
     this.targetInfos.delete(targetId);
     this.views.delete(targetId);
     this.snapshotsShown.delete(targetId);
+    this.borrowedNavDepth.delete(targetId);
     this.forgetReads(targetId);
     this.pendingShown?.delete(targetId);
     this.forgetTabFrames(targetId);

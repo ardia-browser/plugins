@@ -2,7 +2,7 @@ import { SequenceMatcher } from "../../pylib/difflib.ts";
 import { casefold } from "../../pylib/unicode.ts";
 import { joinedWords } from "../../pylib/str.ts";
 import { sleep } from "../cdp/cancel.ts";
-import { BrowseError, Usage } from "../daemon-errors.ts";
+import { BrowseError, ConnectionLost, OutcomeUnknown, Usage } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
 import { flag } from "../metrics.ts";
 import { pyIntArg } from "../pyerror.ts";
@@ -18,6 +18,8 @@ import { need, parse } from "./parse.ts";
 import { shlexQuote } from "../../pylib/shlex.ts";
 import { frameOrMain } from "./shared.ts";
 import { checkedState, ELEMENT_STATES, elementIs } from "./read.ts";
+import { type Scope, scopedMatches, scopeOf, WITHIN_FLAG } from "./find-act.ts";
+import { tracksBorrowedNav } from "./borrowed.ts";
 
 export const FIND_ACTIONS = ["click", "fill", "type", "press", "check", "uncheck", "select", "hover", "focus", "dblclick", "text", "is"];
 export const FIND_LOCATORS = ["role", "text", "label", "placeholder", "alt", "title", "testid", "first", "last", "nth"];
@@ -179,17 +181,70 @@ async function closestWithRef(ctx: Ctx, page: Page, frame: string, role: string,
   }
 }
 
-export async function findRole(
+export const MATCHED_BY_TEXT = new WeakMap<Element, string>();
+
+async function byVisibleText(
   ctx: Ctx,
   page: Page,
   frame: string,
   role: string,
+  shown: string,
+  name: string,
+  exact: boolean,
+  nth: number | null,
+  nodes: readonly unknown[],
+  scope: Scope | null,
+): Promise<[Element, string, string] | null> {
+  const wanted = name.endsWith("…") ? name.slice(0, -1) : name;
+  if (!wanted.trim()) return null;
+  let matches: Element[];
+  try {
+    matches = (await scopedMatches(page, frame, scope?.container ?? null, "role", wanted, exact, role)) ?? [];
+  } catch (error) {
+    if (error instanceof ConnectionLost || error instanceof OutcomeUnknown || !(error instanceof BrowseError)) throw error;
+    return null;
+  }
+  const axNames = new Map(roleCandidates(nodes, role, null, false)[0].map(([node, text]) => [Number(node["backendDOMNodeId"]), text]));
+  const named = matches.filter((element) => axNames.has(element.backendId)).map((element): [Element, string] => [element, axNames.get(element.backendId) as string]);
+  if (named.length === 0) return null;
+  flag("find_visible_text_match", true);
+  if (nth !== null) {
+    const picked = named[nth];
+    if (picked === undefined) {
+      throw new BrowseError(`--nth ${nth} asks for match ${nth + 1}, and only ${named.length} ${shown} element${named.length === 1 ? "" : "s"} show "${name}" (--nth counts from 0)`, { matches: named.length }, "not_found");
+    }
+    MATCHED_BY_TEXT.set(picked[0], name);
+    return [picked[0], shown, picked[1]];
+  }
+  if (named.length === 1) {
+    const [element, axName] = named[0] as [Element, string];
+    MATCHED_BY_TEXT.set(element, name);
+    return [element, shown, axName];
+  }
+  const listed = named.slice(0, MAX_CANDIDATES).map(([element, axName]) => ({ ref: `@${ctx.state.addRef(page, element, shown, axName)}`, name: axName }));
+  const more = named.length > MAX_CANDIDATES ? ` (and ${named.length - MAX_CANDIDATES} more)` : "";
+  const lines = listed.map((item) => `  ${shown} "${shownName(item.name)}" [ref=${item.ref.slice(1)}]`).join("\n");
+  throw new BrowseError(
+    `${named.length} ${shown}s show the text "${name}"${more} (no ${shown} is named that, so their visible text was matched), so nothing was clicked. Use one of their refs (or --nth <n>, from 0):\n${lines}`,
+    { candidates: listed, matchedBy: "visible_text" },
+    "ambiguous",
+  );
+}
+
+export async function findRole(
+  ctx: Ctx,
+  page: Page,
+  given: string,
+  role: string,
   name: string | null,
   exact: boolean,
   nth: number | null = null,
+  scope: Scope | null = null,
 ): Promise<[Element, string, string]> {
+  const frame = scope?.container.frame ?? given;
   const tree = await page.send("Accessibility.getFullAXTree", { frameId: frame }, { timeout: 60, session: page.sessionFor(frame) });
-  const nodes = Array.isArray(tree["nodes"]) ? tree["nodes"] : [];
+  const everything = Array.isArray(tree["nodes"]) ? tree["nodes"] : [];
+  const nodes = scope === null ? everything : everything.filter((raw) => scope.backends.has(Number(record(raw)["backendDOMNodeId"])));
   const [found, how] = roleCandidates(nodes, role, name, exact);
   const shown = ROLE_NAMES[role] ?? role;
   const miss = async (): Promise<RoleMiss> => {
@@ -212,12 +267,15 @@ export async function findRole(
       }
     }
     const hint = (altHint || "") + (close.length && name !== null ? `; the ${shown}s here are: ${close.map((text) => `"${shownName(text)}"`).join(", ")}` : "");
-    return new RoleMiss(`No ${shown}${named} on this page`, hint, { candidates: close }, ofRole, role, shown, name, frame);
+    const where = scope === null ? "on this page" : `inside --within "${scope.label}"`;
+    return new RoleMiss(`No ${shown}${named} ${where}`, hint, { candidates: close }, ofRole, role, shown, name, frame);
   };
   if (nth !== null) {
     const picked = await nthOfRole(page, frame, role, found, nth, shown);
-    if (picked === null) throw await miss();
-    return picked;
+    if (picked !== null) return picked;
+    const seen = name === null ? null : await byVisibleText(ctx, page, frame, role, shown, name, exact, nth, nodes, scope);
+    if (seen !== null) return seen;
+    throw await miss();
   }
   const resolved: [Element, string][] = [];
   for (const [node, nodeName] of found.slice(0, MAX_CANDIDATES + 1)) {
@@ -228,7 +286,11 @@ export async function findRole(
     const [element, nodeName] = resolved[0] as [Element, string];
     return [element, shown, nodeName];
   }
-  if (resolved.length === 0) throw await miss();
+  if (resolved.length === 0) {
+    const seen = name === null ? null : await byVisibleText(ctx, page, frame, role, shown, name, exact, null, nodes, scope);
+    if (seen !== null) return seen;
+    throw await miss();
+  }
   const listed = resolved.slice(0, MAX_CANDIDATES).map(([element, nodeName]) => ({ ref: `@${ctx.state.addRef(page, element, shown, nodeName)}`, name: nodeName }));
   const more = found.length > MAX_CANDIDATES ? ` (and ${found.length - MAX_CANDIDATES} more)` : "";
   const kind = how === "exact" ? "are named exactly" : "have names containing";
@@ -237,7 +299,7 @@ export async function findRole(
   throw new BrowseError(`${found.length} ${shown}s ${kind} "${name}"${more}, so nothing was clicked. ${fix}:\n${lines}`, { candidates: listed }, "ambiguous");
 }
 
-const FIND_FLAGS = { "--name": "value", "--exact": "bool", "--partial": "bool", "--no-humanize": "bool", "--nth": "value" } as const;
+const FIND_FLAGS = { "--name": "value", "--exact": "bool", "--partial": "bool", "--no-humanize": "bool", "--nth": "value", ...WITHIN_FLAG } as const;
 
 function namesLocator(word: string): boolean {
   const at = word.indexOf("=");
@@ -298,11 +360,24 @@ async function findWith(ctx: Ctx, argv: string[]): Promise<Result> {
   }
   const fromRemote = async (fn: string, values: unknown[], label: string) =>
     page.elementFrom(await page.call(fn, values, { frame, byValue: false, read: true }), frame, label);
+  const within = options["within"] === undefined ? null : String(options["within"]);
+  if (within !== null && !within.trim()) throw new Usage("--within takes a container: an @ref, a CSS selector, or text shown in the row, card or dialog");
+  const scope = within === null ? null : await scopeOf(ctx, within);
+  if (scope !== null && scope.page !== page) throw new BrowseError(`--within "${within}" is in another tab`, { within }, "not_found");
+  const scoped = async (): Promise<Element | null> => {
+    const container = (scope as Scope).container;
+    const kind = locator === "first" || locator === "last" || locator === "nth" ? "css" : locator;
+    if (!["css", "text", "label", "placeholder", "alt", "title", "testid"].includes(kind)) throw new Usage(`Unknown locator: ${locator} (role, text, label, placeholder, alt, title, testid, first, last, nth)`);
+    const all = (await scopedMatches(page, container.frame, container, kind, value, kind === "testid" ? true : exact)) ?? [];
+    const position = locator === "last" ? -1 : locator === "nth" ? index : 0;
+    return all.at(position) ?? null;
+  };
   const locate = async (): Promise<[Element, string, string]> => {
     let element: Element | null = null;
     let role = "";
     let name = "";
-    if (locator === "role") [element, role, name] = await findRole(ctx, page, frame, value, wantedName, exact, nth);
+    if (locator === "role") [element, role, name] = await findRole(ctx, page, frame, value, wantedName, exact, nth, scope);
+    else if (scope !== null) element = await scoped();
     else if (locator === "text") element = await fromRemote("(t, e) => ardiaBrowse.findText(t, e)", [value, exact], `text=${value}`);
     else if (locator === "label") element = await fromRemote("(t, e) => ardiaBrowse.findLabel(t, e)", [value, exact], `label=${value}`);
     else if (locator === "placeholder" || locator === "alt" || locator === "title") {
@@ -312,7 +387,7 @@ async function findWith(ctx: Ctx, argv: string[]): Promise<Result> {
       const position = locator === "first" ? 0 : locator === "last" ? -1 : index;
       element = await fromRemote("(s, i) => { const all = ardiaBrowse.queryAll(s); return all.at(i) || null; }", [value, position], `${locator} ${value}`);
     } else throw new Usage(`Unknown locator: ${locator} (role, text, label, placeholder, alt, title, testid, first, last, nth)`);
-    if (element === null) throw new BrowseError(`Element not found: ${locator} ${value}`, null, "not_found");
+    if (element === null) throw new BrowseError(`Element not found: ${locator} ${value}${scope === null ? "" : ` inside --within "${scope.label}"`}`, null, "not_found");
     return [element, role, name];
   };
   const deadline = monotonic() + FIND_WAIT;
@@ -341,11 +416,15 @@ async function findWith(ctx: Ctx, argv: string[]): Promise<Result> {
     const value = await elementIs(page, element, asked);
     return new Result({ ref: `@${ref}`, state: asked, [asked]: value }, value ? "true" : "false");
   }
+  const seenAs = MATCHED_BY_TEXT.get(element);
+  const viaText = seenAs === undefined ? null : `→ No ${role} is named "${seenAs}"; matched ${role} "${shownName(name)}" @${ref} by its visible text`;
   if (action !== "text") {
-    return findActions.act(ctx, page, element, ref, action, rest, ctx.humanize && !options["no_humanize"]);
+    const acted = await findActions.act(ctx, page, element, ref, action, rest, ctx.humanize && !options["no_humanize"]);
+    if (viaText !== null) acted.notice = [viaText, acted.notice].filter(Boolean).join("\n");
+    return acted;
   }
   const text = await page.call(TEXT_OF, [element], { frame: element.frame });
   return new Result({ ref: `@${ref}`, text }, String(text ?? ""), true);
 }
 
-register("find", cmdFind);
+register("find", tracksBorrowedNav(cmdFind));

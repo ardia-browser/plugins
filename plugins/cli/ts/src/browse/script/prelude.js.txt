@@ -5,6 +5,9 @@
   const READ_BATCH = config.readBatch;
   const STATE_LIMIT = config.stateLimit;
   const ARGS_LIMIT = config.argsLimit;
+  const REPL = config.repl === true;
+  const RUN_LOG_LIMIT = 8 * 1024 * 1024;
+  const FETCH_LIMIT = 2 * 1024 * 1024;
   const BridgeError = Error;
   const send = (kind, payload) => {
     let answer;
@@ -42,6 +45,15 @@
   let nextTimer = 1;
   let stateSent = "";
   let stateCheckedAt = 0;
+  let stateGiven = config.state;
+  let spillAt = 0;
+  let previewChars = 2000;
+  let outCount = 0;
+  let replCapture = null;
+  let runLogs = [];
+  let runLogChars = 0;
+  let lastReceipt = null;
+  const replNames = new Set();
 
   const show = (value) => {
     if (typeof value === "string") return value;
@@ -75,7 +87,12 @@
     send("state", text);
   };
   const log = (...args) => {
-    send("log", args.map(show).join(" "));
+    const line = args.map(show).join(" ");
+    if (REPL && runLogChars < RUN_LOG_LIMIT) {
+      runLogs.push(line);
+      runLogChars += line.length + 1;
+    }
+    send("log", line);
   };
 
   const request = (op, payload) => {
@@ -121,6 +138,7 @@
   const words = (value) => (value == null ? [] : Array.isArray(value) ? value.map(String) : String(value).trim().split(/\s+/).filter(Boolean));
   const plainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
   const call = (argv, options) => request("call", { argv: argv.flat().map(String), light: true, receipt: Boolean(options && options.receipt) });
+  const callWith = (argv, extra) => request("call", { argv: argv.flat().map(String), ...(extra ? { options: extra } : {}) });
   const browse = (...argv) => request("call", { argv: argv.flat().map(String) });
   const text = (answer) => answer.text;
   const data = (key) => (answer) => (answer.data || {})[key];
@@ -181,34 +199,89 @@
     }
     return browse("wait", ...words(what), ...flags(options, { text: "--text", url: "--url", load: "--load", fn: "--fn", state: "--state", timeout: "--timeout" })).then(text);
   };
-  const keyboard = (value, options) => call(["keyboard", "type", String(value)], options).then(text);
+  const rowText = (row) => (plainObject(row) ? [row.role, row.name, row.value].filter((part) => part !== undefined && part !== null && part !== "").map(String).join(" ") : "");
+  const changesIn = (body) => {
+    const at = body.indexOf("\nchanges");
+    const block = at >= 0 ? body.slice(at + 1) : body.startsWith("changes") ? body : "";
+    return block.replace(/^changes[^\n]*\n?/, "");
+  };
+  class Receipt {
+    toString() { return String(this.text); }
+    toJSON() { return String(this.text); }
+    includes(wanted) { return String(this.text).includes(String(wanted)) || String(this.changedText).includes(String(wanted)); }
+  }
+  const parseReceipt = (given, facts) => {
+    const body = given === undefined || given === null ? "" : String(given);
+    const fields = plainObject(facts) ? facts : {};
+    const changes = plainObject(fields.changes) ? fields.changes : null;
+    const list = (key) => (changes && Array.isArray(changes[key]) ? changes[key] : []);
+    const added = list("added");
+    const changed = list("changed");
+    const lines = changes && plainObject(changes.text) && Array.isArray(changes.text.lines) ? changes.text.lines.map(String) : [];
+    const parts = changes ? [...lines, ...added.map(rowText), ...changed.map((item) => rowText(item && item.to))] : [changesIn(body)];
+    if (changes && typeof changes.notes === "string") parts.push(changes.notes);
+    const dialogs = list("dialogs");
+    const receipt = Object.assign(new Receipt(), {
+      ok: true,
+      text: body,
+      url: changes && plainObject(changes.url) ? changes.url.to : typeof fields.url === "string" ? fields.url : null,
+      navigated: Boolean(changes && plainObject(changes.url)),
+      title: changes && plainObject(changes.title) ? changes.title.to : typeof fields.title === "string" ? fields.title : null,
+      document: changes && typeof changes.document === "string" ? changes.document : null,
+      added,
+      removed: list("removed"),
+      changed,
+      changedText: parts.filter(Boolean).join("\n"),
+      dialog: dialogs.length > 0 ? dialogs[dialogs.length - 1] : null,
+      network: list("network"),
+      downloads: list("downloads"),
+      unsettled: Boolean(changes && changes.unsettled),
+      error: changes && typeof changes.error === "string" ? changes.error : null,
+    });
+    return receipt;
+  };
+  const acted = (options) => (answer) => {
+    if (options && options.receipt === true) {
+      lastReceipt = parseReceipt(answer.text, answer.data);
+      return lastReceipt;
+    }
+    lastReceipt = null;
+    return answer.text;
+  };
+  const keyboard = (value, options) => call(["keyboard", "type", String(value)], options).then(acted(options));
   keyboard.type = keyboard;
-  keyboard.press = (key, options) => call(["press", String(key)], options).then(text);
-  keyboard.insertText = (value, options) => call(["keyboard", "inserttext", String(value)], options).then(text);
+  keyboard.press = (key, options) => call(["press", String(key)], options).then(acted(options));
+  keyboard.insertText = (value, options) => call(["keyboard", "inserttext", String(value)], options).then(acted(options));
 
   const api = {
+    here: () => browse("here").then(text),
     goto: async (url) => (await browse("open", await absolute(url))).data,
     back: () => browse("back").then(data("url")),
     forward: () => browse("forward").then(data("url")),
     reload: () => browse("reload").then(data("url")),
-    click: (selector, options) => call(["click", selector, flags(options, { newTab: "--new-tab", button: "--button" })], options).then(text),
-    dblclick: (selector, options) => call(["dblclick", selector], options).then(text),
-    focus: (selector, options) => call(["focus", selector], options).then(text),
-    fill: (selector, value, options) => call(["fill", selector, String(value)], options).then(text),
-    type: (selector, value, options) => call(["type", selector, String(value)], options).then(text),
+    fillForm: async (entries) => {
+      const pairs = Array.isArray(entries) ? entries : Object.entries(entries || {});
+      for (const [sel, val] of pairs) await call(["fill", sel, String(val)], undefined);
+      return pairs.length;
+    },
+    click: (selector, options) => call(["click", selector, flags(options, { newTab: "--new-tab", button: "--button" })], options).then(acted(options)),
+    dblclick: (selector, options) => call(["dblclick", selector], options).then(acted(options)),
+    focus: (selector, options) => call(["focus", selector], options).then(acted(options)),
+    fill: (selector, value, options) => call(["fill", selector, String(value)], options).then(acted(options)),
+    type: (selector, value, options) => call(["type", selector, String(value)], options).then(acted(options)),
     press: (...given) => {
       const [args, options] = trailing(given);
-      return call(["press", ...args.slice(-2)], options).then(text);
+      return call(["press", ...args.slice(-2)], options).then(acted(options));
     },
     keyboard,
     select: (selector, ...given) => {
       const [values, options] = trailing(given);
-      return call(["select", selector, ...values.flat()], options).then(text);
+      return call(["select", selector, ...values.flat()], options).then(acted(options));
     },
-    check: (selector, options) => call(["check", selector], options).then(text),
-    uncheck: (selector, options) => call(["uncheck", selector], options).then(text),
-    hover: (selector, options) => call(["hover", selector], options).then(text),
-    scroll: (direction, pixels, options) => call(["scroll", ...words(direction), ...words(pixels)], options).then(text),
+    check: (selector, options) => call(["check", selector], options).then(acted(options)),
+    uncheck: (selector, options) => call(["uncheck", selector], options).then(acted(options)),
+    hover: (selector, options) => call(["hover", selector], options).then(acted(options)),
+    scroll: (direction, pixels, options) => call(["scroll", ...words(direction), ...words(pixels)], options).then(acted(options)),
     waitForTimeout: (ms) => request("sleep", { ms: Number(ms) || 0 }).then(() => undefined),
     text: (selector) => (selector == null ? browse("read").then(data("content")) : browse("get", "text", selector).then(data("text"))),
     value: (selector) => browse("get", "value", selector).then(data("value")),
@@ -239,10 +312,402 @@
     waitForURL: (url, options) => browse("wait", "--url", String(url), ...flags(options, { timeout: "--timeout" })).then(text),
     waitForLoadState: (state, options) => browse("wait", "--load", String(state || "load"), ...flags(options, { timeout: "--timeout" })).then(text),
   };
+  const norm = (value) => String(value === undefined || value === null ? "" : value).replace(/\s+/g, " ").trim();
+  const QUOTE = String.fromCharCode(34);
+  const APOSTROPHE = String.fromCharCode(39);
+  const cssString = (value) => QUOTE + String(value).replace(/\\/g, "\\\\").replace(/"/g, "\\" + QUOTE).replace(/\n/g, "\\a ") + QUOTE;
+  const bareQuote = (value) => (!value.includes(QUOTE) ? QUOTE + value + QUOTE : !value.includes(APOSTROPHE) ? APOSTROPHE + value + APOSTROPHE : null);
+  const xpathString = (value) => {
+    const given = String(value);
+    if (!given.includes(QUOTE)) return QUOTE + given + QUOTE;
+    if (!given.includes(APOSTROPHE)) return APOSTROPHE + given + APOSTROPHE;
+    return "concat(" + given.split(QUOTE).map((part) => QUOTE + part + QUOTE).join(", " + APOSTROPHE + QUOTE + APOSTROPHE + ", ") + ")";
+  };
+  const UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const LOWER = "abcdefghijklmnopqrstuvwxyz";
+  const xpathText = (node, wanted, exact) => (exact
+    ? `normalize-space(${node})=${xpathString(norm(wanted))}`
+    : `contains(translate(normalize-space(${node}), "${UPPER}", "${LOWER}"), ${xpathString(norm(wanted).toLowerCase())})`);
+  const chainOf = (selector) => {
+    const parts = [];
+    let depth = 0;
+    let quote = "";
+    let start = 0;
+    for (let i = 0; i < selector.length; i++) {
+      const c = selector[i];
+      if (c === "\\") { i++; continue; }
+      if (quote) { if (c === quote) quote = ""; continue; }
+      if (c === QUOTE || c === APOSTROPHE) quote = c;
+      else if (c === "(" || c === "[") depth++;
+      else if (c === ")" || c === "]") depth--;
+      else if (depth === 0 && c === ">" && selector[i + 1] === ">") {
+        parts.push(selector.slice(start, i).trim());
+        start = i + 2;
+        i++;
+      }
+    }
+    parts.push(selector.slice(start).trim());
+    return parts;
+  };
+  const topComma = (css) => {
+    let depth = 0;
+    let quote = "";
+    for (let i = 0; i < css.length; i++) {
+      const c = css[i];
+      if (c === "\\") { i++; continue; }
+      if (quote) { if (c === quote) quote = ""; continue; }
+      if (c === QUOTE || c === APOSTROPHE) quote = c;
+      else if (c === "(" || c === "[") depth++;
+      else if (c === ")" || c === "]") depth--;
+      else if (depth === 0 && c === ",") return true;
+    }
+    return false;
+  };
+  const chained = (...parts) => parts.filter((part) => typeof part === "string" && part !== "").join(" >> ");
+  const SPECIAL_PART = /^(text=|role=|nth=|xpath=|\/\/|\(\/\/|@)/;
+  const cssPart = (part) => (/^css=/.test(part) ? part.slice(4) : SPECIAL_PART.test(part) ? null : part);
+  const locators = new WeakSet();
+  const isLocator = (value) => value !== null && typeof value === "object" && locators.has(value);
+  const selectorOf = (given, name) => {
+    if (isLocator(given)) return given.selector;
+    if (typeof given === "string" && given.trim()) return given.trim();
+    throw new TypeError(`${name} takes a CSS selector, an @ref or a locator`);
+  };
+  const nthOf = (index, name) => {
+    const n = Number(index);
+    if (!Number.isInteger(n)) throw new TypeError(`${name} takes a whole number (negative counts from the end)`);
+    return `nth=${n}`;
+  };
+  const textFilter = (selector, wanted, exact, negate) => {
+    const parts = chainOf(selector);
+    const css = cssPart(parts[parts.length - 1]);
+    const quoted = bareQuote(norm(wanted));
+    if (!negate && css !== null && quoted !== null && !(topComma(css) && /:(has-text|text-is|text)\(/.test(css))) {
+      const base = topComma(css) ? `:is(${css})` : css;
+      return chained(...parts.slice(0, -1), `${base}${exact ? ":text-is(" : ":has-text("}${quoted})`);
+    }
+    const test = xpathText(".", wanted, exact);
+    return chained(selector, `xpath=self::*[${negate ? `not(${test})` : test}]`);
+  };
+  const filtered = (selector, options) => {
+    if (!plainObject(options)) return selector;
+    let out = selector;
+    if (options.hasText !== undefined && options.hasText !== null) out = textFilter(out, options.hasText, options.exact === true, false);
+    if (options.hasNotText !== undefined && options.hasNotText !== null) out = textFilter(out, options.hasNotText, false, true);
+    if (options.has !== undefined && options.has !== null) {
+      const inner = selectorOf(options.has, "filter({ has })");
+      const parts = chainOf(out);
+      const css = cssPart(parts[parts.length - 1]);
+      const innerCss = chainOf(inner).length === 1 ? cssPart(inner) : null;
+      if (css === null || innerCss === null) throw new TypeError("filter({ has }) takes CSS on both sides; for anything else chain with .locator(sub)");
+      out = chained(...parts.slice(0, -1), `${topComma(css) ? `:is(${css})` : css}:has(${innerCss})`);
+    }
+    if (options.nth !== undefined && options.nth !== null) out = chained(out, nthOf(options.nth, "nth"));
+    return out;
+  };
+  const missingFalse = (error) => {
+    if (error && (error.code === "not_found" || error.code === "failed")) return false;
+    throw error;
+  };
+  const makeLocator = (selector) => {
+    const loc = {
+      selector,
+      click: (options) => api.click(selector, options),
+      dblclick: (options) => api.dblclick(selector, options),
+      fill: (value, options) => api.fill(selector, value, options),
+      clear: (options) => api.fill(selector, "", options),
+      type: (value, options) => api.type(selector, value, options),
+      pressSequentially: (value, options) => api.type(selector, value, options),
+      press: (key, options) => (plainObject(options) ? api.press(selector, key, options) : api.press(selector, key)),
+      select: (...values) => api.select(selector, ...values),
+      selectOption: (...values) => api.select(selector, ...values),
+      check: (options) => api.check(selector, options),
+      uncheck: (options) => api.uncheck(selector, options),
+      setChecked: (checked, options) => (checked ? api.check(selector, options) : api.uncheck(selector, options)),
+      hover: (options) => api.hover(selector, options),
+      focus: (options) => api.focus(selector, options),
+      scrollIntoView: () => browse("scrollintoview", selector).then(text),
+      scrollIntoViewIfNeeded: () => browse("scrollintoview", selector).then(text),
+      text: () => api.innerText(selector),
+      innerText: () => api.innerText(selector),
+      textContent: () => api.innerText(selector),
+      value: () => api.value(selector),
+      inputValue: () => api.value(selector),
+      attr: (name) => api.attr(selector, name),
+      getAttribute: (name) => api.attr(selector, name),
+      count: () => api.count(selector),
+      visible: () => api.visible(selector).catch(missingFalse),
+      isVisible: () => api.visible(selector).catch(missingFalse),
+      isHidden: () => api.visible(selector).then((shown) => !shown, (error) => !missingFalse(error)),
+      isChecked: () => browse("is", "checked", selector).then(data("checked")),
+      isEnabled: () => browse("is", "enabled", selector).then(data("enabled")),
+      isDisabled: () => browse("is", "disabled", selector).then(data("disabled")),
+      isEditable: () => browse("is", "editable", selector).then(data("editable")),
+      waitFor: (options) => api.waitForSelector(selector, { state: (options && options.state) || undefined, timeout: (options && options.timeout) || undefined }),
+      nth: (index) => makeLocator(chained(selector, nthOf(index, "locator.nth()"))),
+      first: () => makeLocator(chained(selector, "nth=0")),
+      last: () => makeLocator(chained(selector, "nth=-1")),
+      locator: (sub, options) => makeLocator(filtered(chained(selector, selectorOf(sub, "locator.locator()")), options)),
+      filter: (options) => makeLocator(filtered(selector, options)),
+      getByRole: (role, options) => getBy.role(role, { ...(plainObject(options) ? options : {}), within: selector }),
+      getByText: (value, options) => getBy.text(value, { ...(plainObject(options) ? options : {}), within: selector }),
+      getByLabel: (value, options) => getBy.label(value, { ...(plainObject(options) ? options : {}), within: selector }),
+      getByPlaceholder: (value, options) => getBy.placeholder(value, { ...(plainObject(options) ? options : {}), within: selector }),
+      getByTestId: (value, options) => getBy.testid(value, { ...(plainObject(options) ? options : {}), within: selector }),
+      all: async () => {
+        const total = await api.count(selector);
+        return Array.from({ length: Number(total) || 0 }, (_, index) => makeLocator(chained(selector, `nth=${index}`)));
+      },
+      allTexts: async () => {
+        const total = Number(await api.count(selector)) || 0;
+        const out = [];
+        for (let index = 0; index < total; index++) out.push(await api.innerText(chained(selector, `nth=${index}`)));
+        return out;
+      },
+      toString: () => selector,
+      toJSON: () => selector,
+    };
+    loc.allInnerTexts = loc.allTexts;
+    loc.allTextContents = loc.allTexts;
+    Object.freeze(loc);
+    locators.add(loc);
+    return loc;
+  };
+  const scoped = (selector, options) => {
+    const within = options && options.within !== undefined && options.within !== null ? selectorOf(options.within, "within") : null;
+    let out = within ? chained(within, selector) : selector;
+    if (options && options.nth !== undefined && options.nth !== null) out = chained(out, nthOf(options.nth, "nth"));
+    return makeLocator(out);
+  };
+  const FIELD = "self::input or self::textarea or self::select or self::button or @contenteditable or @role";
+  const regexText = (value) => {
+    if (!(value instanceof RegExp)) return { text: norm(value), anchored: false };
+    let src = value.source;
+    const anchored = src.startsWith("^") && src.endsWith("$");
+    src = src.replace(/^\^/u, "").replace(/\$$/u, "").replace(/\\s\+/gu, " ").replace(/\\s\*/gu, " ").replace(/\\([/.\\\-+?*()[\]{}|])/gu, "$1");
+    return { text: norm(src), anchored };
+  };
+  const getBy = {
+    role: (role, options) => {
+      options = plainObject(options) ? options : {};
+      if (typeof role !== "string" || !/^[A-Za-z]+$/.test(role)) throw new TypeError('page.getByRole() takes an ARIA role like "button" or "textbox"');
+      const base = `role=${role.toLowerCase()}`;
+      let selector = base;
+      if (options.name !== undefined && options.name !== null) {
+        const parsed = regexText(options.name);
+        const name = parsed.text;
+        const exact = options.exact === true || parsed.anchored;
+        const quoted = bareQuote(name);
+        if (exact || quoted === null) {
+          const test = (node) => (exact ? `normalize-space(${node})=${xpathString(name)}` : xpathText(node, name, false));
+          selector = chained(base, `xpath=self::*[${["@aria-label", ".", "@title", "@value", "@alt", "@placeholder"].map(test).join(" or ")}]`);
+        } else selector = `${base}[name=${quoted}]`;
+      }
+      return scoped(selector, options);
+    },
+    text: (value, options) => {
+      options = plainObject(options) ? options : {};
+      const parsed = regexText(value);
+      const wanted = parsed.text;
+      if (!wanted) throw new TypeError("page.getByText() takes the text to find");
+      const exact = options.exact === true || parsed.anchored;
+      const quoted = bareQuote(wanted);
+      if (wanted.includes(">>") || (exact && quoted === null)) {
+        const test = xpathText(".", wanted, exact);
+        return scoped(`xpath=.//*[not(self::script or self::style or self::head or self::title)][${test}][not(.//*[${test}])]`, options);
+      }
+      return scoped(exact ? `text=${quoted}` : `text=${wanted}`, options);
+    },
+    label: (value, options) => {
+      options = plainObject(options) ? options : {};
+      const parsed = regexText(value);
+      const wanted = parsed.text;
+      if (!wanted) throw new TypeError("page.getByLabel() takes the label text");
+      const exact = options.exact === true || parsed.anchored;
+      const test = (node) => xpathText(node, wanted, exact);
+      const labelled = [
+        `(@id and @id = //label[${test(".")}]/@for)`,
+        `ancestor::label[${test(".")}]`,
+        test("@aria-label"),
+        `(@aria-labelledby and @aria-labelledby = //*[${test(".")}]/@id)`,
+      ].join(" or ");
+      return scoped(`xpath=.//*[${FIELD}][${labelled}]`, options);
+    },
+    placeholder: (value, options) => {
+      options = plainObject(options) ? options : {};
+      const wanted = value instanceof RegExp ? regexText(value).text : String(value === undefined || value === null ? "" : value);
+      return scoped(options.exact === true ? `[placeholder=${cssString(wanted)}]` : `[placeholder*=${cssString(wanted)} i]`, options);
+    },
+    testid: (value, options) => scoped(`[data-testid=${cssString(String(value))}]`, plainObject(options) ? options : {}),
+    alt: (value, options) => {
+      options = plainObject(options) ? options : {};
+      const wanted = value instanceof RegExp ? regexText(value).text : String(value);
+      return scoped(options.exact === true ? `[alt=${cssString(wanted)}]` : `[alt*=${cssString(wanted)} i]`, options);
+    },
+    title: (value, options) => {
+      options = plainObject(options) ? options : {};
+      const wanted = value instanceof RegExp ? regexText(value).text : String(value);
+      return scoped(options.exact === true ? `[title=${cssString(wanted)}]` : `[title*=${cssString(wanted)} i]`, options);
+    },
+  };
+  const forced = (options) => ({ ...(plainObject(options) ? options : {}), receipt: true });
+  const act = (action, ...given) => {
+    const method = typeof action === "string" && Object.prototype.hasOwnProperty.call(act, action) ? act[action] : null;
+    if (typeof method !== "function") throw new TypeError(`page.act() takes an action first: ${Object.keys(act).join(", ")}`);
+    return method(...given);
+  };
+  act.click = (selector, options) => api.click(selector, forced(options));
+  act.dblclick = (selector, options) => api.dblclick(selector, forced(options));
+  act.fill = (selector, value, options) => api.fill(selector, value, forced(options));
+  act.type = (selector, value, options) => api.type(selector, value, forced(options));
+  act.press = (...given) => {
+    const [args, options] = trailing(given);
+    return api.press(...args, forced(options));
+  };
+  act.select = (selector, ...given) => {
+    const [values, options] = trailing(given);
+    return api.select(selector, ...values, forced(options));
+  };
+  act.check = (selector, options) => api.check(selector, forced(options));
+  act.uncheck = (selector, options) => api.uncheck(selector, forced(options));
+  act.hover = (selector, options) => api.hover(selector, forced(options));
+  act.focus = (selector, options) => api.focus(selector, forced(options));
+  act.scroll = (direction, pixels, options) => api.scroll(direction, pixels, forced(options));
+  Object.freeze(act);
+  const assertionError = (message) => {
+    const error = new Error(message);
+    error.name = "AssertionError";
+    error.code = "assertion";
+    return error;
+  };
+  const assertText = async (expected, options) => {
+    options = plainObject(options) ? options : {};
+    const wanted = norm(expected);
+    if (!wanted) throw new TypeError("page.assertText() takes the text to look for");
+    const fold = options.ignoreCase === true ? (value) => norm(value).toLowerCase() : norm;
+    const has = (value) => fold(value).includes(fold(wanted));
+    const receipt = lastReceipt;
+    if (!options.selector && receipt && (has(receipt.changedText) || has(receipt.text))) return true;
+    const deadline = Date.now() + Math.min(Math.max(Number(options.timeout) || 0, 0), 600000);
+    let seen = "";
+    for (;;) {
+      seen = String((options.selector ? await api.innerText(options.selector) : await browse("get", "text", "body").then(data("text"))) || "");
+      if (has(seen)) return true;
+      if (Date.now() >= deadline) break;
+      await request("sleep", { ms: 250 });
+    }
+    const where = options.selector ? ` in ${String(options.selector)}` : " on the page";
+    const after = receipt ? `; the last receipt's changes: ${receipt.changedText ? JSON.stringify(receipt.changedText.slice(0, 300)) : "none"}` : "";
+    throw assertionError(`expected ${JSON.stringify(wanted)}${where}, but it isn't there${after}; the text starts: ${JSON.stringify(norm(seen).slice(0, 300))}`);
+  };
+  const pageFetch = async (url, options) => {
+    options = plainObject(options) ? options : {};
+    const target = await absolute(url);
+    const limit = Number(options.maxBytes) > 0 ? Math.min(Number(options.maxBytes), 16 * FETCH_LIMIT) : FETCH_LIMIT;
+    const headers = plainObject(options.headers) ? { ...options.headers } : {};
+    let body = options.body;
+    if (body !== undefined && body !== null && typeof body !== "string") {
+      body = JSON.stringify(body);
+      if (!Object.keys(headers).some((name) => name.toLowerCase() === "content-type")) headers["content-type"] = "application/json";
+    }
+    const init = { method: String(options.method || (body !== undefined && body !== null ? "POST" : "GET")).toUpperCase(), headers, credentials: options.credentials || "include", redirect: options.redirect || "follow" };
+    if (body !== undefined && body !== null) init.body = body;
+    const answer = await api.evaluate(async (target, init, limit) => {
+      const response = await fetch(target, init);
+      const contentType = response.headers.get("content-type") || "";
+      const headers = {};
+      response.headers.forEach((value, name) => { headers[name] = value; });
+      let bytes = 0;
+      let truncated = false;
+      const chunks = [];
+      if (response.body && response.body.getReader) {
+        const reader = response.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const room = limit - bytes;
+          if (value.byteLength > room) {
+            chunks.push(value.subarray(0, Math.max(room, 0)));
+            bytes += Math.max(room, 0);
+            truncated = true;
+            try { await reader.cancel(); } catch (e) {}
+            break;
+          }
+          chunks.push(value);
+          bytes += value.byteLength;
+        }
+      }
+      const joined = new Uint8Array(bytes);
+      let at = 0;
+      for (const chunk of chunks) { joined.set(chunk, at); at += chunk.byteLength; }
+      const text = new TextDecoder().decode(joined);
+      return { ok: response.ok, status: response.status, statusText: response.statusText, url: response.url, redirected: response.redirected, contentType, headers, bytes, truncated, text };
+    }, target, init, limit);
+    let json = null;
+    if (answer && /json/i.test(String(answer.contentType || "")) && !answer.truncated) {
+      try {
+        json = JSON.parse(answer.text);
+      } catch (e) {
+        json = null;
+      }
+    }
+    return { ...answer, json };
+  };
+  Object.assign(api, {
+    locator: (selector, options) => makeLocator(filtered(selectorOf(selector, "page.locator()"), options)),
+    getByRole: (role, options) => getBy.role(role, options),
+    getByText: (value, options) => getBy.text(value, options),
+    getByLabel: (value, options) => getBy.label(value, options),
+    getByPlaceholder: (value, options) => getBy.placeholder(value, options),
+    getByTestId: (value, options) => getBy.testid(value, options),
+    getByAltText: (value, options) => getBy.alt(value, options),
+    getByTitle: (value, options) => getBy.title(value, options),
+    act,
+    assertText,
+    parseReceipt,
+    fetch: pageFetch,
+    read: async (options) => {
+      options = typeof options === "string" ? { selector: options } : plainObject(options) ? options : {};
+      const argv = ["read", ...flags(options, { selector: "-s", nav: "--nav", raw: "--raw", outline: "--outline", filter: "--filter", limit: "--limit", scroll: "--scroll" })];
+      const answer = await callWith(argv, options.full === true ? { full: true } : null);
+      if (options.data === true) return answer.data;
+      return plainObject(answer.data) && typeof answer.data.content === "string" && answer.data.content ? answer.data.content : answer.text;
+    },
+    form: async (options) => {
+      options = typeof options === "string" || isLocator(options) ? { selector: options } : plainObject(options) ? options : {};
+      const answer = await browse("form", ...flags(options, { selector: "-s", all: "--all" }));
+      const facts = plainObject(answer.data) ? answer.data : {};
+      return { text: answer.text, fields: facts.fields || [], submits: facts.submits || [], count: facts.count ?? 0, more: Boolean(facts.more), url: facts.url ?? null };
+    },
+    query: async (selector, options) => {
+      if (plainObject(selector)) {
+        options = selector;
+        selector = options.selector;
+      }
+      options = plainObject(options) ? options : {};
+      const fields = options.fields;
+      const spec = fields === undefined || fields === null ? null
+        : Array.isArray(fields) ? fields.map(String).join(",")
+        : plainObject(fields) ? Object.entries(fields).map(([name, sel]) => `${name}=${String(sel)}`).join(",")
+        : String(fields);
+      const argv = ["query", selectorOf(selector, "page.query()")];
+      if (spec) argv.push("--fields", spec);
+      argv.push(...flags(options, { limit: "--limit", all: "--all" }));
+      const answer = await browse(argv);
+      return options.data === true ? answer.data : ((answer.data || {}).rows || []);
+    },
+    screenshot: async (options) => {
+      options = typeof options === "string" ? { out: options } : plainObject(options) ? options : {};
+      const given = { ...options, out: options.out ?? options.path, full: options.full ?? options.fullPage };
+      const answer = await browse("screenshot", ...flags(given, { selector: "-s", full: "--full", out: "--out", annotate: "--annotate", marks: "--marks", region: "--region", scale: "--scale", withSnapshot: "--with-snapshot" }));
+      return answer.data;
+    },
+  });
+  Object.defineProperty(api, "lastReceipt", { get: () => lastReceipt, enumerable: true });
   const known = Object.keys(api).filter((name) => name !== "eval").sort();
   const missing = (name) => {
     const error = new TypeError(
-      `page.${name} isn't part of ardia's script API (no element handles or locators): read with page.$$eval(sel, els => …) or page.evaluate(fn, ...args), act with page.click(sel) or page.fill(sel, value). page has: ${known.join(", ")}`,
+      `page.${name} isn't part of ardia's script API: read with page.$$eval(sel, els => …) or page.evaluate(fn, ...args), act with page.click(sel), page.fill(sel, value) or page.locator(sel).click(). page has: ${known.join(", ")}`,
     );
     error.code = "usage";
     return error;
@@ -259,6 +724,24 @@
   });
 
   const sleep = (ms) => request("sleep", { ms: Number(ms) || 0 }).then(() => undefined);
+  const tabIdOf = (tab) => String(plainObject(tab) ? tab.tabId ?? tab.id ?? "" : tab);
+  const openTab = async (url, options) => {
+    const argv = ["tab", "new"];
+    if (url !== undefined && url !== null && url !== "") argv.push(await absolute(url));
+    if (plainObject(options) && options.label) argv.push("--label", String(options.label));
+    return (await browse(argv)).data;
+  };
+  const listTabs = async () => ((await browse("tab", "list")).data || {}).tabs || [];
+  const useTab = async (tab) => (await browse("tab", tabIdOf(tab))).data;
+  const closeTab = async (tab) => (await browse(tab === undefined || tab === null ? ["tab", "close"] : ["tab", "close", tabIdOf(tab)])).data;
+  const readUrls = async (urls, options) => {
+    options = plainObject(options) ? options : {};
+    const list = [];
+    for (const url of words(urls)) list.push(await absolute(url));
+    if (list.length === 0) throw new TypeError("readUrls() takes one or more URLs");
+    const answer = await browse(["read-urls", ...list, ...flags(options, { selector: "-s", concurrency: "--concurrency", timeout: "--timeout", maxChars: "--max-chars" })]);
+    return options.data === true ? answer.data : ((answer.data || {}).results || []);
+  };
   const setTimer = (repeat) => (fn, ms, ...args) => {
     if (typeof fn !== "function") throw new TypeError("setTimeout takes a function");
     const id = nextTimer++;
@@ -520,7 +1003,15 @@
   define("atob", (value) => base64("atob", value));
   define("btoa", (value) => base64("btoa", value));
   define("structuredClone", (value) => structuredCloneValue(value));
+  define("openTab", openTab);
+  define("listTabs", listTabs);
+  define("useTab", useTab);
+  define("closeTab", closeTab);
+  define("readUrls", readUrls);
+  define("parseReceipt", parseReceipt);
+  if (REPL) define("__ardiaReplCapture__", (fn) => { replCapture = typeof fn === "function" ? fn : null; });
   Object.defineProperty(globalThis, "state", { value: JSON.parse(config.state), writable: true, configurable: false, enumerable: false });
+  const BUILTIN = new Set(Reflect.ownKeys(globalThis));
 
   const clean = (value) => {
     if (value === undefined) return { undefined: true };
@@ -540,12 +1031,110 @@
     }
     send("done", body);
   };
-  const run = (fn) => {
+  const grouped = (count) => String(count).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const previewOf = (value) => {
+    if (typeof value === "string") return value;
+    if (Array.isArray(value)) {
+      try {
+        return value.map((item) => (typeof item === "string" ? item : JSON.stringify(item))).join("\n");
+      } catch (e) {
+        return show(value);
+      }
+    }
+    return show(value);
+  };
+  const described = (value, chars) => {
+    const size = `${grouped(chars)} chars`;
+    if (Array.isArray(value)) return `array, ${grouped(value.length)} items, ${size}`;
+    if (typeof value === "string") return `string, ${size}`;
+    if (plainObject(value)) {
+      const keys = Object.keys(value);
+      return `object, ${grouped(keys.length)} keys: ${keys.slice(0, 8).join(", ")}${keys.length > 8 ? ", …" : ""}; ${size}`;
+    }
+    return `${typeof value}, ${size}`;
+  };
+  const stash = (value) => {
+    outCount += 1;
+    const name = "$out" + outCount;
+    try {
+      globalThis[name] = value;
+      replNames.add(name);
+    } catch (e) {}
+    return name;
+  };
+  const spilledValue = (value) => {
+    if (!REPL || spillAt <= 0 || value === undefined) return null;
+    const shown = previewOf(value);
+    if (typeof shown !== "string" || shown.length <= spillAt) return null;
+    const name = stash(value);
+    const head = shown.slice(0, previewChars);
+    return { value: `${head}${shown.length > previewChars ? "…" : ""}\n[stored in ${name} (${described(value, shown.length)}); inspect or filter in next repl call]`, spilled: name };
+  };
+  const spilledLogs = () => {
+    if (!REPL || spillAt <= 0 || runLogChars <= spillAt) return null;
+    const lines = runLogs.slice();
+    const joined = lines.join("\n");
+    const name = stash(lines);
+    return { name, lines: lines.length, chars: joined.length, preview: joined.slice(0, previewChars) + (joined.length > previewChars ? "…" : "") };
+  };
+  const harvest = () => {
+    const capture = replCapture;
+    replCapture = null;
+    if (!REPL || typeof capture !== "function") return [];
+    let values;
+    try {
+      values = capture();
+    } catch (e) {
+      return [];
+    }
+    const kept = [];
+    for (const name of Object.keys(values || {})) {
+      if (BUILTIN.has(name) && !replNames.has(name)) continue;
+      try {
+        globalThis[name] = values[name];
+        replNames.add(name);
+        kept.push(name);
+      } catch (e) {}
+    }
+    return kept;
+  };
+  const begin = (runText) => {
+    let given = {};
+    try {
+      given = JSON.parse(runText) || {};
+    } catch (e) {
+      given = {};
+    }
+    spillAt = REPL && typeof given.spill === "number" ? given.spill : 0;
+    previewChars = typeof given.preview === "number" && given.preview > 0 ? given.preview : 2000;
+    runLogs = [];
+    runLogChars = 0;
+    replCapture = null;
+    stateCheckedAt = 0;
+    waiting.clear();
+    timers.clear();
+    if (typeof given.state === "string") {
+      if (REPL && given.state !== stateGiven && given.state !== stateSent) {
+        try {
+          globalThis.state = JSON.parse(given.state);
+        } catch (e) {}
+      }
+      stateGiven = given.state;
+    }
+  };
+  const run = (fn, runText) => {
+    begin(typeof runText === "string" ? runText : "{}");
     (async () => {
       let result;
       try {
-        result = { kind: "done", ...clean(await fn()) };
+        const value = await fn();
+        const kept = harvest();
+        const logSpill = spilledLogs();
+        result = { kind: "done", ...(spilledValue(value) || clean(value)) };
+        if (REPL) result.kept = kept;
+        if (logSpill) result.logSpill = logSpill;
       } catch (error) {
+        harvest();
         result = {
           kind: "error",
           message: error && error.message !== undefined ? String(error.message) : show(error),
@@ -569,6 +1158,6 @@
       }
       settle(first, answer);
     } else if (kind === "timer") fire(first);
-    else if (kind === "run") run(first);
+    else if (kind === "run") run(first, second);
   };
 })

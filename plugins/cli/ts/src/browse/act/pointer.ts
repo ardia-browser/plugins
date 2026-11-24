@@ -22,7 +22,7 @@ import type { Element, Page } from "../state/page.ts";
 import type { State } from "../state/state.ts";
 import { monotonic } from "../state/wait.ts";
 import { asRecord, type Counts, expectInput, mouseButton, poll, rect, viewport, type Viewport } from "./common.ts";
-import { blockerPhrase, type CoverAt, findBlocker, noteObstruction } from "./obstruction.ts";
+import { type Blocker, blockerPhrase, type CoverAt, findBlocker, noteObstruction, type Obstruction } from "./obstruction.ts";
 
 export const CLEANUP_TIMEOUT = 2.0;
 export const LAYOUT_WAIT = 2.0;
@@ -40,6 +40,24 @@ const temporaryMetrics = new WeakSet<Page>();
 
 export type Box = [number, number, number, number];
 export type Point = [number, number, Record<string, unknown>];
+
+export function blockerKind(kind: Obstruction): string {
+  return kind.replace(/_/gu, "-");
+}
+
+export function blockerFacts(kind: Obstruction, blocker: Blocker | null, closeRef: string | null, closeName: string | null): Record<string, unknown> {
+  const ref = blocker?.ref ? `@${blocker.ref}` : closeRef;
+  const name = blocker?.name || (ref === closeRef ? closeName : null) || blocker?.role || null;
+  return { intercepted: true, blockerKind: blockerKind(kind), blockerRef: ref ?? null, blockerName: name, ...(closeRef !== null ? { blockerCloseRef: closeRef } : {}) };
+}
+
+function closeParts(closer: string | null): [string | null, string | null] {
+  if (closer === null) return [null, null];
+  const space = closer.indexOf(" ");
+  if (space < 0) return [closer, null];
+  const quoted = closer.slice(space + 1);
+  return [closer.slice(0, space), quoted.startsWith('"') && quoted.endsWith('"') ? quoted.slice(1, -1) : quoted];
+}
 
 function notVisible(element: Element): BrowseError {
   return new BrowseError(`Element ${element.label} has no visible box (hidden or zero-size)`, null, "not_visible");
@@ -510,13 +528,13 @@ export async function targetPoint(page: Page, element: Element, humanize: boolea
         flag("click_scroll_locked", true);
         throw new BrowseError(
           `Element ${where}, and the page won't scroll to it: ${lock}. Close that first (press Escape, or its close button), then retry`,
-          { point: [cx, cy], viewport: [vp.width, vp.height], scrollLock: lock, obstruction: "offscreen", blocker: null },
+          { point: [cx, cy], viewport: [vp.width, vp.height], scrollLock: lock, obstruction: "offscreen", blocker: null, ...blockerFacts("offscreen", null, null, null) },
           "outside_viewport",
         );
       }
       throw new BrowseError(
         `Element ${where}, so a click there would land on nothing. Scroll it into view (scrollintoview), or snapshot again if the page moved`,
-        { point: [cx, cy], viewport: [vp.width, vp.height], obstruction: "offscreen", blocker: null },
+        { point: [cx, cy], viewport: [vp.width, vp.height], obstruction: "offscreen", blocker: null, ...blockerFacts("offscreen", null, null, null) },
         "outside_viewport",
       );
     }
@@ -532,7 +550,7 @@ export async function targetPoint(page: Page, element: Element, humanize: boolea
       const what = blocker !== null ? `, ${blockerPhrase(blocker)}` : "";
       throw new BrowseError(
         `Element ${element.label} is covered by ${cover}${what}${way}`,
-        { coveredBy: cover, closeRef: first, obstruction: kind, blocker: blockerRef, point: [cx, cy] },
+        { coveredBy: cover, closeRef: first, obstruction: kind, blocker: blockerRef, point: [cx, cy], ...blockerFacts(kind, blocker, ...closeParts(closer)) },
         "covered",
       );
     }

@@ -22,6 +22,7 @@ import { type AnnotationRow, drawAnnotations, thresholdOf } from "./draw.ts";
 import { refNumber } from "../state/refs.ts";
 import { defaultPath } from "./paths.ts";
 import { type Comparison, comparePngs, encodePng } from "./png.ts";
+import { clipScale, type CoordinateFrame, frameLines, frameOf, imageSize, type Mark, markOf, marksText, parseRegion, parseScale, type Region } from "./marks.ts";
 
 export const mediaPairing: { withSnapshot: ((ctx: Ctx, file: string | null) => Promise<Result>) | null } = { withSnapshot: null };
 
@@ -57,17 +58,17 @@ function pyFloatArg(text: string): number {
   return value;
 }
 
-export async function capturePng(page: Page, full = false, clip: Clip | null = null, fmt = "png", quality: number | null = null): Promise<Uint8Array> {
+export async function capturePng(page: Page, full = false, clip: Clip | null = null, fmt = "png", quality: number | null = null, fullScale = 1, beyond = true): Promise<Uint8Array> {
   const params: Json = { format: fmt, fromSurface: true };
   if (quality !== null && fmt === "jpeg") params["quality"] = quality;
   if (full) {
     const metrics = await page.send("Page.getLayoutMetrics");
     const size = record(metrics["cssContentSize"] || metrics["contentSize"]);
-    params["clip"] = { x: 0, y: 0, width: size["width"], height: size["height"], scale: 1 };
+    params["clip"] = { x: 0, y: 0, width: size["width"], height: size["height"], scale: fullScale };
     params["captureBeyondViewport"] = true;
   } else if (clip) {
     params["clip"] = clip;
-    params["captureBeyondViewport"] = true;
+    params["captureBeyondViewport"] = beyond;
   }
   const result = await page.send("Page.captureScreenshot", params, { timeout: 60 });
   return Buffer.from(String(result["data"] ?? ""), "base64");
@@ -82,7 +83,7 @@ function num(value: unknown): number {
   return Number(value) || 0;
 }
 
-async function annotations(ctx: Ctx, page: Page, full: boolean): Promise<[Annotation[], Viewport]> {
+async function annotations(ctx: Ctx, page: Page, full: boolean, within: Region | null = null): Promise<[Annotation[], Viewport]> {
   await take(ctx.state, page, { interactive: true });
   const rows: Annotation[] = [];
   const metrics = await page.send("Page.getLayoutMetrics");
@@ -96,6 +97,7 @@ async function annotations(ctx: Ctx, page: Page, full: boolean): Promise<[Annota
     const scrollY = num(viewport["pageY"]);
     region = [-scrollX, -scrollY, (num(content["width"]) || width) - scrollX, (num(content["height"]) || height) - scrollY];
   }
+  if (within !== null) region = [within.x, within.y, within.x + within.width, within.y + within.height];
   for (const ref of ctx.state.snapshotRefs()) {
     let quads: unknown[] = [];
     try {
@@ -134,8 +136,35 @@ function isPath(arg: string): boolean {
   return lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || (arg.includes("/") && !arg.startsWith("@"));
 }
 
-function viewKey(page: Page, selector: string | null, full: boolean, fmt: string, annotate: boolean): string {
-  return JSON.stringify([page.targetId, selector, full, fmt, annotate]);
+function viewKey(page: Page, selector: string | null, full: boolean, fmt: string, annotate: boolean, shape: unknown = null): string {
+  return JSON.stringify(shape === null ? [page.targetId, selector, full, fmt, annotate] : [page.targetId, selector, full, fmt, annotate, shape]);
+}
+
+type Layout = { viewport: { width: number; height: number }; scrollX: number; scrollY: number; dpr: number; content: { width: number; height: number } };
+
+async function layoutOf(page: Page): Promise<Layout> {
+  const metrics = await page.send("Page.getLayoutMetrics");
+  const css = record(metrics["cssVisualViewport"]);
+  const device = record(metrics["visualViewport"]);
+  const content = record(metrics["cssContentSize"] || metrics["contentSize"]);
+  const width = num(css["clientWidth"]);
+  const height = num(css["clientHeight"]);
+  const deviceWidth = num(device["clientWidth"]);
+  const measured = width > 0 && deviceWidth > 0 ? deviceWidth / width : 1;
+  let reported = 0;
+  try {
+    reported = num(await page.call("() => window.devicePixelRatio", [], { frame: page.mainFrame, read: true }));
+  } catch (error) {
+    if (!quiet(error)) throw error;
+  }
+  const dpr = reported >= 0.5 && reported <= 8 ? reported : measured >= 0.5 && measured <= 8 ? measured : 1;
+  return {
+    viewport: { width, height },
+    scrollX: num(css["pageX"]),
+    scrollY: num(css["pageY"]),
+    dpr,
+    content: { width: num(content["width"]) || width, height: num(content["height"]) || height },
+  };
 }
 
 export function unchanged(before: Uint8Array, after: Uint8Array, fmt: string, percent: number): boolean {
@@ -158,6 +187,9 @@ export async function cmdScreenshot(ctx: Ctx, argv: string[]): Promise<Result> {
       "--if-changed": "bool",
       "--threshold": "value",
       "--with-snapshot": "bool",
+      "--scale": "value",
+      "--region": "value",
+      "--marks": "bool",
       ...SELECTOR_FLAG,
     },
     { "-f": "--full", ...SELECTOR_ALIAS },
@@ -187,13 +219,21 @@ export async function cmdScreenshot(ctx: Ctx, argv: string[]): Promise<Result> {
     else target = arg;
   }
   if (annotate && fmt !== "png") throw new BrowseError("--annotate draws on a PNG; drop --screenshot-format jpeg");
+  const scale = parseScale(options["scale"]);
+  const region = parseRegion(options["region"]);
+  const marks = Boolean(options["marks"]);
+  if (marks && fmt !== "png") throw new BrowseError("--marks draws on a PNG; drop --screenshot-format jpeg");
+  if (marks && annotate) throw new Usage("--marks already draws each ref's badge, so give --marks or --annotate, not both");
+  if (region !== null && (full || selector !== null)) throw new Usage("--region crops the viewport, so it doesn't go with --full or a selector");
   if (options["with_snapshot"]) {
+    if (scale !== null || region !== null || marks) throw new Usage("screenshot --with-snapshot takes only a path (no --scale, --region or --marks)");
     if (selector !== null || full || annotate || fmt !== "png" || options["if_changed"]) {
       throw new Usage("screenshot --with-snapshot pairs the whole viewport with its snapshot, so it takes only a path (no selector, --full, --annotate, --if-changed or jpeg)");
     }
     if (mediaPairing.withSnapshot === null) throw new Usage("screenshot --with-snapshot isn't available here");
     return mediaPairing.withSnapshot(ctx, target);
   }
+  if (scale !== null || region !== null || marks) return framedScreenshot(ctx, { selector, full, fmt, quality, target, scale: scale ?? 1, region, marks, ifChanged: Boolean(options["if_changed"]), threshold: options["threshold"] ?? null });
   let page = await ctx.state.page();
   let clip: Clip | null = null;
   if (selector) {
@@ -243,6 +283,73 @@ export async function cmdScreenshot(ctx: Ctx, argv: string[]): Promise<Result> {
     text = [text, ...legend].join("\n");
   }
   return new Result(result, text);
+}
+
+type Framed = {
+  selector: string | null;
+  full: boolean;
+  fmt: string;
+  quality: number | null;
+  target: string | null;
+  scale: number;
+  region: Region | null;
+  marks: boolean;
+  ifChanged: boolean;
+  threshold: unknown;
+};
+
+async function framedScreenshot(ctx: Ctx, want: Framed): Promise<Result> {
+  let page = await ctx.state.page();
+  let layout = await layoutOf(page);
+  let area: Region;
+  if (want.selector !== null) {
+    let element: Element;
+    [page, element] = await ctx.state.locate(want.selector);
+    await page.send("DOM.scrollIntoViewIfNeeded", { backendNodeId: element.backendId });
+    layout = await layoutOf(page);
+    const box = await rect(page, element);
+    const [ox, oy] = await frameOffset(page, element.frame);
+    area = { x: num(box["x"]) + ox, y: num(box["y"]) + oy, width: Math.max(1, num(box["width"])), height: Math.max(1, num(box["height"])) };
+  } else if (want.full) {
+    area = { x: -layout.scrollX, y: -layout.scrollY, width: layout.content.width, height: layout.content.height };
+  } else area = want.region ?? { x: 0, y: 0, width: layout.viewport.width, height: layout.viewport.height };
+  const scaleForClip = clipScale(want.scale, layout.dpr);
+  const clip: Clip = { x: pyFloat(area.x + layout.scrollX), y: pyFloat(area.y + layout.scrollY), width: area.width, height: area.height, scale: scaleForClip };
+  let rows: Annotation[] | null = null;
+  if (want.marks) [rows] = await annotations(ctx, page, want.full, want.full ? null : area);
+  let data = want.full ? await capturePng(page, true, null, want.fmt, want.quality, scaleForClip) : await capturePng(page, false, clip, want.fmt, want.quality, 1, want.region !== null || want.selector !== null);
+  const frame: CoordinateFrame = frameOf(layout.viewport, area, imageSize(data), layout.dpr);
+  let marked: Mark[] | null = null;
+  if (rows !== null) {
+    data = drawAnnotations(data, rows, { clientWidth: area.width }, [-area.x, -area.y]);
+    marked = rows.map((row) => markOf(row, frame));
+  }
+  const shots = captureOf(ctx.state).lastShots;
+  const view = viewKey(page, want.selector, want.full, want.fmt, want.marks, [want.scale, want.region]);
+  const before = shots.get(view);
+  shots.set(view, data);
+  if (want.ifChanged && before !== undefined && unchanged(before, data, want.fmt, thresholdOf(want.threshold as never))) {
+    flag("screenshot_unchanged", true);
+    return new Result({ path: null, unchanged: true }, "= Unchanged since the last screenshot of this view, so nothing was saved");
+  }
+  const file = want.target ? ctx.path(want.target) : defaultPath(ctx, want.fmt === "jpeg" ? "jpg" : "png");
+  makeParents(file);
+  writeBytes(file, data);
+  const shown = want.target || file;
+  const wholeViewport = want.selector === null && !want.full && want.region === null;
+  const result: Record<string, unknown> = {
+    path: shown,
+    viewport: frame.viewport,
+    image: frame.image,
+    scale: new Float(frame.scale),
+    region: frame.region,
+  };
+  const lines = [`✓ Screenshot saved to ${shown}`, ...frameLines(frame, wholeViewport)];
+  if (marked !== null) {
+    result["marks"] = marked;
+    lines.push(...marksText(marked));
+  }
+  return new Result(result, lines.join("\n"));
 }
 
 export async function cmdPdf(ctx: Ctx, argv: string[]): Promise<Result> {

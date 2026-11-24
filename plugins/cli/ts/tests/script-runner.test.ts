@@ -310,9 +310,9 @@ describe("the script runner", () => {
   });
 
   test("a page method that doesn't exist says what to use instead", async () => {
-    const { result } = await runScript("await page.locator('.row').first().click();");
+    const { result } = await runScript("await page.route('**/*', () => {});");
     expect(result).toMatchObject({ kind: "error", name: "TypeError", code: "usage", line: 1 });
-    expect(String(result?.["message"])).toContain("page.locator isn't part of ardia's script API");
+    expect(String(result?.["message"])).toContain("page.route isn't part of ardia's script API");
     expect(String(result?.["message"])).toContain("page.$$eval");
   });
 

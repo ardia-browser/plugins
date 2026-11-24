@@ -15,6 +15,7 @@ import { afterSameDocument, beforeNavigating } from "../read/settle.ts";
 import { arrival, attach, settled } from "../changes/observe.ts";
 import { type Ctx } from "./ctx.ts";
 import { register } from "./index.ts";
+import { openTarget, tracksBorrowedNav } from "./borrowed.ts";
 import { cmdRead } from "./read-page.ts";
 import { type Flags, need, normalizeUrl, type Parsed, parse } from "./parse.ts";
 import { applyOpenOptions, takeOpenOptions } from "./setup.ts";
@@ -567,5 +568,5 @@ export async function cmdSession(ctx: Ctx, argv: string[]): Promise<Result> {
   return new Result({ session: state.session }, state.session);
 }
 
-register("open", cmdOpen);
+register("open", tracksBorrowedNav(cmdOpen, openTarget));
 register("session", cmdSession);

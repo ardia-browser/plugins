@@ -2405,7 +2405,10 @@ from a checkout), `$geoip_disable`, `$process_person_profile: false` and `$sessi
   (`page.$eval` or `page.$$eval`), `script_frames_listed`, `script_frame_eval`, `script_missing_api` (it called a
   `page` method the API doesn't have; the name isn't sent), `script_runner_unconfined` (Linux without Landlock),
   `script_runner_crashed`, `script_memory_limit` and `script_sandbox_hint` (a `require`, `fetch` or `process` the
-  sandbox lacks got a hint) (watch `total_ms` on `script` against
+  sandbox lacks got a hint), and for `script --repl` the flag `script_repl`, `script_repl_runs` (which call this is in
+  the session's scope), `script_repl_lost` (the scope was gone and a fresh one started), `script_repl_reset`,
+  `script_repl_value_spilled` and `script_repl_logs_spilled` (a result or logs over 8,192 characters went to `$outN`)
+  (watch `total_ms` on `script` against
   `script_calls`, and `error_code` on `script` beside `script_missing_api`), and `cdp_calls` with `cdp_ms_total` (the
   command's own DevTools calls). The daemon counts its share in `ts/src/browse/metrics.ts` and returns it as `metrics`
   in its answer.

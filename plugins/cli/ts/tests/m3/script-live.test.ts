@@ -182,9 +182,9 @@ describe.skipIf(!CHROME)("browse script against headless Chrome", () => {
   });
 
   test("a page method the API lacks says what to use", async () => {
-    const done = await script("await page.locator('h4').first();");
+    const done = await script("await page.route('**/*', () => {});");
     expect(done.status).toBe(1);
-    expect(done.err).toContain("page.locator isn't part of ardia's script API");
+    expect(done.err).toContain("page.route isn't part of ardia's script API");
   });
 
   test("a script that fails keeps its own error, even with a call it never awaited", async () => {

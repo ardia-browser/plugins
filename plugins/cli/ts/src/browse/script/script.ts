@@ -17,10 +17,10 @@ import { Result } from "../daemon/render.ts";
 import { add, count, flag } from "../metrics.ts";
 import { record } from "../state/records.ts";
 import type { State } from "../state/state.ts";
-import { Dropped, Gate, SharedWait, MEMORY_LIMIT, type Runner, type RunnerEvent, takeRunner, whenReady } from "./host.ts";
+import { Dropped, dropRepl, Gate, SharedWait, MEMORY_LIMIT, releaseRepl, type Runner, type RunnerEvent, takeRepl, takeRunner, whenReady } from "./host.ts";
 import { ArgumentsTooDeep, evaluateExpression, frameFunction, framesAnswer, selectorExpression, validEvaluate } from "./page-calls.ts";
 import { renderJson } from "./render.ts";
-import { overBytes } from "./runner.ts";
+import { overBytes, SPILL_CHARS } from "./runner.ts";
 import { MAX_TIMEOUT, parseTimeout } from "./timeout.ts";
 import { EVAL_TIMEOUT } from "../commands/pagejs.ts";
 import { hasPendingReaction, reactionWaits, settleReaction } from "../changes/observe.ts";
@@ -211,9 +211,10 @@ export function refusedCall(given: unknown): Answer | null {
   return null;
 }
 
-async function answerCall(ctx: Ctx, argv: string[], index: number, light: boolean): Promise<Answer> {
+async function answerCall(ctx: Ctx, argv: string[], index: number, light: boolean, full = false): Promise<Answer> {
   const name = canonical(argv[0] as string);
-  const options = light ? { ...ctx.options, settle_only: true } : { ...ctx.options };
+  const options: Record<string, unknown> = light ? { ...ctx.options, settle_only: true } : { ...ctx.options };
+  if (full) options["full"] = true;
   const sub = new Ctx(ctx.state, options, ctx.cwd, ctx.env, null, name);
   ctx.state.scriptsRunning += 1;
   let ran: Awaited<ReturnType<typeof runOne>>;
@@ -287,6 +288,8 @@ class ScriptRun {
   readonly started = new Set<number>();
   private ended = false;
   signal: AbortSignal | null = null;
+  repl = false;
+  spill = 0;
   private readonly reactions = new SharedWait(() => this.signal);
 
   constructor(readonly ctx: Ctx, readonly runner: Runner) {}
@@ -385,13 +388,15 @@ async function serveCall(run: ScriptRun, request: Request): Promise<Answer> {
   const exclusive = !CONCURRENT_CALLS.has(name) || words.some((word) => word === "--scroll" || word.startsWith("--scroll="));
   const light = request["light"] === true && request["receipt"] !== true && LIGHT_CALLS.has(name);
   if (light) run.receiptsSkipped += 1;
+  const extra = request["options"];
+  const full = extra !== null && typeof extra === "object" && !Array.isArray(extra) && (extra as Record<string, unknown>)["full"] === true;
   let ok = false;
   try {
     const answer = await run.gate.run(exclusive, () => run.admitted(async () => {
       run.started.add(request.id);
       if (exclusive) run.mutating.add(request.id);
       if (!exclusive) await run.settle(name, words.slice(1));
-      return answerCall(run.ctx, words, index, light);
+      return answerCall(run.ctx, words, index, light, full);
     }));
     ok = answer.ok;
     return answer.ok ? answer : { ...answer, call: index };
@@ -500,7 +505,8 @@ function tooBusy(message: string): BrowseError {
 async function drive(run: ScriptRun, source: string): Promise<Message> {
   const runner = run.runner;
   runner.watchMemory();
-  if (!runner.send({ type: "start", source, state: run.ctx.state.scriptState, readBatch: READ_BATCH, stateLimit: STATE_LIMIT })) return crashed({ type: "exit", code: null, signal: null });
+  const replFields = run.repl ? { repl: true, spill: run.spill } : {};
+  if (!runner.send({ type: "start", source, state: run.ctx.state.scriptState, readBatch: READ_BATCH, stateLimit: STATE_LIMIT, ...replFields })) return crashed({ type: "exit", code: null, signal: null });
   const seen = new Set<number>();
   const outer = currentSignal();
   const signal = outer === null ? run.stop.signal : AbortSignal.any([outer, run.stop.signal]);
@@ -566,7 +572,7 @@ export function keptPreview(stateText: unknown): string {
   return `${points.slice(0, STATE_PREVIEW_CHARS).join("")}… (${groupThousands(String(points.length))} characters in all; \`ardia browse script 'return state' --out <file>\` saves it)`;
 }
 
-function timedOut(seconds: number, current: Map<string, unknown>, source: string, logs: string[], kept: string, done: string[], stateText: unknown): BrowseError {
+function timedOut(seconds: number, current: Map<string, unknown>, source: string, logs: string[], kept: string, done: string[], stateText: unknown, after = ""): BrowseError {
   let where = "";
   const argv = current.get("argv");
   const call = typeof current.get("call") === "number" ? (current.get("call") as number) : null;
@@ -596,6 +602,7 @@ function timedOut(seconds: number, current: Map<string, unknown>, source: string
       `. It opened ${opened} pages one after another; to take text from many pages, ` +
       "`ardia browse read <url> <url> …` (or `await read(urls)` here) loads them side by side, each with its own time limit";
   }
+  message += after;
   return failure(message, logs, { line, call, command: Array.isArray(argv) && argv.length > 0 ? commandName(argv) : null }, "timeout");
 }
 
@@ -638,19 +645,37 @@ async function withDeadline<T>(seconds: number, run: () => Promise<T>): Promise<
   }
 }
 
-export async function run(ctx: Ctx, source: string, seconds: number): Promise<Result> {
+export type ScriptMode = { repl?: boolean; full?: boolean };
+export const REPL_LOST_NOTE = "[repl: the earlier scope was gone (its runner stopped after 15 idle minutes, a timeout or a crash), so this ran in a fresh one]";
+export const REPL_TIMEOUT_NOTE = ". The repl scope was lost with it: the next --repl call starts fresh, with only `state` kept";
+
+function replTaken(state: State, repl: boolean): { runner: Runner; warm: boolean; lost: boolean; runs: number } {
+  if (!repl) return { ...takeRunner(), lost: false, runs: 0 };
+  const taken = takeRepl(state);
+  if (taken.busy) throw new BrowseError("A --repl script is already running in this session; wait for it to finish, or run this one without --repl", null, "script_failed");
+  flag("script_repl", true);
+  count("script_repl_runs", taken.runs);
+  if (taken.lost) flag("script_repl_lost", true);
+  return taken;
+}
+
+export async function run(ctx: Ctx, source: string, seconds: number, mode: ScriptMode = {}): Promise<Result> {
   if (!strip(source, isSpace)) throw new Usage("Usage: ardia browse script [file.js] (or the script on stdin: ardia browse script <<'EOF' … EOF)");
   if (pyLen(source) > MAX_SOURCE) throw new Usage(`The script is over ${Math.floor(MAX_SOURCE / 1024)} KB`);
   const state = ctx.state;
-  const { runner, warm } = takeRunner();
+  const repl = mode.repl === true;
+  const { runner, warm, lost } = replTaken(state, repl);
   flag("script_runner_warm", warm);
   let script: ScriptRun | null = null;
   let message: Message;
+  let keep = false;
   try {
     const confined = await whenReady(runner);
     if (confined < 0) throw new BrowseError("The script didn't run: its runner couldn't sandbox itself", null, "script_failed");
     if (confined === 0) flag("script_runner_unconfined", true);
     const started = new ScriptRun(ctx, runner);
+    started.repl = repl;
+    started.spill = repl && !mode.full ? SPILL_CHARS : 0;
     script = started;
     let outcome: { value: Message } | { timedOut: true };
     try {
@@ -667,12 +692,14 @@ export async function run(ctx: Ctx, source: string, seconds: number): Promise<Re
     if ("timedOut" in outcome) {
       runner.kill();
       const kept = keepState(state, started.stateText);
-      throw timedOut(seconds, started.current(), source, started.logs, kept, started.done, started.stateText);
+      throw timedOut(seconds, started.current(), source, started.logs, kept, started.done, started.stateText, repl ? REPL_TIMEOUT_NOTE : "");
     }
     message = outcome.value;
+    keep = repl;
   } finally {
-    runner.kill();
+    if (!keep) runner.kill();
     if (script !== null) await (script as ScriptRun).drain();
+    if (repl) releaseRepl(state, runner, keep && runner.alive && (script === null || (script as ScriptRun).error === null));
     if (script !== null) {
       count("script_concurrent_peak", script.gate.peak);
       count("script_receipts_skipped", script.receiptsSkipped);
@@ -690,9 +717,16 @@ export async function run(ctx: Ctx, source: string, seconds: number): Promise<Re
       late.code ?? "script_failed",
     );
   }
-  const logs = Array.isArray(message["logs"]) ? message["logs"].map(String) : [];
+  let logs = Array.isArray(message["logs"]) ? message["logs"].map(String) : [];
+  const logSpill = message["logSpill"];
+  if (repl && message["kind"] !== "error" && logSpill !== null && typeof logSpill === "object" && !Array.isArray(logSpill)) {
+    const spilled = logSpill as Record<string, unknown>;
+    flag("script_repl_logs_spilled", true);
+    logs = [String(spilled["preview"] ?? ""), `[logs stored in ${String(spilled["name"])} (${groupThousands(String(Number(spilled["lines"]) || 0))} lines, ${groupThousands(String(Number(spilled["chars"]) || 0))} chars); inspect or filter in next repl call]`];
+  }
   if (message["logsDropped"]) logs.push(`[${String(message["logsDropped"])} more log lines dropped past ${Math.floor(LOG_LIMIT / 1024)} KB]`);
   const notes: string[] = [];
+  if (lost) notes.push(REPL_LOST_NOTE);
   const unawaited = script !== null ? script.gate.dropped : Number(message["unawaited"]) || 0;
   if (unawaited) notes.push(`[${unawaited} command${unawaited !== 1 ? "s" : ""} the script didn't await never ran]`);
   const cut = Number(message["cut"]) || 0;
@@ -714,12 +748,30 @@ export async function run(ctx: Ctx, source: string, seconds: number): Promise<Re
   }
   const value = renderValue(message);
   const parts = [...logs, ...(value !== null ? [value] : []), ...notes];
-  return new Result({ value: message["undefined"] ? null : (message["value"] ?? null), logs }, parts.length > 0 ? parts.join("\n") : "✓ Done", true);
+  const data: Record<string, unknown> = { value: message["undefined"] ? null : (message["value"] ?? null), logs };
+  if (repl) {
+    const spilled = [message["spilled"], logSpill !== null && typeof logSpill === "object" ? (logSpill as Record<string, unknown>)["name"] : undefined].filter((name) => typeof name === "string");
+    if (typeof message["spilled"] === "string") flag("script_repl_value_spilled", true);
+    data["repl"] = { kept: Array.isArray(message["kept"]) ? message["kept"].map(String) : [], spilled, fresh: lost };
+  }
+  return new Result(data, parts.length > 0 ? parts.join("\n") : "✓ Done", true);
 }
 
+export const SCRIPT_FLAGS = { "--timeout": "value", "--stdin": "bool", "--repl": "bool", "--persist": "bool", "--reset": "bool" } as const;
+export const REPL_RESET_TEXT = "✓ REPL scope reset: its variables and $out values are gone, and $out numbering starts again at $out1";
+
 export async function cmdScript(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options] = parse(argv, { "--timeout": "value", "--stdin": "bool" });
-  return run(ctx, ctx.stdin || "", parseTimeout(options["timeout"] as string | undefined));
+  const [options] = parse(argv, SCRIPT_FLAGS);
+  const reset = Boolean(options["reset"] || ctx.options["reset"]);
+  const repl = reset || Boolean(options["repl"] || options["persist"] || ctx.options["repl"] || ctx.options["persist"]);
+  const source = ctx.stdin || "";
+  const seconds = parseTimeout(options["timeout"] as string | undefined);
+  if (reset) {
+    const had = dropRepl(ctx.state);
+    flag("script_repl_reset", true);
+    if (!strip(source, isSpace)) return new Result({ reset: true, had }, had ? REPL_RESET_TEXT : "✓ REPL scope reset (none was open yet)");
+  }
+  return run(ctx, source, seconds, { repl, full: Boolean(ctx.options["full"]) });
 }
 
 register("script", cmdScript);

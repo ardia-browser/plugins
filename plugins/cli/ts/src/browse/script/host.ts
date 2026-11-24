@@ -178,6 +178,17 @@ export class Runner {
     }
   }
 
+  stopWatching(): void {
+    if (this.memoryWatch !== null) clearInterval(this.memoryWatch);
+    this.memoryWatch = null;
+  }
+
+  discardEvents(): void {
+    this.events.splice(0, this.events.length);
+    this.queuedBytes = 0;
+    this.overBudget = false;
+  }
+
   kill(): void {
     if (this.memoryWatch !== null) clearInterval(this.memoryWatch);
     this.memoryWatch = null;
@@ -216,6 +227,54 @@ export function dropSpare(): void {
   spareTimer = null;
   spare?.kill();
   spare = null;
+}
+
+type ReplSlot = { runner: Runner; busy: boolean; runs: number };
+const repls = new WeakMap<object, ReplSlot>();
+
+export type ReplTaken = { runner: Runner; warm: boolean; fresh: boolean; lost: boolean; busy: boolean; runs: number };
+
+export function takeRepl(owner: object): ReplTaken {
+  const slot = repls.get(owner);
+  if (slot !== undefined && slot.runner.alive) {
+    if (slot.busy) return { runner: slot.runner, warm: true, fresh: false, lost: false, busy: true, runs: slot.runs };
+    slot.busy = true;
+    slot.runs += 1;
+    slot.runner.discardEvents();
+    return { runner: slot.runner, warm: true, fresh: false, lost: false, busy: false, runs: slot.runs };
+  }
+  const { runner, warm } = takeRunner();
+  repls.set(owner, { runner, busy: true, runs: 1 });
+  return { runner, warm, fresh: true, lost: slot !== undefined, busy: false, runs: 1 };
+}
+
+export function releaseRepl(owner: object, runner: Runner, keep: boolean): void {
+  const slot = repls.get(owner);
+  if (slot === undefined || slot.runner !== runner) {
+    if (!keep) runner.kill();
+    return;
+  }
+  slot.busy = false;
+  if (keep && runner.alive) {
+    runner.stopWatching();
+    runner.discardEvents();
+    return;
+  }
+  runner.kill();
+  repls.delete(owner);
+}
+
+export function dropRepl(owner: object): boolean {
+  const slot = repls.get(owner);
+  if (slot === undefined) return false;
+  repls.delete(owner);
+  slot.runner.kill();
+  return true;
+}
+
+export function replAlive(owner: object): boolean {
+  const slot = repls.get(owner);
+  return slot !== undefined && slot.runner.alive;
 }
 
 export async function whenReady(runner: Runner, timeoutMs = READY_TIMEOUT_MS): Promise<number> {

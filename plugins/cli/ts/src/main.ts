@@ -140,6 +140,11 @@ async function main(words: string[]): Promise<number> {
     process.exit(await failWithoutAddon(failure, routed.lifeline));
   }
   if (routed !== undefined) watchLifeline(routed.lifeline);
+  if (argv.includes("mcp")) {
+    const mcp = await import("./mcp/index.ts");
+    const parsed = mcp.mcpArgv(argv);
+    if (parsed !== undefined) process.exit(await mcp.mcpMain(parsed));
+  }
   if (!interruptsIgnored()) catchInterrupts();
   const handBack = routed === undefined ? notInThisBuild : () => HAND_BACK;
   if (argv.some((word) => word.includes(LOSSY))) {

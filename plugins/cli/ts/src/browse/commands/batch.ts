@@ -8,7 +8,7 @@ import { shlexSplit } from "../../pylib/shlex.ts";
 import { codeLine } from "./batch-line.ts";
 import { opaqueSlot } from "../opaque.ts";
 import { redact, redactJson } from "../../redact.ts";
-import { BrowseError, ConnectionLost, OutcomeUnknown, StaleRef, Usage } from "../daemon-errors.ts";
+import { BrowseError, ConnectionLost, OutcomeUnknown, StaleRef, SUPERSEDED, Usage } from "../daemon-errors.ts";
 import type { JsonObject } from "../../json.ts";
 import { OUTPUT_CAP, pyValue, Result } from "../daemon/render.ts";
 import { content, savedBodyLine } from "../outfile.ts";
@@ -21,7 +21,7 @@ import { inferredCode, remedyFor, remedyLine, tagged } from "../remedies.ts";
 import { commitShown } from "../snapshot/since.ts";
 import { attach, beginBatch, endBatch, flushBatch, hasPendingReaction } from "../changes/observe.ts";
 import type { Report } from "../changes/report.ts";
-import { parseRef } from "../state/refs.ts";
+import { parseRef, type Ref } from "../state/refs.ts";
 import type { State } from "../state/state.ts";
 import { openDialog } from "../changes/dialogs.ts";
 import { mayRetry, noteReadRetry } from "../act/retry.ts";
@@ -245,9 +245,9 @@ export const VALUE_FLAGS_TAKEN: ReadonlySet<string> = new Set([
   "--credential-provider", "--curl", "--delay", "--depth", "--description", "--domain", "--duration", "--enable", "--expires", "--field",
   "--fields", "--filter", "--fixture", "--fn", "--format", "--from", "--headers", "--idle", "--init-script", "--item", "--kind", "--label", "--limit",
   "--links", "--llms", "--load", "--match", "--max-chars", "--method", "--name", "--nth", "--origin", "--out", "--output", "--param", "--params",
-  "--password", "--password-selector", "--patch", "--path", "--payload", "--port", "--prefix", "--property", "--resource-type", "--role",
-  "--save", "--scope", "--screenshot-dir", "--screenshot-format", "--screenshot-quality", "--site", "--state", "--status", "--step",   "--submit-selector", "--tags", "--target", "--text", "--threshold", "--timeout", "--to", "--trace", "--type", "--url", "--username",
-  "--username-selector", "--wait-until", "--where", "--with-screenshot",
+  "--password", "--password-selector", "--patch", "--path", "--payload", "--port", "--prefix", "--property", "--region", "--resource-type", "--role",
+  "--save", "--scale", "--scope", "--screenshot-dir", "--screenshot-format", "--screenshot-quality", "--site", "--state", "--status", "--step",   "--submit-selector", "--tags", "--target", "--text", "--threshold", "--timeout", "--to", "--trace", "--type", "--url", "--username",
+  "--username-selector", "--wait-until", "--where", "--with-screenshot", "--within",
 ]);
 export const SHORT_VALUE_FLAGS: Readonly<Record<string, readonly string[]>> = {
   snapshot: ["-d"],
@@ -349,6 +349,66 @@ function staleMatches(state: State, error: StaleRef): string {
   if (error.ambiguous) return `→ ${listed.length} match it now, so nothing was picked: ${listed.join(", ")}`;
   if (error.text.includes(" is now @")) return `→ not followed for you: ${NOT_FOLLOWED}; on the page now: ${listed.join(", ")}`;
   return `→ on the page now: ${listed.join(", ")}`;
+}
+
+const NAV_HEAL_COMMANDS = new Set(["click", "dblclick", "hover", "focus", "fill", "type", "check", "uncheck", "select", "scrollintoview", "get", "is"]);
+const NAV_HEAL_RISKY = /\b(delete|remove|erase|destroy|pay|payment|buy|purchase|order|checkout|check out|place|confirm|submit|send|transfer|subscribe|unsubscribe|cancel|sign out|log ?out|book|donate|publish|post|reset|refund|withdraw)\b/iu;
+
+export type NavOrigins = Map<string, Set<string>>;
+
+export function originOf(url: string): string {
+  try {
+    const origin = new URL(url).origin;
+    return origin === "null" ? "" : origin;
+  } catch {
+    return "";
+  }
+}
+
+type NavPage = { url: string; mainFrame: string | null };
+type NavState = {
+  navigatedRefs: ReadonlyMap<string, Ref>;
+  pages: ReadonlyMap<string, NavPage>;
+  redrawnAll(page: never, ref: Ref): Promise<{ unique: Ref | null; same: string[] }>;
+};
+
+export function noteOrigins(state: { pages?: ReadonlyMap<string, NavPage> }, origins: NavOrigins): void {
+  for (const [target, page] of state.pages ?? []) {
+    const origin = originOf(page.url);
+    if (!origin) continue;
+    let seen = origins.get(target);
+    if (seen === undefined) origins.set(target, (seen = new Set()));
+    seen.add(origin);
+  }
+}
+
+export function navHealable(command: string, old: Ref, fresh: Ref, page: NavPage, origins: NavOrigins, liveAtStart: ReadonlySet<string>): boolean {
+  if (!NAV_HEAL_COMMANDS.has(command)) return false;
+  if (!liveAtStart.has(old.id)) return false;
+  if (!old.role || !old.name || NAV_HEAL_RISKY.test(old.name)) return false;
+  if (fresh.role !== old.role || fresh.name !== old.name || fresh.target !== old.target) return false;
+  if (page.mainFrame === null || old.frame !== page.mainFrame || fresh.frame !== page.mainFrame) return false;
+  const now = originOf(page.url);
+  const seen = origins.get(old.target);
+  return Boolean(now) && seen !== undefined && seen.size === 1 && seen.has(now);
+}
+
+export async function navSuccessor(state: NavState, error: StaleRef, command: string, origins: NavOrigins, liveAtStart: ReadonlySet<string>): Promise<Ref | null> {
+  if (error.code !== SUPERSEDED || error.successor !== null) return null;
+  const old = state.navigatedRefs.get(error.staleRef);
+  if (old === undefined) return null;
+  const page = state.pages.get(old.target);
+  if (page === undefined) return null;
+  let found: { unique: Ref | null; same: string[] };
+  try {
+    found = await state.redrawnAll(page as never, old);
+  } catch (caught) {
+    if (caught instanceof BrowseError && !(caught instanceof ConnectionLost)) return null;
+    throw caught;
+  }
+  const fresh = found.unique;
+  if (fresh === null || found.same.length !== 1) return null;
+  return navHealable(command, old, fresh, page, origins, liveAtStart) ? fresh : null;
 }
 
 export function failureMeta(outcome: Outcome): { code: string | undefined; remedy: string | undefined } {
@@ -610,7 +670,10 @@ async function cmdBatch(ctx: Ctx, argv: string[]): Promise<Result> {
 }
 
 async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, args] = parse(argv, { "--bail": "bool", "--out": "value" });
+  const [options, args] = parse(argv, { "--bail": "bool", "--out": "value", "--no-heal-nav": "bool" });
+  const healNav = !options["no_heal_nav"];
+  const liveAtStart: ReadonlySet<string> = new Set(healNav && ctx.state.refs instanceof Map ? ctx.state.refs.keys() : []);
+  const origins: NavOrigins = new Map();
   const lines = args.length > 0 ? args : splitlines(ctx.stdin || "").filter((line) => strip(line, isSpace) && !strip(line, isSpace).startsWith("#"));
   const runs = lines.map((line, index) => {
     try {
@@ -704,6 +767,7 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
     const holding = !ctx.options["no_changes"] && heldLine(ctx.state, item, false) && heldLine(ctx.state, runs[index + 1], true);
     if (hasPendingReaction(ctx.state)) observing.current = null;
     observing.nextLine(holding);
+    if (healNav) noteOrigins(ctx.state, origins);
     let [result, error] = await runOne(ctx, command, lineOptions);
     if (error !== null && mayRetry(ran, error)) {
       noteReadRetry();
@@ -718,6 +782,17 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
       add("batch_refs_healed");
       flag("batch_ref_healed", true);
       [result, error] = await runOne(ctx, command, lineOptions);
+    }
+    if (healNav && error instanceof StaleRef && error.code === SUPERSEDED && heals.length < MAX_HEALS) {
+      const fresh = await navSuccessor(ctx.state, error, ran, origins, liveAtStart);
+      const swapped = fresh === null ? null : rebound(command, error.staleRef, fresh.id);
+      if (fresh !== null && swapped !== null) {
+        heals.push(`↻ @${error.staleRef}→@${fresh.id} (the page reloaded; same ${fresh.role} "${fresh.name}" on the same site)`);
+        command = swapped;
+        add("batch_refs_healed");
+        flag("followed_ref_after_reload", true);
+        [result, error] = await runOne(ctx, command, lineOptions);
+      } else flag("batch_ref_not_followed", true);
     }
     observing.defer = false;
     if (observing.flushed !== null) {
@@ -737,7 +812,7 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
     if (error !== null && error.code) outcome.code = error.code;
     if (result?.notice && outcome.text?.endsWith(result.notice)) outcome.text = outcome.text.slice(0, outcome.text.length - result.notice.length).replace(/\n$/u, "");
     if (heals.length > 0) {
-      outcome.healed = heals.map((heal) => heal.slice(2));
+      outcome.healed = heals.map((heal) => heal.slice(2).replace(/ \(.*$/u, ""));
       if (outcome.success) outcome.text = `${heals.join("\n")}\n${outcome.text || "✓ Done"}`;
     }
     if (error instanceof StaleRef && error.successor === null && error.matches.length > 0) {
