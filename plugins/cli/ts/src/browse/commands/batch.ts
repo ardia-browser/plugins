@@ -255,11 +255,13 @@ export function rebound(command: readonly string[], stale: string, fresh: string
   const swapped = (word: string): string | null => forms.find(([from]) => from === word)?.[1] ?? null;
   const out = [...command];
   let changed = false;
+  let flagged = false;
   const positionals: number[] = [];
   for (let index = 1; index < command.length; index += 1) {
     const word = command[index] as string;
     if (word === "--") break;
     if (SELECTOR_FLAGS.has(word)) {
+      flagged = true;
       const next = command[index + 1];
       const value = next === undefined || next === "--" ? null : swapped(next);
       if (value !== null) {
@@ -270,6 +272,7 @@ export function rebound(command: readonly string[], stale: string, fresh: string
       continue;
     }
     if (word.startsWith(SELECTOR_PREFIX)) {
+      flagged = true;
       const value = swapped(word.slice(SELECTOR_PREFIX.length));
       if (value !== null) {
         out[index] = `${SELECTOR_PREFIX}${value}`;
@@ -281,6 +284,7 @@ export function rebound(command: readonly string[], stale: string, fresh: string
     positionals.push(index);
   }
   if (name === "press" && positionals.length >= 2) positions.add(0);
+  if (flagged) positions.clear();
   for (const at of positions) {
     const index = positionals[at];
     if (index === undefined) continue;

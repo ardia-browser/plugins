@@ -50,6 +50,7 @@ const EDGE = `<!doctype html><title>Edge</title><main>
 <label for="flip">Flip</label><input id="flip" type="password" value="sesame77">
 <button type="button" id="flipper">Flip it</button>
 <div role="combobox" aria-label="Who"><input aria-label="Who" value="Ana"></div>
+<div role="combobox" aria-label="Pick">Blue<input type="button" value="open"></div>
 <fieldset disabled><label for="locked">Locked</label><input id="locked" value="x"></fieldset>
 </form></main>
 <script>
@@ -67,7 +68,7 @@ document.getElementById("flipper").addEventListener("click", () => { document.ge
 </script>`;
 
 const MANY = `<!doctype html><title>Many</title><main><div id="many"></div><table id="wide"><tbody><tr id="row"></tr></tbody></table>
-<table id="dup"><thead><tr><th>Price</th><th>Price</th></tr></thead><tbody><tr><td>10</td><td>20</td></tr><tr style="display:none"><td>hidden</td><td>row</td></tr></tbody></table>
+<table id="dup"><thead><tr><th>Price</th><th>Price 2</th><th>Price</th></tr></thead><tbody><tr><td>10</td><td>20</td><td>30</td></tr><tr style="display:none"><td>hidden</td><td>row</td></tr></tbody></table>
 <a id="long" class="link" href="/${"x".repeat(2000)}">long</a></main>
 <script>
 const many = document.getElementById("many");
@@ -79,6 +80,36 @@ for (let index = 0; index < 20000; index += 1) {
 }
 const row = document.getElementById("row");
 for (let index = 0; index < 60; index += 1) row.insertCell().textContent = "c" + index;
+</script>`;
+
+const HIDDEN_FIRST = `<!doctype html><title>Hidden</title><main><form id="h"></form><label for="late">Late</label><input id="late"></main>
+<script>
+const form = document.getElementById("h");
+for (let index = 0; index < 6000; index += 1) {
+  const input = document.createElement("input");
+  input.style.display = "none";
+  form.appendChild(input);
+}
+</script>`;
+
+const REOPEN = `<!doctype html><title>Reopen</title><main>
+<div role="dialog" aria-label="Confirm" class="dlg"><button type="button" class="del">Delete</button></div>
+<button type="button" id="reopen">Reopen</button>
+<span id="hit">none</span></main>
+<script>
+document.querySelector(".del").addEventListener("click", () => { document.getElementById("hit").textContent = "first"; });
+document.getElementById("reopen").addEventListener("click", () => {
+  document.querySelector(".dlg").remove();
+  const dialog = document.createElement("div");
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-label", "Confirm");
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = "Delete";
+  button.addEventListener("click", () => { document.getElementById("hit").textContent = "second dialog clicked"; });
+  dialog.appendChild(button);
+  document.querySelector("main").prepend(dialog);
+});
 </script>`;
 
 const FIELDS = `<!doctype html><title>Fields</title><main><form id="f"></form></main>
@@ -141,7 +172,7 @@ describe.skipIf(!CHROME)("round-trip commands against headless Chrome (plugins#1
     fs.mkdirSync(path.join(root, "home"));
     fs.mkdirSync(path.join(root, "data"), { mode: 0o700 });
     server = http.createServer((request, response) => {
-      const pages: Record<string, string> = { "/edge.html": EDGE, "/many.html": MANY, "/fields.html": FIELDS };
+      const pages: Record<string, string> = { "/edge.html": EDGE, "/many.html": MANY, "/fields.html": FIELDS, "/hidden.html": HIDDEN_FIRST, "/reopen.html": REOPEN };
       const extra = pages[request.url ?? ""];
       if (extra !== undefined) {
         response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" }).end(extra);
@@ -221,6 +252,9 @@ describe.skipIf(!CHROME)("round-trip commands against headless Chrome (plugins#1
     expect(cards.out).toContain(`{"name": "Red Mug", "price": "$12", "url": "${site}/p/1"}`);
     const table = await browse(["query", "#t"]);
     expect(table.out).toContain('{"Item": "Cup", "Qty": "5"}');
+    const rows = await browse(["query", "#t tbody tr"]);
+    expect(rows.out).toContain('{"Item": "Mug", "Qty": "2"}');
+    expect(rows.out).toContain('{"Item": "Cup", "Qty": "5"}');
   });
 
   test("read-urls fetches pages from the tab in parallel and reports failures one per line", async () => {
@@ -229,6 +263,9 @@ describe.skipIf(!CHROME)("round-trip commands against headless Chrome (plugins#1
     expect(read.out.split("\n")[0]).toMatch(/^read-urls: 2 of 3 read in /u);
     expect(read.out).toContain("# Product 2");
     expect(read.out).toContain("✗ " + site + "/missing: HTTP 404");
+    const fractional = await browse(["read-urls", "/p/1", "--concurrency", "1.5"]);
+    expect(fractional.status).toBe(1);
+    expect(fractional.err).toContain("--concurrency takes a whole number");
   });
 
   test("a ref removed with its dialog never follows a same-named button outside it", async () => {
@@ -241,6 +278,23 @@ describe.skipIf(!CHROME)("round-trip commands against headless Chrome (plugins#1
     expect(moved.out + moved.err).toContain("→ not followed for you:");
     const hit = await browse(["get", "text", "#hit"]);
     expect(hit.out.trim()).toBe("none");
+  });
+
+  test("a ref in a dialog never follows a same-named button in another dialog with the same name", async () => {
+    expect((await browse(["open", `${site}/reopen.html`])).status).toBe(0);
+    const listing = (await browse(["snapshot", "-i", "--full", "--all"])).out;
+    const moved = await browse(["batch", `click @${refOf(listing, "Reopen")}`, `click @${refOf(listing, "Delete")}`]);
+    expect(moved.out + moved.err).not.toContain("↻");
+    expect(moved.out + moved.err).toContain("(stale_ref)");
+    expect((await browse(["get", "text", "#hit"])).out.trim()).toBe("none");
+  });
+
+  test("form says when it stopped at the candidate limit, even with no field kept", async () => {
+    expect((await browse(["open", `${site}/hidden.html`])).status).toBe(0);
+    const form = await browse(["form"]);
+    expect(form.status, form.err).toBe(0);
+    expect(form.out).toContain("among the first 5,000 candidates; stopped after 5,000 candidates");
+    expect(JSON.parse((await browse(["--json", "form"])).out).data.stopped).toBe("candidates");
   });
 
   test("form never prints a secret: odd-case autocomplete, a validation message holding it, a field flipped to text", async () => {
@@ -257,6 +311,7 @@ describe.skipIf(!CHROME)("round-trip commands against headless Chrome (plugins#1
     }
     expect(after.out).toMatch(/- textbox "Flip" \[ref=e[0-9]+\]: ••••/u);
     expect(after.out).toMatch(/- textbox "Who" \[ref=e[0-9]+\]: Ana/u);
+    expect(after.out).toMatch(/- combobox "Pick" \[ref=e[0-9]+\]: Blue/u);
     expect(after.out).toMatch(/- textbox "Locked" \[disabled, ref=e[0-9]+\]: x/u);
   });
 
@@ -271,7 +326,7 @@ describe.skipIf(!CHROME)("round-trip commands against headless Chrome (plugins#1
     const row = JSON.parse(wide.out).data.rows[0] as Record<string, string>;
     expect(Object.keys(row).length).toBe(30);
     const dup = await browse(["query", "#dup"]);
-    expect(dup.out).toContain('{"Price": "10", "Price 2": "20"}');
+    expect(dup.out).toContain('{"Price": "10", "Price 2": "20", "Price 3": "30"}');
     expect(dup.out).not.toContain("hidden");
     const link = await browse(["--json", "query", "#long", "--fields", "url=@href"]);
     expect((JSON.parse(link.out).data.rows[0].url as string).length).toBeLessThanOrEqual(300);

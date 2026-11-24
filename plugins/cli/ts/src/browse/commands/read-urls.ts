@@ -238,7 +238,9 @@ export async function cmdReadUrls(ctx: Ctx, argv: string[]): Promise<Result> {
   const [options, args] = parse(argv, { "--concurrency": "value", "--timeout": "value", "--max-chars": "value" });
   if (args.length === 0) throw new Usage("Usage: ardia browse read-urls <url> [url...] [--concurrency n] [--timeout s] [--max-chars n]");
   if (args.length > MAX_URLS) throw new Usage(`read-urls takes up to ${MAX_URLS} addresses at once; split the list`);
-  const concurrency = intFlag(options["concurrency"], "--concurrency", DEFAULT_CONCURRENCY, 1, MAX_CONCURRENCY);
+  const givenConcurrency = options["concurrency"];
+  if (givenConcurrency !== undefined && !/^[0-9]+$/u.test(String(givenConcurrency))) throw new Usage(`--concurrency takes a whole number of requests at once, not ${String(givenConcurrency)}`);
+  const concurrency = intFlag(givenConcurrency, "--concurrency", DEFAULT_CONCURRENCY, 1, MAX_CONCURRENCY);
   const timeout = intFlag(options["timeout"], "--timeout", DEFAULT_TIMEOUT, 1, MAX_TIMEOUT);
   const given = options["max_chars"] === undefined ? null : intFlag(options["max_chars"], "--max-chars", DEFAULT_SHARE, 1, 10_000_000);
   const state = ctx.state;

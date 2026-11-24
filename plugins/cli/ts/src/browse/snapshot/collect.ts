@@ -367,7 +367,7 @@ export function dialogScopes(nodes: readonly Node[]): Map<Node, string> {
   const visit = (list: readonly Node[], here: readonly string[]) => {
     for (const node of list) {
       scopes.set(node, JSON.stringify(here));
-      visit(node.children, DIALOG_ROLES.has(node.role) ? [...here, `${node.role}:${node.name}`] : here);
+      visit(node.children, DIALOG_ROLES.has(node.role) ? [...here, `${node.role}#${node.frame ?? ""}#${node.backend ?? "?"}:${node.name}`] : here);
     }
   };
   visit(nodes, []);

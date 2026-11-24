@@ -1,4 +1,5 @@
 import { dumps } from "../../json.ts";
+import { groupThousands } from "../../pylib/format.ts";
 import { headPoints, joinedWords, pyLen } from "../../pylib/str.ts";
 import { BrowseError, Usage } from "../daemon-errors.ts";
 import { pyValue, Result } from "../daemon/render.ts";
@@ -29,7 +30,10 @@ const FIELD_SELECTOR = [
 
 export const MAX_EXAMINED = 5000;
 
+const NATIVE_FIELD = "input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]):not([type=image]), select, textarea";
+
 const FIELDS_OF = `(scope, all) => {
+  ardiaBrowse.fieldsCut = false;
   const selector = ${JSON.stringify(FIELD_SELECTOR)};
   const root = scope ? ardiaBrowse.query(scope) : document;
   if (!root) return null;
@@ -39,7 +43,7 @@ const FIELDS_OF = `(scope, all) => {
     return [...(el.labels || [])].some((label) => ardiaBrowse.visible(label));
   };
   const native = (el) => el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA";
-  const holdsNative = (el) => !native(el) && el.querySelector("input:not([type=hidden]), select, textarea") !== null;
+  const holdsNative = (el) => !native(el) && el.querySelector(${JSON.stringify(NATIVE_FIELD)}) !== null;
   const nested = (el) => {
     if (native(el)) return false;
     const outer = el.parentElement ? el.parentElement.closest(selector) : null;
@@ -53,7 +57,11 @@ const FIELDS_OF = `(scope, all) => {
   };
   if (root !== document && root.matches && root.matches(selector)) consider(root);
   for (const el of root.querySelectorAll(selector)) {
-    if (kept.length > ${MAX_FIELDS} || examined >= ${MAX_EXAMINED}) break;
+    if (kept.length > ${MAX_FIELDS}) break;
+    if (examined >= ${MAX_EXAMINED}) {
+      ardiaBrowse.fieldsCut = true;
+      break;
+    }
     consider(el);
   }
   return kept;
@@ -157,7 +165,7 @@ export function shownInvalid(facts: Record<string, unknown>, secret: boolean): s
 
 export function fieldLine(field: Field): string {
   const marks: string[] = [];
-  if (!PLAIN_TYPES.has(field.type)) marks.push(`type=${field.type}`);
+  if (!PLAIN_TYPES.has(field.type) && field.type !== field.role) marks.push(`type=${field.type}`);
   if (field.checked !== null) marks.push(`checked=${field.checked}`);
   if (field.role === "radio" && field.name) marks.push(`group=${field.name}`);
   if (field.required) marks.push("required");
@@ -174,7 +182,15 @@ export function fieldLine(field: Field): string {
   return `- ${field.role}${label} [${marks.join(", ")}]${value}`;
 }
 
-export function formSummary(fields: readonly Field[], more = false): string {
+export type Stop = "fields" | "candidates" | null;
+
+export function stopNote(stop: Stop): string {
+  if (stop === "fields") return `more past the first ${MAX_FIELDS}: narrow with -s <selector>`;
+  if (stop === "candidates") return `stopped after ${groupThousands(String(MAX_EXAMINED))} candidates: narrow with -s <selector>`;
+  return "";
+}
+
+export function formSummary(fields: readonly Field[], stop: Stop = null): string {
   const required = fields.filter((field) => field.required).length;
   const invalid = fields.filter((field) => field.invalid).length;
   const empty = fields.filter((field) => field.required && field.checked === null && field.value === "").length;
@@ -182,17 +198,17 @@ export function formSummary(fields: readonly Field[], more = false): string {
   if (required) parts.push(`${required} required`);
   if (empty) parts.push(`${empty} required and empty`);
   if (invalid) parts.push(`${invalid} invalid`);
-  const tail = more ? `; more past the first ${MAX_FIELDS}: narrow with -s <selector>` : "";
-  return `form: ${parts.join(", ")}${tail}`;
+  return `form: ${parts.join(", ")}${stop === null ? "" : `; ${stopNote(stop)}`}`;
 }
 
-async function fieldsOf(ctx: Ctx, page: Page, frame: string, scope: string | null, all: boolean): Promise<{ fields: Field[]; more: boolean }> {
+async function fieldsOf(ctx: Ctx, page: Page, frame: string, scope: string | null, all: boolean): Promise<{ fields: Field[]; stop: Stop }> {
   const remote = await page.call(FIELDS_OF, [scope, all], { frame, byValue: false, read: true });
   if (record(remote)["subtype"] === "null") throw new BrowseError(`Element not found: ${scope ?? ""}`, null, "not_found");
   const found: Element[] = await page.elementsFrom(remote, frame, "form field", MAX_FIELDS + 1);
-  const more = found.length > MAX_FIELDS;
+  const cut = (await page.call("() => ardiaBrowse.fieldsCut === true", [], { frame, read: true })) === true;
+  const stop: Stop = found.length > MAX_FIELDS ? "fields" : cut ? "candidates" : null;
   const elements = found.slice(0, MAX_FIELDS);
-  if (elements.length === 0) return { fields: [], more };
+  if (elements.length === 0) return { fields: [], stop };
   const facts = await page.call(FACTS_OF, elements, { frame, read: true });
   const rows = Array.isArray(facts) ? facts.map(record) : [];
   const fields = rows.map((row, index) => {
@@ -218,7 +234,7 @@ async function fieldsOf(ctx: Ctx, page: Page, frame: string, scope: string | nul
       options: typeof row["options"] === "number" ? row["options"] : null,
     };
   });
-  return { fields, more };
+  return { fields, stop };
 }
 
 export async function cmdForm(ctx: Ctx, argv: string[]): Promise<Result> {
@@ -228,12 +244,15 @@ export async function cmdForm(ctx: Ctx, argv: string[]): Promise<Result> {
   const page = await ctx.state.page();
   await page.refreshFrames();
   const frame = frameOrMain(ctx, page);
-  const { fields, more } = await fieldsOf(ctx, page, frame, scope, Boolean(options["all"]));
+  const { fields, stop } = await fieldsOf(ctx, page, frame, scope, Boolean(options["all"]));
   flag("form", true);
   count("form_fields", fields.length);
-  const data = { url: page.url, count: fields.length, more, fields };
-  if (fields.length === 0) return new Result(data, scope ? `No form fields in ${scope}` : "No form fields on this page", true);
-  return new Result(data, [formSummary(fields, more), ...fields.map(fieldLine)].join("\n"), true);
+  const data = { url: page.url, count: fields.length, more: stop !== null, stopped: stop, fields };
+  if (fields.length === 0) {
+    const none = scope ? `No form fields in ${scope}` : "No form fields on this page";
+    return new Result(data, stop === null ? none : `${none} among the first ${groupThousands(String(MAX_EXAMINED))} candidates; ${stopNote(stop)}`, true);
+  }
+  return new Result(data, [formSummary(fields, stop), ...fields.map(fieldLine)].join("\n"), true);
 }
 
 export type FieldSpec = { key: string; selector: string | null; attribute: string | null };
@@ -304,20 +323,29 @@ const ROWS_OF = `(selector, fields, limit, all, cap, columns) => {
     if (/^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName)) return clean(target.value);
     return textOf(target);
   };
+  const headerCache = new Map();
   const headersOf = (table) => {
+    if (headerCache.has(table)) return headerCache.get(table);
+    const found = headersFound(table);
+    headerCache.set(table, found);
+    return found;
+  };
+  const headersFound = (table) => {
     const head = table.tHead && table.tHead.rows[0] ? table.tHead.rows[0] : [...table.rows].find((row) => [...row.cells].every((cell) => cell.tagName === "TH"));
     if (!head) return null;
-    const seen = new Map();
-    return [...head.cells].slice(0, columns).map((cell, index) => {
-      const base = textOf(cell) || "column " + (index + 1);
-      const times = (seen.get(base) || 0) + 1;
-      seen.set(base, times);
-      return times === 1 ? base : base + " " + times;
-    });
+    const used = new Set();
+    return [...head.cells].slice(0, columns).map((cell, index) => unique(used, textOf(cell) || "column " + (index + 1)));
+  };
+  const unique = (used, base) => {
+    let key = base;
+    for (let times = 2; used.has(key); times += 1) key = base + " " + times;
+    used.add(key);
+    return key;
   };
   const rowOf = (row, headers) => {
     const out = {};
-    [...row.cells].slice(0, columns).forEach((cell, index) => { out[(headers && headers[index]) || "column " + (index + 1)] = textOf(cell); });
+    const used = new Set();
+    [...row.cells].slice(0, columns).forEach((cell, index) => { out[unique(used, (headers && headers[index]) || "column " + (index + 1))] = textOf(cell); });
     return out;
   };
   const rows = [];

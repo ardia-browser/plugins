@@ -1117,8 +1117,10 @@ invalid message is the browser's `validationMessage`, or the `aria-errormessage`
 and so does any field this session already knew was secret, even after the page turned it into a text field; a secret
 field's validation message prints only as `invalid`, since a page can put the value in it. The page walk stops at 200
 fields or 5,000 candidates, and a field inside another field is skipped without comparing every pair; past 200 the first
-line says so (`; more past the first 200: narrow with -s <selector>`, `--json`: `more`). A widget role wrapped around a
-native input (`<div role="combobox"><input>`) lists the input, which holds the value, and a control inside a disabled
+line says so (`; more past the first 200: narrow with -s <selector>`, `--json`: `more` and `stopped`), and so does a walk
+that hit the 5,000-candidate limit, even when it kept no field (`stopped after 5,000 candidates`). A widget role wrapped around a
+native field (`<div role="combobox"><input>`) lists the input, which holds the value (a button-type input inside doesn't
+count), and a control inside a disabled
 `fieldset` counts as disabled (`:disabled`). Each line's
 ref is a real ref (`addRef`, followed across redraws like a snapshot's), so `fill @e11 …` works next. Telemetry:
 `form`, `form_fields`.
@@ -1130,7 +1132,8 @@ the match itself. With no fields, a `table` gives one row per body row keyed by 
 and anything else `text` and its first `link`. Rows print as JSON lines under `3 rows for .card:` (`--json`: `rows`,
 `count`, `more`); 50 by default, at most 500. The page walk stops at the first match past the limit (`1 rows for .m, and
 more match`), so `--limit 1` over 20,000 matches checks two; a row keeps at most 30 columns (and `--fields` takes at
-most 30), repeated headers get ` 2`, ` 3` so no cell is lost, a table's hidden rows are skipped like other hidden
+most 30), repeated headers get ` 2`, ` 3`, never a key already taken (`Price, Price 2, Price` reads `Price`, `Price 2`, `Price 3`), so
+no cell is lost, a table's hidden rows are skipped like other hidden
 matches, and every value, links included, is cut at 300 characters. Telemetry: `query`, `query_fields`,
 `query_rows`.
 
@@ -1195,12 +1198,12 @@ takes JavaScript (`eval --stdin` from a heredoc) and runs it in the page's main 
 A line whose ref went stale because an earlier line redrew the page runs again on the new element when the stale-ref
 check can follow it, and its answer starts with `↻ @e14→@e352` (`--json`: `healed`); a line follows up to four such
 redraws. It follows only when the old ref was the only one with its role and name in its snapshot and the new one is
-still the only one, in the same frame, the same dialog (named or not) and the same named containers (`sameScope` in
-`ts/src/browse/state/refs.ts`), so a `Delete` removed with its dialog never turns into the page's own `Delete` behind
-it. When a single command's error names a successor (`is now @e352`) that fails those checks, the batch line fails and
+still the only one, in the same frame, the same dialog instance (the same dialog element, not one that closed and
+another with the same name opened) and the same named containers (`sameScope` in `ts/src/browse/state/refs.ts`), so a
+`Delete` removed with its dialog never turns into the page's own `Delete` behind it or one in a reopened dialog. When a single command's error names a successor (`is now @e352`) that fails those checks, the batch line fails and
 says `→ not followed for you: …; on the page now: …` (telemetry `batch_ref_not_followed`). The rebinding replaces the ref only at the
-command's selector arguments (`click`'s first, `drag`'s two, `get text`'s second, `-s`/`--selector`'s value, …), never in
-text or values to type and never after `--`. When none or several match, the line fails as before and lists the refs on the page now, so no extra
+command's selector arguments (`click`'s first, `drag`'s two, `get text`'s second, or `-s`/`--selector`'s value when
+that flag names the target), never in text or values to type and never after `--`. When none or several match, the line fails as before and lists the refs on the page now, so no extra
 snapshot is needed: `→ 2 match it now, so nothing was picked: button "Delete" [ref=e30], button "Delete" [ref=e31]`, or
 `→ on the page now:` with up to six of the same role (`--json`: `matches`). Telemetry: `batch_ref_healed`,
 `batch_refs_healed` (lines rebound), `batch_ref_ambiguous`, `batch_ref_missing`; watch `error_code` `stale_ref` on
@@ -1543,8 +1546,8 @@ probe has 4 s, the tab's own text is the fallback, and `tried` lists every step.
 `read-urls <url> [url…] [--concurrency n] [--timeout s] [--max-chars n]` (`ts/src/browse/commands/read-urls.ts`)
 fetches up to 50 addresses at once from inside the session's tab (the user's active tab, picked as `tab active`, when
 the session has none, and it says so), with `fetch(url, { credentials: "include" })` in the isolated world, so the
-requests carry the tab's cookies and logins and the tab never navigates. Six run at a time (`--concurrency`, at most
-10), each with 15 s (`--timeout`, at most 60) and at most 2 MB of body, 8 MB in all (cut before decoding). The whole
+requests carry the tab's cookies and logins and the tab never navigates. Six run at a time (`--concurrency`, a whole
+number, at most 10), each with 15 s (`--timeout`, at most 60) and at most 2 MB of body, 8 MB in all (cut before decoding). The whole
 run has one limit, the per-address timeout times the rounds the queue needs, at most 75 s, kept under the page call's
 own deadline: at that limit every request still running is aborted, the queue stops, and the answer keeps what
 finished, with `stopped at the … limit` or `not fetched` on the rest (telemetry `read_urls_deadline`). One address's

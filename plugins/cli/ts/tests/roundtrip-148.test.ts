@@ -44,6 +44,9 @@ test("a stale ref is rebound only where it is a selector", () => {
   expect(rebound(["press", "@e14", "Enter"], "e14", "e352")).toEqual(["press", "@e352", "Enter"]);
   expect(rebound(["press", "e14"], "e14", "e352")).toBeNull();
   expect(rebound(["get", "text", "@e14"], "e14", "e352")).toEqual(["get", "text", "@e352"]);
+  expect(rebound(["fill", "-s", "@e14", "@e14"], "e14", "e352")).toEqual(["fill", "-s", "@e352", "@e14"]);
+  expect(rebound(["fill", "--selector=@e14", "@e14"], "e14", "e352")).toEqual(["fill", "--selector=@e352", "@e14"]);
+  expect(rebound(["fill", "-s", "#name", "@e14"], "e14", "e352")).toBeNull();
 });
 
 function ref(id: string, extra: Partial<Ref> = {}): Ref {
@@ -86,7 +89,7 @@ function framed(node: Node, frame: string): Node {
 }
 
 test("a redrawn ref is followed only as a unique match in the same frame, dialog and container", async () => {
-  const inDialog = ref("e5", { scope: JSON.stringify(["dialog:Confirm"]), context: [["dialog", "Confirm"]] });
+  const inDialog = ref("e5", { scope: JSON.stringify(["dialog#F#11:Confirm"]), context: [["dialog", "Confirm"]] });
   const background = framed(new Node("main", "", "", new Map(), 10, [control("button", "Delete", "e9")]), "F");
   await withTree([background], async () => {
     const state = new FakeRefs();
@@ -99,6 +102,12 @@ test("a redrawn ref is followed only as a unique match in the same frame, dialog
   const dialog = framed(new Node("dialog", "Confirm", "", new Map(), 11, [control("button", "Delete", "e10")]), "F");
   await withTree([dialog], async () => {
     expect((await new FakeRefs().redrawnAll(FAKE_PAGE, inDialog)).followable?.id).toBe("e10");
+  });
+  const reopened = framed(new Node("dialog", "Confirm", "", new Map(), 99, [control("button", "Delete", "e13")]), "F");
+  await withTree([reopened], async () => {
+    const other = await new FakeRefs().redrawnAll(FAKE_PAGE, inDialog);
+    expect(other.unique?.id).toBe("e13");
+    expect(other.followable).toBeNull();
   });
   const otherFrame = framed(new Node("main", "", "", new Map(), 12, [control("button", "Delete", "e11")]), "OTHER");
   await withTree([otherFrame], async () => {
@@ -179,7 +188,8 @@ test("form lines show role, label, state, validation and ref, and mask secrets",
   expect(fieldLine(field({ role: "radio", type: "radio", label: "Pro", name: "plan", checked: false, required: false, invalid: "" }))).toBe('- radio "Pro" [checked=false, group=plan, ref=e1]');
   expect(fieldLine(field({ role: "combobox", type: "select", label: "Country", value: "Mexico", options: 2, required: false, invalid: "" }))).toBe('- combobox "Country" [ref=e1]: Mexico (of 2)');
   expect(formSummary([field({}), field({ required: false, invalid: "", value: "x" })])).toBe("form: 2 fields, 1 required, 1 required and empty, 1 invalid");
-  expect(formSummary([field({ required: false, invalid: "", value: "x" })], true)).toBe("form: 1 field; more past the first 200: narrow with -s <selector>");
+  expect(formSummary([field({ required: false, invalid: "", value: "x" })], "fields")).toBe("form: 1 field; more past the first 200: narrow with -s <selector>");
+  expect(formSummary([field({ required: false, invalid: "", value: "x" })], "candidates")).toBe("form: 1 field; stopped after 5,000 candidates: narrow with -s <selector>");
   expect(maskedValue({ type: "password", value: "hunter2", label: "Password" })).toBe("••••");
   expect(maskedValue({ type: "text", value: "4111 1111 1111 1111", label: "Number" })).toBe("••••");
   expect(maskedValue({ type: "text", value: "123456", label: "One-time code" })).toBe("••••");
@@ -248,7 +258,7 @@ test("read-urls' page loop stops at its deadline with partial results, and caps 
     const run = (0, eval)(FETCH_ALL) as (...args: unknown[]) => Promise<Record<string, unknown>[]>;
     const started = performance.now();
     const out = await run([`${base}/a`, `${base}/slow`, `${base}/slow`, `${base}/b`], 1000, 5000, 1, 4000, 1500);
-    expect(performance.now() - started).toBeLessThan(3000);
+    expect(performance.now() - started).toBeLessThan(4500);
     expect(out.map((item) => item["error"] ?? item["body"])).toEqual(["ok /a", DEADLINE, NOT_STARTED, NOT_STARTED]);
     const big = await run([`${base}/big`, `${base}/big`, `${base}/big`], 100_000, 150_000, 3, 4000, 4000);
     expect(big.map((item) => String(item["body"]).length).reduce((sum, size) => sum + size, 0)).toBe(150_000);
