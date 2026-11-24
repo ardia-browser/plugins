@@ -97,7 +97,7 @@ class Collector {
   constructor(readonly dir: Dir) {}
 
   keep(name: string, what: string, path: string, read: Exclude<Read, { missing: string }>, cut: string | undefined): void {
-    const done = triageScrub(read.text);
+    const done = triageScrub(read.text.replaceAll("\\/", "/"));
     const text = done.text === "" ? "" : `${done.text}\n`;
     writePrivate(name, this.dir, utf8(text));
     addRemoved(this.removed, done.removed);

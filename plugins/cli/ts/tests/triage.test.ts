@@ -1349,3 +1349,88 @@ exit 1`,
     cleanup(box);
   }
 });
+
+test("addresses inside Markdown links and sentences keep their closing marks and lose their logins", () => {
+  for (const [given, expected] of [
+    ["[repro](//alice:pw@localhost)", "[repro](//localhost)"],
+    ["[repro](//alice:pw@localhost/private) and more", "[repro](//localhost/<path>) and more"],
+    ["see [the page](https://mail.example.org/inbox/1?q=2).", "see [the page](https://mail.example.org/<path>)."],
+    ["(docs.example.com/d/1abc), then", "(docs.example.com/<path>), then"],
+    ["https://en.wikipedia.org/wiki/Foo_(bar)?x=1 next", "https://en.wikipedia.org/<path> next"],
+  ] as [string, string][]) assert.equal(triageScrub(given).text, expected);
+});
+
+test("an address with JSON-escaped slashes in the settings file is scrubbed in the evidence", async () => {
+  const box = sandbox();
+  try {
+    fs.mkdirSync(path.join(box.data, "config"), { recursive: true });
+    const escaped = '{"customSearchUrl":"https:\\/\\/alice:pw@host\\/private?q=secret"}';
+    for (const folder of new Set([MAC ? path.join(box.home, ".config", "ardia") : path.join(box.data, "config"), path.join(box.data, "config")])) {
+      fs.mkdirSync(folder, { recursive: true });
+      fs.writeFileSync(path.join(folder, "config.json"), escaped);
+    }
+    const ran = await run(box, ["triage", "--yes", "--print"]);
+    assert.equal(ran.status, 0, ran.err);
+    const config = fs.readFileSync(path.join(sessions(box)[0] as string, "evidence", "config.json"), "utf8");
+    assert.equal(config.trim(), '{"customSearchUrl":"https://host/<path>"}');
+  } finally {
+    cleanup(box);
+  }
+});
+
+test("a title or a required section that is nothing but a removed run is refused", async () => {
+  const box = sandbox();
+  try {
+    const { session } = await preparedSession(box);
+    const long = "a".repeat(512);
+    const title = await run(box, ["triage", "file", "--title", long, "--body", "report.md"], inSession(session));
+    assert.equal(title.status, 2, title.out);
+    assert.match(title.err, /nothing is left of the title/);
+    fs.writeFileSync(path.join(box.root, "empty.md"), REPORT.replace(/## Diagnosis\n[^\n]*\n/, `## Diagnosis\n${long}\n`));
+    const section = await run(box, ["triage", "file", "--title", "Sidebar blank", "--body", "empty.md"], inSession(session));
+    assert.equal(section.status, 2, section.out);
+    assert.match(section.err, /nothing is left of "## Diagnosis"/);
+  } finally {
+    cleanup(box);
+  }
+});
+
+test("the printed command names the ask-first mode the installed Claude Code takes", async () => {
+  const box = sandbox();
+  try {
+    standIn(box, "claude");
+    const printed = await run(box, ["triage", "--yes", "--print", "--agent", "claude"], { STANDIN_HELP: '--permission-mode <mode>  (choices: "acceptEdits", "bypassPermissions", "default", "plan")' });
+    assert.equal(printed.status, 0, printed.err);
+    assert.match(printed.out, / claude --permission-mode default --settings /);
+    assert.equal(recorded(box, "claude"), 0);
+  } finally {
+    cleanup(box);
+  }
+});
+
+test("a private report whose record can't be written still gives its reference", async () => {
+  const box = sandbox();
+  try {
+    const { session, code } = await preparedSession(box);
+    await withServer(
+      (request, response) => {
+        const url = request.url ?? "";
+        response.setHeader("Content-Type", "application/json");
+        if (request.method === "POST" && url === "/api/feedback") response.writeHead(201).end(JSON.stringify({ id: "FB-AB12", name: "Quiet Otter", upload_token: "token-12345678" }));
+        else if (request.method === "PUT") response.writeHead(200).end("{}");
+        else {
+          fs.mkdirSync(path.join(session, "filed.json"), { recursive: true });
+          response.writeHead(200).end(JSON.stringify({ id: "FB-AB12", name: "Quiet Otter" }));
+        }
+      },
+      async (base) => {
+        const sent = await run(box, ["triage", "file", "--post", code, "--via", "feedback"], inSession(session, { ARDIA_FEEDBACK_URL: base }));
+        assert.equal(sent.status, 0, sent.out + sent.err);
+        assert.match(sent.out, /Reference FB-AB12/);
+        assert.match(sent.out, /couldn't be written to the session's record/);
+      },
+    );
+  } finally {
+    cleanup(box);
+  }
+});

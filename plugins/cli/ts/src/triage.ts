@@ -178,8 +178,19 @@ function claudeSettings(root: string): string {
   return JSON.stringify({ permissions: { deny, ask: CLAUDE_ASKS } });
 }
 
-function claudeAskFirstMode(path: string | undefined): string {
+const askFirstModes = new Map<string, string>();
+
+function claudeAskFirstMode(given: string | undefined): string {
+  const path = given ?? onPath("claude");
   if (path === undefined) return "manual";
+  const known = askFirstModes.get(path);
+  if (known !== undefined) return known;
+  const mode = probedAskFirstMode(path);
+  askFirstModes.set(path, mode);
+  return mode;
+}
+
+function probedAskFirstMode(path: string): string {
   const help = spawnSync(path, ["--help"], { encoding: "utf8", timeout: HELP_TIMEOUT_MS, killSignal: "SIGKILL", stdio: ["ignore", "pipe", "ignore"] }).stdout ?? "";
   return help.includes('"default"') && !help.includes('"manual"') ? "default" : "manual";
 }

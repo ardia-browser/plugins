@@ -2651,8 +2651,12 @@ are; an unbroken run of 512 or more letters, digits and `._%+~/=-` (an encoded i
 with the rest of its word, by `<removed>` and counted as "long unbroken runs", which also keeps the scrub's time
 bounded on long lines; and the home folder's name is replaced wherever it is
 a path segment, not only under `/Users` and `/home` (`ts/src/triage-scrub.ts`; `scrub()` and `ardia feedback` are
-unchanged). These are patterns, so a best effort: the user reads the text before it goes anywhere. A required section with nothing left is
-refused. The command adds the "Filed by" line itself from the session: `<claude|codex|a coding agent> via ardia triage
+unchanged). A closing bracket or full stop after an address stays where it was, so a Markdown link survives; in
+evidence files `\/` is read as `/` first, so an address in JSON is found. These are patterns, so a best effort: the
+user reads the text before it goes anywhere. Known to over-reach: a build label such as `//chrome/browser:tests`
+loses its path, and code that follows a long run in the same word goes with it. A required section with nothing left is
+refused, and so is a title or a required section that is nothing but a removed run. The command adds the "Filed by"
+line itself from the session: `<claude|codex|a coding agent> via ardia triage
 <version>`, plus `, model M` when `--model` was given. It writes the final text to `prepared-report.md` in the session, prints
 it in full, then a count per category of what was removed (never the values), then a code: the first 8 hex digits of
 the SHA-256 of the final title and text, stored with it in `prepared-report.json`. Preparing again replaces the draft.

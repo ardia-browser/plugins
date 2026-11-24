@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { isSpace } from "./py.ts";
 import { codePoints, joinCodePoints, utf8 } from "./pystr.ts";
 import { onlyPlaceholders, wholeWords } from "./scrub.ts";
-import { addRemoved, emptyRemoved, type Removed, triageScrub } from "./triage-scrub.ts";
+import { addRemoved, emptyRemoved, nothingLeft, type Removed, triageScrub } from "./triage-scrub.ts";
 import { TriageRefused } from "./triage-session.ts";
 
 export type Section = { heading: string; id: string; required: boolean; fenced: boolean };
@@ -93,7 +93,7 @@ export function cleanTitle(given: string): [string, Removed] {
   if (words === "") throw new TriageRefused(`the report needs --title "…" (1-${MAX_TITLE} characters)`);
   const done = triageScrub(words);
   const length = codePoints(done.text).length;
-  if (done.text === "" || onlyPlaceholders(done.text)) throw new TriageRefused("nothing is left of the title once secrets and personal data are removed; describe the problem instead");
+  if (nothingLeft(done.text) || onlyPlaceholders(done.text.replaceAll("<removed>", " "))) throw new TriageRefused("nothing is left of the title once secrets and personal data are removed; describe the problem instead");
   if (length > MAX_TITLE) throw new TriageRefused(`the title is ${length} characters after scrubbing; keep it to ${MAX_TITLE}`);
   return [done.text, done.removed];
 }
@@ -124,7 +124,7 @@ export function buildReport(title: string, markdown: string, filedBy: string): R
     const section = SECTIONS.find((candidate) => candidate.id === id) as Section;
     const done = triageScrub(section.fenced ? unfenced(raw) : raw);
     addRemoved(removed, done.removed);
-    if (done.text === "" || onlyPlaceholders(done.text)) {
+    if (nothingLeft(done.text) || onlyPlaceholders(done.text.replaceAll("<removed>", " "))) {
       if (section.required) throw new TriageRefused(`nothing is left of "## ${section.heading}" once secrets and personal data are removed; describe it without them`);
       continue;
     }

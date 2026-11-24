@@ -195,7 +195,7 @@ function rememberFiled(dir: Dir, entry: Filed): string[] {
     remember(dir, entry);
     return [];
   } catch {
-    return ["This couldn't be written to the session's record, so note the address: don't file it again."];
+    return ["This couldn't be written to the session's record, so note where it went: don't file it again."];
   }
 }
 
@@ -251,7 +251,8 @@ function postWithGh(gh: string, repo: string, report: Stored, dir: Dir, sessionD
       return { status: 1, out: [], err: [`ardia triage: ${what}, so the issue may or may not exist. Check ${mine} before filing again.`] };
     }
     forget(dir, report.code, "gh");
-    const why = refused && errors[0] instanceof Map && typeof errors[0].get("message") === "string" ? (errors[0].get("message") as string) : created.neverRan ? "gh couldn't be run" : firstLine(created.stderr);
+    if (created.neverRan) return { status: 1, out: [], err: ["ardia triage: gh couldn't be started, so nothing was filed. Try --via form, or --via feedback."] };
+    const why = refused && errors[0] instanceof Map && typeof errors[0].get("message") === "string" ? (errors[0].get("message") as string) : firstLine(created.stderr);
     return { status: 1, out: [], err: [`ardia triage: GitHub refused the issue (${why || "no reason given"}); nothing was filed. Try --via form, or --via feedback.`] };
   }
   const labels = dig(issue, "labels", "nodes");
@@ -344,9 +345,9 @@ async function postWithFeedback(args: TriageFileArgs, report: Stored, dir: Dir, 
     flag(call, "triage_refused");
     return sent.said;
   }
-  remember(dir, { code: report.code, via: "feedback", where: sent.reference, state: "filed" });
+  const unrecorded = rememberFiled(dir, { code: report.code, via: "feedback", where: sent.reference, state: "filed" });
   flag(call, "triage_filed_feedback");
-  const out = [...sent.said.out];
+  const out = [...sent.said.out, ...unrecorded];
   if (args.attachEvidence) out.push(extra.paths.length > 0 ? `Attached ${extra.paths.length} evidence file${extra.paths.length === 1 ? "" : "s"} with the report.` : "No evidence file could be attached.");
   for (const left of extra.left) out.push(`Not attached: ${left}.`);
   return { ...sent.said, out };
