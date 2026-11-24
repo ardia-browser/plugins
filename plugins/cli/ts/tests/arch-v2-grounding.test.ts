@@ -161,12 +161,24 @@ describe("borrowed-tab navigation depth", () => {
     expect(history.currentIndex).toBe(3);
   });
 
-  test("an action that doesn't navigate costs no extra CDP call", async () => {
+  test("an action that doesn't navigate skips the post-action history check", async () => {
     const { state, browser } = await borrowedTab();
     const before = browser.sent.length;
     await trackBorrowedNav(state, "TARGET", async () => null);
-    expect(browser.sent.length).toBe(before);
+    expect(browser.sent.length).toBe(before + 1);
     expect(borrowedDepth(state, "TARGET")).toBe(0);
+  });
+
+  test("a replace on duplicate adjacent URLs never earns a back step past the user's entry", async () => {
+    const { state, page, history } = await borrowedTab();
+    history.entries = [{ id: 1, url: ORIGINAL }, { id: 2, url: ORIGINAL }];
+    history.currentIndex = 1;
+    await trackBorrowedNav(state, "TARGET", async () => {
+      history.entries[1] = { id: 3, url: "http://u/replaced" };
+      page.onEvent("Page.frameNavigated", { frame: { id: MAIN, loaderId: LOADER, url: "http://u/replaced" } });
+    });
+    expect(borrowedDepth(state, "TARGET")).toBe(0);
+    expect((await failure(() => dispatch(ctxOf(state, "back"), "back", []))).code).toBe("borrowed_tab");
   });
 
   test("a navigation is still counted when the action itself fails afterwards", async () => {

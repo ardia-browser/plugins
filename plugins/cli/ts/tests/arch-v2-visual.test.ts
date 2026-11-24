@@ -154,6 +154,21 @@ describe("screenshot --scale / --region / --marks", () => {
     expect(captures(browser)).toEqual([]);
   });
 
+  test("--annotate still draws and emits legend when combined with --scale or --region", async () => {
+    const ax = [
+      { nodeId: "1", role: { value: "RootWebArea" }, name: { value: "Shop" }, childIds: ["2"], backendDOMNodeId: 1 },
+      axButton("2", 42, "Apply"),
+    ];
+    const quads = { 42: [100, 200, 160, 200, 160, 230, 100, 230] };
+    const { ctx } = shotRig(png(400, 300), { width: 800, height: 600, deviceWidth: 800 }, ax, quads);
+    const result = await cmdScreenshot(ctx, ["ann.png", "--annotate", "--scale", "0.5"]);
+    expect(result.pageContent).toBe(true);
+    expect(result.text).toContain('button "Apply"');
+    const drawn = decodePng(fs.readFileSync(ctx.path("ann.png")));
+    const pixel = new Uint32Array(drawn.pixels.buffer, drawn.pixels.byteOffset, drawn.width * drawn.height)[100 * drawn.width + 50] as number;
+    expect([pixel & 0xff, (pixel >> 8) & 0xff, (pixel >> 16) & 0xff]).toEqual([...LABEL]);
+  });
+
   test("a plain screenshot keeps its old output", async () => {
     const { browser, ctx } = shotRig(png(10, 10), { width: 10, height: 10 });
     expect((await cmdScreenshot(ctx, ["p.png"])).text).toBe("✓ Screenshot saved to p.png");
@@ -180,38 +195,43 @@ function superseded(id: string): StaleRef {
 }
 
 describe("batch follows a ref across a same-site reload", () => {
-  test("the HC3 case: select reloads, then click @e65 finds the one Apply as @e131", async () => {
+  test("read-only commands heal across a same-site reload; mutating clicks do not", async () => {
     const old = ref("e65");
     const fresh = ref("e131", { loader: "L2", backend: 9 });
     const state = navState(old, { unique: fresh, same: ["e131"] });
     const origins: NavOrigins = new Map();
     noteOrigins({ pages: new Map([["T", { url: "http://127.0.0.1:8821/shop", mainFrame: "MAIN" }]]) }, origins);
     noteOrigins(state, origins);
-    const found = await navSuccessor(state, superseded("e65"), "click", origins, new Set(["e65"]));
+    const found = await navSuccessor(state, superseded("e65"), "hover", origins, new Set(["e65"]));
     expect(found?.id).toBe("e131");
-    expect(rebound(["click", "@e65"], "e65", "e131")).toEqual(["click", "@e131"]);
+    expect(await navSuccessor(state, superseded("e65"), "get", origins, new Set(["e65"]))).toBe(fresh);
+    expect(await navSuccessor(state, superseded("e65"), "click", origins, new Set(["e65"]))).toBeNull();
+    expect(rebound(["hover", "@e65"], "e65", "e131")).toEqual(["hover", "@e131"]);
   });
 
-  test("nothing is followed when the site changed, the name repeats, or the action is risky", async () => {
+  test("nothing is followed when the site changed, the name repeats, or the action can change state", async () => {
     const old = ref("e65");
     const fresh = ref("e131", { loader: "L2" });
     const live = new Set(["e65"]);
     const sameSite: NavOrigins = new Map([["T", new Set(["http://127.0.0.1:8821"])]]);
     const crossSite: NavOrigins = new Map([["T", new Set(["http://127.0.0.1:8821", "http://127.0.0.1:8822"])]]);
-    expect(await navSuccessor(navState(old, { unique: fresh, same: ["e131"] }), superseded("e65"), "click", crossSite, live)).toBeNull();
-    expect(await navSuccessor(navState(old, { unique: null, same: ["e131", "e140"] }), superseded("e65"), "click", sameSite, live)).toBeNull();
-    expect(await navSuccessor(navState(old, { unique: fresh, same: ["e131"] }, "http://127.0.0.1:9999/"), superseded("e65"), "click", sameSite, live)).toBeNull();
-    expect(await navSuccessor(navState(old, { unique: fresh, same: ["e131"] }), superseded("e65"), "click", sameSite, new Set())).toBeNull();
+    expect(await navSuccessor(navState(old, { unique: fresh, same: ["e131"] }), superseded("e65"), "hover", crossSite, live)).toBeNull();
+    expect(await navSuccessor(navState(old, { unique: null, same: ["e131", "e140"] }), superseded("e65"), "hover", sameSite, live)).toBeNull();
+    expect(await navSuccessor(navState(old, { unique: fresh, same: ["e131"] }, "http://127.0.0.1:9999/"), superseded("e65"), "hover", sameSite, live)).toBeNull();
+    expect(await navSuccessor(navState(old, { unique: fresh, same: ["e131"] }), superseded("e65"), "hover", sameSite, new Set())).toBeNull();
     expect(await navSuccessor(navState(old, { unique: fresh, same: ["e131"] }), superseded("e65"), "eval", sameSite, live)).toBeNull();
     const plainStale = new StaleRef("e65", "the element was removed from the page");
-    expect(await navSuccessor(navState(old, { unique: fresh, same: ["e131"] }), plainStale, "click", sameSite, live)).toBeNull();
+    expect(await navSuccessor(navState(old, { unique: fresh, same: ["e131"] }), plainStale, "hover", sameSite, live)).toBeNull();
     const page = { url: "http://127.0.0.1:8821/x", mainFrame: "MAIN" };
-    for (const name of ["Place order", "Delete account", "Pay now", "Confirm purchase", "Submit"]) {
-      expect(navHealable("click", ref("e1", { name }), ref("e2", { name, loader: "L2" }), page, sameSite, new Set(["e1"]))).toBe(false);
+    for (const cmd of ["click", "dblclick", "fill", "type", "check", "uncheck", "select"]) {
+      expect(navHealable(cmd, old, ref("e2", { loader: "L2" }), page, sameSite, live)).toBe(false);
     }
-    expect(navHealable("click", old, ref("e2", { role: "link", loader: "L2" }), page, sameSite, live)).toBe(false);
-    expect(navHealable("click", old, ref("e2", { frame: "CHILD", loader: "L2" }), page, sameSite, live)).toBe(false);
-    expect(navHealable("click", old, ref("e2", { loader: "L2" }), page, sameSite, live)).toBe(true);
+    for (const name of ["Place order", "Delete account", "Pay now", "Confirm purchase", "Submit"]) {
+      expect(navHealable("hover", ref("e1", { name }), ref("e2", { name, loader: "L2" }), page, sameSite, new Set(["e1"]))).toBe(false);
+    }
+    expect(navHealable("hover", old, ref("e2", { role: "link", loader: "L2" }), page, sameSite, live)).toBe(false);
+    expect(navHealable("hover", old, ref("e2", { frame: "CHILD", loader: "L2" }), page, sameSite, live)).toBe(false);
+    expect(navHealable("hover", old, ref("e2", { loader: "L2" }), page, sameSite, live)).toBe(true);
   });
 
   test("origins come from each page's URL, and opaque ones are skipped", () => {

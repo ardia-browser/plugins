@@ -351,7 +351,7 @@ function staleMatches(state: State, error: StaleRef): string {
   return `→ on the page now: ${listed.join(", ")}`;
 }
 
-const NAV_HEAL_COMMANDS = new Set(["click", "dblclick", "hover", "focus", "fill", "type", "check", "uncheck", "select", "scrollintoview", "get", "is"]);
+const NAV_HEAL_COMMANDS = new Set(["hover", "focus", "scrollintoview", "get", "is"]);
 const NAV_HEAL_RISKY = /\b(delete|remove|erase|destroy|pay|payment|buy|purchase|order|checkout|check out|place|confirm|submit|send|transfer|subscribe|unsubscribe|cancel|sign out|log ?out|book|donate|publish|post|reset|refund|withdraw)\b/iu;
 
 export type NavOrigins = Map<string, Set<string>>;

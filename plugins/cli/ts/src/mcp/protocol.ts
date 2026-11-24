@@ -45,9 +45,18 @@ export class FrameReader {
   }
 
   finish(): Frame[] {
-    if (this.framing === "content-length" || this.pending.length === 0) return [];
-    const text = this.pending.toString("utf8").trim();
+    if (this.pending.length === 0) return [];
+    if (this.framing === "content-length") {
+      let at = 0;
+      while (at < this.pending.length && LEADING_SPACE.has(this.pending[at] as number)) at += 1;
+      const truncated = at < this.pending.length;
+      this.pending = Buffer.alloc(0);
+      return truncated ? [{ kind: "invalid", reason: "truncated message" }] : [];
+    }
+    const over = this.pending.length > MAX_FRAME_BYTES;
+    const text = over ? "" : this.pending.toString("utf8").trim();
     this.pending = Buffer.alloc(0);
+    if (over) return [{ kind: "invalid", reason: "message too large" }];
     return text === "" ? [] : [{ kind: "message", text }];
   }
 
@@ -77,6 +86,10 @@ export class FrameReader {
         }
         return undefined;
       }
+      if (end > MAX_FRAME_BYTES) {
+        this.pending = this.pending.subarray(end + 1);
+        return { kind: "invalid", reason: "message too large" };
+      }
       const text = this.pending.subarray(0, end).toString("utf8").trim();
       this.pending = this.pending.subarray(end + 1);
       if (text !== "") return { kind: "message", text };
@@ -90,11 +103,15 @@ export class FrameReader {
     const lf = this.pending.indexOf(BARE_HEADER_END, start);
     const [end, gap] = crlf >= 0 && (lf < 0 || crlf <= lf) ? [crlf, HEADER_END.length] : lf >= 0 ? [lf, BARE_HEADER_END.length] : [-1, 0];
     if (end < 0) {
-      if (this.pending.length > 8192) {
+      if (this.pending.length - start > 8192) {
         this.pending = Buffer.alloc(0);
         return { kind: "invalid", reason: "header too large" };
       }
       return undefined;
+    }
+    if (end - start > 8192) {
+      this.pending = this.pending.subarray(end + gap);
+      return { kind: "invalid", reason: "header too large" };
     }
     const header = this.pending.subarray(start, end).toString("latin1");
     const length = CONTENT_LENGTH.exec(header);

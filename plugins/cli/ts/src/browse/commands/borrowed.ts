@@ -37,6 +37,7 @@ export function hintOnce(state: State, key: string, text: string): void {
 }
 
 export type History = { index: number; entries: unknown[] };
+export type BeforeNav = { index: number; entry: unknown; url: string };
 type Trail = { index: number; entry: unknown; ahead: number };
 
 const TRAILS = new WeakMap<State, Map<string, Trail>>();
@@ -71,28 +72,39 @@ export function historyFrom(raw: Record<string, unknown>): History {
   return { index: typeof raw["currentIndex"] === "number" ? raw["currentIndex"] : 0, entries: Array.isArray(raw["entries"]) ? raw["entries"] : [] };
 }
 
-export function pushedEntries(history: History, fromUrl: string, most: number): number {
+export function pushedEntries(history: History, from: string | BeforeNav, most: number): number {
+  if (typeof from !== "string") {
+    if (from.entry === undefined) return 0;
+    for (let back = 1; back <= history.index; back += 1) {
+      if (field(history.entries[history.index - back], "id") === from.entry) return back;
+    }
+    return 0;
+  }
   const limit = Math.max(1, most);
   for (let back = 1; back <= limit && history.index - back >= 0; back += 1) {
-    if (field(history.entries[history.index - back], "url") === fromUrl) return back;
+    if (field(history.entries[history.index - back], "url") === from) return back;
   }
   return 0;
 }
 
-export function recordBorrowedNav(state: State, target: string, history: History, fromUrl: string, documents: number): number {
+export function recordBorrowedNav(state: State, target: string, history: History, from: string | BeforeNav, documents: number): number {
   const trails = trailsOf(state);
   const trail = trails.get(target);
   const depth = borrowedDepth(state, target);
   const entry = field(history.entries[history.index], "id");
-  const pushed = pushedEntries(history, fromUrl, documents);
+  const pushed = pushedEntries(history, from, documents);
   if (pushed > 0) {
-    const continued = trail !== undefined && depth > 0 && trail.index + pushed === history.index ? depth : 0;
+    const continuous =
+      trail !== undefined &&
+      depth > 0 &&
+      (typeof from !== "string" ? trail.entry === from.entry && trail.index === from.index : trail.index + pushed === history.index);
+    const continued = continuous ? depth : 0;
     state.borrowedNavDepth.set(target, continued + pushed);
     trails.set(target, { index: history.index, entry, ahead: 0 });
     flag("borrowed_nav_tracked", true);
     return pushed;
   }
-  if (depth > 0 && trail !== undefined && trail.index === history.index) {
+  if (depth > 0 && trail !== undefined && trail.index === history.index && (typeof from === "string" || trail.entry === from.entry)) {
     trails.set(target, { index: history.index, entry, ahead: 0 });
     return 0;
   }
@@ -135,15 +147,18 @@ export async function trackBorrowedNav<T>(state: State, target: string | null, r
   if (page === undefined || target === null) return run();
   const navigations = page.navigations;
   const fromUrl = page.url;
+  const beforeHistory = await historyOf(page);
+  const before: BeforeNav | null =
+    beforeHistory === null ? null : { index: beforeHistory.index, entry: field(beforeHistory.entries[beforeHistory.index], "id"), url: fromUrl };
   const result = await run().catch(async (error: unknown) => {
-    await settleBorrowedNav(state, target, page, navigations, fromUrl);
+    await settleBorrowedNav(state, target, page, navigations, fromUrl, before);
     throw error;
   });
-  await settleBorrowedNav(state, target, page, navigations, fromUrl);
+  await settleBorrowedNav(state, target, page, navigations, fromUrl, before);
   return result;
 }
 
-async function settleBorrowedNav(state: State, target: string, page: Page, navigations: number, fromUrl: string): Promise<void> {
+async function settleBorrowedNav(state: State, target: string, page: Page, navigations: number, fromUrl: string, before: BeforeNav | null): Promise<void> {
   if (page.navigations === navigations && page.url === fromUrl) return;
   if (borrowedTab(state) !== target || state.pages.get(target) !== page) return;
   let history: History | null = null;
@@ -153,7 +168,11 @@ async function settleBorrowedNav(state: State, target: string, page: Page, navig
     return;
   }
   if (history === null) return;
-  recordBorrowedNav(state, target, history, fromUrl, page.navigations - navigations);
+  if (before === null) {
+    forgetBorrowedNav(state, target);
+    return;
+  }
+  recordBorrowedNav(state, target, history, before, page.navigations - navigations);
 }
 
 export function tracksBorrowedNav(handler: Handler, targetOf: (state: State, argv: readonly string[]) => string | null = (state) => borrowedTab(state)): Handler {

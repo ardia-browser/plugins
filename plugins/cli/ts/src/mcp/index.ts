@@ -197,10 +197,12 @@ export class SessionDaemon implements Daemon {
     }
   }
 
-  private async link(): Promise<Link> {
+  private async link(signal?: AbortSignal): Promise<Link> {
+    if (signal?.aborted) throw new BrowseError("cancelled", 130, "interrupted");
     if (this.socket !== undefined) return socketLink(this.socket);
     const live = await this.openIfLive();
     if (live !== null) return live;
+    if (signal?.aborted) throw new BrowseError("cancelled", 130, "interrupted");
     const dir = openBrowseDir(this.root);
     try {
       return await awaitDaemon(dir.fd, this.key, spawnDaemon(dir.fd, this.key, this.config, { kind: "ts", program: process.execPath }), () => this.openIfLive());
@@ -235,13 +237,21 @@ export class SessionDaemon implements Daemon {
       const deadline = answerDeadline(request.argv, timeout);
       const seconds = quickMs !== undefined ? quickMs / 1000 : typeof deadline === "number" ? deadline : FALLBACK_DEADLINE_S;
       if (signal?.aborted) return failed("cancelled", "interrupted", 130);
-      const link = await this.link();
+      const link = await this.link(signal);
+      if (signal?.aborted) {
+        link.destroy();
+        return failed("cancelled", "interrupted", 130);
+      }
       const abort = () => {
         link.destroy();
         link.ended("ECANCELED");
       };
       signal?.addEventListener("abort", abort, { once: true });
       try {
+        if (signal?.aborted) {
+          abort();
+          return failed("cancelled", "interrupted", 130);
+        }
         return answerOf(await exchange(link, line, request.argv[0] ?? "", seconds));
       } finally {
         signal?.removeEventListener("abort", abort);

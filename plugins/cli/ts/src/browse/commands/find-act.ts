@@ -110,8 +110,9 @@ export const SCOPED_MATCH = `(root, kind, value, exact, role) => {
     return innermost(pick(shownOnly, (el) => [shown(el)])).slice(0, 50);
   }
   if (kind === "label") {
+    const allSet = new Set(all);
     const controls = [];
-    for (const label of pick(all.filter((el) => el.tagName === "LABEL"), (el) => [shown(el)])) if (label.control && !controls.includes(label.control)) controls.push(label.control);
+    for (const label of pick(all.filter((el) => el.tagName === "LABEL"), (el) => [shown(el)])) if (label.control && allSet.has(label.control) && !controls.includes(label.control)) controls.push(label.control);
     for (const el of pick(all.filter((el) => el.matches("input,select,textarea,[role=textbox],[role=combobox],[role=checkbox],[role=radio],[role=switch]")), (el) => [fold(el.getAttribute("aria-label"))])) if (!controls.includes(el)) controls.push(el);
     return controls.slice(0, 50);
   }
@@ -154,7 +155,24 @@ async function containersByText(page: Page, frame: string, text: string): Promis
   return page.elementsFrom(remote, frame, `--within ${text}`, 20);
 }
 
-async function containerBySelector(ctx: Ctx, value: string): Promise<[Page, Element] | null> {
+async function ambiguousContainers(ctx: Ctx, page: Page, value: string, containers: Element[]): Promise<never> {
+  const listed: { ref: string; text: string }[] = [];
+  for (const container of containers.slice(0, MAX_LISTED)) listed.push({ ref: `@${ctx.state.addRef(page, container)}`, text: await matchText(page, container) });
+  const lines = listed.map((item) => `  ${item.ref} "${item.text}"`).join("\n");
+  throw new BrowseError(
+    `--within "${value}" matches ${containers.length} separate containers, so nothing was done. Use one of their refs as --within:\n${lines}`,
+    { containers: listed },
+    "ambiguous",
+  );
+}
+
+async function containerBySelector(ctx: Ctx, page: Page, frame: string, value: string): Promise<[Page, Element] | null> {
+  const css = await scopedMatches(page, frame, null, "css", value, false);
+  if (css !== null) {
+    if (css.length > 1) return ambiguousContainers(ctx, page, value, css);
+    if (css.length === 1) return [page, css[0] as Element];
+    return null;
+  }
   try {
     return await ctx.state.locate(value, null, 0);
   } catch (error) {
@@ -171,22 +189,13 @@ export async function scopeOf(ctx: Ctx, value: string): Promise<Scope> {
     const page = await ctx.state.page();
     const frame = (ctx.state.frameFor(page) || page.mainFrame) as string;
     const cssFirst = CSS_SHAPED.test(value);
-    if (cssFirst) found = await containerBySelector(ctx, value);
+    if (cssFirst) found = await containerBySelector(ctx, page, frame, value);
     if (found === null) {
       const containers = await containersByText(page, frame, value);
-      if (containers.length > 1) {
-        const listed: { ref: string; text: string }[] = [];
-        for (const container of containers.slice(0, MAX_LISTED)) listed.push({ ref: `@${ctx.state.addRef(page, container)}`, text: await matchText(page, container) });
-        const lines = listed.map((item) => `  ${item.ref} "${item.text}"`).join("\n");
-        throw new BrowseError(
-          `--within "${value}" matches ${containers.length} separate containers, so nothing was done. Use one of their refs as --within:\n${lines}`,
-          { containers: listed },
-          "ambiguous",
-        );
-      }
+      if (containers.length > 1) return ambiguousContainers(ctx, page, value, containers);
       if (containers.length === 1) found = [page, containers[0] as Element];
     }
-    if (found === null && !cssFirst) found = await containerBySelector(ctx, value);
+    if (found === null && !cssFirst) found = await containerBySelector(ctx, page, frame, value);
   }
   if (found === null) {
     throw new BrowseError(

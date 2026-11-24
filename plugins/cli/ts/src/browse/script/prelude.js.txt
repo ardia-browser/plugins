@@ -8,6 +8,9 @@
   const REPL = config.repl === true;
   const RUN_LOG_LIMIT = 8 * 1024 * 1024;
   const FETCH_LIMIT = 2 * 1024 * 1024;
+  const MAX_SPILL_ENTRIES = 12;
+  const MAX_SPILL_CHARS = 2 * 1024 * 1024;
+  const RECEIPT_STALE_CMDS = new Set(["open", "goto", "back", "forward", "reload", "tab", "window", "frame", "close", "pushstate"]);
   const BridgeError = Error;
   const send = (kind, payload) => {
     let answer;
@@ -54,6 +57,8 @@
   let runLogChars = 0;
   let lastReceipt = null;
   const replNames = new Set();
+  const spilledEntries = [];
+  let spilledChars = 0;
 
   const show = (value) => {
     if (typeof value === "string") return value;
@@ -99,6 +104,13 @@
     const origin = new Error();
     const line = lineOf(origin.stack);
     const id = nextId++;
+    if (op === "call" && Array.isArray(payload.argv) && payload.argv.length > 0) {
+      const first = String(payload.argv[0]).trim();
+      const parts = first.split(/\s+/);
+      const cmd = parts[0].toLowerCase();
+      const sub = (parts[1] || (payload.argv.length > 1 ? String(payload.argv[1]) : "")).toLowerCase();
+      if (RECEIPT_STALE_CMDS.has(cmd) && !(cmd === "tab" && (sub === "list" || sub === ""))) lastReceipt = null;
+    }
     syncState(false);
     return new Promise((resolve, reject) => {
       waiting.set(id, { resolve, reject, origin, argv: payload.argv || (op === "sleep" ? null : ["eval"]) });
@@ -480,12 +492,106 @@
     return makeLocator(out);
   };
   const FIELD = "self::input or self::textarea or self::select or self::button or @contenteditable or @role";
-  const regexText = (value) => {
-    if (!(value instanceof RegExp)) return { text: norm(value), anchored: false };
+  const REGEX_META = new Set([".", "*", "+", "?", "(", ")", "[", "]", "{", "}", "^", "$"]);
+  const ESCAPED_LITERAL = new Set(["/", ".", "-", "+", "?", "*", "(", ")", "[", "]", "{", "}", "|", "^", "$", "\\", "'", "\"", ":", ",", "!", "=", "<", ">"]);
+  const splitBranches = (src) => {
+    const parts = [];
+    let cur = "";
+    for (let i = 0; i < src.length; i++) {
+      const c = src[i];
+      if (c === "\\") {
+        cur += src.slice(i, i + 2);
+        i++;
+      } else if (c === "|") {
+        parts.push(cur);
+        cur = "";
+      } else cur += c;
+    }
+    parts.push(cur);
+    return parts;
+  };
+  const parseBranch = (raw, whole) => {
+    let s = raw;
+    let starts = false;
+    let ends = false;
+    if (s.startsWith("^")) {
+      starts = true;
+      s = s.slice(1);
+    }
+    let trailingSlashes = 0;
+    for (let i = s.length - 2; i >= 0 && s[i] === "\\"; i--) trailingSlashes++;
+    if (s.endsWith("$") && trailingSlashes % 2 === 0) {
+      ends = true;
+      s = s.slice(0, -1);
+    }
+    let out = "";
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (c === "\\") {
+        const next = s[i + 1];
+        if (next === undefined) throw new TypeError(`locator regex ${whole} ends with a bare backslash`);
+        if (next === "s" && s[i + 2] === "+") {
+          out += " ";
+          i += 2;
+          continue;
+        }
+        if (ESCAPED_LITERAL.has(next)) {
+          out += next;
+          i++;
+          continue;
+        }
+        throw new TypeError(`locator regex ${whole} uses unsupported escape \\${next}; locators support literal text, \\s+, ^/$ anchors, | alternation, and /i`);
+      }
+      if (REGEX_META.has(c)) {
+        throw new TypeError(`locator regex ${whole} uses unsupported syntax "${c}"; locators support literal text, ^/$ anchors, | alternation, and /i (use page.locator or page.evaluate for full regexes)`);
+      }
+      out += c;
+    }
+    return { text: norm(out), starts, ends };
+  };
+  const parsePattern = (value, exactFlag) => {
+    if (!(value instanceof RegExp)) {
+      return { isRegex: false, ignoreCase: !exactFlag, branches: [{ text: norm(value), starts: exactFlag, ends: exactFlag }] };
+    }
+    const whole = String(value);
     let src = value.source;
-    const anchored = src.startsWith("^") && src.endsWith("$");
-    src = src.replace(/^\^/u, "").replace(/\$$/u, "").replace(/\\s\+/gu, " ").replace(/\\s\*/gu, " ").replace(/\\([/.\\\-+?*()[\]{}|])/gu, "$1");
-    return { text: norm(src), anchored };
+    let outerStart = false;
+    let outerEnd = false;
+    if (src.startsWith("^")) {
+      let trailingSlashes = 0;
+      for (let i = src.length - 2; i >= 0 && src[i] === "\\"; i--) trailingSlashes++;
+      const hasEnd = src.endsWith("$") && trailingSlashes % 2 === 0;
+      const inner = hasEnd ? src.slice(1, -1) : src.slice(1);
+      if ((inner.startsWith("(?:") || inner.startsWith("(")) && inner.endsWith(")")) {
+        const body = inner.startsWith("(?:") ? inner.slice(3, -1) : inner.slice(1, -1);
+        if (!/[()]/.test(body.replace(/\\./g, ""))) {
+          outerStart = true;
+          outerEnd = hasEnd;
+          src = body;
+        }
+      }
+    }
+    const branches = splitBranches(src).map((part) => {
+      const parsed = parseBranch(part, whole);
+      return { text: parsed.text, starts: outerStart || parsed.starts, ends: outerEnd || parsed.ends };
+    });
+    return { isRegex: true, ignoreCase: value.ignoreCase, branches };
+  };
+  const xpathBranch = (node, branch, ignoreCase) => {
+    const subject = ignoreCase ? `translate(normalize-space(${node}), "${UPPER}", "${LOWER}")` : `normalize-space(${node})`;
+    const needle = ignoreCase ? branch.text.toLowerCase() : branch.text;
+    const quoted = xpathString(needle);
+    if (branch.starts && branch.ends) return `${subject}=${quoted}`;
+    if (branch.starts) return `starts-with(${subject}, ${quoted})`;
+    if (branch.ends) {
+      if (needle.length === 0) return "true()";
+      return `(string-length(${subject}) >= ${needle.length} and substring(${subject}, string-length(${subject}) - ${needle.length - 1})=${quoted})`;
+    }
+    return `contains(${subject}, ${quoted})`;
+  };
+  const xpathPattern = (node, pattern) => {
+    const tests = pattern.branches.map((branch) => xpathBranch(node, branch, pattern.ignoreCase));
+    return tests.length === 1 ? tests[0] : `(${tests.join(" or ")})`;
   };
   const getBy = {
     role: (role, options) => {
@@ -494,23 +600,32 @@
       const base = `role=${role.toLowerCase()}`;
       let selector = base;
       if (options.name !== undefined && options.name !== null) {
-        const parsed = regexText(options.name);
-        const name = parsed.text;
-        const exact = options.exact === true || parsed.anchored;
-        const quoted = bareQuote(name);
-        if (exact || quoted === null) {
-          const test = (node) => (exact ? `normalize-space(${node})=${xpathString(name)}` : xpathText(node, name, false));
+        const pattern = parsePattern(options.name, options.exact === true);
+        if (pattern.isRegex) {
+          const test = (node) => xpathPattern(node, pattern);
           selector = chained(base, `xpath=self::*[${["@aria-label", ".", "@title", "@value", "@alt", "@placeholder"].map(test).join(" or ")}]`);
-        } else selector = `${base}[name=${quoted}]`;
+        } else {
+          const name = pattern.branches[0].text;
+          const exact = options.exact === true;
+          const quoted = bareQuote(name);
+          if (exact || quoted === null) {
+            const test = (node) => (exact ? `normalize-space(${node})=${xpathString(name)}` : xpathText(node, name, false));
+            selector = chained(base, `xpath=self::*[${["@aria-label", ".", "@title", "@value", "@alt", "@placeholder"].map(test).join(" or ")}]`);
+          } else selector = `${base}[name=${quoted}]`;
+        }
       }
       return scoped(selector, options);
     },
     text: (value, options) => {
       options = plainObject(options) ? options : {};
-      const parsed = regexText(value);
-      const wanted = parsed.text;
+      const pattern = parsePattern(value, options.exact === true);
+      if (pattern.isRegex) {
+        const test = xpathPattern(".", pattern);
+        return scoped(`xpath=.//*[not(self::script or self::style or self::head or self::title)][${test}][not(.//*[${test}])]`, options);
+      }
+      const wanted = pattern.branches[0].text;
       if (!wanted) throw new TypeError("page.getByText() takes the text to find");
-      const exact = options.exact === true || parsed.anchored;
+      const exact = options.exact === true;
       const quoted = bareQuote(wanted);
       if (wanted.includes(">>") || (exact && quoted === null)) {
         const test = xpathText(".", wanted, exact);
@@ -520,11 +635,9 @@
     },
     label: (value, options) => {
       options = plainObject(options) ? options : {};
-      const parsed = regexText(value);
-      const wanted = parsed.text;
-      if (!wanted) throw new TypeError("page.getByLabel() takes the label text");
-      const exact = options.exact === true || parsed.anchored;
-      const test = (node) => xpathText(node, wanted, exact);
+      const pattern = parsePattern(value, options.exact === true);
+      if (!pattern.isRegex && !pattern.branches[0].text) throw new TypeError("page.getByLabel() takes the label text");
+      const test = (node) => xpathPattern(node, pattern);
       const labelled = [
         `(@id and @id = //label[${test(".")}]/@for)`,
         `ancestor::label[${test(".")}]`,
@@ -535,18 +648,21 @@
     },
     placeholder: (value, options) => {
       options = plainObject(options) ? options : {};
-      const wanted = value instanceof RegExp ? regexText(value).text : String(value === undefined || value === null ? "" : value);
+      if (value instanceof RegExp) return scoped(`xpath=.//*[${xpathPattern("@placeholder", parsePattern(value, false))}]`, options);
+      const wanted = String(value === undefined || value === null ? "" : value);
       return scoped(options.exact === true ? `[placeholder=${cssString(wanted)}]` : `[placeholder*=${cssString(wanted)} i]`, options);
     },
     testid: (value, options) => scoped(`[data-testid=${cssString(String(value))}]`, plainObject(options) ? options : {}),
     alt: (value, options) => {
       options = plainObject(options) ? options : {};
-      const wanted = value instanceof RegExp ? regexText(value).text : String(value);
+      if (value instanceof RegExp) return scoped(`xpath=.//*[${xpathPattern("@alt", parsePattern(value, false))}]`, options);
+      const wanted = String(value);
       return scoped(options.exact === true ? `[alt=${cssString(wanted)}]` : `[alt*=${cssString(wanted)} i]`, options);
     },
     title: (value, options) => {
       options = plainObject(options) ? options : {};
-      const wanted = value instanceof RegExp ? regexText(value).text : String(value);
+      if (value instanceof RegExp) return scoped(`xpath=.//*[${xpathPattern("@title", parsePattern(value, false))}]`, options);
+      const wanted = String(value);
       return scoped(options.exact === true ? `[title=${cssString(wanted)}]` : `[title*=${cssString(wanted)} i]`, options);
     },
   };
@@ -1009,7 +1125,19 @@
   define("closeTab", closeTab);
   define("readUrls", readUrls);
   define("parseReceipt", parseReceipt);
-  if (REPL) define("__ardiaReplCapture__", (fn) => { replCapture = typeof fn === "function" ? fn : null; });
+  if (REPL) {
+    define("__ardiaReplCapture__", (fn) => { replCapture = typeof fn === "function" ? fn : null; });
+    define("__ardiaReplInit__", (names) => {
+      if (!Array.isArray(names)) return;
+      for (const name of names) {
+        if (BUILTIN.has(name) && !replNames.has(name)) continue;
+        if (!Object.prototype.hasOwnProperty.call(globalThis, name)) {
+          try { globalThis[name] = undefined; } catch (e) {}
+        }
+        replNames.add(name);
+      }
+    });
+  }
   Object.defineProperty(globalThis, "state", { value: JSON.parse(config.state), writable: true, configurable: false, enumerable: false });
   const BUILTIN = new Set(Reflect.ownKeys(globalThis));
 
@@ -1053,12 +1181,20 @@
     }
     return `${typeof value}, ${size}`;
   };
-  const stash = (value) => {
+  const stash = (value, chars) => {
     outCount += 1;
     const name = "$out" + outCount;
     try {
       globalThis[name] = value;
       replNames.add(name);
+      spilledEntries.push({ name, chars });
+      spilledChars += chars;
+      while (spilledEntries.length > 1 && (spilledEntries.length > MAX_SPILL_ENTRIES || spilledChars > MAX_SPILL_CHARS)) {
+        const old = spilledEntries.shift();
+        spilledChars -= old.chars;
+        try { delete globalThis[old.name]; } catch (e) {}
+        replNames.delete(old.name);
+      }
     } catch (e) {}
     return name;
   };
@@ -1066,7 +1202,7 @@
     if (!REPL || spillAt <= 0 || value === undefined) return null;
     const shown = previewOf(value);
     if (typeof shown !== "string" || shown.length <= spillAt) return null;
-    const name = stash(value);
+    const name = stash(value, shown.length);
     const head = shown.slice(0, previewChars);
     return { value: `${head}${shown.length > previewChars ? "…" : ""}\n[stored in ${name} (${described(value, shown.length)}); inspect or filter in next repl call]`, spilled: name };
   };
@@ -1074,7 +1210,7 @@
     if (!REPL || spillAt <= 0 || runLogChars <= spillAt) return null;
     const lines = runLogs.slice();
     const joined = lines.join("\n");
-    const name = stash(lines);
+    const name = stash(lines, joined.length);
     return { name, lines: lines.length, chars: joined.length, preview: joined.slice(0, previewChars) + (joined.length > previewChars ? "…" : "") };
   };
   const harvest = () => {
@@ -1110,6 +1246,7 @@
     runLogs = [];
     runLogChars = 0;
     replCapture = null;
+    lastReceipt = null;
     stateCheckedAt = 0;
     waiting.clear();
     timers.clear();

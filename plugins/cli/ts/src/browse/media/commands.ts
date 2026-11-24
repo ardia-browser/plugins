@@ -233,7 +233,7 @@ export async function cmdScreenshot(ctx: Ctx, argv: string[]): Promise<Result> {
     if (mediaPairing.withSnapshot === null) throw new Usage("screenshot --with-snapshot isn't available here");
     return mediaPairing.withSnapshot(ctx, target);
   }
-  if (scale !== null || region !== null || marks) return framedScreenshot(ctx, { selector, full, fmt, quality, target, scale: scale ?? 1, region, marks, ifChanged: Boolean(options["if_changed"]), threshold: options["threshold"] ?? null });
+  if (scale !== null || region !== null || marks) return framedScreenshot(ctx, { selector, full, fmt, quality, target, scale: scale ?? 1, region, marks, annotate, ifChanged: Boolean(options["if_changed"]), threshold: options["threshold"] ?? null });
   let page = await ctx.state.page();
   let clip: Clip | null = null;
   if (selector) {
@@ -282,7 +282,7 @@ export async function cmdScreenshot(ctx: Ctx, argv: string[]): Promise<Result> {
     const legend = rows.map((row) => `   [${row.number}] @${row.ref} ${row.role}` + (row.name ? ` "${row.name}"` : ""));
     text = [text, ...legend].join("\n");
   }
-  return new Result(result, text);
+  return new Result(result, text, rows !== null);
 }
 
 type Framed = {
@@ -294,6 +294,7 @@ type Framed = {
   scale: number;
   region: Region | null;
   marks: boolean;
+  annotate: boolean;
   ifChanged: boolean;
   threshold: unknown;
 };
@@ -316,16 +317,16 @@ async function framedScreenshot(ctx: Ctx, want: Framed): Promise<Result> {
   const scaleForClip = clipScale(want.scale, layout.dpr);
   const clip: Clip = { x: pyFloat(area.x + layout.scrollX), y: pyFloat(area.y + layout.scrollY), width: area.width, height: area.height, scale: scaleForClip };
   let rows: Annotation[] | null = null;
-  if (want.marks) [rows] = await annotations(ctx, page, want.full, want.full ? null : area);
+  if (want.marks || want.annotate) [rows] = await annotations(ctx, page, want.full, want.full ? null : area);
   let data = want.full ? await capturePng(page, true, null, want.fmt, want.quality, scaleForClip) : await capturePng(page, false, clip, want.fmt, want.quality, 1, want.region !== null || want.selector !== null);
   const frame: CoordinateFrame = frameOf(layout.viewport, area, imageSize(data), layout.dpr);
   let marked: Mark[] | null = null;
   if (rows !== null) {
     data = drawAnnotations(data, rows, { clientWidth: area.width }, [-area.x, -area.y]);
-    marked = rows.map((row) => markOf(row, frame));
+    if (want.marks) marked = rows.map((row) => markOf(row, frame));
   }
   const shots = captureOf(ctx.state).lastShots;
-  const view = viewKey(page, want.selector, want.full, want.fmt, want.marks, [want.scale, want.region]);
+  const view = viewKey(page, want.selector, want.full, want.fmt, want.marks || want.annotate, [want.scale, want.region]);
   const before = shots.get(view);
   shots.set(view, data);
   if (want.ifChanged && before !== undefined && unchanged(before, data, want.fmt, thresholdOf(want.threshold as never))) {
@@ -348,8 +349,11 @@ async function framedScreenshot(ctx: Ctx, want: Framed): Promise<Result> {
   if (marked !== null) {
     result["marks"] = marked;
     lines.push(...marksText(marked));
+  } else if (rows !== null) {
+    result["annotations"] = rows;
+    lines.push(...rows.map((row) => `   [${row.number}] @${row.ref} ${row.role}` + (row.name ? ` "${row.name}"` : "")));
   }
-  return new Result(result, lines.join("\n"));
+  return new Result(result, lines.join("\n"), rows !== null);
 }
 
 export async function cmdPdf(ctx: Ctx, argv: string[]): Promise<Result> {

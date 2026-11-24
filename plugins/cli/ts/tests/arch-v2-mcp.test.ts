@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { encodeFrame, FrameReader, INVALID_PARAMS, METHOD_NOT_FOUND } from "../src/mcp/protocol.ts";
 import { ACTIVE_TAB_URI, McpServer, serveStdio, type Input } from "../src/mcp/server.ts";
-import { actCall, type Daemon, type DaemonAnswer, type DaemonRequest, fence, INSTRUCTIONS, neutralizeFence, refence, tabHeader, TOOLS } from "../src/mcp/tools.ts";
+import { actCall, type Daemon, type DaemonAnswer, type DaemonRequest, fence, imagePath, INSTRUCTIONS, neutralizeFence, refence, replUnsupported, tabHeader, TOOLS } from "../src/mcp/tools.ts";
 import { mcpArgv } from "../src/mcp/index.ts";
 import { UNTRUSTED_NOTICE, wrapUntrusted } from "../src/browse/untrusted.ts";
 
@@ -140,6 +140,30 @@ describe("tools/call", () => {
     expect(daemon.requests.filter((request) => request.argv[0] === "script").at(-1)?.argv).toEqual(["script", "-"]);
   });
 
+  test("browser_repl never replays when script output mentions Unknown flag: --repl", async () => {
+    let calls = 0;
+    const daemon: Daemon = {
+      async run(request) {
+        if (request.argv[0] === "tab") return { exit: 1, out: "", err: "", code: null };
+        calls += 1;
+        return { exit: 1, out: "Unknown flag: --repl\n", err: "✗ script failed at line 1: Unknown flag: --repl\n", code: "script_failed" };
+      },
+    };
+    const server = new McpServer({ daemon, version: "1" });
+    const res = resultOf(await call(server, "tools/call", { name: "browser_repl", arguments: { code: "throw new Error('Unknown flag: --repl')" } }));
+    expect(res["isError"]).toBe(true);
+    expect(calls).toBe(1);
+    expect(server.replSupported).toBe(true);
+    expect(replUnsupported({ exit: 1, out: "", err: "✗ Unknown flag: --repl\n", code: "usage" })).toBe(true);
+    expect(replUnsupported({ exit: 1, out: "ran", err: "✗ Unknown flag: --repl\n", code: "usage" })).toBe(false);
+  });
+
+  test("imagePath reads only the first saved-screenshot line, never marks labels", () => {
+    expect(imagePath('✓ Screenshot saved to shot.png\n   marks: 1\n   [1] @e1 button "/etc/secret.png" at 10,10')).toEqual({ path: "shot.png", mimeType: "image/png" });
+    expect(imagePath('= Unchanged\n   [1] @e1 button "/etc/secret.png"')).toBeNull();
+    expect(imagePath(`${wrapUntrusted('✓ Screenshot saved to /tmp/a.png\n   [1] @e1 button "/tmp/b.png"', "abc")}`)).toEqual({ path: "/tmp/a.png", mimeType: "image/png" });
+  });
+
   test("browser_act passes argv, stdin and output options straight through", async () => {
     const daemon = new MockDaemon();
     const server = new McpServer({ daemon, version: "1" });
@@ -225,7 +249,8 @@ describe("resources", () => {
     const content = (read["contents"] as { uri: string; text: string }[])[0] as { uri: string; text: string };
     const body = JSON.parse(content.text) as Record<string, unknown>;
     expect(body["reachable"]).toBe(true);
-    expect(body["active"]).toEqual({ id: "t1", title: "Example Domain", url: "https://example.com/" });
+    expect(body["active"]).toMatchObject({ id: "t1", url: "https://example.com/" });
+    expect(String((body["active"] as Record<string, unknown>)["title"])).toMatch(/^<page-data nonce="[0-9a-f]+">Example Domain<\/page-data>$/u);
     expect(String(body["header"])).toMatch(/^\[tab t1 \| <page-data/u);
     expect((body["tabs"] as unknown[]).length).toBe(1);
     expect((await call(server, "resources/read", { uri: "ardia://nope" }))["error"]).toMatchObject({ code: -32002 });
@@ -356,7 +381,9 @@ describe.skipIf(!fs.existsSync(BINARY))("built binary over stdio", () => {
       expect(repl).toContain("ran: return document.title");
       expect(repl).toContain("[tab t1 | <page-data");
       expect(repl).toContain("no persistent REPL yet");
-      expect(JSON.parse(((replies.get(4)?.["result"] as Record<string, unknown>)["contents"] as { text: string }[])[0]?.text ?? "{}")["active"]).toEqual({ id: "t1", title: "Mock", url: "https://mock.test/" });
+      const resActive = JSON.parse(((replies.get(4)?.["result"] as Record<string, unknown>)["contents"] as { text: string }[])[0]?.text ?? "{}")["active"] as Record<string, unknown>;
+      expect(resActive).toMatchObject({ id: "t1", url: "https://mock.test/" });
+      expect(String(resActive["title"])).toMatch(/^<page-data nonce="[0-9a-f]+">Mock<\/page-data>$/u);
       const script = daemon.requests.find((request) => (request["argv"] as string[])[0] === "script" && !(request["argv"] as string[]).includes("--repl")) as Record<string, unknown>;
       expect(script["stdin"]).toBe("return document.title");
       expect((script["options"] as Record<string, unknown>)["_session"]).toBe("mcp-test");

@@ -124,11 +124,46 @@ function oneLine(text: string, units: number): string {
   return safeHead(text.replace(CONTROL, " ").replace(/\s+/gu, " ").trim(), units);
 }
 
+export function sanitizeUrl(url: string): string {
+  return oneLine(stripLoneSurrogates(url), URL_UNITS).replace(/[\s<>"]/gu, encodeURIComponent);
+}
+
+export function fenceInline(text: string, nonce: string): string {
+  const clean = oneLine(neutralizeFence(text), TITLE_UNITS);
+  return clean === "" ? "" : `<page-data nonce="${nonce}">${clean}</page-data>`;
+}
+
 export function tabHeader(tab: TabInfo, nonce: string): string {
-  const title = oneLine(neutralizeFence(tab.title), TITLE_UNITS);
-  const url = oneLine(stripLoneSurrogates(tab.url), URL_UNITS).replace(/[\s<>"]/gu, encodeURIComponent);
-  const shownTitle = title === "" ? "" : ` | <page-data nonce="${nonce}">${title}</page-data>`;
+  const fencedTitle = fenceInline(tab.title, nonce);
+  const url = sanitizeUrl(tab.url);
+  const shownTitle = fencedTitle === "" ? "" : ` | ${fencedTitle}`;
   return `[tab ${oneLine(tab.id, 40).replace(/[^\w.-]/gu, "")}${shownTitle} | ${url}]`;
+}
+
+export function fencedTab(tab: TabInfo, nonce: string): TabInfo {
+  return {
+    id: oneLine(tab.id, 40).replace(/[^\w.-]/gu, ""),
+    title: fenceInline(tab.title, nonce),
+    url: sanitizeUrl(tab.url),
+  };
+}
+
+export function parseActiveTab(answer: DaemonAnswer): TabInfo | null {
+  if (answer.exit !== 0) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(answer.out);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const data = (parsed as Record<string, unknown>)["data"];
+  if (typeof data !== "object" || data === null) return null;
+  const record = data as Record<string, unknown>;
+  const id = typeof record["tabId"] === "string" ? record["tabId"] : "";
+  const url = typeof record["url"] === "string" ? record["url"] : "";
+  if (id === "" && url === "") return null;
+  return { id, title: String(record["title"] ?? ""), url };
 }
 
 export function parseTabs(answer: DaemonAnswer): { active: TabInfo | null; tabs: TabInfo[] } | null {
@@ -181,8 +216,12 @@ export function replArgv(call: ReplCall, repl: boolean): string[] {
   return ["script", ...(repl ? ["--repl"] : []), ...(repl && call.reset ? ["--reset"] : []), ...(call.timeoutMs !== undefined ? ["--timeout", String(call.timeoutMs)] : []), "-"];
 }
 
+const UNKNOWN_REPL_FLAG = /^(?:✗\s*)?Unknown flag: --(?:repl|reset)(?:\. Did you mean [^\r\n]+)?(?:\s*\[code=[^\]]+\])?$/u;
+
 export function replUnsupported(answer: DaemonAnswer): boolean {
-  return answer.exit !== 0 && /Unknown flag: --(?:repl|reset)\b/u.test(`${answer.err}\n${answer.out}`);
+  if (answer.exit === 0 || answer.out.trim() !== "") return false;
+  if (answer.code !== null && answer.code !== "usage" && answer.code !== "usage_error") return false;
+  return UNKNOWN_REPL_FLAG.test(answer.err.trim());
 }
 
 export type ActCall = { command: string; args: string[]; stdin: string | null; full: boolean; maxOutput: number | null };
@@ -214,12 +253,15 @@ export function answerText(answer: DaemonAnswer, nonce: string): string {
   return parts.join("\n");
 }
 
-const IMAGE_PATH = /(\/[^\s"'<>]+?\.(png|jpe?g|webp))(?=[\s"')]|$)/iu;
+const SAVED_SCREENSHOT = /^✓ Screenshot saved to ([^\r\n]+\.(png|jpe?g|webp))$/iu;
 const MIME: Readonly<Record<string, string>> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp" };
 export const MAX_INLINE_IMAGE_BYTES = 1_500_000;
 
 export function imagePath(text: string): { path: string; mimeType: string } | null {
-  const found = IMAGE_PATH.exec(text);
+  const lines = text.split(/\r?\n/u);
+  let first = (lines[0] ?? "").trim();
+  if (first.startsWith(BOUNDARY_OPEN)) first = (lines[1] ?? "").trim();
+  const found = SAVED_SCREENSHOT.exec(first);
   if (found === null) return null;
   const mimeType = MIME[(found[2] as string).toLowerCase()];
   return mimeType === undefined ? null : { path: found[1] as string, mimeType };

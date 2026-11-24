@@ -1,13 +1,29 @@
 export const REPL_CAPTURE = "__ardiaReplCapture__";
+export const REPL_INIT = "__ardiaReplInit__";
 const KEPT = "__ardiaKept__";
 const MISS = "__ardiaMiss__";
-const RESERVED = new Set([REPL_CAPTURE, KEPT, MISS, "__proto__", "arguments", "eval"]);
+const RESERVED = new Set([REPL_CAPTURE, REPL_INIT, KEPT, MISS, "__proto__", "arguments", "eval"]);
+const PROTECTED_BUILTINS = new Set([
+  "page", "browse", "read", "log", "sleep", "console", "state", "setTimeout", "setInterval", "clearTimeout", "clearInterval", "queueMicrotask",
+  "URL", "URLSearchParams", "atob", "btoa", "structuredClone", "openTab", "listTabs", "useTab", "closeTab", "readUrls", "parseReceipt",
+  "undefined", "NaN", "Infinity", "globalThis", "JSON", "Math", "Reflect", "Atomics", "Intl",
+  "Object", "Function", "Boolean", "Symbol", "Error", "AggregateError", "EvalError", "RangeError", "ReferenceError", "SyntaxError", "TypeError", "URIError",
+  "Number", "BigInt", "Date", "String", "RegExp", "Array", "Map", "Set", "WeakMap", "WeakSet", "Promise", "Proxy",
+  "ArrayBuffer", "SharedArrayBuffer", "DataView", "Int8Array", "Uint8Array", "Uint8ClampedArray", "Int16Array", "Uint16Array", "Int32Array", "Uint32Array", "Float32Array", "Float64Array", "BigInt64Array", "BigUint64Array",
+  "parseInt", "parseFloat", "isNaN", "isFinite", "encodeURI", "decodeURI", "encodeURIComponent", "decodeURIComponent", "TextEncoder", "TextDecoder",
+]);
 
 type Token = { kind: "id" | "num" | "str" | "tpl" | "re" | "punct"; value: string; newline: boolean; start: number; end: number };
 
 const NON_EXPR_STATEMENTS = new Set([
   "const", "let", "var", "function", "class", "return", "if", "for", "while", "do", "try", "switch", "throw", "break", "continue", "debugger", "with", "import", "export",
 ]);
+
+const CONTINUATION_PUNCT = new Set([
+  ".", "?.", "+", "-", "*", "/", "%", "**", "&&", "||", "??", "&", "|", "^", "==", "===", "!=", "!==", "<", "<=", ">", ">=", "<<", ">>", ">>>",
+  "?", ":", ",", "=", "+=", "-=", "*=", "/=", "%=", "**=", "<<=", ">>=", ">>>=", "&=", "^=", "|=", "&&=", "||=", "??=", "=>", "(", "[", ")", "]",
+]);
+const CONTINUATION_WORDS = new Set(["in", "instanceof"]);
 
 const KEYWORDS_BEFORE_EXPRESSION = new Set([
   "return", "typeof", "instanceof", "in", "of", "new", "delete", "void", "throw", "case", "do", "else", "yield", "await",
@@ -326,7 +342,14 @@ function withImplicitReturn(source: string): string {
   for (let index = 0; index <= lastEnd; index += 1) {
     const token = tokens[index] as Token;
     if (depth === 0 && !isPunct(token, ";") && statementStart(tokens, index)) {
-      if (index === 0 || !(token.kind === "punct" && !OPEN.has(token.value) && token.value !== "!" && token.value !== "~" && token.value !== "+" && token.value !== "-" && token.value !== "++" && token.value !== "--")) {
+      const explicitSep = index === 0 || isPunct(tokens[index - 1], ";") || isPunct(tokens[index - 1], "}");
+      const continues =
+        !explicitSep &&
+        ((token.kind === "punct" && CONTINUATION_PUNCT.has(token.value)) ||
+          (token.kind === "id" && CONTINUATION_WORDS.has(token.value)) ||
+          token.kind === "tpl");
+      const unaryOrOpen = token.kind === "punct" && (OPEN.has(token.value) || token.value === "!" || token.value === "~" || token.value === "+" || token.value === "-" || token.value === "++" || token.value === "--");
+      if (!continues && (index === 0 || token.kind !== "punct" || unaryOrOpen)) {
         lastStart = index;
       }
     }
@@ -353,8 +376,101 @@ function withImplicitReturn(source: string): string {
   }
 }
 
+function hoistTopLevelBindings(source: string): string {
+  let tokens: Token[];
+  try {
+    tokens = tokenize(source);
+  } catch {
+    return source;
+  }
+  const edits: { start: number; end: number; text: string }[] = [];
+  let depth = 0;
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index] as Token;
+    if (token.kind === "punct") {
+      if (OPEN.has(token.value)) depth += 1;
+      else if (CLOSE.has(token.value)) depth = Math.max(depth - 1, 0);
+      continue;
+    }
+    if (depth !== 0 || token.kind !== "id" || !statementStart(tokens, index)) continue;
+    const next = tokens[index + 1];
+    if (token.value === "const" || token.value === "var" || (token.value === "let" && next !== undefined && (next.kind === "id" || isPunct(next, "[") || isPunct(next, "{")))) {
+      const end = declarationEnd(tokens, index + 1);
+      if (end <= index + 1) continue;
+      const declNames: string[] = [];
+      const parts = splitTopLevel(tokens, index + 1, end);
+      const exprs: string[] = [];
+      let ok = true;
+      for (const [a, b] of parts) {
+        if (a >= b) {
+          ok = false;
+          break;
+        }
+        const eq = topLevelIndex(tokens, a, b, "=");
+        const lhsEnd = eq < 0 ? b : eq;
+        const partNames: string[] = [];
+        patternNames(tokens, a, lhsEnd, partNames);
+        if (partNames.length === 0) {
+          ok = false;
+          break;
+        }
+        declNames.push(...partNames);
+        const startOff = (tokens[a] as Token).start;
+        const endOff = (tokens[b - 1] as Token).end;
+        const raw = source.slice(startOff, endOff);
+        if (eq < 0) exprs.push(`${raw} = undefined`);
+        else if (isPunct(tokens[a], "{")) exprs.push(`(${raw})`);
+        else exprs.push(raw);
+      }
+      if (ok && declNames.length > 0 && !declNames.some((name) => RESERVED.has(name) || PROTECTED_BUILTINS.has(name))) {
+        const endOff = (tokens[end - 1] as Token).end;
+        const hasSemi = isPunct(tokens[end], ";");
+        edits.push({
+          start: token.start,
+          end: endOff,
+          text: `void (${REPL_INIT}(${JSON.stringify([...new Set(declNames)])}), ${exprs.join(", ")})${hasSemi ? "" : ";"}`,
+        });
+      }
+      index = end - 1;
+      continue;
+    }
+    if (token.value === "class" && next?.kind === "id" && next.value !== "extends") {
+      if (RESERVED.has(next.value) || PROTECTED_BUILTINS.has(next.value)) continue;
+      let brace = index + 2;
+      while (brace < tokens.length && !isPunct(tokens[brace], "{")) brace += 1;
+      if (brace < tokens.length) {
+        const closeBrace = closing(tokens, brace);
+        if (closeBrace < tokens.length) {
+          const endOff = (tokens[closeBrace] as Token).end;
+          const hasSemi = isPunct(tokens[closeBrace + 1], ";");
+          edits.push({
+            start: token.start,
+            end: endOff,
+            text: `void (${REPL_INIT}([${JSON.stringify(next.value)}]), ${next.value} = ${source.slice(token.start, endOff)})${hasSemi ? "" : ";"}`,
+          });
+          index = closeBrace;
+        }
+      }
+    }
+  }
+  if (edits.length === 0) return source;
+  let out = "";
+  let cursor = 0;
+  for (const edit of edits) {
+    out += source.slice(cursor, edit.start) + edit.text;
+    cursor = edit.end;
+  }
+  out += source.slice(cursor);
+  try {
+    new Function(`return async function () { ${out}\n}`);
+    return out;
+  } catch {
+    return source;
+  }
+}
+
 export function replSource(source: string, names: readonly string[] = declaredNames(source)): string {
-  const body = withImplicitReturn(source);
+  const body = hoistTopLevelBindings(withImplicitReturn(source));
   const kept = names.map((name) => `try { ${KEPT}[${JSON.stringify(name)}] = ${name}; } catch (${MISS}) {}`).join(" ");
   return `(async function () { ${REPL_CAPTURE}(function () { const ${KEPT} = Object.create(null); ${kept} return ${KEPT}; }); ${body}\n})`;
 }
