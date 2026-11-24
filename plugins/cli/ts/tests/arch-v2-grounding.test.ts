@@ -86,6 +86,9 @@ describe("borrowed-tab navigation depth", () => {
     state.current = "MINE";
     expect(openTarget(state, ["--here", "http://x/"])).toBe("USER");
     expect(openTarget(state, ["http://x/"])).toBeNull();
+    state.current = "USER";
+    expect(openTarget(state, ["--here", "http://x/"])).toBe("USER");
+    expect(openTarget(state, ["http://x/"])).toBeNull();
   });
 
   async function borrowedTab(): Promise<{ state: State; browser: FakeBrowser; page: Page; history: { currentIndex: number; entries: { id: number; url: string }[] } }> {

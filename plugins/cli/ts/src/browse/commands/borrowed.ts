@@ -180,5 +180,5 @@ export function tracksBorrowedNav(handler: Handler, targetOf: (state: State, arg
 }
 
 export function openTarget(state: State, argv: readonly string[]): string | null {
-  return argv.includes("--here") ? state.attached : borrowedTab(state);
+  return argv.includes("--here") ? state.attached : null;
 }
