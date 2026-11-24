@@ -5,7 +5,8 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { test } from "bun:test";
+import { setDefaultTimeout, test } from "bun:test";
+import { openpty, READABLE, readiness } from "./parity/ffi.ts";
 import { homeNameSegments, hostOnlyUrls, triageScrub } from "../src/triage-scrub.ts";
 import { buildReport, formUrl, parseSections } from "../src/triage-report.ts";
 import { newestReleaseTag } from "../src/triage-playbook.ts";
@@ -17,6 +18,8 @@ const PROGRAM = process.env.ARDIA_TS_CLI ?? path.join(TS, "dist", "ardia-ts");
 const BUNDLED = fs.readFileSync(path.join(TS, "assets", "triage-playbook.md"), "utf8");
 const MAC = process.platform === "darwin";
 const RUN_TIMEOUT_MS = 30_000;
+
+setDefaultTimeout(60_000);
 
 const SECRET = ["ghp", "abcdefghijklmnopqrstuvwxyz0123456789"].join("_");
 const API_KEY = ["sk", "livekeyabcdefghijklmnop"].join("-");
@@ -116,23 +119,37 @@ function run(box: Sandbox, argv: string[], extra: Record<string, string> = {}, i
   });
 }
 
-function shellQuote(word: string): string {
-  return `'${word.replaceAll("'", "'\\''")}'`;
-}
-
 function onTerminal(box: Sandbox, argv: string[], answers: string, extra: Record<string, string> = {}): Promise<Ran> {
-  const command = [PROGRAM, ...argv].map(shellQuote).join(" ");
-  const wrapper = MAC ? ["/usr/bin/script", ["-q", "/dev/null", "/bin/sh", "-c", command]] : ["/usr/bin/script", ["-qec", command, "/dev/null"]];
+  const [leader, follower] = openpty();
   return new Promise((resolve) => {
-    const child = spawn(wrapper[0] as string, wrapper[1] as string[], { cwd: box.root, env: baseEnv(box, extra), stdio: ["pipe", "pipe", "pipe"] });
-    let out = "";
-    child.stdout?.on("data", (chunk) => (out += chunk));
-    child.stderr?.on("data", (chunk) => (out += chunk));
-    child.stdin?.write(answers);
+    const child = spawn(PROGRAM, argv, { cwd: box.root, env: baseEnv(box, extra), stdio: [follower, follower, follower] });
+    fs.closeSync(follower);
+    fs.writeSync(leader, answers);
+    const chunks: Buffer[] = [];
+    const buffer = Buffer.alloc(65536);
+    const drain = (): void => {
+      for (;;) {
+        if (!readiness(leader, READABLE)) return;
+        let count = 0;
+        try {
+          count = fs.readSync(leader, buffer, 0, buffer.length, null);
+        } catch {
+          return;
+        }
+        if (count === 0) return;
+        chunks.push(Buffer.from(buffer.subarray(0, count)));
+      }
+    };
+    const polling = setInterval(drain, 10);
     const timer = setTimeout(() => child.kill("SIGKILL"), RUN_TIMEOUT_MS);
-    child.on("close", (status) => {
+    child.on("exit", (status) => {
       clearTimeout(timer);
-      resolve({ status, out: out.replaceAll("\r", ""), err: "" });
+      setTimeout(() => {
+        clearInterval(polling);
+        drain();
+        fs.closeSync(leader);
+        resolve({ status, out: Buffer.concat(chunks).toString("utf8").replaceAll("\r", ""), err: "" });
+      }, 100);
     });
   });
 }
