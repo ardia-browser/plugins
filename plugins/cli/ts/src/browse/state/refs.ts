@@ -215,7 +215,11 @@ export abstract class Refs {
 
   addRef(page: Page, element: Element, role = "", name = ""): string {
     const id = this.refForNode(page, element.frame, element.backendId);
-    const known = this.refs.get(id);
+    const found = this.refs.get(id);
+    const nextRole = role || (found?.role ?? "");
+    const nextName = name || (found?.name ?? "");
+    const verified = found !== undefined && found.role === nextRole && found.name === nextName && found.loader === (page.loader(element.frame) || "");
+    const known = verified ? found : undefined;
     this.refs.set(id, {
       id,
       instance: this.instance,
@@ -224,12 +228,12 @@ export abstract class Refs {
       loader: page.loader(element.frame) || "",
       generation: this.generation,
       backend: element.backendId,
-      role: role || (known?.role ?? ""),
-      name: name || (known?.name ?? ""),
+      role: nextRole,
+      name: nextName,
       unique: Boolean(known?.unique),
       context: known?.context ?? [],
       ...(known?.scope !== undefined ? { scope: known.scope } : {}),
-      ...(known?.epoch !== undefined ? { epoch: known.epoch } : {}),
+      ...(found?.epoch !== undefined ? { epoch: found.epoch } : {}),
     });
     return id;
   }

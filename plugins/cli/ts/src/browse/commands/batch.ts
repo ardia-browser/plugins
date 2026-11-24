@@ -239,6 +239,10 @@ const MAX_HEALS = 4;
 const NOT_FOLLOWED = "it wasn't the only one with its role and name, or the new one is in another frame, dialog or container, so check it before using it";
 const SELECTOR_PREFIX = "--selector=";
 const SELECTOR_FLAGS = new Set(["-s", "--selector"]);
+const VALUE_TAKING = new Set([
+  "--button", "--delay", "--count", "--timeout", "--nth", "--name", "--label", "--depth", "-d", "--out", "--property", "--duration", "--baseline",
+  "--text", "--url", "--load", "--fn", "--state", "--with-screenshot", "--screenshot-format", "--screenshot-quality", "--format", "--quality", "--steps",
+]);
 const SELECTOR_AT: Readonly<Record<string, readonly number[]>> = {
   click: [0], dblclick: [0], hover: [0], focus: [0], fill: [0], type: [0], check: [0], uncheck: [0], select: [0], drag: [0, 1], upload: [0],
   download: [0], scrollintoview: [0], wait: [0], highlight: [0], screenshot: [0], styles: [0], frame: [0], get: [1], is: [1],
@@ -254,6 +258,7 @@ export function rebound(command: readonly string[], stale: string, fresh: string
   const forms = refForms(stale, fresh);
   const swapped = (word: string): string | null => forms.find(([from]) => from === word)?.[1] ?? null;
   const out = [...command];
+  const last = name === "press" ? 1 : Math.max(-1, ...positions);
   let changed = false;
   let flagged = false;
   const positionals: number[] = [];
@@ -268,8 +273,7 @@ export function rebound(command: readonly string[], stale: string, fresh: string
         out[index + 1] = value;
         changed = true;
       }
-      index += 1;
-      continue;
+      break;
     }
     if (word.startsWith(SELECTOR_PREFIX)) {
       flagged = true;
@@ -278,10 +282,15 @@ export function rebound(command: readonly string[], stale: string, fresh: string
         out[index] = `${SELECTOR_PREFIX}${value}`;
         changed = true;
       }
+      break;
+    }
+    if (VALUE_TAKING.has(word)) {
+      index += 1;
       continue;
     }
     if (word.startsWith("-") && word.length > 1) continue;
     positionals.push(index);
+    if (positionals.length > last) break;
   }
   if (name === "press" && positionals.length >= 2) positions.add(0);
   if (flagged) positions.clear();

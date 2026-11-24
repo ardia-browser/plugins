@@ -6,7 +6,7 @@ import { type Field, fieldLine, fieldSpecs, formSummary, maskedValue, rowsText, 
 import { absoluteUrls, contentOf, DEADLINE, FETCH_ALL, fetchedOf, fetchedText, MAX_CHARS, NOT_STARTED, overallSeconds, share } from "../src/browse/commands/read-urls.ts";
 import { refsOf } from "../src/browse/snapshot/collect.ts";
 import { type Ref, Refs, sameScope, type Snapshots } from "../src/browse/state/refs.ts";
-import type { Page } from "../src/browse/state/page.ts";
+import { Element, type Page } from "../src/browse/state/page.ts";
 import { checkedState } from "../src/browse/commands/read.ts";
 import { StaleRef, Usage } from "../src/browse/daemon-errors.ts";
 import { stepsData, stepsText } from "../src/browse/script/script.ts";
@@ -47,6 +47,11 @@ test("a stale ref is rebound only where it is a selector", () => {
   expect(rebound(["fill", "-s", "@e14", "@e14"], "e14", "e352")).toEqual(["fill", "-s", "@e352", "@e14"]);
   expect(rebound(["fill", "--selector=@e14", "@e14"], "e14", "e352")).toEqual(["fill", "--selector=@e352", "@e14"]);
   expect(rebound(["fill", "-s", "#name", "@e14"], "e14", "e352")).toBeNull();
+  expect(rebound(["fill", "-s", "@e14", "--selector=@e14"], "e14", "e352")).toEqual(["fill", "-s", "@e352", "--selector=@e14"]);
+  expect(rebound(["fill", "-s", "@e14", "-s", "@e14"], "e14", "e352")).toEqual(["fill", "-s", "@e352", "-s", "@e14"]);
+  expect(rebound(["type", "--delay", "10", "@e14", "hello"], "e14", "e352")).toEqual(["type", "--delay", "10", "@e352", "hello"]);
+  expect(rebound(["click", "--button", "right", "@e14"], "e14", "e352")).toEqual(["click", "--button", "right", "@e352"]);
+  expect(rebound(["type", "@e14", "--delay", "@e14"], "e14", "e352")).toEqual(["type", "@e352", "--delay", "@e14"]);
 });
 
 function ref(id: string, extra: Partial<Ref> = {}): Ref {
@@ -62,7 +67,28 @@ class FakeRefs extends Refs {
   }
 }
 
-const FAKE_PAGE = { targetId: "T", loader: () => "L", frames: new Map([["F", { loader: "L" }], ["OTHER", { loader: "L" }]]) } as unknown as Page;
+const FAKE_PAGE = { targetId: "T", loader: () => "L", frameSessions: new Map(), frames: new Map([["F", { loader: "L" }], ["OTHER", { loader: "L" }]]) } as unknown as Page;
+
+test("addRef keeps verified uniqueness and scope only for the same role and name", () => {
+  const state = new FakeRefs();
+  const element = new Element("F", "OBJ", 7, "@x");
+  const id = state.addRef(FAKE_PAGE, element, "button", "Delete");
+  state.refs.set(id, { ...(state.refs.get(id) as Ref), unique: true, scope: JSON.stringify(["dialog#F#11:Confirm"]), context: [["dialog", "Confirm"]] });
+  expect(state.addRef(FAKE_PAGE, element, "button", "Delete")).toBe(id);
+  expect(state.refs.get(id)?.unique).toBe(true);
+  expect(state.refs.get(id)?.scope).toBe(JSON.stringify(["dialog#F#11:Confirm"]));
+  state.addRef(FAKE_PAGE, element, "textbox", "Delete");
+  const renamed = state.refs.get(id) as Ref;
+  expect(renamed.role).toBe("textbox");
+  expect(renamed.unique).toBe(false);
+  expect(renamed.scope).toBeUndefined();
+  expect(renamed.context).toEqual([]);
+  state.refs.set(id, { ...renamed, unique: true, scope: "[]" });
+  state.addRef(FAKE_PAGE, element, "textbox", "Remove");
+  expect(state.refs.get(id)?.unique).toBe(false);
+  expect(state.refs.get(id)?.scope).toBeUndefined();
+  expect(sameScope(state.refs.get(id) as Ref, { ...renamed, unique: true, scope: "[]" })).toBe(false);
+});
 
 function withTree(tree: Node[], run: () => Promise<void>): Promise<void> {
   const kept = Refs.snapshots;
@@ -233,11 +259,46 @@ test("read-urls resolves addresses, turns HTML into text and reports each failur
   const huge = fetchedOf({ url: "http://x/h", status: 200, contentType: "text/plain", body: "b".repeat(MAX_CHARS + 500), binary: false }, "http://x", 0);
   expect(huge.content.length).toBe(MAX_CHARS);
   expect(huge.truncated).toBe(true);
+  const titled = fetchedOf({ url: "http://x/t", status: 200, contentType: "text/html", body: `<title>${"t".repeat(201_000)}</title><p>body</p>`, binary: false }, "http://x", 0);
+  expect(titled.title.length).toBeLessThanOrEqual(300);
+  expect(titled.truncated).toBe(true);
+  expect(titled.content).toBe("body");
+  const long = fetchedOf({ url: "http://x/l", status: 200, contentType: "text/html", body: `<title>${"t".repeat(250)}</title><p>${"b".repeat(MAX_CHARS)}</p>`, binary: false }, "http://x", 0);
+  expect(long.title.length + long.content.length).toBeLessThanOrEqual(MAX_CHARS);
+  expect(long.truncated).toBe(true);
   expect(fetchedOf({ url: "http://x/s", error: DEADLINE }, "http://x", 400, 30).error).toContain("30 s limit for the whole command");
   expect(fetchedOf({ url: "http://x/q", error: NOT_STARTED }, "http://x", 400, 30).error).toContain("not fetched");
   expect(overallSeconds(50, 6, 15)).toBe(75);
   expect(overallSeconds(3, 1, 12)).toBe(36);
   expect(overallSeconds(2, 6, 15)).toBe(15);
+});
+
+test("read-urls' concurrent streams never decode past the shared byte budget", async () => {
+  const drips = [0, 1, 2].map(() =>
+    Bun.serve({
+      port: 0,
+      fetch() {
+        const stream = new ReadableStream({
+          async start(controller) {
+            controller.enqueue(new TextEncoder().encode("d"));
+            await Bun.sleep(200);
+            controller.enqueue(new TextEncoder().encode("d".repeat(99)));
+            controller.close();
+          },
+        });
+        return new Response(stream, { headers: { "content-type": "text/plain" } });
+      },
+    }),
+  );
+  try {
+    const run = (0, eval)(FETCH_ALL) as (...args: unknown[]) => Promise<Record<string, unknown>[]>;
+    const out = await run(drips.map((server) => `http://127.0.0.1:${server.port}/drip`), 1000, 100, 3, 4000, 4000);
+    expect(out.every((item) => item["error"] === undefined)).toBe(true);
+    expect(out.map((item) => String(item["body"]).length).reduce((sum, size) => sum + size, 0)).toBeLessThanOrEqual(100);
+    expect(out.some((item) => item["truncated"] === true)).toBe(true);
+  } finally {
+    for (const server of drips) server.stop(true);
+  }
 });
 
 test("read-urls' page loop stops at its deadline with partial results, and caps bytes per address and in all", async () => {
@@ -311,6 +372,10 @@ test("--help on a batch line is help, except inside free text or as a value", ()
   expect(asksHelp("cookies", ["set", "--help"])).toBe(true);
   expect(asksHelp("click", ["--button", "-h"])).toBe(false);
   expect(asksHelp("type", ["@e1", "-h"])).toBe(false);
+  expect(asksHelp("dialog", ["status", "--help"])).toBe(true);
+  expect(asksHelp("open", ["https://example.test", "--help"])).toBe(false);
+  expect(asksHelp("click", ["@e1", "--help"])).toBe(false);
+  expect(asksHelp("open", ["--help"])).toBe(true);
   expect(asksHelp("snapshot", ["-h"])).toBe(true);
   expect(asksHelp("fill", ["@e1", "--help"])).toBe(false);
   expect(asksHelp("fill", ["--help"])).toBe(true);

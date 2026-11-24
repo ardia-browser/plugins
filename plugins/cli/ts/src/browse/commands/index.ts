@@ -127,12 +127,14 @@ export function unknownCommand(name: string): Usage {
 }
 
 const HELP_WORDS = new Set(["--help", "-h"]);
-const FREE_TEXT = new Set(["fill", "type", "eval", "keyboard", "notes", "script", "addinitscript", "clipboard", "dialog", "tool", "press", "select", "upload", "cdp"]);
+export const TAKES_SUBCOMMAND: ReadonlySet<string> = new Set([
+  "network", "tab", "window", "storage", "cookies", "state", "set", "dialog", "diff", "record", "stream", "trace", "profiler", "react", "plugin",
+  "session", "notes", "flow", "auth", "perf", "logpoint", "keyboard", "mouse", "get", "is", "snapshot", "clipboard",
+]);
 
 export function asksHelp(name: string, argv: readonly string[]): boolean {
   if (argv.length > 0 && HELP_WORDS.has(argv[0] as string)) return true;
-  if (FREE_TEXT.has(name)) return false;
-  return argv.length > 1 && HELP_WORDS.has(argv[1] as string) && !(argv[0] as string).startsWith("-");
+  return TAKES_SUBCOMMAND.has(name) && argv.length > 1 && HELP_WORDS.has(argv[1] as string) && !(argv[0] as string).startsWith("-");
 }
 
 export async function dispatch(ctx: Ctx, name: string, argv: string[]): Promise<Result> {

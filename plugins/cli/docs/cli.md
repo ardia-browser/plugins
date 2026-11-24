@@ -1200,10 +1200,13 @@ check can follow it, and its answer starts with `↻ @e14→@e352` (`--json`: `h
 redraws. It follows only when the old ref was the only one with its role and name in its snapshot and the new one is
 still the only one, in the same frame, the same dialog instance (the same dialog element, not one that closed and
 another with the same name opened) and the same named containers (`sameScope` in `ts/src/browse/state/refs.ts`), so a
-`Delete` removed with its dialog never turns into the page's own `Delete` behind it or one in a reopened dialog. When a single command's error names a successor (`is now @e352`) that fails those checks, the batch line fails and
+`Delete` removed with its dialog never turns into the page's own `Delete` behind it or one in a reopened dialog. A ref
+another command hands out (`form`, `find`) or renames keeps that verified uniqueness and scope only while its role, name
+and document stay the same; otherwise it starts unverified and is never followed. When a single command's error names a successor (`is now @e352`) that fails those checks, the batch line fails and
 says `→ not followed for you: …; on the page now: …` (telemetry `batch_ref_not_followed`). The rebinding replaces the ref only at the
-command's selector arguments (`click`'s first, `drag`'s two, `get text`'s second, or `-s`/`--selector`'s value when
-that flag names the target), never in text or values to type and never after `--`. When none or several match, the line fails as before and lists the refs on the page now, so no extra
+command's selector arguments (`click`'s first, `drag`'s two, `get text`'s second, or the first `-s`/`--selector`'s value,
+after which the rest is the command's own), skipping the values of flags such as `--delay` and `--button`, never in text
+or values to type and never after `--`. When none or several match, the line fails as before and lists the refs on the page now, so no extra
 snapshot is needed: `→ 2 match it now, so nothing was picked: button "Delete" [ref=e30], button "Delete" [ref=e31]`, or
 `→ on the page now:` with up to six of the same role (`--json`: `matches`). Telemetry: `batch_ref_healed`,
 `batch_refs_healed` (lines rebound), `batch_ref_ambiguous`, `batch_ref_missing`; watch `error_code` `stale_ref` on
@@ -1211,9 +1214,9 @@ snapshot is needed: `→ 2 match it now, so nothing was picked: button "Delete" 
 
 `--help` or `-h` on a batch line (or in a script's `browse()` call) prints that command's help as the line's answer,
 exit 0, where the daemon used to fail it as an unknown flag. It counts as help only as the first argument, or right
-after a subcommand word (`network requests --help`); anywhere else it is a value (`find role button --name --help`,
-`cookies set name --help`), and for commands whose arguments are free text (`fill`, `type`, `eval`, …) only a first-word
-`--help` counts. Telemetry: `help_in_daemon`.
+after the subcommand of a command that takes one (`network requests --help`, `dialog status --help`; the list is
+`TAKES_SUBCOMMAND` in `ts/src/browse/commands/index.ts`); anywhere else it is a value (`open https://example.test --help`,
+`find role button --name --help`, `cookies set name --help`). Telemetry: `help_in_daemon`.
 
 Filling a form five times is one call:
 
@@ -1547,11 +1550,12 @@ probe has 4 s, the tab's own text is the fallback, and `tried` lists every step.
 fetches up to 50 addresses at once from inside the session's tab (the user's active tab, picked as `tab active`, when
 the session has none, and it says so), with `fetch(url, { credentials: "include" })` in the isolated world, so the
 requests carry the tab's cookies and logins and the tab never navigates. Six run at a time (`--concurrency`, a whole
-number, at most 10), each with 15 s (`--timeout`, at most 60) and at most 2 MB of body, 8 MB in all (cut before decoding). The whole
+number, at most 10), each with 15 s (`--timeout`, at most 60) and at most 2 MB of body, 8 MB in all (each chunk is cut to what is left of both right after it arrives, before decoding, so streams read at once
+never share one allowance). The whole
 run has one limit, the per-address timeout times the rounds the queue needs, at most 75 s, kept under the page call's
 own deadline: at that limit every request still running is aborted, the queue stops, and the answer keeps what
 finished, with `stopped at the … limit` or `not fetched` on the rest (telemetry `read_urls_deadline`). One address's
-text is cut at 200,000 characters even with `--full` or `--json`. HTML becomes text with Markdown headings
+text, title included (a title stops at 300 characters), is cut at 200,000 characters even with `--full` or `--json`. HTML becomes text with Markdown headings
 (scripts, styles, menus and footers left out, the title line moved into the header); text, JSON and Markdown print
 as they are; a binary body is skipped with the `read --http … --out` that saves it. Each address gets an equal share
 of the output cap (`--max-chars` sets it, `--full` lifts it) under `## [n] <title> — <url> (<status>, <type>)`, and

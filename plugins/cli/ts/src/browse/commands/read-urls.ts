@@ -27,6 +27,7 @@ export const TOTAL_BYTES = 8 * 1024 * 1024;
 export const MAX_OVERALL = 75;
 export const CALL_MARGIN = 10;
 export const MAX_CHARS = 200_000;
+export const MAX_TITLE = 300;
 export const DEADLINE = "deadline";
 export const NOT_STARTED = "not_started";
 
@@ -63,14 +64,14 @@ export const FETCH_ALL = `async (urls, maxBytes, totalBytes, concurrency, timeou
       if (response.body && response.body.getReader) {
         const reader = response.body.getReader();
         for (;;) {
-          const room = Math.max(0, Math.min(maxBytes - got, budget));
-          if (room === 0) {
+          if (Math.min(maxBytes - got, budget) <= 0) {
             truncated = true;
             try { await reader.cancel(); } catch (error) {}
             break;
           }
           const { done, value } = await reader.read();
           if (done) break;
+          const room = Math.max(0, Math.min(value.byteLength, maxBytes - got, budget));
           const piece = value.byteLength > room ? value.subarray(0, room) : value;
           got += piece.byteLength;
           budget -= piece.byteLength;
@@ -195,9 +196,12 @@ export function fetchedOf(raw: Record<string, unknown>, origin: string, perUrl: 
   if (raw["binary"]) {
     return { url, finalUrl, status, ok: false, contentType: type, title: "", content: "", chars: 0, truncated: false, error: `${type || "the body"} isn't text; \`ardia browse read --http ${url} --out <file>\` saves it` };
   }
-  const { content, title } = contentOf(neutralize(stripLoneSurrogates(String(raw["body"] ?? ""))), type);
+  const extracted = contentOf(neutralize(stripLoneSurrogates(String(raw["body"] ?? ""))), type);
+  const content = extracted.content;
+  const titleCut = pyLen(extracted.title) > MAX_TITLE;
+  const title = titleCut ? `${safeHead(extracted.title, MAX_TITLE - 1)}…` : extracted.title;
   const chars = pyLen(content);
-  const limit = perUrl > 0 ? Math.min(perUrl, MAX_CHARS) : MAX_CHARS;
+  const limit = Math.max(0, (perUrl > 0 ? Math.min(perUrl, MAX_CHARS) : MAX_CHARS) - pyLen(title));
   const cut = chars > limit;
   const shown = cut ? safeHead(content, limit) : content;
   const failed = status !== null && status >= 400;
@@ -210,7 +214,7 @@ export function fetchedOf(raw: Record<string, unknown>, origin: string, perUrl: 
     title,
     content: shown,
     chars,
-    truncated: cut || Boolean(raw["truncated"]),
+    truncated: cut || titleCut || Boolean(raw["truncated"]),
     error: failed ? `HTTP ${status}` : null,
   };
 }
