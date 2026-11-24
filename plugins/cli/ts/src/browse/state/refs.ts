@@ -7,7 +7,7 @@ export const OPEN_REPLACED_KEPT = 16;
 export const OPEN_TITLE_SHOWN = 80;
 export const SHOWN_MATCHES = 6;
 
-export type Redrawn = { unique: Ref | null; same: string[]; sameRole: string[] };
+export type Redrawn = { unique: Ref | null; followable: Ref | null; same: string[]; sameRole: string[] };
 
 export type OpenReplaced = { target: string; documents: Set<string>; from: string; to: string };
 
@@ -32,6 +32,7 @@ export type Ref = {
   name: string;
   unique: boolean;
   context: readonly unknown[];
+  scope?: string;
   epoch?: number;
 };
 
@@ -53,6 +54,16 @@ export interface Snapshots {
 type RefKey = [string | null, string, string, string, number];
 
 const REF_ID = /^(?:f[0-9]+)?e[0-9]+$/u;
+
+export function sameScope(old: Ref, fresh: Ref): boolean {
+  return (
+    old.unique &&
+    fresh.target === old.target &&
+    fresh.frame === old.frame &&
+    (fresh.scope ?? "[]") === (old.scope ?? "[]") &&
+    JSON.stringify(fresh.context) === JSON.stringify(old.context)
+  );
+}
 
 export function isRefId(text: string): boolean {
   return REF_ID.test(text);
@@ -216,6 +227,7 @@ export abstract class Refs {
       name: name || (known?.name ?? ""),
       unique: Boolean(known?.unique),
       context: known?.context ?? [],
+      ...(known?.scope !== undefined ? { scope: known.scope } : {}),
       ...(known?.epoch !== undefined ? { epoch: known.epoch } : {}),
     });
     return id;
@@ -259,7 +271,8 @@ export abstract class Refs {
       throw missing;
     }
     const redrawn = new StaleRef(refId, `${gone}; the page redrew it, and the same ${ref.role} "${ref.name}" is now @${successor.id}`);
-    redrawn.successor = successor.id;
+    redrawn.successor = found.followable === null ? null : found.followable.id;
+    if (found.followable === null) redrawn.matches = [successor.id];
     throw redrawn;
   }
 
@@ -270,7 +283,7 @@ export abstract class Refs {
     flag("stale_ref_after_navigation", true);
     let successor: Ref | null;
     try {
-      successor = await this.redrawn(page, old);
+      successor = (await this.redrawnAll(page, old)).unique;
     } catch (error) {
       if (error instanceof ConnectionLost || !(error instanceof BrowseError)) throw error;
       successor = null;
@@ -284,7 +297,7 @@ export abstract class Refs {
   }
 
   async redrawnAll(page: Page, ref: Ref): Promise<Redrawn> {
-    const none: Redrawn = { unique: null, same: [], sameRole: [] };
+    const none: Redrawn = { unique: null, followable: null, same: [], sameRole: [] };
     const snapshots = Refs.snapshots;
     if (!ref.role || !ref.name || snapshots === null) return none;
     let nodes: unknown;
@@ -300,7 +313,8 @@ export abstract class Refs {
     const same = walked.filter((node) => (node.ref || node.boxless) && node.role === ref.role && node.name === ref.name).map((node) => node.ref ?? null);
     const sameRole = walked.filter((node) => node.ref && node.role === ref.role && node.name).map((node) => node.ref as string);
     const unique = same.length === 1 && same[0] ? (this.refs.get(same[0]) ?? null) : null;
-    return { unique, same: same.filter((id): id is string => id !== null), sameRole };
+    const followable = unique !== null && sameScope(ref, unique) ? unique : null;
+    return { unique, followable, same: same.filter((id): id is string => id !== null), sameRole };
   }
 
   refsJson(): Record<string, { name: string; role: string }> {

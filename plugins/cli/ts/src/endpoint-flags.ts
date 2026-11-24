@@ -2,7 +2,7 @@ export const PLACED_VALUE_FLAGS: readonly string[] = ["--port", "--session"];
 const SHARED_VALUE_FLAGS: readonly string[] = ["--port", "--ws", "--data-dir", "--timeout", "--session"];
 const BROWSE_LIKE = new Set(["browse", "notes"]);
 const UNTOUCHED = new Set(["computer"]);
-const KEEPS_PORT: Readonly<Record<string, string>> = { scripts: "test" };
+const KEEPS_PORT = new Set(["scripts"]);
 
 export type Placed = { argv: string[]; dropped: string[] };
 
@@ -19,17 +19,13 @@ function commandAt(argv: readonly string[]): number {
       continue;
     }
     if (SHARED_VALUE_FLAGS.includes(flagName(token))) {
+      if (!token.includes("=") && argv[index + 1] === "--") return argv.length;
       index += token.includes("=") ? 1 : 2;
       continue;
     }
     return index;
   }
   return argv.length;
-}
-
-function keepsPort(argv: readonly string[], at: number): boolean {
-  const sub = KEEPS_PORT[argv[at] as string];
-  return sub !== undefined && argv.slice(at + 1).find((token) => !token.startsWith("-")) === sub;
 }
 
 function sessionAfterCommand(argv: string[], at: number): Placed {
@@ -57,7 +53,7 @@ export function placeEndpointFlags(given: readonly string[]): Placed {
   const command = argv[at];
   if (command === undefined || UNTOUCHED.has(command)) return { argv, dropped: [] };
   if (BROWSE_LIKE.has(command)) return sessionAfterCommand(argv, at);
-  const portKept = keepsPort(argv, at);
+  const portKept = KEEPS_PORT.has(command);
   const out: string[] = [];
   const dropped: string[] = [];
   for (let position = 0; position < argv.length; position += 1) {
@@ -68,7 +64,8 @@ export function placeEndpointFlags(given: readonly string[]): Placed {
     }
     const name = flagName(token);
     const placed = PLACED_VALUE_FLAGS.includes(name) && !(name === "--port" && portKept);
-    if (!placed || (!token.includes("=") && position + 1 >= argv.length)) {
+    const valueMissing = !token.includes("=") && (position + 1 >= argv.length || argv[position + 1] === "--");
+    if (!placed || valueMissing) {
       out.push(token);
       continue;
     }

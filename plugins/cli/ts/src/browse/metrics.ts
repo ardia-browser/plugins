@@ -56,7 +56,7 @@ export const FLAGS = new Set([
   "script_runner_crashed", "script_memory_limit", "script_sandbox_hint",
   "snapshot_budget_trimmed", "snapshot_modal_scoped", "snapshot_hidden_text_dropped", "snapshot_closed_shadow", "snapshot_dom_depth_retry", "snapshot_find", "snapshot_paired", "snapshot_paired_unstable",
   "did_you_mean", "perf_crux", "logpoint_source_mapped",
-  "batch_ref_healed", "batch_ref_ambiguous", "batch_ref_missing", "here", "here_read", "form", "query", "query_fields", "read_urls", "find_is", "field_label_fallback", "script_steps_shown", "snapshot_lean_trimmed", "help_in_daemon",
+  "batch_ref_healed", "batch_ref_ambiguous", "batch_ref_missing", "here", "here_read", "form", "query", "query_fields", "read_urls", "find_is", "field_label_fallback", "script_steps_shown", "snapshot_lean_trimmed", "help_in_daemon", "read_urls_deadline", "batch_ref_not_followed",
 ]);
 export const SAFETY_FLAGS = new Set([
   "boundary_marker_removed", "notes_promoted", "notes_quarantined_shown", "otp_not_asked", "otp_split_boxes", "otp_typed", "scheduler_parallel", "scheduler_read_lane", "session_auto", "session_reset", "snapshot_masked_fields",

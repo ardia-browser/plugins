@@ -202,9 +202,10 @@ front of (or between) the command words to just after them, so a flag written af
 flag before it; arguments after `on`'s `--` are never touched. `--port` and `--session` steer only `ardia browse` and `ardia notes`,
 so every other command takes them anywhere on the line, before or after its words, and ignores them: `ardia tabs
 --port 9371` and `ardia methods --port 9371` run as `ardia tabs` and `ardia methods` do, where they used to exit 2
-(agents put the browse session's `--port` on every call). `scripts test` keeps its own `--port`, and `ardia --session
-s browse …` hands the session to browse (`ts/src/endpoint-flags.ts`, before any routing; nothing changes for a plugin's
-`ARDIA_BROWSE_FOR_PLUGIN` run). A command that doesn't take another flag given before it says so and exits 2
+(agents put the browse session's `--port` on every call). `scripts` keeps every `--port` and reads it itself, a flag
+right before `--` is left alone, nothing after `--` is touched, and `ardia --session s browse …` hands the session to
+browse (`ts/src/endpoint-flags.ts`, before any routing; nothing changes for a plugin's `ARDIA_BROWSE_FOR_PLUGIN` run). A
+dropped `--port` still counts as a test endpoint for telemetry, so nothing is sent. A command that doesn't take another flag given before it says so and exits 2
 (`ardia: windows doesn't take --timeout`). For `browse` the flags go to the front of browse's own
 arguments, where its parser reads them; `browse` takes `--port`, `--ws`, `--data-dir` and `--json`, not `--timeout`.
 
@@ -1112,7 +1113,10 @@ form: 7 fields, 1 required, 1 required and empty, 1 invalid
 The label is the first of its `aria-label`, `aria-labelledby` text, `<label>`s, placeholder, title, name and id; the
 invalid message is the browser's `validationMessage`, or the `aria-errormessage`/`aria-describedby` text of an
 `aria-invalid` field. A checkbox or radio whose box is hidden behind a visible label counts as visible. Values that
-`snapshot` masks (passwords, card numbers, one-time codes, by type, autocomplete and name) show as `••••`. Each line's
+`snapshot` masks (passwords, card numbers, one-time codes, by type, autocomplete in any case and name) show as `••••`,
+and so does any field this session already knew was secret, even after the page turned it into a text field; a secret
+field's validation message prints only as `invalid`, since a page can put the value in it. The page walk stops at 200
+fields or 5,000 candidates, and a field inside another field is skipped without comparing every pair. Each line's
 ref is a real ref (`addRef`, followed across redraws like a snapshot's), so `fill @e11 …` works next. Telemetry:
 `form`, `form_fields`.
 
@@ -1121,7 +1125,9 @@ row in one page call, instead of an `eval` loop: each field is a selector inside
 field's value), `@attr` reads an attribute (`href` and `src` resolved), and a key without a selector (`url=@href`) reads
 the match itself. With no fields, a `table` gives one row per body row keyed by its header cells, a `tr` its cells,
 and anything else `text` and its first `link`. Rows print as JSON lines under `3 rows for .card:` (`--json`: `rows`,
-`total`); 50 by default, at most 500, each value cut at 300 characters. Telemetry: `query`, `query_fields`,
+`count`, `more`); 50 by default, at most 500. The page walk stops at the first match past the limit (`1 rows for .m, and
+more match`), so `--limit 1` over 20,000 matches checks two; a row keeps at most 30 columns (and `--fields` takes at
+most 30), and every value, links included, is cut at 300 characters. Telemetry: `query`, `query_fields`,
 `query_rows`.
 
 ### Forms agents guess
@@ -1183,18 +1189,24 @@ session stays); anywhere else the error points at `tab close`. For a loop the pa
 takes JavaScript (`eval --stdin` from a heredoc) and runs it in the page's main world.
 
 A line whose ref went stale because an earlier line redrew the page runs again on the new element when the stale-ref
-check found exactly one with the same role and name (the case where a single command says `is now @e352`), and its
-answer starts with `↻ @e14→@e352` (`--json`: `healed`); a line follows up to four such redraws. The rebinding replaces
-the ref only where it is a selector (`@e14`, `ref=e14`, `[ref=e14]`, `--selector=@e14`, or a bare `e14` first), never in
-text to type. When none or several match, the line fails as before and lists the refs on the page now, so no extra
+check can follow it, and its answer starts with `↻ @e14→@e352` (`--json`: `healed`); a line follows up to four such
+redraws. It follows only when the old ref was the only one with its role and name in its snapshot and the new one is
+still the only one, in the same frame, the same dialog (named or not) and the same named containers (`sameScope` in
+`ts/src/browse/state/refs.ts`), so a `Delete` removed with its dialog never turns into the page's own `Delete` behind
+it. When a single command's error names a successor (`is now @e352`) that fails those checks, the batch line fails and
+says `→ not followed for you: …; on the page now: …` (telemetry `batch_ref_not_followed`). The rebinding replaces the ref only at the
+command's selector arguments (`click`'s first, `drag`'s two, `get text`'s second, `-s`/`--selector`'s value, …), never in
+text or values to type and never after `--`. When none or several match, the line fails as before and lists the refs on the page now, so no extra
 snapshot is needed: `→ 2 match it now, so nothing was picked: button "Delete" [ref=e30], button "Delete" [ref=e31]`, or
 `→ on the page now:` with up to six of the same role (`--json`: `matches`). Telemetry: `batch_ref_healed`,
 `batch_refs_healed` (lines rebound), `batch_ref_ambiguous`, `batch_ref_missing`; watch `error_code` `stale_ref` on
 `batch`, which they should lower.
 
 `--help` or `-h` on a batch line (or in a script's `browse()` call) prints that command's help as the line's answer,
-exit 0, where the daemon used to fail it as an unknown flag; for commands whose arguments are free text (`fill`,
-`type`, `eval`, …) only a first-word `--help` counts. Telemetry: `help_in_daemon`.
+exit 0, where the daemon used to fail it as an unknown flag. It counts as help only as the first argument, or right
+after a subcommand word (`network requests --help`); anywhere else it is a value (`find role button --name --help`,
+`cookies set name --help`), and for commands whose arguments are free text (`fill`, `type`, `eval`, …) only a first-word
+`--help` counts. Telemetry: `help_in_daemon`.
 
 Filling a form five times is one call:
 
@@ -1528,7 +1540,11 @@ probe has 4 s, the tab's own text is the fallback, and `tried` lists every step.
 fetches up to 50 addresses at once from inside the session's tab (the user's active tab, picked as `tab active`, when
 the session has none, and it says so), with `fetch(url, { credentials: "include" })` in the isolated world, so the
 requests carry the tab's cookies and logins and the tab never navigates. Six run at a time (`--concurrency`, at most
-10), each with 15 s (`--timeout`, at most 60) and at most 2 MB of body. HTML becomes text with Markdown headings
+10), each with 15 s (`--timeout`, at most 60) and at most 2 MB of body, 8 MB in all (cut before decoding). The whole
+run has one limit, the per-address timeout times the rounds the queue needs, at most 75 s, kept under the page call's
+own deadline: at that limit every request still running is aborted, the queue stops, and the answer keeps what
+finished, with `stopped at the … limit` or `not fetched` on the rest (telemetry `read_urls_deadline`). One address's
+text is cut at 200,000 characters even with `--full` or `--json`. HTML becomes text with Markdown headings
 (scripts, styles, menus and footers left out, the title line moved into the header); text, JSON and Markdown print
 as they are; a binary body is skipped with the `read --http … --out` that saves it. Each address gets an equal share
 of the output cap (`--max-chars` sets it, `--full` lifts it) under `## [n] <title> — <url> (<status>, <type>)`, and

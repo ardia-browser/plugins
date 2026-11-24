@@ -20,14 +20,14 @@ export type FieldFacts = { type?: unknown; autocomplete?: unknown; said?: unknow
 
 export function sensitiveFacts(facts: FieldFacts): boolean {
   if (facts.type === "password" || facts.secure === true) return true;
-  if (typeof facts.autocomplete === "string" && SENSITIVE_AUTOCOMPLETE.test(facts.autocomplete)) return true;
+  if (typeof facts.autocomplete === "string" && SENSITIVE_AUTOCOMPLETE.test(facts.autocomplete.toLowerCase())) return true;
   return typeof facts.said === "string" && SENSITIVE_NAME.test(facts.said);
 }
 
 export function sensitiveNode(node: Node): boolean {
   if (node.props.get("inputType") === "password") return true;
   const autocomplete = node.props.get("autocomplete");
-  if (typeof autocomplete === "string" && SENSITIVE_AUTOCOMPLETE.test(autocomplete)) return true;
+  if (typeof autocomplete === "string" && SENSITIVE_AUTOCOMPLETE.test(autocomplete.toLowerCase())) return true;
   return SENSITIVE_NAME.test(node.name);
 }
 

@@ -360,8 +360,23 @@ async function collectInto(state: State, page: Page, selector: string | null, cu
   return nodes;
 }
 
+export const DIALOG_ROLES: ReadonlySet<string> = new Set(["dialog", "alertdialog"]);
+
+export function dialogScopes(nodes: readonly Node[]): Map<Node, string> {
+  const scopes = new Map<Node, string>();
+  const visit = (list: readonly Node[], here: readonly string[]) => {
+    for (const node of list) {
+      scopes.set(node, JSON.stringify(here));
+      visit(node.children, DIALOG_ROLES.has(node.role) ? [...here, `${node.role}:${node.name}`] : here);
+    }
+  };
+  visit(nodes, []);
+  return scopes;
+}
+
 export function refsOf(state: Refs, page: Page, nodes: readonly Node[], wholePage = true): Ref[] {
   const placed = walkInContext(nodes).filter(([node]) => node.ref && node.backend !== null);
+  const scopes = dialogScopes(nodes);
   const counts = new Map<string, number>();
   const keyOf = (node: Node) => JSON.stringify([node.role, node.name]);
   for (const node of walk(nodes)) if ((node.ref || node.boxless) && node.backend !== null) counts.set(keyOf(node), (counts.get(keyOf(node)) ?? 0) + 1);
@@ -374,13 +389,16 @@ export function refsOf(state: Refs, page: Page, nodes: readonly Node[], wholePag
   return placed.map(([node, here]) => {
     let unique: boolean;
     let context: readonly unknown[];
+    let scope: string;
     if (wholePage) {
       unique = counts.get(keyOf(node)) === 1;
       context = here;
+      scope = scopes.get(node) ?? "[]";
     } else {
       const known = state.refs.get(node.ref as string);
       unique = known ? known.unique : false;
       context = known ? known.context : [];
+      scope = known?.scope ?? scopes.get(node) ?? "[]";
     }
     return {
       id: node.ref as string,
@@ -394,6 +412,7 @@ export function refsOf(state: Refs, page: Page, nodes: readonly Node[], wholePag
       name: node.name,
       unique,
       context,
+      scope,
     };
   });
 }

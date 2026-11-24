@@ -236,26 +236,60 @@ function saveBatchLine(ctx: Ctx, name: string, result: Result, target: string): 
 type Outcome = { command: unknown; success: boolean; result: unknown; error: string | null; code?: string | null; text?: string | null; remedy?: string; healed?: string[]; matches?: string[] };
 
 const MAX_HEALS = 4;
+const NOT_FOLLOWED = "it wasn't the only one with its role and name, or the new one is in another frame, dialog or container, so check it before using it";
 const SELECTOR_PREFIX = "--selector=";
+const SELECTOR_FLAGS = new Set(["-s", "--selector"]);
+const SELECTOR_AT: Readonly<Record<string, readonly number[]>> = {
+  click: [0], dblclick: [0], hover: [0], focus: [0], fill: [0], type: [0], check: [0], uncheck: [0], select: [0], drag: [0, 1], upload: [0],
+  download: [0], scrollintoview: [0], wait: [0], highlight: [0], screenshot: [0], styles: [0], frame: [0], get: [1], is: [1],
+};
+
+function refForms(stale: string, fresh: string): [string, string][] {
+  return [[`@${stale}`, `@${fresh}`], [`ref=${stale}`, `ref=${fresh}`], [`[ref=${stale}]`, `[ref=${fresh}]`], [stale, fresh]];
+}
 
 export function rebound(command: readonly string[], stale: string, fresh: string): string[] | null {
-  let swapped = false;
-  const forms: [string, string][] = [[`@${stale}`, `@${fresh}`], [`ref=${stale}`, `ref=${fresh}`], [`[ref=${stale}]`, `[ref=${fresh}]`]];
-  const swap = (word: string, index: number): string => {
-    if (word.startsWith(SELECTOR_PREFIX)) return `${SELECTOR_PREFIX}${swap(word.slice(SELECTOR_PREFIX.length), 1)}`;
-    for (const [from, to] of forms) {
-      if (word !== from) continue;
-      swapped = true;
-      return to;
+  const name = command.length > 0 ? (ALIASES[command[0] as string] ?? (command[0] as string)) : "";
+  const positions = new Set(SELECTOR_AT[name] ?? []);
+  const forms = refForms(stale, fresh);
+  const swapped = (word: string): string | null => forms.find(([from]) => from === word)?.[1] ?? null;
+  const out = [...command];
+  let changed = false;
+  const positionals: number[] = [];
+  for (let index = 1; index < command.length; index += 1) {
+    const word = command[index] as string;
+    if (word === "--") break;
+    if (SELECTOR_FLAGS.has(word)) {
+      const next = command[index + 1];
+      const value = next === undefined || next === "--" ? null : swapped(next);
+      if (value !== null) {
+        out[index + 1] = value;
+        changed = true;
+      }
+      index += 1;
+      continue;
     }
-    if (index === 1 && word === stale) {
-      swapped = true;
-      return fresh;
+    if (word.startsWith(SELECTOR_PREFIX)) {
+      const value = swapped(word.slice(SELECTOR_PREFIX.length));
+      if (value !== null) {
+        out[index] = `${SELECTOR_PREFIX}${value}`;
+        changed = true;
+      }
+      continue;
     }
-    return word;
-  };
-  const out = command.map(swap);
-  return swapped ? out : null;
+    if (word.startsWith("-") && word.length > 1) continue;
+    positionals.push(index);
+  }
+  if (name === "press" && positionals.length >= 2) positions.add(0);
+  for (const at of positions) {
+    const index = positionals[at];
+    if (index === undefined) continue;
+    const value = swapped(command[index] as string);
+    if (value === null) continue;
+    out[index] = value;
+    changed = true;
+  }
+  return changed ? out : null;
 }
 
 function staleMatches(state: State, error: StaleRef): string {
@@ -263,7 +297,9 @@ function staleMatches(state: State, error: StaleRef): string {
     const ref = state.refs.get(id);
     return ref === undefined ? `[ref=${id}]` : `${ref.role}${ref.name ? ` "${ref.name}"` : ""} [ref=${id}]`;
   });
-  return error.ambiguous ? `→ ${listed.length} match it now, so nothing was picked: ${listed.join(", ")}` : `→ on the page now: ${listed.join(", ")}`;
+  if (error.ambiguous) return `→ ${listed.length} match it now, so nothing was picked: ${listed.join(", ")}`;
+  if (error.text.includes(" is now @")) return `→ not followed for you: ${NOT_FOLLOWED}; on the page now: ${listed.join(", ")}`;
+  return `→ on the page now: ${listed.join(", ")}`;
 }
 
 export function failureMeta(outcome: Outcome): { code: string | undefined; remedy: string | undefined } {
@@ -569,6 +605,7 @@ async function runBatch(ctx: Ctx, argv: string[]): Promise<Result> {
       if (outcome.success) outcome.text = `${heals.join("\n")}\n${outcome.text || "✓ Done"}`;
     }
     if (error instanceof StaleRef && error.successor === null && error.matches.length > 0) {
+      if (error.text.includes(" is now @")) flag("batch_ref_not_followed", true);
       outcome.matches = [...error.matches];
       outcome.text = `${failureLine(outcome)}\n${staleMatches(ctx.state, error)}`;
       flag(error.ambiguous ? "batch_ref_ambiguous" : "batch_ref_missing", true);

@@ -7,6 +7,7 @@ import { luhnCard, MASKED, sensitiveFacts } from "../snapshot/mask.ts";
 import { quoted } from "../snapshot/render.ts";
 import type { Element, Page } from "../state/page.ts";
 import { record } from "../state/records.ts";
+import { isSecret, markSecret } from "../state/secrets.ts";
 import type { Ctx } from "./ctx.ts";
 import { register } from "./index.ts";
 import { parse } from "./parse.ts";
@@ -26,7 +27,10 @@ const FIELD_SELECTOR = [
   "[role=checkbox], [role=radio], [role=switch], [role=combobox], [role=textbox], [role=searchbox], [role=spinbutton], [role=slider], [role=listbox]",
 ].join(", ");
 
+export const MAX_EXAMINED = 5000;
+
 const FIELDS_OF = `(scope, all) => {
+  const selector = ${JSON.stringify(FIELD_SELECTOR)};
   const root = scope ? ardiaBrowse.query(scope) : document;
   if (!root) return null;
   const shown = (el) => {
@@ -34,9 +38,22 @@ const FIELDS_OF = `(scope, all) => {
     if (el.type !== "checkbox" && el.type !== "radio") return false;
     return [...(el.labels || [])].some((label) => ardiaBrowse.visible(label));
   };
-  const found = [...(root.matches && root.matches(${JSON.stringify(FIELD_SELECTOR)}) ? [root] : []), ...root.querySelectorAll(${JSON.stringify(FIELD_SELECTOR)})];
-  const kept = found.filter((el) => (all || shown(el)) && !found.some((other) => other !== el && other.contains(el) && other.getAttribute("role") !== "listbox"));
-  return kept.slice(0, ${MAX_FIELDS});
+  const nested = (el) => {
+    const outer = el.parentElement ? el.parentElement.closest(selector) : null;
+    return outer !== null && (root === document || root.contains(outer)) && outer.getAttribute("role") !== "listbox";
+  };
+  const kept = [];
+  let examined = 0;
+  const consider = (el) => {
+    examined += 1;
+    if (!nested(el) && (all || shown(el))) kept.push(el);
+  };
+  if (root !== document && root.matches && root.matches(selector)) consider(root);
+  for (const el of root.querySelectorAll(selector)) {
+    if (kept.length >= ${MAX_FIELDS} || examined >= ${MAX_EXAMINED}) break;
+    consider(el);
+  }
+  return kept;
 }`;
 
 const FACTS_OF = `(...els) => els.map((el) => {
@@ -113,13 +130,26 @@ function shownValue(text: string): string {
   return pyLen(flat) <= SHOWN_VALUE ? flat : `${headPoints(flat, SHOWN_VALUE - 1)}…`;
 }
 
-export function maskedValue(facts: Record<string, unknown>): string | null {
+export const SECRET_INVALID = "invalid";
+
+export function secretFacts(facts: Record<string, unknown>, latched = false): boolean {
+  if (latched) return true;
+  const said = [facts["label"], facts["name"]].map((item) => String(item ?? "")).join(" ");
+  const value = facts["value"];
+  return sensitiveFacts({ type: String(facts["type"] ?? "").toLowerCase(), autocomplete: String(facts["autocomplete"] ?? ""), said }) || (typeof value === "string" && luhnCard(value));
+}
+
+export function maskedValue(facts: Record<string, unknown>, secret = secretFacts(facts)): string | null {
   const value = facts["value"];
   if (value === null || value === undefined) return null;
   const text = String(value);
   if (text === "") return "";
-  const said = [facts["label"], facts["name"]].map((item) => String(item ?? "")).join(" ");
-  return sensitiveFacts({ type: facts["type"], autocomplete: facts["autocomplete"], said }) || luhnCard(text) ? MASKED : text;
+  return secret ? MASKED : text;
+}
+
+export function shownInvalid(facts: Record<string, unknown>, secret: boolean): string {
+  const invalid = String(facts["invalid"] ?? "");
+  return secret && invalid ? SECRET_INVALID : invalid;
 }
 
 export function fieldLine(field: Field): string {
@@ -162,19 +192,23 @@ async function fieldsOf(ctx: Ctx, page: Page, frame: string, scope: string | nul
   return rows.map((row, index) => {
     const role = roleOf(row);
     const label = String(row["label"] ?? "");
-    const ref = ctx.state.addRef(page, elements[index] as Element, role, label);
+    const element = elements[index] as Element;
+    const loader = page.loader(element.frame);
+    const secret = secretFacts(row, isSecret(ctx.state, page, element.frame, loader, element.backendId));
+    if (secret) markSecret(ctx.state, page, element.frame, loader, element.backendId);
+    const ref = ctx.state.addRef(page, element, role, label);
     return {
       ref,
       role,
       label,
       type: String(row["type"] ?? ""),
       name: String(row["name"] ?? ""),
-      value: maskedValue(row),
+      value: maskedValue(row, secret),
       checked: typeof row["checked"] === "boolean" ? row["checked"] : null,
       disabled: Boolean(row["disabled"]),
       required: Boolean(row["required"]),
       readonly: Boolean(row["readonly"]),
-      invalid: String(row["invalid"] ?? ""),
+      invalid: shownInvalid(row, secret),
       options: typeof row["options"] === "number" ? row["options"] : null,
     };
   });
@@ -244,13 +278,14 @@ export function fieldSpecs(given: readonly string[]): FieldSpec[] {
   return specs;
 }
 
-const ROWS_OF = `(selector, fields, limit, all, cap) => {
+export const MAX_COLUMNS = 30;
+
+const ROWS_OF = `(selector, fields, limit, all, cap, columns) => {
   const clean = (text) => {
     const flat = String(text == null ? "" : text).replace(/\\s+/g, " ").trim();
     return flat.length > cap ? flat.slice(0, cap - 1) + "…" : flat;
   };
   const textOf = (el) => clean(el.innerText != null ? el.innerText : el.textContent);
-  const items = ardiaBrowse.queryAll(selector).filter((el) => all || ardiaBrowse.visible(el));
   const read = (el, spec) => {
     const target = spec.selector ? (el.matches && el.matches(spec.selector) ? el : ardiaBrowse.query(spec.selector, el)) : el;
     if (!target) return null;
@@ -264,49 +299,56 @@ const ROWS_OF = `(selector, fields, limit, all, cap) => {
   };
   const headersOf = (table) => {
     const head = table.tHead && table.tHead.rows[0] ? table.tHead.rows[0] : [...table.rows].find((row) => [...row.cells].every((cell) => cell.tagName === "TH"));
-    return head ? [...head.cells].map((cell, index) => textOf(cell) || "column " + (index + 1)) : null;
+    return head ? [...head.cells].slice(0, columns).map((cell, index) => textOf(cell) || "column " + (index + 1)) : null;
   };
   const rowOf = (row, headers) => {
     const out = {};
-    [...row.cells].forEach((cell, index) => { out[(headers && headers[index]) || "column " + (index + 1)] = textOf(cell); });
+    [...row.cells].slice(0, columns).forEach((cell, index) => { out[(headers && headers[index]) || "column " + (index + 1)] = textOf(cell); });
     return out;
   };
   const rows = [];
-  let total = 0;
-  for (const el of items) {
+  let more = false;
+  const add = (make) => {
+    if (rows.length >= limit) {
+      more = true;
+      return false;
+    }
+    rows.push(make());
+    return true;
+  };
+  for (const el of ardiaBrowse.queryAll(selector)) {
+    if (more) break;
+    if (!all && !ardiaBrowse.visible(el)) continue;
     if (fields.length > 0) {
-      total += 1;
-      if (rows.length < limit) {
+      add(() => {
         const row = {};
         for (const spec of fields) row[spec.key] = read(el, spec);
-        rows.push(row);
-      }
+        return row;
+      });
     } else if (el.tagName === "TABLE") {
       const headers = headersOf(el);
       for (const row of el.rows) {
         if ([...row.cells].every((cell) => cell.tagName === "TH")) continue;
-        total += 1;
-        if (rows.length < limit) rows.push(rowOf(row, headers));
+        if (!add(() => rowOf(row, headers))) break;
       }
     } else if (el.tagName === "TR") {
-      total += 1;
-      if (rows.length < limit) rows.push(rowOf(el, el.closest("table") ? headersOf(el.closest("table")) : null));
+      const table = el.closest("table");
+      add(() => rowOf(el, table ? headersOf(table) : null));
     } else {
-      total += 1;
-      if (rows.length < limit) {
+      add(() => {
         const row = { text: textOf(el) };
         const link = el.matches("a[href]") ? el : el.querySelector("a[href]");
-        if (link) row.link = link.href;
-        rows.push(row);
-      }
+        if (link) row.link = clean(link.href);
+        return row;
+      });
     }
   }
-  return { total, rows, matched: items.length };
+  return { rows, more };
 }`;
 
-export function rowsText(selector: string, shown: number, total: number, rows: readonly unknown[]): string {
-  if (total === 0) return `No visible matches for ${selector}`;
-  const head = shown < total ? `${shown} of ${total} rows for ${selector} (--limit ${Math.min(total, QUERY_MAX)} for more):` : `${total} row${total === 1 ? "" : "s"} for ${selector}:`;
+export function rowsText(selector: string, shown: number, more: boolean, rows: readonly unknown[]): string {
+  if (shown === 0) return `No visible matches for ${selector}`;
+  const head = more ? `${shown} rows for ${selector}, and more match (--limit ${Math.min(shown * 2, QUERY_MAX)} for more):` : `${shown} row${shown === 1 ? "" : "s"} for ${selector}:`;
   return [head, ...rows.map((row) => dumps(pyValue(row), "spaced"))].join("\n");
 }
 
@@ -316,6 +358,7 @@ export async function cmdQuery(ctx: Ctx, argv: string[]): Promise<Result> {
   const selector = args[0] as string;
   const given = [...((options["fields"] as string[] | undefined) ?? []), ...((options["field"] as string[] | undefined) ?? [])];
   const fields = fieldSpecs(given);
+  if (fields.length > MAX_COLUMNS) throw new Usage(`--fields takes up to ${MAX_COLUMNS} fields`);
   const limitText = options["limit"] as string | undefined;
   if (limitText !== undefined && !/^[0-9]+$/u.test(limitText)) throw new Usage(`--limit takes a number of rows, not ${limitText}`);
   const limit = Math.min(Math.max(limitText === undefined ? QUERY_LIMIT : Number(limitText), 1), QUERY_MAX);
@@ -324,17 +367,17 @@ export async function cmdQuery(ctx: Ctx, argv: string[]): Promise<Result> {
   const frame = frameOrMain(ctx, page);
   let found: Record<string, unknown>;
   try {
-    found = record(await page.call(ROWS_OF, [selector, fields, limit, Boolean(options["all"]), CELL_TEXT], { frame, read: true }));
+    found = record(await page.call(ROWS_OF, [selector, fields, limit, Boolean(options["all"]), CELL_TEXT, MAX_COLUMNS], { frame, read: true }));
   } catch (error) {
     if (error instanceof BrowseError && error.code === "page_script_error") throw new BrowseError(`Invalid selector ${selector}: ${error.text}`, null, "usage_error");
     throw error;
   }
   const rows = Array.isArray(found["rows"]) ? (found["rows"] as unknown[]) : [];
-  const total = Number(found["total"]) || 0;
+  const more = found["more"] === true;
   flag("query", true);
   if (fields.length > 0) flag("query_fields", true);
   count("query_rows", rows.length);
-  return new Result({ selector, total, count: rows.length, rows }, rowsText(selector, rows.length, total, rows), true);
+  return new Result({ selector, count: rows.length, more, rows }, rowsText(selector, rows.length, more, rows), true);
 }
 
 register("form", cmdForm);

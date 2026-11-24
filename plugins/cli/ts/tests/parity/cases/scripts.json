@@ -6107,6 +6107,75 @@
   }
  },
  {
+  "id": "scripts--install-port",
+  "command": "scripts install",
+  "argv": [
+   "scripts",
+   "install",
+   "x.user.ts",
+   "--port",
+   "9"
+  ],
+  "fallback": true,
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "usage: ardia [-h] [--version] [--skill] <command> ...\nardia: error: unrecognized arguments: --port 9\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts install (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
   "id": "scripts--uninstall-no-control",
   "command": "scripts uninstall",
   "argv": [
@@ -16456,6 +16525,74 @@
      384,
      {
       "text": "<compared apart>"
+     }
+    ]
+   },
+   "helpers": [],
+   "timed_out": false
+  }
+ },
+ {
+  "id": "scripts--list-port",
+  "command": "scripts list",
+  "argv": [
+   "scripts",
+   "list",
+   "--port",
+   "9"
+  ],
+  "fallback": true,
+  "expected": {
+   "status": 2,
+   "stdout": {
+    "text": ""
+   },
+   "stderr": {
+    "text": "usage: ardia [-h] [--version] [--skill] <command> ...\nardia: error: unrecognized arguments: --port 9\n"
+   },
+   "requests": [],
+   "daemon_requests": [],
+   "telemetry": [],
+   "queued": [
+    {
+     "event": "cli_command",
+     "distinct_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+     "timestamp": "2026-01-01T00:00:00.000Z",
+     "properties": {
+      "command": "earlier"
+     }
+    }
+   ],
+   "usage": {
+    "recent": [
+     "scripts list (exit 2)"
+    ],
+    "tasks": {}
+   },
+   "flush": {
+    "failures": 0,
+    "next_at": 9000000000000.0
+   },
+   "files": {
+    "cli-home/Usage": [
+     "written",
+     "dir",
+     448
+    ],
+    "cli-home/Usage/usage.json": [
+     "written",
+     "file",
+     384,
+     {
+      "text": "<compared apart>"
+     }
+    ],
+    "cli-home/Usage/usage.lock": [
+     "written",
+     "file",
+     384,
+     {
+      "text": ""
      }
     ]
    },

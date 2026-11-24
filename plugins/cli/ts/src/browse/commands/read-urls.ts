@@ -23,9 +23,19 @@ export const MIN_SHARE = 400;
 export const DEFAULT_SHARE = 4000;
 export const FAILED_SHOWN = 300;
 
-const FETCH_ALL = `async (urls, maxBytes, concurrency, timeoutMs) => {
-  const out = new Array(urls.length);
+export const TOTAL_BYTES = 8 * 1024 * 1024;
+export const MAX_OVERALL = 75;
+export const CALL_MARGIN = 10;
+export const MAX_CHARS = 200_000;
+export const DEADLINE = "deadline";
+export const NOT_STARTED = "not_started";
+
+export const FETCH_ALL = `async (urls, maxBytes, totalBytes, concurrency, timeoutMs, deadlineMs) => {
+  const out = new Array(urls.length).fill(null);
+  const controls = new Set();
   let next = 0;
+  let budget = totalBytes;
+  let stopped = false;
   const textual = (type) => type === "" || /^text\\/|json|xml|javascript|markdown|x-www-form-urlencoded/i.test(type);
   const decoderFor = (type) => {
     const named = /charset=([^;\\s]+)/i.exec(type);
@@ -34,7 +44,9 @@ const FETCH_ALL = `async (urls, maxBytes, concurrency, timeoutMs) => {
   const one = async (index) => {
     const url = urls[index];
     const control = new AbortController();
-    const timer = setTimeout(() => control.abort(), timeoutMs);
+    controls.add(control);
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; control.abort(); }, timeoutMs);
     try {
       const response = await fetch(url, { credentials: "include", redirect: "follow", signal: control.signal });
       const type = response.headers.get("content-type") || "";
@@ -51,35 +63,66 @@ const FETCH_ALL = `async (urls, maxBytes, concurrency, timeoutMs) => {
       if (response.body && response.body.getReader) {
         const reader = response.body.getReader();
         for (;;) {
+          const room = Math.max(0, Math.min(maxBytes - got, budget));
+          if (room === 0) {
+            truncated = true;
+            try { await reader.cancel(); } catch (error) {}
+            break;
+          }
           const { done, value } = await reader.read();
           if (done) break;
-          got += value.byteLength;
-          body += decoder.decode(value, { stream: true });
-          if (got >= maxBytes) {
+          const piece = value.byteLength > room ? value.subarray(0, room) : value;
+          got += piece.byteLength;
+          budget -= piece.byteLength;
+          body += decoder.decode(piece, { stream: true });
+          if (piece.byteLength < value.byteLength) {
             truncated = true;
             try { await reader.cancel(); } catch (error) {}
             break;
           }
         }
         body += decoder.decode();
-      } else body = await response.text();
-      out[index] = { ...base, binary: false, body, truncated };
+      } else {
+        const whole = new Uint8Array(await response.arrayBuffer());
+        const room = Math.max(0, Math.min(maxBytes, budget));
+        const piece = whole.byteLength > room ? whole.subarray(0, room) : whole;
+        budget -= piece.byteLength;
+        body = decoder.decode(piece);
+        truncated = piece.byteLength < whole.byteLength;
+      }
+      if (!stopped) out[index] = { ...base, binary: false, body, truncated };
     } catch (error) {
-      out[index] = { url, error: control.signal.aborted ? "timeout" : String((error && error.message) || error) };
+      if (!stopped) out[index] = { url, error: timedOut ? "timeout" : String((error && error.message) || error) };
     } finally {
       clearTimeout(timer);
+      controls.delete(control);
     }
   };
   const workers = Array.from({ length: Math.min(concurrency, urls.length) }, async () => {
-    while (next < urls.length) {
+    while (!stopped && next < urls.length) {
       const index = next;
       next += 1;
       await one(index);
     }
   });
-  await Promise.all(workers);
-  return out;
+  let deadlineTimer = null;
+  const deadline = new Promise((resolve) => {
+    deadlineTimer = setTimeout(() => {
+      stopped = true;
+      for (const control of controls) control.abort();
+      resolve();
+    }, deadlineMs);
+  });
+  await Promise.race([Promise.all(workers), deadline]);
+  clearTimeout(deadlineTimer);
+  stopped = true;
+  for (const control of controls) control.abort();
+  return out.map((item, index) => item || { url: urls[index], error: index < next ? "${DEADLINE}" : "${NOT_STARTED}" });
 }`;
+
+export function overallSeconds(urls: number, concurrency: number, timeout: number): number {
+  return Math.min(MAX_OVERALL, timeout * Math.ceil(urls / Math.max(concurrency, 1)));
+}
 
 export type Fetched = {
   url: string;
@@ -115,8 +158,10 @@ export function absoluteUrls(given: readonly string[], base: string): string[] {
   });
 }
 
-function blockedReason(error: string, origin: string): string {
+function blockedReason(error: string, origin: string, overall: number): string {
   if (error === "timeout") return "timed out";
+  if (error === DEADLINE) return `stopped at the ${overall} s limit for the whole command (fewer addresses, or --concurrency, finishes sooner)`;
+  if (error === NOT_STARTED) return `not fetched: the ${overall} s limit for the whole command ran out first`;
   if (/failed to fetch|networkerror|load failed/iu.test(error)) {
     return `the page at ${origin || "this tab"} can't read it (another site that doesn't allow it, or the network failed); \`ardia browse read <url>\` loads it in a tab`;
   }
@@ -139,10 +184,10 @@ export function share(total: number, urls: number, given: number | null): number
   return Math.max(MIN_SHARE, Math.floor(total / Math.max(urls, 1)));
 }
 
-export function fetchedOf(raw: Record<string, unknown>, origin: string, perUrl: number): Fetched {
+export function fetchedOf(raw: Record<string, unknown>, origin: string, perUrl: number, overall = MAX_OVERALL): Fetched {
   const url = String(raw["url"] ?? "");
   if (typeof raw["error"] === "string") {
-    return { url, finalUrl: null, status: null, ok: false, contentType: "", title: "", content: "", chars: 0, truncated: false, error: blockedReason(raw["error"], origin) };
+    return { url, finalUrl: null, status: null, ok: false, contentType: "", title: "", content: "", chars: 0, truncated: false, error: blockedReason(raw["error"], origin, overall) };
   }
   const status = typeof raw["status"] === "number" ? raw["status"] : null;
   const type = String(raw["contentType"] ?? "");
@@ -152,8 +197,9 @@ export function fetchedOf(raw: Record<string, unknown>, origin: string, perUrl: 
   }
   const { content, title } = contentOf(neutralize(stripLoneSurrogates(String(raw["body"] ?? ""))), type);
   const chars = pyLen(content);
-  const cut = perUrl > 0 && chars > perUrl;
-  const shown = cut ? safeHead(content, perUrl) : content;
+  const limit = perUrl > 0 ? Math.min(perUrl, MAX_CHARS) : MAX_CHARS;
+  const cut = chars > limit;
+  const shown = cut ? safeHead(content, limit) : content;
   const failed = status !== null && status >= 400;
   return {
     url,
@@ -213,12 +259,14 @@ export async function cmdReadUrls(ctx: Ctx, argv: string[]): Promise<Result> {
     }
   })();
   const started = clock();
-  const raw = await page.call(FETCH_ALL, [urls, MAX_BYTES, concurrency, timeout * 1000], { frame: page.mainFrame, read: true, timeout: timeout + 15 });
+  const overall = overallSeconds(urls.length, concurrency, timeout);
+  const raw = await page.call(FETCH_ALL, [urls, MAX_BYTES, TOTAL_BYTES, concurrency, timeout * 1000, overall * 1000], { frame: page.mainFrame, read: true, timeout: overall + CALL_MARGIN });
   const seconds = clock() - started;
   if (!Array.isArray(raw)) throw new BrowseError("read-urls got no answer from the page", null, "page_script_error");
   const cap = ctx.options["full"] ? 0 : ctx.options["max_output"] === undefined || ctx.options["max_output"] === null ? OUTPUT_CAP : Number(ctx.options["max_output"]);
   const perUrl = share(cap - urls.length * 120, urls.length, given);
-  const fetched = raw.map((item) => fetchedOf(record(item), origin === "null" ? "" : origin, cap === 0 && given === null ? 0 : perUrl));
+  const fetched = raw.map((item) => fetchedOf(record(item), origin === "null" ? "" : origin, cap === 0 && given === null ? 0 : perUrl, overall));
+  if (fetched.some((item) => item.error !== null && (item.error.includes(`${overall} s limit`)))) flag("read_urls_deadline", true);
   flag("read_urls", true);
   count("read_urls_count", urls.length);
   add("read_urls_failed", fetched.filter((item) => item.error !== null).length);

@@ -132,8 +132,7 @@ const FREE_TEXT = new Set(["fill", "type", "eval", "keyboard", "notes", "script"
 export function asksHelp(name: string, argv: readonly string[]): boolean {
   if (argv.length > 0 && HELP_WORDS.has(argv[0] as string)) return true;
   if (FREE_TEXT.has(name)) return false;
-  const end = argv.indexOf("--");
-  return (end < 0 ? argv : argv.slice(0, end)).some((word) => HELP_WORDS.has(word));
+  return argv.length > 1 && HELP_WORDS.has(argv[1] as string) && !(argv[0] as string).startsWith("-");
 }
 
 export async function dispatch(ctx: Ctx, name: string, argv: string[]): Promise<Result> {

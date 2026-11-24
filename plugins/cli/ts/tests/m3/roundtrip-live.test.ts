@@ -40,6 +40,54 @@ document.getElementById("redraw").addEventListener("click", () => {
 wire(document.getElementById("save"));
 </script>`;
 
+const EDGE = `<!doctype html><title>Edge</title><main>
+<div role="dialog" aria-label="Confirm" id="dlg"><button type="button" id="inner">Remove</button></div>
+<button type="button" id="swap">Swap</button>
+<span id="hit">none</span>
+<form id="sec">
+<label for="otp">Code</label><input id="otp" autocomplete="ONE-TIME-CODE" value="831245">
+<label for="pw2">Secret</label><input id="pw2" type="password" value="hunter22">
+<label for="flip">Flip</label><input id="flip" type="password" value="sesame77">
+<button type="button" id="flipper">Flip it</button>
+</form></main>
+<script>
+document.getElementById("pw2").setCustomValidity("hunter22 is too weak");
+document.getElementById("inner").addEventListener("click", () => { document.getElementById("hit").textContent = "dialog clicked"; });
+document.getElementById("swap").addEventListener("click", () => {
+  document.getElementById("dlg").remove();
+  const outside = document.createElement("button");
+  outside.type = "button";
+  outside.textContent = "Remove";
+  outside.addEventListener("click", () => { document.getElementById("hit").textContent = "background clicked"; });
+  document.querySelector("main").prepend(outside);
+});
+document.getElementById("flipper").addEventListener("click", () => { document.getElementById("flip").type = "text"; });
+</script>`;
+
+const MANY = `<!doctype html><title>Many</title><main><div id="many"></div><table id="wide"><tbody><tr id="row"></tr></tbody></table>
+<a id="long" class="link" href="/${"x".repeat(2000)}">long</a></main>
+<script>
+const many = document.getElementById("many");
+for (let index = 0; index < 20000; index += 1) {
+  const item = document.createElement("span");
+  item.className = "m";
+  item.textContent = "m" + index;
+  many.appendChild(item);
+}
+const row = document.getElementById("row");
+for (let index = 0; index < 60; index += 1) row.insertCell().textContent = "c" + index;
+</script>`;
+
+const FIELDS = `<!doctype html><title>Fields</title><main><form id="f"></form></main>
+<script>
+const form = document.getElementById("f");
+for (let index = 0; index < 3000; index += 1) {
+  const input = document.createElement("input");
+  input.name = "n" + index;
+  form.appendChild(input);
+}
+</script>`;
+
 let root = "";
 let chrome: ChildProcess | null = null;
 let server: http.Server | null = null;
@@ -90,6 +138,12 @@ describe.skipIf(!CHROME)("round-trip commands against headless Chrome (plugins#1
     fs.mkdirSync(path.join(root, "home"));
     fs.mkdirSync(path.join(root, "data"), { mode: 0o700 });
     server = http.createServer((request, response) => {
+      const pages: Record<string, string> = { "/edge.html": EDGE, "/many.html": MANY, "/fields.html": FIELDS };
+      const extra = pages[request.url ?? ""];
+      if (extra !== undefined) {
+        response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" }).end(extra);
+        return;
+      }
       if (request.url === "/page.html") {
         response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" }).end(PAGE);
         return;
@@ -172,6 +226,57 @@ describe.skipIf(!CHROME)("round-trip commands against headless Chrome (plugins#1
     expect(read.out.split("\n")[0]).toMatch(/^read-urls: 2 of 3 read in /u);
     expect(read.out).toContain("# Product 2");
     expect(read.out).toContain("✗ " + site + "/missing: HTTP 404");
+  });
+
+  test("a ref removed with its dialog never follows a same-named button outside it", async () => {
+    expect((await browse(["open", `${site}/edge.html`])).status).toBe(0);
+    const listing = (await browse(["snapshot", "-i", "--full", "--all"])).out;
+    const moved = await browse(["batch", `click @${refOf(listing, "Swap")}`, `click @${refOf(listing, "Remove")}`, "get text #hit"]);
+    expect(moved.out + moved.err).not.toContain("↻");
+    expect(moved.out + moved.err).not.toContain("background clicked");
+    expect(moved.out + moved.err).toContain("(stale_ref)");
+    expect(moved.out + moved.err).toContain("→ not followed for you:");
+    const hit = await browse(["get", "text", "#hit"]);
+    expect(hit.out.trim()).toBe("none");
+  });
+
+  test("form never prints a secret: odd-case autocomplete, a validation message holding it, a field flipped to text", async () => {
+    expect((await browse(["open", `${site}/edge.html`])).status).toBe(0);
+    const first = await browse(["form"]);
+    const firstJson = await browse(["--json", "form"]);
+    expect(first.status, first.err).toBe(0);
+    expect(first.out).toContain('- textbox "Secret" [type=password, invalid: invalid, ref=');
+    expect((await browse(["click", "#flipper"])).status).toBe(0);
+    const after = await browse(["form"]);
+    const afterJson = await browse(["--json", "form"]);
+    for (const shown of [first, firstJson, after, afterJson]) {
+      for (const secret of ["831245", "hunter22", "sesame77"]) expect(shown.out + shown.err).not.toContain(secret);
+    }
+    expect(after.out).toMatch(/- textbox "Flip" \[ref=e[0-9]+\]: ••••/u);
+  });
+
+  test("query stops at --limit, caps columns and values; form stops at 200 fields", async () => {
+    expect((await browse(["open", `${site}/many.html`])).status).toBe(0);
+    const started = performance.now();
+    const one = await browse(["query", ".m", "--limit", "1"]);
+    expect(one.status, one.err).toBe(0);
+    expect(one.out.split("\n")[0]).toBe("1 rows for .m, and more match (--limit 2 for more):");
+    expect(performance.now() - started).toBeLessThan(15_000);
+    const wide = await browse(["--json", "query", "#wide"]);
+    const row = JSON.parse(wide.out).data.rows[0] as Record<string, string>;
+    expect(Object.keys(row).length).toBe(30);
+    const link = await browse(["--json", "query", "#long", "--fields", "url=@href"]);
+    expect((JSON.parse(link.out).data.rows[0].url as string).length).toBeLessThanOrEqual(300);
+    expect((await browse(["open", `${site}/fields.html`])).status).toBe(0);
+    const fields = await browse(["--json", "form"]);
+    expect(JSON.parse(fields.out).data.count).toBe(200);
+  });
+
+  test("--help as an option's value or a positional runs the command instead of printing help", async () => {
+    expect((await browse(["open", `${site}/page.html`])).status).toBe(0);
+    const valued = await browse(["batch", "find role button --name --help click"]);
+    expect(valued.out + valued.err).not.toContain("ardia browse find <role");
+    expect(valued.out + valued.err).toContain("(not_found)");
   });
 
   test("--help exits 0 on a batch line, and --port is accepted after other commands", async () => {

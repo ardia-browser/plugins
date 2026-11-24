@@ -2,8 +2,11 @@ import { expect, test } from "bun:test";
 import { rebound } from "../src/browse/commands/batch.ts";
 import { asksHelp } from "../src/browse/commands/index.ts";
 import { labelShaped } from "../src/browse/commands/act.ts";
-import { type Field, fieldLine, fieldSpecs, formSummary, maskedValue, rowsText, splitTop } from "../src/browse/commands/extract.ts";
-import { absoluteUrls, contentOf, fetchedOf, fetchedText, share } from "../src/browse/commands/read-urls.ts";
+import { type Field, fieldLine, fieldSpecs, formSummary, maskedValue, rowsText, secretFacts, shownInvalid, splitTop } from "../src/browse/commands/extract.ts";
+import { absoluteUrls, contentOf, DEADLINE, FETCH_ALL, fetchedOf, fetchedText, MAX_CHARS, NOT_STARTED, overallSeconds, share } from "../src/browse/commands/read-urls.ts";
+import { refsOf } from "../src/browse/snapshot/collect.ts";
+import { type Ref, Refs, sameScope, type Snapshots } from "../src/browse/state/refs.ts";
+import type { Page } from "../src/browse/state/page.ts";
 import { checkedState } from "../src/browse/commands/read.ts";
 import { StaleRef, Usage } from "../src/browse/daemon-errors.ts";
 import { stepsData, stepsText } from "../src/browse/script/script.ts";
@@ -32,6 +35,82 @@ test("a stale ref is rebound only where it is a selector", () => {
   expect(rebound(["fill", "@e5", "e14"], "e14", "e352")).toBeNull();
   expect(rebound(["drag", "@e1", "@e14"], "e14", "e352")).toEqual(["drag", "@e1", "@e352"]);
   expect(rebound(["click", "#save"], "e14", "e352")).toBeNull();
+  expect(rebound(["fill", "@e14", "@e14"], "e14", "e352")).toEqual(["fill", "@e352", "@e14"]);
+  expect(rebound(["type", "@e14", "ref=e14"], "e14", "e352")).toEqual(["type", "@e352", "ref=e14"]);
+  expect(rebound(["select", "@e14", "@e14"], "e14", "e352")).toEqual(["select", "@e352", "@e14"]);
+  expect(rebound(["click", "--", "@e14"], "e14", "e352")).toBeNull();
+  expect(rebound(["fill", "-s", "@e14", "--", "@e14"], "e14", "e352")).toEqual(["fill", "-s", "@e352", "--", "@e14"]);
+  expect(rebound(["eval", "@e14"], "e14", "e352")).toBeNull();
+  expect(rebound(["press", "@e14", "Enter"], "e14", "e352")).toEqual(["press", "@e352", "Enter"]);
+  expect(rebound(["press", "e14"], "e14", "e352")).toBeNull();
+  expect(rebound(["get", "text", "@e14"], "e14", "e352")).toEqual(["get", "text", "@e352"]);
+});
+
+function ref(id: string, extra: Partial<Ref> = {}): Ref {
+  return { id, instance: "i", target: "T", frame: "F", loader: "L", generation: 0, backend: 1, role: "button", name: "Delete", unique: true, context: [], scope: "[]", ...extra };
+}
+
+class FakeRefs extends Refs {
+  instance: string | null = "i";
+  readonly pages = new Map<string, Page>();
+  targetInfos = new Map<string, Record<string, unknown>>();
+  async page(): Promise<Page> {
+    throw new Error("unused");
+  }
+}
+
+const FAKE_PAGE = { targetId: "T", loader: () => "L", frames: new Map([["F", { loader: "L" }], ["OTHER", { loader: "L" }]]) } as unknown as Page;
+
+function withTree(tree: Node[], run: () => Promise<void>): Promise<void> {
+  const kept = Refs.snapshots;
+  const fake: Snapshots = {
+    collect: async () => tree,
+    refsOf: (state, page, nodes) => refsOf(state, page, nodes as Node[]),
+    walk: (nodes) => (function* walk(list: readonly Node[]): Generator<Node> {
+      for (const node of list) {
+        yield node;
+        yield* walk(node.children);
+      }
+    })(nodes as Node[]),
+  };
+  Refs.snapshots = fake;
+  return run().finally(() => {
+    Refs.snapshots = kept;
+  });
+}
+
+function framed(node: Node, frame: string): Node {
+  node.frame = frame;
+  for (const child of node.children) framed(child, frame);
+  return node;
+}
+
+test("a redrawn ref is followed only as a unique match in the same frame, dialog and container", async () => {
+  const inDialog = ref("e5", { scope: JSON.stringify(["dialog:Confirm"]), context: [["dialog", "Confirm"]] });
+  const background = framed(new Node("main", "", "", new Map(), 10, [control("button", "Delete", "e9")]), "F");
+  await withTree([background], async () => {
+    const state = new FakeRefs();
+    const fromDialog = await state.redrawnAll(FAKE_PAGE, inDialog);
+    expect(fromDialog.unique?.id).toBe("e9");
+    expect(fromDialog.followable).toBeNull();
+    expect((await state.redrawnAll(FAKE_PAGE, ref("e5"))).followable?.id).toBe("e9");
+    expect((await state.redrawnAll(FAKE_PAGE, ref("e5", { unique: false }))).followable).toBeNull();
+  });
+  const dialog = framed(new Node("dialog", "Confirm", "", new Map(), 11, [control("button", "Delete", "e10")]), "F");
+  await withTree([dialog], async () => {
+    expect((await new FakeRefs().redrawnAll(FAKE_PAGE, inDialog)).followable?.id).toBe("e10");
+  });
+  const otherFrame = framed(new Node("main", "", "", new Map(), 12, [control("button", "Delete", "e11")]), "OTHER");
+  await withTree([otherFrame], async () => {
+    expect((await new FakeRefs().redrawnAll(FAKE_PAGE, ref("e5"))).followable).toBeNull();
+  });
+  const otherForm = framed(new Node("form", "Billing", "", new Map(), 13, [control("button", "Delete", "e12")]), "F");
+  await withTree([otherForm], async () => {
+    expect((await new FakeRefs().redrawnAll(FAKE_PAGE, ref("e5", { context: [["form", "Shipping"]] }))).followable).toBeNull();
+  });
+  expect(sameScope(ref("a"), ref("b"))).toBe(true);
+  expect(sameScope(ref("a", { unique: false }), ref("b"))).toBe(false);
+  expect(sameScope(ref("a"), ref("b", { target: "T2" }))).toBe(false);
 });
 
 test("a stale ref error carries its successor and matches without changing its message", () => {
@@ -86,9 +165,9 @@ test("query --fields splits on top-level commas and reads @attributes", () => {
   ]);
   expect(fieldSpecs(['tag=a[data-x="a=b"]'])).toEqual([{ key: "tag", selector: 'a[data-x="a=b"]', attribute: null }]);
   expect(() => fieldSpecs(["=h2"])).toThrow(Usage);
-  expect(rowsText(".card", 2, 2, [{ name: "Red Mug" }, { name: "Blue Cup" }])).toBe('2 rows for .card:\n{"name": "Red Mug"}\n{"name": "Blue Cup"}');
-  expect(rowsText(".card", 1, 3, [{ name: "Red Mug" }]).split("\n")[0]).toBe("1 of 3 rows for .card (--limit 3 for more):");
-  expect(rowsText(".none", 0, 0, [])).toBe("No visible matches for .none");
+  expect(rowsText(".card", 2, false, [{ name: "Red Mug" }, { name: "Blue Cup" }])).toBe('2 rows for .card:\n{"name": "Red Mug"}\n{"name": "Blue Cup"}');
+  expect(rowsText(".card", 1, true, [{ name: "Red Mug" }]).split("\n")[0]).toBe("1 rows for .card, and more match (--limit 2 for more):");
+  expect(rowsText(".none", 0, false, [])).toBe("No visible matches for .none");
 });
 
 test("form lines show role, label, state, validation and ref, and mask secrets", () => {
@@ -104,6 +183,14 @@ test("form lines show role, label, state, validation and ref, and mask secrets",
   expect(maskedValue({ type: "text", value: "123456", label: "One-time code" })).toBe("••••");
   expect(maskedValue({ type: "text", value: "Ana", label: "Name" })).toBe("Ana");
   expect(maskedValue({ type: "checkbox", value: null, label: "Terms" })).toBeNull();
+  expect(maskedValue({ type: "text", value: "831245", label: "Code", autocomplete: "ONE-TIME-CODE" })).toBe("••••");
+  expect(maskedValue({ type: "text", value: "x", label: "Pin", autocomplete: "Current-Password" })).toBe("••••");
+  expect(secretFacts({ type: "text", value: "hunter22", label: "Shown" }, true)).toBe(true);
+  expect(maskedValue({ type: "text", value: "hunter22", label: "Shown" }, secretFacts({ type: "text", value: "hunter22", label: "Shown" }, true))).toBe("••••");
+  const leaky = { type: "password", value: "hunter22", label: "Password", invalid: "hunter22 is too short" };
+  expect(shownInvalid(leaky, secretFacts(leaky))).toBe("invalid");
+  expect(shownInvalid({ type: "email", value: "", label: "Email", invalid: "Please fill out this field." }, false)).toBe("Please fill out this field.");
+  expect(shownInvalid({ type: "password", value: "", label: "Password", invalid: "" }, true)).toBe("");
 });
 
 test("read-urls resolves addresses, turns HTML into text and reports each failure on its own", () => {
@@ -131,6 +218,42 @@ test("read-urls resolves addresses, turns HTML into text and reports each failur
   expect(share(12000, 3, null)).toBe(4000);
   expect(share(12000, 100, null)).toBe(400);
   expect(share(12000, 3, 50)).toBe(50);
+  const huge = fetchedOf({ url: "http://x/h", status: 200, contentType: "text/plain", body: "b".repeat(MAX_CHARS + 500), binary: false }, "http://x", 0);
+  expect(huge.content.length).toBe(MAX_CHARS);
+  expect(huge.truncated).toBe(true);
+  expect(fetchedOf({ url: "http://x/s", error: DEADLINE }, "http://x", 400, 30).error).toContain("30 s limit for the whole command");
+  expect(fetchedOf({ url: "http://x/q", error: NOT_STARTED }, "http://x", 400, 30).error).toContain("not fetched");
+  expect(overallSeconds(50, 6, 15)).toBe(75);
+  expect(overallSeconds(3, 1, 12)).toBe(36);
+  expect(overallSeconds(2, 6, 15)).toBe(15);
+});
+
+test("read-urls' page loop stops at its deadline with partial results, and caps bytes per address and in all", async () => {
+  const server = Bun.serve({
+    port: 0,
+    async fetch(request) {
+      const path = new URL(request.url).pathname;
+      if (path === "/slow") {
+        await Bun.sleep(5000);
+        return new Response("late");
+      }
+      if (path === "/big") return new Response("x".repeat(300_000), { headers: { "content-type": "text/plain" } });
+      return new Response(`ok ${path}`, { headers: { "content-type": "text/plain" } });
+    },
+  });
+  try {
+    const base = `http://127.0.0.1:${server.port}`;
+    const run = (0, eval)(FETCH_ALL) as (...args: unknown[]) => Promise<Record<string, unknown>[]>;
+    const started = performance.now();
+    const out = await run([`${base}/a`, `${base}/slow`, `${base}/slow`, `${base}/b`], 1000, 5000, 1, 4000, 1500);
+    expect(performance.now() - started).toBeLessThan(3000);
+    expect(out.map((item) => item["error"] ?? item["body"])).toEqual(["ok /a", DEADLINE, NOT_STARTED, NOT_STARTED]);
+    const big = await run([`${base}/big`, `${base}/big`, `${base}/big`], 100_000, 150_000, 3, 4000, 4000);
+    expect(big.map((item) => String(item["body"]).length).reduce((sum, size) => sum + size, 0)).toBe(150_000);
+    expect(big.every((item) => item["truncated"] === true && String(item["body"]).length <= 100_000)).toBe(true);
+  } finally {
+    server.stop(true);
+  }
 });
 
 test("a failed script lists the calls before it with their lines", () => {
@@ -158,15 +281,24 @@ test("--port and --session go anywhere: browse gets the session, other commands 
   expect(placeEndpointFlags(["browse", "--port", "9", "snapshot"]).argv).toEqual(["browse", "--port", "9", "snapshot"]);
   expect(placeEndpointFlags(["scripts", "test", "x.user.ts", "--port", "9"]).argv).toEqual(["scripts", "test", "x.user.ts", "--port", "9"]);
   expect(placeEndpointFlags(["--port", "9", "scripts", "test", "x.user.ts"]).argv).toEqual(["--port", "9", "scripts", "test", "x.user.ts"]);
-  expect(placeEndpointFlags(["scripts", "list", "--port", "9"]).argv).toEqual(["scripts", "list"]);
+  expect(placeEndpointFlags(["scripts", "--port", "9371", "test", "fixture.user.ts"]).argv).toEqual(["scripts", "--port", "9371", "test", "fixture.user.ts"]);
+  expect(placeEndpointFlags(["scripts", "list", "--port", "9"]).argv).toEqual(["scripts", "list", "--port", "9"]);
+  expect(placeEndpointFlags(["on", "tab.opened", "--port", "--", "echo", "--session", "s"]).argv).toEqual(["on", "tab.opened", "--port", "--", "echo", "--session", "s"]);
+  expect(placeEndpointFlags(["tabs", "--session", "--", "x"]).argv).toEqual(["tabs", "--session", "--", "x"]);
+  expect(placeEndpointFlags(["--port", "--", "tabs"]).argv).toEqual(["--port", "--", "tabs"]);
   expect(placeEndpointFlags(["on", "tab.opened", "--", "echo", "--port", "1"]).argv).toEqual(["on", "tab.opened", "--", "echo", "--port", "1"]);
   expect(placeEndpointFlags(["--port"]).argv).toEqual(["--port"]);
   expect(placeEndpointFlags(["tabs", "--port"]).argv).toEqual(["tabs", "--port"]);
   expect(placeEndpointFlags(["computer", "--port", "9"]).argv).toEqual(["computer", "--port", "9"]);
 });
 
-test("--help on a batch line is help, except inside free text", () => {
+test("--help on a batch line is help, except inside free text or as a value", () => {
   expect(asksHelp("network", ["requests", "--help"])).toBe(true);
+  expect(asksHelp("find", ["role", "button", "--name", "--help", "click"])).toBe(false);
+  expect(asksHelp("cookies", ["set", "name", "--help"])).toBe(false);
+  expect(asksHelp("cookies", ["set", "--help"])).toBe(true);
+  expect(asksHelp("click", ["--button", "-h"])).toBe(false);
+  expect(asksHelp("type", ["@e1", "-h"])).toBe(false);
   expect(asksHelp("snapshot", ["-h"])).toBe(true);
   expect(asksHelp("fill", ["@e1", "--help"])).toBe(false);
   expect(asksHelp("fill", ["--help"])).toBe(true);
