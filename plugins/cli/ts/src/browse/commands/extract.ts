@@ -38,7 +38,10 @@ const FIELDS_OF = `(scope, all) => {
     if (el.type !== "checkbox" && el.type !== "radio") return false;
     return [...(el.labels || [])].some((label) => ardiaBrowse.visible(label));
   };
+  const native = (el) => el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA";
+  const holdsNative = (el) => !native(el) && el.querySelector("input:not([type=hidden]), select, textarea") !== null;
   const nested = (el) => {
+    if (native(el)) return false;
     const outer = el.parentElement ? el.parentElement.closest(selector) : null;
     return outer !== null && (root === document || root.contains(outer)) && outer.getAttribute("role") !== "listbox";
   };
@@ -46,11 +49,11 @@ const FIELDS_OF = `(scope, all) => {
   let examined = 0;
   const consider = (el) => {
     examined += 1;
-    if (!nested(el) && (all || shown(el))) kept.push(el);
+    if (!holdsNative(el) && !nested(el) && (all || shown(el))) kept.push(el);
   };
   if (root !== document && root.matches && root.matches(selector)) consider(root);
   for (const el of root.querySelectorAll(selector)) {
-    if (kept.length >= ${MAX_FIELDS} || examined >= ${MAX_EXAMINED}) break;
+    if (kept.length > ${MAX_FIELDS} || examined >= ${MAX_EXAMINED}) break;
     consider(el);
   }
   return kept;
@@ -83,7 +86,7 @@ const FACTS_OF = `(...els) => els.map((el) => {
     name: el.getAttribute("name") || "",
     value: value === null ? null : String(value),
     checked: checkable ? el.checked === true || el.getAttribute("aria-checked") === "true" : null,
-    disabled: el.disabled === true || el.getAttribute("aria-disabled") === "true",
+    disabled: (el.matches(":disabled") && (tag === "input" || tag === "select" || tag === "textarea")) || el.getAttribute("aria-disabled") === "true",
     required: el.required === true || el.getAttribute("aria-required") === "true",
     readonly: el.readOnly === true || el.getAttribute("aria-readonly") === "true",
     invalid: clean(invalid),
@@ -171,7 +174,7 @@ export function fieldLine(field: Field): string {
   return `- ${field.role}${label} [${marks.join(", ")}]${value}`;
 }
 
-export function formSummary(fields: readonly Field[]): string {
+export function formSummary(fields: readonly Field[], more = false): string {
   const required = fields.filter((field) => field.required).length;
   const invalid = fields.filter((field) => field.invalid).length;
   const empty = fields.filter((field) => field.required && field.checked === null && field.value === "").length;
@@ -179,17 +182,20 @@ export function formSummary(fields: readonly Field[]): string {
   if (required) parts.push(`${required} required`);
   if (empty) parts.push(`${empty} required and empty`);
   if (invalid) parts.push(`${invalid} invalid`);
-  return `form: ${parts.join(", ")}`;
+  const tail = more ? `; more past the first ${MAX_FIELDS}: narrow with -s <selector>` : "";
+  return `form: ${parts.join(", ")}${tail}`;
 }
 
-async function fieldsOf(ctx: Ctx, page: Page, frame: string, scope: string | null, all: boolean): Promise<Field[]> {
+async function fieldsOf(ctx: Ctx, page: Page, frame: string, scope: string | null, all: boolean): Promise<{ fields: Field[]; more: boolean }> {
   const remote = await page.call(FIELDS_OF, [scope, all], { frame, byValue: false, read: true });
   if (record(remote)["subtype"] === "null") throw new BrowseError(`Element not found: ${scope ?? ""}`, null, "not_found");
-  const elements: Element[] = await page.elementsFrom(remote, frame, "form field", MAX_FIELDS);
-  if (elements.length === 0) return [];
+  const found: Element[] = await page.elementsFrom(remote, frame, "form field", MAX_FIELDS + 1);
+  const more = found.length > MAX_FIELDS;
+  const elements = found.slice(0, MAX_FIELDS);
+  if (elements.length === 0) return { fields: [], more };
   const facts = await page.call(FACTS_OF, elements, { frame, read: true });
   const rows = Array.isArray(facts) ? facts.map(record) : [];
-  return rows.map((row, index) => {
+  const fields = rows.map((row, index) => {
     const role = roleOf(row);
     const label = String(row["label"] ?? "");
     const element = elements[index] as Element;
@@ -212,6 +218,7 @@ async function fieldsOf(ctx: Ctx, page: Page, frame: string, scope: string | nul
       options: typeof row["options"] === "number" ? row["options"] : null,
     };
   });
+  return { fields, more };
 }
 
 export async function cmdForm(ctx: Ctx, argv: string[]): Promise<Result> {
@@ -221,12 +228,12 @@ export async function cmdForm(ctx: Ctx, argv: string[]): Promise<Result> {
   const page = await ctx.state.page();
   await page.refreshFrames();
   const frame = frameOrMain(ctx, page);
-  const fields = await fieldsOf(ctx, page, frame, scope, Boolean(options["all"]));
+  const { fields, more } = await fieldsOf(ctx, page, frame, scope, Boolean(options["all"]));
   flag("form", true);
   count("form_fields", fields.length);
-  const data = { url: page.url, count: fields.length, fields };
+  const data = { url: page.url, count: fields.length, more, fields };
   if (fields.length === 0) return new Result(data, scope ? `No form fields in ${scope}` : "No form fields on this page", true);
-  return new Result(data, [formSummary(fields), ...fields.map(fieldLine)].join("\n"), true);
+  return new Result(data, [formSummary(fields, more), ...fields.map(fieldLine)].join("\n"), true);
 }
 
 export type FieldSpec = { key: string; selector: string | null; attribute: string | null };
@@ -299,7 +306,14 @@ const ROWS_OF = `(selector, fields, limit, all, cap, columns) => {
   };
   const headersOf = (table) => {
     const head = table.tHead && table.tHead.rows[0] ? table.tHead.rows[0] : [...table.rows].find((row) => [...row.cells].every((cell) => cell.tagName === "TH"));
-    return head ? [...head.cells].slice(0, columns).map((cell, index) => textOf(cell) || "column " + (index + 1)) : null;
+    if (!head) return null;
+    const seen = new Map();
+    return [...head.cells].slice(0, columns).map((cell, index) => {
+      const base = textOf(cell) || "column " + (index + 1);
+      const times = (seen.get(base) || 0) + 1;
+      seen.set(base, times);
+      return times === 1 ? base : base + " " + times;
+    });
   };
   const rowOf = (row, headers) => {
     const out = {};
@@ -329,6 +343,7 @@ const ROWS_OF = `(selector, fields, limit, all, cap, columns) => {
       const headers = headersOf(el);
       for (const row of el.rows) {
         if ([...row.cells].every((cell) => cell.tagName === "TH")) continue;
+        if (!all && !ardiaBrowse.visible(row)) continue;
         if (!add(() => rowOf(row, headers))) break;
       }
     } else if (el.tagName === "TR") {

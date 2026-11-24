@@ -50,10 +50,17 @@ const PAGE_MISSING = /ReferenceError: ([\p{L}\p{N}_]+) is not defined/u;
 type Message = Record<string, unknown>;
 type Answer = { ok: boolean; text?: string | null; data?: unknown; error?: string; code?: string | null; call?: number };
 
-export function sourceLine(source: string, wrappedLine: unknown): number | null {
+export function lineCount(source: string): number {
+  return (source.match(/\n/gu)?.length ?? 0) + 1;
+}
+
+export function clampedLine(lines: number, wrappedLine: unknown): number | null {
   if (typeof wrappedLine !== "number") return null;
-  const lines = (source.match(/\n/gu)?.length ?? 0) + 1;
   return Math.min(Math.max(wrappedLine, 1), lines);
+}
+
+export function sourceLine(source: string, wrappedLine: unknown): number | null {
+  return clampedLine(lineCount(source), wrappedLine);
 }
 
 export function showArgv(argv: unknown): string {
@@ -235,8 +242,9 @@ export function stepsText(steps: readonly Step[], source: string): string {
   const ordered = [...steps].sort((a, b) => a.call - b.call);
   const shown = ordered.slice(-SHOWN_STEPS);
   const earlier = ordered.length - shown.length;
+  const lines = lineCount(source);
   const parts = shown.map((step) => {
-    const line = sourceLine(source, step.line);
+    const line = clampedLine(lines, step.line);
     return `${line ? `line ${line} ` : ""}${step.command} ${step.ok ? "✓" : "✗"}`;
   });
   const passed = ordered.filter((step) => step.ok).length;
@@ -244,7 +252,8 @@ export function stepsText(steps: readonly Step[], source: string): string {
 }
 
 export function stepsData(steps: readonly Step[], source: string): Record<string, unknown>[] {
-  return [...steps].sort((a, b) => a.call - b.call).map((step) => ({ call: step.call, command: step.command, line: sourceLine(source, step.line), ok: step.ok }));
+  const lines = lineCount(source);
+  return [...steps].sort((a, b) => a.call - b.call).map((step) => ({ call: step.call, command: step.command, line: clampedLine(lines, step.line), ok: step.ok }));
 }
 type Request = Record<string, unknown> & { id: number; op: string };
 

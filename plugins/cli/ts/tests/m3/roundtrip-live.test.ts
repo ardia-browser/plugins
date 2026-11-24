@@ -49,6 +49,8 @@ const EDGE = `<!doctype html><title>Edge</title><main>
 <label for="pw2">Secret</label><input id="pw2" type="password" value="hunter22">
 <label for="flip">Flip</label><input id="flip" type="password" value="sesame77">
 <button type="button" id="flipper">Flip it</button>
+<div role="combobox" aria-label="Who"><input aria-label="Who" value="Ana"></div>
+<fieldset disabled><label for="locked">Locked</label><input id="locked" value="x"></fieldset>
 </form></main>
 <script>
 document.getElementById("pw2").setCustomValidity("hunter22 is too weak");
@@ -65,6 +67,7 @@ document.getElementById("flipper").addEventListener("click", () => { document.ge
 </script>`;
 
 const MANY = `<!doctype html><title>Many</title><main><div id="many"></div><table id="wide"><tbody><tr id="row"></tr></tbody></table>
+<table id="dup"><thead><tr><th>Price</th><th>Price</th></tr></thead><tbody><tr><td>10</td><td>20</td></tr><tr style="display:none"><td>hidden</td><td>row</td></tr></tbody></table>
 <a id="long" class="link" href="/${"x".repeat(2000)}">long</a></main>
 <script>
 const many = document.getElementById("many");
@@ -253,6 +256,8 @@ describe.skipIf(!CHROME)("round-trip commands against headless Chrome (plugins#1
       for (const secret of ["831245", "hunter22", "sesame77"]) expect(shown.out + shown.err).not.toContain(secret);
     }
     expect(after.out).toMatch(/- textbox "Flip" \[ref=e[0-9]+\]: ••••/u);
+    expect(after.out).toMatch(/- textbox "Who" \[ref=e[0-9]+\]: Ana/u);
+    expect(after.out).toMatch(/- textbox "Locked" \[disabled, ref=e[0-9]+\]: x/u);
   });
 
   test("query stops at --limit, caps columns and values; form stops at 200 fields", async () => {
@@ -265,11 +270,16 @@ describe.skipIf(!CHROME)("round-trip commands against headless Chrome (plugins#1
     const wide = await browse(["--json", "query", "#wide"]);
     const row = JSON.parse(wide.out).data.rows[0] as Record<string, string>;
     expect(Object.keys(row).length).toBe(30);
+    const dup = await browse(["query", "#dup"]);
+    expect(dup.out).toContain('{"Price": "10", "Price 2": "20"}');
+    expect(dup.out).not.toContain("hidden");
     const link = await browse(["--json", "query", "#long", "--fields", "url=@href"]);
     expect((JSON.parse(link.out).data.rows[0].url as string).length).toBeLessThanOrEqual(300);
     expect((await browse(["open", `${site}/fields.html`])).status).toBe(0);
     const fields = await browse(["--json", "form"]);
     expect(JSON.parse(fields.out).data.count).toBe(200);
+    expect(JSON.parse(fields.out).data.more).toBe(true);
+    expect((await browse(["form"])).out.split("\n")[0]).toBe("form: 200 fields; more past the first 200: narrow with -s <selector>");
   });
 
   test("--help as an option's value or a positional runs the command instead of printing help", async () => {

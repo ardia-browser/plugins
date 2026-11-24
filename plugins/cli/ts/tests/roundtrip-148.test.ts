@@ -111,6 +111,7 @@ test("a redrawn ref is followed only as a unique match in the same frame, dialog
   expect(sameScope(ref("a"), ref("b"))).toBe(true);
   expect(sameScope(ref("a", { unique: false }), ref("b"))).toBe(false);
   expect(sameScope(ref("a"), ref("b", { target: "T2" }))).toBe(false);
+  expect(sameScope(ref("a"), ref("b", { loader: "L2" }))).toBe(false);
 });
 
 test("a stale ref error carries its successor and matches without changing its message", () => {
@@ -178,6 +179,7 @@ test("form lines show role, label, state, validation and ref, and mask secrets",
   expect(fieldLine(field({ role: "radio", type: "radio", label: "Pro", name: "plan", checked: false, required: false, invalid: "" }))).toBe('- radio "Pro" [checked=false, group=plan, ref=e1]');
   expect(fieldLine(field({ role: "combobox", type: "select", label: "Country", value: "Mexico", options: 2, required: false, invalid: "" }))).toBe('- combobox "Country" [ref=e1]: Mexico (of 2)');
   expect(formSummary([field({}), field({ required: false, invalid: "", value: "x" })])).toBe("form: 2 fields, 1 required, 1 required and empty, 1 invalid");
+  expect(formSummary([field({ required: false, invalid: "", value: "x" })], true)).toBe("form: 1 field; more past the first 200: narrow with -s <selector>");
   expect(maskedValue({ type: "password", value: "hunter2", label: "Password" })).toBe("••••");
   expect(maskedValue({ type: "text", value: "4111 1111 1111 1111", label: "Number" })).toBe("••••");
   expect(maskedValue({ type: "text", value: "123456", label: "One-time code" })).toBe("••••");
@@ -316,6 +318,14 @@ test("a plain label is tried as a field label; refs and CSS-looking selectors ar
   expect(labelShaped("text=Save")).toBe(false);
   expect(labelShaped("//input")).toBe(false);
   expect(labelShaped("42")).toBe(false);
+  expect(labelShaped("input[name=email]")).toBe(false);
+  expect(labelShaped("div.field")).toBe(false);
+  expect(labelShaped("form > input")).toBe(false);
+  expect(labelShaped("input:checked")).toBe(false);
+  expect(labelShaped("x [data-a=b]")).toBe(false);
+  expect(labelShaped("Email:")).toBe(true);
+  expect(labelShaped("St. Louis")).toBe(true);
+  expect(labelShaped("Email [required]")).toBe(true);
 });
 
 test("find … is and is take the same states", () => {

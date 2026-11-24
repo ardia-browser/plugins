@@ -60,6 +60,7 @@ export function sameScope(old: Ref, fresh: Ref): boolean {
     old.unique &&
     fresh.target === old.target &&
     fresh.frame === old.frame &&
+    fresh.loader === old.loader &&
     (fresh.scope ?? "[]") === (old.scope ?? "[]") &&
     JSON.stringify(fresh.context) === JSON.stringify(old.context)
   );
@@ -313,7 +314,7 @@ export abstract class Refs {
     const same = walked.filter((node) => (node.ref || node.boxless) && node.role === ref.role && node.name === ref.name).map((node) => node.ref ?? null);
     const sameRole = walked.filter((node) => node.ref && node.role === ref.role && node.name).map((node) => node.ref as string);
     const unique = same.length === 1 && same[0] ? (this.refs.get(same[0]) ?? null) : null;
-    const followable = unique !== null && sameScope(ref, unique) ? unique : null;
+    const followable = unique !== null && sameScope(ref, unique) && (page.loader(ref.frame) || "") === ref.loader ? unique : null;
     return { unique, followable, same: same.filter((id): id is string => id !== null), sameRole };
   }
 

@@ -36,7 +36,7 @@ export const NO_REACTION_HINT =
 export const DOWNLOAD_FETCH_LIMIT = 50 * 1024 * 1024;
 
 export const LABEL_FALLBACK: ReadonlySet<string> = new Set(["fill", "select", "check", "uncheck"]);
-const NOT_A_LABEL = /^[#.[/(*>~+:@]|^[a-z-]+=|^-/u;
+const NOT_A_LABEL = /^[#.[/(*>~+:@]|^[a-z-]+=|^-|^[a-z][\w-]*(?:\[|[.#:][a-z_-]|\s*[>~+]\s*\S)|\[[\w-]+\s*[~|^$*]?=/iu;
 const BY_LABEL = "(t) => ardiaBrowse.findLabel(t, true) || ardiaBrowse.findLabel(t, false) || ardiaBrowse.findAttr('placeholder', t, false) || ardiaBrowse.findAttr('name', t, true)";
 
 export function labelShaped(selector: string): boolean {

@@ -1116,7 +1116,10 @@ invalid message is the browser's `validationMessage`, or the `aria-errormessage`
 `snapshot` masks (passwords, card numbers, one-time codes, by type, autocomplete in any case and name) show as `••••`,
 and so does any field this session already knew was secret, even after the page turned it into a text field; a secret
 field's validation message prints only as `invalid`, since a page can put the value in it. The page walk stops at 200
-fields or 5,000 candidates, and a field inside another field is skipped without comparing every pair. Each line's
+fields or 5,000 candidates, and a field inside another field is skipped without comparing every pair; past 200 the first
+line says so (`; more past the first 200: narrow with -s <selector>`, `--json`: `more`). A widget role wrapped around a
+native input (`<div role="combobox"><input>`) lists the input, which holds the value, and a control inside a disabled
+`fieldset` counts as disabled (`:disabled`). Each line's
 ref is a real ref (`addRef`, followed across redraws like a snapshot's), so `fill @e11 …` works next. Telemetry:
 `form`, `form_fields`.
 
@@ -1127,7 +1130,8 @@ the match itself. With no fields, a `table` gives one row per body row keyed by 
 and anything else `text` and its first `link`. Rows print as JSON lines under `3 rows for .card:` (`--json`: `rows`,
 `count`, `more`); 50 by default, at most 500. The page walk stops at the first match past the limit (`1 rows for .m, and
 more match`), so `--limit 1` over 20,000 matches checks two; a row keeps at most 30 columns (and `--fields` takes at
-most 30), and every value, links included, is cut at 300 characters. Telemetry: `query`, `query_fields`,
+most 30), repeated headers get ` 2`, ` 3` so no cell is lost, a table's hidden rows are skipped like other hidden
+matches, and every value, links included, is cut at 300 characters. Telemetry: `query`, `query_fields`,
 `query_rows`.
 
 ### Forms agents guess
@@ -1150,7 +1154,7 @@ The CLI also takes the forms agents typed in the bench and got `Unknown …` for
   `is hidden` is `true` when nothing matches. `is <state> <sel>` takes the same states. Telemetry: `find_is`.
 - `fill`, `select`, `check` and `uncheck` take a field's label as the selector: when the text isn't a ref and matches no
   element right away (or isn't valid CSS), the field labelled with it (exact, then partial), else the one with that
-  placeholder or `name`, is used; when none has it either, the usual wait runs, then the error says no field has that
+  placeholder or `name`, is used (text shaped like CSS, `input[name=email]`, `div.field`, `form > input`, never falls back); when none has it either, the usual wait runs, then the error says no field has that
   label and points at `form`. `fill "Full name" "Ana Ruiz"` and `check "Accept terms"` work. Telemetry:
   `field_label_fallback`.
 
