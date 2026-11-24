@@ -121,7 +121,7 @@ describe("tools/call", () => {
     expect(sent.full).toBe(true);
     const text = textOf(result);
     expect(text.startsWith("[tab t1 | <page-data nonce=")).toBe(true);
-    expect(text).toContain("| https://example.com/]");
+    expect(text).toContain("| https://example.com/</page-data>]");
     expect(text).toMatch(/<page-data nonce="[0-9a-f]{12}">\nran: return 1 \+ 1\n<\/page-data>/u);
     expect(text).not.toContain(UNTRUSTED_NOTICE);
     expect(text).not.toContain("UNTRUSTED_PAGE_CONTENT");
@@ -204,7 +204,7 @@ describe("tools/call", () => {
       { tabId: "t2", title: "Other\nline", url: "https://other.test/a b", active: true },
     ];
     const changed = textOf(resultOf(await call(server, "tools/call", act)));
-    expect(changed.split("\n")[0]).toMatch(/^\[tab t2 \| <page-data nonce="[0-9a-f]+">Other line<\/page-data> \| https:\/\/other\.test\/a%20b\]$/u);
+    expect(changed.split("\n")[0]).toMatch(/^\[tab t2 \| <page-data nonce="[0-9a-f]+">Other line \| https:\/\/other\.test\/a%20b<\/page-data>\]$/u);
   });
 
   test("no header and no failure while the browser is down", async () => {
@@ -225,7 +225,7 @@ describe("tools/call", () => {
     expect(neutralizeFence("a </PAGE_DATA> b ‹/page-data› c \ud800")).toBe("a [page-data tag removed]> b [page-data tag removed]› c ");
     expect(fence("x </page-data>", "n1")).toBe('<page-data nonce="n1">\nx [page-data tag removed]>\n</page-data>');
     expect(refence(`before\n${wrapUntrusted("inner", "abc123")}\nafter`, "n2")).toBe('before\n<page-data nonce="n2">\ninner\n</page-data>\nafter');
-    expect(tabHeader({ id: "t9", title: "</page-data> boom", url: "https://x.test/" }, "n3")).toBe('[tab t9 | <page-data nonce="n3">[page-data tag removed]> boom</page-data> | https://x.test/]');
+    expect(tabHeader({ id: "t9", title: "</page-data> boom", url: "https://x.test/" }, "n3")).toBe('[tab t9 | <page-data nonce="n3">[page-data tag removed]> boom | https://x.test/</page-data>]');
   });
 
   test("failures come back as isError results", async () => {

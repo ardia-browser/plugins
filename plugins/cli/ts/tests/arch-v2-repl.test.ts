@@ -246,6 +246,9 @@ describe("persistent repl runner", () => {
       const afterRefresh = await turn(runner, "await page.click('#save', { receipt: true }); await browse('refresh'); return await page.assertText('changes were saved');", { answer: RECEIPT });
       expect(afterRefresh.result["kind"]).toBe("error");
       expect(afterRefresh.result["code"]).toBe("assertion");
+      const afterHere = await turn(runner, "await page.click('#save', { receipt: true }); await page.here(); return await page.assertText('changes were saved');", { answer: RECEIPT });
+      expect(afterHere.result["kind"]).toBe("error");
+      expect(afterHere.result["code"]).toBe("assertion");
       const concurrent = await turn(runner, "await Promise.all([page.click('#save', { receipt: true }), useTab('t2')]); return await page.assertText('changes were saved');", { answer: RECEIPT });
       expect(concurrent.result["kind"]).toBe("error");
       expect(concurrent.result["code"]).toBe("assertion");
@@ -254,22 +257,22 @@ describe("persistent repl runner", () => {
     }
   });
 
-  test("locator regexes respect /i (including non-ASCII), anchors, and alternation, and reject unsupported syntax or flags", async () => {
+  test("locator regexes respect ASCII /i, anchors, and alternation, and reject unsupported syntax, flags, or Unicode /i", async () => {
     const { requests, result } = await once(`
       await page.getByRole('button', { name: /^save$/i }).click();
       await page.getByRole('button', { name: /save|cancel/i }).click();
-      await page.getByRole('button', { name: /^Édit$/i }).click();
       let rejected = null;
       let badFlag = null;
+      let unicodeFold = null;
       try { page.getByRole('button', { name: /item \\d+/i }); } catch (e) { rejected = e.name; }
       try { page.getByText(/^save$/m); } catch (e) { badFlag = e.name; }
-      return [rejected, badFlag];
+      try { page.getByRole('button', { name: /^σ$/iu }); } catch (e) { unicodeFold = e.name; }
+      return [rejected, badFlag, unicodeFold];
     `);
-    expect(result["value"]).toEqual(["TypeError", "TypeError"]);
+    expect(result["value"]).toEqual(["TypeError", "TypeError", "TypeError"]);
     const selectors = (argvOf(requests) as string[][]).map((row) => row[1]);
     expect(selectors[0]).toContain('translate(normalize-space(@aria-label), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")="save"');
     expect(selectors[1]).toContain('contains(translate(normalize-space(@aria-label), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "save") or contains(translate(normalize-space(@aria-label), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "cancel")');
-    expect(selectors[2]).toContain('translate(normalize-space(@aria-label), "ABCDEFGHIJKLMNOPQRSTUVWXYZÉ", "abcdefghijklmnopqrstuvwxyzé")="édit"');
   });
 
   test("a non-repl runner still takes exactly one script", async () => {

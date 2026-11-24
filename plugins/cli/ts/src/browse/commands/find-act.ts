@@ -2,6 +2,7 @@ import { BrowseError } from "../daemon-errors.ts";
 import { flag } from "../metrics.ts";
 import { sendIn } from "../state/frames.ts";
 import type { Element, Page } from "../state/page.ts";
+import * as pierce from "../state/pierce.ts";
 import { parseRef } from "../state/refs.ts";
 import type { Ctx } from "./ctx.ts";
 
@@ -179,14 +180,12 @@ async function containerBySelector(ctx: Ctx, page: Page, frame: string, value: s
     const matches = await page.elementsFrom(remote, frame, `--within ${value}`, 20);
     if (matches.length > 1) return ambiguousContainers(ctx, page, value, matches);
     if (matches.length === 1) return [page, matches[0] as Element];
+    const pierced = await pierce.queryAll(page, frame, value, 20);
+    if (pierced.length > 1) return ambiguousContainers(ctx, page, value, pierced);
+    if (pierced.length === 1) return [page, pierced[0] as Element];
+    return null;
   } catch (error) {
     if (!(error instanceof BrowseError) || error.code !== "page_script_error") throw error;
-    return null;
-  }
-  try {
-    return await ctx.state.locate(value, null, 0);
-  } catch (error) {
-    if (!(error instanceof BrowseError) || !(error.code === "not_found" || (!error.code && error.text.startsWith("Invalid selector")))) throw error;
     return null;
   }
 }

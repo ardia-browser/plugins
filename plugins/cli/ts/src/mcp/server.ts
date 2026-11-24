@@ -48,7 +48,18 @@ export const DEFAULT_PROTOCOL = "2025-03-26";
 export const ACTIVE_TAB_URI = "ardia://tabs/active";
 const CONTEXT_PROBE_MS = 4000;
 const SCREENSHOT_COMMANDS = new Set(["screenshot", "shot"]);
-const TRANSPORT_ERRORS = new Set(["daemon_unreachable", "socket_refused", "interrupted", "request_too_large", "invalid_name", "internal_error"]);
+const TRANSPORT_ERRORS = new Set([
+  "daemon_unreachable",
+  "socket_refused",
+  "interrupted",
+  "request_too_large",
+  "invalid_name",
+  "internal_error",
+  "outcome_unknown",
+  "connection_lost",
+  "timed_out",
+  "daemon_answer_timed_out",
+]);
 
 export type ServerOptions = { daemon: Daemon; version: string; log?: (line: string) => void };
 
@@ -263,7 +274,7 @@ async function inlineImage(out: string): Promise<ToolContent | null> {
   const resolved = path.resolve(expandUser(found.path));
   let handle;
   try {
-    handle = await open(resolved, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    handle = await open(resolved, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
     const info = await handle.stat();
     if (!info.isFile() || info.size > MAX_INLINE_IMAGE_BYTES) return null;
     const bytes = await handle.readFile();

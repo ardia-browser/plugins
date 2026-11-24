@@ -179,6 +179,12 @@ export function tracksBorrowedNav(handler: Handler, targetOf: (state: State, arg
   return async (ctx: Ctx, argv: string[]): Promise<Result> => trackBorrowedNav(ctx.state, ctx.state ? targetOf(ctx.state, argv) : null, () => handler(ctx, argv));
 }
 
+const HERE_FLAG = /^--here(?:=(?:true|1|yes|on))?$/iu;
+
 export function openTarget(state: State, argv: readonly string[]): string | null {
-  return argv.includes("--here") ? state.attached : null;
+  for (const token of argv) {
+    if (token === "--") break;
+    if (HERE_FLAG.test(token)) return state.attached;
+  }
+  return null;
 }

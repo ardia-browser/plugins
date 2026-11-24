@@ -134,10 +134,10 @@ export function fenceInline(text: string, nonce: string): string {
 }
 
 export function tabHeader(tab: TabInfo, nonce: string): string {
-  const fencedTitle = fenceInline(tab.title, nonce);
+  const title = oneLine(neutralizeFence(tab.title), TITLE_UNITS);
   const url = sanitizeUrl(tab.url);
-  const shownTitle = fencedTitle === "" ? "" : ` | ${fencedTitle}`;
-  return `[tab ${oneLine(tab.id, 40).replace(/[^\w.-]/gu, "")}${shownTitle} | ${url}]`;
+  const inner = title === "" ? url : `${title} | ${url}`;
+  return `[tab ${oneLine(tab.id, 40).replace(/[^\w.-]/gu, "")} | <page-data nonce="${nonce}">${inner}</page-data>]`;
 }
 
 export function fencedTab(tab: TabInfo, nonce: string): TabInfo {

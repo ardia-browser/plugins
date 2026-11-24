@@ -748,7 +748,9 @@ export async function run(ctx: Ctx, source: string, seconds: number, mode: Scrip
     const ran = script === null ? "" : stepsText(script.steps, source);
     if (ran) flag("script_steps_shown", true);
     const steps = script === null ? [] : stepsData(script.steps, source);
-    throw failure(`${errorText(message, source, script?.calls ?? [])}${hint}${ran ? `\n${ran}` : ""}`, [...logs, ...notes], { ...failureData(message, script?.calls ?? []), line, steps }, scriptCode(message["code"]));
+    const rawCode = scriptCode(message["code"]);
+    const finalCode = rawCode === "usage" && !String(message["message"] || "").includes("isn't part of ardia's script API") ? "script_failed" : rawCode;
+    throw failure(`${errorText(message, source, script?.calls ?? [])}${hint}${ran ? `\n${ran}` : ""}`, [...logs, ...notes], { ...failureData(message, script?.calls ?? []), line, steps }, finalCode);
   }
   const value = renderValue(message);
   const parts = [...logs, ...(value !== null ? [value] : []), ...notes];

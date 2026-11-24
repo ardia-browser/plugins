@@ -12,7 +12,7 @@
   const MAX_SPILL_CHARS = 2 * 1024 * 1024;
   const RECEIPT_STALE_CMDS = new Set([
     "open", "goto", "navigate", "go", "visit", "back", "forward", "reload", "refresh",
-    "tab", "tabs", "window", "frame", "close", "exit", "quit", "pushstate",
+    "tab", "tabs", "window", "frame", "close", "exit", "quit", "pushstate", "here",
   ]);
   const BridgeError = Error;
   const send = (kind, payload) => {
@@ -61,6 +61,16 @@
   let lastReceipt = null;
   let receiptEpoch = 0;
   const internalCodes = new WeakMap();
+  const weakGet = WeakMap.prototype.get;
+  const weakSet = WeakMap.prototype.set;
+  const apply = Reflect.apply;
+  const setInternalCode = (error, code) => {
+    try { apply(weakSet, internalCodes, [error, String(code)]); } catch (e) {}
+  };
+  const getInternalCode = (error) => {
+    if (!error || (typeof error !== "object" && typeof error !== "function")) return null;
+    try { return apply(weakGet, internalCodes, [error]) || null; } catch (e) { return null; }
+  };
   const replNames = new Set();
   const spilledEntries = [];
   let spilledChars = 0;
@@ -150,7 +160,7 @@
     const error = entry.origin;
     error.message = String(answer.error || "failed");
     error.code = answer.code || null;
-    if (error.code) internalCodes.set(error, String(error.code));
+    if (error.code) setInternalCode(error, error.code);
     error.argv = entry.argv;
     error.call = typeof answer.call === "number" ? answer.call : null;
     entry.reject(error);
@@ -591,25 +601,15 @@
     }
     const branches = splitBranches(src).map((part) => {
       const parsed = parseBranch(part, whole);
+      if (value.ignoreCase && /[^\x00-\x7f]/.test(parsed.text)) {
+        throw new TypeError(`locator regex ${whole} uses /i with non-ASCII text; locators support ASCII case folding only (use page.evaluate for Unicode case folding)`);
+      }
       return { text: parsed.text, starts: outerStart || parsed.starts, ends: outerEnd || parsed.ends };
     });
     return { isRegex: true, ignoreCase: value.ignoreCase, branches };
   };
   const xpathBranch = (node, branch, ignoreCase) => {
-    let upper = UPPER;
-    let lower = LOWER;
-    if (ignoreCase) {
-      for (const ch of branch.text) {
-        if (ch.charCodeAt(0) <= 0x7f) continue;
-        const lo = ch.toLowerCase();
-        const up = ch.toUpperCase();
-        if (lo.length === 1 && up.length === 1 && lo !== up && !upper.includes(up)) {
-          upper += up;
-          lower += lo;
-        }
-      }
-    }
-    const subject = ignoreCase ? `translate(normalize-space(${node}), ${xpathString(upper)}, ${xpathString(lower)})` : `normalize-space(${node})`;
+    const subject = ignoreCase ? `translate(normalize-space(${node}), "${UPPER}", "${LOWER}")` : `normalize-space(${node})`;
     const needle = ignoreCase ? branch.text.toLowerCase() : branch.text;
     const quoted = xpathString(needle);
     if (branch.starts && branch.ends) return `${subject}=${quoted}`;
@@ -725,7 +725,7 @@
     const error = new Error(message);
     error.name = "AssertionError";
     error.code = "assertion";
-    internalCodes.set(error, "assertion");
+    setInternalCode(error, "assertion");
     return error;
   };
   const assertText = async (expected, options) => {
@@ -858,7 +858,7 @@
       `page.${name} isn't part of ardia's script API: read with page.$$eval(sel, els => …) or page.evaluate(fn, ...args), act with page.click(sel), page.fill(sel, value) or page.locator(sel).click(). page has: ${known.join(", ")}`,
     );
     error.code = "usage";
-    internalCodes.set(error, "usage");
+    setInternalCode(error, "usage");
     return error;
   };
   const page = new Proxy(Object.freeze(api), {
@@ -1238,12 +1238,20 @@
     if (!REPL || spillAt <= 0 || value === undefined) return null;
     const shown = previewOf(value);
     if (typeof shown !== "string" || shown.length <= spillAt) return null;
-    const head = shown.slice(0, previewChars);
+    const head = shown.slice(0, previewChars) + (shown.length > previewChars ? "…" : "");
+    const desc = described(value, shown.length);
     const name = stash(value, shown.length);
-    if (name === null) {
-      return { value: `${head}${shown.length > previewChars ? "…" : ""}\n[too large to retain in $outN (${described(value, shown.length)}); filter inside the script]` };
+    return { head, desc, name };
+  };
+  const renderSpilledValue = (spilled) => {
+    if (spilled === null) return null;
+    if (spilled.name === null) {
+      return { value: `${spilled.head}\n[too large to retain in $outN (${spilled.desc}); filter inside the script]` };
     }
-    return { value: `${head}${shown.length > previewChars ? "…" : ""}\n[stored in ${name} (${described(value, shown.length)}); inspect or filter in next repl call]`, spilled: name };
+    if (!spilledEntries.some((entry) => entry.name === spilled.name)) {
+      return { value: `${spilled.head}\n[evicted by spill memory limit (${spilled.desc}); filter inside the script]` };
+    }
+    return { value: `${spilled.head}\n[stored in ${spilled.name} (${spilled.desc}); inspect or filter in next repl call]`, spilled: spilled.name };
   };
   const spilledLogs = () => {
     if (!REPL || spillAt <= 0 || runLogChars <= spillAt) return null;
@@ -1312,16 +1320,12 @@
         const kept = harvest();
         const spilled = spilledValue(value);
         const logSpill = spilledLogs();
-        if (spilled && spilled.spilled && !spilledEntries.some((entry) => entry.name === spilled.spilled)) {
-          delete spilled.spilled;
-          spilled.value = spilled.value.replace(/\[stored in \$out\d+ \(([^)]+)\); inspect or filter in next repl call\]$/, "[evicted by spill memory limit ($1); filter inside the script]");
-        }
-        result = { kind: "done", ...(spilled || clean(value)) };
+        result = { kind: "done", ...(renderSpilledValue(spilled) || clean(value)) };
         if (REPL) result.kept = kept;
         if (logSpill) result.logSpill = logSpill;
       } catch (error) {
         harvest();
-        const safeCode = error && typeof error === "object" ? (internalCodes.get(error) || null) : null;
+        const safeCode = getInternalCode(error);
         result = {
           kind: "error",
           message: error && error.message !== undefined ? String(error.message) : show(error),
