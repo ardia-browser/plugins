@@ -120,7 +120,10 @@
     const origin = new Error();
     const line = lineOf(origin.stack);
     const id = nextId++;
-    if (op === "call" && Array.isArray(payload.argv) && payload.argv.length > 0) {
+    if (op === "evaluate" || op === "$eval" || op === "$$eval") {
+      receiptEpoch += 1;
+      lastReceipt = null;
+    } else if (op === "call" && Array.isArray(payload.argv) && payload.argv.length > 0) {
       const first = String(payload.argv[0]).trim();
       const parts = first.split(/\s+/);
       const cmd = parts[0].toLowerCase();

@@ -265,6 +265,13 @@ describe("persistent repl runner", () => {
       const concurrent = await turn(runner, "await Promise.all([page.click('#save', { receipt: true }), useTab('t2')]); return await page.assertText('changes were saved');", { answer: RECEIPT });
       expect(concurrent.result["kind"]).toBe("error");
       expect(concurrent.result["code"]).toBe("assertion");
+      const evalAnswer: Answerer = (request) => (request["op"] === "call" ? RECEIPT(request) : { ok: true, data: { result: null } });
+      const afterEvaluate = await turn(runner, "await page.click('#save', { receipt: true }); await page.evaluate(() => null); return await page.assertText('changes were saved');", { answer: evalAnswer });
+      expect(afterEvaluate.result["kind"]).toBe("error");
+      expect(afterEvaluate.result["code"]).toBe("assertion");
+      const afterDollarEval = await turn(runner, "await page.click('#save', { receipt: true }); await page.$eval('#save', (el) => el); return await page.assertText('changes were saved');", { answer: evalAnswer });
+      expect(afterDollarEval.result["kind"]).toBe("error");
+      expect(afterDollarEval.result["code"]).toBe("assertion");
     } finally {
       runner.kill();
     }
