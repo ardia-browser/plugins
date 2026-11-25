@@ -31,7 +31,9 @@ const CREDENTIAL_HEADER = /^(authorization|proxy-authorization|cookie)$|token|cs
 const NO_HUMANIZE: Flags = { "--no-humanize": "bool" };
 const COMMAND_FLAGS: Readonly<Record<string, Flags>> = {
   open: { "--enable": "multi", "--init-script": "multi", "--capture-console": "bool", "--headers": "value", "--label": "value", "--show": "bool" },
-  click: { "--new-tab": "bool", "--button": "value", "--no-humanize": "bool", "--selector": "value" },
+  click: { "--new-tab": "bool", "--button": "value", "--position": "value", "--touch": "bool", "--within": "value", "--no-humanize": "bool", "--selector": "value" },
+  dblclick: { "--position": "value", "--within": "value", "--no-humanize": "bool" },
+  hover: { "--position": "value", "--within": "value", "--no-humanize": "bool" },
   type: { "--no-humanize": "bool", "--delay": "value" },
   find: { "--name": "value", "--exact": "bool", "--partial": "bool", "--no-humanize": "bool", "--nth": "value" },
 };
@@ -357,9 +359,14 @@ async function describe(state: State, page: Page | null, name: string, argv: str
     }
     const target = elementTarget(state, args[0] as string);
     const rest = TYPING.has(name) ? [args.slice(1).join(" ")] : args.slice(1);
+    const positionFlags = options["position"] !== undefined ? [`--position=${String(options["position"])}`] : [];
+    const buttonFlags = name === "click" && typeof options["button"] === "string" ? ["--button", options["button"]] : [];
+    const withinFlags = typeof options["within"] === "string" ? ["--within", options["within"]] : [];
+    const extraFlags = [...buttonFlags, ...withinFlags, ...positionFlags];
     if (target === null) step.why = `${args[0]} was a ref with no role and name to find it by`;
     else if ("role" in target && name === "scrollintoview") step.why = "scrollintoview of a ref has no role-based form";
-    else step.replay = onElement(target, name, rest);
+    else if ("role" in target && extraFlags.length > 0) step.replay = [name, `role=${target["role"]}[name=${JSON.stringify(target["name"])}]`, ...rest, ...extraFlags];
+    else step.replay = onElement(target, name, [...rest, ...extraFlags]);
     if (TYPING.has(name)) {
       const hint = target ? Object.values(target).join(" ") : (args[0] as string);
       step.typed = { value: rest[0] as string, index: step.replay ? (target !== null && "role" in target ? 4 : 2) : null, hint };

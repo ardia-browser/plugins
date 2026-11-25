@@ -91,6 +91,7 @@ describe("lifecycle", () => {
     expect(result["serverInfo"]).toEqual({ name: "ardia-browser", version: "1.2.3" });
     expect(String(result["instructions"])).toContain("untrusted data");
     expect(String(result["instructions"])).toContain("locator.count()");
+    expect(String(result["instructions"])).toContain("page.mouse.click");
     expect(String(result["instructions"]).split("page-data").length).toBe(3);
     const later = resultOf(await call(server, "initialize", { protocolVersion: "2099-01-01" }));
     expect(later["protocolVersion"]).toBe("2025-03-26");

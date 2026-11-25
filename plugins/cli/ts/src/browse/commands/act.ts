@@ -5,7 +5,7 @@ import path from "node:path";
 import { formatG, groupThousands } from "../../pylib/format.ts";
 import { joinedWords, pyFloat, pyLen } from "../../pylib/str.ts";
 import { shlexQuote } from "../../pylib/shlex.ts";
-import { click, hover, tap, TOUCH_OFF } from "../act/pointer.ts";
+import { click, hover, mouseClickAt, type Position, tap, TOUCH_OFF } from "../act/pointer.ts";
 import { drag, listAfter, listBefore } from "../act/drag.ts";
 import { hoverResult, markOverlays, revealedAfter } from "../act/reveal.ts";
 import { choose, comboKind, fieldFacts, type Filled, fill, plain, select, settledSuggestions, SUGGESTION_HINT_WAIT, setChecked, type Item, typeText, uniqueMatch, unwatchSuggestions, watchSuggestions } from "../act/fields.ts";
@@ -132,11 +132,45 @@ export function consentNote(ctx: Ctx, given: Result): Result {
   return result;
 }
 
+function finiteCoord(raw: string, label: string): number {
+  let n: number;
+  try {
+    n = pyFloat(raw);
+  } catch {
+    throw new Usage(`${label} must be a finite number`);
+  }
+  if (!Number.isFinite(n)) throw new Usage(`${label} must be a finite number`);
+  return n;
+}
+
+function parsePosition(raw: unknown): Position | null {
+  if (raw === undefined || raw === null) return null;
+  const parts = String(raw).split(",");
+  if (parts.length !== 2 || !parts[0]?.trim() || !parts[1]?.trim()) {
+    throw new Usage("position must be x,y (CSS pixels from the element's top-left corner)");
+  }
+  return [finiteCoord(parts[0].trim(), "position x"), finiteCoord(parts[1].trim(), "position y")];
+}
+
+function parseClickCount(raw: unknown): number {
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1 || n > 3) throw new Usage("--count must be 1, 2 or 3");
+  return n;
+}
+
 async function cmdClick(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, given] = parse(argv, { "--new-tab": "bool", "--button": "value", "--no-humanize": "bool", "--touch": "bool", ...SELECTOR_FLAG, ...WITHIN_FLAG }, SELECTOR_ALIAS);
+  const [options, given] = parse(
+    argv,
+    { "--new-tab": "bool", "--button": "value", "--position": "value", "--no-humanize": "bool", "--touch": "bool", ...SELECTOR_FLAG, ...WITHIN_FLAG },
+    SELECTOR_ALIAS,
+  );
   const args = withSelector(options, given, 0, 0);
-  need(args, 1, "click <selector> [--new-tab]");
+  need(args, 1, "click <selector> [--position x,y] [--new-tab]");
   const selector = args[0] as string;
+  const position = parsePosition(options["position"]);
+  if (position !== null && (options["new_tab"] || options["touch"])) {
+    throw new Usage("--position can't be combined with --new-tab or --touch");
+  }
   const [page, element] = await resolve(ctx, selector, false, withinOf(options));
   const humanize = humanizing(ctx, options);
   if (options["new_tab"]) {
@@ -152,25 +186,27 @@ async function cmdClick(ctx: Ctx, argv: string[]): Promise<Result> {
     const done = touched ? new Result({ clicked: selector, touch: true }) : new Result({ clicked: selector, touch: false }, `✓ Done (${TOUCH_OFF})`);
     return consentNote(ctx, attach(done, report));
   }
-  const [, report] = await observe(ctx, page, () => click(page, element, humanize, 1, (options["button"] as string | undefined) || "left"));
-  return consentNote(ctx, attach(new Result({ clicked: selector }), report));
+  const [, report] = await observe(ctx, page, () => click(page, element, humanize, 1, (options["button"] as string | undefined) || "left", null, position));
+  return consentNote(ctx, attach(new Result({ clicked: selector, ...(position !== null ? { position } : {}) }), report));
 }
 
 async function cmdDblclick(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, args] = parse(argv, { "--no-humanize": "bool", ...WITHIN_FLAG });
-  need(args, 1, "dblclick <selector>");
+  const [options, args] = parse(argv, { "--position": "value", "--no-humanize": "bool", ...WITHIN_FLAG });
+  need(args, 1, "dblclick <selector> [--position x,y]");
+  const position = parsePosition(options["position"]);
   const [page, element] = await resolve(ctx, args[0] as string, false, withinOf(options));
-  const [, report] = await observe(ctx, page, () => click(page, element, humanizing(ctx, options), 2));
-  return consentNote(ctx, attach(new Result({ clicked: args[0], count: 2 }), report));
+  const [, report] = await observe(ctx, page, () => click(page, element, humanizing(ctx, options), 2, "left", null, position));
+  return consentNote(ctx, attach(new Result({ clicked: args[0], count: 2, ...(position !== null ? { position } : {}) }), report));
 }
 
 async function cmdHover(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, args] = parse(argv, { "--no-humanize": "bool", ...WITHIN_FLAG });
-  need(args, 1, "hover <selector>");
+  const [options, args] = parse(argv, { "--position": "value", "--no-humanize": "bool", ...WITHIN_FLAG });
+  need(args, 1, "hover <selector> [--position x,y]");
+  const position = parsePosition(options["position"]);
   const [page, element] = await resolve(ctx, args[0] as string, false, withinOf(options));
   const baseline = page.loader(element.frame);
   const marked = await markOverlays(page, element.frame);
-  const [, report] = await observe(ctx, page, () => hover(page, element, humanizing(ctx, options)));
+  const [, report] = await observe(ctx, page, () => hover(page, element, humanizing(ctx, options), position));
   const revealed = marked ? await revealedAfter(ctx, page, element.frame, undefined, baseline) : [];
   return attach(hoverResult(args[0] as string, revealed), report);
 }
@@ -529,17 +565,27 @@ async function cmdScrollintoview(ctx: Ctx, argv: string[]): Promise<Result> {
 }
 
 async function cmdMouse(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, args] = parse(argv, { "--no-humanize": "bool" });
-  need(args, 1, "mouse move <x> <y> | down [button] | up [button] | wheel <dy> [dx]");
+  const [options, args] = parse(argv, { "--no-humanize": "bool", "--button": "value", "--count": "value" });
+  need(args, 1, "mouse click <x> <y> [button] | dblclick <x> <y> [button] | move <x> <y> | down [button] | up [button] | wheel <dy> [dx]");
   const page = await ctx.state.page();
   const input = inputOf(page);
   const mouse = input.pointer;
   const humanize = humanizing(ctx, options);
   const action = args[0];
+  if (action === "click" || action === "dblclick") {
+    need(args, 3, `mouse ${action} <x> <y> [button]`);
+    const x = finiteCoord(args[1] as string, "x");
+    const y = finiteCoord(args[2] as string, "y");
+    const button = (options["button"] as string | undefined) ?? (args.length > 3 ? (args[3] as string) : "left");
+    const count = action === "dblclick" ? 2 : options["count"] !== undefined ? parseClickCount(options["count"]) : 1;
+    flag("mouse_click", true);
+    const [, report] = await observe(ctx, page, () => mouseClickAt(page, x, y, button, count, humanize));
+    return attach(new Result({ clicked: [x, y], button: mouseButton(button), count }), report);
+  }
   if (action === "move") {
     need(args, 3, "mouse move <x> <y>");
-    const x = pyFloat(args[1] as string);
-    const y = pyFloat(args[2] as string);
+    const x = finiteCoord(args[1] as string, "x");
+    const y = finiteCoord(args[2] as string, "y");
     const needs = (await overFrame(page, x, y)) ? {} : { mousemove: 1 };
     await expectInput(page, page.mainFrame, () => input.gesture("mouse move", () => mouse.move(x, y, humanize), { keepHeld: true }), needs, "The mouse move");
     return new Result({ moved: true });

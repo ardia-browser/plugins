@@ -92,7 +92,7 @@ export function shotTaken(state: State, file: string): DisplayImage | null {
   return shotsTaken.get(state)?.get(file) ?? null;
 }
 
-export const LIGHT_CALLS: ReadonlySet<string> = new Set(["click", "dblclick", "fill", "type", "press", "keyboard", "select", "check", "uncheck", "hover", "focus", "scroll"]);
+export const LIGHT_CALLS: ReadonlySet<string> = new Set(["click", "dblclick", "fill", "type", "press", "keyboard", "mouse", "select", "check", "uncheck", "hover", "focus", "scroll"]);
 const PY_WHITESPACE = new RegExp(`[${PY_SPACE_CLASS}]+`, "u");
 const PAGE_GLOBAL = /\b(document|window|localStorage|sessionStorage|getComputedStyle) is not defined/u;
 const PAGE_MISSING = /ReferenceError: ([\p{L}\p{N}_]+) is not defined/u;

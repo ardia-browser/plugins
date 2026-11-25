@@ -2410,8 +2410,9 @@ from a checkout), `$geoip_disable`, `$process_person_profile: false` and `$sessi
   `script_repl_lost` (the scope was gone and a fresh one started), `script_repl_reset`,
   `script_repl_value_spilled` and `script_repl_logs_spilled` (a result or logs over 8,192 characters went to `$outN`),
   `tab_diagnostics_used` (`console` or `network requests` read Ardia's always-on `tabs.diagnostics` ring
-  without attaching CDP Runtime/Network), and `tab_input_used` (pointer, wheel, key or text input went through
-  Ardia's `tabs.input` control-socket primitive)
+  without attaching CDP Runtime/Network), `tab_input_used` (pointer, wheel, key or text input went through
+  Ardia's `tabs.input` control-socket primitive), `click_with_position` (`click`, `dblclick` or `hover` used
+  `--position x,y`), and `mouse_click` (`mouse click` or `mouse dblclick` clicked viewport coordinates)
   (watch `total_ms` on `script` against
   `script_calls`, and `error_code` on `script` beside `script_missing_api`), and `cdp_calls` with `cdp_ms_total` (the
   command's own DevTools calls). The daemon counts its share in `ts/src/browse/metrics.ts` and returns it as `metrics`

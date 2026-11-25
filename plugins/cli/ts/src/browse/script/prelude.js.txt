@@ -294,11 +294,50 @@
     const epoch = receiptEpoch;
     return pending.then(acted(options, epoch));
   };
+  const coordOf = (value, label) => {
+    if (typeof value !== "number" || !Number.isFinite(value)) throw new TypeError(`${label} must be a finite number`);
+    return value;
+  };
+  const positionFlag = (options) => {
+    if (!options || options.position === undefined || options.position === null) return [];
+    const pos = options.position;
+    if (!plainObject(pos) || typeof pos.x !== "number" || !Number.isFinite(pos.x) || typeof pos.y !== "number" || !Number.isFinite(pos.y)) {
+      throw new TypeError("position must be { x, y } with finite numbers");
+    }
+    return [`--position=${pos.x},${pos.y}`];
+  };
   const totpHandles = new WeakMap();
   const keyboard = (value, options) => runAct(["keyboard", "type", String(value)], options);
   keyboard.type = keyboard;
   keyboard.press = (key, options) => runAct(["press", String(key)], options);
   keyboard.insertText = (value, options) => runAct(["keyboard", "inserttext", String(value)], options);
+  const mouse = Object.freeze({
+    click: (x, y, options) => {
+      const opts = plainObject(options) ? options : {};
+      const argv = ["mouse", "click", String(coordOf(x, "page.mouse.click x")), String(coordOf(y, "page.mouse.click y"))];
+      if (opts.button != null) argv.push("--button", String(opts.button));
+      const count = opts.clickCount ?? opts.count;
+      if (count != null) argv.push("--count", String(count));
+      return runAct(argv, opts);
+    },
+    dblclick: (x, y, options) => {
+      const opts = plainObject(options) ? options : {};
+      const argv = ["mouse", "dblclick", String(coordOf(x, "page.mouse.dblclick x")), String(coordOf(y, "page.mouse.dblclick y"))];
+      if (opts.button != null) argv.push("--button", String(opts.button));
+      return runAct(argv, opts);
+    },
+    move: (x, y, options) => runAct(["mouse", "move", String(coordOf(x, "page.mouse.move x")), String(coordOf(y, "page.mouse.move y"))], options),
+    down: (options) => {
+      const opts = plainObject(options) ? options : {};
+      return runAct(["mouse", "down", ...(opts.button != null ? [String(opts.button)] : [])], opts);
+    },
+    up: (options) => {
+      const opts = plainObject(options) ? options : {};
+      return runAct(["mouse", "up", ...(opts.button != null ? [String(opts.button)] : [])], opts);
+    },
+    wheel: (deltaX, deltaY, options) =>
+      runAct(["mouse", "wheel", String(coordOf(deltaY, "page.mouse.wheel deltaY")), String(coordOf(deltaX, "page.mouse.wheel deltaX"))], options),
+  });
 
   const display = async (input) => {
     let shot = input;
@@ -321,8 +360,8 @@
       for (const [sel, val] of pairs) await call(["fill", sel, String(val)], undefined);
       return pairs.length;
     },
-    click: (selector, options) => runAct(["click", selector, flags(options, { newTab: "--new-tab", button: "--button" })], options),
-    dblclick: (selector, options) => runAct(["dblclick", selector], options),
+    click: (selector, options) => runAct(["click", selector, ...flags(options, { newTab: "--new-tab", button: "--button", within: "--within" }), ...positionFlag(options)], options),
+    dblclick: (selector, options) => runAct(["dblclick", selector, ...flags(options, { within: "--within" }), ...positionFlag(options)], options),
     focus: (selector, options) => runAct(["focus", selector], options),
     fill: (selector, value, options) => runAct(["fill", selector, String(value)], options),
     type: (selector, value, options) => runAct(["type", selector, String(value)], options),
@@ -331,13 +370,14 @@
       return runAct(["press", ...args.slice(-2)], options);
     },
     keyboard,
+    mouse,
     select: (selector, ...given) => {
       const [values, options] = trailing(given);
       return runAct(["select", selector, ...values.flat()], options);
     },
     check: (selector, options) => runAct(["check", selector], options),
     uncheck: (selector, options) => runAct(["uncheck", selector], options),
-    hover: (selector, options) => runAct(["hover", selector, ...flags(options, { within: "--within" })], options),
+    hover: (selector, options) => runAct(["hover", selector, ...flags(options, { within: "--within" }), ...positionFlag(options)], options),
     drag: (source, target, options) => runAct(["drag", selectorOf(source, "page.drag()"), selectorOf(target, "page.drag()"), ...flags(options, { before: "--before", after: "--after", synthetic: "--synthetic" })], options),
     editCell: (selector, value, options) => runAct(["edit-cell", selectorOf(selector, "page.editCell()"), String(value), ...flags(options, { commit: "--commit", within: "--within" })], options),
     fillOtp: (code, options) => {
