@@ -5,6 +5,7 @@ import { builtinCrash } from "./errors.ts";
 import { createHash } from "node:crypto";
 import { fstatSync } from "node:fs";
 import { dataRoot } from "../control.ts";
+import { EndpointError, type EnvEndpoint, envEndpoint } from "./endpoint.ts";
 import type { JsonObject, Value } from "../json.ts";
 import { checkName, type Found, pythonInt, truthy, Usage } from "./args.ts";
 
@@ -135,7 +136,23 @@ export function endpointChoice(found: Found): Endpoint {
     if ("invalid" in parsed) throw new Usage("--port takes a number");
     number = parsed.value;
   }
+  if (!ws && number === undefined) checkEnvEndpoint(process.env);
   return { ws, port: number, dataDir: found.value("data_dir") };
+}
+
+// The daemon refuses an ARDIA_PORT that isn't a port. Refuse it here instead, before a session is claimed
+// (and an idle one maybe closed to make room) for a daemon that can't start.
+export function checkEnvEndpoint(environment: NodeJS.ProcessEnv): void {
+  let found: EnvEndpoint | null;
+  try {
+    found = envEndpoint(environment);
+  } catch (error) {
+    if (error instanceof EndpointError) throw new Usage(error.message);
+    throw error;
+  }
+  if (found?.kind === "port" && !(found.port > 0n && found.port < 65536n)) {
+    throw new Usage(`ARDIA_PORT must be between 1 and 65535, not ${found.port}`);
+  }
 }
 
 type Split = { scheme: string; netloc: string; path: string; query: string };
@@ -166,14 +183,25 @@ export function rootOf(endpoint: Endpoint): string {
   return dataRoot(endpoint.dataDir);
 }
 
-export function endpointKey(endpoint: Endpoint, root: string): string {
-  const url = endpoint.ws ? endpoint.ws : endpoint.port !== undefined ? undefined : env("ARDIA_CDP_URL");
-  if (url) {
-    const parts = splitUrl(url);
-    return `ws:${parts.scheme}://${parts.netloc}${parts.path}`;
-  }
+function wsKey(url: string): string {
+  const parts = splitUrl(url);
+  return `ws:${parts.scheme}://${parts.netloc}${parts.path}`;
+}
+
+// Keys the session by the endpoint its daemon will reach: the flags first, then the environment as
+// envEndpoint() reads it (ARDIA_WS, ARDIA_PORT, ARDIA_CDP_URL), the order daemonEnvironment() hands the daemon.
+export function endpointKey(endpoint: Endpoint, root: string, environment: NodeJS.ProcessEnv = process.env): string {
+  if (endpoint.ws) return wsKey(endpoint.ws);
   if (endpoint.port !== undefined) return `port:${endpoint.port}`;
-  return `token:${root}`;
+  let found: EnvEndpoint | null;
+  try {
+    found = envEndpoint(environment);
+  } catch (error) {
+    if (!(error instanceof EndpointError)) throw error;
+    return `port:${environment["ARDIA_PORT"]}`;
+  }
+  if (found === null) return `token:${root}`;
+  return found.kind === "ws" ? wsKey(found.url) : `port:${found.port}`;
 }
 
 export function sessionKey(namespace: string, endpointKey: string, session: string, forPlugin = false): string {
