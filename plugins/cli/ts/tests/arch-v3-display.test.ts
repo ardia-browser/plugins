@@ -292,6 +292,22 @@ describe("MCP inline images from display()", () => {
     expect(content.map((item) => item.type)).toEqual(["text"]);
   });
 
+  test("snapshotShot pruning never deletes unrelated display-* files", () => {
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), "arch-v3-prune-"));
+    try {
+      const keep = path.join(folder, "display-design.png");
+      const src = path.join(folder, "shot.png");
+      fs.writeFileSync(keep, "user-file");
+      fs.writeFileSync(src, png(4, 4));
+      const base = rememberShot({} as State, src, SHOT_DATA) as DisplayImage;
+      for (let i = 0; i < 34; i += 1) expect(snapshotShot(base, folder)).not.toBeNull();
+      expect(fs.existsSync(keep)).toBe(true);
+      expect(fs.readFileSync(keep, "utf8")).toBe("user-file");
+    } finally {
+      fs.rmSync(folder, { recursive: true, force: true });
+    }
+  });
+
   test("the tool text teaches display() and frame refs within the budget", () => {
     const repl = TOOLS[0].description;
     expect(repl).toContain("display(shot)");

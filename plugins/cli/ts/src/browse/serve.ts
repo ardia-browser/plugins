@@ -231,16 +231,29 @@ export function autoSessionsOn(found: Found): boolean {
 
 export type Auto = { session: string; notice: string | null };
 
-async function evictSession(root: string, victim: Reservation, timeout: Value, call: Call): Promise<boolean> {
+async function evictSession(root: string, victim: Reservation, timeout: Value, call: Call, signal?: AbortSignal): Promise<boolean> {
+  if (signal?.aborted) return false;
   const socket = await openIfLive(root, victim.id).catch(() => null);
   if (socket === null) return false;
+  if (signal?.aborted) {
+    socket.destroy();
+    return false;
+  }
+  const abort = () => {
+    socket.destroy();
+    socket.ended("ECANCELED");
+  };
+  signal?.addEventListener("abort", abort, { once: true });
   try {
     const options = new Map<string, Value>([[EVICT_TOKEN, String(victim.token)]]);
     const answer = await ask(socket, object([["argv", ["close"]], ["options", options], ["cwd", process.cwd()], ["env", new Map()], ["stdin", null]]), ["close"], timeout, call);
-    return answer.get("exit") === 0n;
+    return !signal?.aborted && answer.get("exit") === 0n;
   } catch (error) {
+    if (signal?.aborted) return false;
     if (!(error instanceof BrowseError)) throw error;
     return false;
+  } finally {
+    signal?.removeEventListener("abort", abort);
   }
 }
 
@@ -256,11 +269,12 @@ function registryIn<T>(root: string, change: Parameters<typeof withRegistry<T>>[
   }
 }
 
-export async function claimAutoSession(root: string, namespace: string, keySource: string, timeout: Value, call: Call, id: string): Promise<Auto> {
-  return (await autoSession(root, namespace, keySource, timeout, call, id)) as Auto;
+export async function claimAutoSession(root: string, namespace: string, keySource: string, timeout: Value, call: Call, id: string, signal?: AbortSignal): Promise<Auto> {
+  return (await autoSession(root, namespace, keySource, timeout, call, id, signal)) as Auto;
 }
 
-async function autoSession(root: string, namespace: string, keySource: string, timeout: Value, call: Call, given: string | null = null): Promise<Auto | null> {
+async function autoSession(root: string, namespace: string, keySource: string, timeout: Value, call: Call, given: string | null = null, signal?: AbortSignal): Promise<Auto | null> {
+  if (signal?.aborted) throw new BrowseError("cancelled", 130, "interrupted");
   const id = given ?? deriveAutoSession(process.cwd());
   if (id === null) return null;
   const daemonKey = sessionKey(namespace, keySource, id);
@@ -284,11 +298,22 @@ async function autoSession(root: string, namespace: string, keySource: string, t
     );
   }
   let refused = false;
-  for (const victim of used?.evict ?? []) {
+  const victims = used?.evict ?? [];
+  for (let index = 0; index < victims.length; index += 1) {
+    const victim = victims[index] as Reservation;
+    if (signal?.aborted) {
+      for (const rest of victims.slice(index)) registryIn(root, (registry) => ({ registry: settleEviction(registry, rest, false, now()), value: null }));
+      registryIn(root, (registry) => ({ registry: withoutSession(registry, daemonKey), value: null }));
+      throw new BrowseError("cancelled", 130, "interrupted");
+    }
     const stillReserved = registryIn(root, (registry) => ({ registry: null, value: reservationHolds(registry, victim.id, victim.token, now()) }));
-    const closed = stillReserved === true && (await evictSession(root, victim, timeout, call));
+    const closed = stillReserved === true && !signal?.aborted && (await evictSession(root, victim, timeout, call, signal));
     if (!closed) refused = true;
     registryIn(root, (registry) => ({ registry: settleEviction(registry, victim, closed, now()), value: null }));
+  }
+  if (signal?.aborted) {
+    registryIn(root, (registry) => ({ registry: withoutSession(registry, daemonKey), value: null }));
+    throw new BrowseError("cancelled", 130, "interrupted");
   }
   if (refused) {
     registryIn(root, (registry) => ({ registry: withoutSession(registry, daemonKey), value: null }));

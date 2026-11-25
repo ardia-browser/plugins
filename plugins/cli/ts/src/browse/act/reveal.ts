@@ -100,6 +100,7 @@ export async function revealedAfter(ctx: Ctx, page: Page, frame: string, polls: 
         if (error instanceof ConnectionLost || !(error instanceof BrowseError)) throw error;
         continue;
       }
+      if (page.loader(frame) !== baseline || page.loader(element.frame) !== baseline) return [];
       const role = String(facts["role"] ?? "generic");
       const name = String(facts["name"] ?? "");
       revealed.push({ ref: ctx.state.addRef(page, element, role, name), role, name });

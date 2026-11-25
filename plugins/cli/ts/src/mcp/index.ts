@@ -197,9 +197,9 @@ async function socketLink(path: string): Promise<Link> {
   return link;
 }
 
-export type SessionClaim = (root: string, namespace: string, keySource: string, id: string, timeout: Value) => Promise<{ notice: string | null }>;
+export type SessionClaim = (root: string, namespace: string, keySource: string, id: string, timeout: Value, signal?: AbortSignal) => Promise<{ notice: string | null }>;
 
-const claimRegistry: SessionClaim = (root, namespace, keySource, id, timeout) => claimAutoSession(root, namespace, keySource, timeout, new Call(["mcp"]), id);
+const claimRegistry: SessionClaim = (root, namespace, keySource, id, timeout, signal) => claimAutoSession(root, namespace, keySource, timeout, new Call(["mcp"]), id, signal);
 
 export class SessionDaemon implements Daemon {
   readonly root: string;
@@ -210,7 +210,7 @@ export class SessionDaemon implements Daemon {
   readonly keySource: string;
   private readonly config: JsonObject;
   private claimedAt = -Infinity;
-  private claiming: Promise<string | null> | null = null;
+  private claiming: { promise: Promise<string | null>; controller: AbortController; waiters: number } | null = null;
 
   constructor(
     private readonly found: Found,
@@ -300,26 +300,78 @@ export class SessionDaemon implements Daemon {
     return { line: Buffer.from(`${dumps(payload, "spaced")}\n`, "utf8"), timeout };
   }
 
-  async register(now = Date.now()): Promise<string | null> {
+  async register(now = Date.now(), signal?: AbortSignal): Promise<string | null> {
     if (this.auto === null || this.socket !== undefined) return null;
-    if (this.claiming !== null) return this.claiming;
-    if (now - this.claimedAt < CLAIM_EVERY_MS) return null;
-    this.claiming = (async () => {
+    if (signal?.aborted) throw new BrowseError("cancelled", 130, "interrupted");
+    let current = this.claiming;
+    if (current === null) {
+      if (now - this.claimedAt < CLAIM_EVERY_MS) return null;
+      const controller = new AbortController();
+      const entry: { promise: Promise<string | null>; controller: AbortController; waiters: number } = {
+        controller,
+        waiters: 0,
+        promise: Promise.resolve(null),
+      };
+      entry.promise = (async () => {
+        try {
+          const claimed = await this.claim(this.root, this.namespace, this.keySource, this.auto as string, optionsFrom(this.found).timeout, controller.signal);
+          if (!controller.signal.aborted) this.claimedAt = now;
+          return claimed.notice;
+        } finally {
+          if (this.claiming === entry) this.claiming = null;
+        }
+      })();
+      this.claiming = entry;
+      current = entry;
+    }
+    current.waiters += 1;
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      current.waiters -= 1;
+      if (current.waiters <= 0) current.controller.abort();
+    };
+    if (signal === undefined) {
       try {
-        const claimed = await this.claim(this.root, this.namespace, this.keySource, this.auto as string, optionsFrom(this.found).timeout);
-        this.claimedAt = now;
-        return claimed.notice;
+        return await current.promise;
       } finally {
-        this.claiming = null;
+        released = true;
+        current.waiters -= 1;
       }
-    })();
-    return this.claiming;
+    }
+    return new Promise<string | null>((resolve, reject) => {
+      const onAbort = () => {
+        release();
+        reject(new BrowseError("cancelled", 130, "interrupted"));
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+      current.promise.then(
+        (notice) => {
+          signal.removeEventListener("abort", onAbort);
+          if (!released) {
+            released = true;
+            current.waiters -= 1;
+          }
+          if (signal.aborted) reject(new BrowseError("cancelled", 130, "interrupted"));
+          else resolve(notice);
+        },
+        (error) => {
+          signal.removeEventListener("abort", onAbort);
+          if (!released) {
+            released = true;
+            current.waiters -= 1;
+          }
+          reject(error);
+        },
+      );
+    });
   }
 
   async run(request: DaemonRequest, signal?: AbortSignal, quickMs?: number): Promise<DaemonAnswer> {
     try {
       if (signal?.aborted) return failed("cancelled", "interrupted", 130);
-      const notice = await this.register();
+      const notice = await this.register(Date.now(), signal);
       if (signal?.aborted) return failed("cancelled", "interrupted", 130);
       if (notice) {
         const answer = await this.run(request, signal, quickMs);

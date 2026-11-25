@@ -310,10 +310,52 @@ describe("parallel agents get their own sessions", () => {
       controller.abort();
       expect(await cancelled.run({ argv: ["here"], stdin: null, json: false, full: false, maxOutput: null }, controller.signal)).toMatchObject({ code: "interrupted" });
       expect(claimed).toEqual([]);
+
+      const mid = new Found();
+      mid.values.set("port", "9333");
+      const midAbort = new AbortController();
+      let claimAborted = false;
+      const deferred = new SessionDaemon(mid, undefined, () => "auto-mid", async (_root, _namespace, _key, _id, _timeout, sig) => {
+        return new Promise<{ notice: string | null }>((_resolve, reject) => {
+          sig?.addEventListener("abort", () => {
+            claimAborted = true;
+            reject(new BrowseError("cancelled", 130, "interrupted"));
+          });
+        });
+      });
+      const pending = deferred.run({ argv: ["here"], stdin: null, json: false, full: false, maxOutput: null }, midAbort.signal);
+      midAbort.abort();
+      expect(await pending).toMatchObject({ code: "interrupted" });
+      expect(claimAborted).toBe(true);
       expect(CLAIM_EVERY_MS).toBeLessThanOrEqual(5_000);
     } finally {
       if (saved[0] !== undefined) process.env["AGENT_BROWSER_SESSION"] = saved[0];
       if (saved[1] !== undefined) process.env["ARDIA_BROWSE_AUTO_SESSION"] = saved[1];
     }
+  });
+
+  test("editJson upgrades an HTTP entry even when command and args match, and editToml preserves repeated array-of-table child tables", () => {
+    const httpMixed = JSON.stringify({ mcpServers: { ardia: { type: "http", url: "https://example.test/mcp", command: "ardia", args: ["mcp"] } } });
+    const upgraded = editJson("claude.json", httpMixed, "install", { command: "ardia", args: ["mcp"] }, "claude");
+    expect(upgraded.change).toBe("updated");
+    const parsed = JSON.parse(upgraded.text as string) as { mcpServers: { ardia: Record<string, unknown> } };
+    expect(parsed.mcpServers.ardia["type"]).toBe("stdio");
+    expect(parsed.mcpServers.ardia["url"]).toBeUndefined();
+
+    const withArrays = `[[profiles]]
+name = "one"
+
+[profiles.options]
+fast = true
+
+[[profiles]]
+name = "two"
+
+[profiles.options]
+fast = false
+`;
+    const added = editToml(withArrays, "install", { command: "ardia", args: ["mcp"] });
+    expect(added.change).toBe("added");
+    expect(tomlEntry(added.text)).toEqual({ command: "ardia", args: ["mcp"] });
   });
 });

@@ -179,11 +179,12 @@ export function editJson(file: string, text: string | null, action: Action, want
     delete rest[SERVER_NAME];
     return { text: `${JSON.stringify({ ...config, mcpServers: rest }, null, 2)}\n`, change: "removed", entry: null };
   }
-  if (found !== undefined && sameEntry(found, wanted)) return { text: null, change: "unchanged", entry: entryOf(found) };
   const given = found !== null && typeof found === "object" && !Array.isArray(found) ? (found as Record<string, unknown>) : {};
   const otherTransport = given["url"] !== undefined || given["serverUrl"] !== undefined || (given["type"] !== undefined && given["type"] !== "stdio");
+  const needsType = client === "claude" && given["type"] !== "stdio";
+  if (found !== undefined && !otherTransport && !needsType && sameEntry(found, wanted)) return { text: null, change: "unchanged", entry: entryOf(found) };
   const kept: Record<string, unknown> = otherTransport ? (given["env"] !== undefined ? { env: given["env"] } : {}) : given;
-  const next: Record<string, unknown> = client === "claude" ? { type: "stdio", ...kept, command: wanted.command, args: wanted.args } : { ...kept, command: wanted.command, args: wanted.args };
+  const next: Record<string, unknown> = client === "claude" ? { ...kept, type: "stdio", command: wanted.command, args: wanted.args } : { ...kept, command: wanted.command, args: wanted.args };
   if (client !== "claude" && otherTransport) delete next["type"];
   if (client === "claude" && next["env"] === undefined) next["env"] = {};
   const merged = { ...config, mcpServers: { ...servers, [SERVER_NAME]: next } };
@@ -382,12 +383,35 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
+function strictPrefix(parent: readonly string[], child: readonly string[]): boolean {
+  return parent.length < child.length && parent.every((part, index) => part === child[index]);
+}
+
 function verifiedToml(before: string | null, after: string, wanted: ServerEntry | null): string {
   const old = parseToml(before, "the Codex config isn't valid TOML");
   const next = parseToml(after, "the edit would have left the Codex config invalid");
   const { lines } = splitLines(after);
-  const headers = scanToml(lines).filter((statement) => statement.kind === "header" && !statement.array).map((statement) => JSON.stringify(statement.path));
-  const ours = headers.filter((header) => header === JSON.stringify(OURS)).length;
+  const statements = scanToml(lines);
+  const counts = new Map<string, number>();
+  const activeArrays: { path: string[]; key: string }[] = [];
+  const headers: string[] = [];
+  let ours = 0;
+  for (const statement of statements) {
+    if (statement.kind !== "header") continue;
+    const pathKey = JSON.stringify(statement.path);
+    if (statement.array) {
+      while (activeArrays.length > 0 && !strictPrefix((activeArrays[activeArrays.length - 1] as { path: string[] }).path, statement.path)) activeArrays.pop();
+      const scope = activeArrays.map((item) => item.key).join("/");
+      const countKey = `${scope}|${pathKey}`;
+      const index = (counts.get(countKey) ?? 0) + 1;
+      counts.set(countKey, index);
+      activeArrays.push({ path: statement.path, key: `${pathKey}#${index}` });
+      continue;
+    }
+    if (pathKey === JSON.stringify(OURS)) ours += 1;
+    const prefix = activeArrays.filter((item) => strictPrefix(item.path, statement.path)).map((item) => item.key).join("/");
+    headers.push(`${prefix}|${pathKey}`);
+  }
   const servers = next["mcp_servers"] as Record<string, unknown> | undefined;
   const entry = servers !== undefined ? servers[SERVER_NAME] : undefined;
   const fine =

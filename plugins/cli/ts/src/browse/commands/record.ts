@@ -142,7 +142,7 @@ export function recorderSource(binding: string | null): string {
   const secret = (el) => {
     if (sensitive.has(el)) return true;
     const hint = [el.getAttribute("autocomplete"), el.getAttribute("name"), el.id, el.getAttribute("aria-label"), el.getAttribute("placeholder"), labels(el), labelledBy(el)].join(" ");
-    const hidden = (el.localName === "input" && el.type === "password") || /one-time-code|cc-|password|passcode|passphrase|\\bpin\\b|otp|2fa|mfa|cvv|cvc|card.?num|ssn|secret|token|(recovery|backup|security|verification|auth\\w*)\\s*code/i.test(hint);
+    const hidden = (el.localName === "input" && el.type === "password") || /one-time-code|cc-|password|passcode|passphrase|card.?num|(?:^|[^a-z0-9])(one.?time|pin|otp|totp|2fa|mfa|cvv|cvc|ssn|secret|token|6.?digit|(?:recovery|backup|security|verification|auth(?:entication)?).?code|code)(?:[^a-z0-9]|$)/i.test(hint);
     const box = !hidden && el.localName === "input" && el.maxLength === 1 && otpGroup(el);
     if (hidden || box) sensitive.add(el);
     return hidden || box;
@@ -215,6 +215,15 @@ export function recorderSource(binding: string | null): string {
       return;
     }
     flushAll();
+    if (ariaToggle(el)) {
+      pointerSeq += 1;
+      const synthetic = installId + ":" + pointerSeq;
+      emit({ kind: "click", pointer: synthetic, target: describe(el), checked: null, method: formMethod(el) });
+      const confirm = () => emit({ kind: "confirm", pointer: synthetic, checked: stateOf(el) });
+      if (typeof setTimeout === "function") setTimeout(confirm, 0);
+      else confirm();
+      return;
+    }
     emit({ kind: "click", target: describe(el), checked: stateOf(el), method: formMethod(el) });
   };
   const onKey = (event) => {

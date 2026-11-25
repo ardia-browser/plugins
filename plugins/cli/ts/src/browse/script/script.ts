@@ -15,7 +15,7 @@ import { MUTATING } from "../daemon/names.ts";
 import { safeCode } from "../codes.ts";
 import { Result } from "../daemon/render.ts";
 import { active, add, count, type DisplayImage, flag } from "../metrics.ts";
-import { closeSync, constants as fsConstants, fstatSync, openSync, readdirSync, readSync, statSync, unlinkSync, writeSync } from "node:fs";
+import { closeSync, constants as fsConstants, fstatSync, lstatSync, openSync, readdirSync, readSync, unlinkSync, writeSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import nodePath from "node:path";
 import { defaultPath } from "../media/paths.ts";
@@ -510,6 +510,7 @@ async function servePage(run: ScriptRun, request: Request): Promise<Answer> {
 
 export const DISPLAY_BYTES = 1_500_000;
 export const DISPLAY_COPIES_KEPT = 32;
+const DISPLAY_COPY_NAME = /^display-[0-9]{13,}-[0-9a-f]{12}\.(?:png|jpe?g|webp)$/u;
 
 function readBounded(file: string, limit: number): Buffer | null {
   let fd: number | undefined;
@@ -535,11 +536,20 @@ function readBounded(file: string, limit: number): Buffer | null {
 
 function pruneCopies(folder: string): void {
   try {
-    const copies = readdirSync(folder)
-      .filter((name) => name.startsWith("display-"))
-      .map((name) => ({ name, at: statSync(nodePath.join(folder, name)).mtimeMs }))
-      .sort((a, b) => a.at - b.at);
-    for (const old of copies.slice(0, Math.max(0, copies.length - DISPLAY_COPIES_KEPT))) unlinkSync(nodePath.join(folder, old.name));
+    const copies: { name: string; at: number }[] = [];
+    for (const name of readdirSync(folder)) {
+      if (!DISPLAY_COPY_NAME.test(name)) continue;
+      try {
+        const info = lstatSync(nodePath.join(folder, name));
+        if (info.isFile()) copies.push({ name, at: info.mtimeMs });
+      } catch {}
+    }
+    copies.sort((a, b) => a.at - b.at);
+    for (const old of copies.slice(0, Math.max(0, copies.length - DISPLAY_COPIES_KEPT))) {
+      try {
+        unlinkSync(nodePath.join(folder, old.name));
+      } catch {}
+    }
   } catch {}
 }
 

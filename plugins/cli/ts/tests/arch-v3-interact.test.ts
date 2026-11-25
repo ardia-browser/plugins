@@ -8,7 +8,7 @@ import { SYNTHETIC_DROP, syntheticDrop } from "../src/browse/act/drag.ts";
 import { editCell } from "../src/browse/act/fields.ts";
 import { HOVER_MARK, HOVER_REVEALED, hoverResult, revealedLines } from "../src/browse/act/reveal.ts";
 import { markOtpBoxes, OTP_BOXES, otpCode, otpRequest } from "../src/browse/commands/interact.ts";
-import { DESCRIBE_REVEALED } from "../src/browse/act/reveal.ts";
+import { DESCRIBE_REVEALED, revealedAfter } from "../src/browse/act/reveal.ts";
 import { isSecret } from "../src/browse/state/secrets.ts";
 import { RECORDER_SOURCE, QUEUE } from "../src/browse/commands/record.ts";
 import { settledClicks } from "../src/browse/flows/compile.ts";
@@ -321,6 +321,64 @@ describe.skipIf(HEADLESS === undefined)("page scripts in a real Chromium", () =>
     const fill = events.find((event) => event["kind"] === "fill");
     expect(fill).toMatchObject({ secret: true, value: "" });
     await run("globalThis.__ardiaRecorderStop && globalThis.__ardiaRecorderStop()");
+  });
+
+  test("the recorder hides digits in a name=code field and records post-click state on keyboard ARIA toggles", async () => {
+    await run(`(() => {
+      if (!document.getElementById("named-code")) {
+        const input = document.createElement("input");
+        input.id = "named-code";
+        input.name = "code";
+        document.body.appendChild(input);
+      }
+      document.getElementById("wifi").setAttribute("aria-checked", "true");
+    })()`);
+    await run(RECORDER_SOURCE);
+    await run(`globalThis[${JSON.stringify(QUEUE)}].length = 0`);
+    await press("#named-code");
+    await send("Input.insertText", { text: "123456" });
+    await run(`document.getElementById("wifi").focus()`);
+    await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+    await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const events = ((await run(`globalThis[${JSON.stringify(QUEUE)}].map((line) => JSON.parse(line))`)) as Record<string, unknown>[]);
+    const codeFill = events.find((event) => event["kind"] === "fill" && (event["target"] as Record<string, unknown>)["fieldName"] === "code");
+    expect(codeFill).toMatchObject({ secret: true, value: "" });
+    const switchClicks = events.filter((event) => event["kind"] === "click" && (event["target"] as Record<string, unknown>)["role"] === "switch");
+    const confirms = events.filter((event) => event["kind"] === "confirm");
+    if (switchClicks.length > 0) {
+      expect(switchClicks[0]?.["checked"]).toBeNull();
+      expect(confirms.at(-1)?.["checked"]).toBe(false);
+    }
+    await run("globalThis.__ardiaRecorderStop && globalThis.__ardiaRecorderStop()");
+  });
+
+  test("revealedAfter skips registering refs if the document loader navigates during description", async () => {
+    let currentLoader = "loader-1";
+    const added: string[] = [];
+    const el = new Element("obj-1", "f1", 42, "revealed");
+    const page = {
+      loader: () => currentLoader,
+      call: async (fn: string) => {
+        if (fn === DESCRIBE_REVEALED) {
+          currentLoader = "loader-2";
+          return { role: "menuitem", name: "Delete" };
+        }
+        return {};
+      },
+      elementsFrom: async () => [el],
+    } as unknown as Page;
+    const ctx = {
+      state: {
+        addRef: () => {
+          added.push("e1");
+          return "e1";
+        },
+      },
+    } as unknown as import("../src/browse/commands/ctx.ts").Ctx;
+    const found = await revealedAfter(ctx, page, "f1", [0], "loader-1");
+    expect(found).toEqual([]);
+    expect(added).toEqual([]);
   });
 
   test("split boxes are found in order and limited to the code's length; a one-time-code field is the fallback", async () => {
