@@ -1,0 +1,48 @@
+{
+ "source": "hand-written (ardia#1965): a carousel's own aria-hidden slide doesn't make the chat dialog beside it modal",
+ "window": [
+  1200,
+  900
+ ],
+ "steps": [
+  {
+   "argv": [
+    "open",
+    "{fixture}/act-cells.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "open",
+    "{fixture}/carousel-modal.html",
+    "--show"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "document.getElementById('s2').setAttribute('aria-hidden', 'true'), 'ok'"
+   ],
+   "session": "act",
+   "main_world": true
+  },
+  {
+   "argv": [
+    "click",
+    "#s2"
+   ],
+   "session": "act"
+  },
+  {
+   "argv": [
+    "eval",
+    "state.clicked.join()"
+   ],
+   "session": "act",
+   "main_world": true
+  }
+ ]
+}
