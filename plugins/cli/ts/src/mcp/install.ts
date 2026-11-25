@@ -87,48 +87,53 @@ function readText(file: string): string | null {
   }
 }
 
-function canonicalParent(file: string): string {
-  const parts: string[] = [];
-  let dir = path.resolve(file);
-  for (;;) {
-    try {
-      const real = fs.realpathSync(dir);
-      return parts.length === 0 ? real : path.join(real, ...parts);
-    } catch {
-      const parent = path.dirname(dir);
-      if (parent === dir) return path.join(dir, ...parts);
-      parts.unshift(path.basename(dir));
-      dir = parent;
-    }
-  }
-}
-
 export function resolveTarget(file: string): string {
-  let current = file;
-  const seen = new Set<string>();
-  for (;;) {
+  const absolute = path.isAbsolute(file) ? file : path.resolve(file);
+  const parsed = path.parse(absolute);
+  let current = parsed.root;
+  const queue = absolute.slice(parsed.root.length).split(path.sep).filter((part) => part.length > 0);
+  let links = 0;
+  while (queue.length > 0) {
+    const part = queue.shift() as string;
+    if (part === "" || part === ".") continue;
+    if (part === "..") {
+      current = path.dirname(current);
+      continue;
+    }
+    const candidate = path.join(current, part);
     let info: fs.Stats;
     try {
-      info = fs.lstatSync(current);
+      info = fs.lstatSync(candidate);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return canonicalParent(current);
-      throw new ConfigError(`Can't read ${current}: ${(error as Error).message}`);
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        current = candidate;
+        continue;
+      }
+      throw new ConfigError(`Can't read ${candidate}: ${(error as Error).message}`);
     }
-    if (!info.isSymbolicLink()) return canonicalParent(current);
-    const key = `${info.dev}:${info.ino}`;
-    if (seen.has(key) || seen.size >= 40) throw new ConfigError(`${file} is a symlink loop, so it was left alone`);
-    seen.add(key);
+    if (!info.isSymbolicLink()) {
+      current = candidate;
+      continue;
+    }
+    links += 1;
+    if (links > 40) throw new ConfigError(`${file} is a symlink loop, so it was left alone`);
+    let target: string;
     try {
-      return fs.realpathSync(current);
+      target = fs.readlinkSync(candidate);
     } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code === "ELOOP") throw new ConfigError(`${file} is a symlink loop, so it was left alone`);
-      if (code !== "ENOENT") throw new ConfigError(`Can't read ${current}: ${(error as Error).message}`);
-      const rawLink = fs.readlinkSync(current);
-      const baseDir = path.isAbsolute(rawLink) ? "/" : fs.realpathSync(path.dirname(current));
-      current = path.resolve(baseDir, rawLink);
+      throw new ConfigError(`Can't read ${candidate}: ${(error as Error).message}`);
+    }
+    if (path.isAbsolute(target)) {
+      const targetRoot = path.parse(target).root;
+      current = targetRoot;
+      const nextParts = target.slice(targetRoot.length).split(path.sep).filter((seg) => seg.length > 0);
+      queue.unshift(...nextParts);
+    } else {
+      const nextParts = target.split(path.sep).filter((seg) => seg.length > 0);
+      queue.unshift(...nextParts);
     }
   }
+  return current;
 }
 
 export function writeAtomic(file: string, text: string): void {
@@ -173,7 +178,8 @@ function entryOf(found: unknown): ServerEntry | null {
   if (found === null || typeof found !== "object" || Array.isArray(found)) return null;
   const record = found as Record<string, unknown>;
   if (typeof record["command"] !== "string") return null;
-  const args = Array.isArray(record["args"]) ? record["args"].map(String) : [];
+  if (record["args"] !== undefined && (!Array.isArray(record["args"]) || !record["args"].every((item) => typeof item === "string"))) return null;
+  const args = Array.isArray(record["args"]) ? (record["args"] as string[]) : [];
   return { command: record["command"], args };
 }
 
@@ -412,13 +418,18 @@ function ourSections(lines: readonly string[], statements: readonly TomlStatemen
   const out: TomlSection[] = [];
   headers.forEach((header, index) => {
     if (!startsWith(header.path, OURS)) return;
-    let end = index + 1 < headers.length ? (headers[index + 1] as TomlStatement).start : lines.length;
+    const nextStart = index + 1 < headers.length ? (headers[index + 1] as TomlStatement).start : lines.length;
+    let minEnd = header.start + 1;
+    for (const statement of statements) {
+      if (statement.kind === "key" && statement.start > header.start && statement.start < nextStart) minEnd = Math.max(minEnd, statement.end + 1);
+    }
+    let end = nextStart;
     if (index + 1 < headers.length) {
       let probe = end;
-      while (probe > header.start + 1 && (lines[probe - 1] as string).trim().startsWith("#")) probe -= 1;
+      while (probe > minEnd && (lines[probe - 1] as string).trim().startsWith("#")) probe -= 1;
       if (probe < end) end = probe;
     }
-    while (end > header.start + 1 && (lines[end - 1] as string).trim() === "") end -= 1;
+    while (end > minEnd && (lines[end - 1] as string).trim() === "") end -= 1;
     out.push({ start: header.start, end, main: samePath(header.path, OURS), path: header.path });
   });
   return out;
@@ -650,7 +661,7 @@ export function editToml(text: string | null, action: Action, wanted: ServerEntr
   }
   const httpSections = sections.filter((section) => !section.main && section.path.length > OURS.length && CODEX_HTTP_KEYS.has(section.path[OURS.length] as string));
   const hasHttp = hasCodexHttpFields(rawEntry) || httpSections.length > 0;
-  if (current !== null && sameEntry(current, wanted) && !hasHttp) return { text: null, change: "unchanged", entry: current };
+  if (sameEntry(rawEntry, wanted) && !hasHttp) return { text: null, change: "unchanged", entry: current };
   const replaced = statements.filter(
     (statement) =>
       statement.kind === "key" &&
@@ -675,6 +686,7 @@ export function manage(args: ManageArgs, paths: Record<Client, string> = configP
   const wanted = serverEntry(args.command);
   const clients = args.clients ?? (args.action === "status" ? [...CLIENTS] : present(paths));
   const targetFormats = new Map<string, { client: Client; format: "toml" | "json" }>();
+  const initialText = new Map<string, string | null>();
   const targetText = new Map<string, string | null>();
   const planned: { client: Client; file: string; target: string; edited: { text: string | null; change: Change; entry: ServerEntry | null }; willWrite: boolean }[] = [];
   for (const client of clients) {
@@ -686,7 +698,8 @@ export function manage(args: ManageArgs, paths: Record<Client, string> = configP
       throw new ConfigError(`${CLIENT_NAMES[prior.client]} and ${CLIENT_NAMES[client]} both point to ${target}, so it was left alone`);
     }
     targetFormats.set(target, { client, format });
-    const text = targetText.has(target) ? (targetText.get(target) as string | null) : readText(target);
+    if (!initialText.has(target)) initialText.set(target, readText(target));
+    const text = targetText.has(target) ? (targetText.get(target) as string | null) : (initialText.get(target) as string | null);
     const edited = client === "codex" ? editToml(text, args.action, wanted) : editJson(file, text, args.action, wanted, client);
     const willWrite = edited.text !== null && !args.dryRun && args.action !== "status";
     targetText.set(target, edited.text ?? text);
@@ -702,6 +715,9 @@ export function manage(args: ManageArgs, paths: Record<Client, string> = configP
     const item = planned[index] as (typeof planned)[number];
     if (item.willWrite && latestWrite.get(item.target) === index) {
       try {
+        if (readText(item.target) !== initialText.get(item.target)) {
+          throw new ConfigError(`${item.file} changed after it was planned; rerun the command`);
+        }
         writeAtomic(item.target, item.edited.text as string);
         writtenClients.push(item.client);
       } catch (error) {

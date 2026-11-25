@@ -228,12 +228,12 @@ export async function pressKey(page: Page, frame: string | null, key: string, hu
   await expectInput(page, frame, () => input.gesture("press", () => input.pressCombo(key, humanize)), { keydown: 1 }, "The key press");
 }
 
-async function cellEditor(page: Page, cell: Element, humanize: boolean): Promise<[unknown, Element, boolean]> {
+async function cellEditor(page: Page, cell: Element, humanize: boolean): Promise<[unknown, Element, boolean, boolean]> {
   const started = asRecord(await page.call(ACTIONS_CELL_START, [cell], { frame: cell.frame }));
   if (started["inner"]) {
     const inner = await page.call(ACTIONS_CELL_INNER, [], { frame: cell.frame, byValue: false });
     const field = await page.elementFrom(inner, cell.frame, `the field in ${cell.label}`);
-    if (field !== null) return [started["was"], field, Boolean(started["open"])];
+    if (field !== null) return [started["was"], field, Boolean(started["open"]), true];
   }
   await scrollIntoView(page, cell, humanize);
   await page.call(ACTIONS_SETTLED_FRAMES, [], { frame: cell.frame, read: true });
@@ -262,7 +262,7 @@ async function cellEditor(page: Page, cell: Element, humanize: boolean): Promise
       "not_editable",
     );
   }
-  return [started["was"], editor, true];
+  return [started["was"], editor, true, false];
 }
 
 async function setEditor(page: Page, editor: Element, text: string, humanize: boolean): Promise<void> {
@@ -300,14 +300,14 @@ async function commitCell(page: Page, editor: Element, humanize: boolean, key = 
 
 async function fillCell(page: Page, element: Element, cell: Element, text: string, humanize: boolean, commit = "Enter", always = false): Promise<Record<string, unknown> | null> {
   const labelled = new Element(cell.frame, cell.objectId, cell.backendId, element.label);
-  const [was, editor, opened] = await cellEditor(page, labelled, humanize);
+  const [was, editor, opened, preexisting] = await cellEditor(page, labelled, humanize);
   const names = ((await page.call("(el) => ardiaBrowse.labelText(el)", [editor], { frame: editor.frame, read: true })) as unknown[] | null) ?? [];
   const name = names.map((item) => String(item)).find((item) => joinedWords(item) !== "");
   await setEditor(page, editor, text, humanize);
   add("cell_edits");
   if (!opened && !always) return null;
   if (!opened) await page.focusElement(editor);
-  await commitCell(page, editor, humanize, commit, !opened);
+  await commitCell(page, editor, humanize, commit, always && preexisting);
   const now = await page.call(ACTIONS_CELL_NOW, [], { frame: cell.frame, read: true });
   return { cell: name !== undefined ? joinedWords(name) : element.label, value: now, was };
 }

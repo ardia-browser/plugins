@@ -681,7 +681,7 @@ export class Daemon {
     const leftovers = state.instance !== null && state.registry.temporaries(state.instance).length > 0;
     if ((state.opened.size === 0 && !leftovers && !state.ownsSessionTabs()) || state.lost) return;
     try {
-      await state.connect();
+      await state.connect(cancellable);
       if (currentSignal()?.aborted) return;
       await state.refreshTargets();
       if (currentSignal()?.aborted) return;

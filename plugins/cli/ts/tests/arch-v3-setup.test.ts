@@ -429,6 +429,26 @@ command = "other"
 `;
     const uninstalled = editToml(withNextComment, "uninstall", { command: "ardia", args: ["mcp"] });
     expect(uninstalled.text).toBe(`# Keep this server enabled for CI\n[mcp_servers.other]\ncommand = "other"\n`);
+
+    const mlHashEnd = `[mcp_servers.ardia]
+command = "ardia"
+args = ["mcp"]
+note = """
+line1
+#suffix"""
+[mcp_servers.other]
+command = "other"
+`;
+    expect(editToml(mlHashEnd, "uninstall", { command: "ardia", args: ["mcp"] }).text).toBe(`[mcp_servers.other]\ncommand = "other"\n`);
+
+    const nestedArgs = `[mcp_servers.ardia]
+command = "ardia"
+args = [ [ "mcp" ] ]
+`;
+    const fixedArgs = editToml(nestedArgs, "install", { command: "ardia", args: ["mcp"] });
+    expect(fixedArgs.change).toBe("updated");
+    expect(tomlEntry(fixedArgs.text)).toEqual({ command: "ardia", args: ["mcp"] });
+    expect(editJson("c.json", JSON.stringify({ mcpServers: { ardia: { command: "ardia", args: [["mcp"]] } } }), "status", serverEntry(), "cursor").entry).toBeNull();
   });
 
   test("symlink chains resolve to a missing target with cycle detection, and invalid later configs prevent partial writes", () => {
@@ -475,6 +495,16 @@ command = "other"
     manage(args("install", { clients: ["claude"] }), relPaths);
     expect(fs.existsSync(path.join(relRoot, "real", "missing.json"))).toBe(true);
     expect(fs.existsSync(path.join(relRoot, "missing.json"))).toBe(false);
+
+    const stepRoot = path.join(root, `step-link-${counter}`);
+    fs.mkdirSync(path.join(stepRoot, "cfg"), { recursive: true });
+    fs.mkdirSync(path.join(stepRoot, "real", "nested"), { recursive: true });
+    fs.symlinkSync(path.join(stepRoot, "real", "nested"), path.join(stepRoot, "cfg", "step"));
+    fs.symlinkSync("step/../actual.json", path.join(stepRoot, "cfg", "claude.json"));
+    const stepPaths = { ...sandbox(), claude: path.join(stepRoot, "cfg", "claude.json") };
+    manage(args("install", { clients: ["claude"] }), stepPaths);
+    expect(fs.existsSync(path.join(stepRoot, "real", "actual.json"))).toBe(true);
+    expect(fs.existsSync(path.join(stepRoot, "cfg", "actual.json"))).toBe(false);
   });
 
   test("a fresh register() waits for an aborted claim's cleanup instead of inheriting its cancellation", async () => {
