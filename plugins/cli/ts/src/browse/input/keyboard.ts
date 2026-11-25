@@ -1,6 +1,7 @@
 import { rng } from "../../pylib/random.ts";
 import { sleep } from "../cdp/cancel.ts";
 import type { Element, Page } from "../state/page.ts";
+import { nativeKey } from "../state/tabtools.ts";
 import { type KeyCommand, keyEvents, TYPING, pauseAfter } from "./human.ts";
 
 export type HeldKeys = Map<string, Record<string, unknown>>;
@@ -68,7 +69,7 @@ export class FocusedKeyTarget extends KeyTarget {
 export class Keyboard {
   constructor(readonly target: KeyTarget) {}
 
-  async typeText(text: string, humanize = false): Promise<void> {
+  async typeText(text: string, humanize = false, allowNative = true): Promise<void> {
     if (humanize) {
       for (const char of text) {
         await this.typeChar(char);
@@ -77,7 +78,19 @@ export class Keyboard {
       return;
     }
     if (this.target.refocus) await this.target.focus();
-    for (const char of text) for (const command of keyEvents(char)) await this.target.execute(command);
+    const chars = [...text];
+    const guarded = !allowNative || (this.target instanceof FocusedKeyTarget && this.target.guard !== null);
+    const hidden = !guarded && chars.length > 0 && (await this.target.page.hidden());
+    for (const char of chars) {
+      const commands = keyEvents(char);
+      if (hidden && /^[a-z0-9 ]$/u.test(char)) {
+        const down = commands[0]?.params;
+        const key = typeof down?.["key"] === "string" ? down["key"] : char;
+        const code = typeof down?.["code"] === "string" && down["code"] ? down["code"] : undefined;
+        if (await nativeKey(this.target.page, key, code)) continue;
+      }
+      for (const command of commands) await this.target.execute(command);
+    }
   }
 
   async typeSecretChar(char: string, hold: number | null, verify: () => Promise<void>, verifyBeforeUp: () => Promise<void> = verify): Promise<void> {

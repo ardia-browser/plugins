@@ -25,6 +25,7 @@ import { flag } from "../metrics.ts";
 import { parseRef } from "../state/refs.ts";
 import type { Element, Page } from "../state/page.ts";
 import type { Json } from "../state/records.ts";
+import { canUseNativeInput, nativeText } from "../state/tabtools.ts";
 import { newTab } from "./core.ts";
 import type { Ctx } from "./ctx.ts";
 import { register } from "./index.ts";
@@ -314,13 +315,33 @@ async function cmdPress(ctx: Ctx, argv: string[]): Promise<Result> {
   const page = await ctx.state.page();
   const frame = ctx.state.frameFor(page) || page.mainFrame;
   const input = inputOf(page);
+  const combo = args[0] as string;
+  const allowNativePress = !humanize && !combo.includes("+") && input.heldKeys.size === 0 && (await canUseNativeInput(page));
   const [, report] = await observe(
     ctx,
     page,
-    () => expectInput(page, frame, () => input.gesture("press", () => input.pressCombo(args[0] as string, humanize)), { keydown: 1 }, "The key press"),
+    () =>
+      expectInput(
+        page,
+        frame,
+        () =>
+          input.gesture(
+            "press",
+            async () => {
+              if (allowNativePress) {
+                if (await input.tryNativeKey(combo)) return;
+                await page.requireVisible();
+              }
+              await input.pressCombo(combo, humanize, false, false, false);
+            },
+            { allowHidden: allowNativePress },
+          ),
+        { keydown: 1 },
+        "The key press",
+      ),
     [null, frame],
   );
-  return attach(new Result({ pressed: args[0] }), report);
+  return attach(new Result({ pressed: combo }), report);
 }
 
 async function cmdKeydown(ctx: Ctx, argv: string[]): Promise<Result> {
@@ -348,7 +369,8 @@ async function cmdKeyboard(ctx: Ctx, argv: string[]): Promise<Result> {
   const input = inputOf(page);
   const frame = ctx.state.frameFor(page) || page.mainFrame;
   if (args[0] === "inserttext") {
-    await page.requireVisible();
+    const allowNative = Boolean(text) && (await canUseNativeInput(page));
+    if (!allowNative) await page.requireVisible();
     const [, report] = await observe(
       ctx,
       page,
@@ -356,7 +378,16 @@ async function cmdKeyboard(ctx: Ctx, argv: string[]): Promise<Result> {
         expectInput(
           page,
           frame,
-          () => input.gesture("keyboard inserttext", () => page.send("Input.insertText", { text }, { inputEvent: true })),
+          () =>
+            input.gesture(
+              "keyboard inserttext",
+              async () => {
+                if (allowNative && (await nativeText(page, text))) return;
+                await page.requireVisible();
+                await page.send("Input.insertText", { text }, { inputEvent: true });
+              },
+              { allowHidden: allowNative },
+            ),
           text ? { "beforeinput|input": 1 } : {},
           "The text insert",
           null,

@@ -111,7 +111,7 @@ export async function expectInput<T>(
   page: Page,
   given: string | null,
   run: () => Promise<T>,
-  needs: Needs,
+  needsOrFn: Needs | (() => Needs),
   action: string,
   element: Element | null = null,
   primed: Counts | null = null,
@@ -128,6 +128,7 @@ export async function expectInput<T>(
     throw new BrowseError(`Couldn't watch this frame for input, so ${action.toLowerCase()} wasn't sent (${error.message})`, null, "input_unconfirmable");
   }
   const result = await run();
+  const needs = typeof needsOrFn === "function" ? needsOrFn() : needsOrFn;
   const names = Object.keys(needs);
   if (names.length === 0 || (before["activeFrame"] && names.some((name) => KEY_EVENTS.some((key) => name.includes(key))))) return result;
   const deadline = monotonic() + budget(page, DELIVERY_TIMEOUT);

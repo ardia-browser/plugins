@@ -63,7 +63,7 @@ export const FLAGS = new Set([
   "script_display_capped", "script_display_refused", "fill_otp_profile", "snapshot_child_frames",
 ]);
 export const SAFETY_FLAGS = new Set([
-  "boundary_marker_removed", "notes_promoted", "notes_quarantined_shown", "otp_not_asked", "otp_split_boxes", "otp_typed", "scheduler_parallel", "scheduler_read_lane", "session_auto", "session_reset", "snapshot_masked_fields",
+  "boundary_marker_removed", "notes_promoted", "notes_quarantined_shown", "otp_not_asked", "otp_split_boxes", "otp_typed", "scheduler_parallel", "scheduler_read_lane", "session_auto", "session_reset", "snapshot_masked_fields", "tab_diagnostics_used", "tab_input_used",
 ]);
 export const MAIN_PHASE: Readonly<Record<string, string>> = { snapshot: "snapshot_build_ms", eval: "eval_ms" };
 export const FAILED_WITHOUT_CODE = "command_failed";

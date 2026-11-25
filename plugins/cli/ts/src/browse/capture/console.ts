@@ -2,9 +2,11 @@ import { sleep } from "../cdp/cancel.ts";
 import { register } from "../commands/index.ts";
 import type { Ctx } from "../commands/ctx.ts";
 import { parse } from "../commands/parse.ts";
+import { BrowseError } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
 import type { Page } from "../state/page.ts";
 import { ERROR_DETAIL, type ErrorDetail, record } from "../state/records.ts";
+import { MAX_DIAGNOSTICS_LIMIT, readTabDiagnostics, watermarksOf } from "../state/tabtools.ts";
 import { askArdia } from "./inspect.ts";
 import { inlineMapsOf } from "./logpoints.ts";
 import { mapFor, originalPosition } from "./sourcemaps.ts";
@@ -27,13 +29,55 @@ async function opened(ctx: Ctx): Promise<[Page, boolean]> {
 
 export async function cmdConsole(ctx: Ctx, argv: string[]): Promise<Result> {
   const [options] = parse(argv, { "--clear": "bool" });
-  const [page, started] = await opened(ctx);
-  const messages = [...page.console.items];
-  const dropped = page.console.dropped;
+  const page = await ctx.state.page();
+  const marks = watermarksOf(page);
+  const diag = await readTabDiagnostics(ctx.state, page, { kind: "console", since: marks.consoleSince, limit: MAX_DIAGNOSTICS_LIMIT });
+  if (diag !== null) {
+    if (options["clear"]) {
+      marks.consoleSince = Math.max(marks.consoleSince, diag.nextSeq);
+      marks.consoleClearedAt = Date.now();
+      marks.cdpClearedAt = null;
+      page.console.clear();
+      if (diag.more) {
+        throw new BrowseError(
+          "Console log had more entries than could be cleared in one pass; run `console --clear` again to finish",
+          { cleared: false, more: true, source: "ardia", nextSeq: diag.nextSeq },
+        );
+      }
+      return new Result({ cleared: true, source: "ardia" }, "✓ Console cleared");
+    }
+    const cdpClearedAt = marks.cdpClearedAt;
+    const kept = cdpClearedAt === null ? diag.console : diag.console.filter((entry) => entry.time > cdpClearedAt);
+    const messages = kept.map((entry) => ({
+      type: entry.level,
+      text: entry.message,
+      kind: entry.kind,
+      source: entry.source,
+      line: entry.line,
+      timestamp: entry.time,
+      seq: entry.seq,
+    }));
+    const lines = kept.map((entry) => `[${entry.level}] ${entry.message}`);
+    if (diag.dropped) lines.unshift(`(${diag.dropped} older tab diagnostic entries dropped)`);
+    if (diag.more) lines.push("(more diagnostic entries available)");
+    return new Result({ messages, dropped: diag.dropped, more: diag.more, started: false, source: "ardia", nextSeq: diag.nextSeq }, lines.join("\n") || "(no console messages)", true);
+  }
+  const [, started] = await opened(ctx);
   if (options["clear"]) {
+    const now = Date.now();
+    marks.consoleClearedAt = now;
+    marks.cdpClearedAt = now;
     page.console.clear();
     return new Result({ cleared: true }, "✓ Console cleared");
   }
+  const clearedAt = marks.consoleClearedAt;
+  const messages = clearedAt === null
+    ? [...page.console.items]
+    : page.console.items.filter((message) => {
+        const ts = record(message)["timestamp"];
+        return typeof ts !== "number" || ts > clearedAt;
+      });
+  const dropped = page.console.dropped;
   const lines = messages.map((message) => `[${String(record(message)["type"])}] ${String(record(message)["text"])}`);
   if (dropped) lines.unshift(`(${dropped} older messages dropped)`);
   if (started && messages.length === 0) {

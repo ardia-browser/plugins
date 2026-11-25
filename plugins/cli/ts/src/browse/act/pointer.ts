@@ -20,6 +20,7 @@ import { flag } from "../metrics.ts";
 import { localRootOffset, sendIn } from "../state/frames.ts";
 import type { Element, Page } from "../state/page.ts";
 import type { State } from "../state/state.ts";
+import { canUseNativeInput, nativeKey, nativeMouseClick, nativeMouseMove, nativeWheel } from "../state/tabtools.ts";
 import { monotonic } from "../state/wait.ts";
 import { asRecord, type Counts, expectInput, mouseButton, poll, rect, viewport, type Viewport } from "./common.ts";
 import { type Blocker, blockerPhrase, type CoverAt, findBlocker, noteObstruction, type Obstruction } from "./obstruction.ts";
@@ -71,7 +72,7 @@ export async function scrollWheel(
   given: [number, number] | null = null,
   frame: string | null = null,
   element: Element | null = null,
-): Promise<void> {
+): Promise<boolean> {
   const mouse = inputOf(page).pointer;
   const scripted = await page.hidden();
   let point = given;
@@ -90,21 +91,29 @@ export async function scrollWheel(
   } else if (!humanize) {
     mouse.position = point;
   }
-  if (distance === 0) return;
+  if (distance === 0) return false;
   const at = point;
+  let wheeled = false;
   const wheel = async (dx: number, dy: number) => {
+    if (await nativeWheel(page, Math.trunc(at[0]), Math.trunc(at[1]), dx, dy)) {
+      mouse.position = [at[0], at[1]];
+      wheeled = true;
+      return;
+    }
     if (scripted) {
       if (element !== null) await page.call("(el, x, y) => el.scrollBy(x, y)", [element, dx, dy], { frame: element.frame });
       else await page.call("(x, y) => scrollBy(x, y)", [dx, dy], { frame: frame || page.mainFrame });
       return;
     }
     await page.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: Math.trunc(at[0]), y: Math.trunc(at[1]), deltaX: dx, deltaY: dy }, { inputEvent: true });
+    wheeled = true;
   };
   if (humanize) {
     await humanScroll(wheel, Math.abs(distance), vertical, distance > 0 ? 1 : -1);
-    return;
+    return wheeled;
   }
   await wheel(vertical ? 0 : Math.trunc(distance), vertical ? Math.trunc(distance) : 0);
+  return wheeled;
 }
 
 function outside(r: { x: number; y: number; width: number; height: number }, vp: Viewport, margin = 4): boolean {
@@ -762,10 +771,13 @@ export async function dismissedConsent(page: Page, element: Element, x: number, 
 
 export async function closedMenu(page: Page, cover: string): Promise<boolean> {
   try {
-    for (const kind of ["keyDown", "keyUp"]) {
-      await page.send("Input.dispatchKeyEvent", { type: kind, key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 }, { inputEvent: true });
+    if (!(await nativeKey(page, "Escape", "Escape"))) {
+      for (const kind of ["keyDown", "keyUp"]) {
+        await page.send("Input.dispatchKeyEvent", { type: kind, key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 }, { inputEvent: true });
+      }
     }
   } catch (error) {
+    if (error instanceof OutcomeUnknown || error instanceof ConnectionLost || (error instanceof BrowseError && error.code === "document_changed")) throw error;
     if (error instanceof BrowseError) return false;
     throw error;
   }
@@ -780,6 +792,7 @@ export async function centered(page: Page, element: Element): Promise<boolean> {
   try {
     moved = await page.call(ACTIONS_CENTER, [element], { frame: element.frame });
   } catch (error) {
+    if (error instanceof OutcomeUnknown || error instanceof ConnectionLost) throw error;
     if (error instanceof BrowseError) return false;
     throw error;
   }
@@ -899,6 +912,8 @@ export async function click(page: Page, element: Element, humanize: boolean, cou
   const input = inputOf(page);
   const mouse = input.pointer;
   const which = mouseButton(button);
+  const allowNativeClick =
+    beforePress === null && !humanize && (count === 1 || count === 2) && (which === "left" || which === "middle") && page.frameSessions.size === 0 && (await canUseNativeInput(page));
   const press = async () => {
     if (beforePress !== null) {
       await mouse.move(x, y, humanize);
@@ -907,19 +922,47 @@ export async function click(page: Page, element: Element, humanize: boolean, cou
       await mouse.up(which);
       return;
     }
+    if (allowNativeClick && mouse.interception === null && mouse.pressedButton === null) {
+      if (await nativeMouseClick(page, roundCoordinate(x), roundCoordinate(y), which, count)) {
+        mouse.position = [x, y];
+        return;
+      }
+      await page.requireVisible();
+    }
     if (humanize || count === 1) {
-      await mouse.click(x, y, which, count, humanize);
+      await mouse.click(x, y, which, count, humanize, false);
       return;
     }
-    for (let number = 1; number <= count; number += 1) await mouse.click(x, y, which, number, false);
+    for (let number = 1; number <= count; number += 1) await mouse.click(x, y, which, number, false, false);
   };
-  await expectInput(page, element.frame, () => input.gesture("click", press), { "mousedown|pointerdown": count, "mouseup|pointerup": count }, "The click", element, primed);
+  await expectInput(page, element.frame, () => input.gesture("click", press, { allowHidden: allowNativeClick }), { "mousedown|pointerdown": count, "mouseup|pointerup": count }, "The click", element, primed);
 }
 
 export async function hover(page: Page, element: Element, humanize: boolean): Promise<void> {
   const [x, y] = await targetPoint(page, element, humanize, false);
   const input = inputOf(page);
-  await expectInput(page, element.frame, () => input.gesture("hover", () => input.pointer.move(x, y, humanize)), { mousemove: 1 }, "The hover");
+  const allowNativeMove = !humanize && page.frameSessions.size === 0 && (await canUseNativeInput(page));
+  await expectInput(
+    page,
+    element.frame,
+    () =>
+      input.gesture(
+        "hover",
+        async () => {
+          if (allowNativeMove && input.pointer.interception === null && input.pointer.pressedButton === null) {
+            if (await nativeMouseMove(page, roundCoordinate(x), roundCoordinate(y))) {
+              input.pointer.position = [x, y];
+              return;
+            }
+            await page.requireVisible();
+          }
+          await input.pointer.move(x, y, humanize);
+        },
+        { allowHidden: allowNativeMove },
+      ),
+    { mousemove: 1 },
+    "The hover",
+  );
 }
 
 export const TOUCH_PROBE = "() => navigator.maxTouchPoints > 0 && 'ontouchstart' in window";
@@ -931,6 +974,7 @@ export async function touchEmulated(page: Page, frame: string | null): Promise<b
   try {
     return Boolean(await page.call(TOUCH_PROBE, [], { frame: frame || page.mainFrame, read: true }));
   } catch (error) {
+    if (error instanceof OutcomeUnknown || error instanceof ConnectionLost) throw error;
     if (error instanceof BrowseError) return false;
     throw error;
   }

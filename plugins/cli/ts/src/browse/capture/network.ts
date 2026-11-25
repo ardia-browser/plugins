@@ -16,6 +16,7 @@ import { pyIntArg } from "../pyerror.ts";
 import { type Page, quiet, ROUTE_PATTERNS } from "../state/page.ts";
 import { type Json, record } from "../state/records.ts";
 import type { Listener } from "../state/state.ts";
+import { MAX_DIAGNOSTICS_LIMIT, readTabDiagnostics, watermarksOf } from "../state/tabtools.ts";
 import { defaultPath } from "../media/paths.ts";
 import { activate, captureOf, credentialsOf, type Route, releaseClaim, removeListener } from "./store.ts";
 
@@ -79,9 +80,70 @@ export async function cmdNetwork(ctx: Ctx, argv: string[]): Promise<Result> {
   throw new Usage(`Unknown network subcommand: ${action}`);
 }
 
+function filterRequestRows(rows: Json[], options: Record<string, unknown>): Json[] {
+  let out = rows;
+  const filter = options["filter"] as string | undefined;
+  if (filter) out = out.filter((row) => text(row["url"] ?? "").includes(filter) || globMatch(filter, text(row["url"] ?? "")));
+  const type = options["type"] as string | undefined;
+  if (type) {
+    const types = new Set(type.split(",").map((value) => pyLower(strip(value, isSpace))));
+    out = out.filter((row) => types.has(pyLower(text(row["resourceType"] ?? ""))));
+  }
+  const method = options["method"] as string | undefined;
+  if (method) out = out.filter((row) => pyUpper(text(row["method"] ?? "")) === pyUpper(method));
+  const status = options["status"] as string | undefined;
+  if (status) out = out.filter((row) => statusMatches(given(row, "status"), status));
+  return out;
+}
+
+const CDP_ONLY_TYPES = new Set(["xhr", "stylesheet", "websocket", "eventsource"]);
+
 async function networkRequests(ctx: Ctx, argv: string[]): Promise<Result> {
   const [options] = parse(argv, { "--clear": "bool", "--filter": "value", "--type": "value", "--method": "value", "--status": "value", "--reload": "bool" });
   const page = await ctx.state.page();
+  const requestedTypes = typeof options["type"] === "string" ? options["type"].split(",").map((value) => pyLower(strip(value, isSpace))) : [];
+  const needsCdpType = requestedTypes.some((type) => CDP_ONLY_TYPES.has(type));
+  if (!page.networkOn && !options["reload"] && !needsCdpType) {
+    const marks = watermarksOf(page);
+    const diag = await readTabDiagnostics(ctx.state, page, { kind: "network", since: marks.networkSince, limit: MAX_DIAGNOSTICS_LIMIT });
+    if (diag !== null) {
+      if (options["clear"]) {
+        marks.networkSince = Math.max(marks.networkSince, diag.nextSeq);
+        if (diag.more) {
+          throw new BrowseError(
+            "Request log had more entries than could be cleared in one pass; run `network requests --clear` again to finish",
+            { cleared: false, more: true, source: "ardia", nextSeq: diag.nextSeq },
+          );
+        }
+        return new Result({ cleared: true, source: "ardia" }, "✓ Request log cleared");
+      }
+      const mapped: Json[] = diag.network.map((entry) => ({
+        requestId: `diag-${entry.seq}`,
+        url: entry.url,
+        method: entry.method,
+        resourceType: entry.type,
+        status: entry.status || null,
+        timestamp: entry.time,
+        ...(entry.error ? { failed: entry.error } : entry.failed && !entry.status ? { failed: "failed" } : {}),
+        ...(typeof entry.durationMs === "number" ? { durationMs: entry.durationMs } : {}),
+        ...(entry.cached === true ? { cached: true } : {}),
+      }));
+      const rows = filterRequestRows(mapped, options);
+      const serialized = rows.map((row) => ({
+        ...requestRow(row),
+        ...(typeof row["durationMs"] === "number" ? { durationMs: row["durationMs"] } : {}),
+        ...(row["cached"] === true ? { cached: true } : {}),
+      }));
+      const lines = rows.map(
+        (row) =>
+          `[${text(row["requestId"])}] ${shownValue(given(row, "method"))} ${shownValue(given(row, "url"))} (${shownValue(given(row, "resourceType"))}) ` +
+          `${shownValue(row["status"] || row["failed"] || "pending")}`,
+      );
+      if (diag.dropped) lines.unshift(`(${diag.dropped} older tab diagnostic entries dropped)`);
+      if (diag.more) lines.push("(more diagnostic entries available)");
+      return new Result({ requests: serialized, dropped: diag.dropped, more: diag.more, started: false, source: "ardia", nextSeq: diag.nextSeq }, lines.join("\n") || "(no requests)", true);
+    }
+  }
   let started = !page.networkOn;
   await activate(ctx, page, "network", () => page.enableNetwork());
   ctx.state.leases.add("network");
@@ -97,18 +159,7 @@ async function networkRequests(ctx: Ctx, argv: string[]): Promise<Result> {
     page.network.dropped = 0;
     return new Result({ cleared: true }, "✓ Request log cleared");
   }
-  let rows = [...page.network.requests.values()];
-  const filter = options["filter"] as string | undefined;
-  if (filter) rows = rows.filter((row) => text(row["url"] ?? "").includes(filter) || globMatch(filter, text(row["url"] ?? "")));
-  const type = options["type"] as string | undefined;
-  if (type) {
-    const types = new Set(type.split(",").map((value) => pyLower(strip(value, isSpace))));
-    rows = rows.filter((row) => types.has(pyLower(text(row["resourceType"] ?? ""))));
-  }
-  const method = options["method"] as string | undefined;
-  if (method) rows = rows.filter((row) => pyUpper(text(row["method"] ?? "")) === pyUpper(method));
-  const status = options["status"] as string | undefined;
-  if (status) rows = rows.filter((row) => statusMatches(given(row, "status"), status));
+  const rows = filterRequestRows([...page.network.requests.values()], options);
   const lines = rows.map(
     (row) =>
       `[${text(row["requestId"])}] ${shownValue(given(row, "method"))} ${shownValue(given(row, "url"))} (${shownValue(given(row, "resourceType"))}) ` +
@@ -153,7 +204,14 @@ async function networkRequest(ctx: Ctx, argv: string[]): Promise<Result> {
   const page = await ctx.state.page();
   const id = args[0] as string;
   const entry = page.network.requests.get(id);
-  if (entry === undefined) throw new BrowseError(`No captured request ${id}; run \`ardia browse network requests\` first`);
+  if (entry === undefined) {
+    if (id.startsWith("diag-")) {
+      throw new BrowseError(
+        `Request ${id} came from Ardia's always-on diagnostics log, which keeps no headers or bodies; run \`ardia browse network requests --reload\` to capture full request details`,
+      );
+    }
+    throw new BrowseError(`No captured request ${id}; run \`ardia browse network requests\` first`);
+  }
   const detail = requestRow(entry);
   detail["postData"] = given(entry, "postData");
   const [body, encoded] = await responseBody(page, id, BODY_LIMIT);

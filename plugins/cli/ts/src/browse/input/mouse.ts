@@ -4,6 +4,7 @@ import { type CdpResult } from "../cdp/browser.ts";
 import { sleep } from "../cdp/cancel.ts";
 import { OutcomeUnknown } from "../daemon-errors.ts";
 import type { Page } from "../state/page.ts";
+import { nativeMouseClick } from "../state/tabtools.ts";
 import { monotonic } from "../state/wait.ts";
 import { bezierPoint, BUTTON_MASK, controlPoints, CubicBezier, MOUSE, minimumJerk, moveDuration, PRESSED_FORCE, roundCoordinate, SCROLL, tremorSigma } from "./human.ts";
 
@@ -29,10 +30,18 @@ export class Mouse {
     else await this.dispatchMove(x, y);
   }
 
-  async click(x: number, y: number, button = "left", clickCount = 1, humanize = false): Promise<void> {
+  async click(x: number, y: number, button = "left", clickCount = 1, humanize = false, allowNative = true): Promise<void> {
     if (humanize) {
       await this.clickHumanized(x, y, button, clickCount);
       return;
+    }
+    if (allowNative && this.interception === null && this.pressedButton === null && (clickCount === 1 || clickCount === 2)) {
+      const rx = roundCoordinate(x);
+      const ry = roundCoordinate(y);
+      if (await nativeMouseClick(this.page, rx, ry, button, clickCount)) {
+        this.position = [x, y];
+        return;
+      }
     }
     await this.dispatchMove(x, y);
     await this.dispatchButton("mousePressed", button, clickCount);

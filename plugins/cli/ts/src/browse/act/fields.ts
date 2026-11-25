@@ -20,6 +20,7 @@ import {
 } from "../js/index.ts";
 import { add, flag } from "../metrics.ts";
 import { Element, type Page } from "../state/page.ts";
+import { nativeText } from "../state/tabtools.ts";
 import { monotonic } from "../state/wait.ts";
 import { asRecord, expectInput, poll, POLL, pollTimes, textInserted } from "./common.ts";
 import { checkedFrom, CHECK_STATE, HOLDS_FOCUS, matchOptions, OPTION_ROWS, type OptionRow, OVERLAY_INPUT, splitFinal } from "./choices.ts";
@@ -96,7 +97,7 @@ export async function clearField(page: Page, element: Element, humanize: boolean
   const input = inputOf(page);
   const guarded = (combo: string) => async () => {
     await refuseMovedFocus(page, element, "");
-    await input.pressCombo(combo, humanize);
+    await input.pressCombo(combo, humanize, false, false, false);
   };
   await expectInput(page, element.frame, () => input.gesture("clear", guarded("Meta+a")), { keydown: 2 }, "Select all", element);
   await expectInput(page, element.frame, () => input.gesture("clear", guarded("Backspace")), { keydown: 1 }, "Backspace", element);
@@ -360,7 +361,7 @@ export async function insertThenFinalKey(page: Page, element: Element, text: str
   const keyboard = input.keyboard();
   const pressLast = async () => {
     await refuseMovedFocus(page, element, head);
-    await keyboard.typeText(last, false);
+    await keyboard.typeText(last, false, false);
   };
   await expectInput(
     page,
@@ -379,6 +380,7 @@ export async function insertText(page: Page, element: Element, text: string, hol
   const input = inputOf(page);
   const send = async () => {
     if (holdsFocus) await refuseMovedFocus(page, element, "");
+    if (!holdsFocus && (await nativeText(page, text))) return;
     return page.send("Input.insertText", { text }, { inputEvent: true });
   };
   await expectInput(
