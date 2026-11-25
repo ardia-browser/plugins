@@ -349,8 +349,22 @@ class ScriptRun {
   repl = false;
   spill = 0;
   private readonly reactions = new SharedWait(() => this.signal);
+  private readonly adopting = new SharedWait(() => this.signal);
 
   constructor(readonly ctx: Ctx, readonly runner: Runner) {}
+
+  async adoptActiveTab(): Promise<boolean> {
+    if (!this.repl) return false;
+    if (this.ctx.state.current !== null) return true;
+    if (this.ctx.state.hadTab) return false;
+    await this.adopting.join(async () => {
+      if (this.ctx.state.hadTab || this.ctx.state.current !== null) return;
+      await this.ctx.state.connect();
+      await this.ctx.state.takeActive();
+      flag("script_repl_auto_tab", true);
+    });
+    return this.ctx.state.current !== null;
+  }
 
   fail(error: Error): void {
     if (this.error !== null) return;
@@ -454,7 +468,15 @@ async function serveCall(run: ScriptRun, request: Request): Promise<Answer> {
       run.started.add(request.id);
       if (exclusive) run.mutating.add(request.id);
       if (!exclusive) await run.settle(name, words.slice(1));
-      return answerCall(run.ctx, words, index, light, full);
+      let out = await answerCall(run.ctx, words, index, light, full);
+      if (!out.ok && out.code === "no_session_tab" && name !== "open" && name !== "tab") {
+        try {
+          if (await run.adoptActiveTab()) out = await answerCall(run.ctx, words, index, light, full);
+        } catch (error) {
+          out = pageFailure(error, index);
+        }
+      }
+      return out;
     }));
     ok = answer.ok;
     return answer.ok ? answer : { ...answer, call: index };
@@ -482,18 +504,31 @@ async function servePage(run: ScriptRun, request: Request): Promise<Answer> {
       const invalid = op === "frames" ? null : validEvaluate(request);
       if (invalid !== null) return { ok: false, error: invalid, code: "usage", call: index };
       try {
+        const pageForCall = async () => {
+          try {
+            return await run.ctx.state.page();
+          } catch (error) {
+            if (error instanceof BrowseError && error.code === "no_session_tab" && (await run.adoptActiveTab())) {
+              return await run.ctx.state.page();
+            }
+            throw error;
+          }
+        };
         if (op === "frames") {
           flag("script_frames_listed", true);
-          return { ok: true, text: "", data: await framesAnswer(await run.ctx.state.page()) };
+          return { ok: true, text: "", data: await framesAnswer(await pageForCall()) };
         }
         if (frame !== null) {
           flag("script_frame_eval", true);
-          const page = await run.ctx.state.page();
+          const page = await pageForCall();
           const [declaration, args] = frameFunction(request);
           return { ok: true, text: "", data: { result: jsonCopy(await page.call(declaration, args, { frame, read: false, timeout: EVAL_TIMEOUT })) } };
         }
         const expression = op === "evaluate" ? evaluateExpression(request) : selectorExpression(request);
-        const answer = await answerCall(run.ctx, ["eval", expression], index, false);
+        let answer = await answerCall(run.ctx, ["eval", expression], index, false);
+        if (!answer.ok && answer.code === "no_session_tab" && (await run.adoptActiveTab())) {
+          answer = await answerCall(run.ctx, ["eval", expression], index, false);
+        }
         return answer.ok ? answer : { ...answer, call: index };
       } catch (error) {
         if (error instanceof ArgumentsTooDeep) return { ok: false, error: error.message, code: "usage", call: index };

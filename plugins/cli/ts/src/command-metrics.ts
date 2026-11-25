@@ -35,6 +35,7 @@ export const TS_ONLY_FLAGS: readonly string[] = [
   "script_memory_limit",
   "script_missing_api",
   "script_repl",
+  "script_repl_auto_tab",
   "script_repl_logs_spilled",
   "script_repl_lost",
   "script_repl_reset",

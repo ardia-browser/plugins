@@ -55,7 +55,7 @@ export const FLAGS = new Set([
   "eval_main_world", "eval_isolated_reference_error", "permission_granted", "guessed_syntax", "find_closest_ref", "select_retyped", "select_word_match", "open_here", "stale_ref_after_open", "snapshot_diff", "snapshot_diff_full", "settle_ignored_background", "frame_point_unconfirmed",
   "script_eval_args", "script_selector_eval", "script_frames_listed", "script_frame_eval", "script_missing_api", "script_runner_warm", "script_runner_unconfined",
   "script_runner_crashed", "script_memory_limit", "script_sandbox_hint",
-  "script_repl", "script_repl_lost", "script_repl_reset", "script_repl_logs_spilled", "script_repl_value_spilled",
+  "script_repl", "script_repl_auto_tab", "script_repl_lost", "script_repl_reset", "script_repl_logs_spilled", "script_repl_value_spilled",
   "snapshot_budget_trimmed", "snapshot_modal_scoped", "snapshot_hidden_text_dropped", "snapshot_closed_shadow", "snapshot_dom_depth_retry", "snapshot_find", "snapshot_paired", "snapshot_paired_unstable",
   "did_you_mean", "perf_crux", "logpoint_source_mapped",
   "batch_ref_healed", "batch_ref_ambiguous", "batch_ref_missing", "here", "here_read", "form", "query", "query_fields", "read_urls", "find_is", "field_label_fallback", "script_steps_shown", "snapshot_lean_trimmed", "help_in_daemon", "read_urls_deadline", "batch_ref_not_followed",

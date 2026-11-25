@@ -178,7 +178,12 @@ export class McpServer {
       else if (name === ACT_TOOL) {
         const call = actCall(args);
         screenshot = SCREENSHOT_COMMANDS.has(call.command);
-        answer = await this.daemon.run({ argv: [call.command, ...call.args], stdin: call.stdin, json: false, full: call.full, maxOutput: call.maxOutput }, signal);
+        const request = { argv: [call.command, ...call.args], stdin: call.stdin, json: false, full: call.full, maxOutput: call.maxOutput };
+        answer = await this.daemon.run(request, signal);
+        if (answer.exit !== 0 && answer.code === "no_session_tab" && call.command !== "open" && call.command !== "tab") {
+          const picked = await this.daemon.run({ argv: ["tab", "active"], stdin: null, json: true, full: false, maxOutput: 0 }, signal, CONTEXT_PROBE_MS);
+          if (picked.exit === 0) answer = await this.daemon.run(request, signal);
+        }
       } else throw new RpcError(INVALID_PARAMS, `Unknown tool: ${String(name)}`);
     } catch (error) {
       if (error instanceof RpcError && error.code === INVALID_PARAMS && name !== REPL_TOOL && name !== ACT_TOOL) throw error;
