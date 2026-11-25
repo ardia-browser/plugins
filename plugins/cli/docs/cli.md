@@ -216,8 +216,8 @@ passed as `--ws`/`--port` only when its arguments have none of `--ws`, `--port` 
 `stream` is the stream's own), so the session is keyed on the endpoint it really uses. A bad `ARDIA_PORT` exits 2.
 
 The CLI never quits Ardia: every DevTools WebSocket it opens (`browse`, `scripts test`; `ts/src/browse/cdp/guard.ts`) checks
-each outgoing message and refuses fragmented sends, so `Browser.close`, `Browser.crash` and `Browser.crashGpuProcess`
-never leave the process, whether sent one at a time, in an `execute_commands` batch (checked whole before anything is
+each outgoing message and refuses fragmented sends, so `Browser.close`, `Browser.crash`, `Browser.crashGpuProcess`,
+`Page.crash` and any `<Domain>.crash*` method never leave the process, whether sent one at a time, in an `execute_commands` batch (checked whole before anything is
 sent) or straight on the socket. Its WebSockets always connect directly, ignoring `http_proxy`, `ws_proxy` and the
 like, so no proxy sees the token.
 
