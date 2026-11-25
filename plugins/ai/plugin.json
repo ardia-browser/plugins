@@ -1,0 +1,84 @@
+{
+  "manifest": 1,
+  "name": "ai",
+  "title": "AI",
+  "description": "A chat tab that reads and uses your tabs with your permission, running on your own Claude plan.",
+  "version": "0.1.0",
+  "permissions": ["tabs", "commands", "arrange", "pages", "network"],
+  "settings": {
+    "rows": [
+      {
+        "key": "mode",
+        "title": "Start with",
+        "description": "Browser first opens the assistant when you ask for it. AI first makes New Tab a chat.",
+        "type": "choice",
+        "default": "browser",
+        "choices": [
+          { "value": "browser", "title": "Browser first" },
+          { "value": "ai", "title": "AI first" }
+        ]
+      },
+      {
+        "key": "side",
+        "title": "Open the assistant on the",
+        "type": "choice",
+        "default": "right",
+        "choices": [
+          { "value": "right", "title": "Right" },
+          { "value": "left", "title": "Left" }
+        ]
+      },
+      {
+        "key": "newTab",
+        "title": "New Tab box starts in",
+        "description": "Press Tab in an empty box to switch.",
+        "type": "choice",
+        "default": "search",
+        "choices": [
+          { "value": "search", "title": "Search" },
+          { "value": "chat", "title": "Chat" }
+        ]
+      },
+      {
+        "key": "model",
+        "title": "Model",
+        "type": "choice",
+        "default": "claude-sonnet-5-5",
+        "choices": [
+          { "value": "claude-haiku-5-5", "title": "Claude Haiku 5.5" },
+          { "value": "claude-sonnet-5-5", "title": "Claude Sonnet 5.5" },
+          { "value": "claude-opus-5-5", "title": "Claude Opus 5.5" }
+        ]
+      }
+    ]
+  },
+  "commands": [
+    { "name": "ask-beside", "title": "Ask AI About This Tab", "icon": "sparkles", "keywords": ["assistant", "chat", "ai"], "tool": "new-chat", "input": { "split": true } },
+    { "name": "new-chat", "title": "New AI Chat", "icon": "square.and.pencil", "keywords": ["assistant", "chat"], "tool": "new-chat", "input": { "split": false } },
+    { "name": "history", "title": "AI Chat History", "icon": "clock.arrow.circlepath", "keywords": ["chats", "assistant"], "open": "tab", "path": "/history" },
+    { "name": "set-up", "title": "Set Up AI", "icon": "gearshape", "keywords": ["assistant", "sign in"], "open": "tab", "path": "/welcome" }
+  ],
+  "toolbar": { "title": "Ask AI", "icon": "sparkles", "command": "ask-beside", "shortcut": "cmd+shift+e" },
+  "newTab": {
+    "mode": { "title": "Ask", "placeholder": "Ask anything, or about your tabs…", "defaultRow": "newTab", "defaultValue": "chat", "path": "{id}" },
+    "button": { "title": "AI chats", "icon": "clock.arrow.circlepath", "path": "history" }
+  },
+  "page": { "title": "AI", "icon": "sparkles", "file": "page/index.html", "background": "newTab" },
+  "process": {
+    "run": ["bin/ardia-ai", "ardia"],
+    "memoryMB": 2048,
+    "userHome": true,
+    "access": [
+      { "path": "~/.claude", "write": true },
+      { "path": "~/.claude.json", "write": true },
+      { "path": "~/.local/share/claude" },
+      { "path": "~/.local/bin" },
+      { "path": "~/.local/state/claude", "write": true },
+      { "path": "~/.cache/claude", "write": true },
+      { "path": "~/Library/Caches/claude-cli-nodejs", "write": true }
+    ]
+  },
+  "hooks": ["tab.closed"],
+  "telemetry": { "counters": ["chats_started", "mode_browser_first", "mode_ai_first", "tool_read", "tool_act", "tool_open", "tool_close", "tool_group", "tool_split_to_group", "permission_allowed", "permission_always", "permission_denied", "permission_timed_out", "runtime_crashes", "banner_stops", "tag_groups_created", "tag_groups_joined", "signin_started", "tool_refused_stopped", "tool_refused_ended", "tool_refused_unknown"] },
+  "tools": [{ "name": "new-chat", "title": "New chat", "description": "Opens a new AI chat tab, beside the current tab with split.", "timeout": 15 }]
+}
