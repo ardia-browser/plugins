@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Row 11 · Being-debugged banners</title>
+<style>
+body{font:14px system-ui;margin:16px}
+#verdict{font:bold 20px system-ui}.pass{color:#080}.fail{color:#c00}
+</style>
+<div id="verdict">RUNNING row 11</div>
+<p>Measures the browser UI height above the page. An infobar ("controlled by automated test software", "started debugging this browser") adds about 40 px.</p>
+<pre id="measured"></pre>
+<script>
+const ROW = 11;
+function report(pass, measured) {
+  const result = {row: ROW, pass: !!pass, measured};
+  window.__humanResult = result;
+  document.documentElement.dataset.humanResult = JSON.stringify(result);
+  const verdict = document.getElementById('verdict');
+  verdict.textContent = (pass ? 'PASS' : 'FAIL') + ' row ' + ROW;
+  verdict.className = pass ? 'pass' : 'fail';
+  document.getElementById('measured').textContent = JSON.stringify(measured, null, 2);
+}
+function onFinish(run) {
+  let done = false;
+  const go = () => {
+    if (done || !document.documentElement.hasAttribute('data-finish')) return;
+    done = true;
+    Promise.resolve().then(run).catch(error => report(false, {error: String(error)}));
+  };
+  new MutationObserver(go).observe(document.documentElement, {attributes: true, attributeFilter: ['data-finish']});
+  go();
+}
+function driverRead() {
+  try { return JSON.parse(document.documentElement.dataset.read || 'null'); } catch { return null; }
+}
+</script>
+<script>
+const sample = () => ({chromeHeight: window.outerHeight - window.innerHeight, outerHeight: window.outerHeight, innerHeight: window.innerHeight});
+const samples = [];
+let phase = 'pre-attach';
+new MutationObserver(() => { phase = document.documentElement.dataset.phase || phase; }).observe(document.documentElement, {attributes: true, attributeFilter: ['data-phase']});
+const take = () => samples.push({phase, t: Math.round(performance.now()), ...sample()});
+take();
+const timer = setInterval(take, 100);
+onFinish(() => {
+  clearInterval(timer);
+  take();
+  const read = driverRead() || {};
+  const before = samples.filter(entry => entry.phase === 'pre-attach');
+  const after = samples.filter(entry => entry.phase !== 'pre-attach');
+  const settled = before[before.length - 1]?.chromeHeight;
+  const heightsBefore = [...new Set(before.map(entry => entry.chromeHeight))];
+  const heightsAfter = [...new Set(after.map(entry => entry.chromeHeight))];
+  const measured = {heightsBefore, heightsAfter, settledBeforeAttach: settled, headless: read.headless, reference: read.reference ?? null, flags: read.flags};
+  const stableThroughAttach = after.length > 0 && heightsAfter.every(height => height === settled);
+  const matchesReference = read.reference === undefined || read.reference === null || settled === read.reference;
+  measured.checks = {stableThroughAttach, matchesReference};
+  report(stableThroughAttach && matchesReference, measured);
+});
+</script>
+</html>

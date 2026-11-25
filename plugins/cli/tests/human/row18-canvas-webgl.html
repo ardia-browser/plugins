@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Row 18 · Canvas and WebGL</title>
+<style>
+body{font:14px system-ui;margin:16px}
+#verdict{font:bold 20px system-ui}.pass{color:#080}.fail{color:#c00}
+canvas{display:block;margin:6px 0;border:1px solid #888}
+</style>
+<div id="verdict">RUNNING row 18</div>
+<canvas id="flat" width="500" height="200"></canvas>
+<canvas id="gl" width="500" height="200"></canvas>
+<pre id="measured"></pre>
+<script>
+const ROW = 18;
+function report(pass, measured) {
+  const result = {row: ROW, pass: !!pass, measured};
+  window.__humanResult = result;
+  document.documentElement.dataset.humanResult = JSON.stringify(result);
+  const verdict = document.getElementById('verdict');
+  verdict.textContent = (pass ? 'PASS' : 'FAIL') + ' row ' + ROW;
+  verdict.className = pass ? 'pass' : 'fail';
+  document.getElementById('measured').textContent = JSON.stringify(measured, null, 2);
+}
+function onFinish(run) {
+  let done = false;
+  const go = () => {
+    if (done || !document.documentElement.hasAttribute('data-finish')) return;
+    done = true;
+    Promise.resolve().then(run).catch(error => report(false, {error: String(error)}));
+  };
+  new MutationObserver(go).observe(document.documentElement, {attributes: true, attributeFilter: ['data-finish']});
+  go();
+}
+function driverRead() {
+  try { return JSON.parse(document.documentElement.dataset.read || 'null'); } catch { return null; }
+}
+</script>
+<script>
+const random = (min, max) => min + Math.floor(Math.random() * (max - min));
+const flat = document.getElementById('flat');
+const context = flat.getContext('2d');
+for (let i = 0; i < 400; i++) {
+  context.fillStyle = `rgb(${random(120, 200)},${random(120, 200)},${random(120, 200)})`;
+  context.fillRect(random(0, 500), random(0, 200), 6, 6);
+}
+const circle = {x: random(30, 470), y: random(30, 170), r: 14};
+context.fillStyle = 'rgb(255,0,0)';
+context.beginPath();
+context.arc(circle.x, circle.y, circle.r, 0, Math.PI * 2);
+context.fill();
+const gl = document.getElementById('gl');
+const webgl = gl.getContext('webgl');
+const square = {x: random(20, 460), y: random(20, 160), size: 24};
+webgl.clearColor(0.9, 0.9, 0.9, 1);
+webgl.clear(webgl.COLOR_BUFFER_BIT);
+webgl.enable(webgl.SCISSOR_TEST);
+webgl.scissor(square.x, 200 - square.y - square.size, square.size, square.size);
+webgl.clearColor(0, 0, 1, 1);
+webgl.clear(webgl.COLOR_BUFFER_BIT);
+const hits = {flat: [], gl: []};
+const hitTest = (canvas, key, inside) => canvas.addEventListener('click', event => {
+  const box = canvas.getBoundingClientRect();
+  const x = event.clientX - box.left - canvas.clientLeft, y = event.clientY - box.top - canvas.clientTop;
+  hits[key].push({x, y, inside: inside(x, y), trusted: event.isTrusted});
+});
+hitTest(flat, 'flat', (x, y) => Math.hypot(x - circle.x, y - circle.y) <= circle.r);
+hitTest(gl, 'gl', (x, y) => x >= square.x && x <= square.x + square.size && y >= square.y && y <= square.y + square.size);
+const digest = async text => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map(byte => byte.toString(16).padStart(2, '0')).join('');
+onFinish(async () => {
+  const read = driverRead() || {};
+  const expected = await digest(flat.toDataURL('image/png'));
+  const measured = {hits, circle, square, readback: {driver: read.flatDigest, expected, match: read.flatDigest === expected}, glReadback: read.glReadback, driverLocated: read.located};
+  const checks = {
+    flatClick: hits.flat.some(hit => hit.inside && hit.trusted),
+    glClick: hits.gl.some(hit => hit.inside && hit.trusted),
+    readback: measured.readback.match,
+  };
+  measured.checks = checks;
+  report(Object.values(checks).every(Boolean), measured);
+});
+</script>
+</html>

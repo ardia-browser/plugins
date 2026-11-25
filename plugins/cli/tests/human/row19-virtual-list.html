@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Row 19 · Virtualised lists</title>
+<style>
+body{font:14px system-ui;margin:16px}
+#verdict{font:bold 20px system-ui}.pass{color:#080}.fail{color:#c00}
+#viewport{width:320px;height:400px;overflow:auto;border:1px solid #888;position:relative}
+#spacer{position:relative}
+.row{position:absolute;left:0;right:0;height:30px;display:flex;align-items:center;gap:8px;padding:0 8px;box-sizing:border-box;border-bottom:1px solid #eee}
+.row button{height:22px}
+</style>
+<div id="verdict">RUNNING row 19</div>
+<div id="viewport"><div id="spacer"></div></div>
+<pre id="measured"></pre>
+<script>
+const ROW = 19;
+function report(pass, measured) {
+  const result = {row: ROW, pass: !!pass, measured};
+  window.__humanResult = result;
+  document.documentElement.dataset.humanResult = JSON.stringify(result);
+  const verdict = document.getElementById('verdict');
+  verdict.textContent = (pass ? 'PASS' : 'FAIL') + ' row ' + ROW;
+  verdict.className = pass ? 'pass' : 'fail';
+  document.getElementById('measured').textContent = JSON.stringify(measured, null, 2);
+}
+function onFinish(run) {
+  let done = false;
+  const go = () => {
+    if (done || !document.documentElement.hasAttribute('data-finish')) return;
+    done = true;
+    Promise.resolve().then(run).catch(error => report(false, {error: String(error)}));
+  };
+  new MutationObserver(go).observe(document.documentElement, {attributes: true, attributeFilter: ['data-finish']});
+  go();
+}
+function driverRead() {
+  try { return JSON.parse(document.documentElement.dataset.read || 'null'); } catch { return null; }
+}
+</script>
+<script>
+const TOTAL = 10000, HEIGHT = 30, OVERSCAN = 4;
+const viewport = document.getElementById('viewport');
+const spacer = document.getElementById('spacer');
+spacer.style.height = TOTAL * HEIGHT + 'px';
+const stats = {wheel: 0, wheelTrusted: 0, scrollEvents: 0, maxRendered: 0, opened: []};
+const render = () => {
+  const first = Math.max(0, Math.floor(viewport.scrollTop / HEIGHT) - OVERSCAN);
+  const last = Math.min(TOTAL - 1, Math.ceil((viewport.scrollTop + viewport.clientHeight) / HEIGHT) + OVERSCAN);
+  spacer.replaceChildren();
+  for (let index = first; index <= last; index++) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.dataset.index = index;
+    row.style.top = index * HEIGHT + 'px';
+    row.innerHTML = `<span>Row ${index}</span><button>Open ${index}</button>`;
+    spacer.append(row);
+  }
+  stats.maxRendered = Math.max(stats.maxRendered, last - first + 1);
+};
+viewport.addEventListener('scroll', () => { stats.scrollEvents++; render(); }, {passive: true});
+viewport.addEventListener('wheel', event => { stats.wheel++; if (event.isTrusted) stats.wheelTrusted++; }, {passive: true});
+spacer.addEventListener('click', event => {
+  const button = event.target.closest('button');
+  if (button) stats.opened.push({index: Number(button.closest('.row').dataset.index), trusted: event.isTrusted});
+});
+render();
+onFinish(() => {
+  const read = driverRead() || {};
+  const measured = {...stats, driverRead: read};
+  report(stats.opened.length === 1 && stats.opened[0].index === 5000 && stats.opened[0].trusted && stats.maxRendered < 40, measured);
+});
+</script>
+</html>

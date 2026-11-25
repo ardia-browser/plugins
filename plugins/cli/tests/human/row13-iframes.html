@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Row 13 · Cross-origin and out-of-process iframes</title>
+<style>
+body{font:14px system-ui;margin:16px}
+#verdict{font:bold 20px system-ui}.pass{color:#080}.fail{color:#c00}
+iframe{border:2px solid #888;display:block;margin:6px 0}
+button{width:140px;height:32px}
+</style>
+<div id="verdict">RUNNING row 13</div>
+<div id="frames"></div>
+<p id="secret"></p>
+<button id="act">act</button>
+<pre id="measured"></pre>
+<script>
+const ROW = 13;
+function report(pass, measured) {
+  const result = {row: ROW, pass: !!pass, measured};
+  window.__humanResult = result;
+  document.documentElement.dataset.humanResult = JSON.stringify(result);
+  const verdict = document.getElementById('verdict');
+  verdict.textContent = (pass ? 'PASS' : 'FAIL') + ' row ' + ROW;
+  verdict.className = pass ? 'pass' : 'fail';
+  document.getElementById('measured').textContent = JSON.stringify(measured, null, 2);
+}
+function onFinish(run) {
+  let done = false;
+  const go = () => {
+    if (done || !document.documentElement.hasAttribute('data-finish')) return;
+    done = true;
+    Promise.resolve().then(run).catch(error => report(false, {error: String(error)}));
+  };
+  new MutationObserver(go).observe(document.documentElement, {attributes: true, attributeFilter: ['data-finish']});
+  go();
+}
+function driverRead() {
+  try { return JSON.parse(document.documentElement.dataset.read || 'null'); } catch { return null; }
+}
+</script>
+<script>
+const params = new URLSearchParams(location.search);
+const role = params.get('role') || 'top';
+const port = location.port;
+const seed = params.get('seed') || Math.random().toString(36).slice(2, 8);
+const secretText = 'secret-' + role + '-' + seed;
+document.getElementById('secret').textContent = secretText;
+document.title = 'Row 13 · ' + role;
+const frames = document.getElementById('frames');
+const embed = (url, attributes = {}) => {
+  const frame = document.createElement('iframe');
+  frame.src = url;
+  frame.width = role === 'top' ? 520 : 420;
+  frame.height = role === 'top' ? 300 : 150;
+  for (const [name, value] of Object.entries(attributes)) frame.setAttribute(name, value);
+  frames.append(frame);
+};
+if (role === 'top') {
+  embed(`http://localhost:${port}${location.pathname}?role=child&seed=${seed}`);
+  embed(`http://localhost:${port}${location.pathname}?role=sandboxed&seed=${seed}`, {sandbox: 'allow-scripts'});
+} else if (role === 'child') {
+  embed(`http://[::1]:${port}${location.pathname}?role=grandchild&seed=${seed}`);
+}
+const relay = message => { if (window.parent !== window) window.parent.postMessage(message, '*'); };
+const clicks = {};
+window.addEventListener('message', event => {
+  if (event.data?.kind !== 'row13') return;
+  if (role === 'top') clicks[event.data.role] = event.data;
+  else relay(event.data);
+});
+document.getElementById('act').addEventListener('click', event => {
+  const message = {kind: 'row13', role, trusted: event.isTrusted, origin: self.origin};
+  if (role === 'top') clicks.top = message; else relay(message);
+});
+if (role === 'top') {
+  onFinish(() => {
+    const read = driverRead() || {};
+    const roles = ['child', 'grandchild', 'sandboxed'];
+    const measured = {clicks, driverRead: read, expected: Object.fromEntries(roles.map(name => [name, 'secret-' + name + '-' + seed]))};
+    const readOk = roles.every(name => read[name] === measured.expected[name]);
+    const clickOk = roles.every(name => clicks[name]?.trusted === true);
+    measured.checks = {readOk, clickOk, crossSite: clicks.child?.origin?.includes('localhost') && clicks.grandchild?.origin?.includes('[::1]') && clicks.sandboxed?.origin === 'null'};
+    report(Object.values(measured.checks).every(Boolean), measured);
+  });
+}
+</script>
+</html>

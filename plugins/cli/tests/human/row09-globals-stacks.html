@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Row 9 · Injected globals and altered stacks</title>
+<style>
+body{font:14px system-ui;margin:16px}
+#verdict{font:bold 20px system-ui}.pass{color:#080}.fail{color:#c00}
+</style>
+<div id="verdict">RUNNING row 9</div>
+<button id="target" style="width:200px;height:40px">Click me</button>
+<pre id="measured"></pre>
+<script>
+const ROW = 9;
+function report(pass, measured) {
+  const result = {row: ROW, pass: !!pass, measured};
+  window.__humanResult = result;
+  document.documentElement.dataset.humanResult = JSON.stringify(result);
+  const verdict = document.getElementById('verdict');
+  verdict.textContent = (pass ? 'PASS' : 'FAIL') + ' row ' + ROW;
+  verdict.className = pass ? 'pass' : 'fail';
+  document.getElementById('measured').textContent = JSON.stringify(measured, null, 2);
+}
+function onFinish(run) {
+  let done = false;
+  const go = () => {
+    if (done || !document.documentElement.hasAttribute('data-finish')) return;
+    done = true;
+    Promise.resolve().then(run).catch(error => report(false, {error: String(error)}));
+  };
+  new MutationObserver(go).observe(document.documentElement, {attributes: true, attributeFilter: ['data-finish']});
+  go();
+}
+function driverRead() {
+  try { return JSON.parse(document.documentElement.dataset.read || 'null'); } catch { return null; }
+}
+</script>
+<script>
+const ownAtLoad = new Set(Object.getOwnPropertyNames(window));
+const documentOwnAtLoad = new Set(Object.getOwnPropertyNames(document));
+const pageNames = new Set(['report', 'onFinish', 'driverRead', '__humanResult']);
+const stacks = [];
+const pageUrl = location.href.split('#')[0];
+document.getElementById('target').addEventListener('click', event => {
+  const lines = String(new Error('where').stack).split('\n').slice(1).map(line => line.trim());
+  stacks.push({trusted: event.isTrusted, lines, currentScript: document.currentScript ? 'set' : null});
+});
+const errorEvents = [];
+window.addEventListener('error', event => errorEvents.push({filename: event.filename, message: String(event.message).slice(0, 80)}));
+onFinish(() => {
+  const added = Object.getOwnPropertyNames(window).filter(name => !ownAtLoad.has(name) && !pageNames.has(name));
+  const addedOnDocument = Object.getOwnPropertyNames(document).filter(name => !documentOwnAtLoad.has(name));
+  const foreignFrames = stacks.flatMap(entry => entry.lines.filter(line => !line.includes(pageUrl)));
+  const markers = stacks.flatMap(entry => entry.lines).filter(line => /__puppeteer|pptr:|__playwright|evaluation_script|at <anonymous>|\(<anonymous>|VM\d+|debugger:\/\//.test(line));
+  const measured = {added, addedOnDocument, stacks, foreignFrames, markers, errorEvents, globalsAtLoad: ownAtLoad.size};
+  const pass = stacks.length > 0 && stacks.every(entry => entry.trusted) && added.length === 0 && addedOnDocument.length === 0 && foreignFrames.length === 0 && markers.length === 0;
+  report(pass, measured);
+});
+</script>
+</html>
