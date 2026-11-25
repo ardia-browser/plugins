@@ -157,7 +157,7 @@ describe("the link", () => {
   test("forbidden commands never reach the wire", async () => {
     const on = await peer();
     const link = await linked(on);
-    for (const method of [...FORBIDDEN_METHODS, "Worker.crash", "Target.crashRenderer"].sort()) {
+    for (const method of [...FORBIDDEN_METHODS, "Worker.crash", "Target.crashRenderer", "Page.crashed"].sort()) {
       expect(await link.execute({ method }).catch((error: unknown) => error)).toBeInstanceOf(ForbiddenCommand);
       expect(await link.executeNoWait({ method }).catch((error: unknown) => error)).toBeInstanceOf(ForbiddenCommand);
       expect(() => checkMessage(JSON.stringify({ id: 1, method }))).toThrow(ForbiddenCommand);
@@ -166,6 +166,7 @@ describe("the link", () => {
     expect(() => checkMessage("not json")).toThrow("ardia only sends JSON commands");
     expect(() => checkMessage(JSON.stringify({ id: 1, method: "Page.enable" }))).not.toThrow();
     expect(() => checkMessage(JSON.stringify({ id: 1, method: "CrashReport.get" }))).not.toThrow();
+    expect(() => checkMessage(JSON.stringify({ id: 1, method: "Page.getCrashReport" }))).not.toThrow();
     await link.execute({ method: "Test.echo" });
     expect(on.messages.map((message) => message["method"])).toEqual(["Test.echo"]);
   });

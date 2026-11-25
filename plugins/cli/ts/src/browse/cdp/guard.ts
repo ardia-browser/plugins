@@ -1,5 +1,5 @@
 export const FORBIDDEN_METHODS: ReadonlySet<string> = new Set(["Browser.close", "Browser.crash", "Browser.crashGpuProcess", "Page.crash"]);
-const FORBIDDEN_METHOD_PATTERN = /^[^.]+\.crash(?:$|[A-Z_])/;
+const FORBIDDEN_METHOD_PATTERN = /^[^.]+\.crash/;
 
 export class ForbiddenCommand extends Error {
   override readonly name = "ForbiddenCommand";
