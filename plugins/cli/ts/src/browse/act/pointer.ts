@@ -259,7 +259,114 @@ export async function settledBox(page: Page, element: Element, first: Box | null
   return box;
 }
 
-export const PREPARE_ACTION = `(el, fx, fy, scroll, watch, offset = null) => {
+export const PREPARE_ACTION = `(el, fx, fy, scroll, watch) => {
+  if (!el.isConnected) return { connected: false };
+  const facts = {
+    connected: true,
+    native: el.matches(":disabled") || !!(el.closest && el.closest("button:disabled, fieldset:disabled")),
+    aria: el.getAttribute("aria-disabled") === "true",
+    shown: document.visibilityState !== "hidden",
+    width: innerWidth,
+    height: innerHeight,
+    moved: false,
+    animating: false,
+    box: false,
+    cover: null,
+    x: 0,
+    y: 0,
+  };
+  const largest = () => {
+    let best = null;
+    for (const r of el.getClientRects()) if (r.width * r.height > 1 && (!best || r.width * r.height > best.width * best.height)) best = r;
+    return best;
+  };
+  let rect = largest();
+  if (!rect) return facts;
+  if (scroll) {
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    let hidden = rect.top < 0 || rect.left < 0 || rect.bottom > innerHeight || rect.right > innerWidth;
+    for (let p = el.parentElement; p && !hidden; p = p.parentElement) {
+      const style = getComputedStyle(p);
+      if (style.overflowX === "visible" && style.overflowY === "visible") continue;
+      const c = p.getBoundingClientRect();
+      hidden = cx < c.left || cx > c.right || cy < c.top || cy > c.bottom;
+    }
+    if (hidden) {
+      el.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
+      const after = largest();
+      facts.moved = !after || Math.abs(after.top - rect.top) + Math.abs(after.left - rect.left) > 1;
+      if (!after) return facts;
+      rect = after;
+    }
+  }
+  const chain = new Set();
+  for (let node = el; node; node = node.parentNode || node.host) chain.add(node);
+  facts.animating = document.getAnimations().some((a) => a.playState === "running" && a.effect && chain.has(a.effect.target));
+  facts.box = true;
+  const x = rect.left + fx * rect.width;
+  const y = rect.top + fy * rect.height;
+  facts.x = x;
+  facts.y = y;
+  let cover = ardiaBrowse.hitTest(el, x, y);
+  if (cover && !cover.startsWith("nothing")) {
+    const root = el.getRootNode();
+    if (root instanceof ShadowRoot) {
+      const inner = root.elementFromPoint(x, y);
+      let through = !!inner && (inner === el || el.contains(inner));
+      for (let host = root.host; host && through; ) {
+        const outer = host.getRootNode();
+        const hit = outer.elementFromPoint(x, y);
+        through = hit === host || (!!hit && host.contains(hit));
+        host = outer instanceof ShadowRoot ? outer.host : null;
+      }
+      if (through) cover = null;
+    }
+  }
+  facts.cover = cover || null;
+  let top = [x, y];
+  try {
+    for (let win = window; top; win = win.parent) {
+      if (win === win.top) {
+        const visual = win.visualViewport;
+        if (visual && (Math.abs(visual.scale - 1) > 0.001 || visual.offsetLeft || visual.offsetTop)) top = null;
+        break;
+      }
+      const owner = win.frameElement;
+      if (!owner || !owner.offsetWidth || !owner.offsetHeight || !win.innerWidth) {
+        top = null;
+        break;
+      }
+      const up = (node) => node.assignedSlot || node.parentElement || (node.parentNode && node.parentNode.host) || null;
+      for (let node = owner; node && top; node = up(node)) {
+        const style = getComputedStyle(node);
+        if ((style.rotate && style.rotate !== "none") || (style.scale && style.scale !== "none")) {
+          top = null;
+          break;
+        }
+        if (!style.transform || style.transform === "none") continue;
+        const matrix = new DOMMatrixReadOnly(style.transform);
+        if (!matrix.is2D || Math.abs(matrix.b) > 0.000001 || Math.abs(matrix.c) > 0.000001 || matrix.a <= 0 || matrix.d <= 0) top = null;
+      }
+      if (!top) break;
+      const box = owner.getBoundingClientRect();
+      const style = getComputedStyle(owner);
+      const sx = box.width / owner.offsetWidth;
+      const sy = box.height / owner.offsetHeight;
+      const padLeft = parseFloat(style.paddingLeft) || 0;
+      const padTop = parseFloat(style.paddingTop) || 0;
+      const inner = (owner.clientWidth - padLeft - (parseFloat(style.paddingRight) || 0)) / win.innerWidth;
+      top = [box.left + (owner.clientLeft + padLeft) * sx + top[0] * sx * inner, box.top + (owner.clientTop + padTop) * sy + top[1] * sy * inner];
+    }
+  } catch (error) {
+    top = null;
+  }
+  facts.top = top;
+  if (watch) facts.counts = (${ACTIONS_INPUT_WATCH})();
+  return facts;
+}`;
+
+export const PREPARE_POSITIONED_ACTION = `(el, fx, fy, scroll, watch, offset = null) => {
   if (!el.isConnected) return { connected: false };
   const facts = {
     connected: true,
@@ -436,7 +543,11 @@ type Facts = {
 };
 
 async function prepareAction(page: Page, element: Element, fx: number, fy: number, scroll: boolean, watch = false, position: Position | null = null): Promise<Facts> {
-  const facts = asRecord(await page.call(PREPARE_ACTION, [element, fx, fy, scroll, watch, position], { frame: element.frame, read: !scroll })) as Facts;
+  const facts = asRecord(await page.call(
+    position === null ? PREPARE_ACTION : PREPARE_POSITIONED_ACTION,
+    position === null ? [element, fx, fy, scroll, watch] : [element, fx, fy, scroll, watch, position],
+    { frame: element.frame, read: !scroll },
+  )) as Facts;
   if (!facts.connected) throw new BrowseError(`Element ${element.label} was removed from the page`);
   if (facts.shown) page.shownAt = monotonic();
   return facts;

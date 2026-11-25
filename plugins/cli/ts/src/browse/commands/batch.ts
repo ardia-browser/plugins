@@ -241,11 +241,11 @@ const NOT_FOLLOWED = "it wasn't the only one with its role and name, or the new 
 const SELECTOR_PREFIX = "--selector=";
 const SELECTOR_FLAGS = new Set(["-s", "--selector"]);
 export const VALUE_FLAGS_TAKEN: ReadonlySet<string> = new Set([
-  "--baseline", "--block", "--body", "--button", "--capability", "--categories", "--column", "--commit", "--concurrency", "--condition", "--content", "--content-type",
+  "--baseline", "--block", "--body", "--button", "--capability", "--categories", "--column", "--commit", "--concurrency", "--condition", "--content", "--content-type", "--count",
   "--credential-provider", "--curl", "--delay", "--depth", "--description", "--domain", "--duration", "--enable", "--expires", "--field",
   "--fields", "--filter", "--fixture", "--fn", "--format", "--from", "--headers", "--idle", "--init-script", "--item", "--kind", "--label", "--limit",
   "--links", "--llms", "--load", "--match", "--max-chars", "--method", "--name", "--nth", "--origin", "--out", "--output", "--param", "--params",
-  "--password", "--password-selector", "--patch", "--path", "--payload", "--port", "--prefix", "--profile", "--property", "--region", "--resource-type", "--role",
+  "--password", "--password-selector", "--patch", "--path", "--payload", "--port", "--position", "--prefix", "--profile", "--property", "--region", "--resource-type", "--role",
   "--save", "--scale", "--scope", "--screenshot-dir", "--screenshot-format", "--screenshot-quality", "--site", "--state", "--status", "--step",   "--submit-selector", "--tags", "--target", "--text", "--threshold", "--timeout", "--to", "--trace", "--type", "--url", "--username",
   "--username-selector", "--wait-until", "--where", "--with-screenshot", "--within",
 ]);

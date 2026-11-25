@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import "./libc-loaded.ts";
 import "../src/browse/commands/all.ts";
 import { cleanMetrics } from "../src/browse/answer.ts";
-import { click, hover, mouseClickAt, PREPARE_ACTION } from "../src/browse/act/pointer.ts";
+import { click, hover, mouseClickAt, PREPARE_ACTION, PREPARE_POSITIONED_ACTION } from "../src/browse/act/pointer.ts";
 import { Ctx } from "../src/browse/commands/ctx.ts";
 import { dispatch } from "../src/browse/commands/index.ts";
 import { Usage } from "../src/browse/daemon-errors.ts";
@@ -47,7 +47,7 @@ function makeMockPage(box: [number, number, number, number] = [43, 298, 803, 738
     return {};
   }) as Page["send"];
   page.call = (async (fn: string, args: unknown[] = []) => {
-    if (fn === PREPARE_ACTION) {
+    if (fn === PREPARE_ACTION || fn === PREPARE_POSITIONED_ACTION) {
       prepareArgs.push(args);
       const fx = Number(args[1]);
       const fy = Number(args[2]);
@@ -184,7 +184,7 @@ describe("element-relative --position and mouse click", () => {
       parentNode: null,
       getRootNode: () => ({}),
     };
-    const fn = new Function("window", "document", "innerWidth", "innerHeight", "getComputedStyle", "ardiaBrowse", `return (${PREPARE_ACTION});`)(
+    const fn = new Function("window", "document", "innerWidth", "innerHeight", "getComputedStyle", "ardiaBrowse", `return (${PREPARE_POSITIONED_ACTION});`)(
       env,
       { visibilityState: "visible", getAnimations: () => [] },
       500,
@@ -219,7 +219,7 @@ describe("element-relative --position and mouse click", () => {
       return origSend(method, params);
     }) as Page["send"];
     page.call = (async (fnStr: string) => {
-      if (fnStr === PREPARE_ACTION) {
+      if (fnStr === PREPARE_ACTION || fnStr === PREPARE_POSITIONED_ACTION) {
         return { connected: true, native: false, aria: false, shown: true, width: 1280, height: 800, elWidth: 100, elHeight: 200, moved: false, animating: false, box: true, cover: null, x: 120, y: 110, top: null, counts: { ...counts } };
       }
       if (fnStr.includes("__ardiaInputWatch") || fnStr.includes("pointerdown")) return { ...counts };
@@ -260,7 +260,7 @@ describe("element-relative --position and mouse click", () => {
       parentNode: scroller,
       getRootNode: () => ({}),
     };
-    const fn2 = new Function("window", "document", "innerWidth", "innerHeight", "getComputedStyle", "ardiaBrowse", `return (${PREPARE_ACTION});`)(
+    const fn2 = new Function("window", "document", "innerWidth", "innerHeight", "getComputedStyle", "ardiaBrowse", `return (${PREPARE_POSITIONED_ACTION});`)(
       env,
       { visibilityState: "visible", getAnimations: () => [] },
       500,
@@ -302,7 +302,7 @@ describe("element-relative --position and mouse click", () => {
       parentNode: scaledScroller,
       getRootNode: () => ({}),
     };
-    const fn3 = new Function("window", "document", "innerWidth", "innerHeight", "getComputedStyle", "ardiaBrowse", `return (${PREPARE_ACTION});`)(
+    const fn3 = new Function("window", "document", "innerWidth", "innerHeight", "getComputedStyle", "ardiaBrowse", `return (${PREPARE_POSITIONED_ACTION});`)(
       env,
       { visibilityState: "visible", getAnimations: () => [] },
       500,
@@ -335,7 +335,7 @@ describe("element-relative --position and mouse click", () => {
       return ooOrigSend(method, params);
     }) as Page["send"];
     oopif.page.call = (async (fnStr: string) => {
-      if (fnStr === PREPARE_ACTION) {
+      if (fnStr === PREPARE_ACTION || fnStr === PREPARE_POSITIONED_ACTION) {
         return { connected: true, native: false, aria: false, shown: true, width: 100, height: 200, elWidth: 100, elHeight: 200, moved: false, animating: false, box: true, cover: null, x: 20, y: 10, top: null, counts: { ...ooCounts } };
       }
       if (fnStr === "() => [innerWidth, innerHeight]") return [100, 200];
@@ -375,7 +375,7 @@ describe("element-relative --position and mouse click", () => {
       parentNode: { host: shadowHost },
       getRootNode: () => ({ host: shadowHost }),
     };
-    const fn4 = new Function("window", "document", "innerWidth", "innerHeight", "getComputedStyle", "ardiaBrowse", `return (${PREPARE_ACTION});`)(
+    const fn4 = new Function("window", "document", "innerWidth", "innerHeight", "getComputedStyle", "ardiaBrowse", `return (${PREPARE_POSITIONED_ACTION});`)(
       env,
       { visibilityState: "visible", getAnimations: () => [] },
       500,

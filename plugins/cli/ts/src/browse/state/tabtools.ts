@@ -282,6 +282,7 @@ async function sendTabInput(page: Page, actionLabel: string, params: Record<stri
 export async function nativeMouseClick(page: Page, x: number, y: number, button: string, clickCount = 1): Promise<boolean> {
   if (page.frameSessions.size > 0) return false;
   if (!validCoordinate(x) || !validCoordinate(y) || !NATIVE_BUTTONS.has(button) || (clickCount !== 1 && clickCount !== 2)) return false;
+  if (!(await canUseNativeInput(page))) return false;
   if (await pinchZoomed(page)) return false;
   const action = clickCount === 2 ? "dblclick" : "click";
   return sendTabInput(page, action, { action, x, y, button });
@@ -290,6 +291,7 @@ export async function nativeMouseClick(page: Page, x: number, y: number, button:
 export async function nativeMouseMove(page: Page, x: number, y: number): Promise<boolean> {
   if (page.frameSessions.size > 0) return false;
   if (!validCoordinate(x) || !validCoordinate(y)) return false;
+  if (!(await canUseNativeInput(page))) return false;
   if (await pinchZoomed(page)) return false;
   return sendTabInput(page, "mouse move", { action: "move", x, y });
 }
@@ -299,6 +301,7 @@ export async function nativeWheel(page: Page, x: number, y: number, deltaX: numb
   if (!validCoordinate(x) || !validCoordinate(y)) return false;
   if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY) || (deltaX === 0 && deltaY === 0)) return false;
   if (Math.abs(deltaX) > MAX_NATIVE_WHEEL_DELTA || Math.abs(deltaY) > MAX_NATIVE_WHEEL_DELTA) return false;
+  if (!(await canUseNativeInput(page))) return false;
   if (await pinchZoomed(page)) return false;
   return sendTabInput(page, "wheel scroll", { action: "wheel", x, y, deltaX, deltaY });
 }

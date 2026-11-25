@@ -10,12 +10,12 @@ entry. Generated from that help and the command table by `bun src/skill-gen.ts -
 - **batch**: `ardia browse batch [--bail] [--out <file>] ["cmd args" | '["cmd","arg"]' ...]`
 - **cdp**: `ardia browse cdp <Domain.method> [--params <json>|-] [--param k=v]... [--param k:=json]... [--target browser|<tab>]` · `[--timeout 30s]`
 - **check**: `ardia browse check <sel> | uncheck <sel> [--humanize] [--no-changes]`
-- **click**: `ardia browse click <sel> [--new-tab] [--button left|right|middle] [--touch] [--humanize] [--no-changes] [--no-text]`
+- **click**: `ardia browse click <sel> [--position x,y] [--new-tab] [--button left|right|middle] [--touch] [--humanize] [--no-changes] [--no-text]`
 - **clipboard**: `ardia browse clipboard read | write <text> | copy | paste`
 - **close** (also exit, quit): `ardia browse close [--all]`
 - **console**: `ardia browse console [--clear]`
 - **cookies**: `ardia browse cookies [get] | set <name> <value> [--url u] [--domain d] [--path p] [--httpOnly] [--secure]` · `[--sameSite Strict|Lax|None] [--expires epoch] | set --curl <file> | clear`
-- **dblclick**: `ardia browse dblclick <sel> [--humanize] [--no-changes]`
+- **dblclick**: `ardia browse dblclick <sel> [--position x,y] [--humanize] [--no-changes]`
 - **dialog**: `ardia browse dialog status | accept [text] | dismiss`
 - **diff**: `ardia browse diff snapshot [-b baseline] [-s sel] [-i] [-c] [-d n] | screenshot --baseline <png> | url <u1> <u2>`
 - **download**: `ardia browse download <sel> <path>`
@@ -34,7 +34,7 @@ entry. Generated from that help and the command table by `bun src/skill-gen.ts -
 - **get**: `ardia browse get text|html|value|title|url|count|box|styles <sel> | attr <sel> <name>`
 - **here**: `ardia browse here [--read] [--all]`
 - **highlight**: `ardia browse highlight <sel>`
-- **hover**: `ardia browse hover <sel> [--within <container>] [--humanize] [--no-changes]`
+- **hover**: `ardia browse hover <sel> [--position x,y] [--within <container>] [--humanize] [--no-changes]`
 - **is**: `ardia browse is visible|enabled|checked <sel>`
 - **issues**: `ardia browse issues [--kind cookie,cors,csp,mixed] [--clear]`
 - **keyboard**: `ardia browse keyboard type <text> | inserttext <text>`
@@ -42,7 +42,7 @@ entry. Generated from that help and the command table by `bun src/skill-gen.ts -
 - **keyup**: `ardia browse keyup <key>`
 - **links**: `ardia browse links [pattern] [--limit n]`
 - **logpoint**: `ardia browse logpoint add <file:line[:column]> <expression> [--condition <js>] [--column n]` · `ardia browse logpoint list | rm <id>... | clear | scripts`
-- **mouse**: `ardia browse mouse move <x> <y> | down [left|right|middle] | up [button] | wheel <dy> [dx] [--humanize]`
+- **mouse**: `ardia browse mouse click <x> <y> [left|right|middle] [--count 1..3] | dblclick <x> <y> [button] | move <x> <y> | down [button] | up [button] | wheel <dy> [dx] [--humanize]`
 - **network**: `ardia browse network requests [--reload] [--filter p] [--type t] [--method m] [--status 2xx] [--clear] | request <id>` · `--reload starts recording and reloads the page, so its own loads are listed (--type xhr,fetch: its data calls)` · `| har start [--content text|all|none] | har stop [path] | route <url> [--abort|--body json] | unroute [url]`
 - **notes**: `ardia browse notes [get|set|append|list|rm] [site] [text|-]  (also `ardia notes`)`
 - **open** (also goto, navigate, visit): `ardia browse open [url] [--read] [--enable react-devtools] [--init-script <path>] [--capture-console] [--label name] [--here]`
