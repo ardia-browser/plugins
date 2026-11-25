@@ -193,31 +193,38 @@ function isOopif(page: Page, frame: string): boolean {
   return page.frameSessions.has(frame);
 }
 
-async function stitchFrames(page: Page, nodes: Node[], frame: string, prober: Prober | null = null): Promise<number> {
-  const queue = [...walk(nodes)];
-  let crossed = false;
+export const MAX_FRAME_DEPTH = 8;
+
+export type Stitched = { oopifs: number; frames: number };
+
+export async function stitchFrames(page: Page, nodes: Node[], frame: string, prober: Prober | null = null): Promise<Stitched> {
+  const queue: [Node, number][] = [...walk(nodes)].map((node) => [node, 0]);
+  const seen = new Set<string>([frame]);
   let crossings = 0;
+  let stitched = 0;
   for (let index = 0; index < queue.length; index += 1) {
-    const node = queue[index] as Node;
-    if ((node.role !== "Iframe" && node.role !== "iframe") || node.backend === null) continue;
+    const [node, depth] = queue[index] as [Node, number];
+    if ((node.role !== "Iframe" && node.role !== "iframe") || node.backend === null || depth >= MAX_FRAME_DEPTH) continue;
     try {
       const described = await page.send("DOM.describeNode", { backendNodeId: node.backend }, { session: page.sessionFor(node.frame) });
       const child = record(described["node"])["frameId"];
-      if (typeof child === "string" && child && page.frames.has(child) && child !== frame) {
-        const hidden = prober === null ? null : ((await prober.frame(child)).extras.get(child)?.hidden ?? null);
-        node.children = await frameNodes(page, child, null, hidden);
-        if (isOopif(page, child)) {
-          crossed = true;
-          crossings += 1;
-          queue.push(...walk(node.children));
-        }
-      }
+      if (typeof child !== "string" || !child || !page.frames.has(child) || seen.has(child)) continue;
+      seen.add(child);
+      const hidden = prober === null ? null : ((await prober.frame(child)).extras.get(child)?.hidden ?? null);
+      node.children = await frameNodes(page, child, null, hidden);
+      stitched += 1;
+      if (isOopif(page, child)) crossings += 1;
+      for (const inner of walk(node.children)) queue.push([inner, depth + 1]);
     } catch (error) {
       if (!quiet(error)) throw error;
     }
   }
-  if (crossed) flag("snapshot_oopif_frames", true);
-  return crossings;
+  if (crossings > 0) flag("snapshot_oopif_frames", true);
+  if (stitched > 0) {
+    flag("snapshot_child_frames", true);
+    count("snapshot_child_frame_count", stitched);
+  }
+  return { oopifs: crossings, frames: stitched };
 }
 
 const readLoaders = new WeakMap<Page, Map<string, string | null>>();
@@ -303,7 +310,7 @@ async function collectInto(state: State, page: Page, selector: string | null, cu
     const many = scopes.length > 1 ? `all ${scopes.length} elements matching it are` : "the element matching it is";
     throw new BrowseError(`Nothing in the accessibility tree under ${selector}: ${many} hidden or empty`);
   }
-  const oopifFrames = await stitchFrames(page, nodes, frame, options.visible ? prober : null);
+  const oopifFrames = (await stitchFrames(page, nodes, frame, options.visible ? prober : null)).oopifs;
   if (oopifFrames > 0) count("snapshot_oopif_count", oopifFrames);
   const framesUsed = [...new Set([...walk(nodes)].map((node) => node.frame as string))];
   const clickable = new Map<string, Map<number, string[]>>();

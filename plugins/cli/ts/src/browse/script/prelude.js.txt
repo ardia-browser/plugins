@@ -275,6 +275,7 @@
       network: list("network"),
       downloads: list("downloads"),
       unsettled: Boolean(changes && changes.unsettled),
+      revealed: Array.isArray(fields.revealed) ? fields.revealed : [],
       error: changes && typeof changes.error === "string" ? changes.error : null,
     });
     return receipt;
@@ -293,11 +294,20 @@
     const epoch = receiptEpoch;
     return pending.then(acted(options, epoch));
   };
+  const totpCodes = new Set();
   const keyboard = (value, options) => runAct(["keyboard", "type", String(value)], options);
   keyboard.type = keyboard;
   keyboard.press = (key, options) => runAct(["press", String(key)], options);
   keyboard.insertText = (value, options) => runAct(["keyboard", "inserttext", String(value)], options);
 
+  const display = async (input) => {
+    let shot = input;
+    if (shot && typeof shot.then === "function") shot = await shot;
+    const file = typeof shot === "string" ? shot : plainObject(shot) && typeof shot.path === "string" ? shot.path : null;
+    if (!file) throw new TypeError("display() takes the result of await page.screenshot(...), a { path } object or the path it saved");
+    const answer = await request("display", { path: file });
+    return answer.data;
+  };
   const api = {
     here: () => browse("here").then(text),
     goto: async (url) => (await browse("open", await absolute(url))).data,
@@ -327,7 +337,24 @@
     },
     check: (selector, options) => runAct(["check", selector], options),
     uncheck: (selector, options) => runAct(["uncheck", selector], options),
-    hover: (selector, options) => runAct(["hover", selector], options),
+    hover: (selector, options) => runAct(["hover", selector, ...flags(options, { within: "--within" })], options),
+    drag: (source, target, options) => runAct(["drag", selectorOf(source, "page.drag()"), selectorOf(target, "page.drag()"), ...flags(options, { before: "--before", after: "--after", synthetic: "--synthetic" })], options),
+    editCell: (selector, value, options) => runAct(["edit-cell", selectorOf(selector, "page.editCell()"), String(value), ...flags(options, { commit: "--commit", within: "--within" })], options),
+    fillOtp: (code, options) => {
+      const given = String(code === undefined || code === null ? "" : code);
+      const sensitive = (plainObject(options) && options.sensitive === true) || totpCodes.has(given);
+      return runAct(["fill-otp", given, ...flags({ ...(plainObject(options) ? options : {}), sensitive }, { within: "--within", sensitive: "--sensitive" })], options);
+    },
+    totp: async (account) => {
+      if (typeof account !== "string" || !account) throw new TypeError("page.totp() takes the name of a saved auth profile");
+      const answer = await request("totp", { name: account });
+      const code = String((answer.data || {}).code || "");
+      if (code) {
+        totpCodes.add(code);
+        if (totpCodes.size > 16) totpCodes.delete(totpCodes.values().next().value);
+      }
+      return code;
+    },
     scroll: (direction, pixels, options) => runAct(["scroll", ...words(direction), ...words(pixels)], options),
     waitForTimeout: (ms) => request("sleep", { ms: Number(ms) || 0 }).then(() => undefined),
     text: (selector) => (selector == null ? browse("read").then(data("content")) : browse("get", "text", selector).then(data("text"))),
@@ -472,6 +499,9 @@
       uncheck: (options) => api.uncheck(selector, options),
       setChecked: (checked, options) => (checked ? api.check(selector, options) : api.uncheck(selector, options)),
       hover: (options) => api.hover(selector, options),
+      editCell: (value, options) => api.editCell(selector, value, options),
+      dragTo: (target, options) => api.drag(selector, target, options),
+      fillOtp: (code, options) => api.fillOtp(code, { ...(plainObject(options) ? options : {}), within: selector }),
       focus: (options) => api.focus(selector, options),
       scrollIntoView: () => browse("scrollintoview", selector).then(text),
       scrollIntoViewIfNeeded: () => browse("scrollintoview", selector).then(text),
@@ -731,6 +761,9 @@
   act.check = (selector, options) => api.check(selector, forced(options));
   act.uncheck = (selector, options) => api.uncheck(selector, forced(options));
   act.hover = (selector, options) => api.hover(selector, forced(options));
+  act.drag = (source, target, options) => api.drag(source, target, forced(options));
+  act.editCell = (selector, value, options) => api.editCell(selector, value, forced(options));
+  act.fillOtp = (code, options) => api.fillOtp(code, forced(options));
   act.focus = (selector, options) => api.focus(selector, forced(options));
   act.scroll = (direction, pixels, options) => api.scroll(direction, pixels, forced(options));
   Object.freeze(act);
@@ -859,8 +892,10 @@
     },
     screenshot: async (options) => {
       options = typeof options === "string" ? { out: options } : plainObject(options) ? options : {};
-      const given = { ...options, out: options.out ?? options.path, full: options.full ?? options.fullPage };
+      const region = Array.isArray(options.region) ? options.region.join(",") : plainObject(options.region) ? [options.region.x, options.region.y, options.region.width, options.region.height].join(",") : options.region;
+      const given = { ...options, region, out: options.out ?? options.path, full: options.full ?? options.fullPage };
       const answer = await browse("screenshot", ...flags(given, { selector: "-s", full: "--full", out: "--out", annotate: "--annotate", marks: "--marks", region: "--region", scale: "--scale", withSnapshot: "--with-snapshot" }));
+      if (options.inline === true) await display(answer.data);
       return answer.data;
     },
   });
@@ -1171,6 +1206,7 @@
   define("closeTab", closeTab);
   define("readUrls", readUrls);
   define("parseReceipt", parseReceipt);
+  define("display", display);
   if (REPL) {
     define("__ardiaReplCapture__", (fn) => { replCapture = typeof fn === "function" ? fn : null; });
     define("__ardiaReplInit__", (names) => {

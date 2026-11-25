@@ -26,5 +26,6 @@ import "./tool.ts";
 import "./here.ts";
 import "./extract.ts";
 import "./read-urls.ts";
+import "./interact.ts";
 
 export { dispatch, hooks, OWNERS, register, served } from "./index.ts";

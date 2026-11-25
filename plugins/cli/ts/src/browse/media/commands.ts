@@ -344,6 +344,7 @@ async function framedScreenshot(ctx: Ctx, want: Framed): Promise<Result> {
     viewport: frame.viewport,
     image: frame.image,
     scale: new Float(frame.scale),
+    dpr: new Float(frame.dpr),
     region: frame.region,
   };
   const lines = [`✓ Screenshot saved to ${shown}`, ...frameLines(frame, wholeViewport)];

@@ -19,10 +19,12 @@ entry. Generated from that help and the command table by `bun src/skill-gen.ts -
 - **dialog**: `ardia browse dialog status | accept [text] | dismiss`
 - **diff**: `ardia browse diff snapshot [-b baseline] [-s sel] [-i] [-c] [-d n] | screenshot --baseline <png> | url <u1> <u2>`
 - **download**: `ardia browse download <sel> <path>`
-- **drag**: `ardia browse drag <src> <dst> [--before|--after] [--humanize] [--no-changes]`
+- **drag**: `ardia browse drag <src> <dst> [--before|--after] [--synthetic] [--humanize] [--no-changes]`
+- **edit-cell**: `ardia browse edit-cell <cell> <value> [--commit enter|tab] [--within <container>] [--no-changes]`
 - **errors**: `ardia browse errors [--clear] [--uncaught]`
 - **eval** (also evaluate, js): `ardia browse eval <js> | -b <base64> | --stdin [--timeout 2m] [--out <file>] [--isolated]`
 - **fill**: `ardia browse fill <sel> <text> [--humanize] [--no-changes]`
+- **fill-otp**: `ardia browse fill-otp <code> [--within <container>] [--sensitive] [--no-changes]`
 - **find**: `ardia browse find <role|text|label|placeholder|alt|title|testid|first|last|nth> <value> [action] [text] [--name n] [--exact|--partial]`
 - **flow**: `ardia browse flow steps [--all]` · `ardia browse flow save <name> [--from n] [--to n] [--param k=v]... [--output s2r1] [--description text]` · `ardia browse flow run <name> [--param k=v]... [--fields a,b.c] [--where field=value]... [--limit n]` · `[--site s] [--timeout 60s]` · `ardia browse flow list [site] | show <name> [--site s] | rm <name> [--site s]`
 - **focus**: `ardia browse focus <sel>`
@@ -32,7 +34,7 @@ entry. Generated from that help and the command table by `bun src/skill-gen.ts -
 - **get**: `ardia browse get text|html|value|title|url|count|box|styles <sel> | attr <sel> <name>`
 - **here**: `ardia browse here [--read] [--all]`
 - **highlight**: `ardia browse highlight <sel>`
-- **hover**: `ardia browse hover <sel> [--humanize] [--no-changes]`
+- **hover**: `ardia browse hover <sel> [--within <container>] [--humanize] [--no-changes]`
 - **is**: `ardia browse is visible|enabled|checked <sel>`
 - **issues**: `ardia browse issues [--kind cookie,cors,csp,mixed] [--clear]`
 - **keyboard**: `ardia browse keyboard type <text> | inserttext <text>`

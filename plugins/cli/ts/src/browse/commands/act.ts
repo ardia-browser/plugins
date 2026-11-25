@@ -7,6 +7,7 @@ import { joinedWords, pyFloat, pyLen } from "../../pylib/str.ts";
 import { shlexQuote } from "../../pylib/shlex.ts";
 import { click, hover, tap, TOUCH_OFF } from "../act/pointer.ts";
 import { drag, listAfter, listBefore } from "../act/drag.ts";
+import { hoverResult, markOverlays, revealedAfter } from "../act/reveal.ts";
 import { choose, comboKind, fieldFacts, type Filled, fill, plain, select, settledSuggestions, SUGGESTION_HINT_WAIT, setChecked, type Item, typeText, uniqueMatch, unwatchSuggestions, watchSuggestions } from "../act/fields.ts";
 import { asRecord, expectInput, mouseButton, overFrame, textInserted } from "../act/common.ts";
 import { scroll, SCROLL_DEFAULT } from "../act/scroll.ts";
@@ -166,8 +167,10 @@ async function cmdHover(ctx: Ctx, argv: string[]): Promise<Result> {
   const [options, args] = parse(argv, { "--no-humanize": "bool", ...WITHIN_FLAG });
   need(args, 1, "hover <selector>");
   const [page, element] = await resolve(ctx, args[0] as string, false, withinOf(options));
+  const marked = await markOverlays(page, element.frame);
   const [, report] = await observe(ctx, page, () => hover(page, element, humanizing(ctx, options)));
-  return attach(new Result({ hovered: args[0] }), report);
+  const revealed = marked ? await revealedAfter(ctx, page, element.frame) : [];
+  return attach(hoverResult(args[0] as string, revealed), report);
 }
 
 async function cmdFocus(ctx: Ctx, argv: string[]): Promise<Result> {
@@ -416,7 +419,8 @@ async function cmdSelect(ctx: Ctx, argv: string[]): Promise<Result> {
 
 export function dragText(outcome: Record<string, unknown>): string {
   let text: string;
-  if (!outcome["html5"]) text = "✓ Done";
+  if (outcome["synthetic"]) text = outcome["dropped"] ? "✓ Done (HTML5 drag and drop, sent as page drag events)" : "✓ Done (page drag events sent, but the target didn't accept the drop)";
+  else if (!outcome["html5"]) text = "✓ Done";
   else if (!outcome["started"]) text = "✓ Done (the page didn't start an HTML5 drag, so it was a plain mouse drag)";
   else if (outcome["dropped"] === false) text = "✓ Done (HTML5 drag; the target didn't accept the drop, so the page got no drop event)";
   else text = "✓ Done (HTML5 drag and drop)";
@@ -428,7 +432,7 @@ export function dragText(outcome: Record<string, unknown>): string {
 }
 
 async function cmdDrag(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, args] = parse(argv, { "--no-humanize": "bool", "--before": "bool", "--after": "bool" });
+  const [options, args] = parse(argv, { "--no-humanize": "bool", "--before": "bool", "--after": "bool", "--synthetic": "bool" });
   need(args, 2, "drag <source> <target> [--before|--after]");
   if (options["before"] && options["after"]) throw new Usage("drag takes --before or --after, not both");
   const side = options["before"] ? "before" : options["after"] ? "after" : null;
@@ -437,7 +441,7 @@ async function cmdDrag(ctx: Ctx, argv: string[]): Promise<Result> {
   const [targetPage, target] = await resolve(ctx, args[1] as string);
   if (targetPage !== page) throw new BrowseError("Both ends of a drag must be in the same tab");
   const listed = await listBefore(page, source, target);
-  const [outcome, report] = await observe(ctx, page, () => drag(page, source, target, humanizing(ctx, options), side));
+  const [outcome, report] = await observe(ctx, page, () => drag(page, source, target, humanizing(ctx, options), side, Boolean(options["synthetic"])));
   if (listed) {
     const position = await listAfter(page, source.frame, listed);
     if (position) outcome["position"] = position;

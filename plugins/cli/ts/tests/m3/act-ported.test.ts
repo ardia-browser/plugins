@@ -167,12 +167,12 @@ describe("HtmlDragTest", () => {
     expect(kinds.indexOf("drop")).toBeLessThan(kinds.indexOf("mouseReleased"));
   });
 
-  test("refused interception fails before any input", async () => {
+  test("refused interception sends page drag events instead, with no input", async () => {
     const page = new FakeRenderer({ refused: ["Input.setInterceptDrags"] });
-    const error = (await drag(page.page, ...ends(), false).catch((caught: unknown) => caught)) as Gated;
-    expect(error).toBeInstanceOf(Gated);
-    expect(error.method).toBe("Input.setInterceptDrags");
-    expect(error.message).toContain("HTML5 draggable");
+    const outcome = await drag(page.page, ...ends(), false);
+    expect(outcome["html5"]).toBe(true);
+    expect(outcome["interception"]).toBe(false);
+    expect(outcome["synthetic"]).toBe(true);
     expect(page.calls()).toEqual([]);
     expect(page.dragIntercepted).toBeNull();
   });

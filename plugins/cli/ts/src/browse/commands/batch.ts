@@ -241,7 +241,7 @@ const NOT_FOLLOWED = "it wasn't the only one with its role and name, or the new 
 const SELECTOR_PREFIX = "--selector=";
 const SELECTOR_FLAGS = new Set(["-s", "--selector"]);
 export const VALUE_FLAGS_TAKEN: ReadonlySet<string> = new Set([
-  "--baseline", "--block", "--body", "--button", "--capability", "--categories", "--column", "--concurrency", "--condition", "--content", "--content-type",
+  "--baseline", "--block", "--body", "--button", "--capability", "--categories", "--column", "--commit", "--concurrency", "--condition", "--content", "--content-type",
   "--credential-provider", "--curl", "--delay", "--depth", "--description", "--domain", "--duration", "--enable", "--expires", "--field",
   "--fields", "--filter", "--fixture", "--fn", "--format", "--from", "--headers", "--idle", "--init-script", "--item", "--kind", "--label", "--limit",
   "--links", "--llms", "--load", "--match", "--max-chars", "--method", "--name", "--nth", "--origin", "--out", "--output", "--param", "--params",

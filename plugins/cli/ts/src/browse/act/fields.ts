@@ -277,10 +277,10 @@ async function setEditor(page: Page, editor: Element, text: string, humanize: bo
   else await fill(page, editor, text, humanize);
 }
 
-async function commitCell(page: Page, editor: Element, humanize: boolean): Promise<void> {
+async function commitCell(page: Page, editor: Element, humanize: boolean, key = "Enter"): Promise<void> {
   const editorState = async () => asRecord(await page.call(ACTIONS_CELL_EDITOR_STATE, [editor], { frame: editor.frame, read: true }));
   if (!(await editorState())["open"]) return;
-  await pressKey(page, editor.frame, "Enter", humanize);
+  await pressKey(page, editor.frame, key, humanize);
   if (await pollTimes(async () => ((await editorState())["open"] ? null : true), COMMIT_CHECKS)) return;
   const state = await editorState();
   try {
@@ -291,13 +291,13 @@ async function commitCell(page: Page, editor: Element, humanize: boolean): Promi
   const message = state["message"] ? String(state["message"]) : "";
   const said = message ? `: ${message.replace(/\.+$/u, "")}` : "";
   throw new BrowseError(
-    `The cell's editor stayed open after Enter${said}. The edit was cancelled (Escape), so the cell keeps its old value`,
+    `The cell's editor stayed open after ${key}${said}. The edit was cancelled (Escape), so the cell keeps its old value`,
     { message: message || null },
     "rejected",
   );
 }
 
-async function fillCell(page: Page, element: Element, cell: Element, text: string, humanize: boolean): Promise<Record<string, unknown> | null> {
+async function fillCell(page: Page, element: Element, cell: Element, text: string, humanize: boolean, commit = "Enter"): Promise<Record<string, unknown> | null> {
   const labelled = new Element(cell.frame, cell.objectId, cell.backendId, element.label);
   const [was, editor, opened] = await cellEditor(page, labelled, humanize);
   const names = ((await page.call("(el) => ardiaBrowse.labelText(el)", [editor], { frame: editor.frame, read: true })) as unknown[] | null) ?? [];
@@ -305,9 +305,17 @@ async function fillCell(page: Page, element: Element, cell: Element, text: strin
   await setEditor(page, editor, text, humanize);
   add("cell_edits");
   if (!opened) return null;
-  await commitCell(page, editor, humanize);
+  await commitCell(page, editor, humanize, commit);
   const now = await page.call(ACTIONS_CELL_NOW, [], { frame: cell.frame, read: true });
   return { cell: name !== undefined ? joinedWords(name) : element.label, value: now, was };
+}
+
+export async function editCell(page: Page, element: Element, text: string, humanize: boolean, commit = "Enter"): Promise<Record<string, unknown> | null> {
+  const cell = await cellOf(page, element);
+  if (cell === null) {
+    throw new BrowseError(`${element.label} isn't a grid cell (no gridcell, cell or td holds it); use \`fill\` for a plain field`, null, "not_a_cell");
+  }
+  return fillCell(page, element, cell, text, humanize, commit);
 }
 
 export async function refuseMovedFocus(page: Page, element: Element, typed: string): Promise<void> {

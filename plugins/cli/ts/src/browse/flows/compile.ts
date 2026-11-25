@@ -8,6 +8,7 @@ export const MAX_VALUE = 2000;
 export const CAUSED_WINDOW_MS = 2500;
 export const REDACTED = "<redacted>";
 const PARAM_NAME = /^[a-z][a-z0-9_]{0,23}$/u;
+export const TOGGLE_ROLES: ReadonlySet<string> = new Set(["switch", "checkbox", "radio", "menuitemcheckbox", "menuitemradio"]);
 
 export type RecEvent = {
   kind: "click" | "confirm" | "fill" | "select" | "press" | "submit" | "navigate";
@@ -179,7 +180,7 @@ export function compileEvents(given: readonly RecEvent[], startUrl: string): Com
     }
     if (event.kind === "click") {
       const kind = (target?.type ?? "").toLowerCase();
-      const toggle = kind === "checkbox" || kind === "radio" || target?.role === "switch";
+      const toggle = kind === "checkbox" || kind === "radio" || TOGGLE_ROLES.has((target?.role ?? "").toLowerCase());
       const type = toggle ? (event.checked === false ? "uncheck" : "check") : "click";
       const previous = steps.at(-1);
       if (toggle && previous && ["check", "uncheck"].includes(previous.action.type) && sameTarget(lastTarget, target)) steps.pop();

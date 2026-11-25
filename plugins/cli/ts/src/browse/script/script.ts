@@ -14,7 +14,9 @@ import { BrowseError, ConnectionLost, OutcomeUnknown, Usage } from "../daemon-er
 import { MUTATING } from "../daemon/names.ts";
 import { safeCode } from "../codes.ts";
 import { Result } from "../daemon/render.ts";
-import { add, count, flag } from "../metrics.ts";
+import { active, add, count, type DisplayImage, flag } from "../metrics.ts";
+import { addSecret } from "../../redact.ts";
+import { totpCode } from "../auth/vault.ts";
 import { record } from "../state/records.ts";
 import type { State } from "../state/state.ts";
 import { Dropped, dropRepl, Gate, SharedWait, MEMORY_LIMIT, releaseRepl, type Runner, type RunnerEvent, takeRepl, takeRunner, whenReady } from "./host.ts";
@@ -42,6 +44,45 @@ export const MAX_CALLS = 200_000;
 export const RESULT_LIMIT = 64 * 1024 * 1024;
 export const REQUEST_LIMIT = 16 * 1024 * 1024 + 64 * 1024;
 export const IN_FLIGHT_BYTES = 64 * 1024 * 1024;
+export const MAX_DISPLAY = 4;
+export const SHOTS_KEPT = 32;
+export const DISPLAY_PATH_LIMIT = 4096;
+const SHOT_EXTENSION = /\.(png|jpe?g|webp)$/iu;
+const shotsTaken = new WeakMap<State, Map<string, DisplayImage>>();
+
+function sizeOf(value: unknown): { width: number; height: number } | null {
+  if (value === null || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const width = Number(record["width"]);
+  const height = Number(record["height"]);
+  return Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0 ? { width, height } : null;
+}
+
+function numberOf(value: unknown): number | null {
+  const given = value !== null && typeof value === "object" && "value" in (value as Record<string, unknown>) ? (value as Record<string, unknown>)["value"] : value;
+  const number = Number(given);
+  return given !== null && given !== undefined && Number.isFinite(number) && number > 0 ? number : null;
+}
+
+export function rememberShot(state: State, file: string, data: unknown): DisplayImage | null {
+  if (!SHOT_EXTENSION.test(file) || file.length > DISPLAY_PATH_LIMIT || file.includes("\0")) return null;
+  const facts = data !== null && typeof data === "object" ? (data as Record<string, unknown>) : {};
+  const shot: DisplayImage = { path: file, scale: numberOf(facts["scale"]), dpr: numberOf(facts["dpr"]), viewport: sizeOf(facts["viewport"]), image: sizeOf(facts["image"]) };
+  let shots = shotsTaken.get(state);
+  if (shots === undefined) {
+    shots = new Map();
+    shotsTaken.set(state, shots);
+  }
+  shots.delete(file);
+  shots.set(file, shot);
+  while (shots.size > SHOTS_KEPT) shots.delete(shots.keys().next().value as string);
+  return shot;
+}
+
+export function shotTaken(state: State, file: string): DisplayImage | null {
+  return shotsTaken.get(state)?.get(file) ?? null;
+}
+
 export const LIGHT_CALLS: ReadonlySet<string> = new Set(["click", "dblclick", "fill", "type", "press", "keyboard", "select", "check", "uncheck", "hover", "focus", "scroll"]);
 const PY_WHITESPACE = new RegExp(`[${PY_SPACE_CLASS}]+`, "u");
 const PAGE_GLOBAL = /\b(document|window|localStorage|sessionStorage|getComputedStyle) is not defined/u;
@@ -231,7 +272,14 @@ async function answerCall(ctx: Ctx, argv: string[], index: number, light: boolea
   const fatal = outcomes.find((outcome) => FATAL.includes(String(outcome?.["code"])));
   if (fatal !== undefined) throw new OutcomeUnknown(callLabel(index, argv), String(fatal["error"] || "a command inside it was cut off"));
   if (done.failed && name !== "read") return { ok: false, error: done.text || `${name} failed`, code: "failed" };
+  if (name === "screenshot") noteShot(ctx, done.data);
   return { ok: true, text: done.text, data: jsonCopy(done.data) };
+}
+
+function noteShot(ctx: Ctx, data: unknown): void {
+  const given = data !== null && typeof data === "object" ? (data as Record<string, unknown>)["path"] : null;
+  if (typeof given !== "string" || given === "") return;
+  rememberShot(ctx.state, ctx.path(given), data);
 }
 
 type Tracked = { argv: unknown; call: number | null; line: unknown; type: string };
@@ -276,6 +324,7 @@ class ScriptRun {
   readonly inflight = new Map<number, Tracked>();
   readonly running = new Set<Promise<void>>();
   readonly logs: string[] = [];
+  readonly displayed: DisplayImage[] = [];
   logSize = 0;
   logsDropped = 0;
   stateText: string | null = null;
@@ -450,6 +499,43 @@ async function servePage(run: ScriptRun, request: Request): Promise<Answer> {
   }
 }
 
+export function displayAnswer(state: State, displayed: DisplayImage[], given: unknown, resolve: (file: string) => string): Answer {
+  if (typeof given !== "string" || given === "" || given.length > DISPLAY_PATH_LIMIT || given.includes("\0")) {
+    return { ok: false, error: "display() takes the result of await page.screenshot(...), a { path } object or the path it saved", code: "usage" };
+  }
+  const shot = shotTaken(state, resolve(given)) ?? shotTaken(state, given);
+  if (shot === null) {
+    flag("script_display_refused", true);
+    return { ok: false, error: "display() shows screenshots this session took: pass the result of await page.screenshot(...)", code: "usage" };
+  }
+  if (displayed.length >= MAX_DISPLAY) {
+    flag("script_display_capped", true);
+    return { ok: true, text: "", data: { shown: false, reason: `at most ${MAX_DISPLAY} images are shown per call` } };
+  }
+  displayed.push(shot);
+  return { ok: true, text: "", data: { shown: true, index: displayed.length, path: shot.path } };
+}
+
+function serveDisplay(run: ScriptRun, request: Request): Answer {
+  return displayAnswer(run.ctx.state, run.displayed, request["path"], (file) => run.ctx.path(file));
+}
+
+async function serveTotp(run: ScriptRun, request: Request): Promise<Answer> {
+  const name = request["name"];
+  if (typeof name !== "string" || !/^[\w.@+-]{1,128}$/u.test(name)) return { ok: false, error: "page.totp() takes the name of a saved auth profile", code: "usage" };
+  const root = run.ctx.state.dataRoot;
+  if (!root) return { ok: false, error: "page.totp() needs the session's data folder, which this session has none of", code: "usage" };
+  try {
+    const { code, remaining } = await totpCode(root, name);
+    addSecret(code);
+    flag("script_totp", true);
+    return { ok: true, text: "", data: { code, remaining } };
+  } catch (error) {
+    if (error instanceof BrowseError) return { ok: false, error: error.text, code: error.code ?? "no_totp" };
+    throw error;
+  }
+}
+
 async function serve(run: ScriptRun, request: Request): Promise<void> {
   let answer: Answer;
   try {
@@ -461,6 +547,8 @@ async function serve(run: ScriptRun, request: Request): Promise<void> {
       answer = { ok: true, text: "", data: {} };
     } else if (request.op === "call") answer = await serveCall(run, request);
     else if (["evaluate", "$eval", "$$eval", "frames"].includes(request.op)) answer = await servePage(run, request);
+    else if (request.op === "display") answer = serveDisplay(run, request);
+    else if (request.op === "totp") answer = await serveTotp(run, request);
     else answer = { ok: false, error: `unknown script call ${JSON.stringify(request.op.slice(0, 40))}`, code: "usage" };
   } catch (error) {
     if (error instanceof Dropped) return;
@@ -753,6 +841,12 @@ export async function run(ctx: Ctx, source: string, seconds: number, mode: Scrip
     const isMissingApi = message["name"] === "TypeError" && /^page\.[A-Za-z_$][\w$]* isn't part of ardia's script API:/u.test(rawMsg);
     const finalCode = rawCode === "usage" && !isMissingApi ? "script_failed" : rawCode;
     throw failure(`${errorText(message, source, script?.calls ?? [])}${hint}${ran ? `\n${ran}` : ""}`, [...logs, ...notes], { ...failureData(message, script?.calls ?? []), line, steps }, finalCode);
+  }
+  if (script !== null && script.displayed.length > 0) {
+    const metrics = active();
+    if (metrics !== undefined) metrics.display = [...script.displayed];
+    count("script_display_images", script.displayed.length);
+    notes.push(`[display: ${script.displayed.length} screenshot${script.displayed.length !== 1 ? "s" : ""} attached inline over MCP]`);
   }
   const value = renderValue(message);
   const parts = [...logs, ...(value !== null ? [value] : []), ...notes];

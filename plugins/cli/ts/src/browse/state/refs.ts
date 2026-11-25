@@ -181,7 +181,7 @@ export abstract class Refs {
   }
 
   framePrefix(page: Page, frame: string): string {
-    if (!page.frameSessions.has(frame)) return "";
+    if (!frame || frame === page.mainFrame) return "";
     const key = JSON.stringify([this.instance, page.targetId, frame]);
     let ordinal = this.frameOrdinals.get(key);
     if (ordinal === undefined) {

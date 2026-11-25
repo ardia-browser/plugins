@@ -229,7 +229,7 @@ export function autoSessionsOn(found: Found): boolean {
   return given === undefined || given === "" || argTruthy(given);
 }
 
-type Auto = { session: string; notice: string | null };
+export type Auto = { session: string; notice: string | null };
 
 async function evictSession(root: string, victim: Reservation, timeout: Value, call: Call): Promise<boolean> {
   const socket = await openIfLive(root, victim.id).catch(() => null);
@@ -256,8 +256,12 @@ function registryIn<T>(root: string, change: Parameters<typeof withRegistry<T>>[
   }
 }
 
-async function autoSession(root: string, namespace: string, keySource: string, timeout: Value, call: Call): Promise<Auto | null> {
-  const id = deriveAutoSession(process.cwd());
+export async function claimAutoSession(root: string, namespace: string, keySource: string, timeout: Value, call: Call, id: string): Promise<Auto> {
+  return (await autoSession(root, namespace, keySource, timeout, call, id)) as Auto;
+}
+
+async function autoSession(root: string, namespace: string, keySource: string, timeout: Value, call: Call, given: string | null = null): Promise<Auto | null> {
+  const id = given ?? deriveAutoSession(process.cwd());
   if (id === null) return null;
   const daemonKey = sessionKey(namespace, keySource, id);
   const now = () => Math.trunc(Date.now() / 1000);
