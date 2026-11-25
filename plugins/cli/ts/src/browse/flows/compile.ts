@@ -181,10 +181,11 @@ export function compileEvents(given: readonly RecEvent[], startUrl: string): Com
     if (event.kind === "click") {
       const kind = (target?.type ?? "").toLowerCase();
       const toggle = kind === "checkbox" || kind === "radio" || TOGGLE_ROLES.has((target?.role ?? "").toLowerCase());
-      const type = toggle ? (event.checked === false ? "uncheck" : "check") : "click";
+      const known = toggle && typeof event.checked === "boolean";
+      const type = known ? (event.checked ? "check" : "uncheck") : "click";
       const previous = steps.at(-1);
-      if (toggle && previous && ["check", "uncheck"].includes(previous.action.type) && sameTarget(lastTarget, target)) steps.pop();
-      const action = elementAction(type, target as Descriptor, null, toggle ? event.checked !== false : null);
+      if (known && previous && ["check", "uncheck"].includes(previous.action.type) && sameTarget(lastTarget, target)) steps.pop();
+      const action = elementAction(type, target as Descriptor, null, known ? (event.checked as boolean) : null);
       if (action === null) skipped.push({ at: event.at, why: "a click on something with nothing stable to find it by" });
       else push(action);
       if (kind === "submit" && submitsWrite(event)) writes = true;

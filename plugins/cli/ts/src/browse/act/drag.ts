@@ -9,20 +9,29 @@ import type { Element, Page } from "../state/page.ts";
 import { asRecord, type Counts, expectInput, inputCounts } from "./common.ts";
 import { type Box, CLEANUP_TIMEOUT, elementBox, targetPoint } from "./pointer.ts";
 
+
+
+export const INTERCEPT_TIMEOUT = 1.5;
+export const DRAG_FAR_SHARE = 0.75;
+
 export const SYNTHETIC_DROP = `(source, target, side) => {
   const data = new DataTransfer();
   const box = target.getBoundingClientRect();
   const from = source.getBoundingClientRect();
-  const share = side === "before" ? 0.25 : 0.75;
-  const vertical = Math.abs(box.top + box.height / 2 - (from.top + from.height / 2)) >= Math.abs(box.left + box.width / 2 - (from.left + from.width / 2));
-  const x = vertical ? box.left + box.width / 2 : box.left + box.width * share;
-  const y = vertical ? box.top + box.height * share : box.top + box.height / 2;
   const sx = from.left + from.width / 2;
   const sy = from.top + from.height / 2;
+  const cx = box.left + box.width / 2;
+  const cy = box.top + box.height / 2;
+  const vertical = Math.abs(cy - sy) >= Math.abs(cx - sx);
+  const forward = vertical ? cy > sy : cx > sx;
+  const after = side === null || side === undefined ? forward : side === "after";
+  const share = after ? ${DRAG_FAR_SHARE} : 1 - ${DRAG_FAR_SHARE};
+  const x = vertical ? cx : box.left + box.width * share;
+  const y = vertical ? box.top + box.height * share : cy;
   const point = document.elementFromPoint(x, y);
   const hit = point && target.contains(point) ? point : target;
-  const fire = (el, type, cx, cy) => {
-    const event = new DragEvent(type, { bubbles: true, cancelable: true, composed: true, dataTransfer: data, clientX: cx, clientY: cy });
+  const fire = (el, type, px, py) => {
+    const event = new DragEvent(type, { bubbles: true, cancelable: true, composed: true, dataTransfer: data, clientX: px, clientY: py });
     el.dispatchEvent(event);
     return event;
   };
@@ -31,13 +40,15 @@ export const SYNTHETIC_DROP = `(source, target, side) => {
   fire(source, "drag", sx, sy);
   fire(hit, "dragenter", x, y);
   const over = fire(hit, "dragover", x, y);
+  if (!over.defaultPrevented) {
+    fire(hit, "dragleave", x, y);
+    fire(source, "dragend", x, y);
+    return { started: true, accepted: false, dropped: false };
+  }
   const drop = fire(hit, "drop", x, y);
   fire(source, "dragend", x, y);
-  return { started: true, accepted: over.defaultPrevented, dropped: drop.defaultPrevented };
+  return { started: true, accepted: true, dropped: drop.defaultPrevented };
 }`;
-
-export const INTERCEPT_TIMEOUT = 1.5;
-export const DRAG_FAR_SHARE = 0.75;
 export const DRAG_GATED = "the source is an HTML5 draggable, and without drag interception a synthetic drag would start a real macOS drag session";
 export const CLEANUPS = new Set<Promise<void>>();
 export const CLEANUPS_WAIT = 2 * CLEANUP_TIMEOUT + INTERCEPT_TIMEOUT;
@@ -319,9 +330,5 @@ export async function drag(page: Page, source: Element, target: Element, humaniz
   const started = interception.data !== null;
   const outcome: Record<string, unknown> = { html5: true, started, dropped: started ? await interception.dropped() : false };
   if (!interception.cleaned) outcome["interceptionLeftOn"] = true;
-  if (started && outcome["dropped"] === false && source.frame === target.frame && interception.cleaned) {
-    const fallback = await syntheticDrop(page, source, target, side);
-    return { ...outcome, ...fallback, started: started || Boolean(fallback["started"]) };
-  }
   return outcome;
 }

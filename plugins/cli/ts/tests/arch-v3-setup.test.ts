@@ -6,7 +6,7 @@ import { Found } from "../src/browse/args.ts";
 import { BrowseError } from "../src/browse/errors.ts";
 import { autoSessionId, deriveAutoSession, type ProcessRow } from "../src/browse/session.ts";
 import { CLAIM_EVERY_MS, mcpArgv, mcpManageArgv, SessionDaemon } from "../src/mcp/index.ts";
-import { type Client, configPaths, editToml, manage, manageMain, type ManageArgs, parseManage, serverEntry, tomlEntry } from "../src/mcp/install.ts";
+import { type Client, configPaths, editJson, editToml, manage, manageMain, type ManageArgs, parseManage, serverEntry, tomlEntry } from "../src/mcp/install.ts";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "arch-v3-setup-"));
 let counter = 0;
@@ -129,6 +129,86 @@ describe("ardia mcp install / uninstall / status", () => {
     expect(fs.readdirSync(path.dirname(paths.claude)).filter((name) => name.endsWith(".tmp"))).toEqual([]);
   });
 
+  test("a multi-line args array is replaced whole, with nothing left behind", () => {
+    const before = `[mcp_servers.ardia]\ncommand = "old"\nargs = [\n  "x",\n  "y", # trailing\n]\nstartup_timeout_sec = 5\n`;
+    const edited = editToml(before, "install", serverEntry());
+    expect(edited.text).toBe(`[mcp_servers.ardia]\ncommand = "ardia"\nargs = ["mcp"]\nstartup_timeout_sec = 5\n`);
+    expect(Bun.TOML.parse(edited.text as string)).toEqual({ mcp_servers: { ardia: { command: "ardia", args: ["mcp"], startup_timeout_sec: 5 } } });
+  });
+
+  test("quoted table keys are the same table, not a second declaration", () => {
+    const before = `["mcp_servers"."ardia"]\ncommand = "old"\nargs = []\n\n['mcp_servers'.other]\ncommand = "o"\n`;
+    expect(tomlEntry(before)).toEqual({ command: "old", args: [] });
+    const edited = editToml(before, "install", serverEntry());
+    expect(edited.change).toBe("updated");
+    expect(edited.text).toBe(`["mcp_servers"."ardia"]\ncommand = "ardia"\nargs = ["mcp"]\n\n['mcp_servers'.other]\ncommand = "o"\n`);
+    const removed = editToml(edited.text, "uninstall", serverEntry());
+    expect(removed.text).toBe(`['mcp_servers'.other]\ncommand = "o"\n`);
+  });
+
+  test("an inline or dotted mcp_servers definition is refused, not corrupted", () => {
+    for (const before of [
+      `mcp_servers = { other = { command = "o" } }\n`,
+      `mcp_servers.other.command = "o"\n`,
+      `[mcp_servers]\nardia = { command = "x" }\n`,
+      `[mcp_servers]\nardia.command = "x"\n`,
+      `[[mcp_servers.list]]\nname = "x"\n`,
+    ]) {
+      expect(() => editToml(before, "install", serverEntry())).toThrow("left alone");
+      expect(() => editToml(before, "uninstall", serverEntry())).toThrow("left alone");
+    }
+  });
+
+  test("a table-like line inside a multi-line string is text, not a header", () => {
+    const before = `notes = """\n[mcp_servers.ardia]\ncommand = "fake"\n"""\nmodel = "x"\n`;
+    expect(tomlEntry(before)).toBeNull();
+    expect(editToml(before, "uninstall", serverEntry())).toEqual({ text: null, change: "absent", entry: null });
+    const added = editToml(before, "install", serverEntry()).text as string;
+    expect(added.startsWith(before.trimEnd())).toBe(true);
+    expect((Bun.TOML.parse(added) as { notes: string }).notes).toContain(`[mcp_servers.ardia]\ncommand = "fake"\n`);
+    expect(tomlEntry(added)).toEqual({ command: "ardia", args: ["mcp"] });
+    const literal = `notes = \'\'\'\n[mcp_servers.ardia]\n\'\'\'\n[mcp_servers.ardia]\ncommand = "a"\nargs = ["mcp"]\n`;
+    expect(editToml(literal, "uninstall", serverEntry()).text).toBe(`notes = \'\'\'\n[mcp_servers.ardia]\n\'\'\'\n`);
+  });
+
+  test("a config that isn't valid TOML is left alone", () => {
+    expect(() => editToml(`model = [\n`, "install", serverEntry())).toThrow("left alone");
+    expect(() => editToml(`model = "x\n`, "install", serverEntry())).toThrow("left alone");
+  });
+
+  test("an http entry becomes a clean stdio entry, keeping only its env", () => {
+    const text = JSON.stringify({ mcpServers: { ardia: { type: "http", url: "https://x.test/mcp", headers: { A: "1" }, env: { K: "v" } } } });
+    const claude = JSON.parse(editJson("c.json", text, "install", serverEntry(), "claude").text as string).mcpServers.ardia;
+    expect(claude).toEqual({ type: "stdio", env: { K: "v" }, command: "ardia", args: ["mcp"] });
+    const cursorText = JSON.stringify({ mcpServers: { ardia: { url: "https://x.test/mcp" } } });
+    expect(JSON.parse(editJson("m.json", cursorText, "install", serverEntry(), "cursor").text as string).mcpServers.ardia).toEqual({ command: "ardia", args: ["mcp"] });
+  });
+
+  test("the file mode is kept even under a restrictive umask", () => {
+    const paths = sandbox();
+    fs.writeFileSync(paths.claude, "{}");
+    fs.chmodSync(paths.claude, 0o644);
+    const old = process.umask(0o077);
+    try {
+      manage(args("install", { clients: ["claude"] }), paths);
+    } finally {
+      process.umask(old);
+    }
+    expect(fs.statSync(paths.claude).mode & 0o777).toBe(0o644);
+  });
+
+  test("--json reports a failure when no client config is found", () => {
+    let printed = "";
+    expect(manageMain({ ...args("install", { json: true }), clients: null }, (text) => (printed += text), sandbox())).toBe(1);
+    expect(JSON.parse(printed)).toEqual({ success: false, error: "No Claude Code, Codex or Cursor config found; pick one with --client claude|codex|cursor" });
+  });
+
+  test("--command doesn't swallow the next option", () => {
+    expect(parseManage(["install", "--command", "--dry-run"])).toEqual({ error: "--command needs the path of the ardia command" });
+    expect(parseManage(["install", "--command", "./--custom"])).toMatchObject({ command: "./--custom" });
+    expect(parseManage(["install", "--command=--odd"])).toMatchObject({ command: "--odd" });
+  });
+
   test("CRLF TOML keeps its line endings", () => {
     const edited = editToml('model = "x"\r\n', "install", serverEntry());
     expect(edited.text).toBe('model = "x"\r\n\r\n[mcp_servers.ardia]\r\ncommand = "ardia"\r\nargs = ["mcp"]\r\n');
@@ -221,6 +301,16 @@ describe("parallel agents get their own sessions", () => {
       });
       const answer = await refused.run({ argv: ["here"], stdin: null, json: false, full: false, maxOutput: null });
       expect(answer).toMatchObject({ exit: 1, code: "session_limit" });
+
+      const quiet = new Found();
+      quiet.values.set("port", "9333");
+      const claimed: string[] = [];
+      const cancelled = new SessionDaemon(quiet, undefined, () => "auto-cancel", async (_root, _namespace, _key, id) => (claimed.push(id), { notice: null }));
+      const controller = new AbortController();
+      controller.abort();
+      expect(await cancelled.run({ argv: ["here"], stdin: null, json: false, full: false, maxOutput: null }, controller.signal)).toMatchObject({ code: "interrupted" });
+      expect(claimed).toEqual([]);
+      expect(CLAIM_EVERY_MS).toBeLessThanOrEqual(5_000);
     } finally {
       if (saved[0] !== undefined) process.env["AGENT_BROWSER_SESSION"] = saved[0];
       if (saved[1] !== undefined) process.env["ARDIA_BROWSE_AUTO_SESSION"] = saved[1];

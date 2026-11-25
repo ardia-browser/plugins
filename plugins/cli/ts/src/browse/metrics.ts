@@ -60,7 +60,7 @@ export const FLAGS = new Set([
   "did_you_mean", "perf_crux", "logpoint_source_mapped",
   "batch_ref_healed", "batch_ref_ambiguous", "batch_ref_missing", "here", "here_read", "form", "query", "query_fields", "read_urls", "find_is", "field_label_fallback", "script_steps_shown", "snapshot_lean_trimmed", "help_in_daemon", "read_urls_deadline", "batch_ref_not_followed",
   "drag_interception_unavailable", "drag_synthetic", "edit_cell", "fill_otp", "hover_revealed", "mcp_session_registered",
-  "script_display_capped", "script_display_refused", "script_totp", "snapshot_child_frames",
+  "script_display_capped", "script_display_refused", "fill_otp_profile", "snapshot_child_frames",
 ]);
 export const SAFETY_FLAGS = new Set([
   "boundary_marker_removed", "notes_promoted", "notes_quarantined_shown", "otp_not_asked", "otp_split_boxes", "otp_typed", "scheduler_parallel", "scheduler_read_lane", "session_auto", "session_reset", "snapshot_masked_fields",
@@ -78,7 +78,17 @@ export function clock(): number {
   return performance.now() / 1000;
 }
 
-export type DisplayImage = { path: string; scale: number | null; dpr: number | null; viewport: { width: number; height: number } | null; image: { width: number; height: number } | null };
+export type DisplayImage = {
+  path: string;
+  scale: number | null;
+  dpr: number | null;
+  viewport: { width: number; height: number } | null;
+  image: { width: number; height: number } | null;
+  region: { x: number; y: number; width: number; height: number } | null;
+  dev?: string;
+  ino?: string;
+  size?: number;
+};
 
 export class Metrics {
   readonly started = clock();

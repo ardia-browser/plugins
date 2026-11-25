@@ -167,9 +167,10 @@ async function cmdHover(ctx: Ctx, argv: string[]): Promise<Result> {
   const [options, args] = parse(argv, { "--no-humanize": "bool", ...WITHIN_FLAG });
   need(args, 1, "hover <selector>");
   const [page, element] = await resolve(ctx, args[0] as string, false, withinOf(options));
+  const baseline = page.loader(element.frame);
   const marked = await markOverlays(page, element.frame);
   const [, report] = await observe(ctx, page, () => hover(page, element, humanizing(ctx, options)));
-  const revealed = marked ? await revealedAfter(ctx, page, element.frame) : [];
+  const revealed = marked ? await revealedAfter(ctx, page, element.frame, undefined, baseline) : [];
   return attach(hoverResult(args[0] as string, revealed), report);
 }
 

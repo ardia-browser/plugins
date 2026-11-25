@@ -12,18 +12,18 @@ export const OVERLAY_SELECTOR =
 const OVERLAY_ITEMS =
   'a[href],button,input:not([type=hidden]),select,textarea,[role=menuitem],[role=menuitemcheckbox],[role=menuitemradio],[role=option],[role=tab],[role=link],[role=button],[role=checkbox],[role=switch],[tabindex]:not([tabindex="-1"])';
 
-const OVERLAYS_JS = `const overlays = () => {
-    const shown = (el) => {
-      if (!el.getClientRects || el.getClientRects().length === 0) return false;
-      const style = getComputedStyle(el);
-      if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return false;
-      if (el.hasAttribute("popover")) {
-        try { return el.matches(":popover-open"); } catch (e) { return true; }
-      }
-      return true;
-    };
-    return Array.from(document.querySelectorAll(${JSON.stringify(OVERLAY_SELECTOR)})).filter(shown);
-  };`;
+const OVERLAYS_JS = `const shown = (el) => {
+    if (!el || !el.isConnected || !el.getClientRects || el.getClientRects().length === 0) return false;
+    for (let node = el; node && node.nodeType === 1; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      if (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse" || style.opacity === "0") return false;
+    }
+    if (el.hasAttribute("popover")) {
+      try { return el.matches(":popover-open"); } catch (e) { return true; }
+    }
+    return true;
+  };
+  const overlays = () => Array.from(document.querySelectorAll(${JSON.stringify(OVERLAY_SELECTOR)})).filter(shown);`;
 
 export const HOVER_MARK = `() => {
   ${OVERLAYS_JS}
@@ -40,7 +40,7 @@ export const HOVER_REVEALED = `() => {
   const roots = fresh.filter((el) => !fresh.some((other) => other !== el && other.contains(el)));
   const out = [];
   for (const root of roots) {
-    const items = Array.from(root.querySelectorAll(${JSON.stringify(OVERLAY_ITEMS)})).filter((el) => el.getClientRects().length > 0);
+    const items = Array.from(root.querySelectorAll(${JSON.stringify(OVERLAY_ITEMS)})).filter(shown);
     if (items.length === 0) out.push(root);
     else out.push(...items);
     if (out.length >= ${MAX_REVEALED}) break;
@@ -49,11 +49,18 @@ export const HOVER_REVEALED = `() => {
 }`;
 
 export const DESCRIBE_REVEALED = `(el) => {
+  if (!el.isConnected || el.getClientRects().length === 0) return null;
   const implicit = { A: "link", BUTTON: "button", SELECT: "combobox", TEXTAREA: "textbox", LI: "listitem", OPTION: "option" };
   let role = (el.getAttribute("role") || "").trim().split(/\\s+/)[0] || "";
   if (!role && el.tagName === "INPUT") role = ["checkbox", "radio"].includes(el.type) ? el.type : el.type === "submit" || el.type === "button" ? "button" : "textbox";
   if (!role) role = implicit[el.tagName] || (el.classList.contains("tooltip") ? "tooltip" : el.classList.contains("popover") ? "dialog" : el.classList.contains("dropdown-menu") ? "menu" : "generic");
-  const label = el.getAttribute("aria-label") || el.innerText || el.getAttribute("title") || el.value || "";
+  const control = ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName) || el.isContentEditable;
+  const labelledBy = (el.getAttribute("aria-labelledby") || "").split(/\\s+/).filter(Boolean).map((id) => {
+    const found = document.getElementById(id);
+    return found ? found.textContent || "" : "";
+  }).join(" ");
+  const labels = el.labels ? Array.from(el.labels).map((label) => label.textContent || "").join(" ") : "";
+  const label = el.getAttribute("aria-label") || labelledBy || labels || (control ? "" : el.innerText) || el.getAttribute("title") || (control ? el.getAttribute("placeholder") || "" : "");
   return { role, name: String(label).replace(/\\s+/g, " ").trim().slice(0, 80) };
 }`;
 
@@ -69,7 +76,7 @@ export async function markOverlays(page: Page, frame: string): Promise<boolean> 
   }
 }
 
-export async function revealedAfter(ctx: Ctx, page: Page, frame: string, polls: readonly number[] = REVEAL_POLLS_MS): Promise<Revealed[]> {
+export async function revealedAfter(ctx: Ctx, page: Page, frame: string, polls: readonly number[] = REVEAL_POLLS_MS, baseline: string | null = page.loader(frame)): Promise<Revealed[]> {
   for (const wait of polls) {
     await sleep(wait / 1000);
     let elements: Element[];
@@ -81,19 +88,23 @@ export async function revealedAfter(ctx: Ctx, page: Page, frame: string, polls: 
       return [];
     }
     if (elements.length === 0) continue;
+    if (page.loader(frame) !== baseline) return [];
     const revealed: Revealed[] = [];
     for (const element of elements) {
-      let facts: Record<string, unknown> = {};
+      let facts: Record<string, unknown>;
       try {
         const described = await page.call(DESCRIBE_REVEALED, [element], { frame: element.frame, read: true });
-        if (described !== null && typeof described === "object") facts = described as Record<string, unknown>;
+        if (described === null || typeof described !== "object") continue;
+        facts = described as Record<string, unknown>;
       } catch (error) {
         if (error instanceof ConnectionLost || !(error instanceof BrowseError)) throw error;
+        continue;
       }
       const role = String(facts["role"] ?? "generic");
       const name = String(facts["name"] ?? "");
       revealed.push({ ref: ctx.state.addRef(page, element, role, name), role, name });
     }
+    if (revealed.length === 0) continue;
     flag("hover_revealed", true);
     count("hover_revealed_items", revealed.length);
     return revealed;

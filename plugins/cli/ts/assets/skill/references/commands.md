@@ -24,7 +24,7 @@ entry. Generated from that help and the command table by `bun src/skill-gen.ts -
 - **errors**: `ardia browse errors [--clear] [--uncaught]`
 - **eval** (also evaluate, js): `ardia browse eval <js> | -b <base64> | --stdin [--timeout 2m] [--out <file>] [--isolated]`
 - **fill**: `ardia browse fill <sel> <text> [--humanize] [--no-changes]`
-- **fill-otp**: `ardia browse fill-otp <code> [--within <container>] [--sensitive] [--no-changes]`
+- **fill-otp**: `ardia browse fill-otp <code> [--within <container>] [--no-changes]` · `ardia browse fill-otp --profile <name> [--no-changes]`
 - **find**: `ardia browse find <role|text|label|placeholder|alt|title|testid|first|last|nth> <value> [action] [text] [--name n] [--exact|--partial]`
 - **flow**: `ardia browse flow steps [--all]` · `ardia browse flow save <name> [--from n] [--to n] [--param k=v]... [--output s2r1] [--description text]` · `ardia browse flow run <name> [--param k=v]... [--fields a,b.c] [--where field=value]... [--limit n]` · `[--site s] [--timeout 60s]` · `ardia browse flow list [site] | show <name> [--site s] | rm <name> [--site s]`
 - **focus**: `ardia browse focus <sel>`

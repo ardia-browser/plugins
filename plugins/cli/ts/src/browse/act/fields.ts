@@ -297,15 +297,19 @@ async function commitCell(page: Page, editor: Element, humanize: boolean, key = 
   );
 }
 
-async function fillCell(page: Page, element: Element, cell: Element, text: string, humanize: boolean, commit = "Enter"): Promise<Record<string, unknown> | null> {
+async function fillCell(page: Page, element: Element, cell: Element, text: string, humanize: boolean, commit = "Enter", always = false): Promise<Record<string, unknown> | null> {
   const labelled = new Element(cell.frame, cell.objectId, cell.backendId, element.label);
   const [was, editor, opened] = await cellEditor(page, labelled, humanize);
   const names = ((await page.call("(el) => ardiaBrowse.labelText(el)", [editor], { frame: editor.frame, read: true })) as unknown[] | null) ?? [];
   const name = names.map((item) => String(item)).find((item) => joinedWords(item) !== "");
   await setEditor(page, editor, text, humanize);
   add("cell_edits");
-  if (!opened) return null;
-  await commitCell(page, editor, humanize, commit);
+  if (!opened && !always) return null;
+  if (opened) await commitCell(page, editor, humanize, commit);
+  else {
+    await page.focusElement(editor);
+    await pressKey(page, editor.frame, commit, humanize);
+  }
   const now = await page.call(ACTIONS_CELL_NOW, [], { frame: cell.frame, read: true });
   return { cell: name !== undefined ? joinedWords(name) : element.label, value: now, was };
 }
@@ -315,7 +319,7 @@ export async function editCell(page: Page, element: Element, text: string, human
   if (cell === null) {
     throw new BrowseError(`${element.label} isn't a grid cell (no gridcell, cell or td holds it); use \`fill\` for a plain field`, null, "not_a_cell");
   }
-  return fillCell(page, element, cell, text, humanize, commit);
+  return fillCell(page, element, cell, text, humanize, commit, true);
 }
 
 export async function refuseMovedFocus(page: Page, element: Element, typed: string): Promise<void> {

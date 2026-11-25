@@ -49,7 +49,7 @@ that drives the Ardia browser through the browse daemon, with two tools: browser
 `;
 
 export const MANAGE_ACTIONS: ReadonlySet<string> = new Set(["install", "uninstall", "status"]);
-export const CLAIM_EVERY_MS = 60_000;
+export const CLAIM_EVERY_MS = 5_000;
 
 export type McpArgs = { found: Found; socket: string | undefined; help: boolean };
 
@@ -140,7 +140,15 @@ export function displayRefs(value: unknown): DisplayRef[] {
       return Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0 ? { width, height } : null;
     };
     const positive = (given: unknown) => (typeof given === "number" && Number.isFinite(given) && given > 0 ? given : null);
-    out.push({ path: record["path"], scale: positive(record["scale"]), dpr: positive(record["dpr"]), viewport: size(record["viewport"]), image: size(record["image"]) });
+    const region = (given: unknown) => {
+      if (given === null || typeof given !== "object") return null;
+      const box = given as Record<string, unknown>;
+      const [x, y, width, height] = [box["x"], box["y"], box["width"], box["height"]].map(Number) as [number, number, number, number];
+      return [x, y, width, height].every(Number.isFinite) && width > 0 && height > 0 ? { x, y, width, height } : null;
+    };
+    const digits = (given: unknown) => (typeof given === "string" && /^\d{1,40}$/u.test(given) ? given : null);
+    const bytes = typeof record["size"] === "number" && Number.isSafeInteger(record["size"]) && record["size"] >= 0 ? record["size"] : null;
+    out.push({ path: record["path"], scale: positive(record["scale"]), dpr: positive(record["dpr"]), viewport: size(record["viewport"]), image: size(record["image"]), region: region(record["region"]), dev: digits(record["dev"]), ino: digits(record["ino"]), size: bytes });
   }
   return out;
 }
@@ -310,7 +318,9 @@ export class SessionDaemon implements Daemon {
 
   async run(request: DaemonRequest, signal?: AbortSignal, quickMs?: number): Promise<DaemonAnswer> {
     try {
+      if (signal?.aborted) return failed("cancelled", "interrupted", 130);
       const notice = await this.register();
+      if (signal?.aborted) return failed("cancelled", "interrupted", 130);
       if (notice) {
         const answer = await this.run(request, signal, quickMs);
         return { ...answer, err: `${notice}\n${answer.err}` };

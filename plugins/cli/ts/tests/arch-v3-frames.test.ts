@@ -144,9 +144,11 @@ describe("--within reaches into frames inside the container", () => {
     expect(frameWithin(page, "D", "A")).toBe(false);
   });
 
-  test("a same-process frame's element counts when its backend is in the container's subtree", () => {
-    expect(inScope(scope([9, 10, 55]), new Element("A", "O", 55, "@f1e2"))).toBe(true);
-    expect(inScope(scope([9, 10]), new Element("A", "O", 56, "@f1e3"))).toBe(false);
+  test("a child frame's backend id is never compared with the container's, so a collision can't sneak in", async () => {
+    expect(inScope(scope([9, 55]), new Element("A", "O", 55, "@f1e2"))).toBe(false);
+    expect(await refInScope(scope([9, 11, 55]), new Element("A", "O", 55, "@f1e2"))).toBe(false);
+    expect(await refInScope(scope([9, 10]), new Element("A", "O", 56, "@f1e3"))).toBe(true);
+    expect(inScope(scope([9, 55]), new Element("MAIN", "O", 55, "@e2"))).toBe(true);
   });
 
   test("a cross-process frame's element counts when the iframe owning its frame is inside the container", async () => {

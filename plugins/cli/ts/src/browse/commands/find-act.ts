@@ -286,13 +286,12 @@ export function frameWithin(page: Pick<Page, "frames">, frame: string, ancestor:
 
 export function inScope(scope: Scope | null, element: Element): boolean {
   if (scope === null) return true;
-  if (element.frame === scope.container.frame) return scope.backends.has(element.backendId);
-  return scope.backends.has(element.backendId) && frameWithin(scope.page, element.frame, scope.container.frame);
+  return element.frame === scope.container.frame && scope.backends.has(element.backendId);
 }
 
 export async function refInScope(scope: Scope, element: Element): Promise<boolean> {
-  if (inScope(scope, element)) return true;
-  if (element.frame === scope.container.frame) return false;
+  if (element.frame === scope.container.frame) return inScope(scope, element);
+  if (!frameWithin(scope.page, element.frame, scope.container.frame)) return false;
   const page = scope.page;
   let child = element.frame;
   for (let step = 0; step < MAX_SCOPE_FRAME_DEPTH; step += 1) {

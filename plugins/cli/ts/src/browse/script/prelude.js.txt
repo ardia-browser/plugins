@@ -294,7 +294,7 @@
     const epoch = receiptEpoch;
     return pending.then(acted(options, epoch));
   };
-  const totpCodes = new Set();
+  const totpHandles = new WeakMap();
   const keyboard = (value, options) => runAct(["keyboard", "type", String(value)], options);
   keyboard.type = keyboard;
   keyboard.press = (key, options) => runAct(["press", String(key)], options);
@@ -341,19 +341,16 @@
     drag: (source, target, options) => runAct(["drag", selectorOf(source, "page.drag()"), selectorOf(target, "page.drag()"), ...flags(options, { before: "--before", after: "--after", synthetic: "--synthetic" })], options),
     editCell: (selector, value, options) => runAct(["edit-cell", selectorOf(selector, "page.editCell()"), String(value), ...flags(options, { commit: "--commit", within: "--within" })], options),
     fillOtp: (code, options) => {
-      const given = String(code === undefined || code === null ? "" : code);
-      const sensitive = (plainObject(options) && options.sensitive === true) || totpCodes.has(given);
-      return runAct(["fill-otp", given, ...flags({ ...(plainObject(options) ? options : {}), sensitive }, { within: "--within", sensitive: "--sensitive" })], options);
+      options = plainObject(options) ? options : {};
+      const profile = totpHandles.has(code) ? totpHandles.get(code) : plainObject(code) && typeof code.profile === "string" ? code.profile : null;
+      if (profile !== null) return runAct(["fill-otp", "--profile", profile, ...flags(options, { within: "--within" })], options);
+      return runAct(["fill-otp", String(code === undefined || code === null ? "" : code), ...flags(options, { within: "--within" })], options);
     },
-    totp: async (account) => {
-      if (typeof account !== "string" || !account) throw new TypeError("page.totp() takes the name of a saved auth profile");
-      const answer = await request("totp", { name: account });
-      const code = String((answer.data || {}).code || "");
-      if (code) {
-        totpCodes.add(code);
-        if (totpCodes.size > 16) totpCodes.delete(totpCodes.values().next().value);
-      }
-      return code;
+    totp: (profile) => {
+      if (typeof profile !== "string" || !profile) throw new TypeError("page.totp() takes the name of a saved auth profile");
+      const handle = Object.freeze({ toString: () => "[one-time code for " + profile + "]", toJSON: () => "[one-time code for " + profile + "]" });
+      totpHandles.set(handle, profile);
+      return handle;
     },
     scroll: (direction, pixels, options) => runAct(["scroll", ...words(direction), ...words(pixels)], options),
     waitForTimeout: (ms) => request("sleep", { ms: Number(ms) || 0 }).then(() => undefined),

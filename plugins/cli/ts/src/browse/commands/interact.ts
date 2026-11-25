@@ -10,7 +10,8 @@ import { scopeOf, WITHIN_FLAG } from "./find-act.ts";
 import { register } from "./index.ts";
 import { need, parse } from "./parse.ts";
 import { filledResult, resolve } from "./act.ts";
-import { otpFields, splitDigits } from "../auth/vault.ts";
+import { fillProfileOtp, otpFields, splitDigits } from "../auth/vault.ts";
+import { markSecret } from "../state/secrets.ts";
 
 export const OTP_BOXES = `(scope, length) => {
   const root = scope || document;
@@ -52,13 +53,41 @@ export function otpCode(given: string): string {
   return code;
 }
 
-async function cmdFillOtp(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, args] = parse(argv, { "--sensitive": "bool", "--no-humanize": "bool", ...WITHIN_FLAG }, {}, () => true);
-  need(args, 1, "fill-otp <code> [--within <container>] [--sensitive]");
-  const code = otpCode(args.join(""));
-  const sensitive = Boolean(options["sensitive"]);
-  if (sensitive) addSecret(code);
+export const OTP_PROFILE = /^[\w.@+-]{1,128}$/u;
+
+export function markOtpBoxes(state: object, page: Page, boxes: readonly Element[]): void {
+  for (const box of boxes) markSecret(state, page, box.frame, page.loader(box.frame), box.backendId);
+}
+
+export type OtpRequest = { profile: string | null; code: string | null; within: string | null; instant: boolean };
+
+export function otpRequest(argv: readonly string[]): OtpRequest {
+  const [options, args] = parse(argv, { "--sensitive": "bool", "--profile": "value", "--no-humanize": "bool", ...WITHIN_FLAG });
+  const profile = options["profile"] === undefined ? null : String(options["profile"]);
   const within = options["within"] === undefined ? null : String(options["within"]);
+  const instant = Boolean(options["no_humanize"]);
+  if (profile !== null) {
+    if (args.length > 0) throw new Usage("fill-otp takes a code or --profile <name>, not both");
+    if (!OTP_PROFILE.test(profile)) throw new Usage("--profile takes the name of a saved auth profile");
+    if (within !== null) throw new Usage("fill-otp --profile finds the code field on the profile's own site, so it doesn't take --within");
+    return { profile, code: null, within: null, instant };
+  }
+  need(args, 1, "fill-otp <code> | --profile <name> [--within <container>]");
+  return { profile: null, code: otpCode(args.join("")), within, instant };
+}
+
+async function cmdFillOtp(ctx: Ctx, argv: string[]): Promise<Result> {
+  const { profile, code: given, within, instant } = otpRequest(argv);
+  const humanize = ctx.humanize && !instant;
+  if (profile !== null) {
+    const page = await ctx.state.page();
+    const [shape, report] = await observe(ctx, page, () => fillProfileOtp(ctx, page, profile, humanize));
+    flag("fill_otp", true);
+    flag("fill_otp_profile", true);
+    return attach(new Result({ filled: true, profile, shape, sensitive: true }, `✓ Filled ${profile}'s one-time code into ${shape === "split" ? "its boxes" : "its field"}`), report);
+  }
+  const code = given as string;
+  addSecret(code);
   let page: Page;
   let frame: string;
   let scope: Element | null = null;
@@ -83,9 +112,9 @@ async function cmdFillOtp(ctx: Ctx, argv: string[]): Promise<Result> {
       "not_found",
     );
   }
-  const humanize = ctx.humanize && !options["no_humanize"];
   const split = boxes.length > 1;
   const parts = splitDigits(code, boxes.length);
+  markOtpBoxes(ctx.state, page, boxes);
   const [, report] = await observe(ctx, page, async () => {
     if (!split) {
       await fill(page, boxes[0] as Element, code, humanize);
@@ -96,7 +125,7 @@ async function cmdFillOtp(ctx: Ctx, argv: string[]): Promise<Result> {
   flag("fill_otp", true);
   count("fill_otp_boxes", boxes.length);
   const shape = split ? `${boxes.length} boxes` : "one field";
-  return attach(new Result({ filled: true, boxes: boxes.length, length: code.length, sensitive }, `✓ Filled a ${code.length}-character one-time code into ${shape}`), report);
+  return attach(new Result({ filled: true, boxes: boxes.length, length: code.length, sensitive: true }, `✓ Filled a ${code.length}-character one-time code into ${shape}`), report);
 }
 
 async function cmdEditCell(ctx: Ctx, argv: string[]): Promise<Result> {

@@ -1,4 +1,4 @@
-import { constants, realpathSync } from "node:fs";
+import { constants, lstatSync, realpathSync } from "node:fs";
 import { open } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -188,8 +188,8 @@ export class McpServer {
     }
     const content: ToolContent[] = [];
     const header = signal.aborted ? null : await this.tabChange(nonce, signal);
-    const text = neutralizeDisplayTags(answerText(answer, nonce));
-    content.push({ type: "text", text: header === null ? text : `${header}\n${text}` });
+    const text = answerText(answer, nonce);
+    content.push({ type: "text", text: neutralizeDisplayTags(header === null ? text : `${header}\n${text}`) });
     if (screenshot && answer.exit === 0) {
       const image = await inlineImage(answer.out);
       if (image !== null) content.push(image);
@@ -321,22 +321,41 @@ export function insideRoots(file: string, roots: readonly string[]): boolean {
   return roots.some((root) => file.startsWith(`${root}${path.sep}`));
 }
 
+function privateFolder(folder: string): boolean {
+  try {
+    const info = lstatSync(folder);
+    return info.isDirectory() && info.uid === uid() && (info.mode & 0o022) === 0;
+  } catch {
+    return false;
+  }
+}
+
 export async function readDisplayImage(shot: DisplayRef, roots: readonly string[] = screenshotRoots()): Promise<{ data: string; mimeType: string; width: number | null; height: number | null } | null> {
   const given = shot.path;
   if (typeof given !== "string" || given === "" || given.length > 4096 || given.includes("\0") || !path.isAbsolute(given)) return null;
+  if (shot.dev === null || shot.ino === null || shot.size === null || shot.size > MAX_INLINE_IMAGE_BYTES) return null;
   const mimeType = DISPLAY_EXTENSION[path.extname(given).toLowerCase()];
   if (mimeType === undefined) return null;
   const folder = realOrNull(path.dirname(given));
-  if (folder === null) return null;
+  if (folder === null || !privateFolder(folder)) return null;
   const resolved = path.join(folder, path.basename(given));
   if (!insideRoots(resolved, roots)) return null;
   let handle;
   try {
     handle = await open(resolved, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
-    const info = await handle.stat();
-    if (!info.isFile() || info.nlink !== 1 || info.uid !== uid() || info.size > MAX_INLINE_IMAGE_BYTES) return null;
-    const bytes = await handle.readFile();
-    if (bytes.length > MAX_INLINE_IMAGE_BYTES || !validImageMagic(bytes, mimeType)) return null;
+    const info = await handle.stat({ bigint: true });
+    if (!info.isFile() || info.nlink !== 1n || Number(info.uid) !== uid()) return null;
+    if (String(info.dev) !== shot.dev || String(info.ino) !== shot.ino || info.size !== BigInt(shot.size)) return null;
+    const buffer = Buffer.alloc(MAX_INLINE_IMAGE_BYTES + 1);
+    let filled = 0;
+    for (;;) {
+      const { bytesRead } = await handle.read(buffer, filled, buffer.length - filled, filled);
+      if (bytesRead === 0) break;
+      filled += bytesRead;
+      if (filled > MAX_INLINE_IMAGE_BYTES) return null;
+    }
+    const bytes = buffer.subarray(0, filled);
+    if (bytes.length !== shot.size || !validImageMagic(bytes, mimeType)) return null;
     const size = imageSize(bytes);
     return { data: bytes.toString("base64"), mimeType, width: size?.width ?? null, height: size?.height ?? null };
   } catch {
@@ -351,15 +370,18 @@ function frameNumber(value: number | null): string {
 }
 
 export function displayMeta(shot: DisplayRef, index: number, total: number, width: number | null, height: number | null): string {
+  const region = shot.region ?? (shot.viewport === null ? null : { x: 0, y: 0, width: shot.viewport.width, height: shot.viewport.height });
   const meta = {
     scale: shot.scale,
     dpr: shot.dpr,
     viewport: shot.viewport,
+    region,
     imageWidth: width ?? shot.image?.width ?? null,
     imageHeight: height ?? shot.image?.height ?? null,
   };
   const viewport = shot.viewport === null ? "?" : `${frameNumber(shot.viewport.width)}×${frameNumber(shot.viewport.height)}`;
-  const line = `<${DISPLAY_TAG} index="${index}" of="${total}">image ${meta.imageWidth ?? "?"}×${meta.imageHeight ?? "?"}, scale ${frameNumber(shot.scale)}, dpr ${frameNumber(shot.dpr)}, viewport ${viewport} CSS px; viewport x = image x / scale (click --xy takes viewport CSS px)</${DISPLAY_TAG}>`;
+  const origin = region === null ? "?,?" : `${frameNumber(region.x)},${frameNumber(region.y)}`;
+  const line = `<${DISPLAY_TAG} index="${index}" of="${total}">image ${meta.imageWidth ?? "?"}×${meta.imageHeight ?? "?"}, scale ${frameNumber(shot.scale)}, dpr ${frameNumber(shot.dpr)}, viewport ${viewport} CSS px, region origin ${origin}; viewport x = ${region === null ? "?" : frameNumber(region.x)} + image x / scale, y = ${region === null ? "?" : frameNumber(region.y)} + image y / scale (click --xy takes viewport CSS px)</${DISPLAY_TAG}>`;
   return `${line}\n${JSON.stringify(meta)}`;
 }
 

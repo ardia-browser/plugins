@@ -15,8 +15,10 @@ import { MUTATING } from "../daemon/names.ts";
 import { safeCode } from "../codes.ts";
 import { Result } from "../daemon/render.ts";
 import { active, add, count, type DisplayImage, flag } from "../metrics.ts";
-import { addSecret } from "../../redact.ts";
-import { totpCode } from "../auth/vault.ts";
+import { closeSync, constants as fsConstants, fstatSync, openSync, readdirSync, readSync, statSync, unlinkSync, writeSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import nodePath from "node:path";
+import { defaultPath } from "../media/paths.ts";
 import { record } from "../state/records.ts";
 import type { State } from "../state/state.ts";
 import { Dropped, dropRepl, Gate, SharedWait, MEMORY_LIMIT, releaseRepl, type Runner, type RunnerEvent, takeRepl, takeRunner, whenReady } from "./host.ts";
@@ -58,6 +60,13 @@ function sizeOf(value: unknown): { width: number; height: number } | null {
   return Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0 ? { width, height } : null;
 }
 
+function regionOf(value: unknown): DisplayImage["region"] {
+  if (value === null || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const [x, y, width, height] = ["x", "y", "width", "height"].map((key) => Number(record[key]));
+  return [x, y, width, height].every((item) => Number.isFinite(item)) && (width as number) > 0 && (height as number) > 0 ? { x: x as number, y: y as number, width: width as number, height: height as number } : null;
+}
+
 function numberOf(value: unknown): number | null {
   const given = value !== null && typeof value === "object" && "value" in (value as Record<string, unknown>) ? (value as Record<string, unknown>)["value"] : value;
   const number = Number(given);
@@ -67,7 +76,7 @@ function numberOf(value: unknown): number | null {
 export function rememberShot(state: State, file: string, data: unknown): DisplayImage | null {
   if (!SHOT_EXTENSION.test(file) || file.length > DISPLAY_PATH_LIMIT || file.includes("\0")) return null;
   const facts = data !== null && typeof data === "object" ? (data as Record<string, unknown>) : {};
-  const shot: DisplayImage = { path: file, scale: numberOf(facts["scale"]), dpr: numberOf(facts["dpr"]), viewport: sizeOf(facts["viewport"]), image: sizeOf(facts["image"]) };
+  const shot: DisplayImage = { path: file, scale: numberOf(facts["scale"]), dpr: numberOf(facts["dpr"]), viewport: sizeOf(facts["viewport"]), image: sizeOf(facts["image"]), region: regionOf(facts["region"]) };
   let shots = shotsTaken.get(state);
   if (shots === undefined) {
     shots = new Map();
@@ -499,7 +508,61 @@ async function servePage(run: ScriptRun, request: Request): Promise<Answer> {
   }
 }
 
-export function displayAnswer(state: State, displayed: DisplayImage[], given: unknown, resolve: (file: string) => string): Answer {
+export const DISPLAY_BYTES = 1_500_000;
+export const DISPLAY_COPIES_KEPT = 32;
+
+function readBounded(file: string, limit: number): Buffer | null {
+  let fd: number | undefined;
+  try {
+    fd = openSync(file, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0));
+    const info = fstatSync(fd);
+    if (!info.isFile() || info.size > limit) return null;
+    const buffer = Buffer.alloc(limit + 1);
+    let filled = 0;
+    for (;;) {
+      const got = readSync(fd, buffer, filled, buffer.length - filled, null);
+      if (got === 0) break;
+      filled += got;
+      if (filled > limit) return null;
+    }
+    return buffer.subarray(0, filled);
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
+function pruneCopies(folder: string): void {
+  try {
+    const copies = readdirSync(folder)
+      .filter((name) => name.startsWith("display-"))
+      .map((name) => ({ name, at: statSync(nodePath.join(folder, name)).mtimeMs }))
+      .sort((a, b) => a.at - b.at);
+    for (const old of copies.slice(0, Math.max(0, copies.length - DISPLAY_COPIES_KEPT))) unlinkSync(nodePath.join(folder, old.name));
+  } catch {}
+}
+
+export function snapshotShot(shot: DisplayImage, folder: string): DisplayImage | null {
+  const bytes = readBounded(shot.path, DISPLAY_BYTES);
+  if (bytes === null) return null;
+  const extension = nodePath.extname(shot.path).toLowerCase();
+  const copy = nodePath.join(folder, `display-${Date.now()}-${randomBytes(6).toString("hex")}${extension}`);
+  let fd: number | undefined;
+  try {
+    fd = openSync(copy, fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | (fsConstants.O_NOFOLLOW ?? 0), 0o600);
+    for (let at = 0; at < bytes.length; ) at += writeSync(fd, bytes, at, bytes.length - at);
+    const info = fstatSync(fd, { bigint: true });
+    pruneCopies(folder);
+    return { ...shot, path: copy, dev: String(info.dev), ino: String(info.ino), size: Number(info.size) };
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
+export function displayAnswer(state: State, displayed: DisplayImage[], given: unknown, resolve: (file: string) => string, keep: (shot: DisplayImage) => DisplayImage | null = (shot) => shot): Answer {
   if (typeof given !== "string" || given === "" || given.length > DISPLAY_PATH_LIMIT || given.includes("\0")) {
     return { ok: false, error: "display() takes the result of await page.screenshot(...), a { path } object or the path it saved", code: "usage" };
   }
@@ -512,28 +575,17 @@ export function displayAnswer(state: State, displayed: DisplayImage[], given: un
     flag("script_display_capped", true);
     return { ok: true, text: "", data: { shown: false, reason: `at most ${MAX_DISPLAY} images are shown per call` } };
   }
-  displayed.push(shot);
+  const kept = keep(shot);
+  if (kept === null) {
+    flag("script_display_refused", true);
+    return { ok: false, error: `display() couldn't keep that screenshot: it's gone, not a regular file, or over ${DISPLAY_BYTES / 1_000_000} MB`, code: "failed" };
+  }
+  displayed.push(kept);
   return { ok: true, text: "", data: { shown: true, index: displayed.length, path: shot.path } };
 }
 
 function serveDisplay(run: ScriptRun, request: Request): Answer {
-  return displayAnswer(run.ctx.state, run.displayed, request["path"], (file) => run.ctx.path(file));
-}
-
-async function serveTotp(run: ScriptRun, request: Request): Promise<Answer> {
-  const name = request["name"];
-  if (typeof name !== "string" || !/^[\w.@+-]{1,128}$/u.test(name)) return { ok: false, error: "page.totp() takes the name of a saved auth profile", code: "usage" };
-  const root = run.ctx.state.dataRoot;
-  if (!root) return { ok: false, error: "page.totp() needs the session's data folder, which this session has none of", code: "usage" };
-  try {
-    const { code, remaining } = await totpCode(root, name);
-    addSecret(code);
-    flag("script_totp", true);
-    return { ok: true, text: "", data: { code, remaining } };
-  } catch (error) {
-    if (error instanceof BrowseError) return { ok: false, error: error.text, code: error.code ?? "no_totp" };
-    throw error;
-  }
+  return displayAnswer(run.ctx.state, run.displayed, request["path"], (file) => run.ctx.path(file), (shot) => snapshotShot(shot, nodePath.dirname(defaultPath(run.ctx, "png"))));
 }
 
 async function serve(run: ScriptRun, request: Request): Promise<void> {
@@ -548,7 +600,6 @@ async function serve(run: ScriptRun, request: Request): Promise<void> {
     } else if (request.op === "call") answer = await serveCall(run, request);
     else if (["evaluate", "$eval", "$$eval", "frames"].includes(request.op)) answer = await servePage(run, request);
     else if (request.op === "display") answer = serveDisplay(run, request);
-    else if (request.op === "totp") answer = await serveTotp(run, request);
     else answer = { ok: false, error: `unknown script call ${JSON.stringify(request.op.slice(0, 40))}`, code: "usage" };
   } catch (error) {
     if (error instanceof Dropped) return;

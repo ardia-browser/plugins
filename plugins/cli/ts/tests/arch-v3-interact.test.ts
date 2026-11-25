@@ -7,7 +7,11 @@ import "./libc-loaded.ts";
 import { SYNTHETIC_DROP, syntheticDrop } from "../src/browse/act/drag.ts";
 import { editCell } from "../src/browse/act/fields.ts";
 import { HOVER_MARK, HOVER_REVEALED, hoverResult, revealedLines } from "../src/browse/act/reveal.ts";
-import { OTP_BOXES, otpCode } from "../src/browse/commands/interact.ts";
+import { markOtpBoxes, OTP_BOXES, otpCode, otpRequest } from "../src/browse/commands/interact.ts";
+import { DESCRIBE_REVEALED } from "../src/browse/act/reveal.ts";
+import { isSecret } from "../src/browse/state/secrets.ts";
+import { RECORDER_SOURCE, QUEUE } from "../src/browse/commands/record.ts";
+import { settledClicks } from "../src/browse/flows/compile.ts";
 import { dragText } from "../src/browse/commands/act.ts";
 import { OWNERS } from "../src/browse/commands/index.ts";
 import { compileEvents, type RecEvent, TOGGLE_ROLES } from "../src/browse/flows/compile.ts";
@@ -22,8 +26,8 @@ type Answer = { ok: boolean; text?: string; data?: unknown; error?: string; code
 
 async function once(source: string, answer: (request: Record<string, unknown>) => Answer = () => ({ ok: true, text: "✓ Done", data: {} })) {
   const runner = new Runner();
-  await whenReady(runner);
   try {
+    await whenReady(runner);
     runner.send({ type: "start", source, state: "{}", readBatch: 100, stateLimit: 1 << 24 });
     const requests: Record<string, unknown>[] = [];
     const logs: string[] = [];
@@ -55,16 +59,15 @@ describe("script API for hard widgets", () => {
     expect(argvs(requests)).toEqual([["edit-cell", "@e5", "42", "--commit", "tab"], ["edit-cell", 'role=gridcell[name="Qty"]', "3"]]);
   });
 
-  test("page.totp feeds page.fillOtp, which then masks the code", async () => {
-    const { requests, result } = await once("const code = await page.totp('acme'); await page.fillOtp(code); await page.fillOtp('123456'); return code.length;", (request) =>
-      request["op"] === "totp" ? { ok: true, text: "", data: { code: "654321", remaining: 20 } } : { ok: true, text: "✓ Filled", data: {} });
-    expect(requests[0]).toMatchObject({ op: "totp", name: "acme" });
-    expect(argvs(requests).slice(1)).toEqual([["fill-otp", "654321", "--sensitive"], ["fill-otp", "123456"]]);
-    expect(result["value"]).toBe(6);
+  test("page.totp hands back an opaque handle, and page.fillOtp sends only the profile name", async () => {
+    const { requests, result } = await once("const code = page.totp('acme'); await page.fillOtp(code); await page.fillOtp({ profile: 'work' }); await page.fillOtp('123456', { within: 'Verify' }); return [String(code), JSON.stringify(code)];");
+    expect(argvs(requests)).toEqual([["fill-otp", "--profile", "acme"], ["fill-otp", "--profile", "work"], ["fill-otp", "123456", "--within", "Verify"]]);
+    expect(requests.some((request) => request["op"] === "totp")).toBe(false);
+    expect(result["value"]).toEqual(["[one-time code for acme]", '"[one-time code for acme]"']);
   });
 
   test("page.totp refuses a missing profile name before asking", async () => {
-    const { result, requests } = await once("await page.totp('');");
+    const { result, requests } = await once("page.totp('');");
     expect(result["kind"]).toBe("error");
     expect(requests).toEqual([]);
   });
@@ -91,6 +94,24 @@ describe("commands and helpers", () => {
     expect(Object.hasOwn(OWNERS, "handoff")).toBe(false);
   });
 
+  test("fill-otp parses its flags around the code, and --profile stands alone", () => {
+    expect(otpRequest(["123 456", "--within", "Verify", "--sensitive"])).toEqual({ profile: null, code: "123456", within: "Verify", instant: false });
+    expect(otpRequest(["--within=Card", "--no-humanize", "AB12"])).toEqual({ profile: null, code: "AB12", within: "Card", instant: true });
+    expect(otpRequest(["--profile", "acme"])).toEqual({ profile: "acme", code: null, within: null, instant: false });
+    expect(() => otpRequest(["--profile", "acme", "123456"])).toThrow("not both");
+    expect(() => otpRequest(["--profile", "acme", "--within", "x"])).toThrow("doesn't take --within");
+    expect(() => otpRequest(["--profile", "../x"])).toThrow("saved auth profile");
+  });
+
+  test("every OTP box is marked secret before anything is typed", () => {
+    const state = {};
+    const page = { targetId: "T", loader: (frame: string | null) => `L-${frame}`, frames: new Map([["F", { loader: "L-F" }]]) } as unknown as Page;
+    const boxes = [1, 2, 3, 4, 5, 6].map((backend) => new Element("F", `O${backend}`, backend, `box ${backend}`));
+    markOtpBoxes(state, page, boxes);
+    expect(boxes.every((box) => isSecret(state, page as never, "F", "L-F", box.backendId))).toBe(true);
+    expect(isSecret(state, page as never, "F", "L-F", 99)).toBe(false);
+  });
+
   test("one-time codes take 4 to 8 letters or digits, spaces and dashes dropped", () => {
     expect(otpCode("123 456")).toBe("123456");
     expect(otpCode("AB-12")).toBe("AB12");
@@ -108,6 +129,7 @@ describe("commands and helpers", () => {
   test("drag text says when the drop went through page drag events", () => {
     expect(dragText({ html5: true, synthetic: true, started: true, dropped: true })).toBe("✓ Done (HTML5 drag and drop, sent as page drag events)");
     expect(dragText({ html5: true, interception: false, synthetic: true, dropped: false })).toContain("didn't accept the drop");
+    expect(dragText({ html5: true, started: true, dropped: false })).toBe("✓ Done (HTML5 drag; the target didn't accept the drop, so the page got no drop event)");
   });
 
   test("the page drag events run in the source frame with both ends", async () => {
@@ -139,6 +161,16 @@ describe("flow record keeps the toggle state, ranked selectors and role/name", (
     const compiled = compileEvents(events, "https://app.example.com/settings");
     const actions = compiled.steps.map((step) => step.action).filter((action) => action.type !== "open");
     expect(actions.map((action) => [action.type, action.desired_state])).toEqual([["check", true], ["uncheck", false], ["check", true]]);
+    const unknown = compileEvents([{ kind: "click", at: 1, target: { tag: "div", role: "menuitemcheckbox", name: "Bold", ariaLabel: "Bold" }, checked: null }], "https://app.example.com/");
+    expect(unknown.steps.at(-1)?.action.type).toBe("click");
+    expect(unknown.steps.at(-1)?.action.desired_state).toBeUndefined();
+    const recorded: RecEvent[] = [
+      { kind: "click", pointer: "p1", at: 1, target: { tag: "div", role: "switch", name: "Wifi", ariaLabel: "Wifi" }, checked: null },
+      { kind: "confirm", pointer: "p1", at: 2, checked: false },
+    ];
+    expect(settledClicks(recorded)).toMatchObject([{ kind: "click", checked: false }]);
+    const off = compileEvents(recorded, "https://app.example.com/").steps.at(-1)?.action;
+    expect([off?.type, off?.desired_state]).toEqual(["uncheck", false]);
     expect(actions[0]?.candidates.map((candidate) => candidate.by)).toEqual(["aria-label", "css", "xpath"]);
     expect(actions[1]?.candidates[0]).toEqual({ by: "testid", value: "dark" });
     expect(actions[0]?.fingerprint).toEqual({ role: "checkbox", name: "Remember me" });
@@ -152,19 +184,29 @@ const HEADLESS = [
 ].find((candidate): candidate is string => typeof candidate === "string" && candidate !== "" && fs.existsSync(candidate));
 
 const FIXTURE = `<!doctype html><meta charset="utf-8"><title>Widgets</title>
-<ul id="board"><li id="card" draggable="true">Card</li></ul>
+<ul id="board" style="margin:0;padding:0;list-style:none"><li id="card" draggable="true" style="width:200px;height:20px">Card</li></ul>
 <div id="lane" style="height:80px;width:200px">Lane</div>
 <div id="otp"><input maxlength="1"><input maxlength="1"><input maxlength="1"><input maxlength="1"><input maxlength="1"><input maxlength="1"></div>
 <form id="single"><input id="one" autocomplete="one-time-code"></form>
 <button id="more">More</button>
 <div id="menu" role="menu" style="display:none"><div role="menuitem">Rename</div><div role="menuitem">Delete</div></div>
 <div class="tooltip" style="display:none" id="tip">Saved 2 min ago</div>
+<div id="lane2" style="height:80px;width:200px">Closed lane</div>
+<div id="secretmenu" role="menu" style="display:none"><input id="pw" type="password" value="hunter2"><input id="tok" value="tok-123" aria-label="Token"><div role="menuitem" style="visibility:hidden">Ghost</div></div>
+<div role="switch" id="wifi" aria-checked="true" tabindex="0" style="width:60px;height:30px">Wifi</div>
+<div id="otp2"><input maxlength="1" id="d1"><input maxlength="1"><input maxlength="1"><input maxlength="1"></div>
 <script>
 const lane = document.getElementById("lane");
 window.dropped = [];
 lane.addEventListener("dragover", (event) => event.preventDefault());
 lane.addEventListener("drop", (event) => { event.preventDefault(); window.dropped.push(event.dataTransfer.getData("text/plain")); });
 document.getElementById("card").addEventListener("dragstart", (event) => event.dataTransfer.setData("text/plain", "card-1"));
+window.drops = [];
+lane.addEventListener("drop", (event) => window.drops.push(event.clientY - lane.getBoundingClientRect().top));
+window.lane2drops = 0;
+document.getElementById("lane2").addEventListener("drop", () => { window.lane2drops += 1; });
+const wifi = document.getElementById("wifi");
+wifi.addEventListener("click", () => wifi.setAttribute("aria-checked", wifi.getAttribute("aria-checked") === "true" ? "false" : "true"));
 </script>`;
 
 describe.skipIf(HEADLESS === undefined)("page scripts in a real Chromium", () => {
@@ -238,6 +280,47 @@ describe.skipIf(HEADLESS === undefined)("page scripts in a real Chromium", () =>
     const outcome = await run(`(${SYNTHETIC_DROP})(document.getElementById("card"), document.getElementById("lane"), null)`);
     expect(outcome).toEqual({ started: true, accepted: true, dropped: true });
     expect(await run("window.dropped")).toEqual(["card-1"]);
+    expect(await run("window.drops")).toEqual([60]);
+    await run(`(${SYNTHETIC_DROP})(document.getElementById("card"), document.getElementById("lane"), "before")`);
+    expect(await run("window.drops[1]")).toBe(20);
+  });
+
+  test("a dropzone that doesn't accept dragover gets no drop", async () => {
+    expect(await run(`(${SYNTHETIC_DROP})(document.getElementById("card"), document.getElementById("lane2"), null)`)).toEqual({ started: true, accepted: false, dropped: false });
+    expect(await run("window.lane2drops")).toBe(0);
+  });
+
+  test("revealed names never read a field's value, and hidden items are left out", async () => {
+    await run(`(${HOVER_MARK})()`);
+    await run(`document.getElementById("secretmenu").style.display = "block"`);
+    const names = await run(`(${HOVER_REVEALED})().map((el) => (${DESCRIBE_REVEALED})(el))`);
+    expect(JSON.stringify(names)).not.toContain("hunter2");
+    expect(JSON.stringify(names)).not.toContain("tok-123");
+    expect(JSON.stringify(names)).not.toContain("Ghost");
+    expect(names).toEqual([{ role: "textbox", name: "" }, { role: "textbox", name: "Token" }]);
+    await run(`document.getElementById("secretmenu").style.display = "none"`);
+  });
+
+  async function press(selector: string): Promise<void> {
+    const box = (await run(`(() => { const r = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`)) as [number, number];
+    for (const type of ["mousePressed", "mouseReleased"]) await send("Input.dispatchMouseEvent", { type, x: box[0], y: box[1], button: "left", clickCount: 1 });
+  }
+
+  test("the recorder reads an ARIA toggle's state after the page handles the click, and hides split OTP digits", async () => {
+    await run(RECORDER_SOURCE);
+    await press("#wifi");
+    await press("#d1");
+    await send("Input.insertText", { text: "7" });
+    await press("#wifi");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const events = ((await run(`globalThis[${JSON.stringify(QUEUE)}].map((line) => JSON.parse(line))`)) as Record<string, unknown>[]);
+    const clicks = events.filter((event) => event["kind"] === "click" && (event["target"] as Record<string, unknown>)["role"] === "switch");
+    const confirms = events.filter((event) => event["kind"] === "confirm");
+    expect(clicks[0]?.["checked"]).toBeNull();
+    expect(confirms.map((event) => event["checked"])).toEqual([false, true]);
+    const fill = events.find((event) => event["kind"] === "fill");
+    expect(fill).toMatchObject({ secret: true, value: "" });
+    await run("globalThis.__ardiaRecorderStop && globalThis.__ardiaRecorderStop()");
   });
 
   test("split boxes are found in order and limited to the code's length; a one-time-code field is the fallback", async () => {
@@ -251,5 +334,13 @@ describe.skipIf(HEADLESS === undefined)("page scripts in a real Chromium", () =>
     expect(await run(`(${HOVER_REVEALED})().length`)).toBe(0);
     await run(`document.getElementById("menu").style.display = "block"; document.getElementById("tip").style.display = "block";`);
     expect(await run(`(${HOVER_REVEALED})().map((el) => el.textContent.trim())`)).toEqual(["Rename", "Delete", "Saved 2 min ago"]);
+  });
+});
+
+describe("the CLI hands fill-otp --profile to the daemon", () => {
+  test("--profile is a fill-otp flag, still refused as a launch option elsewhere", async () => {
+    const { splitGlobals } = await import("../src/browse/args.ts");
+    expect(splitGlobals(["fill-otp", "--profile", "acme"]).rest).toEqual(["fill-otp", "--profile", "acme"]);
+    expect(() => splitGlobals(["open", "--profile", "x"])).toThrow("launch options have no effect");
   });
 });

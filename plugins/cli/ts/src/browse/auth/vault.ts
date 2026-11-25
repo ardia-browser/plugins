@@ -26,6 +26,7 @@ import { waitUntil } from "../state/wait.ts";
 import { credential } from "./providers.ts";
 import { addVaultSecret } from "../../redact.ts";
 import { flag } from "../metrics.ts";
+import { markSecret } from "../state/secrets.ts";
 import { type Clock, freshCode, parseSeed, settingsOf, systemClock, type TotpSeed } from "./totp.ts";
 import { LOOPBACK_HOSTS, originOf } from "./origin.ts";
 
@@ -643,7 +644,27 @@ export function otpFrames(page: Pick<Page, "frames" | "mainFrame">, origins: Rea
   return [main, ...children];
 }
 
-async function enterOtp(ctx: Ctx, page: Page, name: string, seed: TotpSeed, origins: ReadonlySet<string>, humanize: boolean, actions: LoginActions): Promise<string> {
+export async function fillProfileOtp(ctx: Ctx, page: Page, name: string, humanize: boolean, actions: LoginActions = loginHooks.actions): Promise<string> {
+  const root = ctx.state.dataRoot;
+  if (root === null) throw new BrowseError("This session has no data folder for auth profiles");
+  const saved = await withProfileLock(root, name, async () => {
+    const meta = loadMeta(root, name);
+    if (!meta["totp"]) throw new BrowseError(`${name} has no TOTP secret; add one with \`ardia browse auth save ${name} --url <url> --totp-stdin\``, null, "no_totp");
+    const record = await readCredentials(root, name, meta);
+    if (record.totp === null) throw new BrowseError(`${name} has no TOTP secret; add one with \`ardia browse auth save ${name} --url <url> --totp-stdin\``, null, "no_totp");
+    return { origins: new Set<string>(meta["origins"]), seed: registerSeed(record.totp) };
+  });
+  await page.refreshFrames();
+  const top = originOfFrame(page, page.mainFrame);
+  if (!saved.origins.has(top ?? "")) {
+    throw new BrowseError(`Refusing to type ${name}'s one-time code: the page is ${top || "unknown"}, not ${[...saved.origins].sort().join(", ")}`, null, "origin_mismatch");
+  }
+  const outcome = await enterOtp(ctx, page, name, saved.seed, saved.origins, humanize, actions, false);
+  if (outcome === "not_asked") throw new BrowseError(`No one-time code field for ${name} on this page`, null, "not_found");
+  return outcome;
+}
+
+async function enterOtp(ctx: Ctx, page: Page, name: string, seed: TotpSeed, origins: ReadonlySet<string>, humanize: boolean, actions: LoginActions, submit = true): Promise<string> {
   let found: { frame: string; fields: Element[] };
   try {
     found = (await waitUntil(async () => {
@@ -662,6 +683,7 @@ async function enterOtp(ctx: Ctx, page: Page, name: string, seed: TotpSeed, orig
     throw error;
   }
   const { frame, fields } = found;
+  for (const field of fields) markSecret(ctx.state, page, field.frame, page.loader(field.frame), field.backendId);
   const { code } = await freshCode(seed, otpHooks.clock);
   addVaultSecret(code);
   const digits = splitDigits(code, fields.length);
@@ -683,7 +705,7 @@ async function enterOtp(ctx: Ctx, page: Page, name: string, seed: TotpSeed, orig
     const next = fields[index + 1];
     await actions.typeInto(page, element, frame, digits[index] as string, humanize, focusedOn([element]), focusedOn(next === undefined ? [element] : [element, next]));
   }
-  if (fields.length === 1) await actions.pressEnter(page, frame, humanize);
+  if (fields.length === 1 && submit) await actions.pressEnter(page, frame, humanize);
   flag(fields.length > 1 ? "otp_split_boxes" : "otp_typed", true);
   return fields.length > 1 ? "split" : "typed";
 }

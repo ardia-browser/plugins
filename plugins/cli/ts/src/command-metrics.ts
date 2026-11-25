@@ -73,7 +73,7 @@ export const TS_ONLY_FLAGS: readonly string[] = [
   "mcp_session_registered",
   "script_display_capped",
   "script_display_refused",
-  "script_totp",
+  "fill_otp_profile",
   "snapshot_child_frames",
 ];
 

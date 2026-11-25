@@ -9,7 +9,7 @@ const SESSION_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const COMMAND_PATTERN = new RegExp(COMMAND_NAME);
 const PY_INT_MAX_STR_DIGITS = 4300;
 
-const COMMAND_LAUNCH_NAMES: Readonly<Record<string, readonly string[]>> = { wait: ["--state"] };
+const COMMAND_LAUNCH_NAMES: Readonly<Record<string, readonly string[]>> = { wait: ["--state"], "fill-otp": ["--profile"] };
 
 export class Usage extends Error {
   constructor(
