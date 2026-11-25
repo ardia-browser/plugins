@@ -12,6 +12,7 @@ Install the `ardia` command: in Ardia, open **Settings**, search for **command l
 | Plugin | What it does | Needs |
 |---|---|---|
 | [`cli`](plugins/cli) | The `ardia` command: drive Ardia, read pages and run its commands from your terminal or an agent. Built into Ardia: install it in one click from **Settings › Plugins**. | Ardia on macOS |
+| [`1password`](plugins/1password) | Fills and saves logins and one-time codes from 1Password, approved in the 1Password app. A source in Ardia's password manager: install it from **Settings › Passwords**. | Ardia on macOS, the 1Password app and its CLI (`op`) |
 | [`compact-command-bar`](plugins/compact-command-bar/plugin.json) | ⌘T stops listing your pinned tabs and Top Apps, and shows at most 5 open tabs before you type. Typing still finds every tab. | Ardia 0.2.46-nightly.4 |
 
 ## Install
