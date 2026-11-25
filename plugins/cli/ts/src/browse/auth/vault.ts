@@ -464,8 +464,8 @@ export async function checkFocusedOrigin(page: Page, frame: string, origins: Rea
 }
 
 export const OTP_FIELDS =
-  "(digits) => { const usable = (i) => ardiaBrowse.visible(i) && !i.disabled && !i.readOnly && /^(text|tel|number|password|)$/.test(i.type || '');" +
-  " const inputs = Array.from(document.querySelectorAll('input')).filter(usable);" +
+  "(digits, scope) => { const root = scope || document; const usable = (i) => ardiaBrowse.visible(i) && !i.disabled && !i.readOnly && /^(text|tel|number|password|)$/.test(i.type || '');" +
+  " const inputs = Array.from(root.querySelectorAll('input')).filter(usable);" +
   " const coded = (i) => /(^|\\s)one-time-code(\\s|$)/.test(String(i.getAttribute('autocomplete') || i.autocomplete || ''));" +
   " const singles = inputs.filter((i) => i.maxLength === 1);" +
   " const shared = (list) => { let holder = list[0].parentElement; while (holder && !list.every((box) => holder.contains(box))) holder = holder.parentElement; return holder; };" +
@@ -487,9 +487,9 @@ export function splitDigits(code: string, boxes: number): string[] {
   return [...code];
 }
 
-export async function otpFields(page: Page, frame: string, digits: number): Promise<Element[]> {
+export async function otpFields(page: Page, frame: string, digits: number, scope: Element | null = null): Promise<Element[]> {
   try {
-    const remote = await page.call(OTP_FIELDS, [digits], { frame, byValue: false });
+    const remote = await page.call(OTP_FIELDS, [digits, scope], { frame, byValue: false });
     return await page.elementsFrom(remote, frame, "the one-time code field", 8);
   } catch (error) {
     if (error instanceof Cancelled || error instanceof ConnectionLost) throw error;
@@ -644,7 +644,7 @@ export function otpFrames(page: Pick<Page, "frames" | "mainFrame">, origins: Rea
   return [main, ...children];
 }
 
-export async function fillProfileOtp(ctx: Ctx, page: Page, name: string, humanize: boolean, actions: LoginActions = loginHooks.actions): Promise<string> {
+export async function fillProfileOtp(ctx: Ctx, page: Page, name: string, humanize: boolean, actions: LoginActions = loginHooks.actions, scope: Element | null = null, within: string | null = null): Promise<string> {
   const root = ctx.state.dataRoot;
   if (root === null) throw new BrowseError("This session has no data folder for auth profiles");
   const saved = await withProfileLock(root, name, async () => {
@@ -656,19 +656,29 @@ export async function fillProfileOtp(ctx: Ctx, page: Page, name: string, humaniz
   });
   await page.refreshFrames();
   const top = originOfFrame(page, page.mainFrame);
-  if (!saved.origins.has(top ?? "")) {
-    throw new BrowseError(`Refusing to type ${name}'s one-time code: the page is ${top || "unknown"}, not ${[...saved.origins].sort().join(", ")}`, null, "origin_mismatch");
+  const scopedOrigin = scope === null ? top : originOfFrame(page, scope.frame);
+  if (!saved.origins.has(top ?? "") || !saved.origins.has(scopedOrigin ?? "")) {
+    throw new BrowseError(
+      `Refusing to type ${name}'s one-time code: the page is ${top || "unknown"}${scope !== null && scope.frame !== page.mainFrame ? ` with the scope in ${scopedOrigin ?? "unknown"}` : ""}, not ${[...saved.origins].sort().join(", ")}`,
+      null,
+      "origin_mismatch",
+    );
   }
-  const outcome = await enterOtp(ctx, page, name, saved.seed, saved.origins, humanize, actions, false);
-  if (outcome === "not_asked") throw new BrowseError(`No one-time code field for ${name} on this page`, null, "not_found");
+  const outcome = await enterOtp(ctx, page, name, saved.seed, saved.origins, humanize, actions, false, scope);
+  if (outcome === "not_asked") throw new BrowseError(`No one-time code field for ${name}${within ? ` inside --within "${within}"` : " on this page"}`, within ? { within } : null, "not_found");
   return outcome;
 }
 
-async function enterOtp(ctx: Ctx, page: Page, name: string, seed: TotpSeed, origins: ReadonlySet<string>, humanize: boolean, actions: LoginActions, submit = true): Promise<string> {
+async function enterOtp(ctx: Ctx, page: Page, name: string, seed: TotpSeed, origins: ReadonlySet<string>, humanize: boolean, actions: LoginActions, submit = true, scope: Element | null = null): Promise<string> {
   let found: { frame: string; fields: Element[] };
   try {
     found = (await waitUntil(async () => {
       await page.refreshFrames();
+      if (scope !== null) {
+        if (!origins.has(originOfFrame(page, page.mainFrame) ?? "") || !origins.has(originOfFrame(page, scope.frame) ?? "")) return null;
+        const fields = await otpFields(page, scope.frame, seed.digits, scope);
+        return fields.length > 0 ? { frame: scope.frame, fields } : null;
+      }
       for (const candidate of otpFrames(page, origins)) {
         const fields = await otpFields(page, candidate, seed.digits);
         if (fields.length > 0) return { frame: candidate, fields };

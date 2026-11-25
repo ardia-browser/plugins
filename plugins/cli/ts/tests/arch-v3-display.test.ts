@@ -292,7 +292,7 @@ describe("MCP inline images from display()", () => {
     expect(content.map((item) => item.type)).toEqual(["text"]);
   });
 
-  test("snapshotShot pruning never deletes unrelated display-* files", () => {
+  test("snapshotShot pruning never deletes unrelated display-* files or copies held by an active run", () => {
     const folder = fs.mkdtempSync(path.join(os.tmpdir(), "arch-v3-prune-"));
     try {
       const keep = path.join(folder, "display-design.png");
@@ -300,9 +300,12 @@ describe("MCP inline images from display()", () => {
       fs.writeFileSync(keep, "user-file");
       fs.writeFileSync(src, png(4, 4));
       const base = rememberShot({} as State, src, SHOT_DATA) as DisplayImage;
-      for (let i = 0; i < 34; i += 1) expect(snapshotShot(base, folder)).not.toBeNull();
+      const held = snapshotShot(base, folder) as DisplayImage;
+      expect(held).not.toBeNull();
+      for (let i = 0; i < 34; i += 1) expect(snapshotShot(base, folder, [held.path])).not.toBeNull();
       expect(fs.existsSync(keep)).toBe(true);
       expect(fs.readFileSync(keep, "utf8")).toBe("user-file");
+      expect(fs.existsSync(held.path)).toBe(true);
     } finally {
       fs.rmSync(folder, { recursive: true, force: true });
     }

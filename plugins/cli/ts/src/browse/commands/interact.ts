@@ -69,8 +69,7 @@ export function otpRequest(argv: readonly string[]): OtpRequest {
   if (profile !== null) {
     if (args.length > 0) throw new Usage("fill-otp takes a code or --profile <name>, not both");
     if (!OTP_PROFILE.test(profile)) throw new Usage("--profile takes the name of a saved auth profile");
-    if (within !== null) throw new Usage("fill-otp --profile finds the code field on the profile's own site, so it doesn't take --within");
-    return { profile, code: null, within: null, instant };
+    return { profile, code: null, within, instant };
   }
   need(args, 1, "fill-otp <code> | --profile <name> [--within <container>]");
   return { profile: null, code: otpCode(args.join("")), within, instant };
@@ -80,8 +79,14 @@ async function cmdFillOtp(ctx: Ctx, argv: string[]): Promise<Result> {
   const { profile, code: given, within, instant } = otpRequest(argv);
   const humanize = ctx.humanize && !instant;
   if (profile !== null) {
-    const page = await ctx.state.page();
-    const [shape, report] = await observe(ctx, page, () => fillProfileOtp(ctx, page, profile, humanize));
+    let page: Page;
+    let scope: Element | null = null;
+    if (within !== null) {
+      const found = await scopeOf(ctx, within);
+      page = found.page;
+      scope = found.container;
+    } else page = await ctx.state.page();
+    const [shape, report] = await observe(ctx, page, () => fillProfileOtp(ctx, page, profile, humanize, undefined, scope, within));
     flag("fill_otp", true);
     flag("fill_otp_profile", true);
     return attach(new Result({ filled: true, profile, shape, sensitive: true }, `✓ Filled ${profile}'s one-time code into ${shape === "split" ? "its boxes" : "its field"}`), report);

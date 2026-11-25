@@ -357,5 +357,149 @@ fast = false
     const added = editToml(withArrays, "install", { command: "ardia", args: ["mcp"] });
     expect(added.change).toBe("added");
     expect(tomlEntry(added.text)).toEqual({ command: "ardia", args: ["mcp"] });
+
+    const dupAcrossOther = `[[a]]
+name = "one"
+
+[a.x]
+v = 1
+
+[[b]]
+name = "other"
+
+[a.x]
+v = 2
+`;
+    expect(() => editToml(dupAcrossOther, "install", { command: "ardia", args: ["mcp"] })).toThrow("left alone");
+
+    const nestedAfterOther = `[[a]]
+[[a.b]]
+[a.b.c]
+v = 1
+
+[[other]]
+k = 1
+
+[[a]]
+[[a.b]]
+[a.b.c]
+v = 2
+`;
+    const nestedAdded = editToml(nestedAfterOther, "install", { command: "ardia", args: ["mcp"] });
+    expect(nestedAdded.change).toBe("added");
+
+    const dupArdia = `[mcp_servers.ardia]
+command = "ardia"
+args = ["mcp"]
+
+[mcp_servers.ardia]
+command = "ardia"
+args = ["mcp"]
+`;
+    expect(() => editToml(dupArdia, "install", { command: "ardia", args: ["mcp"] })).toThrow("left alone");
+
+    const unicodeKey = `[mcp_servers."\\U00000061rdia"]
+command = "old"
+args = ["mcp"]
+`;
+    const updatedUnicode = editToml(unicodeKey, "install", { command: "ardia", args: ["mcp"] });
+    expect(updatedUnicode.change).toBe("updated");
+    expect(tomlEntry(updatedUnicode.text)).toEqual({ command: "ardia", args: ["mcp"] });
+
+    const codexHttp = `[mcp_servers.ardia]
+url = "https://example.test/mcp"
+bearer_token_env_var = "TOK"
+startup_timeout_sec = 15
+
+[mcp_servers.ardia.http_headers]
+X-Test = "1"
+`;
+    const converted = editToml(codexHttp, "install", { command: "ardia", args: ["mcp"] });
+    expect(converted.change).toBe("updated");
+    const parsedCodex = Bun.TOML.parse(converted.text as string) as { mcp_servers: { ardia: Record<string, unknown> } };
+    expect(parsedCodex.mcp_servers.ardia).toEqual({ command: "ardia", args: ["mcp"], startup_timeout_sec: 15 });
+
+    const withNextComment = `[mcp_servers.ardia]
+command = "ardia"
+args = ["mcp"]
+
+# Keep this server enabled for CI
+[mcp_servers.other]
+command = "other"
+`;
+    const uninstalled = editToml(withNextComment, "uninstall", { command: "ardia", args: ["mcp"] });
+    expect(uninstalled.text).toBe(`# Keep this server enabled for CI\n[mcp_servers.other]\ncommand = "other"\n`);
+  });
+
+  test("symlink chains resolve to a missing target with cycle detection, and invalid later configs prevent partial writes", () => {
+    const paths = sandbox();
+    const target = path.join(path.dirname(paths.claude), "actual-claude.json");
+    const mid = path.join(path.dirname(paths.claude), "current-claude.json");
+    fs.symlinkSync(target, mid);
+    fs.symlinkSync(mid, paths.claude);
+    manage(args("install", { clients: ["claude"] }), paths);
+    expect(fs.lstatSync(paths.claude).isSymbolicLink()).toBe(true);
+    expect(fs.lstatSync(mid).isSymbolicLink()).toBe(true);
+    expect(JSON.parse(fs.readFileSync(target, "utf8")).mcpServers.ardia.command).toBe("ardia");
+
+    const loopPaths = sandbox();
+    const a = path.join(path.dirname(loopPaths.claude), "a.json");
+    const b = path.join(path.dirname(loopPaths.claude), "b.json");
+    fs.symlinkSync(b, a);
+    fs.symlinkSync(a, b);
+    fs.symlinkSync(a, loopPaths.claude);
+    expect(() => manage(args("install", { clients: ["claude"] }), loopPaths)).toThrow("symlink loop");
+
+    const atomicPaths = sandbox();
+    fs.writeFileSync(atomicPaths.claude, JSON.stringify({ existing: true }));
+    fs.mkdirSync(path.dirname(atomicPaths.codex), { recursive: true });
+    fs.writeFileSync(atomicPaths.codex, "model = [\n");
+    expect(() => manage(args("install", { clients: ["claude", "codex", "cursor"] }), atomicPaths)).toThrow("left alone");
+    expect(JSON.parse(fs.readFileSync(atomicPaths.claude, "utf8"))).toEqual({ existing: true });
+    expect(fs.existsSync(atomicPaths.cursor)).toBe(false);
+  });
+
+  test("a fresh register() waits for an aborted claim's cleanup instead of inheriting its cancellation", async () => {
+    const saved = [process.env["AGENT_BROWSER_SESSION"], process.env["ARDIA_BROWSE_AUTO_SESSION"]];
+    delete process.env["AGENT_BROWSER_SESSION"];
+    delete process.env["ARDIA_BROWSE_AUTO_SESSION"];
+    try {
+      const found = new Found();
+      found.values.set("port", "9333");
+      let attempt = 0;
+      let finishCleanup = () => {};
+      const events: string[] = [];
+      const daemon = new SessionDaemon(found, undefined, () => "auto-race", async (_root, _namespace, _key, _id, _timeout, sig) => {
+        attempt += 1;
+        const current = attempt;
+        events.push(`start-${current}`);
+        if (current === 1) {
+          await new Promise<void>((resolve) => {
+            sig?.addEventListener("abort", () => {
+              events.push("abort-1");
+              finishCleanup = () => {
+                events.push("cleanup-done-1");
+                resolve();
+              };
+            });
+          });
+          throw new BrowseError("cancelled", 130, "interrupted");
+        }
+        return { notice: null };
+      });
+      const firstAbort = new AbortController();
+      const first = daemon.register(1_000_000, firstAbort.signal);
+      firstAbort.abort();
+      await expect(first).rejects.toThrow("cancelled");
+      const second = daemon.register(1_000_001);
+      await Promise.resolve();
+      expect(events).toEqual(["start-1", "abort-1"]);
+      finishCleanup();
+      expect(await second).toBeNull();
+      expect(events).toEqual(["start-1", "abort-1", "cleanup-done-1", "start-2"]);
+    } finally {
+      if (saved[0] !== undefined) process.env["AGENT_BROWSER_SESSION"] = saved[0];
+      if (saved[1] !== undefined) process.env["ARDIA_BROWSE_AUTO_SESSION"] = saved[1];
+    }
   });
 });

@@ -636,7 +636,9 @@ export class Daemon {
     state.caller = caller ?? state.caller;
     try {
       if (this.stopping) return this.refuseClosing(ctx.options, "close");
-      if (Object.hasOwn(ctx.options, EVICT_TOKEN) && !this.evictionStillReserved(ctx.options[EVICT_TOKEN])) {
+      const evicting = Object.hasOwn(ctx.options, EVICT_TOKEN);
+      const outer = evicting ? currentSignal() : null;
+      if (evicting && (outer?.aborted || !this.evictionStillReserved(ctx.options[EVICT_TOKEN]))) {
         return render(
           ctx.options,
           null,
@@ -647,6 +649,11 @@ export class Daemon {
       this.enterStopping();
       if (this.watchdogState === "failed") return this.refuseClosing(ctx.options, "close");
       const deadline = new AbortController();
+      const forward = () => deadline.abort(new Cancelled());
+      if (outer !== null) {
+        if (outer.aborted) deadline.abort(new Cancelled());
+        else outer.addEventListener("abort", forward, { once: true });
+      }
       const timer = setTimeout(() => deadline.abort(new Cancelled()), this.closeTimeout * 1000);
       try {
         await within(
@@ -657,6 +664,7 @@ export class Daemon {
         if (!(error instanceof Cancelled)) log.exception("closing the session's tabs failed", error);
       } finally {
         clearTimeout(timer);
+        outer?.removeEventListener("abort", forward);
       }
     } finally {
       this.lock.release();
@@ -668,17 +676,22 @@ export class Daemon {
   }
 
   private async closeTabs(tally: { closed: number; kept: string[] }): Promise<void> {
+    if (currentSignal()?.aborted) return;
     const state = this.state;
     const leftovers = state.instance !== null && state.registry.temporaries(state.instance).length > 0;
     if ((state.opened.size === 0 && !leftovers && !state.ownsSessionTabs()) || state.lost) return;
     try {
       await state.connect();
+      if (currentSignal()?.aborted) return;
       await state.refreshTargets();
+      if (currentSignal()?.aborted) return;
       await state.pairBeforeClosing();
+      if (currentSignal()?.aborted) return;
       await temptabs.sweep(state);
       const registry = state.registry;
       const instance = state.instance;
       for (const targetId of [...state.opened]) {
+        if (currentSignal()?.aborted) return;
         if (!state.targetInfos.has(targetId)) {
           state.forgetTarget(targetId);
           continue;

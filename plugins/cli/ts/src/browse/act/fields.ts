@@ -305,11 +305,8 @@ async function fillCell(page: Page, element: Element, cell: Element, text: strin
   await setEditor(page, editor, text, humanize);
   add("cell_edits");
   if (!opened && !always) return null;
-  if (opened) await commitCell(page, editor, humanize, commit);
-  else {
-    await page.focusElement(editor);
-    await pressKey(page, editor.frame, commit, humanize);
-  }
+  if (!opened) await page.focusElement(editor);
+  await commitCell(page, editor, humanize, commit);
   const now = await page.call(ACTIONS_CELL_NOW, [], { frame: cell.frame, read: true });
   return { cell: name !== undefined ? joinedWords(name) : element.label, value: now, was };
 }

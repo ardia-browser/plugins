@@ -88,18 +88,28 @@ function readText(file: string): string | null {
 }
 
 export function resolveTarget(file: string): string {
-  let info: fs.Stats;
-  try {
-    info = fs.lstatSync(file);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return file;
-    throw new ConfigError(`Can't read ${file}: ${(error as Error).message}`);
-  }
-  if (!info.isSymbolicLink()) return file;
-  try {
-    return fs.realpathSync(file);
-  } catch {
-    return path.resolve(path.dirname(file), fs.readlinkSync(file));
+  let current = file;
+  const seen = new Set<string>();
+  for (;;) {
+    let info: fs.Stats;
+    try {
+      info = fs.lstatSync(current);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return current;
+      throw new ConfigError(`Can't read ${current}: ${(error as Error).message}`);
+    }
+    if (!info.isSymbolicLink()) return current;
+    const key = `${info.dev}:${info.ino}`;
+    if (seen.has(key) || seen.size >= 40) throw new ConfigError(`${file} is a symlink loop, so it was left alone`);
+    seen.add(key);
+    try {
+      return fs.realpathSync(current);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ELOOP") throw new ConfigError(`${file} is a symlink loop, so it was left alone`);
+      if (code !== "ENOENT") throw new ConfigError(`Can't read ${current}: ${(error as Error).message}`);
+      current = path.resolve(path.dirname(current), fs.readlinkSync(current));
+    }
   }
 }
 
@@ -196,6 +206,41 @@ type ValueMode = null | "basic" | "literal" | "mlbasic" | "mlliteral";
 
 const BARE_KEY = /[A-Za-z0-9_-]/u;
 const OURS = ["mcp_servers", SERVER_NAME];
+const CODEX_HTTP_KEYS = new Set(["url", "bearer_token_env_var", "http_headers", "env_http_headers"]);
+
+function decodeTomlBasicString(raw: string): string | null {
+  let out = "";
+  for (let at = 0; at < raw.length; at += 1) {
+    const char = raw[at] as string;
+    if (char !== "\\") {
+      const code = char.charCodeAt(0);
+      if ((code >= 0 && code <= 0x08) || (code >= 0x0a && code <= 0x1f) || code === 0x7f) return null;
+      out += char;
+      continue;
+    }
+    const next = raw[at + 1];
+    if (next === undefined) return null;
+    at += 1;
+    if (next === "b") out += "\b";
+    else if (next === "t") out += "\t";
+    else if (next === "n") out += "\n";
+    else if (next === "f") out += "\f";
+    else if (next === "r") out += "\r";
+    else if (next === "e") out += "\u001b";
+    else if (next === '"') out += '"';
+    else if (next === "\\") out += "\\";
+    else if (next === "u" || next === "U") {
+      const width = next === "u" ? 4 : 8;
+      const hex = raw.slice(at + 1, at + 1 + width);
+      if (hex.length !== width || !/^[0-9A-Fa-f]+$/u.test(hex)) return null;
+      const point = Number.parseInt(hex, 16);
+      if (point > 0x10ffff || (point >= 0xd800 && point <= 0xdfff)) return null;
+      out += String.fromCodePoint(point);
+      at += width;
+    } else return null;
+  }
+  return out;
+}
 
 function readKey(text: string, from: number): { path: string[]; at: number } | null {
   const path: string[] = [];
@@ -207,11 +252,9 @@ function readKey(text: string, from: number): { path: string[]; at: number } | n
       let end = at + 1;
       while (end < text.length && text[end] !== '"') end += text[end] === "\\" ? 2 : 1;
       if (end >= text.length) return null;
-      try {
-        path.push(JSON.parse(text.slice(at, end + 1)) as string);
-      } catch {
-        return null;
-      }
+      const decoded = decodeTomlBasicString(text.slice(at + 1, end));
+      if (decoded === null) return null;
+      path.push(decoded);
       at = end + 1;
     } else if (first === "'") {
       const end = text.indexOf("'", at + 1);
@@ -344,7 +387,7 @@ function refuseInline(statements: readonly TomlStatement[]): void {
   }
 }
 
-type TomlSection = { start: number; end: number; main: boolean };
+type TomlSection = { start: number; end: number; main: boolean; path: string[] };
 
 function ourSections(lines: readonly string[], statements: readonly TomlStatement[]): TomlSection[] {
   const headers = statements.filter((statement) => statement.kind === "header");
@@ -352,16 +395,114 @@ function ourSections(lines: readonly string[], statements: readonly TomlStatemen
   headers.forEach((header, index) => {
     if (!startsWith(header.path, OURS)) return;
     let end = index + 1 < headers.length ? (headers[index + 1] as TomlStatement).start : lines.length;
+    if (index + 1 < headers.length) {
+      let probe = end;
+      while (probe > header.start + 1 && (lines[probe - 1] as string).trim().startsWith("#")) probe -= 1;
+      if (probe < end) end = probe;
+    }
     while (end > header.start + 1 && (lines[end - 1] as string).trim() === "") end -= 1;
-    out.push({ start: header.start, end, main: samePath(header.path, OURS) });
+    out.push({ start: header.start, end, main: samePath(header.path, OURS), path: header.path });
   });
+  return out;
+}
+
+function normalizeTomlEscapes(text: string): string {
+  if (!text.includes("\\U")) return text;
+  let out = "";
+  let mode: ValueMode = null;
+  for (let at = 0; at < text.length; ) {
+    const char = text[at] as string;
+    if (mode === null) {
+      if (char === "#") {
+        const nl = text.indexOf("\n", at);
+        if (nl < 0) {
+          out += text.slice(at);
+          break;
+        }
+        out += text.slice(at, nl + 1);
+        at = nl + 1;
+        continue;
+      }
+      if (text.startsWith('"""', at)) {
+        mode = "mlbasic";
+        out += '"""';
+        at += 3;
+      } else if (text.startsWith("'''", at)) {
+        mode = "mlliteral";
+        out += "'''";
+        at += 3;
+      } else if (char === '"') {
+        mode = "basic";
+        out += '"';
+        at += 1;
+      } else if (char === "'") {
+        mode = "literal";
+        out += "'";
+        at += 1;
+      } else {
+        out += char;
+        at += 1;
+      }
+      continue;
+    }
+    if (mode === "literal") {
+      if (char === "'") mode = null;
+      out += char;
+      at += 1;
+      continue;
+    }
+    if (mode === "mlliteral") {
+      if (text.startsWith("'''", at)) {
+        let end = at + 3;
+        while (text[end] === "'" && end < at + 5) end += 1;
+        out += text.slice(at, end);
+        at = end;
+        mode = null;
+      } else {
+        out += char;
+        at += 1;
+      }
+      continue;
+    }
+    if (char === "\\") {
+      const next = text[at + 1];
+      if (next === "U") {
+        const hex = text.slice(at + 2, at + 10);
+        if (hex.length === 8 && /^[0-9A-Fa-f]{8}$/u.test(hex)) {
+          const point = Number.parseInt(hex, 16);
+          if (point <= 0x10ffff && (point < 0xd800 || point > 0xdfff)) {
+            if (point === 0x22) out += '\\"';
+            else if (point === 0x5c) out += "\\\\";
+            else if (point <= 0xffff) out += `\\u${point.toString(16).padStart(4, "0")}`;
+            else out += String.fromCodePoint(point);
+            at += 10;
+            continue;
+          }
+        }
+      }
+      out += text.slice(at, at + 2);
+      at += 2;
+      continue;
+    }
+    if (mode === "mlbasic" && text.startsWith('"""', at)) {
+      let end = at + 3;
+      while (text[end] === '"' && end < at + 5) end += 1;
+      out += text.slice(at, end);
+      at = end;
+      mode = null;
+      continue;
+    }
+    if (mode === "basic" && char === '"') mode = null;
+    out += char;
+    at += 1;
+  }
   return out;
 }
 
 function parseToml(text: string | null, what: string): Record<string, unknown> {
   if (text === null || text.trim() === "") return {};
   try {
-    return Bun.TOML.parse(text) as Record<string, unknown>;
+    return Bun.TOML.parse(normalizeTomlEscapes(text)) as Record<string, unknown>;
   } catch (error) {
     throw new ConfigError(`${what} (${(error as Error).message}), so it was left alone`);
   }
@@ -383,41 +524,63 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function strictPrefix(parent: readonly string[], child: readonly string[]): boolean {
-  return parent.length < child.length && parent.every((part, index) => part === child[index]);
+type TomlTableNode = { kind: "table"; defined: boolean; children: Map<string, TomlNode> };
+type TomlArrayNode = { kind: "array"; items: TomlTableNode[] };
+type TomlNode = TomlTableNode | TomlArrayNode;
+
+function tableNode(defined: boolean): TomlTableNode {
+  return { kind: "table", defined, children: new Map() };
+}
+
+function validateTomlHeaders(statements: readonly TomlStatement[]): { valid: boolean; ours: number } {
+  const root = tableNode(true);
+  let ours = 0;
+  for (const statement of statements) {
+    if (statement.kind !== "header") continue;
+    let current = root;
+    for (let index = 0; index < statement.path.length - 1; index += 1) {
+      const part = statement.path[index] as string;
+      let next = current.children.get(part);
+      if (next === undefined) {
+        next = tableNode(false);
+        current.children.set(part, next);
+      }
+      current = next.kind === "array" ? (next.items[next.items.length - 1] as TomlTableNode) : next;
+    }
+    const leaf = statement.path[statement.path.length - 1] as string;
+    const existing = current.children.get(leaf);
+    if (statement.array) {
+      if (existing === undefined) current.children.set(leaf, { kind: "array", items: [tableNode(true)] });
+      else if (existing.kind === "array") existing.items.push(tableNode(true));
+      else return { valid: false, ours };
+      continue;
+    }
+    if (samePath(statement.path, OURS)) ours += 1;
+    if (existing === undefined) current.children.set(leaf, tableNode(true));
+    else if (existing.kind === "array" || existing.defined) return { valid: false, ours };
+    else existing.defined = true;
+  }
+  return { valid: true, ours };
+}
+
+function hasCodexHttpFields(entry: unknown): boolean {
+  if (entry === null || typeof entry !== "object" || Array.isArray(entry)) return false;
+  const record = entry as Record<string, unknown>;
+  for (const key of CODEX_HTTP_KEYS) if (record[key] !== undefined) return true;
+  return false;
 }
 
 function verifiedToml(before: string | null, after: string, wanted: ServerEntry | null): string {
   const old = parseToml(before, "the Codex config isn't valid TOML");
   const next = parseToml(after, "the edit would have left the Codex config invalid");
   const { lines } = splitLines(after);
-  const statements = scanToml(lines);
-  const counts = new Map<string, number>();
-  const activeArrays: { path: string[]; key: string }[] = [];
-  const headers: string[] = [];
-  let ours = 0;
-  for (const statement of statements) {
-    if (statement.kind !== "header") continue;
-    const pathKey = JSON.stringify(statement.path);
-    if (statement.array) {
-      while (activeArrays.length > 0 && !strictPrefix((activeArrays[activeArrays.length - 1] as { path: string[] }).path, statement.path)) activeArrays.pop();
-      const scope = activeArrays.map((item) => item.key).join("/");
-      const countKey = `${scope}|${pathKey}`;
-      const index = (counts.get(countKey) ?? 0) + 1;
-      counts.set(countKey, index);
-      activeArrays.push({ path: statement.path, key: `${pathKey}#${index}` });
-      continue;
-    }
-    if (pathKey === JSON.stringify(OURS)) ours += 1;
-    const prefix = activeArrays.filter((item) => strictPrefix(item.path, statement.path)).map((item) => item.key).join("/");
-    headers.push(`${prefix}|${pathKey}`);
-  }
+  const checked = validateTomlHeaders(scanToml(lines));
   const servers = next["mcp_servers"] as Record<string, unknown> | undefined;
   const entry = servers !== undefined ? servers[SERVER_NAME] : undefined;
   const fine =
     withoutOurs(old) === withoutOurs(next) &&
-    new Set(headers).size === headers.length &&
-    (wanted === null ? ours === 0 && entry === undefined : ours === 1 && sameEntry(entry, wanted));
+    checked.valid &&
+    (wanted === null ? checked.ours === 0 && entry === undefined : checked.ours === 1 && sameEntry(entry, wanted) && !hasCodexHttpFields(entry));
   if (!fine) throw new ConfigError("the edit couldn't be made cleanly, so the Codex config was left alone; edit [mcp_servers.ardia] by hand");
   return after;
 }
@@ -442,12 +605,17 @@ function finished(lines: readonly string[], newline: string): string {
 }
 
 export function editToml(text: string | null, action: Action, wanted: ServerEntry): { text: string | null; change: Change; entry: ServerEntry | null } {
-  const current = tomlEntry(text);
+  const parsed = parseToml(text, "the Codex config isn't valid TOML");
+  const servers = parsed["mcp_servers"];
+  const rawEntry = servers !== null && typeof servers === "object" && !Array.isArray(servers) ? (servers as Record<string, unknown>)[SERVER_NAME] : undefined;
+  const current = entryOf(rawEntry);
   const { lines, newline } = splitLines(text);
   const statements = scanToml(lines);
   const sections = ourSections(lines, statements);
   const main = sections.find((section) => section.main);
   if (action === "status") return { text: null, change: main === undefined && current === null ? "absent" : "unchanged", entry: current };
+  const headers = validateTomlHeaders(statements);
+  if (!headers.valid) throw new ConfigError("the Codex config has duplicate or conflicting table headers, so it was left alone; edit [mcp_servers.ardia] by hand");
   refuseInline(statements);
   if (action === "uninstall") {
     if (sections.length === 0) return { text: null, change: "absent", entry: null };
@@ -462,11 +630,22 @@ export function editToml(text: string | null, action: Action, wanted: ServerEntr
     while (body.length > 0 && (body[body.length - 1] as string).trim() === "") body.pop();
     return { text: verifiedToml(text, finished(body.length === 0 ? block : [...body, "", ...block], newline), wanted), change: "added", entry: wanted };
   }
-  if (current !== null && sameEntry(current, wanted)) return { text: null, change: "unchanged", entry: current };
-  const replaced = statements.filter((statement) => statement.kind === "key" && statement.start > main.start && statement.start < main.end && statement.local.length === 1 && (statement.local[0] === "command" || statement.local[0] === "args"));
-  const dropped = (index: number) => replaced.some((statement) => index >= statement.start && index <= statement.end);
-  const body = lines.slice(main.start + 1, main.end).filter((_, offset) => !dropped(main.start + 1 + offset));
-  const next = [...lines.slice(0, main.start), lines[main.start] as string, ...block.slice(1), ...body, ...lines.slice(main.end)];
+  const httpSections = sections.filter((section) => !section.main && section.path.length > OURS.length && CODEX_HTTP_KEYS.has(section.path[OURS.length] as string));
+  const hasHttp = hasCodexHttpFields(rawEntry) || httpSections.length > 0;
+  if (current !== null && sameEntry(current, wanted) && !hasHttp) return { text: null, change: "unchanged", entry: current };
+  const replaced = statements.filter(
+    (statement) =>
+      statement.kind === "key" &&
+      statement.start > main.start &&
+      statement.start < main.end &&
+      ((statement.local.length === 1 && (statement.local[0] === "command" || statement.local[0] === "args")) || CODEX_HTTP_KEYS.has(statement.local[0] as string)),
+  );
+  const droppedInMain = (index: number) => replaced.some((statement) => index >= statement.start && index <= statement.end);
+  const droppedHttpSection = (index: number) => httpSections.some((section) => (index >= section.start && index < section.end) || (index === section.start - 1 && (lines[index] as string).trim() === ""));
+  const beforeMain = lines.slice(0, main.start).filter((_, index) => !droppedHttpSection(index));
+  const body = lines.slice(main.start + 1, main.end).filter((_, offset) => !droppedInMain(main.start + 1 + offset));
+  const afterMain = lines.slice(main.end).filter((_, offset) => !droppedHttpSection(main.end + offset));
+  const next = [...beforeMain, lines[main.start] as string, ...block.slice(1), ...body, ...afterMain];
   return { text: verifiedToml(text, finished(next, newline), wanted), change: "updated", entry: wanted };
 }
 
@@ -477,15 +656,34 @@ export function present(paths: Record<Client, string>): Client[] {
 export function manage(args: ManageArgs, paths: Record<Client, string> = configPaths()): Outcome[] {
   const wanted = serverEntry(args.command);
   const clients = args.clients ?? (args.action === "status" ? [...CLIENTS] : present(paths));
-  const outcomes: Outcome[] = [];
+  const planned: { client: Client; file: string; target: string; edited: { text: string | null; change: Change; entry: ServerEntry | null }; willWrite: boolean }[] = [];
   for (const client of clients) {
     const file = paths[client];
     const target = resolveTarget(file);
     const text = readText(target);
     const edited = client === "codex" ? editToml(text, args.action, wanted) : editJson(file, text, args.action, wanted, client);
-    const written = edited.text !== null && !args.dryRun && args.action !== "status";
-    if (written) writeAtomic(target, edited.text as string);
-    outcomes.push({ client, name: CLIENT_NAMES[client], path: file, change: edited.change, written, entry: edited.entry, matches: edited.entry !== null && sameEntry(edited.entry, wanted) });
+    const willWrite = edited.text !== null && !args.dryRun && args.action !== "status";
+    planned.push({ client, file, target, edited, willWrite });
+  }
+  const writtenClients: Client[] = [];
+  const outcomes: Outcome[] = [];
+  for (let index = 0; index < planned.length; index += 1) {
+    const item = planned[index] as (typeof planned)[number];
+    if (item.willWrite) {
+      try {
+        writeAtomic(item.target, item.edited.text as string);
+        writtenClients.push(item.client);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        const skipped = planned.slice(index + 1).map((rest) => rest.client);
+        const details: string[] = [];
+        if (writtenClients.length > 0) details.push(`already written: ${writtenClients.join(", ")}`);
+        if (skipped.length > 0) details.push(`not attempted: ${skipped.join(", ")}`);
+        const suffix = details.length > 0 ? ` (${details.join("; ")})` : "";
+        throw new ConfigError(`Failed writing ${CLIENT_NAMES[item.client]} (${item.file}): ${reason}${suffix}`);
+      }
+    }
+    outcomes.push({ client: item.client, name: CLIENT_NAMES[item.client], path: item.file, change: item.edited.change, written: item.willWrite, entry: item.edited.entry, matches: item.edited.entry !== null && sameEntry(item.edited.entry, wanted) });
   }
   return outcomes;
 }

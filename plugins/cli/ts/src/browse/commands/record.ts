@@ -141,8 +141,12 @@ export function recorderSource(binding: string | null): string {
   const sensitive = new WeakSet();
   const secret = (el) => {
     if (sensitive.has(el)) return true;
-    const hint = [el.getAttribute("autocomplete"), el.getAttribute("name"), el.id, el.getAttribute("aria-label"), el.getAttribute("placeholder"), labels(el), labelledBy(el)].join(" ");
-    const hidden = (el.localName === "input" && el.type === "password") || /one-time-code|cc-|password|passcode|passphrase|card.?num|(?:^|[^a-z0-9])(one.?time|pin|otp|totp|2fa|mfa|cvv|cvc|ssn|secret|token|6.?digit|(?:recovery|backup|security|verification|auth(?:entication)?).?code|code)(?:[^a-z0-9]|$)/i.test(hint);
+    const hint = [el.getAttribute("autocomplete"), el.getAttribute("name"), el.id, el.getAttribute("aria-label"), el.getAttribute("placeholder"), labels(el), labelledBy(el)]
+      .filter(Boolean)
+      .join(" ")
+      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+      .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
+    const hidden = (el.localName === "input" && el.type === "password") || /one-time-code|cc-|password|passcode|passphrase|card.?num|totp|2fa|mfa|secret|token|verification|(?:^|[^a-z])(one.?time|pin|otp|cvv|cvc|ssn|6.?digit|(?:recovery|backup|security|auth(?:entication)?).?code|code)(?:[^a-z]|$)/i.test(hint);
     const box = !hidden && el.localName === "input" && el.maxLength === 1 && otpGroup(el);
     if (hidden || box) sensitive.add(el);
     return hidden || box;

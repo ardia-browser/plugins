@@ -511,6 +511,18 @@ async function servePage(run: ScriptRun, request: Request): Promise<Answer> {
 export const DISPLAY_BYTES = 1_500_000;
 export const DISPLAY_COPIES_KEPT = 32;
 const DISPLAY_COPY_NAME = /^display-[0-9]{13,}-[0-9a-f]{12}\.(?:png|jpe?g|webp)$/u;
+const activeScriptRuns = new Set<ScriptRun>();
+
+function activeDisplayPaths(extra?: Iterable<string>): Set<string> {
+  const held = new Set<string>();
+  for (const run of activeScriptRuns) {
+    for (const shot of run.displayed) held.add(shot.path);
+  }
+  if (extra !== undefined) {
+    for (const file of extra) held.add(file);
+  }
+  return held;
+}
 
 function readBounded(file: string, limit: number): Buffer | null {
   let fd: number | undefined;
@@ -534,26 +546,28 @@ function readBounded(file: string, limit: number): Buffer | null {
   }
 }
 
-function pruneCopies(folder: string): void {
+function pruneCopies(folder: string, keep: ReadonlySet<string> = new Set()): void {
   try {
-    const copies: { name: string; at: number }[] = [];
+    const copies: { file: string; at: number }[] = [];
     for (const name of readdirSync(folder)) {
       if (!DISPLAY_COPY_NAME.test(name)) continue;
+      const file = nodePath.join(folder, name);
+      if (keep.has(file)) continue;
       try {
-        const info = lstatSync(nodePath.join(folder, name));
-        if (info.isFile()) copies.push({ name, at: info.mtimeMs });
+        const info = lstatSync(file);
+        if (info.isFile()) copies.push({ file, at: info.mtimeMs });
       } catch {}
     }
     copies.sort((a, b) => a.at - b.at);
     for (const old of copies.slice(0, Math.max(0, copies.length - DISPLAY_COPIES_KEPT))) {
       try {
-        unlinkSync(nodePath.join(folder, old.name));
+        unlinkSync(old.file);
       } catch {}
     }
   } catch {}
 }
 
-export function snapshotShot(shot: DisplayImage, folder: string): DisplayImage | null {
+export function snapshotShot(shot: DisplayImage, folder: string, keep?: Iterable<string>): DisplayImage | null {
   const bytes = readBounded(shot.path, DISPLAY_BYTES);
   if (bytes === null) return null;
   const extension = nodePath.extname(shot.path).toLowerCase();
@@ -563,7 +577,9 @@ export function snapshotShot(shot: DisplayImage, folder: string): DisplayImage |
     fd = openSync(copy, fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | (fsConstants.O_NOFOLLOW ?? 0), 0o600);
     for (let at = 0; at < bytes.length; ) at += writeSync(fd, bytes, at, bytes.length - at);
     const info = fstatSync(fd, { bigint: true });
-    pruneCopies(folder);
+    const held = activeDisplayPaths(keep);
+    held.add(copy);
+    pruneCopies(folder, held);
     return { ...shot, path: copy, dev: String(info.dev), ino: String(info.ino), size: Number(info.size) };
   } catch {
     return null;
@@ -826,6 +842,7 @@ export async function run(ctx: Ctx, source: string, seconds: number, mode: Scrip
     started.repl = repl;
     started.spill = repl && !mode.full ? SPILL_CHARS : 0;
     script = started;
+    activeScriptRuns.add(started);
     let outcome: { value: Message } | { timedOut: true };
     try {
       outcome = await withDeadline(seconds, async () => {
@@ -846,6 +863,7 @@ export async function run(ctx: Ctx, source: string, seconds: number, mode: Scrip
     message = outcome.value;
     keep = repl;
   } finally {
+    if (script !== null) activeScriptRuns.delete(script);
     if (!keep) runner.kill();
     if (script !== null) await (script as ScriptRun).drain();
     if (repl) releaseRepl(state, runner, keep && runner.alive && (script === null || (script as ScriptRun).error === null));

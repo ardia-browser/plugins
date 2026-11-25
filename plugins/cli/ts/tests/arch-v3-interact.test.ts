@@ -94,12 +94,12 @@ describe("commands and helpers", () => {
     expect(Object.hasOwn(OWNERS, "handoff")).toBe(false);
   });
 
-  test("fill-otp parses its flags around the code, and --profile stands alone", () => {
+  test("fill-otp parses its flags around the code, and allows --within with --profile", () => {
     expect(otpRequest(["123 456", "--within", "Verify", "--sensitive"])).toEqual({ profile: null, code: "123456", within: "Verify", instant: false });
     expect(otpRequest(["--within=Card", "--no-humanize", "AB12"])).toEqual({ profile: null, code: "AB12", within: "Card", instant: true });
     expect(otpRequest(["--profile", "acme"])).toEqual({ profile: "acme", code: null, within: null, instant: false });
+    expect(otpRequest(["--profile", "acme", "--within", "#verify"])).toEqual({ profile: "acme", code: null, within: "#verify", instant: false });
     expect(() => otpRequest(["--profile", "acme", "123456"])).toThrow("not both");
-    expect(() => otpRequest(["--profile", "acme", "--within", "x"])).toThrow("doesn't take --within");
     expect(() => otpRequest(["--profile", "../x"])).toThrow("saved auth profile");
   });
 
@@ -323,27 +323,36 @@ describe.skipIf(HEADLESS === undefined)("page scripts in a real Chromium", () =>
     await run("globalThis.__ardiaRecorderStop && globalThis.__ardiaRecorderStop()");
   });
 
-  test("the recorder hides digits in a name=code field and records post-click state on keyboard ARIA toggles", async () => {
+  test("the recorder hides digits in name=code, name=verification, otpInput and accessToken fields and records post-click state on keyboard ARIA toggles", async () => {
     await run(`(() => {
-      if (!document.getElementById("named-code")) {
-        const input = document.createElement("input");
-        input.id = "named-code";
-        input.name = "code";
-        document.body.appendChild(input);
+      for (const [id, name] of [["named-code", "code"], ["named-verif", "verification"], ["camel-otp", "otpInput"], ["camel-token", "accessToken"], ["plain-note", "notes"]]) {
+        if (!document.getElementById(id)) {
+          const input = document.createElement("input");
+          input.id = id;
+          input.name = name;
+          document.body.appendChild(input);
+        }
       }
       document.getElementById("wifi").setAttribute("aria-checked", "true");
     })()`);
     await run(RECORDER_SOURCE);
     await run(`globalThis[${JSON.stringify(QUEUE)}].length = 0`);
-    await press("#named-code");
-    await send("Input.insertText", { text: "123456" });
+    const pairs: [string, string][] = [["#named-code", "123456"], ["#named-verif", "654321"], ["#camel-otp", "112233"], ["#camel-token", "tok-secret"], ["#plain-note", "hello"]];
+    for (const [sel, val] of pairs) {
+      await press(sel);
+      await send("Input.insertText", { text: val });
+    }
     await run(`document.getElementById("wifi").focus()`);
     await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
     await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
     await new Promise((resolve) => setTimeout(resolve, 100));
     const events = ((await run(`globalThis[${JSON.stringify(QUEUE)}].map((line) => JSON.parse(line))`)) as Record<string, unknown>[]);
-    const codeFill = events.find((event) => event["kind"] === "fill" && (event["target"] as Record<string, unknown>)["fieldName"] === "code");
-    expect(codeFill).toMatchObject({ secret: true, value: "" });
+    for (const fieldName of ["code", "verification", "otpInput", "accessToken"]) {
+      const found = events.find((event) => event["kind"] === "fill" && (event["target"] as Record<string, unknown>)["fieldName"] === fieldName);
+      expect(found).toMatchObject({ secret: true, value: "" });
+    }
+    const plain = events.find((event) => event["kind"] === "fill" && (event["target"] as Record<string, unknown>)["fieldName"] === "notes");
+    expect(plain).toMatchObject({ secret: false, value: "hello" });
     const switchClicks = events.filter((event) => event["kind"] === "click" && (event["target"] as Record<string, unknown>)["role"] === "switch");
     const confirms = events.filter((event) => event["kind"] === "confirm");
     if (switchClicks.length > 0) {

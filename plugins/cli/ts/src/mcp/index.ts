@@ -210,7 +210,8 @@ export class SessionDaemon implements Daemon {
   readonly keySource: string;
   private readonly config: JsonObject;
   private claimedAt = -Infinity;
-  private claiming: { promise: Promise<string | null>; controller: AbortController; waiters: number } | null = null;
+  private claiming: { promise: Promise<string | null>; controller: AbortController; waiters: number; aborted: boolean } | null = null;
+  private cleanup: Promise<void> | null = null;
 
   constructor(
     private readonly found: Found,
@@ -300,16 +301,35 @@ export class SessionDaemon implements Daemon {
     return { line: Buffer.from(`${dumps(payload, "spaced")}\n`, "utf8"), timeout };
   }
 
+  private awaitCleanup(signal?: AbortSignal): Promise<void> {
+    const pending = this.cleanup;
+    if (pending === null) return Promise.resolve();
+    if (signal === undefined) return pending;
+    if (signal.aborted) return Promise.reject(new BrowseError("cancelled", 130, "interrupted"));
+    return new Promise<void>((resolve, reject) => {
+      const onAbort = () => reject(new BrowseError("cancelled", 130, "interrupted"));
+      signal.addEventListener("abort", onAbort, { once: true });
+      pending.then(() => {
+        signal.removeEventListener("abort", onAbort);
+        if (signal.aborted) reject(new BrowseError("cancelled", 130, "interrupted"));
+        else resolve();
+      });
+    });
+  }
+
   async register(now = Date.now(), signal?: AbortSignal): Promise<string | null> {
     if (this.auto === null || this.socket !== undefined) return null;
     if (signal?.aborted) throw new BrowseError("cancelled", 130, "interrupted");
+    while (this.claiming === null && this.cleanup !== null) await this.awaitCleanup(signal);
+    if (signal?.aborted) throw new BrowseError("cancelled", 130, "interrupted");
     let current = this.claiming;
-    if (current === null) {
+    if (current === null || current.aborted) {
       if (now - this.claimedAt < CLAIM_EVERY_MS) return null;
       const controller = new AbortController();
-      const entry: { promise: Promise<string | null>; controller: AbortController; waiters: number } = {
+      const entry: { promise: Promise<string | null>; controller: AbortController; waiters: number; aborted: boolean } = {
         controller,
         waiters: 0,
+        aborted: false,
         promise: Promise.resolve(null),
       };
       entry.promise = (async () => {
@@ -330,7 +350,17 @@ export class SessionDaemon implements Daemon {
       if (released) return;
       released = true;
       current.waiters -= 1;
-      if (current.waiters <= 0) current.controller.abort();
+      if (current.waiters <= 0 && !current.aborted) {
+        current.aborted = true;
+        if (this.claiming === current) this.claiming = null;
+        const tail = current.promise.then(() => undefined, () => undefined);
+        const chained = (this.cleanup ?? Promise.resolve()).then(() => tail);
+        this.cleanup = chained;
+        void chained.finally(() => {
+          if (this.cleanup === chained) this.cleanup = null;
+        });
+        current.controller.abort();
+      }
     };
     if (signal === undefined) {
       try {
