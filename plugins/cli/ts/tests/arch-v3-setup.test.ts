@@ -457,6 +457,24 @@ command = "other"
     expect(() => manage(args("install", { clients: ["claude", "codex", "cursor"] }), atomicPaths)).toThrow("left alone");
     expect(JSON.parse(fs.readFileSync(atomicPaths.claude, "utf8"))).toEqual({ existing: true });
     expect(fs.existsSync(atomicPaths.cursor)).toBe(false);
+
+    const sharedPaths = sandbox();
+    const sharedFile = path.join(path.dirname(sharedPaths.claude), "shared.json");
+    fs.writeFileSync(sharedFile, "{}");
+    fs.mkdirSync(path.dirname(sharedPaths.cursor), { recursive: true });
+    fs.symlinkSync(sharedFile, sharedPaths.claude);
+    fs.symlinkSync(sharedFile, sharedPaths.cursor);
+    manage(args("install", { clients: ["claude", "cursor"] }), sharedPaths);
+    expect(JSON.parse(fs.readFileSync(sharedFile, "utf8")).mcpServers.ardia).toEqual({ type: "stdio", command: "ardia", args: ["mcp"], env: {} });
+
+    const relRoot = path.join(root, `rel-link-${counter}`);
+    fs.mkdirSync(path.join(relRoot, "real", "prefs"), { recursive: true });
+    fs.symlinkSync(path.join(relRoot, "real", "prefs"), path.join(relRoot, "alias"));
+    fs.symlinkSync("../missing.json", path.join(relRoot, "real", "prefs", "config.json"));
+    const relPaths = { ...sandbox(), claude: path.join(relRoot, "alias", "config.json") };
+    manage(args("install", { clients: ["claude"] }), relPaths);
+    expect(fs.existsSync(path.join(relRoot, "real", "missing.json"))).toBe(true);
+    expect(fs.existsSync(path.join(relRoot, "missing.json"))).toBe(false);
   });
 
   test("a fresh register() waits for an aborted claim's cleanup instead of inheriting its cancellation", async () => {

@@ -657,7 +657,7 @@ export class Daemon {
       const timer = setTimeout(() => deadline.abort(new Cancelled()), this.closeTimeout * 1000);
       try {
         await within(
-          withSignal(deadline.signal, () => this.closeTabs(tally)),
+          withSignal(deadline.signal, () => this.closeTabs(tally, evicting)),
           this.closeTimeout,
         );
       } catch (error) {
@@ -675,7 +675,7 @@ export class Daemon {
     return render(ctx.options, new Result({ closed: true, tabs: tally.closed, keptOpen: tally.kept }, text), null, "close");
   }
 
-  private async closeTabs(tally: { closed: number; kept: string[] }): Promise<void> {
+  private async closeTabs(tally: { closed: number; kept: string[] }, cancellable = false): Promise<void> {
     if (currentSignal()?.aborted) return;
     const state = this.state;
     const leftovers = state.instance !== null && state.registry.temporaries(state.instance).length > 0;
@@ -687,7 +687,7 @@ export class Daemon {
       if (currentSignal()?.aborted) return;
       await state.pairBeforeClosing();
       if (currentSignal()?.aborted) return;
-      await temptabs.sweep(state);
+      await temptabs.sweep(state, cancellable);
       const registry = state.registry;
       const instance = state.instance;
       for (const targetId of [...state.opened]) {

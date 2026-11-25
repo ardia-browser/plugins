@@ -87,6 +87,22 @@ function readText(file: string): string | null {
   }
 }
 
+function canonicalParent(file: string): string {
+  const parts: string[] = [];
+  let dir = path.resolve(file);
+  for (;;) {
+    try {
+      const real = fs.realpathSync(dir);
+      return parts.length === 0 ? real : path.join(real, ...parts);
+    } catch {
+      const parent = path.dirname(dir);
+      if (parent === dir) return path.join(dir, ...parts);
+      parts.unshift(path.basename(dir));
+      dir = parent;
+    }
+  }
+}
+
 export function resolveTarget(file: string): string {
   let current = file;
   const seen = new Set<string>();
@@ -95,10 +111,10 @@ export function resolveTarget(file: string): string {
     try {
       info = fs.lstatSync(current);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return current;
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return canonicalParent(current);
       throw new ConfigError(`Can't read ${current}: ${(error as Error).message}`);
     }
-    if (!info.isSymbolicLink()) return current;
+    if (!info.isSymbolicLink()) return canonicalParent(current);
     const key = `${info.dev}:${info.ino}`;
     if (seen.has(key) || seen.size >= 40) throw new ConfigError(`${file} is a symlink loop, so it was left alone`);
     seen.add(key);
@@ -108,7 +124,9 @@ export function resolveTarget(file: string): string {
       const code = (error as NodeJS.ErrnoException).code;
       if (code === "ELOOP") throw new ConfigError(`${file} is a symlink loop, so it was left alone`);
       if (code !== "ENOENT") throw new ConfigError(`Can't read ${current}: ${(error as Error).message}`);
-      current = path.resolve(path.dirname(current), fs.readlinkSync(current));
+      const rawLink = fs.readlinkSync(current);
+      const baseDir = path.isAbsolute(rawLink) ? "/" : fs.realpathSync(path.dirname(current));
+      current = path.resolve(baseDir, rawLink);
     }
   }
 }
@@ -656,20 +674,33 @@ export function present(paths: Record<Client, string>): Client[] {
 export function manage(args: ManageArgs, paths: Record<Client, string> = configPaths()): Outcome[] {
   const wanted = serverEntry(args.command);
   const clients = args.clients ?? (args.action === "status" ? [...CLIENTS] : present(paths));
+  const targetFormats = new Map<string, { client: Client; format: "toml" | "json" }>();
+  const targetText = new Map<string, string | null>();
   const planned: { client: Client; file: string; target: string; edited: { text: string | null; change: Change; entry: ServerEntry | null }; willWrite: boolean }[] = [];
   for (const client of clients) {
     const file = paths[client];
     const target = resolveTarget(file);
-    const text = readText(target);
+    const format = client === "codex" ? "toml" : "json";
+    const prior = targetFormats.get(target);
+    if (prior !== undefined && prior.format !== format) {
+      throw new ConfigError(`${CLIENT_NAMES[prior.client]} and ${CLIENT_NAMES[client]} both point to ${target}, so it was left alone`);
+    }
+    targetFormats.set(target, { client, format });
+    const text = targetText.has(target) ? (targetText.get(target) as string | null) : readText(target);
     const edited = client === "codex" ? editToml(text, args.action, wanted) : editJson(file, text, args.action, wanted, client);
     const willWrite = edited.text !== null && !args.dryRun && args.action !== "status";
+    targetText.set(target, edited.text ?? text);
     planned.push({ client, file, target, edited, willWrite });
   }
+  const latestWrite = new Map<string, number>();
+  planned.forEach((item, index) => {
+    if (item.willWrite) latestWrite.set(item.target, index);
+  });
   const writtenClients: Client[] = [];
   const outcomes: Outcome[] = [];
   for (let index = 0; index < planned.length; index += 1) {
     const item = planned[index] as (typeof planned)[number];
-    if (item.willWrite) {
+    if (item.willWrite && latestWrite.get(item.target) === index) {
       try {
         writeAtomic(item.target, item.edited.text as string);
         writtenClients.push(item.client);

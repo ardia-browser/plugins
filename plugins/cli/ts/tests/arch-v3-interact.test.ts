@@ -323,9 +323,9 @@ describe.skipIf(HEADLESS === undefined)("page scripts in a real Chromium", () =>
     await run("globalThis.__ardiaRecorderStop && globalThis.__ardiaRecorderStop()");
   });
 
-  test("the recorder hides digits in name=code, name=verification, otpInput and accessToken fields and records post-click state on keyboard ARIA toggles", async () => {
+  test("the recorder hides digits in sensitive fields including camelCase passWord/PassPhrase and records post-click state on keyboard ARIA toggles", async () => {
     await run(`(() => {
-      for (const [id, name] of [["named-code", "code"], ["named-verif", "verification"], ["camel-otp", "otpInput"], ["camel-token", "accessToken"], ["plain-note", "notes"]]) {
+      for (const [id, name] of [["named-code", "code"], ["named-verif", "verification"], ["camel-otp", "otpInput"], ["camel-token", "accessToken"], ["camel-pw", "passWord"], ["camel-pp", "PassPhrase"], ["plain-note", "notes"]]) {
         if (!document.getElementById(id)) {
           const input = document.createElement("input");
           input.id = id;
@@ -333,32 +333,42 @@ describe.skipIf(HEADLESS === undefined)("page scripts in a real Chromium", () =>
           document.body.appendChild(input);
         }
       }
-      document.getElementById("wifi").setAttribute("aria-checked", "true");
+      if (!document.getElementById("kbd-switch")) {
+        const button = document.createElement("button");
+        button.id = "kbd-switch";
+        button.setAttribute("role", "switch");
+        button.setAttribute("aria-checked", "false");
+        button.textContent = "Alerts";
+        button.addEventListener("click", () => button.setAttribute("aria-checked", button.getAttribute("aria-checked") === "true" ? "false" : "true"));
+        document.body.appendChild(button);
+      } else {
+        document.getElementById("kbd-switch").setAttribute("aria-checked", "false");
+      }
     })()`);
     await run(RECORDER_SOURCE);
     await run(`globalThis[${JSON.stringify(QUEUE)}].length = 0`);
-    const pairs: [string, string][] = [["#named-code", "123456"], ["#named-verif", "654321"], ["#camel-otp", "112233"], ["#camel-token", "tok-secret"], ["#plain-note", "hello"]];
+    const pairs: [string, string][] = [["#named-code", "123456"], ["#named-verif", "654321"], ["#camel-otp", "112233"], ["#camel-token", "tok-secret"], ["#camel-pw", "my-pass"], ["#camel-pp", "my-phrase"], ["#plain-note", "hello"]];
     for (const [sel, val] of pairs) {
       await press(sel);
       await send("Input.insertText", { text: val });
     }
-    await run(`document.getElementById("wifi").focus()`);
-    await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
-    await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+    await run(`document.getElementById("kbd-switch").focus()`);
+    await send("Input.dispatchKeyEvent", { type: "keyDown", key: " ", code: "Space", windowsVirtualKeyCode: 32 });
+    await send("Input.dispatchKeyEvent", { type: "keyUp", key: " ", code: "Space", windowsVirtualKeyCode: 32 });
     await new Promise((resolve) => setTimeout(resolve, 100));
     const events = ((await run(`globalThis[${JSON.stringify(QUEUE)}].map((line) => JSON.parse(line))`)) as Record<string, unknown>[]);
-    for (const fieldName of ["code", "verification", "otpInput", "accessToken"]) {
+    for (const fieldName of ["code", "verification", "otpInput", "accessToken", "passWord", "PassPhrase"]) {
       const found = events.find((event) => event["kind"] === "fill" && (event["target"] as Record<string, unknown>)["fieldName"] === fieldName);
       expect(found).toMatchObject({ secret: true, value: "" });
     }
     const plain = events.find((event) => event["kind"] === "fill" && (event["target"] as Record<string, unknown>)["fieldName"] === "notes");
     expect(plain).toMatchObject({ secret: false, value: "hello" });
-    const switchClicks = events.filter((event) => event["kind"] === "click" && (event["target"] as Record<string, unknown>)["role"] === "switch");
-    const confirms = events.filter((event) => event["kind"] === "confirm");
-    if (switchClicks.length > 0) {
-      expect(switchClicks[0]?.["checked"]).toBeNull();
-      expect(confirms.at(-1)?.["checked"]).toBe(false);
-    }
+    const switchClicks = events.filter((event) => event["kind"] === "click" && (event["target"] as Record<string, unknown>)["id"] === "kbd-switch");
+    expect(switchClicks.length).toBeGreaterThanOrEqual(1);
+    const click = switchClicks[0] as Record<string, unknown>;
+    expect(click["checked"]).toBeNull();
+    const confirm = events.find((event) => event["kind"] === "confirm" && event["pointer"] === click["pointer"]);
+    expect(confirm?.["checked"]).toBe(true);
     await run("globalThis.__ardiaRecorderStop && globalThis.__ardiaRecorderStop()");
   });
 

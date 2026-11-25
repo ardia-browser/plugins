@@ -277,12 +277,13 @@ async function setEditor(page: Page, editor: Element, text: string, humanize: bo
   else await fill(page, editor, text, humanize);
 }
 
-async function commitCell(page: Page, editor: Element, humanize: boolean, key = "Enter"): Promise<void> {
+async function commitCell(page: Page, editor: Element, humanize: boolean, key = "Enter", inline = false): Promise<void> {
   const editorState = async () => asRecord(await page.call(ACTIONS_CELL_EDITOR_STATE, [editor], { frame: editor.frame, read: true }));
   if (!(await editorState())["open"]) return;
   await pressKey(page, editor.frame, key, humanize);
   if (await pollTimes(async () => ((await editorState())["open"] ? null : true), COMMIT_CHECKS)) return;
   const state = await editorState();
+  if (inline && !state["invalid"] && !state["message"]) return;
   try {
     await pressKey(page, editor.frame, "Escape", humanize);
   } catch (error) {
@@ -306,7 +307,7 @@ async function fillCell(page: Page, element: Element, cell: Element, text: strin
   add("cell_edits");
   if (!opened && !always) return null;
   if (!opened) await page.focusElement(editor);
-  await commitCell(page, editor, humanize, commit);
+  await commitCell(page, editor, humanize, commit, !opened);
   const now = await page.call(ACTIONS_CELL_NOW, [], { frame: cell.frame, read: true });
   return { cell: name !== undefined ? joinedWords(name) : element.label, value: now, was };
 }

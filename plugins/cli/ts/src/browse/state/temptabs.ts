@@ -100,11 +100,12 @@ async function listTargets(state: TempTabState): Promise<Record<string, unknown>
   return (Array.isArray(infos) ? infos : []).filter((info): info is Record<string, unknown> => info !== null && typeof info === "object");
 }
 
-export async function closeMarked(state: TempTabState, slots: ReadonlyMap<string, string>, dropMissing: boolean): Promise<void> {
-  if (slots.size === 0) return;
+export async function closeMarked(state: TempTabState, slots: ReadonlyMap<string, string>, dropMissing: boolean, cancellable = false): Promise<void> {
+  if (slots.size === 0 || (cancellable && currentSignal()?.aborted)) return;
   const infos = await listTargets(state);
   if (infos === null) return;
   for (const [slot, nonce] of slots) {
+    if (cancellable && currentSignal()?.aborted) return;
     const marked = infos.find((info) => info["url"] === markerUrl(nonce));
     if (marked === undefined) {
       if (dropMissing) giveBack(state, slot);
@@ -272,8 +273,9 @@ export async function closeOne(state: TempTabState, targetId: string): Promise<v
   state.forgetTarget(targetId);
 }
 
-export async function closeAll(state: TempTabState, owned: string[]): Promise<void> {
+export async function closeAll(state: TempTabState, owned: string[], cancellable = false): Promise<void> {
   for (const targetId of [...owned]) {
+    if (cancellable && currentSignal()?.aborted) return;
     await closeOne(state, targetId);
     owned.splice(owned.indexOf(targetId), 1);
   }
@@ -283,18 +285,19 @@ export async function release(state: TempTabState, owned: string[]): Promise<voi
   await settleThenCancel(() => closeAll(state, owned));
 }
 
-export async function sweep(state: TempTabState): Promise<void> {
+export async function sweep(state: TempTabState, cancellable = false): Promise<void> {
+  if (cancellable && currentSignal()?.aborted) return;
   const orphans = state.registry.claimOrphans(state.instance);
   if (orphans.length === 0) return;
   const nonces = state.registry.nonces(state.instance);
   const slots = new Map([...nonces].filter(([slot]) => orphans.includes(slot)));
-  await closeMarked(state, slots, true);
+  await closeMarked(state, slots, true, cancellable);
+  if (cancellable && currentSignal()?.aborted) return;
   const targets = orphans.filter((targetId) => !slots.has(targetId));
   const present = targets.length > 0 ? await presentTargets(state) : null;
-  if (present === null) return;
+  if (present === null || (cancellable && currentSignal()?.aborted)) return;
   for (const targetId of targets) if (!present.has(targetId)) state.registry.dropTemporary(state.instance, targetId);
-  await release(
-    state,
-    targets.filter((targetId) => present.has(targetId)),
-  );
+  const live = targets.filter((targetId) => present.has(targetId));
+  if (cancellable) await closeAll(state, live, true);
+  else await release(state, live);
 }

@@ -510,8 +510,18 @@ async function servePage(run: ScriptRun, request: Request): Promise<Answer> {
 
 export const DISPLAY_BYTES = 1_500_000;
 export const DISPLAY_COPIES_KEPT = 32;
-const DISPLAY_COPY_NAME = /^display-[0-9]{13,}-[0-9a-f]{12}\.(?:png|jpe?g|webp)$/u;
+const DISPLAY_COPY_NAME = /^display-(?:p([0-9]+)-)?[0-9]{13,}-[0-9a-f]{12}\.(?:png|jpe?g|webp)$/u;
 const activeScriptRuns = new Set<ScriptRun>();
+
+function pidAlive(pid: number): boolean {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
 
 function activeDisplayPaths(extra?: Iterable<string>): Set<string> {
   const held = new Set<string>();
@@ -546,11 +556,17 @@ function readBounded(file: string, limit: number): Buffer | null {
   }
 }
 
-function pruneCopies(folder: string, keep: ReadonlySet<string> = new Set()): void {
+function pruneCopies(folder: string, keep: ReadonlySet<string> = new Set(), ownerPid = process.pid): void {
   try {
     const copies: { file: string; at: number }[] = [];
     for (const name of readdirSync(folder)) {
-      if (!DISPLAY_COPY_NAME.test(name)) continue;
+      const match = DISPLAY_COPY_NAME.exec(name);
+      if (match === null) continue;
+      const pidText = match[1];
+      if (pidText !== undefined) {
+        const pid = Number(pidText);
+        if (pid !== ownerPid && pidAlive(pid)) continue;
+      }
       const file = nodePath.join(folder, name);
       if (keep.has(file)) continue;
       try {
@@ -567,11 +583,11 @@ function pruneCopies(folder: string, keep: ReadonlySet<string> = new Set()): voi
   } catch {}
 }
 
-export function snapshotShot(shot: DisplayImage, folder: string, keep?: Iterable<string>): DisplayImage | null {
+export function snapshotShot(shot: DisplayImage, folder: string, keep?: Iterable<string>, ownerPid = process.pid): DisplayImage | null {
   const bytes = readBounded(shot.path, DISPLAY_BYTES);
   if (bytes === null) return null;
   const extension = nodePath.extname(shot.path).toLowerCase();
-  const copy = nodePath.join(folder, `display-${Date.now()}-${randomBytes(6).toString("hex")}${extension}`);
+  const copy = nodePath.join(folder, `display-p${ownerPid}-${Date.now()}-${randomBytes(6).toString("hex")}${extension}`);
   let fd: number | undefined;
   try {
     fd = openSync(copy, fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | (fsConstants.O_NOFOLLOW ?? 0), 0o600);
@@ -579,7 +595,7 @@ export function snapshotShot(shot: DisplayImage, folder: string, keep?: Iterable
     const info = fstatSync(fd, { bigint: true });
     const held = activeDisplayPaths(keep);
     held.add(copy);
-    pruneCopies(folder, held);
+    pruneCopies(folder, held, ownerPid);
     return { ...shot, path: copy, dev: String(info.dev), ino: String(info.ino), size: Number(info.size) };
   } catch {
     return null;

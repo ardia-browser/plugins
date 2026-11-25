@@ -141,11 +141,9 @@ export function recorderSource(binding: string | null): string {
   const sensitive = new WeakSet();
   const secret = (el) => {
     if (sensitive.has(el)) return true;
-    const hint = [el.getAttribute("autocomplete"), el.getAttribute("name"), el.id, el.getAttribute("aria-label"), el.getAttribute("placeholder"), labels(el), labelledBy(el)]
-      .filter(Boolean)
-      .join(" ")
-      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-      .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
+    const raw = [el.getAttribute("autocomplete"), el.getAttribute("name"), el.id, el.getAttribute("aria-label"), el.getAttribute("placeholder"), labels(el), labelledBy(el)].filter(Boolean).join(" ");
+    const split = raw.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
+    const hint = raw + " " + split;
     const hidden = (el.localName === "input" && el.type === "password") || /one-time-code|cc-|password|passcode|passphrase|card.?num|totp|2fa|mfa|secret|token|verification|(?:^|[^a-z])(one.?time|pin|otp|cvv|cvc|ssn|6.?digit|(?:recovery|backup|security|auth(?:entication)?).?code|code)(?:[^a-z]|$)/i.test(hint);
     const box = !hidden && el.localName === "input" && el.maxLength === 1 && otpGroup(el);
     if (hidden || box) sensitive.add(el);
