@@ -1,100 +1,102 @@
 #!/bin/sh
 set -eu
 
-REPO_RAW="https://raw.githubusercontent.com/mantrakp04/ardia-plugins/main"
-SOURCE="${ARDIA_PLUGINS_SOURCE:-$REPO_RAW}"
-PLUGINS="compact-command-bar"
-
 say() { printf '%s\n' "$*"; }
-fail() { printf 'ardia-plugins: %s\n' "$*" >&2; exit 1; }
+fail() { printf 'install.sh: %s\n' "$*" >&2; exit 1; }
 
 usage() {
-  say "Installs an Ardia plugin: writes its settings into ~/.config/ardia/config.json with the"
-  say "ardia command, and a running Ardia applies them at once."
-  say ""
-  say "usage: install.sh <plugin>            install a plugin"
-  say "       install.sh --remove <plugin>   put back what the plugin changed"
-  say "       install.sh --list              list the plugins"
-  say ""
-  say "ARDIA_PLUGINS_SOURCE=<folder> installs from a local checkout instead of GitHub."
+  cat <<'USAGE'
+Links a plugin from this checkout into Ardia for development, with @ardia/plugin-cli's ardia-plugin dev --once:
+it builds the plugin, checks it, writes Ardia's plugins-dev/<scope>__<name>.json link to its folder and asks a
+running Ardia to reload it. Ardia installs released plugins from its registry (ardia.dev/r/); this is for trying
+your changes.
+
+usage: sh install.sh <plugin> [--data-dir <dir>] [--config-dir <dir>]   build and link plugins/<plugin>
+       sh install.sh --remove <plugin> [--data-dir <dir>] [--config-dir <dir>]   remove its dev link
+       sh install.sh --list                                                 list the plugins
+
+Run pnpm install at the repository root first. ARDIA_DATA_DIR works as --data-dir. Ardia reloads a linked plugin
+on save only with Settings › Advanced › Let programs control Ardia on; otherwise it picks the link up when it starts.
+cli is native and doesn't link this way: build it with plugins/cli/build.sh, and install the ardia command with
+plugins/cli/install.sh.
+USAGE
 }
 
-find_ardia() {
-  if command -v ardia >/dev/null 2>&1; then command -v ardia; return; fi
-  for candidate in "$HOME/.local/bin/ardia" "/usr/local/bin/ardia" "/opt/homebrew/bin/ardia"; do
-    if [ -x "$candidate" ]; then say "$candidate"; return; fi
-  done
-  fail "the ardia command isn't installed. In Ardia, open Settings, search for \"command line\", and install it."
+repo=$(cd "$(dirname "$0")" && pwd)
+ardia_plugin=$repo/node_modules/.bin/ardia-plugin
+
+manifest_field() {
+  node -e 'const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); const v = process.argv[2].split(".").reduce((o, k) => (o == null ? o : o[k]), m); process.stdout.write(v == null ? "" : String(v));' "$1" "$2"
 }
 
-fetch_plugin() {
+plugin_dir() {
   case "$1" in
     ''|*[!a-z0-9-]*) fail "\"$1\" isn't a plugin name (try --list)" ;;
   esac
-  case "$SOURCE" in
-    http://*|https://*)
-      curl -fsSL "$SOURCE/plugins/$1/plugin.json" -o "$2" 2>/dev/null || fail "no plugin named \"$1\" (try --list)" ;;
-    *)
-      [ -f "$SOURCE/plugins/$1/plugin.json" ] || fail "no plugin named \"$1\" in $SOURCE"
-      cp "$SOURCE/plugins/$1/plugin.json" "$2" ;;
+  [ -f "$repo/plugins/$1/plugin.json" ] || fail "there's no plugins/$1/plugin.json (try --list)"
+  printf '%s\n' "$repo/plugins/$1"
+}
+
+config_dir() {
+  if [ -n "$config_dir" ]; then printf '%s\n' "$config_dir"; return; fi
+  if [ -n "$data_dir" ]; then printf '%s\n' "$data_dir/config"; return; fi
+  case ${XDG_CONFIG_HOME:-} in
+    /*) printf '%s\n' "$XDG_CONFIG_HOME/ardia" ;;
+    *) printf '%s\n' "$HOME/.config/ardia" ;;
   esac
 }
 
-plugin_entries() {
-  osascript -l JavaScript - "$1" "$2" <<'JS'
-function run(argv) {
-  const text = $.NSString.stringWithContentsOfFileEncodingError(argv[0], $.NSUTF8StringEncoding, null);
-  if (text.isNil()) throw new Error("can't read the plugin file");
-  const plugin = JSON.parse(text.js);
-  const section = plugin[argv[1]];
-  if (argv[1] === "title") return plugin.title || plugin.name;
-  if (argv[1] === "requires") return plugin.requires || "";
-  if (!section || typeof section !== "object" || Array.isArray(section)) return "";
-  return Object.keys(section).map((key) => key + "\t" + JSON.stringify(section[key])).join("\n");
-}
-JS
-}
+[ $# -gt 0 ] || { usage >&2; exit 64; }
+mode=link
+name=
+data_dir=${ARDIA_DATA_DIR:-}
+config_dir=
+while [ $# -gt 0 ]; do
+  case $1 in
+    -h|--help) usage; exit 0 ;;
+    --list) mode=list; shift ;;
+    --remove) mode=remove; shift ;;
+    --data-dir) [ $# -ge 2 ] || fail "--data-dir needs a folder"; data_dir=$2; shift 2 ;;
+    --config-dir) [ $# -ge 2 ] || fail "--config-dir needs a folder"; config_dir=$2; shift 2 ;;
+    -*) fail "there's no option $1" ;;
+    *) [ -z "$name" ] || fail "name one plugin, not $name and $1"; name=$1; shift ;;
+  esac
+done
+command -v node >/dev/null 2>&1 || fail "this needs Node.js 24 or later"
 
-apply_section() {
-  ardia_bin="$1"; file="$2"; section="$3"; requires="$4"
-  entries=$(plugin_entries "$file" "$section") || fail "the plugin file doesn't parse"
-  [ -n "$entries" ] || fail "the plugin has no $section"
-  printf '%s\n' "$entries" | while IFS="$(printf '\t')" read -r key value; do
-    if ! output=$("$ardia_bin" config set "$key" "$value" 2>&1); then
-      printf '%s\n' "$output" >&2
-      if [ -n "$requires" ]; then
-        fail "this Ardia doesn't know \"$key\" yet. Update Ardia to $requires or later (Settings › General › Check for Updates; the nightly channel gets it first), then run this again."
-      fi
-      fail "couldn't set $key"
-    fi
-    say "  set $key"
+if [ "$mode" = list ]; then
+  for manifest in "$repo"/plugins/*/plugin.json; do
+    dir=$(dirname "$manifest")
+    printf '%-22s %-30s %s\n' "$(basename "$dir")" "$(manifest_field "$manifest" id)" "$(manifest_field "$manifest" version)"
   done
-}
-
-[ $# -gt 0 ] || { usage; exit 1; }
-mode=install
-case "$1" in
-  -h|--help) usage; exit 0 ;;
-  --list)
-    for name in $PLUGINS; do say "$name"; done
-    exit 0 ;;
-  --remove) mode=remove; shift; [ $# -gt 0 ] || { usage; exit 1; } ;;
-esac
-name="$1"
-
-ardia_bin=$(find_ardia)
-tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
-fetch_plugin "$name" "$tmp/plugin.json"
-title=$(plugin_entries "$tmp/plugin.json" title)
-requires=$(plugin_entries "$tmp/plugin.json" requires)
-
-if [ "$mode" = install ]; then
-  say "Installing $title"
-  apply_section "$ardia_bin" "$tmp/plugin.json" settings "$requires"
-  say "Done. Ardia picks it up at once; to remove it: install.sh --remove $name"
-else
-  say "Removing $title"
-  apply_section "$ardia_bin" "$tmp/plugin.json" reset "$requires"
-  say "Done."
+  exit 0
 fi
+
+[ -n "$name" ] || { usage >&2; exit 64; }
+dir=$(plugin_dir "$name")
+id=$(manifest_field "$dir/plugin.json" id)
+[ -n "$id" ] || fail "plugins/$name/plugin.json has no id; is it manifest 3?"
+
+if [ "$mode" = remove ]; then
+  scope=${id%%/*}
+  link="$(config_dir)/plugins-dev/${scope#@}__${id#*/}.json"
+  if [ -f "$link" ]; then
+    rm -f "$link"
+    say "Removed $link; Ardia drops $id when it next looks."
+  else
+    say "$id isn't linked ($link isn't there)."
+  fi
+  exit 0
+fi
+
+[ "$name" != cli ] || fail "cli is native: build it with plugins/cli/build.sh <out dir>, and install the ardia command with plugins/cli/install.sh"
+[ -x "$ardia_plugin" ] || fail "there's no node_modules/.bin/ardia-plugin: run pnpm install at $repo first"
+if [ -f "$dir/package.json" ]; then
+  say "Building $id"
+  node "$repo/scripts/plugins.mjs" build "$name"
+fi
+set -- dev "$dir" --once
+[ -z "$data_dir" ] || set -- "$@" --data-dir "$data_dir"
+[ -z "$config_dir" ] || set -- "$@" --config-dir "$config_dir"
+"$ardia_plugin" "$@"
+say "Linked $id. To unlink it: sh install.sh --remove $name"

@@ -1,0 +1,7 @@
+packages:
+  - "packages/*"
+  - "plugins/*"
+  - "plugins/cli/main"
+
+allowBuilds:
+  esbuild: true

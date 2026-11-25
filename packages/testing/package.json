@@ -1,0 +1,13 @@
+{
+  "name": "@ardia-plugins/testing",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "dependencies": {
+    "@ardia/plugin-sdk": "^3.0.0",
+    "esbuild": "0.28.2"
+  }
+}

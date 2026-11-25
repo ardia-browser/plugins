@@ -259,4 +259,35 @@ describe.skipIf(!RUNS_HERE)("install.sh on Linux x86_64", () => {
     const run = it.install("0.0.9");
     expect([run.status, run.lines.at(-1)]).toEqual([1, "error the tarball has links that point outside it"]);
   });
+
+  test("installs the registry asset, with cli/ at its root, and gives it a .leases folder", () => {
+    it.loginShell("zsh");
+    const tarball = path.join(it.dist, "cli-0.0.5-linux-x64.tar.gz");
+    const stage = fs.mkdtempSync(path.join(it.temp, "stage-"));
+    fs.mkdirSync(path.join(stage, "cli", "bin"), { recursive: true, mode: 0o755 });
+    fs.mkdirSync(path.join(stage, "cli", "dist"), { recursive: true, mode: 0o755 });
+    fs.writeFileSync(path.join(stage, "cli", "bin", "ardia"), "#!/bin/sh\necho 'ardia 0.0.5'\n", { mode: 0o755 });
+    fs.writeFileSync(path.join(stage, "cli", "plugin.json"), '{"manifest": 3, "id": "@ardia/cli", "version": "0.0.5"}\n');
+    fs.writeFileSync(path.join(stage, "cli", "dist", "index.js"), "\n");
+    tarUp(tarball, stage, ["cli"]);
+    fs.writeFileSync(`${tarball}.sha256`, `${sha256(tarball)}  ${path.basename(tarball)}\n`);
+    const run = it.install(null, [], { env: { ARDIA_CLI_URL: `file://${tarball}` } });
+    expect(run.status, run.stderr).toBe(0);
+    expect(run.lines).toContain("version 0.0.5");
+    expect(it.current()).toBe("0.0.5");
+    expect(spawnSync(it.bin, { encoding: "utf8" }).stdout.trim()).toBe("ardia 0.0.5");
+    expect(fs.statSync(path.join(it.cliHome, "0.0.5", ".leases")).isDirectory()).toBe(true);
+  });
+
+  test("refuses a tarball whose root is neither cli/ nor ardia-cli-<version>/", () => {
+    it.loginShell("zsh");
+    const tarball = path.join(it.dist, "cli-0.0.6-linux-x64.tar.gz");
+    const stage = fs.mkdtempSync(path.join(it.temp, "stage-"));
+    fs.mkdirSync(path.join(stage, "other", "bin"), { recursive: true });
+    fs.writeFileSync(path.join(stage, "other", "bin", "ardia"), "#!/bin/sh\n", { mode: 0o755 });
+    tarUp(tarball, stage, ["other"]);
+    fs.writeFileSync(`${tarball}.sha256`, `${sha256(tarball)}\n`);
+    const run = it.install(null, [], { env: { ARDIA_CLI_URL: `file://${tarball}` } });
+    expect([run.status, run.lines.at(-1)]).toEqual([1, "error the tarball's root isn't cli/ or ardia-cli-0.0.6/"]);
+  });
 });

@@ -1,0 +1,7 @@
+node_modules/
+.ardia-packages/
+pnpm-lock.yaml
+plugins/*/release/
+.build/
+plugins/*/dist/
+.DS_Store

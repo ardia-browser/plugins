@@ -1,0 +1,24 @@
+{
+  "name": "@ardia-plugins/credential-provider",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./sidecar": "./src/sidecar.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@ardia/plugin-sdk": "^3.0.0"
+  },
+  "devDependencies": {
+    "@ardia-plugins/testing": "workspace:*",
+    "@types/node": "24.19.2",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3"
+  }
+}

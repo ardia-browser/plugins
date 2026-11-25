@@ -11,13 +11,15 @@ to the new copy, and `~/Library/Application Support/Ardia/CLI/current` points at
 home keep working. Installing turns on "Let the ardia command control Ardia", as the sheet says; after that the setting
 is yours. The program runs as you, outside Ardia's sandbox, like anything you install.
 
-It declares:
+Its `plugin.json` is manifest 3, `@ardia/cli`, and declares:
 
-- `official` and `alwaysOn`, which only a plugin built into Ardia may declare, and the `terminal.fill` icon (`official` lists it among
-  Ardia's official plugins; `alwaysOn` means once installed, it stays);
-- `programs`: `ardia` (`bin/ardia`), with `afterUpdate` run once per new version, as `install.sh` did after an upgrade:
-  `skills install --auto`, `skills refresh`, `computer refresh`;
-- the `control` permission.
+- `scope: "global"` (one copy for the whole app, as `programs` and `control` require) and the `terminal.fill` icon;
+- `main: "dist/index.js"`, built from `main/` with `@ardia/plugin-sdk` 3: the **Command Line: Show Status** view;
+- `contributes.programs`: `ardia` (`bin/ardia`), with `afterUpdate` run once per new version, as `install.sh` did after
+  an upgrade: `skills install --auto`, `skills refresh`, `computer refresh`;
+- `permissions.control`, and the `telemetry` it discloses;
+- `release`: `ardia-browser/plugins`, tags `cli-v<version>`, one archive per platform it builds on,
+  `cli-<version>-macos-arm64.tar.gz` and `cli-<version>-linux-x64.tar.gz`.
 
 It has no helper, page or tools.
 
@@ -27,9 +29,11 @@ It has no helper, page or tools.
 plugins/cli/build.sh <out dir>
 ```
 
-This writes `<out dir>/cli`, the plugin folder Ardia bundles, packed as `cli-plugin-<version>-<platform>.tar.gz`,
-plus the command's tarball `ardia-cli-<version>-<platform>.tar.gz` for Linux and hand installs, each with its
-`.sha256`. `bin/ardia` is the TypeScript command as one Bun executable, with its Node-API addon `bin/ardia-libc.so`
+This writes `<out dir>/cli`, the plugin folder, packed as the registry asset `cli-<version>-<platform>.tar.gz` (with
+`cli/` at its root, deterministic, by `scripts/pack-folder.mjs`, as `ardia-plugin pack` would if `bin/ardia` fit its
+32 MB per-file limit), plus the command's tarball `ardia-cli-<version>-<platform>.tar.gz` for Linux and hand
+installs, each with its `.sha256`. `main/` builds from the repository's pnpm workspace, so run `pnpm install` at the
+root first. `bin/ardia` is the TypeScript command as one Bun executable, with its Node-API addon `bin/ardia-libc.so`
 beside it and esbuild in `libexec/`; there is no Python and no Rust in it. The version is `plugin.json`'s
 (`ARDIA_PLUGIN_VERSION` overrides it for a local build). It needs Bun 1.3.14 and a C compiler; `scripts/build.sh --help`
 lists the rest.
@@ -37,8 +41,10 @@ lists the rest.
 ## Release
 
 The command has its own version and releases, apart from Ardia's. Bump `version` in `plugin.json`, merge, and push
-`cli-v<version>`: `.github/workflows/cli-release.yml` builds macOS and Linux with Bun, and publishes the release with
-every artifact and its `.sha256` (pull requests run it as a dry run). Ardia then pins it with
+`cli-v<version>`: `.github/workflows/release-plugin.yml` builds macOS and Linux with Bun (Developer ID-signing and
+notarizing the macOS build when the `cli-release` environment has its secrets), co-signs each archive with the
+official native key (`<asset>.official-sig`), and publishes the release with the two registry archives, their
+`.sha256` and `install.sh` (pull requests that touch the release scripts run it as a dry run). Ardia then pins it with
 `scripts/release/official-plugins.py pin cli <version>` in ardia-browser/ardia, and its next release bundles, signs
 (Developer ID, hardened runtime) and notarizes it (`docs/cli.md` › Build and release).
 

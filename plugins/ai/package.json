@@ -1,0 +1,21 @@
+{
+  "name": "@ardia-plugins/ai",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "ardia-plugin build",
+    "check": "ardia-plugin check",
+    "pack": "ardia-plugin pack",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@ardia/plugin-sdk": "^3.0.0"
+  },
+  "devDependencies": {
+    "@ardia-plugins/testing": "workspace:*",
+    "@ardia/plugin-cli": "^3.0.0",
+    "typescript": "5.9.3"
+  }
+}

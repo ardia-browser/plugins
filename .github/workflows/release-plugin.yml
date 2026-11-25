@@ -1,0 +1,404 @@
+name: Release a plugin
+
+on:
+  push:
+    tags: ["*-v*"]
+  pull_request:
+    paths:
+      - ".github/workflows/release-plugin.yml"
+      - ".github/release/**"
+      - "scripts/release-info.mjs"
+      - "scripts/official-sig.mjs"
+      - "scripts/notify-registry.mjs"
+      - "scripts/pack-folder.mjs"
+      - "plugins/cli/build.sh"
+      - "plugins/cli/install.sh"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release tag, like cli-v0.8.0 or ai-v1.0.0 (plugin.json must carry its version)
+        type: string
+        required: true
+      dry_run:
+        description: Build, pack, sign and check everything, publish nothing
+        type: boolean
+        default: true
+      ardia_packages:
+        description: owner/repo@tag of a release with ardia-plugin-sdk and ardia-plugin-cli tarballs (empty takes them from npm)
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-plugin-${{ inputs.tag || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  ARDIA_PACKAGES: ${{ inputs.ardia_packages || vars.ARDIA_PACKAGES_RELEASE || '' }}
+
+jobs:
+  resolve:
+    name: Which plugin and version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.read.outputs.tag }}
+      name: ${{ steps.read.outputs.name }}
+      id: ${{ steps.read.outputs.id }}
+      title: ${{ steps.read.outputs.title }}
+      version: ${{ steps.read.outputs.version }}
+      prerelease: ${{ steps.read.outputs.prerelease }}
+      native: ${{ steps.read.outputs.native }}
+      asset_names: ${{ steps.read.outputs.asset_names }}
+      publish: ${{ steps.mode.outputs.publish }}
+      cli: ${{ steps.mode.outputs.cli }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.2
+      - id: tag
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          case $EVENT in
+            push) tag=$REF_NAME ;;
+            workflow_dispatch) tag=$INPUT_TAG ;;
+            *) tag="cli-v$(node -p 'require("./plugins/cli/plugin.json").version')" ;;
+          esac
+          [[ "$tag" =~ ^[a-z0-9][a-z0-9-]*-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "::error::$tag isn't a <plugin>-v<version> tag"; exit 1; }
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - id: read
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: node scripts/release-info.mjs "$TAG" --github-output
+      - id: mode
+        env:
+          EVENT: ${{ github.event_name }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          REF: ${{ github.ref }}
+          TAG: ${{ steps.read.outputs.tag }}
+          NAME: ${{ steps.read.outputs.name }}
+          TITLE: ${{ steps.read.outputs.title }}
+          VERSION: ${{ steps.read.outputs.version }}
+          NATIVE: ${{ steps.read.outputs.native }}
+        run: |
+          set -euo pipefail
+          publish=false
+          if [ "$EVENT" = push ]; then
+            publish=true
+          elif [ "$EVENT" = workflow_dispatch ] && [ "$DRY_RUN" = false ]; then
+            [ "$REF" = "refs/tags/$TAG" ] || { echo "::error::a release that publishes runs from its tag: run this workflow on $TAG, not $REF"; exit 1; }
+            publish=true
+          fi
+          cli=false
+          [ "$NAME" != cli ] || cli=true
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          echo "cli=$cli" >> "$GITHUB_OUTPUT"
+          echo "### $TITLE $VERSION as $TAG ($([ "$publish" = true ] && echo publish || echo dry run)$([ "$NATIVE" = true ] && echo ', native'))" >> "$GITHUB_STEP_SUMMARY"
+
+  pack:
+    name: Check, test and pack ${{ needs.resolve.outputs.name }}
+    needs: resolve
+    if: needs.resolve.outputs.cli != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      NAME: ${{ needs.resolve.outputs.name }}
+      ASSETS: ${{ needs.resolve.outputs.asset_names }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          ardia-packages: ${{ env.ARDIA_PACKAGES }}
+      - name: Build and ardia-plugin check
+        run: node scripts/plugins.mjs check "$NAME"
+      - name: Type check and test
+        run: |
+          set -euo pipefail
+          node scripts/plugins.mjs typecheck "$NAME"
+          node scripts/plugins.mjs test "$NAME"
+      - name: Pack, and check the archives are exactly what plugin.json's release names
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/assets"
+          node scripts/plugins.mjs pack "$NAME" --out "$out"
+          expected=$(node -e 'console.log(JSON.parse(process.argv[1]).sort().join("\n"))' "$ASSETS")
+          found=$(cd "$out" && find . -maxdepth 1 -name '*.tar.gz' | sed 's#^\./##' | sort)
+          [ "$expected" = "$found" ] || { echo "::error::packed $found, and plugin.json's release names $expected"; exit 1; }
+          (cd "$out" && sha256sum -c ./*.sha256)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: assets-js
+          path: ${{ runner.temp }}/assets/*
+          if-no-files-found: error
+          retention-days: 14
+
+  cli-signing-script:
+    name: sign-macos.sh fails closed without its secrets
+    needs: resolve
+    if: needs.resolve.outputs.cli == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: |
+          set -euo pipefail
+          bash -n .github/release/sign-macos.sh
+          mkdir -p "$RUNNER_TEMP/cli" && echo '{}' > "$RUNNER_TEMP/cli/plugin.json"
+          if out=$(env -i PATH=/usr/bin:/bin .github/release/sign-macos.sh "$RUNNER_TEMP/cli" 2>&1); then
+            echo "::error::sign-macos.sh signed nothing yet exited 0"; exit 1
+          fi
+          grep -q "missing DEVELOPER_ID_P12_BASE64 DEVELOPER_ID_P12_PASSWORD ASC_API_KEY_P8_BASE64 ASC_API_KEY_ID ASC_API_ISSUER_ID APPLE_TEAM_ID" <<<"$out"
+
+  cli-build:
+    name: Build cli on ${{ matrix.platform }}
+    needs: resolve
+    if: needs.resolve.outputs.cli == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            platform: macos-arm64
+            cache: ~/Library/Caches/ardia-cli-build
+          - os: ubuntu-24.04
+            platform: linux-x64
+            cache: ~/.cache/ardia-cli-build
+    env:
+      VERSION: ${{ needs.resolve.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+      - uses: ./.github/actions/setup
+        with:
+          ardia-packages: ${{ env.ARDIA_PACKAGES }}
+      - uses: actions/cache@v4
+        with:
+          path: ${{ matrix.cache }}
+          key: ardia-cli-build-${{ matrix.platform }}-${{ hashFiles('plugins/cli/scripts/build.sh') }}
+      - name: Build
+        run: ARDIA_PLUGIN_VERSION="$VERSION" plugins/cli/build.sh "$RUNNER_TEMP/out"
+      - name: Check
+        run: |
+          set -euo pipefail
+          .github/release/check-build.sh "$RUNNER_TEMP/out" "$VERSION"
+          node scripts/plugins.mjs check cli --cli-out "$RUNNER_TEMP/out"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.platform }}
+          path: |
+            ${{ runner.temp }}/out/cli-${{ env.VERSION }}-${{ matrix.platform }}.tar.gz
+            ${{ runner.temp }}/out/cli-${{ env.VERSION }}-${{ matrix.platform }}.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ardia-cli-${{ matrix.platform }}
+          path: |
+            ${{ runner.temp }}/out/ardia-cli-${{ env.VERSION }}-${{ matrix.platform }}.tar.gz
+            ${{ runner.temp }}/out/ardia-cli-${{ env.VERSION }}-${{ matrix.platform }}.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  cli-build-signed-macos:
+    name: Build, sign and notarize cli on macos-arm64
+    needs: resolve
+    if: needs.resolve.outputs.cli == 'true' && needs.resolve.outputs.publish == 'true'
+    runs-on: macos-15
+    timeout-minutes: 75
+    environment: cli-release
+    env:
+      VERSION: ${{ needs.resolve.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+      - uses: ./.github/actions/setup
+        with:
+          ardia-packages: ${{ env.ARDIA_PACKAGES }}
+      - name: Build, then sign and notarize before packing
+        env:
+          DEVELOPER_ID_P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          ASC_API_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          ARDIA_SIGN_CMD: '"$GITHUB_WORKSPACE/.github/release/sign-macos.sh" "$1"'
+        run: ARDIA_PLUGIN_VERSION="$VERSION" plugins/cli/build.sh "$RUNNER_TEMP/out"
+      - name: Every Mach-O in both tarballs is signed by the team
+        env:
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+        run: |
+          .github/release/sign-macos.sh --check "$RUNNER_TEMP/out" "$VERSION"
+          echo "- macos-arm64, signed and notarized: $(cut -d' ' -f1 "$RUNNER_TEMP/out/cli-$VERSION-macos-arm64.tar.gz.sha256")" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-macos-arm64-signed
+          path: |
+            ${{ runner.temp }}/out/cli-${{ env.VERSION }}-macos-arm64.tar.gz
+            ${{ runner.temp }}/out/cli-${{ env.VERSION }}-macos-arm64.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  assemble:
+    name: Assemble and co-sign the release assets
+    needs: [resolve, pack, cli-build, cli-build-signed-macos]
+    if: ${{ !cancelled() && (needs.pack.result == 'success' || needs.cli-build.result == 'success') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      TAG: ${{ needs.resolve.outputs.tag }}
+      NAME: ${{ needs.resolve.outputs.name }}
+      NATIVE: ${{ needs.resolve.outputs.native }}
+      PUBLISH: ${{ needs.resolve.outputs.publish }}
+      ASSETS: ${{ needs.resolve.outputs.asset_names }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          ardia-packages: ${{ env.ARDIA_PACKAGES }}
+      - uses: actions/download-artifact@v4
+        if: needs.resolve.outputs.cli != 'true'
+        with:
+          name: assets-js
+          path: ${{ runner.temp }}/assets
+      - uses: actions/download-artifact@v4
+        if: needs.resolve.outputs.cli == 'true'
+        with:
+          name: cli-linux-x64
+          path: ${{ runner.temp }}/assets
+      - uses: actions/download-artifact@v4
+        if: needs.resolve.outputs.cli == 'true' && needs.cli-build-signed-macos.result == 'success'
+        with:
+          name: cli-macos-arm64-signed
+          path: ${{ runner.temp }}/assets
+      - uses: actions/download-artifact@v4
+        if: needs.resolve.outputs.cli == 'true' && needs.cli-build-signed-macos.result != 'success'
+        with:
+          name: cli-macos-arm64
+          path: ${{ runner.temp }}/assets
+      - name: Say when the macOS command ships without Developer ID signing
+        if: needs.resolve.outputs.cli == 'true' && needs.cli-build-signed-macos.result != 'success'
+        run: |
+          echo "::warning::The macOS build isn't Developer ID-signed and notarized (that job ended ${{ needs.cli-build-signed-macos.result }}), so the release carries the unsigned build. Ardia verifies it by its SHA-256 and the official co-signature."
+          echo "- macos-arm64: not Developer ID-signed" >> "$GITHUB_STEP_SUMMARY"
+      - name: The archives are exactly what plugin.json's release names
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/assets"
+          expected=$(node -e 'console.log(JSON.parse(process.argv[1]).sort().join("\n"))' "$ASSETS")
+          found=$(find . -maxdepth 1 -name '*.tar.gz' | sed 's#^\./##' | sort)
+          [ "$expected" = "$found" ] || { echo "::error::the assets are $found, and plugin.json's release names $expected"; exit 1; }
+          sha256sum -c ./*.sha256
+      - name: Co-sign native archives with the official key
+        env:
+          ARDIA_OFFICIAL_NATIVE_ED25519_PRIVATE_KEY: ${{ secrets.ARDIA_OFFICIAL_NATIVE_ED25519_PRIVATE_KEY }}
+          ARDIA_OFFICIAL_NATIVE_KEY_ID: ${{ vars.ARDIA_OFFICIAL_NATIVE_KEY_ID }}
+        run: |
+          set -euo pipefail
+          if [ "$NATIVE" != true ]; then
+            echo "$NAME isn't native: no official co-signature"
+            exit 0
+          fi
+          if [ -z "$ARDIA_OFFICIAL_NATIVE_ED25519_PRIVATE_KEY" ]; then
+            if [ "$PUBLISH" = true ]; then
+              echo "::error::$NAME is native and ARDIA_OFFICIAL_NATIVE_ED25519_PRIVATE_KEY isn't set: a native plugin isn't released without its official co-signature"
+              exit 1
+            fi
+            echo "::warning::dry run: ARDIA_OFFICIAL_NATIVE_ED25519_PRIVATE_KEY isn't set, so the archives aren't co-signed; a real release stops here"
+            exit 0
+          fi
+          node scripts/official-sig.mjs sign "$TAG" "$RUNNER_TEMP/assets"
+          node scripts/official-sig.mjs verify "$TAG" "$RUNNER_TEMP/assets"
+          echo "- co-signed with ${ARDIA_OFFICIAL_NATIVE_KEY_ID:-ardia-official-native-1}" >> "$GITHUB_STEP_SUMMARY"
+      - name: The cli's own installer rides along
+        if: needs.resolve.outputs.cli == 'true'
+        run: |
+          set -euo pipefail
+          cp plugins/cli/install.sh "$RUNNER_TEMP/assets/install.sh"
+          (cd "$RUNNER_TEMP/assets" && sha256sum install.sh > install.sh.sha256)
+      - name: Summary
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/assets"
+          for file in *; do echo "- $file: $(wc -c < "$file") bytes" >> "$GITHUB_STEP_SUMMARY"; done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: ${{ runner.temp }}/assets/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish the GitHub release
+    needs: [resolve, assemble]
+    if: needs.resolve.outputs.publish == 'true' && needs.assemble.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.resolve.outputs.tag }}
+      NAME: ${{ needs.resolve.outputs.name }}
+      TITLE: ${{ needs.resolve.outputs.title }}
+      ID: ${{ needs.resolve.outputs.id }}
+      VERSION: ${{ needs.resolve.outputs.version }}
+      PRERELEASE: ${{ needs.resolve.outputs.prerelease }}
+      NATIVE: ${{ needs.resolve.outputs.native }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.2
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: ${{ runner.temp }}/assets
+      - name: Release
+        run: |
+          set -euo pipefail
+          assets="$RUNNER_TEMP/assets"
+          (cd "$assets" && sha256sum -c ./*.sha256)
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::$TAG is already released; bump plugins/$NAME/plugin.json's version for a new one"
+            exit 1
+          fi
+          notes="$TITLE ($ID) $VERSION, packed from plugins/$NAME at $GITHUB_SHA."
+          for sum in "$assets"/*.tar.gz.sha256; do notes="$notes"$'\n'"- $(basename "${sum%.sha256}"): sha256 $(cut -d' ' -f1 "$sum")"; done
+          [ "$NATIVE" != true ] || notes="$notes"$'\n'"Each archive's .official-sig is Ardia's official co-signature (ardia-registry-v1)."
+          flags=()
+          [ "$PRERELEASE" != true ] || flags+=(--prerelease)
+          gh release create "$TAG" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$TITLE $VERSION" --notes "$notes" "${flags[@]}" "$assets"/*
+          echo "Released $TAG$([ "$PRERELEASE" = true ] && echo ' as a prerelease')" >> "$GITHUB_STEP_SUMMARY"
+      - name: Tell the registry
+        env:
+          ARDIA_REGISTRY_WEBHOOK_URL: ${{ vars.ARDIA_REGISTRY_WEBHOOK_URL }}
+          ARDIA_REGISTRY_WEBHOOK_SECRET: ${{ secrets.ARDIA_REGISTRY_WEBHOOK_SECRET }}
+        run: node scripts/notify-registry.mjs "$GITHUB_REPOSITORY" "$TAG"

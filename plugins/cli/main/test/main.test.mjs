@@ -18,13 +18,13 @@ function inVm(onLine) {
   let deliver = () => {};
   const bridge = { send: (line) => onLine(line), onLine: (listener) => (deliver = listener) };
   const context = vm.createContext({ __ardiaBridge: bridge, setTimeout, clearTimeout, queueMicrotask, console });
-  vm.runInContext(readFileSync(`${distDir}main.js`, "utf8"), context, { filename: "main.js" });
+  vm.runInContext(readFileSync(`${distDir}index.js`, "utf8"), context, { filename: "index.js" });
   return { deliver: (line) => deliver(line), stop: () => {}, problems: () => "" };
 }
 
 function inHost(binary) {
   return (onLine) => {
-    const child = spawn(binary, ["--entry", "main.js"], { cwd: distDir, stdio: ["ignore", "ignore", "pipe", "pipe"], env: { ARDIA_PLUGIN_FD: "3" } });
+    const child = spawn(binary, ["--entry", "index.js"], { cwd: distDir, stdio: ["ignore", "ignore", "pipe", "pipe"], env: { ARDIA_PLUGIN_FD: "3" } });
     let stderr = "";
     let pending = "";
     child.stderr.on("data", (chunk) => (stderr += chunk));
@@ -126,7 +126,7 @@ const transports = [["a Node vm", inVm]];
 if (process.env.ARDIA_PLUGIN_HOST) transports.push(["ArdiaPluginHost", inHost(process.env.ARDIA_PLUGIN_HOST)]);
 
 for (const [where, start] of transports) {
-  describe(`dist/main.js in ${where}`, () => {
+  describe(`dist/index.js in ${where}`, () => {
     test("registers the view every manifest command opens, and no commands of its own", async () => {
       const { host, ready } = await openStatus(start, { "programs.status": linked });
       try {

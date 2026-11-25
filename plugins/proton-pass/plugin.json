@@ -1,0 +1,56 @@
+{
+  "$schema": "https://raw.githubusercontent.com/ardia-browser/ardia/main/docs/plugin.v3.schema.json",
+  "manifest": 3,
+  "id": "@ardia/proton-pass",
+  "name": "Proton Pass",
+  "description": "Fills and saves logins and codes from Proton Pass.",
+  "version": "1.0.0",
+  "icon": "lock.shield.fill",
+  "license": "Apache-2.0",
+  "repository": "https://github.com/ardia-browser/plugins",
+  "homepage": "https://github.com/ardia-browser/plugins/tree/main/plugins/proton-pass",
+  "categories": [
+    "passwords",
+    "security"
+  ],
+  "keywords": [
+    "proton",
+    "proton pass",
+    "pass-cli",
+    "passwords",
+    "one-time codes"
+  ],
+  "engines": {
+    "ardia": ">=0.3.0",
+    "sdk": "^3.0.0"
+  },
+  "scope": "profile",
+  "provides": [
+    "credentials.provider"
+  ],
+  "release": {
+    "github": "ardia-browser/plugins",
+    "tagPrefix": "proton-pass-v",
+    "asset": "proton-pass-{version}.tar.gz"
+  },
+  "main": "dist/index.js",
+  "sidecar": {
+    "run": [
+      "sidecar/server.mjs"
+    ],
+    "memoryMB": 256
+  },
+  "memoryMB": 1024,
+  "permissions": {
+    "storage": true
+  },
+  "contributes": {
+    "passwordManager": {
+      "fill": "system",
+      "fields": [
+        "login",
+        "oneTimeCode"
+      ]
+    }
+  }
+}

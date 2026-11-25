@@ -12,12 +12,7 @@
     "skipLibCheck": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,
-    "types": [],
-    "paths": {
-      "@ardia/plugin-sdk": ["./vendor/plugin-sdk/src/index.ts"],
-      "@ardia/plugin-sdk/jsx-runtime": ["./vendor/plugin-sdk/src/jsxRuntime.ts"],
-      "@ardia/plugin-sdk/jsx-dev-runtime": ["./vendor/plugin-sdk/src/jsxRuntime.ts"]
-    }
+    "types": []
   },
-  "include": ["src", "vendor/plugin-sdk/src"]
+  "include": ["src"]
 }

@@ -1,37 +1,4 @@
 #!/bin/sh
-# Installs the ardia command, which controls a running Ardia from the terminal.
-#
-#   install.sh [--version V] [--sha256 DIGEST] [--uninstall]
-#   install.sh -h | --help
-#
-# --version V        install that release (default: the latest release that ships the CLI).
-# --sha256 DIGEST    the tarball's digest; required for a download (the app passes the one pinned in its signed bundle).
-# --uninstall        remove the installed CLI and its ardia link.
-#
-# Runs on macOS (Apple silicon) and Linux (x86_64). Installs into $ARDIA_CLI_HOME/<version> (default
-# ~/Library/Application Support/Ardia/CLI on macOS, ${XDG_DATA_HOME:-~/.local/share}/ardia/cli on Linux), points its
-# `current` link there and links ${ARDIA_CLI_BIN_DIR:-~/.local/bin}/ardia to current/bin/ardia. When the default bin
-# dir isn't on the login shell's PATH, it adds one PATH line to its login file, once: on macOS ~/.zprofile
-# (~/.bash_profile for bash); on Linux ~/.zprofile for zsh, ~/.bash_profile for bash when it exists, else ~/.profile;
-# for fish, on both, ${XDG_CONFIG_HOME:-~/.config}/fish/conf.d/ardia.fish.
-# Re-running it upgrades: a version that is already current is left alone; a new one is verified, staged in
-# <version>.partial, renamed, and `current` is swapped atomically (a running ardia keeps its old dir). It keeps the
-# current and the previous version and prunes the rest, except versions a running ardia uses (it leaves a lease in
-# <version>/.leases/<pid>, live while that pid runs and started before the lease was written). Two runs never overlap:
-# each holds a flock on $ARDIA_CLI_HOME/.lock (lockf on macOS, flock on Linux), which the kernel drops when
-# the run exits.
-# The installed version is `basename "$(readlink "$ARDIA_CLI_HOME/current")"`. After switching to a new version it runs
-# `ardia skills install --auto` (the skill for every coding agent found, never over a folder ardia didn't write or one
-# the user removed), then `ardia skills refresh`, which rewrites the agent skill copies `ardia skills install` wrote, and ignores its result,
-# then starts `ardia computer refresh` in the background, which updates /Applications/CuaDriver.app to the new pinned
-# cua-driver only when `ardia computer setup` put it there. --uninstall also removes $ARDIA_CLI_HOME/cua-driver and the
-# cua-driver link in the bin dir when it is ardia's, and leaves /Applications/CuaDriver.app.
-# Downloads are https only, and never trust a checksum from the same place as the tarball: without --sha256 it refuses
-# to download. ARDIA_CLI_URL overrides the tarball URL; a file:// one may go without --sha256, and its checksum is read
-# from $ARDIA_CLI_URL.sha256.
-#
-# Prints one line per event: `step resolve|download|verify|install|link`, `version <v>`, `path <rc file>`,
-# then `installed <bin path>` (or `uninstalled`), or `error <message>` and exits 1.
 set -eu
 umask 022
 
@@ -56,11 +23,48 @@ bin_dir=${ARDIA_CLI_BIN_DIR:-$default_bin_dir}
 version=
 pinned_sha=
 uninstall=0
+top=
 work=
 reported=0
 
 help() {
-  awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"
+  cat <<'USAGE'
+Installs the ardia command, which controls a running Ardia from the terminal.
+
+  install.sh [--version V] [--sha256 DIGEST] [--uninstall]
+  install.sh -h | --help
+
+--version V        install that release (default: the latest release that ships the CLI).
+--sha256 DIGEST    the tarball's digest; required for a download (the app passes the one pinned in its signed bundle).
+--uninstall        remove the installed CLI and its ardia link.
+
+Runs on macOS (Apple silicon) and Linux (x86_64). Installs into $ARDIA_CLI_HOME/<version> (default
+~/Library/Application Support/Ardia/CLI on macOS, ${XDG_DATA_HOME:-~/.local/share}/ardia/cli on Linux), points its
+`current` link there and links ${ARDIA_CLI_BIN_DIR:-~/.local/bin}/ardia to current/bin/ardia. When the default bin
+dir isn't on the login shell's PATH, it adds one PATH line to its login file, once: on macOS ~/.zprofile
+(~/.bash_profile for bash); on Linux ~/.zprofile for zsh, ~/.bash_profile for bash when it exists, else ~/.profile;
+for fish, on both, ${XDG_CONFIG_HOME:-~/.config}/fish/conf.d/ardia.fish.
+Re-running it upgrades: a version that is already current is left alone; a new one is verified, staged in
+<version>.partial, renamed, and `current` is swapped atomically (a running ardia keeps its old dir). It keeps the
+current and the previous version and prunes the rest, except versions a running ardia uses (it leaves a lease in
+<version>/.leases/<pid>, live while that pid runs and started before the lease was written). Two runs never overlap:
+each holds a flock on $ARDIA_CLI_HOME/.lock (lockf on macOS, flock on Linux), which the kernel drops when
+the run exits.
+The installed version is `basename "$(readlink "$ARDIA_CLI_HOME/current")"`. After switching to a new version it runs
+`ardia skills install --auto` (the skill for every coding agent found, never over a folder ardia didn't write or one
+the user removed), then `ardia skills refresh`, which rewrites the agent skill copies `ardia skills install` wrote, and ignores its result,
+then starts `ardia computer refresh` in the background, which updates /Applications/CuaDriver.app to the new pinned
+cua-driver only when `ardia computer setup` put it there. --uninstall also removes $ARDIA_CLI_HOME/cua-driver and the
+cua-driver link in the bin dir when it is ardia's, and leaves /Applications/CuaDriver.app.
+Downloads are https only, and never trust a checksum from the same place as the tarball: without --sha256 it refuses
+to download. ARDIA_CLI_URL overrides the tarball URL; a file:// one may go without --sha256, and its checksum is read
+from $ARDIA_CLI_URL.sha256. A download is the release's registry asset, cli-<version>-<platform>.tar.gz, with cli/
+at its root; ARDIA_CLI_URL may also name the command's own tarball, ardia-cli-<version>-<platform>.tar.gz, with
+ardia-cli-<version>/ at its root.
+
+Prints one line per event: `step resolve|download|verify|install|link`, `version <v>`, `path <rc file>`,
+then `installed <bin path>` (or `uninstalled`), or `error <message>` and exits 1.
+USAGE
   exit 0
 }
 
@@ -79,6 +83,14 @@ finish() {
 }
 trap finish EXIT
 trap 'exit 130' INT TERM HUP
+
+version_of_asset() {
+  case $1 in
+    ardia-cli-*) found=${1#ardia-cli-} ;;
+    *) found=${1#cli-} ;;
+  esac
+  printf '%s\n' "${found%"$asset_suffix"}"
+}
 
 is_version() {
   printf '%s\n' "$1" | grep -Eq "$version_pattern"
@@ -197,8 +209,13 @@ check_archive() {
   if grep -q -e '\\' -e ' -> ' -e '[[:cntrl:]]' "$work/names"; then
     fail "the tarball has entry names with control characters, backslashes or arrows"
   fi
-  if grep -Ev "^ardia-cli-$version(/|$)" "$work/names" | grep -q .; then
-    fail "the tarball has entries outside ardia-cli-$version/"
+  top=$(sed -n '1{s#/.*##;p;}' "$work/names")
+  case $top in
+    cli|"ardia-cli-$version") ;;
+    *) fail "the tarball's root isn't cli/ or ardia-cli-$version/" ;;
+  esac
+  if grep -Ev "^$top(/|$)" "$work/names" | grep -q .; then
+    fail "the tarball has entries outside $top/"
   fi
   if grep -Eq '(^|/)\.\.(/|$)' "$work/names"; then
     fail "the tarball has .. entries"
@@ -263,22 +280,18 @@ printf 'step resolve\n'
 if [ -n "${ARDIA_CLI_URL:-}" ]; then
   url=$ARDIA_CLI_URL
   if [ -z "$version" ]; then
-    name=${url##*/}
-    version=${name#ardia-cli-}
-    version=${version%"$asset_suffix"}
+    version=$(version_of_asset "${url##*/}")
   fi
 elif [ -n "$version" ]; then
-  url=https://github.com/$repo/releases/download/cli-v$version/ardia-cli-$version$asset_suffix
+  url=https://github.com/$repo/releases/download/cli-v$version/cli-$version$asset_suffix
 else
-  pattern="https://github\.com/$repo/releases/download/cli-v[0-9a-z.-]*/ardia-cli-[0-9a-z.-]*-$asset_platform\.tar\.gz"
-  url=$(fetch https://api.github.com/repos/$repo/releases/latest 2>/dev/null | grep -o "$pattern" | head -n 1 || true)
+  pattern="https://github\.com/$repo/releases/download/cli-v[0-9a-z.-]*/(ardia-)?cli-[0-9][0-9a-z.-]*-$asset_platform\.tar\.gz"
+  url=$(fetch https://api.github.com/repos/$repo/releases/latest 2>/dev/null | grep -Eo "$pattern" | head -n 1 || true)
   if [ -z "$url" ]; then
-    url=$(fetch "https://api.github.com/repos/$repo/releases?per_page=30" 2>/dev/null | grep -o "$pattern" | head -n 1 || true)
+    url=$(fetch "https://api.github.com/repos/$repo/releases?per_page=30" 2>/dev/null | grep -Eo "$pattern" | head -n 1 || true)
   fi
   [ -n "$url" ] || fail "no Ardia release ships the CLI yet (or GitHub is unreachable)"
-  name=${url##*/}
-  version=${name#ardia-cli-}
-  version=${version%"$asset_suffix"}
+  version=$(version_of_asset "${url##*/}")
 fi
 is_version "$version" || fail "bad version: $version"
 case $url in
@@ -321,10 +334,11 @@ staged=$cli_home/$version.partial
 dest=$cli_home/$version
 rm -rf "$staged"
 mkdir "$staged" || fail "couldn't create $staged"
-tar -xzf "$work/cli.tar.gz" -C "$staged" --strip-components 1 --no-same-owner "ardia-cli-$version" \
-  || fail "couldn't extract ardia-cli-$version from the tarball"
+tar -xzf "$work/cli.tar.gz" -C "$staged" --strip-components 1 --no-same-owner "$top" \
+  || fail "couldn't extract $top from the tarball"
+[ -d "$staged/.leases" ] || [ -L "$staged/.leases" ] || mkdir "$staged/.leases" || fail "couldn't create $staged/.leases"
 check_tree "$staged"
-[ -x "$staged/bin/ardia" ] || fail "the tarball has no ardia-cli-$version/bin/ardia"
+[ -x "$staged/bin/ardia" ] || fail "the tarball has no $top/bin/ardia"
 [ "$os" = linux ] || xattr -dr com.apple.quarantine "$staged" 2>/dev/null || true
 "$staged/bin/ardia" --version >"$work/check.out" 2>&1 9>&- || fail "the downloaded ardia doesn't run: $(tail -n 1 "$work/check.out")"
 if [ -d "$dest" ] && ! [ -L "$dest" ] && [ -x "$dest/bin/ardia" ] && in_use "$dest"; then

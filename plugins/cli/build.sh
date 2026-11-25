@@ -1,30 +1,49 @@
 #!/bin/sh
-# Usage: plugins/cli/build.sh <out dir>
-#   Builds the Command Line plugin folder into <out dir>/cli: the ardia command as scripts/build.sh packs it (bin/ardia,
-#   the Bun executable, with bin/ardia-libc.so beside it and libexec/esbuild), plugin.json with its version set and,
-#   once plugins/cli/main exists, dist/main.js built from it with npm. The version is $ARDIA_PLUGIN_VERSION, else
-#   plugin.json's. Ardia refuses links in a plugin's programs and makes .leases itself, so the folder has neither. Also
-#   leaves in <out dir> the command's tarball (ardia-cli-<version>-<platform>.tar.gz) and the folder packed as Ardia's
-#   release fetches it (cli-plugin-<version>-<platform>.tar.gz), each with its .sha256.
-#   ARDIA_SIGN_CMD, when set, signs the folder before anything is packed: once the folder is complete (plugin.json,
-#   dist/main.js, no links) it runs as sh -c "$ARDIA_SIGN_CMD" ardia-sign <out dir>/cli, with the folder as $1, and
-#   should sign bin/ardia, bin/ardia-libc.so and libexec/esbuild in place. The build fails if it exits non-zero; after
-#   it, the signed ardia must still say the version, and both tarballs and their .sha256 files are packed from the
-#   signed folder, with the same layout as without it.
 set -eu
 
-case "${1:-}" in ''|-h|--help) sed -n '2,13s/^# \{0,1\}//p' "$0"; exit 0 ;; esac
+usage() {
+  cat <<'USAGE'
+Usage: plugins/cli/build.sh <out dir>
+  Builds the Command Line plugin folder into <out dir>/cli: the ardia command as scripts/build.sh packs it (bin/ardia,
+  the Bun executable, with bin/ardia-libc.so beside it and libexec/esbuild), plugin.json (manifest 3) with its version
+  set and no $schema, and dist/index.js built from plugins/cli/main. The version is $ARDIA_PLUGIN_VERSION, else
+  plugin.json's. Ardia refuses links in a plugin's programs and makes .leases itself, so the folder has neither.
+  Leaves in <out dir> the command's own tarball (ardia-cli-<version>-<platform>.tar.gz, for install.sh with
+  ARDIA_CLI_URL) and the registry asset that plugin.json's release.assets names (cli-<version>-<platform>.tar.gz),
+  packed deterministically by scripts/pack-folder.mjs with cli/ at its root, each with its .sha256.
+  ARDIA_SIGN_CMD, when set, signs the folder before anything is packed: once the folder is complete (plugin.json,
+  dist/index.js, no links) it runs as sh -c "$ARDIA_SIGN_CMD" ardia-sign <out dir>/cli, with the folder as $1, and
+  should sign bin/ardia, bin/ardia-libc.so and libexec/esbuild in place. The build fails if it exits non-zero; after
+  it, the signed ardia must still say the version, and both tarballs and their .sha256 files are packed from the
+  signed folder, with the same layout as without it.
+  plugins/cli/main builds with the root pnpm workspace's packages: run pnpm install at the repository root first.
+USAGE
+}
+
+case "${1:-}" in '' | -h | --help) usage; [ -n "${1:-}" ] && exit 0 || exit 64 ;; esac
 
 here=$(cd "$(dirname "$0")" && pwd)
+repo=$(cd "$here/../.." && pwd)
 out=$(mkdir -p "$1" && cd "$1" && pwd)
-version=${ARDIA_PLUGIN_VERSION:-$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' "$here/plugin.json" | head -n 1)}
+version=${ARDIA_PLUGIN_VERSION:-$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).version' "$here/plugin.json")}
 
-build_manifest_v2_main() {
+build_main() {
   dest=$1
-  [ -d "$here/main" ] || return 0
-  (cd "$here/main" && npm ci --ignore-scripts --no-audit --no-fund --silent && npm run --silent build)
+  [ -d "$here/main/node_modules/@ardia/plugin-sdk" ] || { echo "build.sh: plugins/cli/main has no @ardia/plugin-sdk; run pnpm install at the repository root" >&2; exit 1; }
+  (cd "$here/main" && node build.mjs)
   mkdir -p "$dest/dist"
-  cp "$here/main/dist/main.js" "$dest/dist/main.js"
+  cp "$here/main/dist/index.js" "$dest/dist/index.js"
+}
+
+write_manifest() {
+  node -e '
+    const fs = require("fs");
+    const [from, to, version] = process.argv.slice(1);
+    const manifest = JSON.parse(fs.readFileSync(from, "utf8"));
+    delete manifest.$schema;
+    manifest.version = version;
+    fs.writeFileSync(to, JSON.stringify(manifest, null, 2) + "\n");
+  ' "$here/plugin.json" "$1" "$version"
 }
 
 "$here/scripts/build.sh" "$version" "$out"
@@ -38,11 +57,12 @@ dest="$out/cli"
 rm -rf "$dest"
 mv "$work/ardia-cli-$version" "$dest"
 rmdir "$dest/.leases"
-sed "s/^\( *\"version\": *\)\"[^\"]*\"/\1\"$version\"/" "$here/plugin.json" | grep -v '"\$schema"' >"$dest/plugin.json"
-build_manifest_v2_main "$dest"
-packed="cli-plugin-$version-$platform.tar.gz"
+write_manifest "$dest/plugin.json"
+build_main "$dest"
+asset="cli-$version-$platform.tar.gz"
+rm -f "$out/$asset" "$out/$asset.sha256"
 if [ -n "${ARDIA_SIGN_CMD:-}" ]; then
-  rm -f "$tarball" "$tarball.sha256" "$out/$packed" "$out/$packed.sha256"
+  rm -f "$tarball" "$tarball.sha256"
 fi
 links=$(find "$dest" -type l | head -n 5)
 [ -z "$links" ] || { echo "build.sh: Ardia copies a plugin's programs without links, and these are links: $links" >&2; exit 1; }
@@ -53,9 +73,5 @@ if [ -n "${ARDIA_SIGN_CMD:-}" ]; then
 fi
 [ "$("$dest/bin/ardia" --version)" = "ardia $version" ] || { echo "build.sh: the built ardia doesn't say $version" >&2; exit 1; }
 [ -z "${ARDIA_SIGN_CMD:-}" ] || "$here/scripts/build.sh" "$version" "$out" --from "$dest" >/dev/null
-case $(uname -s) in
-  Darwin) (cd "$out" && COPYFILE_DISABLE=1 tar --no-mac-metadata -czf "$packed" cli) ;;
-  *) (cd "$out" && tar --sort=name --owner=0 --group=0 --numeric-owner -czf "$packed" cli) ;;
-esac
-(cd "$out" && { command -v sha256sum >/dev/null && sha256sum "$packed" || shasum -a 256 "$packed"; } >"$packed.sha256")
+node "$repo/scripts/pack-folder.mjs" "$dest" "$out/$asset" --root cli >/dev/null
 echo "$dest"

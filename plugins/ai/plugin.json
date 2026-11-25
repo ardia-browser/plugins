@@ -1,0 +1,90 @@
+{
+  "$schema": "https://raw.githubusercontent.com/ardia-browser/ardia/main/docs/plugin.v3.schema.json",
+  "manifest": 3,
+  "id": "@ardia/ai",
+  "name": "AI",
+  "description": "Ask Claude about the page you're on from the command bar, and give other plugins answers through ai.provider, with your own Anthropic API key.",
+  "version": "1.0.0",
+  "icon": "sparkles",
+  "license": "Apache-2.0",
+  "repository": "https://github.com/ardia-browser/plugins",
+  "homepage": "https://github.com/ardia-browser/plugins/tree/main/plugins/ai",
+  "categories": ["ai", "productivity"],
+  "keywords": ["ai", "assistant", "chat", "claude", "anthropic", "ask", "summarize", "page"],
+  "engines": {
+    "ardia": ">=0.3.0",
+    "sdk": "^3.0.0"
+  },
+  "scope": "profile",
+  "provides": ["ai.provider"],
+  "release": {
+    "github": "ardia-browser/plugins",
+    "tagPrefix": "ai-v",
+    "asset": "ai-{version}.tar.gz"
+  },
+  "main": "dist/index.js",
+  "permissions": {
+    "activePage": {
+      "read": true
+    },
+    "network": ["api.anthropic.com"],
+    "secrets": true
+  },
+  "contributes": {
+    "inputModes": [
+      {
+        "id": "ask",
+        "title": "Ask AI",
+        "placeholder": "Ask anything, or about this page…",
+        "icon": "sparkles",
+        "keywords": ["ai", "ask", "assistant", "chat", "claude"]
+      }
+    ],
+    "commands": [
+      {
+        "name": "ask",
+        "title": "Ask AI About This Page",
+        "icon": "sparkles",
+        "keywords": ["ai", "assistant", "chat", "claude"],
+        "shortcut": "cmd+shift+e",
+        "inputMode": "ask"
+      },
+      {
+        "name": "set-api-key",
+        "title": "AI: Set Anthropic API Key",
+        "icon": "key",
+        "keywords": ["ai", "anthropic", "api key", "sign in"],
+        "handler": true
+      },
+      {
+        "name": "forget-api-key",
+        "title": "AI: Forget Anthropic API Key",
+        "icon": "key.slash",
+        "keywords": ["ai", "anthropic", "api key", "sign out"],
+        "handler": true
+      }
+    ],
+    "settings": {
+      "rows": [
+        {
+          "key": "model",
+          "title": "Model",
+          "type": "choice",
+          "default": "claude-sonnet-5-5",
+          "choices": [
+            { "value": "claude-haiku-5-5", "title": "Claude Haiku 5.5" },
+            { "value": "claude-sonnet-5-5", "title": "Claude Sonnet 5.5" },
+            { "value": "claude-opus-5-5", "title": "Claude Opus 5.5" }
+          ]
+        },
+        {
+          "key": "includePage",
+          "title": "Include the Page You're On",
+          "description": "Ask AI sends the page's text with your question.",
+          "type": "toggle",
+          "default": true
+        }
+      ]
+    }
+  }
+}
