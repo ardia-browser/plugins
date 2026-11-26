@@ -13,7 +13,10 @@ import { BrowseError, PythonCrash } from "../browse/errors.ts";
 import { Absent, CONNECT_WAIT_MS, connect, exchange, Link } from "../browse/exchange.ts";
 import { pluginMode } from "../browse/route.ts";
 import { agentEnv, type Endpoint, endpointChoice, endpointKey, namespaceName, optionsFrom, Refused, rootOf, sessionKey, sessionName, sessionOwner, splitUrl } from "../browse/request.ts";
-import { autoSessionsOn } from "../browse/serve.ts";
+import { autoSessionsOn, claimAutoSession } from "../browse/serve.ts";
+import { Call } from "../telemetry.ts";
+import { type ManageArgs, manageMain, MCP_MANAGE_HELP, parseManage } from "./install.ts";
+import { type DisplayRef, MAX_DISPLAY_IMAGES } from "./tools.ts";
 import { checkSocket, deriveAutoSession, NoDaemon, openBrowseDir } from "../browse/session.ts";
 import { stripLoneSurrogates } from "../browse/untrusted.ts";
 import { McpServer, serveStdio } from "./server.ts";
@@ -38,11 +41,15 @@ export const MCP_HELP = `Usage: ardia [--port N] [--session S] mcp [--port N] [-
 Runs a Model Context Protocol server on stdin/stdout (newline-delimited JSON-RPC or Content-Length framing)
 that drives the Ardia browser through the browse daemon, with two tools: browser_repl and browser_act.
 
+  ardia mcp install            (adds it to Claude Code, Codex and Cursor; see ardia mcp install --help)
   claude mcp add ardia -- ardia mcp
   codex mcp add ardia -- ardia mcp
 
 --socket PATH talks to an already running daemon socket instead of starting one.
 `;
+
+export const MANAGE_ACTIONS: ReadonlySet<string> = new Set(["install", "uninstall", "status"]);
+export const CLAIM_EVERY_MS = 5_000;
 
 export type McpArgs = { found: Found; socket: string | undefined; help: boolean };
 
@@ -82,6 +89,17 @@ function takeFlags(argv: readonly string[], from: number, found: Found, allowSoc
   return { at, socket, help };
 }
 
+export type ManageCall = { manage: ManageArgs };
+
+export function mcpManageArgv(argv: readonly string[]): ManageCall | { error: string } | undefined {
+  const leading = takeFlags(argv, 0, new Found(), false);
+  if ("error" in leading || argv[leading.at] !== "mcp") return undefined;
+  const action = argv[leading.at + 1];
+  if (action === undefined || !MANAGE_ACTIONS.has(action)) return undefined;
+  const managed = parseManage(argv.slice(leading.at + 1));
+  return "error" in managed ? { error: managed.error } : { manage: managed };
+}
+
 export function mcpArgv(argv: readonly string[]): McpArgs | { error: string } | undefined {
   const found = new Found();
   const leading = takeFlags(argv, 0, found, false);
@@ -100,10 +118,39 @@ function endpointLabel(endpoint: Endpoint): string {
   return endpoint.port !== undefined ? `--port ${endpoint.port}` : "Ardia";
 }
 
-function chooseSession(found: Found): void {
-  if (found.value("session") || process.env["AGENT_BROWSER_SESSION"] || !autoSessionsOn(found)) return;
-  const id = deriveAutoSession(process.cwd());
+function chooseSession(found: Found, derive: (cwd: string) => string | null = deriveAutoSession): string | null {
+  if (found.value("session") || process.env["AGENT_BROWSER_SESSION"] || !autoSessionsOn(found)) return null;
+  const id = derive(process.cwd());
   if (id !== null) found.values.set("session", id);
+  return id;
+}
+
+export function displayRefs(value: unknown): DisplayRef[] {
+  if (!Array.isArray(value)) return [];
+  const out: DisplayRef[] = [];
+  for (const item of value.slice(0, MAX_DISPLAY_IMAGES)) {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) continue;
+    const record = item as Record<string, unknown>;
+    if (typeof record["path"] !== "string") continue;
+    const size = (given: unknown) => {
+      if (given === null || typeof given !== "object") return null;
+      const box = given as Record<string, unknown>;
+      const width = Number(box["width"]);
+      const height = Number(box["height"]);
+      return Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0 ? { width, height } : null;
+    };
+    const positive = (given: unknown) => (typeof given === "number" && Number.isFinite(given) && given > 0 ? given : null);
+    const region = (given: unknown) => {
+      if (given === null || typeof given !== "object") return null;
+      const box = given as Record<string, unknown>;
+      const [x, y, width, height] = [box["x"], box["y"], box["width"], box["height"]].map(Number) as [number, number, number, number];
+      return [x, y, width, height].every(Number.isFinite) && width > 0 && height > 0 ? { x, y, width, height } : null;
+    };
+    const digits = (given: unknown) => (typeof given === "string" && /^\d{1,40}$/u.test(given) ? given : null);
+    const bytes = typeof record["size"] === "number" && Number.isSafeInteger(record["size"]) && record["size"] >= 0 ? record["size"] : null;
+    out.push({ path: record["path"], scale: positive(record["scale"]), dpr: positive(record["dpr"]), viewport: size(record["viewport"]), image: size(record["image"]), region: region(record["region"]), dev: digits(record["dev"]), ino: digits(record["ino"]), size: bytes });
+  }
+  return out;
 }
 
 function failed(text: string, code: string | null, exit = 1): DaemonAnswer {
@@ -113,11 +160,13 @@ function failed(text: string, code: string | null, exit = 1): DaemonAnswer {
 function answerOf(raw: Buffer): DaemonAnswer {
   const parsed = JSON.parse(raw.toString("utf8")) as Record<string, unknown>;
   const exit = Number(parsed["exit"] ?? 1);
+  const display = displayRefs(parsed["display"]);
   return {
     exit: Number.isFinite(exit) ? exit : 1,
     out: typeof parsed["out"] === "string" ? parsed["out"] : "",
     err: typeof parsed["err"] === "string" ? parsed["err"] : "",
     code: typeof parsed["code"] === "string" ? parsed["code"] : null,
+    ...(display.length > 0 ? { display } : {}),
   };
 }
 
@@ -148,22 +197,36 @@ async function socketLink(path: string): Promise<Link> {
   return link;
 }
 
+export type SessionClaim = (root: string, namespace: string, keySource: string, id: string, timeout: Value, signal?: AbortSignal) => Promise<{ notice: string | null }>;
+
+const claimRegistry: SessionClaim = (root, namespace, keySource, id, timeout, signal) => claimAutoSession(root, namespace, keySource, timeout, new Call(["mcp"]), id, signal);
+
 export class SessionDaemon implements Daemon {
   readonly root: string;
   readonly key: string;
   readonly session: string;
+  readonly auto: string | null;
+  readonly namespace: string;
+  readonly keySource: string;
   private readonly config: JsonObject;
+  private claimedAt = -Infinity;
+  private claiming: { promise: Promise<string | null>; controller: AbortController; waiters: number; aborted: boolean } | null = null;
+  private cleanup: Promise<void> | null = null;
 
   constructor(
     private readonly found: Found,
     private readonly socket: string | undefined,
+    derive: (cwd: string) => string | null = deriveAutoSession,
+    private readonly claim: SessionClaim = claimRegistry,
   ) {
-    chooseSession(found);
+    this.auto = chooseSession(found, derive);
     this.session = sessionName(found);
     const namespace = namespaceName(found);
+    this.namespace = namespace;
     const endpoint = endpointChoice(found);
     this.root = rootOf(endpoint);
     const keySource = endpointKey(endpoint, this.root);
+    this.keySource = keySource;
     const forPlugin = process.env["ARDIA_BROWSE_FOR_PLUGIN"] === "1";
     this.key = sessionKey(namespace, keySource, this.session, forPlugin);
     this.config = object([
@@ -238,8 +301,112 @@ export class SessionDaemon implements Daemon {
     return { line: Buffer.from(`${dumps(payload, "spaced")}\n`, "utf8"), timeout };
   }
 
+  private awaitCleanup(signal?: AbortSignal): Promise<void> {
+    const pending = this.cleanup;
+    if (pending === null) return Promise.resolve();
+    if (signal === undefined) return pending;
+    if (signal.aborted) return Promise.reject(new BrowseError("cancelled", 130, "interrupted"));
+    return new Promise<void>((resolve, reject) => {
+      const onAbort = () => reject(new BrowseError("cancelled", 130, "interrupted"));
+      signal.addEventListener("abort", onAbort, { once: true });
+      pending.then(() => {
+        signal.removeEventListener("abort", onAbort);
+        if (signal.aborted) reject(new BrowseError("cancelled", 130, "interrupted"));
+        else resolve();
+      });
+    });
+  }
+
+  async register(now = Date.now(), signal?: AbortSignal): Promise<string | null> {
+    if (this.auto === null || this.socket !== undefined) return null;
+    if (signal?.aborted) throw new BrowseError("cancelled", 130, "interrupted");
+    while (this.claiming === null && this.cleanup !== null) await this.awaitCleanup(signal);
+    if (signal?.aborted) throw new BrowseError("cancelled", 130, "interrupted");
+    let current = this.claiming;
+    if (current === null || current.aborted) {
+      if (now - this.claimedAt < CLAIM_EVERY_MS) return null;
+      const controller = new AbortController();
+      const entry: { promise: Promise<string | null>; controller: AbortController; waiters: number; aborted: boolean } = {
+        controller,
+        waiters: 0,
+        aborted: false,
+        promise: Promise.resolve(null),
+      };
+      entry.promise = (async () => {
+        try {
+          const claimed = await this.claim(this.root, this.namespace, this.keySource, this.auto as string, optionsFrom(this.found).timeout, controller.signal);
+          if (!controller.signal.aborted) this.claimedAt = now;
+          return claimed.notice;
+        } finally {
+          if (this.claiming === entry) this.claiming = null;
+        }
+      })();
+      this.claiming = entry;
+      current = entry;
+    }
+    current.waiters += 1;
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      current.waiters -= 1;
+      if (current.waiters <= 0 && !current.aborted) {
+        current.aborted = true;
+        if (this.claiming === current) this.claiming = null;
+        const tail = current.promise.then(() => undefined, () => undefined);
+        const chained = (this.cleanup ?? Promise.resolve()).then(() => tail);
+        this.cleanup = chained;
+        void chained.finally(() => {
+          if (this.cleanup === chained) this.cleanup = null;
+        });
+        current.controller.abort();
+      }
+    };
+    if (signal === undefined) {
+      try {
+        return await current.promise;
+      } finally {
+        released = true;
+        current.waiters -= 1;
+      }
+    }
+    return new Promise<string | null>((resolve, reject) => {
+      const onAbort = () => {
+        release();
+        reject(new BrowseError("cancelled", 130, "interrupted"));
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+      current.promise.then(
+        (notice) => {
+          signal.removeEventListener("abort", onAbort);
+          if (!released) {
+            released = true;
+            current.waiters -= 1;
+          }
+          if (signal.aborted) reject(new BrowseError("cancelled", 130, "interrupted"));
+          else resolve(notice);
+        },
+        (error) => {
+          signal.removeEventListener("abort", onAbort);
+          if (!released) {
+            released = true;
+            current.waiters -= 1;
+          }
+          reject(error);
+        },
+      );
+    });
+  }
+
   async run(request: DaemonRequest, signal?: AbortSignal, quickMs?: number): Promise<DaemonAnswer> {
     try {
+      if (signal?.aborted) return failed("cancelled", "interrupted", 130);
+      const notice = await this.register(Date.now(), signal);
+      if (signal?.aborted) return failed("cancelled", "interrupted", 130);
+      if (notice) {
+        const answer = await this.run(request, signal, quickMs);
+        return { ...answer, err: `${notice}\n${answer.err}` };
+      }
       const { line, timeout } = this.payload(request);
       if (line.length - 1 > MAX_REQUEST_BYTES) return failed("The request is over 16 MB", "request_too_large");
       const deadline = answerDeadline(request.argv, timeout);
@@ -279,6 +446,18 @@ function stderr(text: string): void {
   try {
     writeSync(2, text);
   } catch {}
+}
+
+export function mcpManageMain(parsed: ManageCall | { error: string }): number {
+  if ("error" in parsed) {
+    stderr(`ardia: ${parsed.error}\n\n${MCP_MANAGE_HELP}`);
+    return USAGE_STATUS;
+  }
+  if (pluginMode()) {
+    stderr("ardia: mcp isn't available to plugins\n");
+    return PLUGIN_REFUSED;
+  }
+  return manageMain(parsed.manage, (text) => process.stdout.write(text));
 }
 
 export async function mcpMain(parsed: McpArgs | { error: string }): Promise<number> {

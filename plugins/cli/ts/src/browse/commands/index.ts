@@ -85,6 +85,8 @@ export const OWNERS: Readonly<Record<string, string>> = {
   form: "D4",
   query: "D4",
   "read-urls": "D4",
+  "fill-otp": "D5",
+  "edit-cell": "D5",
 };
 
 export type Step = unknown;

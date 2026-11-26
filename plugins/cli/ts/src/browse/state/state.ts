@@ -298,12 +298,12 @@ export class State extends Refs implements temptabs.TempTabState {
     this.notice = [this.notice, notice].filter((part) => part).join("\n");
   }
 
-  async connect(): Promise<void> {
+  async connect(cancellable = false): Promise<void> {
     for (;;) {
       if (this.connected) return;
       const pending = this.connecting;
       if (pending === null) {
-        const attempt = this.connectOnce();
+        const attempt = this.connectOnce(cancellable);
         this.connecting = attempt;
         try {
           return await attempt;
@@ -319,7 +319,7 @@ export class State extends Refs implements temptabs.TempTabState {
     }
   }
 
-  private async connectOnce(): Promise<void> {
+  private async connectOnce(cancellable = false): Promise<void> {
     const started = clock();
     flag("reconnected_after_idle", this.instance !== null);
     if (this.browser !== null && !this.browser.closedByUs) this.lost = true;
@@ -365,7 +365,7 @@ export class State extends Refs implements temptabs.TempTabState {
     } finally {
       this.discovering = false;
     }
-    await temptabs.sweep(this);
+    await temptabs.sweep(this, cancellable);
     spent("connect_ms", started);
   }
 

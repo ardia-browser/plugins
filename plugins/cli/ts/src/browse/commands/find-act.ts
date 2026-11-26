@@ -1,4 +1,4 @@
-import { BrowseError } from "../daemon-errors.ts";
+import { BrowseError, ConnectionLost } from "../daemon-errors.ts";
 import { flag } from "../metrics.ts";
 import { sendIn } from "../state/frames.ts";
 import type { Element, Page } from "../state/page.ts";
@@ -273,8 +273,42 @@ export async function scopeOf(ctx: Ctx, value: string): Promise<Scope> {
   return { page, container, label: value, backends: await descendantsOf(page, container) };
 }
 
+export const MAX_SCOPE_FRAME_DEPTH = 8;
+
+export function frameWithin(page: Pick<Page, "frames">, frame: string, ancestor: string): boolean {
+  let current: string | null = frame;
+  for (let step = 0; current !== null && step <= MAX_SCOPE_FRAME_DEPTH; step += 1) {
+    if (current === ancestor) return true;
+    current = page.frames.get(current)?.parent ?? null;
+  }
+  return false;
+}
+
 export function inScope(scope: Scope | null, element: Element): boolean {
-  return scope === null || (element.frame === scope.container.frame && scope.backends.has(element.backendId));
+  if (scope === null) return true;
+  return element.frame === scope.container.frame && scope.backends.has(element.backendId);
+}
+
+export async function refInScope(scope: Scope, element: Element): Promise<boolean> {
+  if (element.frame === scope.container.frame) return inScope(scope, element);
+  if (!frameWithin(scope.page, element.frame, scope.container.frame)) return false;
+  const page = scope.page;
+  let child = element.frame;
+  for (let step = 0; step < MAX_SCOPE_FRAME_DEPTH; step += 1) {
+    const parent = page.frames.get(child)?.parent ?? null;
+    if (parent === null) return false;
+    if (parent === scope.container.frame) {
+      try {
+        const owner = Number((await page.send("DOM.getFrameOwner", { frameId: child }, { session: page.sessionFor(parent) }))["backendNodeId"]);
+        return scope.backends.has(owner);
+      } catch (error) {
+        if (error instanceof BrowseError && !(error instanceof ConnectionLost)) return false;
+        throw error;
+      }
+    }
+    child = parent;
+  }
+  return false;
 }
 
 function collectClosedRoots(node: Record<string, unknown>, into: number[]): void {
@@ -332,7 +366,7 @@ export async function resolveWithin(ctx: Ctx, selector: string, within: string):
   const { page, container } = scope;
   if (parseRef(selector) !== null) {
     const [refPage, element] = await ctx.state.locate(selector, null, 0);
-    if (refPage !== page || !inScope(scope, element)) {
+    if (refPage !== page || !(await refInScope(scope, element))) {
       throw new BrowseError(`${selector} isn't inside --within "${within}", so nothing was done. Drop --within, or pick a ref inside that container`, { within }, "not_within");
     }
     return [refPage, element];

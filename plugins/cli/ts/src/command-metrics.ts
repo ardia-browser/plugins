@@ -35,6 +35,7 @@ export const TS_ONLY_FLAGS: readonly string[] = [
   "script_memory_limit",
   "script_missing_api",
   "script_repl",
+  "script_repl_auto_tab",
   "script_repl_logs_spilled",
   "script_repl_lost",
   "script_repl_reset",
@@ -77,9 +78,19 @@ export const TS_ONLY_FLAGS: readonly string[] = [
   "triage_prepared",
   "triage_printed",
   "triage_refused",
+  "drag_interception_unavailable",
+  "drag_synthetic",
+  "edit_cell",
+  "fill_otp",
+  "hover_revealed",
+  "mcp_session_registered",
+  "script_display_capped",
+  "script_display_refused",
+  "fill_otp_profile",
+  "snapshot_child_frames",
 ];
 
-export const TS_ONLY_COUNTS: readonly string[] = ["batch_refs_healed", "failed_step_index", "form_fields", "query_rows", "read_urls_count", "read_urls_failed", "script_calls", "script_concurrent_peak", "script_receipts_skipped", "script_repl_runs", "snapshot_find_matches", "snapshot_lean_lines", "snapshot_lines_dropped", "snapshot_new_lines", "snapshot_oopif_count"];
+export const TS_ONLY_COUNTS: readonly string[] = ["batch_refs_healed", "failed_step_index", "form_fields", "query_rows", "read_urls_count", "read_urls_failed", "fill_otp_boxes", "hover_revealed_items", "script_calls", "script_concurrent_peak", "script_display_images", "snapshot_child_frame_count", "script_receipts_skipped", "script_repl_runs", "snapshot_find_matches", "snapshot_lean_lines", "snapshot_lines_dropped", "snapshot_new_lines", "snapshot_oopif_count"];
 
 const FLAGS = new Set([...METRIC_FLAGS, ...TS_ONLY_FLAGS, ...PRECISION_FLAGS, ...SAFETY_FLAGS]);
 const DURATIONS = new Set(METRIC_DURATIONS);

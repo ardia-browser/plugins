@@ -1,6 +1,6 @@
 import { Cancelled, shield, untilCancelled } from "../cdp/cancel.ts";
 import { TimedOut, within } from "../changes/observe.ts";
-import { BrowseError, Gated, OutcomeUnknown } from "../daemon-errors.ts";
+import { BrowseError, Gated, NOT_YET_REASONS, OutcomeUnknown } from "../daemon-errors.ts";
 import { inputOf } from "../input/input.ts";
 import { roundCoordinate } from "../input/human.ts";
 import { ACTIONS_INPUT_WATCH, ACTIONS_LIST_AFTER, ACTIONS_LIST_BEFORE } from "../js/index.ts";
@@ -9,8 +9,46 @@ import type { Element, Page } from "../state/page.ts";
 import { asRecord, type Counts, expectInput, inputCounts } from "./common.ts";
 import { type Box, CLEANUP_TIMEOUT, elementBox, targetPoint } from "./pointer.ts";
 
+
+
 export const INTERCEPT_TIMEOUT = 1.5;
 export const DRAG_FAR_SHARE = 0.75;
+
+export const SYNTHETIC_DROP = `(source, target, side) => {
+  const data = new DataTransfer();
+  const box = target.getBoundingClientRect();
+  const from = source.getBoundingClientRect();
+  const sx = from.left + from.width / 2;
+  const sy = from.top + from.height / 2;
+  const cx = box.left + box.width / 2;
+  const cy = box.top + box.height / 2;
+  const vertical = Math.abs(cy - sy) >= Math.abs(cx - sx);
+  const forward = vertical ? cy > sy : cx > sx;
+  const after = side === null || side === undefined ? forward : side === "after";
+  const share = after ? ${DRAG_FAR_SHARE} : 1 - ${DRAG_FAR_SHARE};
+  const x = vertical ? cx : box.left + box.width * share;
+  const y = vertical ? box.top + box.height * share : cy;
+  const point = document.elementFromPoint(x, y);
+  const hit = point && target.contains(point) ? point : target;
+  const fire = (el, type, px, py) => {
+    const event = new DragEvent(type, { bubbles: true, cancelable: true, composed: true, dataTransfer: data, clientX: px, clientY: py });
+    el.dispatchEvent(event);
+    return event;
+  };
+  const started = fire(source, "dragstart", sx, sy);
+  if (started.defaultPrevented) return { started: false, accepted: false, dropped: false };
+  fire(source, "drag", sx, sy);
+  fire(hit, "dragenter", x, y);
+  const over = fire(hit, "dragover", x, y);
+  if (!over.defaultPrevented) {
+    fire(hit, "dragleave", x, y);
+    fire(source, "dragend", x, y);
+    return { started: true, accepted: false, dropped: false };
+  }
+  const drop = fire(hit, "drop", x, y);
+  fire(source, "dragend", x, y);
+  return { started: true, accepted: true, dropped: drop.defaultPrevented };
+}`;
 export const DRAG_GATED = "the source is an HTML5 draggable, and without drag interception a synthetic drag would start a real macOS drag session";
 export const CLEANUPS = new Set<Promise<void>>();
 export const CLEANUPS_WAIT = 2 * CLEANUP_TIMEOUT + INTERCEPT_TIMEOUT;
@@ -240,9 +278,30 @@ export async function listAfter(page: Page, frame: string, before: ListPlace): P
   return { from: before.from, to: after["to"], count: after["count"] };
 }
 
-export async function drag(page: Page, source: Element, target: Element, humanize: boolean, side: string | null = null): Promise<Record<string, unknown>> {
-  const interception = (await draggable(page, source)) ? new DragInterception(page, source.frame, target.frame) : null;
-  if (interception !== null) await interception.start();
+export function interceptionMissing(error: Gated): boolean {
+  return !error.reason || NOT_YET_REASONS.has(error.reason);
+}
+
+export async function syntheticDrop(page: Page, source: Element, target: Element, side: string | null): Promise<Record<string, unknown>> {
+  if (source.frame !== target.frame) throw new BrowseError("A drag sent as page events needs both ends in the same frame", null, "cross_frame_drag");
+  const done = asRecord(await page.call(SYNTHETIC_DROP, [source, target, side], { frame: source.frame }));
+  flag("drag_synthetic", true);
+  return { synthetic: true, started: Boolean(done["started"]), dropped: Boolean(done["dropped"]), accepted: Boolean(done["accepted"]) };
+}
+
+export async function drag(page: Page, source: Element, target: Element, humanize: boolean, side: string | null = null, synthetic = false): Promise<Record<string, unknown>> {
+  const html5 = await draggable(page, source);
+  if (synthetic) return { html5, ...(await syntheticDrop(page, source, target, side)) };
+  const interception = html5 ? new DragInterception(page, source.frame, target.frame) : null;
+  if (interception !== null) {
+    try {
+      await interception.start();
+    } catch (error) {
+      if (!(error instanceof Gated) || source.frame !== target.frame || !interceptionMissing(error)) throw error;
+      flag("drag_interception_unavailable", true);
+      return { html5: true, interception: false, ...(await syntheticDrop(page, source, target, side)) };
+    }
+  }
   const input = inputOf(page);
   const mouse = input.pointer;
   try {

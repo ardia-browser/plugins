@@ -15,6 +15,7 @@ export const COUNTS = new Set([
   "batch_lines_compacted", "read_tabs_reopened", "skills_installed", "skills_skipped", "failed_step_index", "batch_lines_held", "read_nav_hidden", "read_nav_chars_hidden",
   "script_calls", "script_concurrent_peak", "script_receipts_skipped", "script_repl_runs",
   "snapshot_oopif_count", "snapshot_lines_dropped", "snapshot_new_lines", "snapshot_find_matches",
+  "fill_otp_boxes", "hover_revealed_items", "script_display_images", "snapshot_child_frame_count",
   "batch_refs_healed", "form_fields", "query_rows", "read_urls_count", "read_urls_failed", "snapshot_lean_lines",
 ]);
 export const READ_FLAGS = new Set([
@@ -54,13 +55,15 @@ export const FLAGS = new Set([
   "eval_main_world", "eval_isolated_reference_error", "permission_granted", "guessed_syntax", "find_closest_ref", "select_retyped", "select_word_match", "open_here", "stale_ref_after_open", "snapshot_diff", "snapshot_diff_full", "settle_ignored_background", "frame_point_unconfirmed",
   "script_eval_args", "script_selector_eval", "script_frames_listed", "script_frame_eval", "script_missing_api", "script_runner_warm", "script_runner_unconfined",
   "script_runner_crashed", "script_memory_limit", "script_sandbox_hint",
-  "script_repl", "script_repl_lost", "script_repl_reset", "script_repl_logs_spilled", "script_repl_value_spilled",
+  "script_repl", "script_repl_auto_tab", "script_repl_lost", "script_repl_reset", "script_repl_logs_spilled", "script_repl_value_spilled",
   "snapshot_budget_trimmed", "snapshot_modal_scoped", "snapshot_hidden_text_dropped", "snapshot_closed_shadow", "snapshot_dom_depth_retry", "snapshot_find", "snapshot_paired", "snapshot_paired_unstable",
   "did_you_mean", "perf_crux", "logpoint_source_mapped",
   "batch_ref_healed", "batch_ref_ambiguous", "batch_ref_missing", "here", "here_read", "form", "query", "query_fields", "read_urls", "find_is", "field_label_fallback", "script_steps_shown", "snapshot_lean_trimmed", "help_in_daemon", "read_urls_deadline", "batch_ref_not_followed",
+  "drag_interception_unavailable", "drag_synthetic", "edit_cell", "fill_otp", "hover_revealed", "mcp_session_registered",
+  "script_display_capped", "script_display_refused", "fill_otp_profile", "snapshot_child_frames",
 ]);
 export const SAFETY_FLAGS = new Set([
-  "boundary_marker_removed", "notes_promoted", "notes_quarantined_shown", "otp_not_asked", "otp_split_boxes", "otp_typed", "scheduler_parallel", "scheduler_read_lane", "session_auto", "session_reset", "snapshot_masked_fields",
+  "boundary_marker_removed", "click_with_position", "mouse_click", "notes_promoted", "notes_quarantined_shown", "otp_not_asked", "otp_split_boxes", "otp_typed", "scheduler_parallel", "scheduler_read_lane", "session_auto", "session_reset", "snapshot_masked_fields", "tab_diagnostics_used", "tab_input_used",
 ]);
 export const MAIN_PHASE: Readonly<Record<string, string>> = { snapshot: "snapshot_build_ms", eval: "eval_ms" };
 export const FAILED_WITHOUT_CODE = "command_failed";
@@ -75,12 +78,25 @@ export function clock(): number {
   return performance.now() / 1000;
 }
 
+export type DisplayImage = {
+  path: string;
+  scale: number | null;
+  dpr: number | null;
+  viewport: { width: number; height: number } | null;
+  image: { width: number; height: number } | null;
+  region: { x: number; y: number; width: number; height: number } | null;
+  dev?: string;
+  ino?: string;
+  size?: number;
+};
+
 export class Metrics {
   readonly started = clock();
   readonly values: Map<string, MetricValue>;
   errorCode: string | null = null;
   failedStepCommand: string | null = null;
   failedStepCodeKept = false;
+  display: DisplayImage[] | null = null;
 
   constructor(
     readonly name: string,

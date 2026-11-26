@@ -20,6 +20,7 @@ import {
 } from "../js/index.ts";
 import { add, flag } from "../metrics.ts";
 import { Element, type Page } from "../state/page.ts";
+import { nativeText } from "../state/tabtools.ts";
 import { monotonic } from "../state/wait.ts";
 import { asRecord, expectInput, poll, POLL, pollTimes, textInserted } from "./common.ts";
 import { checkedFrom, CHECK_STATE, HOLDS_FOCUS, matchOptions, OPTION_ROWS, type OptionRow, OVERLAY_INPUT, splitFinal } from "./choices.ts";
@@ -96,7 +97,7 @@ export async function clearField(page: Page, element: Element, humanize: boolean
   const input = inputOf(page);
   const guarded = (combo: string) => async () => {
     await refuseMovedFocus(page, element, "");
-    await input.pressCombo(combo, humanize);
+    await input.pressCombo(combo, humanize, false, false, false);
   };
   await expectInput(page, element.frame, () => input.gesture("clear", guarded("Meta+a")), { keydown: 2 }, "Select all", element);
   await expectInput(page, element.frame, () => input.gesture("clear", guarded("Backspace")), { keydown: 1 }, "Backspace", element);
@@ -228,12 +229,12 @@ export async function pressKey(page: Page, frame: string | null, key: string, hu
   await expectInput(page, frame, () => input.gesture("press", () => input.pressCombo(key, humanize)), { keydown: 1 }, "The key press");
 }
 
-async function cellEditor(page: Page, cell: Element, humanize: boolean): Promise<[unknown, Element, boolean]> {
+async function cellEditor(page: Page, cell: Element, humanize: boolean): Promise<[unknown, Element, boolean, boolean]> {
   const started = asRecord(await page.call(ACTIONS_CELL_START, [cell], { frame: cell.frame }));
   if (started["inner"]) {
     const inner = await page.call(ACTIONS_CELL_INNER, [], { frame: cell.frame, byValue: false });
     const field = await page.elementFrom(inner, cell.frame, `the field in ${cell.label}`);
-    if (field !== null) return [started["was"], field, Boolean(started["open"])];
+    if (field !== null) return [started["was"], field, Boolean(started["open"]), true];
   }
   await scrollIntoView(page, cell, humanize);
   await page.call(ACTIONS_SETTLED_FRAMES, [], { frame: cell.frame, read: true });
@@ -262,7 +263,7 @@ async function cellEditor(page: Page, cell: Element, humanize: boolean): Promise
       "not_editable",
     );
   }
-  return [started["was"], editor, true];
+  return [started["was"], editor, true, false];
 }
 
 async function setEditor(page: Page, editor: Element, text: string, humanize: boolean): Promise<void> {
@@ -277,12 +278,13 @@ async function setEditor(page: Page, editor: Element, text: string, humanize: bo
   else await fill(page, editor, text, humanize);
 }
 
-async function commitCell(page: Page, editor: Element, humanize: boolean): Promise<void> {
+async function commitCell(page: Page, editor: Element, humanize: boolean, key = "Enter", inline = false): Promise<void> {
   const editorState = async () => asRecord(await page.call(ACTIONS_CELL_EDITOR_STATE, [editor], { frame: editor.frame, read: true }));
   if (!(await editorState())["open"]) return;
-  await pressKey(page, editor.frame, "Enter", humanize);
+  await pressKey(page, editor.frame, key, humanize);
   if (await pollTimes(async () => ((await editorState())["open"] ? null : true), COMMIT_CHECKS)) return;
   const state = await editorState();
+  if (inline && !state["invalid"] && !state["message"]) return;
   try {
     await pressKey(page, editor.frame, "Escape", humanize);
   } catch (error) {
@@ -291,23 +293,32 @@ async function commitCell(page: Page, editor: Element, humanize: boolean): Promi
   const message = state["message"] ? String(state["message"]) : "";
   const said = message ? `: ${message.replace(/\.+$/u, "")}` : "";
   throw new BrowseError(
-    `The cell's editor stayed open after Enter${said}. The edit was cancelled (Escape), so the cell keeps its old value`,
+    `The cell's editor stayed open after ${key}${said}. The edit was cancelled (Escape), so the cell keeps its old value`,
     { message: message || null },
     "rejected",
   );
 }
 
-async function fillCell(page: Page, element: Element, cell: Element, text: string, humanize: boolean): Promise<Record<string, unknown> | null> {
+async function fillCell(page: Page, element: Element, cell: Element, text: string, humanize: boolean, commit = "Enter", always = false): Promise<Record<string, unknown> | null> {
   const labelled = new Element(cell.frame, cell.objectId, cell.backendId, element.label);
-  const [was, editor, opened] = await cellEditor(page, labelled, humanize);
+  const [was, editor, opened, preexisting] = await cellEditor(page, labelled, humanize);
   const names = ((await page.call("(el) => ardiaBrowse.labelText(el)", [editor], { frame: editor.frame, read: true })) as unknown[] | null) ?? [];
   const name = names.map((item) => String(item)).find((item) => joinedWords(item) !== "");
   await setEditor(page, editor, text, humanize);
   add("cell_edits");
-  if (!opened) return null;
-  await commitCell(page, editor, humanize);
+  if (!opened && !always) return null;
+  if (!opened) await page.focusElement(editor);
+  await commitCell(page, editor, humanize, commit, always && preexisting);
   const now = await page.call(ACTIONS_CELL_NOW, [], { frame: cell.frame, read: true });
   return { cell: name !== undefined ? joinedWords(name) : element.label, value: now, was };
+}
+
+export async function editCell(page: Page, element: Element, text: string, humanize: boolean, commit = "Enter"): Promise<Record<string, unknown> | null> {
+  const cell = await cellOf(page, element);
+  if (cell === null) {
+    throw new BrowseError(`${element.label} isn't a grid cell (no gridcell, cell or td holds it); use \`fill\` for a plain field`, null, "not_a_cell");
+  }
+  return fillCell(page, element, cell, text, humanize, commit, true);
 }
 
 export async function refuseMovedFocus(page: Page, element: Element, typed: string): Promise<void> {
@@ -350,7 +361,7 @@ export async function insertThenFinalKey(page: Page, element: Element, text: str
   const keyboard = input.keyboard();
   const pressLast = async () => {
     await refuseMovedFocus(page, element, head);
-    await keyboard.typeText(last, false);
+    await keyboard.typeText(last, false, false);
   };
   await expectInput(
     page,
@@ -369,6 +380,7 @@ export async function insertText(page: Page, element: Element, text: string, hol
   const input = inputOf(page);
   const send = async () => {
     if (holdsFocus) await refuseMovedFocus(page, element, "");
+    if (!holdsFocus && (await nativeText(page, text))) return;
     return page.send("Input.insertText", { text }, { inputEvent: true });
   };
   await expectInput(

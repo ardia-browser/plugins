@@ -174,15 +174,20 @@ export function worktreeRoot(cwd: string): string {
   }
 }
 
-export function autoSessionId(launcher: ProcessRow, worktree: string): string {
-  const digest = createHash("sha256").update(`${launcher.pid}\0${launcher.started}\0${baseName(launcher.name)}\0${worktree}`, "utf8").digest("hex").slice(0, 10);
+export function agentSalt(env: NodeJS.ProcessEnv = process.env): string {
+  return (env["ARDIA_AGENT_ID"] ?? "").trim().slice(0, 200);
+}
+
+export function autoSessionId(launcher: ProcessRow, worktree: string, salt = ""): string {
+  const seed = `${launcher.pid}\0${launcher.started}\0${baseName(launcher.name)}\0${worktree}${salt ? `\0${salt}` : ""}`;
+  const digest = createHash("sha256").update(seed, "utf8").digest("hex").slice(0, 10);
   return `${AUTO_PREFIX}-${digest}`;
 }
 
-export function deriveAutoSession(cwd: string, rows: ReadonlyMap<number, ProcessRow> = processRows(), parent = process.ppid): string | null {
+export function deriveAutoSession(cwd: string, rows: ReadonlyMap<number, ProcessRow> = processRows(), parent = process.ppid, salt = agentSalt()): string | null {
   const launcher = launcherOf(rows, parent);
   if (launcher === null) return null;
-  return autoSessionId(launcher, worktreeRoot(cwd));
+  return autoSessionId(launcher, worktreeRoot(cwd), salt);
 }
 
 export type AutoRegistry = { sessions: Record<string, number>; evicted: Record<string, number>; reserved?: Record<string, number> };

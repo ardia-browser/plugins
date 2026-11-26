@@ -14,7 +14,11 @@ import { BrowseError, ConnectionLost, OutcomeUnknown, Usage } from "../daemon-er
 import { MUTATING } from "../daemon/names.ts";
 import { safeCode } from "../codes.ts";
 import { Result } from "../daemon/render.ts";
-import { add, count, flag } from "../metrics.ts";
+import { active, add, count, type DisplayImage, flag } from "../metrics.ts";
+import { closeSync, constants as fsConstants, fstatSync, lstatSync, openSync, readdirSync, readSync, unlinkSync, writeSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import nodePath from "node:path";
+import { defaultPath } from "../media/paths.ts";
 import { record } from "../state/records.ts";
 import type { State } from "../state/state.ts";
 import { Dropped, dropRepl, Gate, SharedWait, MEMORY_LIMIT, releaseRepl, type Runner, type RunnerEvent, takeRepl, takeRunner, whenReady } from "./host.ts";
@@ -42,7 +46,53 @@ export const MAX_CALLS = 200_000;
 export const RESULT_LIMIT = 64 * 1024 * 1024;
 export const REQUEST_LIMIT = 16 * 1024 * 1024 + 64 * 1024;
 export const IN_FLIGHT_BYTES = 64 * 1024 * 1024;
-export const LIGHT_CALLS: ReadonlySet<string> = new Set(["click", "dblclick", "fill", "type", "press", "keyboard", "select", "check", "uncheck", "hover", "focus", "scroll"]);
+export const MAX_DISPLAY = 4;
+export const SHOTS_KEPT = 32;
+export const DISPLAY_PATH_LIMIT = 4096;
+const SHOT_EXTENSION = /\.(png|jpe?g|webp)$/iu;
+const shotsTaken = new WeakMap<State, Map<string, DisplayImage>>();
+
+function sizeOf(value: unknown): { width: number; height: number } | null {
+  if (value === null || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const width = Number(record["width"]);
+  const height = Number(record["height"]);
+  return Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0 ? { width, height } : null;
+}
+
+function regionOf(value: unknown): DisplayImage["region"] {
+  if (value === null || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const [x, y, width, height] = ["x", "y", "width", "height"].map((key) => Number(record[key]));
+  return [x, y, width, height].every((item) => Number.isFinite(item)) && (width as number) > 0 && (height as number) > 0 ? { x: x as number, y: y as number, width: width as number, height: height as number } : null;
+}
+
+function numberOf(value: unknown): number | null {
+  const given = value !== null && typeof value === "object" && "value" in (value as Record<string, unknown>) ? (value as Record<string, unknown>)["value"] : value;
+  const number = Number(given);
+  return given !== null && given !== undefined && Number.isFinite(number) && number > 0 ? number : null;
+}
+
+export function rememberShot(state: State, file: string, data: unknown): DisplayImage | null {
+  if (!SHOT_EXTENSION.test(file) || file.length > DISPLAY_PATH_LIMIT || file.includes("\0")) return null;
+  const facts = data !== null && typeof data === "object" ? (data as Record<string, unknown>) : {};
+  const shot: DisplayImage = { path: file, scale: numberOf(facts["scale"]), dpr: numberOf(facts["dpr"]), viewport: sizeOf(facts["viewport"]), image: sizeOf(facts["image"]), region: regionOf(facts["region"]) };
+  let shots = shotsTaken.get(state);
+  if (shots === undefined) {
+    shots = new Map();
+    shotsTaken.set(state, shots);
+  }
+  shots.delete(file);
+  shots.set(file, shot);
+  while (shots.size > SHOTS_KEPT) shots.delete(shots.keys().next().value as string);
+  return shot;
+}
+
+export function shotTaken(state: State, file: string): DisplayImage | null {
+  return shotsTaken.get(state)?.get(file) ?? null;
+}
+
+export const LIGHT_CALLS: ReadonlySet<string> = new Set(["click", "dblclick", "fill", "type", "press", "keyboard", "mouse", "select", "check", "uncheck", "hover", "focus", "scroll"]);
 const PY_WHITESPACE = new RegExp(`[${PY_SPACE_CLASS}]+`, "u");
 const PAGE_GLOBAL = /\b(document|window|localStorage|sessionStorage|getComputedStyle) is not defined/u;
 const PAGE_MISSING = /ReferenceError: ([\p{L}\p{N}_]+) is not defined/u;
@@ -231,7 +281,14 @@ async function answerCall(ctx: Ctx, argv: string[], index: number, light: boolea
   const fatal = outcomes.find((outcome) => FATAL.includes(String(outcome?.["code"])));
   if (fatal !== undefined) throw new OutcomeUnknown(callLabel(index, argv), String(fatal["error"] || "a command inside it was cut off"));
   if (done.failed && name !== "read") return { ok: false, error: done.text || `${name} failed`, code: "failed" };
+  if (name === "screenshot") noteShot(ctx, done.data);
   return { ok: true, text: done.text, data: jsonCopy(done.data) };
+}
+
+function noteShot(ctx: Ctx, data: unknown): void {
+  const given = data !== null && typeof data === "object" ? (data as Record<string, unknown>)["path"] : null;
+  if (typeof given !== "string" || given === "") return;
+  rememberShot(ctx.state, ctx.path(given), data);
 }
 
 type Tracked = { argv: unknown; call: number | null; line: unknown; type: string };
@@ -276,6 +333,7 @@ class ScriptRun {
   readonly inflight = new Map<number, Tracked>();
   readonly running = new Set<Promise<void>>();
   readonly logs: string[] = [];
+  readonly displayed: DisplayImage[] = [];
   logSize = 0;
   logsDropped = 0;
   stateText: string | null = null;
@@ -291,8 +349,22 @@ class ScriptRun {
   repl = false;
   spill = 0;
   private readonly reactions = new SharedWait(() => this.signal);
+  private readonly adopting = new SharedWait(() => this.signal);
 
   constructor(readonly ctx: Ctx, readonly runner: Runner) {}
+
+  async adoptActiveTab(): Promise<boolean> {
+    if (!this.repl) return false;
+    if (this.ctx.state.current !== null) return true;
+    if (this.ctx.state.hadTab) return false;
+    await this.adopting.join(async () => {
+      if (this.ctx.state.hadTab || this.ctx.state.current !== null) return;
+      await this.ctx.state.connect();
+      await this.ctx.state.takeActive();
+      flag("script_repl_auto_tab", true);
+    });
+    return this.ctx.state.current !== null;
+  }
 
   fail(error: Error): void {
     if (this.error !== null) return;
@@ -396,7 +468,15 @@ async function serveCall(run: ScriptRun, request: Request): Promise<Answer> {
       run.started.add(request.id);
       if (exclusive) run.mutating.add(request.id);
       if (!exclusive) await run.settle(name, words.slice(1));
-      return answerCall(run.ctx, words, index, light, full);
+      let out = await answerCall(run.ctx, words, index, light, full);
+      if (!out.ok && out.code === "no_session_tab" && name !== "open" && name !== "tab") {
+        try {
+          if (await run.adoptActiveTab()) out = await answerCall(run.ctx, words, index, light, full);
+        } catch (error) {
+          out = pageFailure(error, index);
+        }
+      }
+      return out;
     }));
     ok = answer.ok;
     return answer.ok ? answer : { ...answer, call: index };
@@ -424,18 +504,31 @@ async function servePage(run: ScriptRun, request: Request): Promise<Answer> {
       const invalid = op === "frames" ? null : validEvaluate(request);
       if (invalid !== null) return { ok: false, error: invalid, code: "usage", call: index };
       try {
+        const pageForCall = async () => {
+          try {
+            return await run.ctx.state.page();
+          } catch (error) {
+            if (error instanceof BrowseError && error.code === "no_session_tab" && (await run.adoptActiveTab())) {
+              return await run.ctx.state.page();
+            }
+            throw error;
+          }
+        };
         if (op === "frames") {
           flag("script_frames_listed", true);
-          return { ok: true, text: "", data: await framesAnswer(await run.ctx.state.page()) };
+          return { ok: true, text: "", data: await framesAnswer(await pageForCall()) };
         }
         if (frame !== null) {
           flag("script_frame_eval", true);
-          const page = await run.ctx.state.page();
+          const page = await pageForCall();
           const [declaration, args] = frameFunction(request);
           return { ok: true, text: "", data: { result: jsonCopy(await page.call(declaration, args, { frame, read: false, timeout: EVAL_TIMEOUT })) } };
         }
         const expression = op === "evaluate" ? evaluateExpression(request) : selectorExpression(request);
-        const answer = await answerCall(run.ctx, ["eval", expression], index, false);
+        let answer = await answerCall(run.ctx, ["eval", expression], index, false);
+        if (!answer.ok && answer.code === "no_session_tab" && (await run.adoptActiveTab())) {
+          answer = await answerCall(run.ctx, ["eval", expression], index, false);
+        }
         return answer.ok ? answer : { ...answer, call: index };
       } catch (error) {
         if (error instanceof ArgumentsTooDeep) return { ok: false, error: error.message, code: "usage", call: index };
@@ -450,6 +543,128 @@ async function servePage(run: ScriptRun, request: Request): Promise<Answer> {
   }
 }
 
+export const DISPLAY_BYTES = 1_500_000;
+export const DISPLAY_COPIES_KEPT = 32;
+const DISPLAY_COPY_NAME = /^display-(?:p([0-9]+)-)?[0-9]{13,}-[0-9a-f]{12}\.(?:png|jpe?g|webp)$/u;
+const activeScriptRuns = new Set<ScriptRun>();
+
+function pidAlive(pid: number): boolean {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+function activeDisplayPaths(extra?: Iterable<string>): Set<string> {
+  const held = new Set<string>();
+  for (const run of activeScriptRuns) {
+    for (const shot of run.displayed) held.add(shot.path);
+  }
+  if (extra !== undefined) {
+    for (const file of extra) held.add(file);
+  }
+  return held;
+}
+
+function readBounded(file: string, limit: number): Buffer | null {
+  let fd: number | undefined;
+  try {
+    fd = openSync(file, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0));
+    const info = fstatSync(fd);
+    if (!info.isFile() || info.size > limit) return null;
+    const buffer = Buffer.alloc(limit + 1);
+    let filled = 0;
+    for (;;) {
+      const got = readSync(fd, buffer, filled, buffer.length - filled, null);
+      if (got === 0) break;
+      filled += got;
+      if (filled > limit) return null;
+    }
+    return buffer.subarray(0, filled);
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
+function pruneCopies(folder: string, keep: ReadonlySet<string> = new Set(), ownerPid = process.pid): void {
+  try {
+    const copies: { file: string; at: number }[] = [];
+    for (const name of readdirSync(folder)) {
+      const match = DISPLAY_COPY_NAME.exec(name);
+      if (match === null) continue;
+      const pidText = match[1];
+      if (pidText !== undefined) {
+        const pid = Number(pidText);
+        if (pid !== ownerPid && pidAlive(pid)) continue;
+      }
+      const file = nodePath.join(folder, name);
+      if (keep.has(file)) continue;
+      try {
+        const info = lstatSync(file);
+        if (info.isFile()) copies.push({ file, at: info.mtimeMs });
+      } catch {}
+    }
+    copies.sort((a, b) => a.at - b.at);
+    for (const old of copies.slice(0, Math.max(0, copies.length - DISPLAY_COPIES_KEPT))) {
+      try {
+        unlinkSync(old.file);
+      } catch {}
+    }
+  } catch {}
+}
+
+export function snapshotShot(shot: DisplayImage, folder: string, keep?: Iterable<string>, ownerPid = process.pid): DisplayImage | null {
+  const bytes = readBounded(shot.path, DISPLAY_BYTES);
+  if (bytes === null) return null;
+  const extension = nodePath.extname(shot.path).toLowerCase();
+  const copy = nodePath.join(folder, `display-p${ownerPid}-${Date.now()}-${randomBytes(6).toString("hex")}${extension}`);
+  let fd: number | undefined;
+  try {
+    fd = openSync(copy, fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | (fsConstants.O_NOFOLLOW ?? 0), 0o600);
+    for (let at = 0; at < bytes.length; ) at += writeSync(fd, bytes, at, bytes.length - at);
+    const info = fstatSync(fd, { bigint: true });
+    const held = activeDisplayPaths(keep);
+    held.add(copy);
+    pruneCopies(folder, held, ownerPid);
+    return { ...shot, path: copy, dev: String(info.dev), ino: String(info.ino), size: Number(info.size) };
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
+export function displayAnswer(state: State, displayed: DisplayImage[], given: unknown, resolve: (file: string) => string, keep: (shot: DisplayImage) => DisplayImage | null = (shot) => shot): Answer {
+  if (typeof given !== "string" || given === "" || given.length > DISPLAY_PATH_LIMIT || given.includes("\0")) {
+    return { ok: false, error: "display() takes the result of await page.screenshot(...), a { path } object or the path it saved", code: "usage" };
+  }
+  const shot = shotTaken(state, resolve(given)) ?? shotTaken(state, given);
+  if (shot === null) {
+    flag("script_display_refused", true);
+    return { ok: false, error: "display() shows screenshots this session took: pass the result of await page.screenshot(...)", code: "usage" };
+  }
+  if (displayed.length >= MAX_DISPLAY) {
+    flag("script_display_capped", true);
+    return { ok: true, text: "", data: { shown: false, reason: `at most ${MAX_DISPLAY} images are shown per call` } };
+  }
+  const kept = keep(shot);
+  if (kept === null) {
+    flag("script_display_refused", true);
+    return { ok: false, error: `display() couldn't keep that screenshot: it's gone, not a regular file, or over ${DISPLAY_BYTES / 1_000_000} MB`, code: "failed" };
+  }
+  displayed.push(kept);
+  return { ok: true, text: "", data: { shown: true, index: displayed.length, path: shot.path } };
+}
+
+function serveDisplay(run: ScriptRun, request: Request): Answer {
+  return displayAnswer(run.ctx.state, run.displayed, request["path"], (file) => run.ctx.path(file), (shot) => snapshotShot(shot, nodePath.dirname(defaultPath(run.ctx, "png"))));
+}
+
 async function serve(run: ScriptRun, request: Request): Promise<void> {
   let answer: Answer;
   try {
@@ -461,6 +676,7 @@ async function serve(run: ScriptRun, request: Request): Promise<void> {
       answer = { ok: true, text: "", data: {} };
     } else if (request.op === "call") answer = await serveCall(run, request);
     else if (["evaluate", "$eval", "$$eval", "frames"].includes(request.op)) answer = await servePage(run, request);
+    else if (request.op === "display") answer = serveDisplay(run, request);
     else answer = { ok: false, error: `unknown script call ${JSON.stringify(request.op.slice(0, 40))}`, code: "usage" };
   } catch (error) {
     if (error instanceof Dropped) return;
@@ -677,6 +893,7 @@ export async function run(ctx: Ctx, source: string, seconds: number, mode: Scrip
     started.repl = repl;
     started.spill = repl && !mode.full ? SPILL_CHARS : 0;
     script = started;
+    activeScriptRuns.add(started);
     let outcome: { value: Message } | { timedOut: true };
     try {
       outcome = await withDeadline(seconds, async () => {
@@ -697,6 +914,7 @@ export async function run(ctx: Ctx, source: string, seconds: number, mode: Scrip
     message = outcome.value;
     keep = repl;
   } finally {
+    if (script !== null) activeScriptRuns.delete(script);
     if (!keep) runner.kill();
     if (script !== null) await (script as ScriptRun).drain();
     if (repl) releaseRepl(state, runner, keep && runner.alive && (script === null || (script as ScriptRun).error === null));
@@ -753,6 +971,12 @@ export async function run(ctx: Ctx, source: string, seconds: number, mode: Scrip
     const isMissingApi = message["name"] === "TypeError" && /^page\.[A-Za-z_$][\w$]* isn't part of ardia's script API:/u.test(rawMsg);
     const finalCode = rawCode === "usage" && !isMissingApi ? "script_failed" : rawCode;
     throw failure(`${errorText(message, source, script?.calls ?? [])}${hint}${ran ? `\n${ran}` : ""}`, [...logs, ...notes], { ...failureData(message, script?.calls ?? []), line, steps }, finalCode);
+  }
+  if (script !== null && script.displayed.length > 0) {
+    const metrics = active();
+    if (metrics !== undefined) metrics.display = [...script.displayed];
+    count("script_display_images", script.displayed.length);
+    notes.push(`[display: ${script.displayed.length} screenshot${script.displayed.length !== 1 ? "s" : ""} attached inline over MCP]`);
   }
   const value = renderValue(message);
   const parts = [...logs, ...(value !== null ? [value] : []), ...notes];

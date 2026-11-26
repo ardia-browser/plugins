@@ -24,7 +24,7 @@ import { closeCaptures } from "../capture/close.ts";
 import { type Caller, parseCaller } from "./announce.ts";
 import { log } from "./log.ts";
 import { canonical } from "./names.ts";
-import { type Answer, encodeAnswer, joinedBatch, MAX_REQUEST, MAX_RESPONSE, type Options, render, Result, timedOut } from "./render.ts";
+import { type Answer, encodeAnswer, joinedBatch, MAX_REQUEST, MAX_RESPONSE, type Options, pyValue, render, Result, timedOut } from "./render.ts";
 import { redact } from "../../redact.ts";
 import { parseText } from "../../json.ts";
 import { dispatch, hooks } from "../commands/all.ts";
@@ -456,6 +456,7 @@ export class Daemon {
       if (extra.code) fields.push(["code", extra.code]);
       if (extra.failed_step_command) fields.push(["failed_step_command", extra.failed_step_command]);
       if (request["busy_elsewhere"]) fields.push(["busy_elsewhere", true]);
+      if (metrics?.display && metrics.display.length > 0) fields.push(["display", pyValue(metrics.display)]);
       fields.push(["daemon", `ts/${cliVersion()}`]);
       const argv0 = Array.isArray(request["argv"]) && request["argv"].length > 0 ? canonical(String(request["argv"][0])) : "";
       await writeAnswer(socket, encodeAnswer(code, out, err, fields, MAX_RESPONSE, argv0, Boolean(record(request["options"])["json"])));
@@ -635,7 +636,9 @@ export class Daemon {
     state.caller = caller ?? state.caller;
     try {
       if (this.stopping) return this.refuseClosing(ctx.options, "close");
-      if (Object.hasOwn(ctx.options, EVICT_TOKEN) && !this.evictionStillReserved(ctx.options[EVICT_TOKEN])) {
+      const evicting = Object.hasOwn(ctx.options, EVICT_TOKEN);
+      const outer = evicting ? currentSignal() : null;
+      if (evicting && (outer?.aborted || !this.evictionStillReserved(ctx.options[EVICT_TOKEN]))) {
         return render(
           ctx.options,
           null,
@@ -646,16 +649,22 @@ export class Daemon {
       this.enterStopping();
       if (this.watchdogState === "failed") return this.refuseClosing(ctx.options, "close");
       const deadline = new AbortController();
+      const forward = () => deadline.abort(new Cancelled());
+      if (outer !== null) {
+        if (outer.aborted) deadline.abort(new Cancelled());
+        else outer.addEventListener("abort", forward, { once: true });
+      }
       const timer = setTimeout(() => deadline.abort(new Cancelled()), this.closeTimeout * 1000);
       try {
         await within(
-          withSignal(deadline.signal, () => this.closeTabs(tally)),
+          withSignal(deadline.signal, () => this.closeTabs(tally, evicting)),
           this.closeTimeout,
         );
       } catch (error) {
         if (!(error instanceof Cancelled)) log.exception("closing the session's tabs failed", error);
       } finally {
         clearTimeout(timer);
+        outer?.removeEventListener("abort", forward);
       }
     } finally {
       this.lock.release();
@@ -666,18 +675,23 @@ export class Daemon {
     return render(ctx.options, new Result({ closed: true, tabs: tally.closed, keptOpen: tally.kept }, text), null, "close");
   }
 
-  private async closeTabs(tally: { closed: number; kept: string[] }): Promise<void> {
+  private async closeTabs(tally: { closed: number; kept: string[] }, cancellable = false): Promise<void> {
+    if (currentSignal()?.aborted) return;
     const state = this.state;
     const leftovers = state.instance !== null && state.registry.temporaries(state.instance).length > 0;
     if ((state.opened.size === 0 && !leftovers && !state.ownsSessionTabs()) || state.lost) return;
     try {
-      await state.connect();
+      await state.connect(cancellable);
+      if (currentSignal()?.aborted) return;
       await state.refreshTargets();
+      if (currentSignal()?.aborted) return;
       await state.pairBeforeClosing();
-      await temptabs.sweep(state);
+      if (currentSignal()?.aborted) return;
+      await temptabs.sweep(state, cancellable);
       const registry = state.registry;
       const instance = state.instance;
       for (const targetId of [...state.opened]) {
+        if (currentSignal()?.aborted) return;
         if (!state.targetInfos.has(targetId)) {
           state.forgetTarget(targetId);
           continue;

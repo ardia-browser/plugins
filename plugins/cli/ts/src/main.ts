@@ -153,6 +153,8 @@ async function main(words: string[]): Promise<number> {
   if (routed !== undefined) watchLifeline(routed.lifeline);
   if (argv.includes("mcp")) {
     const mcp = await import("./mcp/index.ts");
+    const managed = mcp.mcpManageArgv(argv);
+    if (managed !== undefined) process.exit(mcp.mcpManageMain(managed));
     const parsed = mcp.mcpArgv(argv);
     if (parsed !== undefined) process.exit(await mcp.mcpMain(parsed));
   }

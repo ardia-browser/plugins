@@ -78,7 +78,7 @@ EOF
 
 ## Commands
 
-`ardia browse` takes a11y, addinitscript, auth, back, batch, cdp, check, click, clipboard, close, console, cookies, dblclick, dialog, diff, download, drag, errors, eval, fill, find, flow, focus, form, forward, frame, get, here, highlight, hover, is, issues, keyboard, keydown, keyup, links, logpoint, mouse, network, notes, open, pdf, perf, plugin, press, profiler, pushstate, query, react, read, read-urls, record, reload, removeinitscript, screenshot, script, scroll, scrollintoview, select, session, set, snapshot, state, storage, stream, styles, tab, text, tool, tools, trace, type, uncheck, upload, vitals, wait, window.
+`ardia browse` takes a11y, addinitscript, auth, back, batch, cdp, check, click, clipboard, close, console, cookies, dblclick, dialog, diff, download, drag, edit-cell, errors, eval, fill, fill-otp, find, flow, focus, form, forward, frame, get, here, highlight, hover, is, issues, keyboard, keydown, keyup, links, logpoint, mouse, network, notes, open, pdf, perf, plugin, press, profiler, pushstate, query, react, read, read-urls, record, reload, removeinitscript, screenshot, script, scroll, scrollintoview, select, session, set, snapshot, state, storage, stream, styles, tab, text, tool, tools, trace, type, uncheck, upload, vitals, wait, window.
 Aliases: exit, quit = close; evaluate, js = eval; goto, navigate, visit = open; key = press; refresh = reload; shot = screenshot; scrollinto = scrollintoview; snap = snapshot. Every form and flag: `references/commands.md`.
 
 A mistyped command or flag names the closest one. A failure ends with its stable `(code)`, and when one command fixes

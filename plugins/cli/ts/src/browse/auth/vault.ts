@@ -26,6 +26,7 @@ import { waitUntil } from "../state/wait.ts";
 import { credential } from "./providers.ts";
 import { addVaultSecret } from "../../redact.ts";
 import { flag } from "../metrics.ts";
+import { markSecret } from "../state/secrets.ts";
 import { type Clock, freshCode, parseSeed, settingsOf, systemClock, type TotpSeed } from "./totp.ts";
 import { LOOPBACK_HOSTS, originOf } from "./origin.ts";
 
@@ -463,8 +464,8 @@ export async function checkFocusedOrigin(page: Page, frame: string, origins: Rea
 }
 
 export const OTP_FIELDS =
-  "(digits) => { const usable = (i) => ardiaBrowse.visible(i) && !i.disabled && !i.readOnly && /^(text|tel|number|password|)$/.test(i.type || '');" +
-  " const inputs = Array.from(document.querySelectorAll('input')).filter(usable);" +
+  "(digits, scope) => { const root = scope || document; const usable = (i) => ardiaBrowse.visible(i) && !i.disabled && !i.readOnly && /^(text|tel|number|password|)$/.test(i.type || '');" +
+  " const inputs = Array.from(root.querySelectorAll('input')).filter(usable);" +
   " const coded = (i) => /(^|\\s)one-time-code(\\s|$)/.test(String(i.getAttribute('autocomplete') || i.autocomplete || ''));" +
   " const singles = inputs.filter((i) => i.maxLength === 1);" +
   " const shared = (list) => { let holder = list[0].parentElement; while (holder && !list.every((box) => holder.contains(box))) holder = holder.parentElement; return holder; };" +
@@ -486,9 +487,9 @@ export function splitDigits(code: string, boxes: number): string[] {
   return [...code];
 }
 
-export async function otpFields(page: Page, frame: string, digits: number): Promise<Element[]> {
+export async function otpFields(page: Page, frame: string, digits: number, scope: Element | null = null): Promise<Element[]> {
   try {
-    const remote = await page.call(OTP_FIELDS, [digits], { frame, byValue: false });
+    const remote = await page.call(OTP_FIELDS, [digits, scope], { frame, byValue: false });
     return await page.elementsFrom(remote, frame, "the one-time code field", 8);
   } catch (error) {
     if (error instanceof Cancelled || error instanceof ConnectionLost) throw error;
@@ -643,11 +644,41 @@ export function otpFrames(page: Pick<Page, "frames" | "mainFrame">, origins: Rea
   return [main, ...children];
 }
 
-async function enterOtp(ctx: Ctx, page: Page, name: string, seed: TotpSeed, origins: ReadonlySet<string>, humanize: boolean, actions: LoginActions): Promise<string> {
+export async function fillProfileOtp(ctx: Ctx, page: Page, name: string, humanize: boolean, actions: LoginActions = loginHooks.actions, scope: Element | null = null, within: string | null = null): Promise<string> {
+  const root = ctx.state.dataRoot;
+  if (root === null) throw new BrowseError("This session has no data folder for auth profiles");
+  const saved = await withProfileLock(root, name, async () => {
+    const meta = loadMeta(root, name);
+    if (!meta["totp"]) throw new BrowseError(`${name} has no TOTP secret; add one with \`ardia browse auth save ${name} --url <url> --totp-stdin\``, null, "no_totp");
+    const record = await readCredentials(root, name, meta);
+    if (record.totp === null) throw new BrowseError(`${name} has no TOTP secret; add one with \`ardia browse auth save ${name} --url <url> --totp-stdin\``, null, "no_totp");
+    return { origins: new Set<string>(meta["origins"]), seed: registerSeed(record.totp) };
+  });
+  await page.refreshFrames();
+  const top = originOfFrame(page, page.mainFrame);
+  const scopedOrigin = scope === null ? top : originOfFrame(page, scope.frame);
+  if (!saved.origins.has(top ?? "") || !saved.origins.has(scopedOrigin ?? "")) {
+    throw new BrowseError(
+      `Refusing to type ${name}'s one-time code: the page is ${top || "unknown"}${scope !== null && scope.frame !== page.mainFrame ? ` with the scope in ${scopedOrigin ?? "unknown"}` : ""}, not ${[...saved.origins].sort().join(", ")}`,
+      null,
+      "origin_mismatch",
+    );
+  }
+  const outcome = await enterOtp(ctx, page, name, saved.seed, saved.origins, humanize, actions, false, scope);
+  if (outcome === "not_asked") throw new BrowseError(`No one-time code field for ${name}${within ? ` inside --within "${within}"` : " on this page"}`, within ? { within } : null, "not_found");
+  return outcome;
+}
+
+async function enterOtp(ctx: Ctx, page: Page, name: string, seed: TotpSeed, origins: ReadonlySet<string>, humanize: boolean, actions: LoginActions, submit = true, scope: Element | null = null): Promise<string> {
   let found: { frame: string; fields: Element[] };
   try {
     found = (await waitUntil(async () => {
       await page.refreshFrames();
+      if (scope !== null) {
+        if (!origins.has(originOfFrame(page, page.mainFrame) ?? "") || !origins.has(originOfFrame(page, scope.frame) ?? "")) return null;
+        const fields = await otpFields(page, scope.frame, seed.digits, scope);
+        return fields.length > 0 ? { frame: scope.frame, fields } : null;
+      }
       for (const candidate of otpFrames(page, origins)) {
         const fields = await otpFields(page, candidate, seed.digits);
         if (fields.length > 0) return { frame: candidate, fields };
@@ -662,6 +693,7 @@ async function enterOtp(ctx: Ctx, page: Page, name: string, seed: TotpSeed, orig
     throw error;
   }
   const { frame, fields } = found;
+  for (const field of fields) markSecret(ctx.state, page, field.frame, page.loader(field.frame), field.backendId);
   const { code } = await freshCode(seed, otpHooks.clock);
   addVaultSecret(code);
   const digits = splitDigits(code, fields.length);
@@ -683,7 +715,7 @@ async function enterOtp(ctx: Ctx, page: Page, name: string, seed: TotpSeed, orig
     const next = fields[index + 1];
     await actions.typeInto(page, element, frame, digits[index] as string, humanize, focusedOn([element]), focusedOn(next === undefined ? [element] : [element, next]));
   }
-  if (fields.length === 1) await actions.pressEnter(page, frame, humanize);
+  if (fields.length === 1 && submit) await actions.pressEnter(page, frame, humanize);
   flag(fields.length > 1 ? "otp_split_boxes" : "otp_typed", true);
   return fields.length > 1 ? "split" : "typed";
 }

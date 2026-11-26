@@ -123,7 +123,7 @@ export function recorderSource(binding: string | null): string {
     };
   };
   const quietName = (el) => short(el.getAttribute("aria-label")) || labelledBy(el) || labels(el) || short(el.getAttribute("placeholder")) || short(el.getAttribute("title"));
-  const INTERACTIVE = "a[href],button,input,select,textarea,summary,label,option,[role=button],[role=link],[role=checkbox],[role=radio],[role=switch],[role=tab],[role=menuitem],[role=option],[role=combobox],[role=textbox],[contenteditable=''],[contenteditable=true],[onclick],[tabindex]";
+  const INTERACTIVE = "a[href],button,input,select,textarea,summary,label,option,[role=button],[role=link],[role=checkbox],[role=radio],[role=switch],[role=tab],[role=menuitem],[role=menuitemcheckbox],[role=menuitemradio],[role=option],[role=combobox],[role=textbox],[contenteditable=''],[contenteditable=true],[onclick],[tabindex]";
   const targetOf = (event) => {
     const path = event.composedPath ? event.composedPath() : [event.target];
     const first = path.find((node) => node && node.nodeType === 1);
@@ -141,10 +141,20 @@ export function recorderSource(binding: string | null): string {
   const sensitive = new WeakSet();
   const secret = (el) => {
     if (sensitive.has(el)) return true;
-    const hint = [el.getAttribute("autocomplete"), el.getAttribute("name"), el.id, el.getAttribute("aria-label"), el.getAttribute("placeholder"), labels(el), labelledBy(el)].join(" ");
-    const hidden = (el.localName === "input" && el.type === "password") || /one-time-code|cc-|password|passcode|passphrase|\\bpin\\b|otp|2fa|mfa|cvv|cvc|card.?num|ssn|secret|token|(recovery|backup|security|verification|auth\\w*)\\s*code/i.test(hint);
-    if (hidden) sensitive.add(el);
-    return hidden;
+    const raw = [el.getAttribute("autocomplete"), el.getAttribute("name"), el.id, el.getAttribute("aria-label"), el.getAttribute("placeholder"), labels(el), labelledBy(el)].filter(Boolean).join(" ");
+    const split = raw.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
+    const hint = raw + " " + split;
+    const hidden = (el.localName === "input" && el.type === "password") || /one-time-code|cc-|password|passcode|passphrase|card.?num|totp|2fa|mfa|secret|token|verification|(?:^|[^a-z])(one.?time|pin|otp|cvv|cvc|ssn|6.?digit|(?:recovery|backup|security|auth(?:entication)?).?code|code)(?:[^a-z]|$)/i.test(hint);
+    const box = !hidden && el.localName === "input" && el.maxLength === 1 && otpGroup(el);
+    if (hidden || box) sensitive.add(el);
+    return hidden || box;
+  };
+  const otpGroup = (el) => {
+    let node = el.parentElement;
+    for (let up = 0; node && up < 4; up += 1, node = node.parentElement) {
+      if ([...node.querySelectorAll("input")].filter((input) => input.maxLength === 1).length >= 4) return true;
+    }
+    return el.inputMode === "numeric";
   };
   const textual = (el) => (el.localName === "input" && !["checkbox", "radio", "submit", "button", "reset", "image", "file", "range", "color"].includes(el.type)) || el.localName === "textarea" || Boolean(el.isContentEditable);
   const emit = (event) => { try { send(JSON.stringify({ ...event, at: Date.now(), frame: frameInfo() })); } catch {} };
@@ -173,7 +183,14 @@ export function recorderSource(binding: string | null): string {
     return el;
   };
   const formMethod = (el) => (el.form ? (el.form.getAttribute("method") || "get").toLowerCase() : null);
-  const stateOf = (el) => ("checked" in el ? Boolean(el.checked) : null);
+  const TOGGLE_ROLES = ["checkbox", "radio", "switch", "menuitemcheckbox", "menuitemradio"];
+  const ariaToggle = (el) => !("checked" in el) && TOGGLE_ROLES.includes(roleOf(el));
+  const stateOf = (el) => {
+    if ("checked" in el) return Boolean(el.checked);
+    if (!ariaToggle(el)) return null;
+    const state = el.getAttribute("aria-checked");
+    return state === "true" ? true : state === "false" ? false : null;
+  };
   const pressed = new WeakMap();
   let pointerSeq = 0;
   const onPointer = (event) => {
@@ -185,7 +202,7 @@ export function recorderSource(binding: string | null): string {
     const pointer = installId + ":" + pointerSeq;
     pressed.set(el, pointer);
     const toggle = el.localName === "input" && (el.type === "checkbox" || el.type === "radio");
-    emit({ kind: "click", pointer, target: describe(el), checked: toggle ? el.type === "radio" || !el.checked : stateOf(el), method: formMethod(el) });
+    emit({ kind: "click", pointer, target: describe(el), checked: toggle ? el.type === "radio" || !el.checked : ariaToggle(el) ? null : stateOf(el), method: formMethod(el) });
   };
   const onClick = (event) => {
     if (!event.isTrusted || event.button !== 0) return;
@@ -194,10 +211,21 @@ export function recorderSource(binding: string | null): string {
     const pointer = pressed.get(el);
     if (pointer !== undefined) {
       pressed.delete(el);
-      emit({ kind: "confirm", pointer, checked: stateOf(el) });
+      const confirm = () => emit({ kind: "confirm", pointer, checked: stateOf(el) });
+      if (ariaToggle(el) && typeof setTimeout === "function") setTimeout(confirm, 0);
+      else confirm();
       return;
     }
     flushAll();
+    if (ariaToggle(el)) {
+      pointerSeq += 1;
+      const synthetic = installId + ":" + pointerSeq;
+      emit({ kind: "click", pointer: synthetic, target: describe(el), checked: null, method: formMethod(el) });
+      const confirm = () => emit({ kind: "confirm", pointer: synthetic, checked: stateOf(el) });
+      if (typeof setTimeout === "function") setTimeout(confirm, 0);
+      else confirm();
+      return;
+    }
     emit({ kind: "click", target: describe(el), checked: stateOf(el), method: formMethod(el) });
   };
   const onKey = (event) => {

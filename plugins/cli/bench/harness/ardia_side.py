@@ -189,6 +189,18 @@ def launch(opts):
         shutil.rmtree(data)
     data.mkdir(parents=True)
     (data / "onboarding.json").write_text(json.dumps({"version": 1, "completedAt": 1}))
+    (data / "session.json").write_text(json.dumps({
+        "version": 2,
+        "profiles": {"default": {"id": "default", "name": "Personal", "color": "plum", "icon": None, "createdAt": 0}},
+        "profileOrder": ["default"],
+        "windows": [{"id": "w1", "profileId": "default", "incognito": False, "sidebarOpen": True,
+                     "frame": [80, 80, 1280, 800], "createdAt": 1, "tabIds": [], "activeTabIds": {}}],
+        "windowOrder": ["w1"],
+        "focusedWindowId": "w1",
+        "tabs": [], "groups": [], "splits": [], "closedTabs": [], "closedWindows": [],
+        "closedGroups": [], "cleanedTabs": [],
+        "settings": {"cliControl": True},
+    }))
     logfile = data / "app.out.log"
     t0 = time.monotonic()
     env_args = ["--env", "ARDIA_BACKGROUND=1", "--env", f"ARDIA_DATA_DIR={data}",
@@ -211,9 +223,13 @@ def launch(opts):
              "app": str(app), "ardia_test": opts["ardia_test"], "data": str(data)}
     write_json(instance, state)
     wait_until(lambda: "Browser" in devtools(opts, "GET", "/json/version"), 60, "DevTools /json/version", pid=pid)
+    sock_deadline = time.monotonic() + 5.0
+    while time.monotonic() < sock_deadline and not (data / "ArdiaControl.sock").exists():
+        time.sleep(0.1)
+    state["control_sock"] = (data / "ArdiaControl.sock").exists()
     state["launch_s"] = round(time.monotonic() - t0, 2)
     write_json(instance, state)
-    log(f"launched Ardia pid {pid} on port {opts['port']} in {state['launch_s']} s")
+    log(f"launched Ardia pid {pid} on port {opts['port']} in {state['launch_s']} s (control_sock={state['control_sock']})")
     return state, False
 
 
@@ -355,7 +371,7 @@ def mcp_server(opts, data):
     env = {"ARDIA_DATA_DIR": str(data), "PATH": agent_env(opts)["PATH"]}
     if opts.get("humanize"):
         env["AGENT_BROWSER_HUMANIZE"] = "1"
-    return {"command": ardia_bin(opts), "args": ["--port", str(opts["port"]), "mcp"], "env": env}
+    return {"command": ardia_bin(opts), "args": ["--port", str(opts["port"]), "--data-dir", str(data), "mcp"], "env": env}
 
 
 def write_mcp_config(path, server):

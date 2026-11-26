@@ -32,12 +32,19 @@ export async function scroll(page: Page, given: string | null, amount: number, h
     point = [x, y];
   }
   const landedInside = frame === null && distance !== 0 && (await overFrame(page, point[0], point[1]));
-  const needs = distance === 0 || landedInside || !(await page.takesInput()) ? {} : { wheel: 1 };
+  let wheeled = false;
   await expectInput(
     page,
     frame,
-    () => input.gesture("scroll", () => scrollWheel(page, distance, vertical, humanize, point, frame, element), { allowHidden: true }),
-    needs,
+    () =>
+      input.gesture(
+        "scroll",
+        async () => {
+          wheeled = await scrollWheel(page, distance, vertical, humanize, point, frame, element);
+        },
+        { allowHidden: true },
+      ),
+    () => (distance === 0 || landedInside || !wheeled ? {} : { wheel: 1 }),
     "The scroll",
   );
 }

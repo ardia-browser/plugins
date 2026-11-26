@@ -43,7 +43,7 @@ class McpWiring(unittest.TestCase):
 
     def test_server_runs_ardia_mcp_on_the_instance_port(self):
         self.assertEqual(self.server["command"], str(ardia_side.INSTALLED_ARDIA))
-        self.assertEqual(self.server["args"], ["--port", "9371", "mcp"])
+        self.assertEqual(self.server["args"], ["--port", "9371", "--data-dir", "/tmp/data-x", "mcp"])
         self.assertEqual(self.server["env"]["ARDIA_DATA_DIR"], "/tmp/data-x")
         self.assertIn(str(ardia_side.INSTALLED_ARDIA.parent), self.server["env"]["PATH"].split(":"))
         self.assertNotIn("AGENT_BROWSER_HUMANIZE", self.server["env"])
@@ -56,7 +56,7 @@ class McpWiring(unittest.TestCase):
             config = json.loads(path.read_text())
             entry = config["mcpServers"]["ardia"]
             self.assertEqual(entry["type"], "stdio")
-            self.assertEqual(entry["args"], ["--port", "9371", "mcp"])
+            self.assertEqual(entry["args"], ["--port", "9371", "--data-dir", "/tmp/data-x", "mcp"])
             cmd = ardia_side.mcp_claude_command("m", "high", "P", path)
             self.assertEqual(cmd[:4], ["claude", "-p", "--mcp-config", str(path)])
             self.assertIn("--strict-mcp-config", cmd)
@@ -67,7 +67,7 @@ class McpWiring(unittest.TestCase):
         self.assertEqual(cmd[-1], "P")
         flags = [cmd[i + 1] for i, part in enumerate(cmd) if part == "-c"]
         self.assertIn(f'mcp_servers.ardia.command={json.dumps(str(ardia_side.INSTALLED_ARDIA))}', flags)
-        self.assertIn('mcp_servers.ardia.args=["--port", "9371", "mcp"]', flags)
+        self.assertIn('mcp_servers.ardia.args=["--port", "9371", "--data-dir", "/tmp/data-x", "mcp"]', flags)
         self.assertIn("mcp_servers.ardia.tool_timeout_sec=600", flags)
         env_flag = next(f for f in flags if f.startswith("mcp_servers.ardia.env="))
         self.assertIn('ARDIA_DATA_DIR = "/tmp/data-x"', env_flag)

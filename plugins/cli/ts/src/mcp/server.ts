@@ -1,4 +1,4 @@
-import { constants } from "node:fs";
+import { constants, lstatSync, realpathSync } from "node:fs";
 import { open } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -19,16 +19,21 @@ import {
   success,
   validId,
 } from "./protocol.ts";
+import { imageSize } from "../browse/media/marks.ts";
+import { tempRoot } from "../browse/daemon/render.ts";
+import { uid } from "../paths.ts";
 import {
   ACT_TOOL,
   actCall,
   answerText,
   type Daemon,
   type DaemonAnswer,
+  type DisplayRef,
   fencedTab,
   freshNonce,
   imagePath,
   INSTRUCTIONS,
+  MAX_DISPLAY_IMAGES,
   MAX_INLINE_IMAGE_BYTES,
   parseActiveTab,
   parseTabs,
@@ -173,7 +178,12 @@ export class McpServer {
       else if (name === ACT_TOOL) {
         const call = actCall(args);
         screenshot = SCREENSHOT_COMMANDS.has(call.command);
-        answer = await this.daemon.run({ argv: [call.command, ...call.args], stdin: call.stdin, json: false, full: call.full, maxOutput: call.maxOutput }, signal);
+        const request = { argv: [call.command, ...call.args], stdin: call.stdin, json: false, full: call.full, maxOutput: call.maxOutput };
+        answer = await this.daemon.run(request, signal);
+        if (answer.exit !== 0 && answer.code === "no_session_tab" && call.command !== "open" && call.command !== "tab" && call.command !== "script" && call.command !== "batch") {
+          const picked = await this.daemon.run({ argv: ["tab", "active"], stdin: null, json: true, full: false, maxOutput: 0 }, signal, CONTEXT_PROBE_MS);
+          if (picked.exit === 0) answer = await this.daemon.run(request, signal);
+        }
       } else throw new RpcError(INVALID_PARAMS, `Unknown tool: ${String(name)}`);
     } catch (error) {
       if (error instanceof RpcError && error.code === INVALID_PARAMS && name !== REPL_TOOL && name !== ACT_TOOL) throw error;
@@ -184,11 +194,12 @@ export class McpServer {
     const content: ToolContent[] = [];
     const header = signal.aborted ? null : await this.tabChange(nonce, signal);
     const text = answerText(answer, nonce);
-    content.push({ type: "text", text: header === null ? text : `${header}\n${text}` });
+    content.push({ type: "text", text: neutralizeDisplayTags(header === null ? text : `${header}\n${text}`) });
     if (screenshot && answer.exit === 0) {
       const image = await inlineImage(answer.out);
       if (image !== null) content.push(image);
     }
+    if (name === REPL_TOOL) content.push(...(await displayContent(answer.display ?? [])));
     return answer.exit === 0 ? { content } : { content, isError: true };
   }
 
@@ -285,6 +296,115 @@ async function inlineImage(out: string): Promise<ToolContent | null> {
   } finally {
     await handle?.close().catch(() => undefined);
   }
+}
+
+export const DISPLAY_TAG = "ardia-display";
+const DISPLAY_LOOKALIKE = /<\s*\/?\s*ardia[\s_-]*display\b/giu;
+const DISPLAY_EXTENSION: Readonly<Record<string, string>> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" };
+
+export function neutralizeDisplayTags(text: string): string {
+  return text.replace(DISPLAY_LOOKALIKE, "[display tag removed]");
+}
+
+function realOrNull(given: string): string | null {
+  try {
+    return realpathSync(given);
+  } catch {
+    return null;
+  }
+}
+
+export function screenshotRoots(env: NodeJS.ProcessEnv = process.env, cwd: string = process.cwd()): string[] {
+  const roots = [path.join(tempRoot(), "ardia-browse", "screenshots"), path.join(os.tmpdir(), "ardia-browse", "screenshots"), "/tmp/ardia-browse/screenshots"];
+  const given = env["AGENT_BROWSER_SCREENSHOT_DIR"];
+  if (given) roots.push(path.resolve(cwd, expandUser(given)));
+  const real = roots.map(realOrNull).filter((root): root is string => root !== null);
+  return [...new Set(real)];
+}
+
+export function insideRoots(file: string, roots: readonly string[]): boolean {
+  return roots.some((root) => file.startsWith(`${root}${path.sep}`));
+}
+
+function privateFolder(folder: string): boolean {
+  try {
+    const info = lstatSync(folder);
+    return info.isDirectory() && info.uid === uid() && (info.mode & 0o022) === 0;
+  } catch {
+    return false;
+  }
+}
+
+export async function readDisplayImage(shot: DisplayRef, roots: readonly string[] = screenshotRoots()): Promise<{ data: string; mimeType: string; width: number | null; height: number | null } | null> {
+  const given = shot.path;
+  if (typeof given !== "string" || given === "" || given.length > 4096 || given.includes("\0") || !path.isAbsolute(given)) return null;
+  if (shot.dev === null || shot.ino === null || shot.size === null || shot.size > MAX_INLINE_IMAGE_BYTES) return null;
+  const mimeType = DISPLAY_EXTENSION[path.extname(given).toLowerCase()];
+  if (mimeType === undefined) return null;
+  const folder = realOrNull(path.dirname(given));
+  if (folder === null || !privateFolder(folder)) return null;
+  const resolved = path.join(folder, path.basename(given));
+  if (!insideRoots(resolved, roots)) return null;
+  let handle;
+  try {
+    handle = await open(resolved, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
+    const info = await handle.stat({ bigint: true });
+    if (!info.isFile() || info.nlink !== 1n || Number(info.uid) !== uid()) return null;
+    if (String(info.dev) !== shot.dev || String(info.ino) !== shot.ino || info.size !== BigInt(shot.size)) return null;
+    const buffer = Buffer.alloc(MAX_INLINE_IMAGE_BYTES + 1);
+    let filled = 0;
+    for (;;) {
+      const { bytesRead } = await handle.read(buffer, filled, buffer.length - filled, filled);
+      if (bytesRead === 0) break;
+      filled += bytesRead;
+      if (filled > MAX_INLINE_IMAGE_BYTES) return null;
+    }
+    const bytes = buffer.subarray(0, filled);
+    if (bytes.length !== shot.size || !validImageMagic(bytes, mimeType)) return null;
+    const size = imageSize(bytes);
+    return { data: bytes.toString("base64"), mimeType, width: size?.width ?? null, height: size?.height ?? null };
+  } catch {
+    return null;
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
+}
+
+function frameNumber(value: number | null): string {
+  return value === null ? "?" : String(Math.round(value * 1000) / 1000);
+}
+
+export function displayMeta(shot: DisplayRef, index: number, total: number, width: number | null, height: number | null): string {
+  const region = shot.region ?? (shot.viewport === null ? null : { x: 0, y: 0, width: shot.viewport.width, height: shot.viewport.height });
+  const meta = {
+    scale: shot.scale,
+    dpr: shot.dpr,
+    viewport: shot.viewport,
+    region,
+    imageWidth: width ?? shot.image?.width ?? null,
+    imageHeight: height ?? shot.image?.height ?? null,
+  };
+  const viewport = shot.viewport === null ? "?" : `${frameNumber(shot.viewport.width)}×${frameNumber(shot.viewport.height)}`;
+  const origin = region === null ? "?,?" : `${frameNumber(region.x)},${frameNumber(region.y)}`;
+  const line = `<${DISPLAY_TAG} index="${index}" of="${total}">image ${meta.imageWidth ?? "?"}×${meta.imageHeight ?? "?"}, scale ${frameNumber(shot.scale)}, dpr ${frameNumber(shot.dpr)}, viewport ${viewport} CSS px, region origin ${origin}; viewport x = ${region === null ? "?" : frameNumber(region.x)} + image x / scale, y = ${region === null ? "?" : frameNumber(region.y)} + image y / scale (click --xy takes viewport CSS px)</${DISPLAY_TAG}>`;
+  return `${line}\n${JSON.stringify(meta)}`;
+}
+
+export async function displayContent(shots: readonly DisplayRef[], roots: readonly string[] = screenshotRoots()): Promise<ToolContent[]> {
+  const content: ToolContent[] = [];
+  const kept = shots.slice(0, MAX_DISPLAY_IMAGES);
+  let index = 0;
+  for (const shot of kept) {
+    const image = await readDisplayImage(shot, roots);
+    index += 1;
+    if (image === null) {
+      content.push({ type: "text", text: `<${DISPLAY_TAG} index="${index}" of="${kept.length}">not shown: the screenshot wasn't a readable image in the screenshot folder</${DISPLAY_TAG}>` });
+      continue;
+    }
+    content.push({ type: "text", text: displayMeta(shot, index, kept.length, image.width, image.height) });
+    content.push({ type: "image", data: image.data, mimeType: image.mimeType });
+  }
+  return content;
 }
 
 export type Input = { on(event: string, listener: (chunk: Uint8Array) => void): unknown; resume?(): unknown };

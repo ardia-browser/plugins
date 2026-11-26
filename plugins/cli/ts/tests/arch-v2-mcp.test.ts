@@ -90,6 +90,8 @@ describe("lifecycle", () => {
     expect(result["capabilities"]).toEqual({ tools: {}, resources: {} });
     expect(result["serverInfo"]).toEqual({ name: "ardia-browser", version: "1.2.3" });
     expect(String(result["instructions"])).toContain("untrusted data");
+    expect(String(result["instructions"])).toContain("locator.count()");
+    expect(String(result["instructions"])).toContain("page.mouse.click");
     expect(String(result["instructions"]).split("page-data").length).toBe(3);
     const later = resultOf(await call(server, "initialize", { protocolVersion: "2099-01-01" }));
     expect(later["protocolVersion"]).toBe("2025-03-26");
@@ -191,6 +193,55 @@ describe("tools/call", () => {
     expect(textOf(result)).toContain("✓ batch");
     resultOf(await call(server, "tools/call", { name: "browser_act", arguments: { command: "open https://b.test", args: ["--here"] } }));
     expect(daemon.requests.at(-2)?.argv).toEqual(["open", "https://b.test", "--here"]);
+  });
+
+  test("browser_act adopts the active tab and retries once on no_session_tab", async () => {
+    let picked = false;
+    const seen: string[][] = [];
+    const daemon: Daemon = {
+      async run(request) {
+        seen.push(request.argv);
+        if (request.argv[0] === "tab" && request.argv[1] === "active") {
+          picked = true;
+          return { exit: 0, out: `${JSON.stringify({ success: true, data: { tabId: "t2", title: "Desk", url: "https://desk.test/" }, error: null })}\n`, err: "", code: null };
+        }
+        if (request.argv[0] === "tab" && request.argv[1] === "list") {
+          const tabs = picked ? [{ tabId: "t2", title: "Desk", url: "https://desk.test/", active: true }] : [];
+          return { exit: 0, out: `${JSON.stringify({ success: true, data: { tabs }, error: null })}\n`, err: "", code: null };
+        }
+        if (request.argv[0] === "snapshot" && !picked) {
+          return { exit: 1, out: "", err: "✗ This session has no tab yet\n", code: "no_session_tab" };
+        }
+        return { exit: 0, out: "✓ snap\n", err: "", code: null };
+      },
+    };
+    const server = new McpServer({ daemon, version: "1" });
+    const result = resultOf(await call(server, "tools/call", { name: "browser_act", arguments: { command: "snapshot", args: ["-i"] } }));
+    expect(result["isError"]).toBeUndefined();
+    expect(textOf(result)).toContain("[tab t2 |");
+    expect(textOf(result)).toContain("✓ snap");
+    expect(seen.slice(0, 3)).toEqual([["snapshot", "-i"], ["tab", "active"], ["snapshot", "-i"]]);
+  });
+
+  test("browser_act does not retry compound script or batch commands on no_session_tab", async () => {
+    const seen: string[][] = [];
+    const daemon: Daemon = {
+      async run(request) {
+        seen.push(request.argv);
+        if (request.argv[0] === "tab" && request.argv[1] === "list") {
+          return { exit: 0, out: `${JSON.stringify({ success: true, data: { tabs: [] }, error: null })}\n`, err: "", code: null };
+        }
+        return { exit: 1, out: "", err: "✗ This session has no tab yet\n", code: "no_session_tab" };
+      },
+    };
+    const server = new McpServer({ daemon, version: "1" });
+    const scriptRes = resultOf(await call(server, "tools/call", { name: "browser_act", arguments: { command: "script", stdin: "return 1" } }));
+    expect(scriptRes["isError"]).toBe(true);
+    const batchRes = resultOf(await call(server, "tools/call", { name: "browser_act", arguments: { command: "batch", stdin: "here" } }));
+    expect(batchRes["isError"]).toBe(true);
+    expect(seen.some((argv) => argv[0] === "tab" && argv[1] === "active")).toBe(false);
+    expect(seen.filter((argv) => argv[0] === "script")).toHaveLength(1);
+    expect(seen.filter((argv) => argv[0] === "batch")).toHaveLength(1);
   });
 
   test("the tab header shows on the first call and again only when the active tab changes", async () => {

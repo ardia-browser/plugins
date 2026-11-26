@@ -1,8 +1,8 @@
 import type { CdpResult } from "../cdp/browser.ts";
-import { frameOffset, localRoot, type Offset } from "./offsets.ts";
+import { frameOffset, localRoot, mapLocalPoint, type Offset } from "./offsets.ts";
 import type { Page, SendOptions } from "./page.ts";
 
-export { frameOffset };
+export { frameOffset, mapLocalPoint };
 
 export function sessionOfFrame(page: Page, frameId: string | null): string | null {
   return page.sessionFor(frameId);

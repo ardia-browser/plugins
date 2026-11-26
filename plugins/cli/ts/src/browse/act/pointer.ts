@@ -17,11 +17,12 @@ import {
   ACTIONS_VISIBLE_LABEL,
 } from "../js/index.ts";
 import { flag } from "../metrics.ts";
-import { localRootOffset, sendIn } from "../state/frames.ts";
+import { localRootOffset, mapLocalPoint, sendIn } from "../state/frames.ts";
 import type { Element, Page } from "../state/page.ts";
 import type { State } from "../state/state.ts";
+import { canUseNativeInput, nativeKey, nativeMouseClick, nativeMouseMove, nativeWheel } from "../state/tabtools.ts";
 import { monotonic } from "../state/wait.ts";
-import { asRecord, type Counts, expectInput, mouseButton, poll, rect, viewport, type Viewport } from "./common.ts";
+import { asRecord, type Counts, expectInput, mouseButton, overFrame, poll, rect, viewport, type Viewport } from "./common.ts";
 import { type Blocker, blockerPhrase, type CoverAt, findBlocker, noteObstruction, type Obstruction } from "./obstruction.ts";
 
 export const CLEANUP_TIMEOUT = 2.0;
@@ -40,6 +41,7 @@ const temporaryMetrics = new WeakSet<Page>();
 
 export type Box = [number, number, number, number];
 export type Point = [number, number, Record<string, unknown>];
+export type Position = [number, number];
 
 export function blockerKind(kind: Obstruction): string {
   return kind.replace(/_/gu, "-");
@@ -71,7 +73,7 @@ export async function scrollWheel(
   given: [number, number] | null = null,
   frame: string | null = null,
   element: Element | null = null,
-): Promise<void> {
+): Promise<boolean> {
   const mouse = inputOf(page).pointer;
   const scripted = await page.hidden();
   let point = given;
@@ -90,21 +92,29 @@ export async function scrollWheel(
   } else if (!humanize) {
     mouse.position = point;
   }
-  if (distance === 0) return;
+  if (distance === 0) return false;
   const at = point;
+  let wheeled = false;
   const wheel = async (dx: number, dy: number) => {
+    if (await nativeWheel(page, Math.trunc(at[0]), Math.trunc(at[1]), dx, dy)) {
+      mouse.position = [at[0], at[1]];
+      wheeled = true;
+      return;
+    }
     if (scripted) {
       if (element !== null) await page.call("(el, x, y) => el.scrollBy(x, y)", [element, dx, dy], { frame: element.frame });
       else await page.call("(x, y) => scrollBy(x, y)", [dx, dy], { frame: frame || page.mainFrame });
       return;
     }
     await page.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: Math.trunc(at[0]), y: Math.trunc(at[1]), deltaX: dx, deltaY: dy }, { inputEvent: true });
+    wheeled = true;
   };
   if (humanize) {
     await humanScroll(wheel, Math.abs(distance), vertical, distance > 0 ? 1 : -1);
-    return;
+    return wheeled;
   }
   await wheel(vertical ? 0 : Math.trunc(distance), vertical ? Math.trunc(distance) : 0);
+  return wheeled;
 }
 
 function outside(r: { x: number; y: number; width: number; height: number }, vp: Viewport, margin = 4): boolean {
@@ -194,7 +204,9 @@ export async function scrollIntoView(page: Page, element: Element, humanize: boo
   if (outside(r, vp)) await scrollIntoViewIfNeeded(page, element);
 }
 
-export async function elementBox(page: Page, element: Element): Promise<Box | null> {
+export type Quad = [number, number, number, number, number, number, number, number];
+
+async function rawElementQuad(page: Page, element: Element): Promise<Quad | null> {
   let quads: number[][];
   try {
     const found = await sendIn(page, element.frame, "DOM.getContentQuads", { backendNodeId: element.backendId });
@@ -203,16 +215,35 @@ export async function elementBox(page: Page, element: Element): Promise<Box | nu
     if (!(error instanceof CdpError) || !error.cdpMessage.includes("content quads")) throw error;
     return null;
   }
-  let best: [number, number, number, number, number] | null = null;
+  let best: [number, Quad] | null = null;
   for (const quad of quads) {
-    const xs = quad.filter((_, index) => index % 2 === 0);
-    const ys = quad.filter((_, index) => index % 2 === 1);
+    if (quad.length < 8) continue;
+    const xs = [quad[0] as number, quad[2] as number, quad[4] as number, quad[6] as number];
+    const ys = [quad[1] as number, quad[3] as number, quad[5] as number, quad[7] as number];
     const area = (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys));
-    if (area > 1 && (best === null || area > best[0])) best = [area, Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+    if (area > 1 && (best === null || area > best[0])) {
+      best = [area, [quad[0] as number, quad[1] as number, quad[2] as number, quad[3] as number, quad[4] as number, quad[5] as number, quad[6] as number, quad[7] as number]];
+    }
   }
-  if (best === null) return null;
+  return best === null ? null : best[1];
+}
+
+async function elementQuad(page: Page, element: Element): Promise<Quad | null> {
+  const q = await rawElementQuad(page, element);
+  if (q === null) return null;
   const [rootX, rootY] = await localRootOffset(page, element.frame);
-  return [best[1] + rootX, best[2] + rootY, best[3] + rootX, best[4] + rootY];
+  return [q[0] + rootX, q[1] + rootY, q[2] + rootX, q[3] + rootY, q[4] + rootX, q[5] + rootY, q[6] + rootX, q[7] + rootY];
+}
+
+function quadBounds(q: Quad): Box {
+  const xs = [q[0], q[2], q[4], q[6]];
+  const ys = [q[1], q[3], q[5], q[7]];
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+}
+
+export async function elementBox(page: Page, element: Element): Promise<Box | null> {
+  const quad = await elementQuad(page, element);
+  return quad === null ? null : quadBounds(quad);
 }
 
 export async function settledBox(page: Page, element: Element, first: Box | null = null): Promise<Box | null> {
@@ -335,6 +366,163 @@ export const PREPARE_ACTION = `(el, fx, fy, scroll, watch) => {
   return facts;
 }`;
 
+export const PREPARE_POSITIONED_ACTION = `(el, fx, fy, scroll, watch, offset = null) => {
+  if (!el.isConnected) return { connected: false };
+  const facts = {
+    connected: true,
+    native: el.matches(":disabled") || !!(el.closest && el.closest("button:disabled, fieldset:disabled")),
+    aria: el.getAttribute("aria-disabled") === "true",
+    shown: document.visibilityState !== "hidden",
+    width: innerWidth,
+    height: innerHeight,
+    moved: false,
+    animating: false,
+    box: false,
+    cover: null,
+    x: 0,
+    y: 0,
+  };
+  const boxOf = () => {
+    if (offset) {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 ? r : null;
+    }
+    let best = null;
+    for (const r of el.getClientRects()) if (r.width * r.height > 1 && (!best || r.width * r.height > best.width * best.height)) best = r;
+    return best;
+  };
+  const roundCoord = (v) => {
+    const f = Math.floor(v);
+    const d = v - f;
+    if (d < 0.5) return f;
+    if (d > 0.5) return f + 1;
+    return f % 2 === 0 ? f : f + 1;
+  };
+  let rect = boxOf();
+  if (!rect) return facts;
+  if (scroll) {
+    const rectBefore = rect;
+    const clipBox = (p) => {
+      const c = p.getBoundingClientRect();
+      const sx = p.offsetWidth > 0 ? c.width / p.offsetWidth : 1;
+      const sy = p.offsetHeight > 0 ? c.height / p.offsetHeight : 1;
+      const left = c.left + (p.clientLeft || 0) * sx;
+      const top = c.top + (p.clientTop || 0) * sy;
+      const width = (p.clientWidth > 0 ? p.clientWidth : p.offsetWidth || c.width / sx) * sx;
+      const height = (p.clientHeight > 0 ? p.clientHeight : p.offsetHeight || c.height / sy) * sy;
+      return { left, top, right: left + width, bottom: top + height, width, height, sx, sy };
+    };
+    const parentOf = (node) => node.assignedSlot || node.parentElement || (node.parentNode && node.parentNode.host) || null;
+    const cx = offset ? rect.left + offset[0] : rect.left + rect.width / 2;
+    const cy = offset ? rect.top + offset[1] : rect.top + rect.height / 2;
+    let hidden = offset
+      ? cx < 0 || cy < 0 || cx > innerWidth || cy > innerHeight
+      : rect.top < 0 || rect.left < 0 || rect.bottom > innerHeight || rect.right > innerWidth;
+    for (let p = parentOf(el); p && !hidden; p = parentOf(p)) {
+      const style = getComputedStyle(p);
+      if (style.overflowX === "visible" && style.overflowY === "visible") continue;
+      const c = offset ? clipBox(p) : p.getBoundingClientRect();
+      hidden = cx < c.left || cx > c.right || cy < c.top || cy > c.bottom;
+    }
+    if (hidden) {
+      if (offset) {
+        let px = cx;
+        let py = cy;
+        for (let p = parentOf(el); p; p = parentOf(p)) {
+          const style = getComputedStyle(p);
+          if (style.overflowX === "visible" && style.overflowY === "visible") continue;
+          const c = clipBox(p);
+          const dx = px < c.left || px > c.right ? px - (c.left + c.width / 2) : 0;
+          const dy = py < c.top || py > c.bottom ? py - (c.top + c.height / 2) : 0;
+          if (dx || dy) {
+            p.scrollBy({ left: dx / c.sx, top: dy / c.sy, behavior: "instant" });
+            const next = boxOf();
+            if (!next) return facts;
+            rect = next;
+            px = rect.left + offset[0];
+            py = rect.top + offset[1];
+          }
+        }
+        const wdx = px < 0 || px > innerWidth ? px - innerWidth / 2 : 0;
+        const wdy = py < 0 || py > innerHeight ? py - innerHeight / 2 : 0;
+        if (wdx || wdy) window.scrollBy({ left: wdx, top: wdy, behavior: "instant" });
+      } else {
+        el.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
+      }
+      const after = boxOf();
+      facts.moved = !after || Math.abs(after.top - rectBefore.top) + Math.abs(after.left - rectBefore.left) > 1;
+      if (!after) return facts;
+      rect = after;
+    }
+  }
+  const chain = new Set();
+  for (let node = el; node; node = node.parentNode || node.host) chain.add(node);
+  facts.animating = document.getAnimations().some((a) => a.playState === "running" && a.effect && chain.has(a.effect.target));
+  facts.box = true;
+  facts.elWidth = rect.width;
+  facts.elHeight = rect.height;
+  const x = offset ? (window === window.top ? roundCoord(rect.left + offset[0]) : rect.left + offset[0]) : rect.left + fx * rect.width;
+  const y = offset ? (window === window.top ? roundCoord(rect.top + offset[1]) : rect.top + offset[1]) : rect.top + fy * rect.height;
+  facts.x = x;
+  facts.y = y;
+  let cover = ardiaBrowse.hitTest(el, x, y);
+  if (cover && !cover.startsWith("nothing")) {
+    const root = el.getRootNode();
+    if (root instanceof ShadowRoot) {
+      const inner = root.elementFromPoint(x, y);
+      let through = !!inner && (inner === el || el.contains(inner));
+      for (let host = root.host; host && through; ) {
+        const outer = host.getRootNode();
+        const hit = outer.elementFromPoint(x, y);
+        through = hit === host || (!!hit && host.contains(hit));
+        host = outer instanceof ShadowRoot ? outer.host : null;
+      }
+      if (through) cover = null;
+    }
+  }
+  facts.cover = cover || null;
+  let top = [x, y];
+  try {
+    for (let win = window; top; win = win.parent) {
+      if (win === win.top) {
+        const visual = win.visualViewport;
+        if (visual && (Math.abs(visual.scale - 1) > 0.001 || visual.offsetLeft || visual.offsetTop)) top = null;
+        break;
+      }
+      const owner = win.frameElement;
+      if (!owner || !owner.offsetWidth || !owner.offsetHeight || !win.innerWidth) {
+        top = null;
+        break;
+      }
+      const up = (node) => node.assignedSlot || node.parentElement || (node.parentNode && node.parentNode.host) || null;
+      for (let node = owner; node && top; node = up(node)) {
+        const style = getComputedStyle(node);
+        if ((style.rotate && style.rotate !== "none") || (style.scale && style.scale !== "none")) {
+          top = null;
+          break;
+        }
+        if (!style.transform || style.transform === "none") continue;
+        const matrix = new DOMMatrixReadOnly(style.transform);
+        if (!matrix.is2D || Math.abs(matrix.b) > 0.000001 || Math.abs(matrix.c) > 0.000001 || matrix.a <= 0 || matrix.d <= 0) top = null;
+      }
+      if (!top) break;
+      const box = owner.getBoundingClientRect();
+      const style = getComputedStyle(owner);
+      const sx = box.width / owner.offsetWidth;
+      const sy = box.height / owner.offsetHeight;
+      const padLeft = parseFloat(style.paddingLeft) || 0;
+      const padTop = parseFloat(style.paddingTop) || 0;
+      const inner = (owner.clientWidth - padLeft - (parseFloat(style.paddingRight) || 0)) / win.innerWidth;
+      top = [box.left + (owner.clientLeft + padLeft) * sx + top[0] * sx * inner, box.top + (owner.clientTop + padTop) * sy + top[1] * sy * inner];
+    }
+  } catch (error) {
+    top = null;
+  }
+  facts.top = top;
+  if (watch) facts.counts = (${ACTIONS_INPUT_WATCH})();
+  return facts;
+}`;
+
 type Facts = {
   connected?: boolean;
   native?: boolean;
@@ -342,6 +530,8 @@ type Facts = {
   shown?: boolean;
   width?: number;
   height?: number;
+  elWidth?: number;
+  elHeight?: number;
   moved?: boolean;
   animating?: boolean;
   box?: boolean;
@@ -352,8 +542,12 @@ type Facts = {
   counts?: Counts;
 };
 
-async function prepareAction(page: Page, element: Element, fx: number, fy: number, scroll: boolean, watch = false): Promise<Facts> {
-  const facts = asRecord(await page.call(PREPARE_ACTION, [element, fx, fy, scroll, watch], { frame: element.frame, read: !scroll })) as Facts;
+async function prepareAction(page: Page, element: Element, fx: number, fy: number, scroll: boolean, watch = false, position: Position | null = null): Promise<Facts> {
+  const facts = asRecord(await page.call(
+    position === null ? PREPARE_ACTION : PREPARE_POSITIONED_ACTION,
+    position === null ? [element, fx, fy, scroll, watch] : [element, fx, fy, scroll, watch, position],
+    { frame: element.frame, read: !scroll },
+  )) as Facts;
   if (!facts.connected) throw new BrowseError(`Element ${element.label} was removed from the page`);
   if (facts.shown) page.shownAt = monotonic();
   return facts;
@@ -364,16 +558,41 @@ function directPoint(facts: Facts): [number, number] | null {
   return Array.isArray(top) && Number.isFinite(top[0]) && Number.isFinite(top[1]) ? [top[0], top[1]] : null;
 }
 
-function pointIn(box: Box | null, facts: Facts, fx: number, fy: number): [number, number] | null {
+function pointIn(box: Box | null, facts: Facts, fx: number, fy: number, position: Position | null = null): [number, number] | null {
   const direct = directPoint(facts);
   if (direct !== null) return direct;
   if (box === null) return null;
   const [left, upper, right, bottom] = box;
+  if (position !== null) {
+    const sx = typeof facts.elWidth === "number" && facts.elWidth > 0 ? (right - left) / facts.elWidth : 1;
+    const sy = typeof facts.elHeight === "number" && facts.elHeight > 0 ? (bottom - upper) / facts.elHeight : 1;
+    return [left + position[0] * sx, upper + position[1] * sy];
+  }
   return [left + fx * (right - left), upper + fy * (bottom - upper)];
 }
 
-async function aimAt(page: Page, element: Element, box: Box | null, facts: Facts, fx: number, fy: number): Promise<[[number, number], Box | null]> {
+function pointInQuad(q: Quad, facts: Facts, position: Position): [number, number] {
+  const u = typeof facts.elWidth === "number" && facts.elWidth > 0 ? position[0] / facts.elWidth : 0;
+  const v = typeof facts.elHeight === "number" && facts.elHeight > 0 ? position[1] / facts.elHeight : 0;
+  return [q[0] + u * (q[2] - q[0]) + v * (q[6] - q[0]), q[1] + u * (q[3] - q[1]) + v * (q[7] - q[1])];
+}
+
+async function aimAt(page: Page, element: Element, box: Box | null, facts: Facts, fx: number, fy: number, position: Position | null = null): Promise<[[number, number], Box | null]> {
   if (!facts.box) throw notVisible(element);
+  const direct = directPoint(facts);
+  if (direct !== null) return [direct, box];
+  if (position !== null) {
+    if (typeof facts.x === "number" && typeof facts.y === "number" && Number.isFinite(facts.x) && Number.isFinite(facts.y)) {
+      const mapped = await mapLocalPoint(page, element.frame, facts.x, facts.y);
+      return [mapped, box];
+    }
+    const localQuad = await rawElementQuad(page, element);
+    if (localQuad === null) throw notVisible(element);
+    const [lx, ly] = pointInQuad(localQuad, facts, position);
+    const mapped = await mapLocalPoint(page, element.frame, lx, ly);
+    const [rootX, rootY] = await localRootOffset(page, element.frame);
+    return [mapped, quadBounds([localQuad[0] + rootX, localQuad[1] + rootY, localQuad[2] + rootX, localQuad[3] + rootY, localQuad[4] + rootX, localQuad[5] + rootY, localQuad[6] + rootX, localQuad[7] + rootY])];
+  }
   const point = pointIn(box, facts, fx, fy);
   if (point !== null) return [point, box];
   const measured = await elementBox(page, element);
@@ -430,19 +649,19 @@ export async function outsideItsFrame(page: Page, element: Element, x: number, y
   return { where, at: { frame, backend } };
 }
 
-export async function targetPoint(page: Page, element: Element, humanize: boolean, checkCover = true, waitForEnabled = false): Promise<Point> {
-  let fx = humanize ? 0.5 + rng().uniform(-0.2, 0.2) : 0.5;
-  let fy = humanize ? 0.5 + rng().uniform(-0.2, 0.2) : 0.5;
-  const humanScroll = humanize && element.frame === page.mainFrame;
-  let facts = await prepareAction(page, element, fx, fy, !humanScroll, true);
+export async function targetPoint(page: Page, element: Element, humanize: boolean, checkCover = true, waitForEnabled = false, position: Position | null = null): Promise<Point> {
+  let fx = position === null && humanize ? 0.5 + rng().uniform(-0.2, 0.2) : 0.5;
+  let fy = position === null && humanize ? 0.5 + rng().uniform(-0.2, 0.2) : 0.5;
+  const humanScroll = position === null && humanize && element.frame === page.mainFrame;
+  let facts = await prepareAction(page, element, fx, fy, !humanScroll, true, position);
   if (waitForEnabled && (facts.native || facts.aria)) {
     await waitEnabled(page, element, false);
-    facts = await prepareAction(page, element, fx, fy, !humanScroll, true);
+    facts = await prepareAction(page, element, fx, fy, !humanScroll, true, position);
   }
   const inMain = element.frame === page.mainFrame;
   if (inMain && !((facts.width ?? 0) >= 1 && (facts.height ?? 0) >= 1)) {
     await laidOut(page);
-    facts = await prepareAction(page, element, fx, fy, !humanScroll, true);
+    facts = await prepareAction(page, element, fx, fy, !humanScroll, true, position);
   }
   let stale = Boolean(facts.moved || facts.animating);
   if (humanScroll) {
@@ -459,7 +678,7 @@ export async function targetPoint(page: Page, element: Element, humanize: boolea
     const vp = await viewport(page);
     if (!(vp.width >= 1 && vp.height >= 1)) await laidOut(page);
     let point: [number, number];
-    [point, box] = await aimAt(page, element, box, facts, fx, fy);
+    [point, box] = await aimAt(page, element, box, facts, fx, fy, position);
     if (outsideMain(point, vp)) {
       await scrollIntoViewIfNeeded(page, element);
       stale = true;
@@ -480,15 +699,15 @@ export async function targetPoint(page: Page, element: Element, humanize: boolea
       box = await settledBox(page, element);
       if (box === null) throw notVisible(element);
     }
-    if (round > 0 || stale) facts = await prepareAction(page, element, fx, fy, false, true);
-    [[cx, cy], box] = await aimAt(page, element, box, facts, fx, fy);
+    if (round > 0 || stale) facts = await prepareAction(page, element, fx, fy, false, true, position);
+    [[cx, cy], box] = await aimAt(page, element, box, facts, fx, fy, position);
     if (!checkCover) return [cx, cy, { connected: true, counts: facts.counts ?? null }];
     cover = facts.cover ?? null;
-    if (cover && humanize && (fx !== 0.5 || fy !== 0.5)) {
+    if (cover && position === null && humanize && (fx !== 0.5 || fy !== 0.5)) {
       fx = 0.5;
       fy = 0.5;
-      facts = await prepareAction(page, element, fx, fy, false, true);
-      [[cx, cy], box] = await aimAt(page, element, box, facts, fx, fy);
+      facts = await prepareAction(page, element, fx, fy, false, true, position);
+      [[cx, cy], box] = await aimAt(page, element, box, facts, fx, fy, position);
       cover = facts.cover ?? null;
     }
     if (!cover && !inMain) {
@@ -510,7 +729,7 @@ export async function targetPoint(page: Page, element: Element, humanize: boolea
       tried.add("escape");
       if (await closedMenu(page, cover)) continue;
     }
-    if (!tried.has("center")) {
+    if (position === null && !tried.has("center")) {
       tried.add("center");
       if (await centered(page, element)) continue;
     }
@@ -762,10 +981,13 @@ export async function dismissedConsent(page: Page, element: Element, x: number, 
 
 export async function closedMenu(page: Page, cover: string): Promise<boolean> {
   try {
-    for (const kind of ["keyDown", "keyUp"]) {
-      await page.send("Input.dispatchKeyEvent", { type: kind, key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 }, { inputEvent: true });
+    if (!(await nativeKey(page, "Escape", "Escape"))) {
+      for (const kind of ["keyDown", "keyUp"]) {
+        await page.send("Input.dispatchKeyEvent", { type: kind, key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 }, { inputEvent: true });
+      }
     }
   } catch (error) {
+    if (error instanceof OutcomeUnknown || error instanceof ConnectionLost || (error instanceof BrowseError && error.code === "document_changed")) throw error;
     if (error instanceof BrowseError) return false;
     throw error;
   }
@@ -780,6 +1002,7 @@ export async function centered(page: Page, element: Element): Promise<boolean> {
   try {
     moved = await page.call(ACTIONS_CENTER, [element], { frame: element.frame });
   } catch (error) {
+    if (error instanceof OutcomeUnknown || error instanceof ConnectionLost) throw error;
     if (error instanceof BrowseError) return false;
     throw error;
   }
@@ -866,18 +1089,27 @@ export async function domClick(page: Page, element: Element, error: BrowseError)
       : `${element.label} sits outside the page, so it got a DOM click instead of a pointer click`;
 }
 
-export async function click(page: Page, element: Element, humanize: boolean, count = 1, button = "left", beforePress: (() => Promise<void>) | null = null): Promise<void> {
+export async function click(
+  page: Page,
+  element: Element,
+  humanize: boolean,
+  count = 1,
+  button = "left",
+  beforePress: (() => Promise<void>) | null = null,
+  position: Position | null = null,
+): Promise<void> {
+  if (position !== null) flag("click_with_position", true);
   let x: number;
   let y: number;
   let primed: Counts | null;
   try {
     const loader = page.loader(element.frame);
     let facts: Record<string, unknown>;
-    [x, y, facts] = await targetPoint(page, element, humanize, true, true);
+    [x, y, facts] = await targetPoint(page, element, humanize, true, true, position);
     primed = page.loader(element.frame) === loader ? ((facts["counts"] as Counts | null | undefined) ?? null) : null;
   } catch (error) {
     if (!(error instanceof BrowseError)) throw error;
-    if (error.code === "not_visible") {
+    if (error.code === "not_visible" && position === null) {
       let standIn = await visibleLabel(page, element);
       if (standIn !== null) {
         flag("clicked_label_of_hidden_input", true);
@@ -892,13 +1124,15 @@ export async function click(page: Page, element: Element, humanize: boolean, cou
       page.state.clickNote = `${element.label} has no box of its own, so the click went to its visible content`;
       return;
     }
-    if (error.code !== "outside_viewport" || count !== 1 || button !== "left") throw error;
+    if (position !== null || error.code !== "outside_viewport" || count !== 1 || button !== "left") throw error;
     await domClick(page, element, error);
     return;
   }
   const input = inputOf(page);
   const mouse = input.pointer;
   const which = mouseButton(button);
+  const allowNativeClick =
+    beforePress === null && !humanize && (count === 1 || count === 2) && (which === "left" || which === "middle") && page.frameSessions.size === 0 && (await canUseNativeInput(page));
   const press = async () => {
     if (beforePress !== null) {
       await mouse.move(x, y, humanize);
@@ -907,19 +1141,78 @@ export async function click(page: Page, element: Element, humanize: boolean, cou
       await mouse.up(which);
       return;
     }
+    if (allowNativeClick && mouse.interception === null && mouse.pressedButton === null) {
+      if (await nativeMouseClick(page, roundCoordinate(x), roundCoordinate(y), which, count)) {
+        mouse.position = [x, y];
+        return;
+      }
+      await page.requireVisible();
+    }
     if (humanize || count === 1) {
-      await mouse.click(x, y, which, count, humanize);
+      await mouse.click(x, y, which, count, humanize, false);
       return;
     }
-    for (let number = 1; number <= count; number += 1) await mouse.click(x, y, which, number, false);
+    for (let number = 1; number <= count; number += 1) await mouse.click(x, y, which, number, false, false);
   };
-  await expectInput(page, element.frame, () => input.gesture("click", press), { "mousedown|pointerdown": count, "mouseup|pointerup": count }, "The click", element, primed);
+  await expectInput(page, element.frame, () => input.gesture("click", press, { allowHidden: allowNativeClick }), { "mousedown|pointerdown": count, "mouseup|pointerup": count }, "The click", element, primed);
 }
 
-export async function hover(page: Page, element: Element, humanize: boolean): Promise<void> {
-  const [x, y] = await targetPoint(page, element, humanize, false);
+export async function mouseClickAt(page: Page, x: number, y: number, button: string, count: number, humanize: boolean): Promise<void> {
   const input = inputOf(page);
-  await expectInput(page, element.frame, () => input.gesture("hover", () => input.pointer.move(x, y, humanize)), { mousemove: 1 }, "The hover");
+  const mouse = input.pointer;
+  const which = mouseButton(button);
+  const allowNativeClick =
+    !humanize && (count === 1 || count === 2) && (which === "left" || which === "middle") && page.frameSessions.size === 0 && (await canUseNativeInput(page));
+  const over = await overFrame(page, x, y);
+  const press = async () => {
+    if (allowNativeClick && mouse.interception === null && mouse.pressedButton === null) {
+      if (await nativeMouseClick(page, roundCoordinate(x), roundCoordinate(y), which, count)) {
+        mouse.position = [x, y];
+        return;
+      }
+      await page.requireVisible();
+    }
+    if (humanize || count === 1) {
+      await mouse.click(x, y, which, count, humanize, false);
+      return;
+    }
+    for (let number = 1; number <= count; number += 1) await mouse.click(x, y, which, number, false, false);
+  };
+  await expectInput(
+    page,
+    page.mainFrame,
+    () => input.gesture("mouse click", press, { allowHidden: allowNativeClick }),
+    over ? {} : { "mousedown|pointerdown": count, "mouseup|pointerup": count },
+    "The mouse click",
+  );
+}
+
+export async function hover(page: Page, element: Element, humanize: boolean, position: Position | null = null): Promise<void> {
+  if (position !== null) flag("click_with_position", true);
+  const [x, y] = await targetPoint(page, element, humanize, false, false, position);
+  const input = inputOf(page);
+  const allowNativeMove = !humanize && page.frameSessions.size === 0 && (await canUseNativeInput(page));
+  await expectInput(
+    page,
+    element.frame,
+    () =>
+      input.gesture(
+        "hover",
+        async () => {
+          if (allowNativeMove && input.pointer.interception === null && input.pointer.pressedButton === null) {
+            if (await nativeMouseMove(page, roundCoordinate(x), roundCoordinate(y))) {
+              input.pointer.position = [x, y];
+              return;
+            }
+            await page.requireVisible();
+          }
+          await input.pointer.move(x, y, humanize);
+        },
+        { allowHidden: allowNativeMove },
+      ),
+    { mousemove: 1 },
+    "The hover",
+  );
 }
 
 export const TOUCH_PROBE = "() => navigator.maxTouchPoints > 0 && 'ontouchstart' in window";
@@ -931,6 +1224,7 @@ export async function touchEmulated(page: Page, frame: string | null): Promise<b
   try {
     return Boolean(await page.call(TOUCH_PROBE, [], { frame: frame || page.mainFrame, read: true }));
   } catch (error) {
+    if (error instanceof OutcomeUnknown || error instanceof ConnectionLost) throw error;
     if (error instanceof BrowseError) return false;
     throw error;
   }

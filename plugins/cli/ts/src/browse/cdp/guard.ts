@@ -1,11 +1,16 @@
-export const FORBIDDEN_METHODS: ReadonlySet<string> = new Set(["Browser.close", "Browser.crash", "Browser.crashGpuProcess"]);
+export const FORBIDDEN_METHODS: ReadonlySet<string> = new Set(["Browser.close", "Browser.crash", "Browser.crashGpuProcess", "Page.crash"]);
+const FORBIDDEN_METHOD_PATTERN = /^[^.]+\.crash/;
 
 export class ForbiddenCommand extends Error {
   override readonly name = "ForbiddenCommand";
 }
 
+export function isForbiddenMethod(method: string): boolean {
+  return FORBIDDEN_METHODS.has(method) || FORBIDDEN_METHOD_PATTERN.test(method);
+}
+
 export function checkMethod(method: unknown): void {
-  if (typeof method === "string" && FORBIDDEN_METHODS.has(method)) {
+  if (typeof method === "string" && isForbiddenMethod(method)) {
     throw new ForbiddenCommand(`ardia never sends ${method}: it's the user's browser`);
   }
 }

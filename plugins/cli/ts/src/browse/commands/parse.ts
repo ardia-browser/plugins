@@ -104,7 +104,9 @@ export function parse(
       }
       continue;
     }
-    if (token.startsWith("-") && token.length > 1 && !pyDigit([...token.slice(1, 3)][0])) throw unknownFlag(name, [...Object.keys(flags), ...Object.keys(aliases)]);
+    if (token.startsWith("-") && token.length > 1 && !pyDigit([...token.slice(1, 3)][0]) && !(token[1] === "." && pyDigit(token[2]))) {
+      throw unknownFlag(name, [...Object.keys(flags), ...Object.keys(aliases)]);
+    }
     positionals.push(token);
   }
   return [options, positionals];

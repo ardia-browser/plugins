@@ -275,6 +275,7 @@
       network: list("network"),
       downloads: list("downloads"),
       unsettled: Boolean(changes && changes.unsettled),
+      revealed: Array.isArray(fields.revealed) ? fields.revealed : [],
       error: changes && typeof changes.error === "string" ? changes.error : null,
     });
     return receipt;
@@ -293,11 +294,59 @@
     const epoch = receiptEpoch;
     return pending.then(acted(options, epoch));
   };
+  const coordOf = (value, label) => {
+    if (typeof value !== "number" || !Number.isFinite(value)) throw new TypeError(`${label} must be a finite number`);
+    return value;
+  };
+  const positionFlag = (options) => {
+    if (!options || options.position === undefined || options.position === null) return [];
+    const pos = options.position;
+    if (!plainObject(pos) || typeof pos.x !== "number" || !Number.isFinite(pos.x) || typeof pos.y !== "number" || !Number.isFinite(pos.y)) {
+      throw new TypeError("position must be { x, y } with finite numbers");
+    }
+    return [`--position=${pos.x},${pos.y}`];
+  };
+  const totpHandles = new WeakMap();
   const keyboard = (value, options) => runAct(["keyboard", "type", String(value)], options);
   keyboard.type = keyboard;
   keyboard.press = (key, options) => runAct(["press", String(key)], options);
   keyboard.insertText = (value, options) => runAct(["keyboard", "inserttext", String(value)], options);
+  const mouse = Object.freeze({
+    click: (x, y, options) => {
+      const opts = plainObject(options) ? options : {};
+      const argv = ["mouse", "click", String(coordOf(x, "page.mouse.click x")), String(coordOf(y, "page.mouse.click y"))];
+      if (opts.button != null) argv.push("--button", String(opts.button));
+      const count = opts.clickCount ?? opts.count;
+      if (count != null) argv.push("--count", String(count));
+      return runAct(argv, opts);
+    },
+    dblclick: (x, y, options) => {
+      const opts = plainObject(options) ? options : {};
+      const argv = ["mouse", "dblclick", String(coordOf(x, "page.mouse.dblclick x")), String(coordOf(y, "page.mouse.dblclick y"))];
+      if (opts.button != null) argv.push("--button", String(opts.button));
+      return runAct(argv, opts);
+    },
+    move: (x, y, options) => runAct(["mouse", "move", String(coordOf(x, "page.mouse.move x")), String(coordOf(y, "page.mouse.move y"))], options),
+    down: (options) => {
+      const opts = plainObject(options) ? options : {};
+      return runAct(["mouse", "down", ...(opts.button != null ? [String(opts.button)] : [])], opts);
+    },
+    up: (options) => {
+      const opts = plainObject(options) ? options : {};
+      return runAct(["mouse", "up", ...(opts.button != null ? [String(opts.button)] : [])], opts);
+    },
+    wheel: (deltaX, deltaY, options) =>
+      runAct(["mouse", "wheel", String(coordOf(deltaY, "page.mouse.wheel deltaY")), String(coordOf(deltaX, "page.mouse.wheel deltaX"))], options),
+  });
 
+  const display = async (input) => {
+    let shot = input;
+    if (shot && typeof shot.then === "function") shot = await shot;
+    const file = typeof shot === "string" ? shot : plainObject(shot) && typeof shot.path === "string" ? shot.path : null;
+    if (!file) throw new TypeError("display() takes the result of await page.screenshot(...), a { path } object or the path it saved");
+    const answer = await request("display", { path: file });
+    return answer.data;
+  };
   const api = {
     here: () => browse("here").then(text),
     goto: async (url) => (await browse("open", await absolute(url))).data,
@@ -311,8 +360,8 @@
       for (const [sel, val] of pairs) await call(["fill", sel, String(val)], undefined);
       return pairs.length;
     },
-    click: (selector, options) => runAct(["click", selector, flags(options, { newTab: "--new-tab", button: "--button" })], options),
-    dblclick: (selector, options) => runAct(["dblclick", selector], options),
+    click: (selector, options) => runAct(["click", selector, ...flags(options, { newTab: "--new-tab", button: "--button", within: "--within" }), ...positionFlag(options)], options),
+    dblclick: (selector, options) => runAct(["dblclick", selector, ...flags(options, { within: "--within" }), ...positionFlag(options)], options),
     focus: (selector, options) => runAct(["focus", selector], options),
     fill: (selector, value, options) => runAct(["fill", selector, String(value)], options),
     type: (selector, value, options) => runAct(["type", selector, String(value)], options),
@@ -321,13 +370,28 @@
       return runAct(["press", ...args.slice(-2)], options);
     },
     keyboard,
+    mouse,
     select: (selector, ...given) => {
       const [values, options] = trailing(given);
       return runAct(["select", selector, ...values.flat()], options);
     },
     check: (selector, options) => runAct(["check", selector], options),
     uncheck: (selector, options) => runAct(["uncheck", selector], options),
-    hover: (selector, options) => runAct(["hover", selector], options),
+    hover: (selector, options) => runAct(["hover", selector, ...flags(options, { within: "--within" }), ...positionFlag(options)], options),
+    drag: (source, target, options) => runAct(["drag", selectorOf(source, "page.drag()"), selectorOf(target, "page.drag()"), ...flags(options, { before: "--before", after: "--after", synthetic: "--synthetic" })], options),
+    editCell: (selector, value, options) => runAct(["edit-cell", selectorOf(selector, "page.editCell()"), String(value), ...flags(options, { commit: "--commit", within: "--within" })], options),
+    fillOtp: (code, options) => {
+      options = plainObject(options) ? options : {};
+      const profile = totpHandles.has(code) ? totpHandles.get(code) : plainObject(code) && typeof code.profile === "string" ? code.profile : null;
+      if (profile !== null) return runAct(["fill-otp", "--profile", profile, ...flags(options, { within: "--within" })], options);
+      return runAct(["fill-otp", String(code === undefined || code === null ? "" : code), ...flags(options, { within: "--within" })], options);
+    },
+    totp: (profile) => {
+      if (typeof profile !== "string" || !profile) throw new TypeError("page.totp() takes the name of a saved auth profile");
+      const handle = Object.freeze({ toString: () => "[one-time code for " + profile + "]", toJSON: () => "[one-time code for " + profile + "]" });
+      totpHandles.set(handle, profile);
+      return handle;
+    },
     scroll: (direction, pixels, options) => runAct(["scroll", ...words(direction), ...words(pixels)], options),
     waitForTimeout: (ms) => request("sleep", { ms: Number(ms) || 0 }).then(() => undefined),
     text: (selector) => (selector == null ? browse("read").then(data("content")) : browse("get", "text", selector).then(data("text"))),
@@ -472,6 +536,9 @@
       uncheck: (options) => api.uncheck(selector, options),
       setChecked: (checked, options) => (checked ? api.check(selector, options) : api.uncheck(selector, options)),
       hover: (options) => api.hover(selector, options),
+      editCell: (value, options) => api.editCell(selector, value, options),
+      dragTo: (target, options) => api.drag(selector, target, options),
+      fillOtp: (code, options) => api.fillOtp(code, { ...(plainObject(options) ? options : {}), within: selector }),
       focus: (options) => api.focus(selector, options),
       scrollIntoView: () => browse("scrollintoview", selector).then(text),
       scrollIntoViewIfNeeded: () => browse("scrollintoview", selector).then(text),
@@ -731,6 +798,9 @@
   act.check = (selector, options) => api.check(selector, forced(options));
   act.uncheck = (selector, options) => api.uncheck(selector, forced(options));
   act.hover = (selector, options) => api.hover(selector, forced(options));
+  act.drag = (source, target, options) => api.drag(source, target, forced(options));
+  act.editCell = (selector, value, options) => api.editCell(selector, value, forced(options));
+  act.fillOtp = (code, options) => api.fillOtp(code, forced(options));
   act.focus = (selector, options) => api.focus(selector, forced(options));
   act.scroll = (direction, pixels, options) => api.scroll(direction, pixels, forced(options));
   Object.freeze(act);
@@ -859,8 +929,10 @@
     },
     screenshot: async (options) => {
       options = typeof options === "string" ? { out: options } : plainObject(options) ? options : {};
-      const given = { ...options, out: options.out ?? options.path, full: options.full ?? options.fullPage };
+      const region = Array.isArray(options.region) ? options.region.join(",") : plainObject(options.region) ? [options.region.x, options.region.y, options.region.width, options.region.height].join(",") : options.region;
+      const given = { ...options, region, out: options.out ?? options.path, full: options.full ?? options.fullPage };
       const answer = await browse("screenshot", ...flags(given, { selector: "-s", full: "--full", out: "--out", annotate: "--annotate", marks: "--marks", region: "--region", scale: "--scale", withSnapshot: "--with-snapshot" }));
+      if (options.inline === true) await display(answer.data);
       return answer.data;
     },
   });
@@ -1171,6 +1243,7 @@
   define("closeTab", closeTab);
   define("readUrls", readUrls);
   define("parseReceipt", parseReceipt);
+  define("display", display);
   if (REPL) {
     define("__ardiaReplCapture__", (fn) => { replCapture = typeof fn === "function" ? fn : null; });
     define("__ardiaReplInit__", (names) => {

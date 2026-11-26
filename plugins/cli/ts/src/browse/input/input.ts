@@ -3,6 +3,7 @@ import { rng } from "../../pylib/random.ts";
 import { Cancelled, later, shield, sleep, withSignal } from "../cdp/cancel.ts";
 import { BrowseError, ConnectionLost, OutcomeUnknown } from "../daemon-errors.ts";
 import { Page, type PageInput, type Viewport, type Element } from "../state/page.ts";
+import { nativeKey } from "../state/tabtools.ts";
 import { roundCoordinate } from "./human.ts";
 import { FocusedKeyTarget, type HeldKeys, Keyboard, KeyTarget } from "./keyboard.ts";
 import { EDITING_SHORTCUTS, MODIFIER_BITS, MODIFIER_KEYS, parseCombo, parseKey, RELEASE_TIMEOUT } from "./keys.ts";
@@ -180,9 +181,21 @@ export class Input implements PageInput {
     }
   }
 
-  async pressCombo(combo: string, humanize: boolean, downOnly = false, upOnly = false): Promise<void> {
+  async tryNativeKey(combo: string): Promise<boolean> {
+    if (this.heldKeys.size > 0) return false;
+    const [modifiers, last] = parseCombo(combo);
+    if (last === null || modifiers.length > 0) return false;
+    const [key, code] = parseKey(last);
+    return nativeKey(this.page, key, code || undefined);
+  }
+
+  async pressCombo(combo: string, humanize: boolean, downOnly = false, upOnly = false, allowNative = true): Promise<void> {
     const [modifiers, last] = parseCombo(combo);
     let bits = 0;
+    if (allowNative && !humanize && !downOnly && !upOnly && last !== null && modifiers.length === 0 && this.heldKeys.size === 0) {
+      const [key, code] = parseKey(last);
+      if (await nativeKey(this.page, key, code || undefined)) return;
+    }
     const random = rng();
     const hold = () => (humanize ? random.uniform(0.05, 0.12) : 0);
     const gap = () => (humanize ? random.uniform(0.03, 0.08) : 0);
