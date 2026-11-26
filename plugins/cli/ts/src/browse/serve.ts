@@ -12,7 +12,7 @@ import { Absent, CONNECT_WAIT_MS, connect, exchange, type Link, Stalled } from "
 import { encodeError } from "./output.ts";
 import { loadAnswer } from "./pyjson.ts";
 import type { Secrets } from "../redact.ts";
-import { agentEnv, endpointChoice, endpointKey, namespaceName, optionsFrom, rootOf, sessionKey, sessionName, sessionOwner, splitUrl, urlsWithSecrets } from "./request.ts";
+import { agentEnv, endpointChoice, endpointKey, envSession, namespaceName, optionsFrom, rootOf, sessionKey, sessionName, sessionOwner, splitUrl, urlsWithSecrets } from "./request.ts";
 import { closeDir } from "../privatefs.ts";
 import { AUTO_SESSION_CAP, checkSocket, deriveAutoSession, EVICT_TOKEN, withoutSession, NoDaemon, openBrowseDir, osFailure, type Reservation, reservationHolds, resetNotice, settleEviction, useAutoSession, withRegistry } from "./session.ts";
 import { lockHeld } from "./paths.ts";
@@ -223,7 +223,7 @@ async function closeAll(root: string, options: Record<string, unknown>, timeout:
 }
 
 export function autoSessionsOn(found: Found): boolean {
-  if (found.value("session") || process.env.AGENT_BROWSER_SESSION) return false;
+  if (found.value("session") || envSession()) return false;
   if (process.env.ARDIA_BROWSE_FOR_PLUGIN === "1") return false;
   const given = process.env.ARDIA_BROWSE_AUTO_SESSION;
   return given === undefined || given === "" || argTruthy(given);

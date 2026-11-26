@@ -12,7 +12,7 @@ import { awaitDaemon, DaemonDidNotStart, spawnDaemon } from "../browse/daemon/sp
 import { BrowseError, PythonCrash } from "../browse/errors.ts";
 import { Absent, CONNECT_WAIT_MS, connect, exchange, Link } from "../browse/exchange.ts";
 import { pluginMode } from "../browse/route.ts";
-import { agentEnv, type Endpoint, endpointChoice, endpointKey, namespaceName, optionsFrom, Refused, rootOf, sessionKey, sessionName, sessionOwner, splitUrl } from "../browse/request.ts";
+import { agentEnv, type Endpoint, endpointChoice, endpointKey, envSession, namespaceName, optionsFrom, Refused, rootOf, sessionKey, sessionName, sessionOwner, splitUrl } from "../browse/request.ts";
 import { autoSessionsOn, claimAutoSession } from "../browse/serve.ts";
 import { Call } from "../telemetry.ts";
 import { type ManageArgs, manageMain, MCP_MANAGE_HELP, parseManage } from "./install.ts";
@@ -119,7 +119,7 @@ function endpointLabel(endpoint: Endpoint): string {
 }
 
 function chooseSession(found: Found, derive: (cwd: string) => string | null = deriveAutoSession): string | null {
-  if (found.value("session") || process.env["AGENT_BROWSER_SESSION"] || !autoSessionsOn(found)) return null;
+  if (found.value("session") || envSession() || !autoSessionsOn(found)) return null;
   const id = derive(process.cwd());
   if (id !== null) found.values.set("session", id);
   return id;

@@ -266,7 +266,8 @@ describe("parallel agents get their own sessions", () => {
   });
 
   test("ardia mcp registers its automatic session, and refreshes it at most once a minute", async () => {
-    const saved = [process.env["AGENT_BROWSER_SESSION"], process.env["ARDIA_BROWSE_AUTO_SESSION"]];
+    const saved = [process.env["ARDIA_SESSION"], process.env["AGENT_BROWSER_SESSION"], process.env["ARDIA_BROWSE_AUTO_SESSION"]];
+    delete process.env["ARDIA_SESSION"];
     delete process.env["AGENT_BROWSER_SESSION"];
     delete process.env["ARDIA_BROWSE_AUTO_SESSION"];
     try {
@@ -329,8 +330,9 @@ describe("parallel agents get their own sessions", () => {
       expect(claimAborted).toBe(true);
       expect(CLAIM_EVERY_MS).toBeLessThanOrEqual(5_000);
     } finally {
-      if (saved[0] !== undefined) process.env["AGENT_BROWSER_SESSION"] = saved[0];
-      if (saved[1] !== undefined) process.env["ARDIA_BROWSE_AUTO_SESSION"] = saved[1];
+      if (saved[0] !== undefined) process.env["ARDIA_SESSION"] = saved[0];
+      if (saved[1] !== undefined) process.env["AGENT_BROWSER_SESSION"] = saved[1];
+      if (saved[2] !== undefined) process.env["ARDIA_BROWSE_AUTO_SESSION"] = saved[2];
     }
   });
 
@@ -508,7 +510,8 @@ args = [ [ "mcp" ] ]
   });
 
   test("a fresh register() waits for an aborted claim's cleanup instead of inheriting its cancellation", async () => {
-    const saved = [process.env["AGENT_BROWSER_SESSION"], process.env["ARDIA_BROWSE_AUTO_SESSION"]];
+    const saved = [process.env["ARDIA_SESSION"], process.env["AGENT_BROWSER_SESSION"], process.env["ARDIA_BROWSE_AUTO_SESSION"]];
+    delete process.env["ARDIA_SESSION"];
     delete process.env["AGENT_BROWSER_SESSION"];
     delete process.env["ARDIA_BROWSE_AUTO_SESSION"];
     try {
@@ -546,8 +549,9 @@ args = [ [ "mcp" ] ]
       expect(await second).toBeNull();
       expect(events).toEqual(["start-1", "abort-1", "cleanup-done-1", "start-2"]);
     } finally {
-      if (saved[0] !== undefined) process.env["AGENT_BROWSER_SESSION"] = saved[0];
-      if (saved[1] !== undefined) process.env["ARDIA_BROWSE_AUTO_SESSION"] = saved[1];
+      if (saved[0] !== undefined) process.env["ARDIA_SESSION"] = saved[0];
+      if (saved[1] !== undefined) process.env["AGENT_BROWSER_SESSION"] = saved[1];
+      if (saved[2] !== undefined) process.env["ARDIA_BROWSE_AUTO_SESSION"] = saved[2];
     }
   });
 });
