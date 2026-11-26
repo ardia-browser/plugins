@@ -46,5 +46,5 @@ runs:
         if [ -f pnpm-lock.yaml ] && [ ! -d .ardia-packages ]; then
           pnpm install --frozen-lockfile
         else
-          pnpm install --no-frozen-lockfile --lockfile=false
+          pnpm install --no-frozen-lockfile --no-prefer-frozen-lockfile
         fi
