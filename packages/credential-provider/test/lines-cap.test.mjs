@@ -44,3 +44,13 @@ test(`exactly ${LIMIT} lines drop none`, () => {
   const outcome = verbOutcome(spec.verbs["item.get"], { ...done, stdout: many.slice(1).join("\n") }, [], []);
   assert.deepEqual([outcome.lines.length, outcome.droppedLines], [LIMIT, 0]);
 });
+
+test("an unterminated trailing carriage return counts as a retained blank line", () => {
+  const text = `${Array.from({ length: LIMIT }, (_, i) => `line ${i}`).join("\n")}\n\r`;
+  for (const verb of ["item.get", "login"]) {
+    const outcome = verbOutcome(spec.verbs[verb], { ...done, stdout: text }, [], []);
+    assert.equal(outcome.lines.length, LIMIT, verb);
+    assert.equal(outcome.droppedLines, 1, verb);
+    assert.equal(outcome.lines.at(-1), "", verb);
+  }
+});

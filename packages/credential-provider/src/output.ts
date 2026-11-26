@@ -105,8 +105,8 @@ export function verbOutcome(verb: CredentialVerb, outcome: LaunchOutcome, consum
     const mode = verb.output.mode;
     if (mode === "json") ({ overflowed, json, items } = jsonOutput(verb, stdout, secrets));
     else if (mode === "lines" || mode === "stream") {
-      lines = stdout.split("\n").map((line) => redactText(line.replace(/\r$/, ""), secrets));
-      if (lines.at(-1) === "") lines.pop();
+      const rawLines = stdout === "" ? [] : (stdout.endsWith("\n") ? stdout.slice(0, -1) : stdout).split("\n");
+      lines = rawLines.map((line) => redactText(line.replace(/\r$/, ""), secrets));
       if (lines.length > CREDENTIAL_LIMITS.retainedLines) {
         droppedLines = lines.length - CREDENTIAL_LIMITS.retainedLines;
         lines = lines.slice(droppedLines);
