@@ -107,10 +107,12 @@ export async function uploadFiles(
     return mode ? { via: "chooser", mode } : { via: "chooser" };
   } finally {
     page.fileChooserOpened = null;
-    for (const session of enabled) {
-      await shield(() =>
-        page.send("Page.setInterceptFileChooserDialog", { enabled: false }, { session, timeout: CLEANUP_TIMEOUT }).catch(() => {}),
-      );
-    }
+    await Promise.all(
+      enabled.map((session) =>
+        shield(() =>
+          page.send("Page.setInterceptFileChooserDialog", { enabled: false }, { session, timeout: CLEANUP_TIMEOUT }).catch(() => {}),
+        ).catch(() => {}),
+      ),
+    );
   }
 }
