@@ -279,6 +279,62 @@ describe.skipIf(!RUNS_HERE)("install.sh on Linux x86_64", () => {
     expect(fs.statSync(path.join(it.cliHome, "0.0.5", ".leases")).isDirectory()).toBe(true);
   });
 
+  function releaseAsset(releases: string, version: string, layout: "registry" | "legacy", says: string): string {
+    const folder = path.join(releases, `cli-v${version}`);
+    fs.mkdirSync(folder, { recursive: true });
+    const root = layout === "registry" ? "cli" : `ardia-cli-${version}`;
+    const tarball = path.join(folder, `${layout === "registry" ? "cli" : "ardia-cli"}-${version}-linux-x64.tar.gz`);
+    const stage = fs.mkdtempSync(path.join(it.temp, "stage-"));
+    fs.mkdirSync(path.join(stage, root, "bin"), { recursive: true, mode: 0o755 });
+    fs.writeFileSync(path.join(stage, root, "bin", "ardia"), `#!/bin/sh\necho '${says}'\n`, { mode: 0o755 });
+    tarUp(tarball, stage, [root]);
+    fs.rmSync(stage, { recursive: true, force: true });
+    fs.writeFileSync(`${tarball}.sha256`, `${sha256(tarball)}  ${path.basename(tarball)}\n`);
+    return tarball;
+  }
+
+  const fromReleases = (releases: string) => ({ env: { ARDIA_CLI_URL: "", ARDIA_CLI_RELEASES_URL: `file://${releases}` } });
+
+  test("--version before 0.8.0 downloads the release's ardia-cli tarball, never the registry asset", () => {
+    it.loginShell("zsh");
+    const releases = path.join(it.temp, "releases");
+    releaseAsset(releases, "0.7.0", "legacy", "ardia legacy 0.7.0");
+    releaseAsset(releases, "0.7.0", "registry", "ardia registry 0.7.0");
+    const run = it.install("0.7.0", [], fromReleases(releases));
+    expect(run.status, run.stderr + run.lines.join("\n")).toBe(0);
+    expect(it.current()).toBe("0.7.0");
+    expect(spawnSync(it.bin, { encoding: "utf8" }).stdout.trim()).toBe("ardia legacy 0.7.0");
+  });
+
+  test("--version 0.8.0 or later takes the registry asset when the release has it", () => {
+    it.loginShell("zsh");
+    const releases = path.join(it.temp, "releases");
+    releaseAsset(releases, "0.8.0", "legacy", "ardia legacy 0.8.0");
+    releaseAsset(releases, "0.8.0", "registry", "ardia registry 0.8.0");
+    const run = it.install("0.8.0", [], fromReleases(releases));
+    expect(run.status, run.stderr + run.lines.join("\n")).toBe(0);
+    expect(spawnSync(it.bin, { encoding: "utf8" }).stdout.trim()).toBe("ardia registry 0.8.0");
+  });
+
+  test("--version 0.8.0 or later falls back to the ardia-cli tarball when the registry asset is missing", () => {
+    it.loginShell("zsh");
+    const releases = path.join(it.temp, "releases");
+    releaseAsset(releases, "0.9.1", "legacy", "ardia legacy 0.9.1");
+    const run = it.install("0.9.1", [], fromReleases(releases));
+    expect(run.status, run.stderr + run.lines.join("\n")).toBe(0);
+    expect(it.current()).toBe("0.9.1");
+    expect(spawnSync(it.bin, { encoding: "utf8" }).stdout.trim()).toBe("ardia legacy 0.9.1");
+  });
+
+  test("a release with neither asset fails and names both", () => {
+    it.loginShell("zsh");
+    const releases = path.join(it.temp, "releases");
+    fs.mkdirSync(path.join(releases, "cli-v0.9.2"), { recursive: true });
+    const run = it.install("0.9.2", [], fromReleases(releases));
+    expect(run.status).toBe(1);
+    expect(run.lines.at(-1)).toMatch(/^error download failed: .*cli-0\.9\.2-linux-x64\.tar\.gz, and .*ardia-cli-0\.9\.2-linux-x64\.tar\.gz too/);
+  });
+
   test("refuses a tarball whose root is neither cli/ nor ardia-cli-<version>/", () => {
     it.loginShell("zsh");
     const tarball = path.join(it.dist, "cli-0.0.6-linux-x64.tar.gz");

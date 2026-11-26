@@ -6,69 +6,94 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, w
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { affected } from "../lib.mjs";
+import { pathToFileURL } from "node:url";
+import { affected, isMain } from "../lib.mjs";
 import { notify, webhookRequest } from "../notify-registry.mjs";
-import { packFolder } from "../pack-folder.mjs";
 
 const scratch = () => mkdtempSync(join(tmpdir(), "plugins-scripts-"));
 
-describe("pack-folder", () => {
+describe("the native cli folder with the stock ardia-plugin", () => {
+  const cli = new URL("../../node_modules/.bin/ardia-plugin", import.meta.url).pathname;
   const folder = (root) => {
     const dir = join(root, "cli");
     mkdirSync(join(dir, "bin"), { recursive: true });
+    mkdirSync(join(dir, "libexec"), { recursive: true });
     mkdirSync(join(dir, "dist"), { recursive: true });
-    writeFileSync(join(dir, "plugin.json"), "{}\n");
+    const manifest = JSON.parse(readFileSync(new URL("../../plugins/cli/plugin.json", import.meta.url), "utf8"));
+    delete manifest.$schema;
+    writeFileSync(join(dir, "plugin.json"), `${JSON.stringify(manifest, null, 2)}\n`);
     writeFileSync(join(dir, "dist", "index.js"), "void 0;\n");
-    writeFileSync(join(dir, "bin", "ardia"), "#!/bin/sh\n");
-    chmodSync(join(dir, "bin", "ardia"), 0o700);
-    chmodSync(join(dir, "plugin.json"), 0o600);
+    writeFileSync(join(dir, "bin", "ardia"), Buffer.alloc(40 * 1024 * 1024, 1));
+    chmodSync(join(dir, "bin", "ardia"), 0o755);
+    writeFileSync(join(dir, "bin", "ardia-libc.so"), "so\n");
+    writeFileSync(join(dir, "libexec", "esbuild"), "#!/bin/sh\n");
+    chmodSync(join(dir, "libexec", "esbuild"), 0o755);
     return dir;
   };
 
-  test("packs the same bytes every time, sorted under the root with normalized modes and owners", () => {
+  test("checks and packs a program over the 32 MB JS limit, deterministically, with cli/ at the root", () => {
     const root = scratch();
     try {
       const dir = folder(root);
-      const first = packFolder(dir, join(root, "a.tar.gz"));
-      writeFileSync(join(dir, "plugin.json"), "{}\n");
-      const second = packFolder(dir, join(root, "b.tar.gz"));
+      const checked = spawnSync(cli, ["check", dir], { encoding: "utf8" });
+      assert.equal(checked.status, 0, checked.stdout + checked.stderr);
+      assert.match(checked.stdout, /looks good/);
+      const pack = (name) => {
+        const done = spawnSync(cli, ["pack", dir, "--no-build", "--out", join(root, name), "--json", "--quiet"], { encoding: "utf8" });
+        assert.equal(done.status, 0, done.stderr);
+        return JSON.parse(done.stdout);
+      };
+      const first = pack("a.tar.gz");
+      const second = pack("b.tar.gz");
       assert.equal(first.sha256, second.sha256);
-      assert.deepEqual(readFileSync(join(root, "a.tar.gz")), readFileSync(join(root, "b.tar.gz")));
       assert.equal(readFileSync(join(root, "a.tar.gz.sha256"), "utf8"), `${first.sha256}  a.tar.gz\n`);
-      const listing = spawnSync("tar", ["-tvzf", join(root, "a.tar.gz")], { encoding: "utf8" }).stdout.trim().split("\n");
       const names = spawnSync("tar", ["-tzf", join(root, "a.tar.gz")], { encoding: "utf8" }).stdout.trim().split("\n");
-      assert.deepEqual(names, ["cli/", "cli/bin/", "cli/bin/ardia", "cli/dist/", "cli/dist/index.js", "cli/plugin.json"]);
-      assert.match(listing.find((line) => line.endsWith("cli/bin/ardia")), /^-rwxr-xr-x/);
-      assert.match(listing.find((line) => line.endsWith("cli/plugin.json")), /^-rw-r--r--/);
-      for (const line of listing) assert.match(line, /\s0\s+0\s|root|wheel|\s0\/0\s/);
+      assert.deepEqual(names, ["cli/", "cli/bin/", "cli/bin/ardia", "cli/bin/ardia-libc.so", "cli/dist/", "cli/dist/index.js", "cli/libexec/", "cli/libexec/esbuild", "cli/plugin.json"]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
 
-  test("matches ardia-plugin pack byte for byte on a manifest-only plugin", () => {
-    const root = scratch();
-    try {
-      const dir = join(root, "developer-mode");
-      mkdirSync(dir);
-      const manifest = readFileSync(new URL("../../plugins/developer-mode/plugin.json", import.meta.url));
-      writeFileSync(join(dir, "plugin.json"), manifest);
-      const ours = packFolder(dir, join(root, "ours.tar.gz"));
-      const cli = new URL("../../node_modules/.bin/ardia-plugin", import.meta.url).pathname;
-      const done = spawnSync(cli, ["pack", dir, "--out", join(root, "theirs.tar.gz"), "--json", "--quiet"], { encoding: "utf8" });
-      assert.equal(done.status, 0, done.stderr);
-      assert.equal(JSON.parse(done.stdout).sha256, ours.sha256);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  test("refuses symlinks", () => {
+  test("refuses a symlink in the folder", () => {
     const root = scratch();
     try {
       const dir = folder(root);
       symlinkSync("ardia", join(dir, "bin", "python3"));
-      assert.throws(() => packFolder(dir, join(root, "a.tar.gz")), /bin\/python3 is a symlink/);
+      const checked = spawnSync(cli, ["check", dir], { encoding: "utf8" });
+      assert.notEqual(checked.status, 0);
+      assert.match(checked.stdout + checked.stderr, /bin\/python3 is a symlink/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("the scripts run from a symlinked path", () => {
+  for (const script of ["release-info.mjs", "plugins.mjs", "official-sig.mjs", "notify-registry.mjs", "ardia-packages.mjs"]) {
+    test(`${script} still runs when argv[1] is a symlink to it`, () => {
+      const root = scratch();
+      try {
+        const scripts = new URL("..", import.meta.url).pathname;
+        const linked = join(root, "scripts");
+        symlinkSync(scripts, linked);
+        const done = spawnSync(process.execPath, [join(linked, script), "--help"], { encoding: "utf8" });
+        assert.equal(done.status, 0, done.stderr);
+        assert.match(done.stdout, /usage/i);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+  }
+
+  test("isMain compares real paths, so a symlink and its target are the same file", () => {
+    const root = scratch();
+    try {
+      const target = join(root, "real.mjs");
+      writeFileSync(target, "");
+      symlinkSync(target, join(root, "link.mjs"));
+      assert.equal(isMain(pathToFileURL(target).href, join(root, "link.mjs")), true);
+      assert.equal(isMain(pathToFileURL(target).href, join(root, "other.mjs")), false);
+      assert.equal(isMain(pathToFileURL(target).href, undefined), false);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

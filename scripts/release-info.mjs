@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 import { appendFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { findByTag, releaseInfo } from "./lib.mjs";
+import { findByTag, isMain, releaseInfo } from "./lib.mjs";
 
 const HELP = `usage: node scripts/release-info.mjs <tag> [--github-output]
 
@@ -47,4 +45,4 @@ function main(argv) {
   return 0;
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = main(process.argv.slice(2));
+if (isMain(import.meta.url)) process.exitCode = main(process.argv.slice(2));

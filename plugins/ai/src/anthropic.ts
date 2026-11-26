@@ -65,6 +65,7 @@ export async function streamMessage(net: Ardia["net"], request: MessageRequest):
   let text = "";
   let model = request.model;
   let stopReason: string | null = null;
+  let finished = false;
   try {
     for await (const event of readServerSentEvents(response.body)) {
       if (request.signal?.aborted) break;
@@ -76,6 +77,7 @@ export async function streamMessage(net: Ardia["net"], request: MessageRequest):
         text += data.delta.text;
         request.onText?.(data.delta.text, text);
       } else if (type === "message_delta" && data.delta && "stop_reason" in data.delta) stopReason = data.delta.stop_reason ?? null;
+      else if (type === "message_stop") finished = true;
       else if (type === "error") throw streamError(data.error?.type, data.error?.message);
     }
   } catch (error) {
@@ -87,6 +89,7 @@ export async function streamMessage(net: Ardia["net"], request: MessageRequest):
     await response.cancel().catch(() => undefined);
     throw new AiError("cancelled", "The question was cancelled.");
   }
+  if (!finished) throw new AiError("incomplete", "The answer was cut off before Anthropic finished it. Ask again.");
   if (stopReason === "refusal") throw new AiError("refused", text ? `Claude declined to finish: ${text}` : "Claude declined to answer that.");
   return { text, model, stopReason };
 }

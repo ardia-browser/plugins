@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { createHmac, randomUUID } from "node:crypto";
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { isMain } from "./lib.mjs";
 
 const HELP = `usage: node scripts/notify-registry.mjs <owner/repo> <tag>
 
@@ -59,4 +58,4 @@ async function main(argv) {
   }
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = await main(process.argv.slice(2));
+if (isMain(import.meta.url)) process.exitCode = await main(process.argv.slice(2));

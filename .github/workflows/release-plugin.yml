@@ -10,7 +10,6 @@ on:
       - "scripts/release-info.mjs"
       - "scripts/official-sig.mjs"
       - "scripts/notify-registry.mjs"
-      - "scripts/pack-folder.mjs"
       - "plugins/cli/build.sh"
       - "plugins/cli/install.sh"
   workflow_dispatch:
@@ -34,9 +33,6 @@ permissions:
 concurrency:
   group: release-plugin-${{ inputs.tag || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-env:
-  ARDIA_PACKAGES: ${{ inputs.ardia_packages || vars.ARDIA_PACKAGES_RELEASE || '' }}
 
 jobs:
   resolve:
@@ -113,6 +109,7 @@ jobs:
     env:
       NAME: ${{ needs.resolve.outputs.name }}
       ASSETS: ${{ needs.resolve.outputs.asset_names }}
+      ARDIA_PACKAGES: ${{ inputs.ardia_packages || vars.ARDIA_PACKAGES_RELEASE || '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -180,6 +177,7 @@ jobs:
             cache: ~/.cache/ardia-cli-build
     env:
       VERSION: ${{ needs.resolve.outputs.version }}
+      ARDIA_PACKAGES: ${{ inputs.ardia_packages || vars.ARDIA_PACKAGES_RELEASE || '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -227,6 +225,7 @@ jobs:
     environment: cli-release
     env:
       VERSION: ${{ needs.resolve.outputs.version }}
+      ARDIA_PACKAGES: ${{ inputs.ardia_packages || vars.ARDIA_PACKAGES_RELEASE || '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -263,7 +262,7 @@ jobs:
           retention-days: 14
 
   assemble:
-    name: Assemble and co-sign the release assets
+    name: Assemble the release assets
     needs: [resolve, pack, cli-build, cli-build-signed-macos]
     if: ${{ !cancelled() && (needs.pack.result == 'success' || needs.cli-build.result == 'success') }}
     runs-on: ubuntu-24.04
@@ -272,15 +271,14 @@ jobs:
       TAG: ${{ needs.resolve.outputs.tag }}
       NAME: ${{ needs.resolve.outputs.name }}
       NATIVE: ${{ needs.resolve.outputs.native }}
-      PUBLISH: ${{ needs.resolve.outputs.publish }}
       ASSETS: ${{ needs.resolve.outputs.asset_names }}
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: ./.github/actions/setup
+      - uses: actions/setup-node@v4
         with:
-          ardia-packages: ${{ env.ARDIA_PACKAGES }}
+          node-version: 24.22.2
       - uses: actions/download-artifact@v4
         if: needs.resolve.outputs.cli != 'true'
         with:
@@ -303,8 +301,10 @@ jobs:
           path: ${{ runner.temp }}/assets
       - name: Say when the macOS command ships without Developer ID signing
         if: needs.resolve.outputs.cli == 'true' && needs.cli-build-signed-macos.result != 'success'
+        env:
+          SIGNED: ${{ needs.cli-build-signed-macos.result }}
         run: |
-          echo "::warning::The macOS build isn't Developer ID-signed and notarized (that job ended ${{ needs.cli-build-signed-macos.result }}), so the release carries the unsigned build. Ardia verifies it by its SHA-256 and the official co-signature."
+          echo "::warning::The macOS build isn't Developer ID-signed and notarized (that job ended $SIGNED), so the release carries the unsigned build. Ardia verifies it by its SHA-256 and the official co-signature."
           echo "- macos-arm64: not Developer ID-signed" >> "$GITHUB_STEP_SUMMARY"
       - name: The archives are exactly what plugin.json's release names
         run: |
@@ -313,28 +313,20 @@ jobs:
           expected=$(node -e 'console.log(JSON.parse(process.argv[1]).sort().join("\n"))' "$ASSETS")
           found=$(find . -maxdepth 1 -name '*.tar.gz' | sed 's#^\./##' | sort)
           [ "$expected" = "$found" ] || { echo "::error::the assets are $found, and plugin.json's release names $expected"; exit 1; }
+          [ -z "$(find . -maxdepth 1 -name '*.official-sig')" ] || { echo "::error::an archive arrived already co-signed; only the publish job signs"; exit 1; }
           sha256sum -c ./*.sha256
-      - name: Co-sign native archives with the official key
-        env:
-          ARDIA_OFFICIAL_NATIVE_ED25519_PRIVATE_KEY: ${{ secrets.ARDIA_OFFICIAL_NATIVE_ED25519_PRIVATE_KEY }}
-          ARDIA_OFFICIAL_NATIVE_KEY_ID: ${{ vars.ARDIA_OFFICIAL_NATIVE_KEY_ID }}
+      - name: Rehearse the official co-signature with a throwaway key
+        if: needs.resolve.outputs.native == 'true'
         run: |
           set -euo pipefail
-          if [ "$NATIVE" != true ]; then
-            echo "$NAME isn't native: no official co-signature"
-            exit 0
-          fi
-          if [ -z "$ARDIA_OFFICIAL_NATIVE_ED25519_PRIVATE_KEY" ]; then
-            if [ "$PUBLISH" = true ]; then
-              echo "::error::$NAME is native and ARDIA_OFFICIAL_NATIVE_ED25519_PRIVATE_KEY isn't set: a native plugin isn't released without its official co-signature"
-              exit 1
-            fi
-            echo "::warning::dry run: ARDIA_OFFICIAL_NATIVE_ED25519_PRIVATE_KEY isn't set, so the archives aren't co-signed; a real release stops here"
-            exit 0
-          fi
-          node scripts/official-sig.mjs sign "$TAG" "$RUNNER_TEMP/assets"
-          node scripts/official-sig.mjs verify "$TAG" "$RUNNER_TEMP/assets"
-          echo "- co-signed with ${ARDIA_OFFICIAL_NATIVE_KEY_ID:-ardia-official-native-1}" >> "$GITHUB_STEP_SUMMARY"
+          rehearsal="$RUNNER_TEMP/rehearsal"
+          mkdir -p "$rehearsal"
+          cp "$RUNNER_TEMP/assets"/*.tar.gz "$RUNNER_TEMP/assets"/*.tar.gz.sha256 "$rehearsal/"
+          keys=$(node -e 'const { generateKeyPairSync } = require("node:crypto"); const k = generateKeyPairSync("ed25519"); console.log(JSON.stringify({ priv: k.privateKey.export({ type: "pkcs8", format: "pem" }), pub: k.publicKey.export({ type: "spki", format: "pem" }) }))')
+          ARDIA_OFFICIAL_NATIVE_ED25519_PRIVATE_KEY=$(node -p 'JSON.parse(process.argv[1]).priv' "$keys") node scripts/official-sig.mjs sign "$TAG" "$rehearsal"
+          ARDIA_OFFICIAL_NATIVE_ED25519_PUBLIC_KEY=$(node -p 'JSON.parse(process.argv[1]).pub' "$keys") node scripts/official-sig.mjs verify "$TAG" "$rehearsal"
+          rm -rf "$rehearsal"
+          echo "- $NAME is native: the publish job co-signs its archives with the official key" >> "$GITHUB_STEP_SUMMARY"
       - name: The cli's own installer rides along
         if: needs.resolve.outputs.cli == 'true'
         run: |
@@ -354,9 +346,9 @@ jobs:
           retention-days: 14
 
   publish:
-    name: Publish the GitHub release
+    name: Co-sign and publish the GitHub release
     needs: [resolve, assemble]
-    if: needs.resolve.outputs.publish == 'true' && needs.assemble.result == 'success'
+    if: needs.resolve.outputs.publish == 'true' && needs.assemble.result == 'success' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -369,11 +361,24 @@ jobs:
       VERSION: ${{ needs.resolve.outputs.version }}
       PRERELEASE: ${{ needs.resolve.outputs.prerelease }}
       NATIVE: ${{ needs.resolve.outputs.native }}
-      GH_TOKEN: ${{ github.token }}
+      ASSETS: ${{ needs.resolve.outputs.asset_names }}
     steps:
+      - name: The run is the tag it publishes
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          [ "$REF" = "refs/tags/$TAG" ] || { echo "::error::publishing $TAG runs from refs/tags/$TAG, not $REF"; exit 1; }
       - uses: actions/checkout@v4
         with:
+          ref: refs/tags/${{ needs.resolve.outputs.tag }}
           persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/official-sig.mjs
+            /scripts/lib.mjs
+            /scripts/notify-registry.mjs
+            /plugins/*/plugin.json
       - uses: actions/setup-node@v4
         with:
           node-version: 24.22.2
@@ -381,18 +386,39 @@ jobs:
         with:
           name: release-assets
           path: ${{ runner.temp }}/assets
+      - name: The archives are still exactly what plugin.json's release names
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/assets"
+          expected=$(node -e 'console.log(JSON.parse(process.argv[1]).sort().join("\n"))' "$ASSETS")
+          found=$(find . -maxdepth 1 -name '*.tar.gz' | sed 's#^\./##' | sort)
+          [ "$expected" = "$found" ] || { echo "::error::the assets are $found, and plugin.json's release names $expected"; exit 1; }
+          sha256sum -c ./*.sha256
+      - name: Co-sign native archives with the official key
+        if: needs.resolve.outputs.native == 'true'
+        env:
+          ARDIA_OFFICIAL_NATIVE_ED25519_PRIVATE_KEY: ${{ secrets.ARDIA_OFFICIAL_NATIVE_ED25519_PRIVATE_KEY }}
+          ARDIA_OFFICIAL_NATIVE_ED25519_PUBLIC_KEY: ${{ vars.ARDIA_OFFICIAL_NATIVE_ED25519_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          [ -n "$ARDIA_OFFICIAL_NATIVE_ED25519_PRIVATE_KEY" ] || { echo "::error::$NAME is native and ARDIA_OFFICIAL_NATIVE_ED25519_PRIVATE_KEY isn't set: a native plugin isn't released without its official co-signature"; exit 1; }
+          [ -n "$ARDIA_OFFICIAL_NATIVE_ED25519_PUBLIC_KEY" ] || { echo "::error::the repository variable ARDIA_OFFICIAL_NATIVE_ED25519_PUBLIC_KEY isn't set, so the co-signature can't be checked against the published key"; exit 1; }
+          node scripts/official-sig.mjs sign "$TAG" "$RUNNER_TEMP/assets"
+          ARDIA_OFFICIAL_NATIVE_ED25519_PRIVATE_KEY='' node scripts/official-sig.mjs verify "$TAG" "$RUNNER_TEMP/assets"
+          echo "- co-signed with the official native key" >> "$GITHUB_STEP_SUMMARY"
       - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           assets="$RUNNER_TEMP/assets"
-          (cd "$assets" && sha256sum -c ./*.sha256)
           if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "::error::$TAG is already released; bump plugins/$NAME/plugin.json's version for a new one"
             exit 1
           fi
           notes="$TITLE ($ID) $VERSION, packed from plugins/$NAME at $GITHUB_SHA."
           for sum in "$assets"/*.tar.gz.sha256; do notes="$notes"$'\n'"- $(basename "${sum%.sha256}"): sha256 $(cut -d' ' -f1 "$sum")"; done
-          [ "$NATIVE" != true ] || notes="$notes"$'\n'"Each archive's .official-sig is Ardia's official co-signature (ardia-registry-v1)."
+          [ "$NATIVE" != true ] || notes="$notes"$'\n'"Each archive's .official-sig is Ardia's official co-signature (ardia-official-native-v1)."
           flags=()
           [ "$PRERELEASE" != true ] || flags+=(--prerelease)
           gh release create "$TAG" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$TITLE $VERSION" --notes "$notes" "${flags[@]}" "$assets"/*

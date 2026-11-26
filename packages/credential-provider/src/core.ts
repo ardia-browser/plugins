@@ -35,6 +35,7 @@ type Run = {
   signIn: boolean;
   lines: StreamLine[];
   shown: number;
+  dropped: number;
   finished: Promise<RunReply>;
   done: RunReply | null;
   cancel(): void;
@@ -48,11 +49,12 @@ export function createSidecarCore(spec: CliSpec, launcher: Launcher, options: Si
   const setTimer = options.setTimer ?? ((callback, ms) => setTimeout(callback, ms));
   const clearTimer = options.clearTimer ?? ((timer) => clearTimeout(timer as ReturnType<typeof setTimeout>));
   const runs = new Map<string, Run>();
+  const live = new Set<Run>();
   let session: { key: string | null; at: number } | null = options.session ? { key: options.session.key, at: now() } : null;
   let offered: string | null = null;
   let signInRun: SignInRunState = NONE;
   let nextRun = 0;
-  let active = 0;
+  let disposed = false;
 
   const current = () => {
     if (session && spec.sessionLastsSeconds !== null && now() - session.at > spec.sessionLastsSeconds * 1000) session = null;
@@ -90,7 +92,7 @@ export function createSidecarCore(spec: CliSpec, launcher: Launcher, options: Si
       json: null,
       lines,
       items: 0,
-      droppedLines: 0,
+      droppedLines: run.dropped,
       unlocked: false,
       running: run.id,
       signInRun,
@@ -115,7 +117,8 @@ export function createSidecarCore(spec: CliSpec, launcher: Launcher, options: Si
     const verbParams = (isRecord(params.params) ? params.params : {}) as VerbParams;
     const built = buildVerb(spec, verbId, verbParams, lookup);
     if (!("launch" in built)) throw new SidecarRefusal(built.code, built.message);
-    if (active >= CREDENTIAL_LIMITS.runningVerbs) throw new SidecarRefusal("overloaded", `${spec.name} has ${CREDENTIAL_LIMITS.runningVerbs} commands running.`);
+    if (disposed) throw new SidecarRefusal("stopped", `The ${spec.name} sidecar is stopping.`);
+    if (live.size >= CREDENTIAL_LIMITS.runningVerbs) throw new SidecarRefusal("overloaded", `${spec.name} has ${CREDENTIAL_LIMITS.runningVerbs} commands running.`);
     const { verb, consumed, jsonStrings } = built;
     const launch = { ...built.launch, timeoutMs: effectiveTimeout(params.timeoutMs, built.launch.timeoutMs) };
     if (verb.signIn) {
@@ -125,21 +128,26 @@ export function createSidecarCore(spec: CliSpec, launcher: Launcher, options: Si
     const secrets = redactable(consumed, 3);
     let cancel: () => void = () => {};
     const cancelled = new Promise<void>((resolve) => (cancel = resolve));
-    const run: Run = { id: `r${++nextRun}`, verb, signIn: verb.signIn, lines: [], shown: 0, finished: Promise.resolve(null as never), done: null, cancel, wake: new Set() };
+    const run: Run = { id: `r${++nextRun}`, verb, signIn: verb.signIn, lines: [], shown: 0, dropped: 0, finished: Promise.resolve(null as never), done: null, cancel, wake: new Set() };
     const notify = () => {
       for (const wake of [...run.wake]) wake();
     };
-    active++;
+    live.add(run);
     run.finished = launcher(launch, {
       onLine(line) {
         run.lines.push({ stream: line.stream, text: redactText(line.text, secrets) });
+        if (run.lines.length > CREDENTIAL_LIMITS.retainedLines) {
+          run.lines.shift();
+          run.dropped++;
+          if (run.shown > 0) run.shown--;
+        }
         notify();
       },
       cancelled,
     })
       .catch((): LaunchOutcome => ({ launched: false, status: -1, stdout: "", stderr: "", timedOut: false, overflowed: false, cancelled: false }))
       .then((outcome) => {
-        active--;
+        live.delete(run);
         const output = verbOutcome(verb, outcome, consumed, jsonStrings);
         const unlocked = output.succeeded && applyUnlock(verb, output.lastLine);
         if (verb.signIn) {
@@ -219,6 +227,8 @@ export function createSidecarCore(spec: CliSpec, launcher: Launcher, options: Si
       }
     },
     dispose() {
+      disposed = true;
+      for (const run of live) run.cancel();
       for (const run of runs.values()) run.cancel();
       runs.clear();
       session = null;

@@ -30,8 +30,8 @@ plugins/cli/build.sh <out dir>
 ```
 
 This writes `<out dir>/cli`, the plugin folder, packed as the registry asset `cli-<version>-<platform>.tar.gz` (with
-`cli/` at its root, deterministic, by `scripts/pack-folder.mjs`, as `ardia-plugin pack` would if `bin/ardia` fit its
-32 MB per-file limit), plus the command's tarball `ardia-cli-<version>-<platform>.tar.gz` for Linux and hand
+`cli/` at its root, deterministic, by the stock `ardia-plugin pack`, after `ardia-plugin check` passes on the folder
+under the native plugin limits), plus the command's tarball `ardia-cli-<version>-<platform>.tar.gz` for Linux and hand
 installs, each with its `.sha256`. `main/` builds from the repository's pnpm workspace, so run `pnpm install` at the
 root first. `bin/ardia` is the TypeScript command as one Bun executable, with its Node-API addon `bin/ardia-libc.so`
 beside it and esbuild in `libexec/`; there is no Python and no Rust in it. The version is `plugin.json`'s
@@ -43,7 +43,7 @@ lists the rest.
 The command has its own version and releases, apart from Ardia's. Bump `version` in `plugin.json`, merge, and push
 `cli-v<version>`: `.github/workflows/release-plugin.yml` builds macOS and Linux with Bun (Developer ID-signing and
 notarizing the macOS build when the `cli-release` environment has its secrets), co-signs each archive with the
-official native key (`<asset>.official-sig`), and publishes the release with the two registry archives, their
+official native key (`<asset>.official-sig`, `ardia-official-native-v1`) in its publish-only job, and publishes the release with the two registry archives, their
 `.sha256` and `install.sh` (pull requests that touch the release scripts run it as a dry run). Ardia then pins it with
 `scripts/release/official-plugins.py pin cli <version>` in ardia-browser/ardia, and its next release bundles, signs
 (Developer ID, hardened runtime) and notarizes it (`docs/cli.md` › Build and release).

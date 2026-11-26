@@ -10,7 +10,8 @@ Usage: plugins/cli/build.sh <out dir>
   plugin.json's. Ardia refuses links in a plugin's programs and makes .leases itself, so the folder has neither.
   Leaves in <out dir> the command's own tarball (ardia-cli-<version>-<platform>.tar.gz, for install.sh with
   ARDIA_CLI_URL) and the registry asset that plugin.json's release.assets names (cli-<version>-<platform>.tar.gz),
-  packed deterministically by scripts/pack-folder.mjs with cli/ at its root, each with its .sha256.
+  checked and packed with the workspace's stock ardia-plugin check and ardia-plugin pack (cli/ at its root,
+  deterministic), each with its .sha256. The build fails unless the archive and its .sha256 are there and agree.
   ARDIA_SIGN_CMD, when set, signs the folder before anything is packed: once the folder is complete (plugin.json,
   dist/index.js, no links) it runs as sh -c "$ARDIA_SIGN_CMD" ardia-sign <out dir>/cli, with the folder as $1, and
   should sign bin/ardia, bin/ardia-libc.so and libexec/esbuild in place. The build fails if it exits non-zero; after
@@ -73,5 +74,11 @@ if [ -n "${ARDIA_SIGN_CMD:-}" ]; then
 fi
 [ "$("$dest/bin/ardia" --version)" = "ardia $version" ] || { echo "build.sh: the built ardia doesn't say $version" >&2; exit 1; }
 [ -z "${ARDIA_SIGN_CMD:-}" ] || "$here/scripts/build.sh" "$version" "$out" --from "$dest" >/dev/null
-node "$repo/scripts/pack-folder.mjs" "$dest" "$out/$asset" --root cli >/dev/null
+ardia_plugin="$repo/node_modules/.bin/ardia-plugin"
+[ -x "$ardia_plugin" ] || { echo "build.sh: there's no $ardia_plugin; run pnpm install at the repository root" >&2; exit 1; }
+"$ardia_plugin" check "$dest" --quiet >/dev/null || { "$ardia_plugin" check "$dest" >&2 || true; echo "build.sh: ardia-plugin check refused $dest" >&2; exit 1; }
+"$ardia_plugin" pack "$dest" --no-build --out "$out/$asset" --quiet >/dev/null || { echo "build.sh: ardia-plugin pack failed on $dest" >&2; exit 1; }
+[ -s "$out/$asset" ] || { echo "build.sh: ardia-plugin pack didn't write $out/$asset" >&2; exit 1; }
+[ -s "$out/$asset.sha256" ] || { echo "build.sh: ardia-plugin pack didn't write $out/$asset.sha256" >&2; exit 1; }
+(cd "$out" && { command -v sha256sum >/dev/null && sha256sum -c "$asset.sha256" || shasum -a 256 -c "$asset.sha256"; } >/dev/null) || { echo "build.sh: $asset doesn't match its .sha256" >&2; exit 1; }
 echo "$dest"

@@ -1,4 +1,4 @@
-export type AiErrorCode = "no-key" | "bad-key" | "rate-limited" | "overloaded" | "unavailable" | "bad-request" | "refused" | "cancelled" | "network" | "invalid-input";
+export type AiErrorCode = "no-key" | "bad-key" | "rate-limited" | "overloaded" | "unavailable" | "bad-request" | "refused" | "cancelled" | "network" | "incomplete" | "invalid-input";
 
 export class AiError extends Error {
   readonly code: AiErrorCode;

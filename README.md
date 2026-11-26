@@ -26,7 +26,7 @@ plugins/<name>/                 one plugin: plugin.json, package.json, src/, tes
 plugins/cli/                    the ardia command (ts/, Bun), its Manifest 3 main (main/) and build.sh
 packages/testing/               @ardia-plugins/testing: bundles a plugin's src for createMockHost() tests
 packages/credential-provider/   @ardia-plugins/credential-provider: what the password managers share
-scripts/                        plugins.mjs, release-info.mjs, pack-folder.mjs, official-sig.mjs, notify-registry.mjs
+scripts/                        plugins.mjs, release-info.mjs, official-sig.mjs, notify-registry.mjs, ardia-packages.mjs
 .github/workflows/ci.yml        checks, builds, tests and packs the plugins a change touches
 .github/workflows/release-plugin.yml   releases one plugin from its <name>-v<version> tag
 ```
@@ -84,10 +84,15 @@ Bump `version` in `plugins/<name>/plugin.json` (and its `package.json`), merge, 
    (`{name}-{version}.tar.gz`, or one per platform), each with its `.sha256`; `cli` builds on macOS and Linux with
    `plugins/cli/build.sh`, Developer ID-signed and notarized on macOS when the `cli-release` environment has its
    secrets;
-3. co-signs a native plugin's archives (a sidecar, `programs` or `control`) with `ARDIA_OFFICIAL_NATIVE_ED25519_PRIVATE_KEY`:
-   `<asset>.official-sig` is the Ed25519 `ardia-registry-v1` envelope signature (`@ardia/plugin-sdk/registry`
-   `signEnvelope`, key id `ARDIA_OFFICIAL_NATIVE_KEY_ID`) of `{ type: "ardia.official-native", id, version, platform,
-   asset, sha256, sizeBytes }`, the registry's `officialSig`. Without the key, a native release stops;
+3. co-signs a native plugin's archives (a sidecar, `programs` or `control`) in the publish-only job, the one job that
+   sees `ARDIA_OFFICIAL_NATIVE_ED25519_PRIVATE_KEY`: it runs only for a real publish from the tag, checks out just
+   `scripts/official-sig.mjs`, `scripts/lib.mjs`, `scripts/notify-registry.mjs` and the `plugin.json` files from that
+   tag, and installs no packages (the script uses `node:crypto`, `node:fs` and `node:path` only).
+   `<asset>.official-sig` is the bare unpadded base64url Ed25519 signature over
+   `"ardia-official-native-v1\n" + canonicalJson({ v: 1, id, version, platform, sha256 })`, byte for byte
+   `@ardia/plugin-sdk/registry`'s `officialArtifactMessage`, the registry's `officialSig`. It is verified against the
+   repository variable `ARDIA_OFFICIAL_NATIVE_ED25519_PUBLIC_KEY`, never the signing key. Without the key, a native
+   release stops; dry runs rehearse the signature with a throwaway key;
 4. creates the GitHub Release, a prerelease when the version has a `-`, and, when `ARDIA_REGISTRY_WEBHOOK_URL` and
    `ARDIA_REGISTRY_WEBHOOK_SECRET` are set, tells the registry with a signed GitHub-style `release` event.
 

@@ -297,7 +297,7 @@ export type SlotType = "id" | "enum" | "flag" | "url" | "email" | "code" | "secr
 
 export type VerbSlot = { type: SlotType; optional: boolean; pattern?: string; values?: readonly string[]; allowLocalHttp?: boolean };
 
-export type ArgvToken = string | { slot: string } | { flag: string; slot: string } | { flag: string; when: string } | { slot: string; prefix: string };
+export type ArgvToken = string | { slot: string } | { flag: string; slot: string } | { flag: string; when: string };
 
 export type EnvEntry = { name: string; literal: string } | { name: string; secretSlot: string };
 
@@ -318,7 +318,6 @@ export type CredentialVerb = {
   signIn: boolean;
   unlocks: VerbUnlocks;
   outlivesCall: boolean;
-  argvSecrets: boolean;
   hints: Readonly<Record<string, readonly string[]>>;
 };
 

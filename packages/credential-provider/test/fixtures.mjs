@@ -18,7 +18,7 @@ export const raw = {
     },
     status: { argv: ["status"], slots: { session: { type: "secret", optional: true } }, env: [{ name: "FAKECLI_SESSION", secretSlot: "session" }], output: { mode: "json" } },
     create: { argv: ["create"], slots: { item: { type: "json" } }, stdin: { slot: "item", encoding: "base64" }, output: { mode: "json" } },
-    edit: { argv: ["edit", { slot: "id" }, { slot: "password", prefix: "password=" }], slots: { id: { type: "id", pattern: "item" }, password: { type: "secret", optional: true } }, argvSecrets: true, output: { mode: "json" } },
+    edit: { argv: ["edit", { slot: "id" }], slots: { id: { type: "id", pattern: "item" }, password: { type: "secret", optional: true } }, stdin: { slot: "password", encoding: "utf8" }, output: { mode: "json" } },
     open: { argv: ["open", { flag: "--url", slot: "url" }, { flag: "--verbose", when: "verbose" }], slots: { url: { type: "url", allowLocalHttp: true }, verbose: { type: "flag" } }, output: { mode: "lines" } },
     slow: { argv: ["slow"], timeoutMs: 1000, output: { mode: "lines" } },
     login: { argv: ["login"], signIn: true, unlocks: true, outlivesCall: true, timeoutMs: 20000, output: { mode: "stream" } },

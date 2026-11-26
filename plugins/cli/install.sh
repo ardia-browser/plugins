@@ -22,6 +22,7 @@ default_bin_dir=$HOME/.local/bin
 bin_dir=${ARDIA_CLI_BIN_DIR:-$default_bin_dir}
 version=
 pinned_sha=
+legacy_url=
 uninstall=0
 top=
 work=
@@ -60,7 +61,10 @@ Downloads are https only, and never trust a checksum from the same place as the 
 to download. ARDIA_CLI_URL overrides the tarball URL; a file:// one may go without --sha256, and its checksum is read
 from $ARDIA_CLI_URL.sha256. A download is the release's registry asset, cli-<version>-<platform>.tar.gz, with cli/
 at its root; ARDIA_CLI_URL may also name the command's own tarball, ardia-cli-<version>-<platform>.tar.gz, with
-ardia-cli-<version>/ at its root.
+ardia-cli-<version>/ at its root. A --version before 0.8.0 downloads that release's ardia-cli-<version>-<platform>.tar.gz,
+since registry assets start at 0.8.0, and a later one falls back to it when the release has no registry asset.
+ARDIA_CLI_RELEASES_URL overrides https://github.com/ardia-browser/plugins/releases/download, the folder holding
+cli-v<version>/ (https, or file:// for a local mirror).
 
 Prints one line per event: `step resolve|download|verify|install|link`, `version <v>`, `path <rc file>`,
 then `installed <bin path>` (or `uninstalled`), or `error <message>` and exits 1.
@@ -92,6 +96,14 @@ version_of_asset() {
   printf '%s\n' "${found%"$asset_suffix"}"
 }
 
+registry_asset_version() {
+  base=${1%%-*}
+  major=${base%%.*}
+  rest=${base#*.}
+  minor=${rest%%.*}
+  [ "$major" -gt 0 ] || [ "$minor" -ge 8 ]
+}
+
 is_version() {
   printf '%s\n' "$1" | grep -Eq "$version_pattern"
 }
@@ -115,7 +127,7 @@ if [ -n "$pinned_sha" ] && ! printf '%s\n' "$pinned_sha" | grep -Eq '^[0-9a-f]{6
   fail "bad --sha256 digest: $pinned_sha"
 fi
 
-if [ -n "${ARDIA_CLI_URL:-}" ]; then
+if [ -n "${ARDIA_CLI_URL:-}" ] || [ -n "${ARDIA_CLI_RELEASES_URL:-}" ]; then
   protocols==https,file
 else
   protocols==https
@@ -283,7 +295,19 @@ if [ -n "${ARDIA_CLI_URL:-}" ]; then
     version=$(version_of_asset "${url##*/}")
   fi
 elif [ -n "$version" ]; then
-  url=https://github.com/$repo/releases/download/cli-v$version/cli-$version$asset_suffix
+  releases=${ARDIA_CLI_RELEASES_URL:-https://github.com/$repo/releases/download}
+  case $releases in
+    https://*|file://*) releases=${releases%/} ;;
+    *) fail "ARDIA_CLI_RELEASES_URL must be an https:// or file:// URL" ;;
+  esac
+  is_version "$version" || fail "bad version: $version"
+  legacy_url=$releases/cli-v$version/ardia-cli-$version$asset_suffix
+  if registry_asset_version "$version"; then
+    url=$releases/cli-v$version/cli-$version$asset_suffix
+  else
+    url=$legacy_url
+    legacy_url=
+  fi
 else
   pattern="https://github\.com/$repo/releases/download/cli-v[0-9a-z.-]*/(ardia-)?cli-[0-9][0-9a-z.-]*-$asset_platform\.tar\.gz"
   url=$(fetch https://api.github.com/repos/$repo/releases/latest 2>/dev/null | grep -Eo "$pattern" | head -n 1 || true)
@@ -316,7 +340,12 @@ fi
 is_version "$previous" || previous=
 
 printf 'step download\n'
-fetch -o "$work/cli.tar.gz" "$url" 2>"$work/curl.err" || fail "download failed: $url ($(tail -n 1 "$work/curl.err"))"
+if ! fetch -o "$work/cli.tar.gz" "$url" 2>"$work/curl.err"; then
+  [ -n "${legacy_url:-}" ] || fail "download failed: $url ($(tail -n 1 "$work/curl.err"))"
+  first=$url
+  url=$legacy_url
+  fetch -o "$work/cli.tar.gz" "$url" 2>"$work/curl.err" || fail "download failed: $first, and $url too ($(tail -n 1 "$work/curl.err"))"
+fi
 if [ -n "$pinned_sha" ]; then
   expected=$pinned_sha
 else

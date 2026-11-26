@@ -28,13 +28,15 @@ test("values that don't fit their slot are refused", () => {
   assert.equal(built("nope", {}).code, "refused");
 });
 
-test("a secret goes in env, stdin or a prefixed argv token, never as a bare slot", () => {
+test("a secret goes in env or stdin, never in argv", () => {
   const unlock = built("unlock", { password: "hunter22" });
   assert.equal(unlock.launch.env.FAKECLI_PASSWORD, "hunter22");
   assert.deepEqual(unlock.launch.argv, ["unlock", "--raw"]);
   assert.deepEqual(unlock.consumed, ["hunter22"]);
-  assert.deepEqual(built("edit", { id: "a1", password: "pw" }).launch.argv, ["edit", "a1", "password=pw"]);
-  assert.match(built("edit", { id: "a1", password: "p\nw" }).message, /line break/);
+  const edit = built("edit", { id: "a1", password: "pw=1 two" });
+  assert.deepEqual(edit.launch.argv, ["edit", "a1"]);
+  assert.equal(edit.launch.stdin, "pw=1 two");
+  assert.equal(edit.launch.argv.some((token) => token.includes("pw=1")), false);
 });
 
 test("a session handle resolves only when the sidecar holds a session", () => {

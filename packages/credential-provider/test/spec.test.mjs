@@ -25,11 +25,14 @@ test("a command that runs other programs or writes files is never allowed", () =
   assert.match(problemsOf({ ...raw, name: "bw", verbs: { serve: { argv: ["serve"], output: { mode: "lines" } } } }), /bw serve is never allowed/);
 });
 
-test("secrets stay out of argv unless argvSecrets says so", () => {
+test("a secret never goes in argv, bare or prefixed, and argvSecrets isn't a verb key", () => {
   const leaky = withVerb("leak", { argv: ["unlock", { slot: "password" }], slots: { password: { type: "secret" } }, output: { mode: "lines" } });
   assert.match(problemsOf(leaky), /a secret slot can't go in argv/);
   const prefixed = withVerb("leak", { argv: ["unlock", { slot: "password", prefix: "password=" }], slots: { password: { type: "secret" } }, output: { mode: "lines" } });
-  assert.match(problemsOf(prefixed), /argvSecrets: true/);
+  assert.match(problemsOf(prefixed), /a secret never goes in argv/);
+  const opted = withVerb("leak", { argv: ["unlock", { slot: "password", prefix: "password=" }], slots: { password: { type: "secret" } }, argvSecrets: true, output: { mode: "lines" } });
+  assert.match(problemsOf(opted), /argvSecrets/);
+  assert.match(problemsOf(opted), /a secret never goes in argv/);
 });
 
 test("env never takes PATH, loader or proxy variables", () => {

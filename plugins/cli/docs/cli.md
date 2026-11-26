@@ -2762,8 +2762,8 @@ plus an empty `.leases/` for `install.sh`. It needs Bun 1.3.14 and a C compiler 
 `plugins/cli/build.sh <out dir>` builds the plugin folder (`<out dir>/cli`: the tarball's tree without `.leases`, with
 the manifest 3 `plugin.json` and `dist/index.js` built from `plugins/cli/main` with `@ardia/plugin-sdk` 3), checks it
 has no links (Ardia refuses them in a plugin's programs) and that `bin/ardia --version` says the version, and packs it
-as the registry asset `cli-<version>-<platform>.tar.gz` (`cli/` at its root, packed deterministically by
-`scripts/pack-folder.mjs`) beside the tarball, each with its `.sha256`.
+as the registry asset `cli-<version>-<platform>.tar.gz` (`cli/` at its root, checked by `ardia-plugin check` and packed
+deterministically by `ardia-plugin pack`) beside the tarball, each with its `.sha256`.
 
 Sizes for the macOS build (TypeScript entry of 2026-11-20): `bin/ardia` 63.5 MB, `ardia-libc.so` 54 KB, esbuild
 10.6 MB; the folder is 74 MB, the plugin tarball 28.3 MB. 0.4.0 with CPython was 42.6 MB and 15.2 MB: Bun's runtime is

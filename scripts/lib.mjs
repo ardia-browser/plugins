@@ -1,8 +1,20 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+const real = (path) => {
+  try {
+    return realpathSync(path);
+  } catch {
+    return resolve(path);
+  }
+};
+
+export function isMain(moduleUrl, argv1 = process.argv[1]) {
+  return Boolean(argv1) && real(argv1) === real(fileURLToPath(moduleUrl));
+}
 export const PLUGINS_DIR = join(ROOT, "plugins");
 export const PACKAGES_DIR = join(ROOT, "packages");
 export const PLATFORMS = ["universal", "macos-arm64", "macos-x64", "linux-x64", "linux-arm64", "windows-x64"];

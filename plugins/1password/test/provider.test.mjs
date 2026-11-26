@@ -556,51 +556,65 @@ describe("editing a login", () => {
     });
   }
 
-  const argumentsHolding = (launch, secret) => launch.argv.filter((argument) => argument.includes(secret));
-  const secretSeen = (launch, secret) => [launch.stdin.includes(secret), Object.values(launch.env).some((value) => value.includes(secret))];
+  const replaceLaunch = (cli) => cli.seen.find((entry) => entry.launch.verb === "item.replace")?.launch;
+  const secretInArgv = (cli, secret) => cli.seen.some((entry) => entry.launch.argv.some((argument) => argument.includes(secret)));
 
-  for (const [name, stored, change, secret, element] of [
-    ["a new password", revealedEntry(), { password: NEW_PASSWORD }, NEW_PASSWORD, `password=${NEW_PASSWORD}`],
-    ["a new password with a new username", revealedEntry(), { username: "new@example.com", password: NEW_PASSWORD }, NEW_PASSWORD, `password=${NEW_PASSWORD}`],
-    ["a password with spaces, = and a tab", revealedEntry(), { password: "a b=c\td" }, "a b=c\td", "password=a b=c\td"],
-    ["a new code on a login without one", revealedEntry(), { totp: { set: TOTP_URI } }, TOTP_URI, `one-time password[otp]=${TOTP_URI}`],
-    ["a new code over 1Password's own code field", revealedEntry({ otp: { value: "otpauth://totp/Old?secret=GEZDGNBVGY3TQOJQ" } }), { totp: { set: TOTP_URI } }, TOTP_URI, `one-time password[otp]=${TOTP_URI}`],
+  for (const [name, stored, change, secret] of [
+    ["a new password", revealedEntry(), { password: NEW_PASSWORD }, NEW_PASSWORD],
+    ["a new password with a new username", revealedEntry(), { username: "new@example.com", password: NEW_PASSWORD }, NEW_PASSWORD],
+    ["a password with spaces, = and a tab", revealedEntry(), { password: "a b=c\td" }, "a b=c\td"],
+    ["a new code on a login without one", revealedEntry(), { totp: { set: TOTP_URI } }, TOTP_URI],
+    ["a new code over 1Password's own code field", revealedEntry({ otp: { value: "otpauth://totp/Old?secret=GEZDGNBVGY3TQOJQ" } }), { totp: { set: TOTP_URI } }, TOTP_URI],
   ]) {
-    test(`${name} goes only in its own argument, so the login keeps its passkey`, async () => {
-      const { vault, routes } = opHoldingPasskey(stored);
+    test(`${name} reaches op only on stdin, never in argv`, async () => {
+      const { vault, routes } = opHoldingPasskey(stored, false);
       const { h, cli } = harness(routes);
       const answer = await h.call("edit", { id: ITEM_ID, change: change });
       assert.equal(answer.ok, true, JSON.stringify(answer));
-      assert.equal(vault.passkey, true);
-      const launch = editLaunch(cli);
-      assert.deepEqual(argumentsHolding(launch, secret), [element]);
-      assert.equal(cli.seen.filter((entry) => entry.launch.argv.some((argument) => argument.includes(secret))).length, 1);
-      assert.deepEqual(secretSeen(launch, secret), [false, false]);
+      const launch = replaceLaunch(cli);
+      assert.deepEqual(launch.argv, ["item", "edit", ITEM_ID, "--format=json", "--account=ACCOUNTUUID1"]);
+      assert.equal(launch.stdin.includes(JSON.stringify(secret).slice(1, -1)), true);
+      assert.equal(secretInArgv(cli, secret), false);
+      assert.equal(Object.values(launch.env).some((value) => value.includes(secret)), false);
+      assert.equal(editLaunch(cli), undefined);
       assert.equal(JSON.stringify(answer).includes(secret), false);
       if (change.password !== undefined) assert.equal(vault.item.fields.find((field) => field.purpose === "PASSWORD").value, change.password);
+      if (change.username !== undefined) assert.equal(vault.item.fields.find((field) => field.purpose === "USERNAME").value, change.username);
       if (change.totp) assert.deepEqual(vault.item.fields.filter((field) => field.type === "OTP").map((field) => [field.label, field.value]), [["one-time password", TOTP_URI]]);
+    });
+
+    test(`${name} on a login with a passkey is refused, since op's template edit would drop the passkey`, async () => {
+      const { vault, routes } = opHoldingPasskey(stored);
+      const { h, cli } = harness(routes);
+      assert.equal(problemOf(await h.call("edit", { id: ITEM_ID, change: change })), "cantPrepare");
+      assert.deepEqual([ranEdit(cli), vault.passkey, secretInArgv(cli, secret)], [false, true, false]);
     });
   }
 
+  test("a new code over two code fields named one-time password leaves exactly one", async () => {
+    const { vault, routes } = opHoldingPasskey(revealedEntry({ extraFields: [codeField("one-time password"), codeField("One-Time  Password", { id: "TOTP_second" })] }), false);
+    const { h } = harness(routes);
+    assert.equal((await h.call("edit", { id: ITEM_ID, change: { totp: { set: TOTP_URI } } })).ok, true);
+    assert.deepEqual(vault.item.fields.filter((field) => field.type === "OTP").map((field) => field.value), [TOTP_URI]);
+  });
+
   test("a new code replaces code fields under other names in the same edit", async () => {
-    const { vault, routes } = opHoldingPasskey(revealedEntry({ extraFields: [codeField("backup code")] }));
+    const { vault, routes } = opHoldingPasskey(revealedEntry({ extraFields: [codeField("backup code")] }), false);
     const { h, cli } = harness(routes);
     assert.equal((await h.call("edit", { id: ITEM_ID, change: { totp: { set: TOTP_URI } } })).ok, true);
-    assert.deepEqual(editLaunch(cli).argv.slice(3, -2), ["backup code[delete]", `one-time password[otp]=${TOTP_URI}`]);
-    assert.equal(cli.seen.filter((entry) => entry.launch.verb === "item.assign").length, 1);
+    assert.equal(cli.seen.filter((entry) => entry.launch.verb === "item.replace").length, 1);
+    assert.equal(secretInArgv(cli, TOTP_URI), false);
     assert.deepEqual(vault.item.fields.filter((field) => field.type === "OTP").map((field) => field.label), ["one-time password"]);
-    assert.equal(vault.passkey, true);
   });
 
   for (const [name, extraFields] of [
     ["a text field already named one-time password", [{ id: "note1", type: "STRING", label: "One-Time Password", value: "x" }]],
-    ["two fields named one-time password", [codeField("one-time password"), codeField("One-Time  Password", { id: "TOTP_second" })]],
   ]) {
     test(`a new code isn't added over ${name}`, async () => {
-      const { vault, routes } = opHoldingPasskey(revealedEntry({ extraFields }));
+      const { vault, routes } = opHoldingPasskey(revealedEntry({ extraFields }), false);
       const { h, cli } = harness(routes);
       assert.equal(problemOf(await h.call("edit", { id: ITEM_ID, change: { totp: { set: TOTP_URI } } })), "cantPrepare");
-      assert.deepEqual([ranEdit(cli), vault.passkey], [false, true]);
+      assert.deepEqual([ranEdit(cli), vault.passkey], [false, false]);
     });
   }
 
@@ -612,11 +626,11 @@ describe("editing a login", () => {
     ["a code address with a line break", { totp: { set: `${TOTP_URI}\nx` } }],
   ]) {
     test(`${name} is refused by Ardia and never reaches op`, async () => {
-      const { vault, routes } = opHoldingPasskey(revealedEntry());
+      const { vault, routes } = opHoldingPasskey(revealedEntry(), false);
       const { h, cli } = harness(routes);
       const answer = await h.call("edit", { id: ITEM_ID, change: change });
       assert.equal(answer.ok, false);
-      assert.deepEqual([ranEdit(cli), vault.passkey], [false, true]);
+      assert.deepEqual([ranEdit(cli), vault.item.fields.find((field) => field.purpose === "PASSWORD").value], [false, PASSWORD]);
     });
   }
 
@@ -626,7 +640,7 @@ describe("editing a login", () => {
   });
 
   test("an op error that repeats the new password keeps it out of the error", async () => {
-    const { h } = harness([["item get*", ok(revealedEntry())], ["item edit*", (launch) => fail(`[ERROR] 2026/11/23 10:00:00 couldn't apply ${launch.argv.join(" ")}`)]]);
+    const { h } = harness([["item get*", ok(revealedEntry())], ["item edit*", (launch) => fail(`[ERROR] 2026/11/23 10:00:00 couldn't apply ${launch.argv.join(" ")} ${launch.stdin}`)]]);
     const answer = await h.call("edit", { id: ITEM_ID, change: { password: NEW_PASSWORD } });
     assert.equal(problemOf(answer), "failed");
     assert.equal(JSON.stringify(answer).includes(NEW_PASSWORD), false);
@@ -707,14 +721,22 @@ describe("editing a login", () => {
 });
 
 describe("adding a code", () => {
-  test("a login gains a code field by assignment, kept with its passkey", async () => {
-    const { vault, routes } = opHoldingPasskey(revealedEntry());
+  test("a login gains a code field through a template on stdin, with the code never in argv", async () => {
+    const { vault, routes } = opHoldingPasskey(revealedEntry(), false);
     const { h, cli } = harness(routes);
     assert.equal((await h.call("addTotp", { id: ITEM_ID, uri: TOTP_URI })).ok, true);
-    assert.equal(vault.passkey, true);
-    const launch = cli.seen.find((entry) => entry.launch.verb === "item.assign").launch;
-    assert.deepEqual(launch.argv, ["item", "edit", ITEM_ID, `one-time password[otp]=${TOTP_URI}`, "--format=json", "--account=ACCOUNTUUID1"]);
-    assert.equal(launch.stdin, "");
+    const launch = cli.seen.find((entry) => entry.launch.verb === "item.replace").launch;
+    assert.deepEqual(launch.argv, ["item", "edit", ITEM_ID, "--format=json", "--account=ACCOUNTUUID1"]);
+    assert.equal(JSON.parse(launch.stdin).fields.some((field) => field.type === "OTP" && field.value === TOTP_URI), true);
+    assert.equal(cli.seen.some((entry) => entry.launch.argv.some((argument) => argument.includes(TOTP_URI))), false);
+    assert.deepEqual(vault.item.fields.filter((field) => field.type === "OTP").map((field) => field.value), [TOTP_URI]);
+  });
+
+  test("a login with a passkey gets no code, so the passkey stays", async () => {
+    const { vault, routes } = opHoldingPasskey(revealedEntry());
+    const { h, cli } = harness(routes);
+    assert.equal(problemOf(await h.call("addTotp", { id: ITEM_ID, uri: TOTP_URI })), "cantPrepare");
+    assert.deepEqual([cli.lines().some((line) => line.startsWith("item edit")), vault.passkey], [false, true]);
   });
 
   for (const [name, readBack] of [
@@ -801,13 +823,16 @@ describe("the provider", () => {
     assert.ok(sdk.INFO.appLinks.some((prefix) => link.startsWith(prefix)));
   });
 
-  test("only the assign verb puts secrets on argv, each behind a literal prefix", () => {
-    const verbs = sdk.CLI.verbs;
-    const withSecrets = Object.entries(verbs).filter(([, verb]) => verb.argv.some((token) => typeof token === "object" && "prefix" in token));
-    assert.deepEqual(withSecrets.map(([id]) => id), ["item.assign"]);
-    assert.deepEqual(verbs["item.assign"].argv.filter((token) => typeof token === "object" && "prefix" in token), [
-      { slot: "password", prefix: "password=" },
-      { slot: "oneTimeCode", prefix: "one-time password[otp]=" },
-    ]);
+  test("no verb puts a secret on argv: secret slots reach op only through env or stdin", () => {
+    for (const [id, verb] of Object.entries(sdk.CLI.verbs)) {
+      assert.equal(verb.argvSecrets, undefined, id);
+      const secrets = Object.entries(verb.slots).filter(([, slot]) => slot.type === "secret").map(([name]) => name);
+      for (const token of verb.argv) {
+        assert.equal(typeof token === "object" && "prefix" in token, false, id);
+        if (typeof token === "object" && "slot" in token) assert.equal(secrets.includes(token.slot), false, `${id} ${token.slot}`);
+      }
+    }
+    assert.equal(Object.hasOwn(sdk.CLI.verbs["item.assign"].slots, "password"), false);
+    assert.equal(Object.hasOwn(sdk.CLI.verbs["item.assign"].slots, "oneTimeCode"), false);
   });
 });

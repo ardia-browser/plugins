@@ -227,4 +227,3 @@ describe("sign out", () => {
     assert.equal(argvOf(h).at(-1), "logout");
   });
 });
-

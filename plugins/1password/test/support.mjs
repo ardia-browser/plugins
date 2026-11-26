@@ -153,8 +153,12 @@ function applyAssignment(item, argument) {
   return true;
 }
 
-export function opHoldingPasskey(stored) {
-  const vault = { item: structuredClone(stored), passkey: true };
+export const PASSKEY_FIELD = { id: "passkey", type: "PASSKEY", label: "passkey" };
+
+export function opHoldingPasskey(stored, passkey = true) {
+  const item = structuredClone(stored);
+  if (passkey) item.fields = [...(item.fields ?? []), PASSKEY_FIELD];
+  const vault = { item, passkey };
   const routes = [
     ["item get*", () => ok(vault.item)],
     [

@@ -122,16 +122,11 @@ function resolveSlots(cli: CliSpec, verbId: string, verb: CredentialVerb, params
   return out;
 }
 
-function argvOf(cli: CliSpec, verbId: string, verb: CredentialVerb, values: Resolved["values"], secrets: Resolved["secrets"]): string[] | VerbRefusal {
+function argvOf(cli: CliSpec, verbId: string, verb: CredentialVerb, values: Resolved["values"]): string[] | VerbRefusal {
   const argv: string[] = [];
   for (const token of verb.argv) {
     if (typeof token === "string") argv.push(token);
-    else if ("prefix" in token) {
-      const secret = secrets[token.slot];
-      if (secret === undefined) continue;
-      if (BREAKS.test(secret)) return refusal("bad_request", `${token.slot} for ${verbId} can't go in argv with NUL or a line break.`);
-      argv.push(`${token.prefix}${secret}`);
-    } else if ("when" in token) {
+    else if ("when" in token) {
       if (values[token.when] === true) argv.push(token.flag);
     } else {
       const value = values[token.slot];
@@ -172,7 +167,7 @@ export function buildVerb(cli: CliSpec, verbId: string, params: VerbParams, secr
   if (!verb) return refusal("refused", `${cli.name} has no verb ${verbId}.`);
   const resolved = resolveSlots(cli, verbId, verb, params, secrets);
   if ("code" in resolved) return resolved;
-  const argv = argvOf(cli, verbId, verb, resolved.values, resolved.secrets);
+  const argv = argvOf(cli, verbId, verb, resolved.values);
   if ("code" in argv) return argv;
   const launch: Launch = {
     verb: verbId,

@@ -1,13 +1,11 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { appendFileSync, chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { ROOT, affected, listPlugins, loadPlugin, releaseInfo } from "./lib.mjs";
+import { ROOT, affected, isMain, listPlugins, loadPlugin, releaseInfo } from "./lib.mjs";
 
 const ARDIA_PLUGIN = join(ROOT, "node_modules", ".bin", "ardia-plugin");
-const REGISTRY_LIMITS = { compressedBytes: 512 * 1024 * 1024, unpackedBytes: 1024 * 1024 * 1024 };
 
 const HELP = `usage: node scripts/plugins.mjs <command> [plugin…] [options]
 
@@ -26,9 +24,10 @@ Commands, for every plugin under plugins/ or the ones named:
              archive's name against plugin.json's release.asset or release.assets
                --cli-out <dir>        take cli's registry assets from plugins/cli/build.sh's <dir>
 
-cli is native: plugins/cli/build.sh builds its folder and packs it with scripts/pack-folder.mjs, since bin/ardia is
-larger than ardia-plugin pack's 32 MB per-file limit. Without --cli-out, check validates its plugin.json and file
-layout with stand-ins for the programs, and pack skips it.
+cli is native: plugins/cli/build.sh builds its folder (bin/ardia is the Bun executable it compiles) and checks and
+packs it with the stock ardia-plugin check and pack. --cli-out runs ardia-plugin check on that real folder. Without
+--cli-out, check validates plugin.json and dist/index.js with stand-ins for the programs build.sh makes, and pack
+skips it.
 `;
 
 function parse(argv) {
@@ -97,55 +96,29 @@ function list(flags) {
   process.stdout.write(flags.json ? `${JSON.stringify(result)}\n` : result.plugins.map((name) => `${name}\n`).join(""));
 }
 
-function walkFiles(dir, out = [], base = dir) {
-  for (const name of readdirSync(dir)) {
-    const full = join(dir, name);
-    const stats = lstatSync(full);
-    if (stats.isDirectory()) walkFiles(full, out, base);
-    else out.push({ full, rel: full.slice(base.length + 1), size: stats.size });
-  }
-  return out;
-}
-
 function checkCli(plugin, cliOut) {
-  const built = cliOut ? join(resolve(cliOut), "cli") : null;
-  if (built && !existsSync(join(built, "plugin.json"))) throw new Error(`${built} has no plugin.json: run plugins/cli/build.sh ${cliOut} first`);
+  if (cliOut) {
+    const built = join(resolve(cliOut), "cli");
+    if (!existsSync(join(built, "plugin.json"))) throw new Error(`${built} has no plugin.json: run plugins/cli/build.sh ${cliOut} first`);
+    run(ARDIA_PLUGIN, ["check", built], ROOT);
+    return;
+  }
   const stage = mkdtempSync(join(tmpdir(), "ardia-cli-check-"));
   const folder = join(stage, "cli");
   try {
-    mkdirSync(folder);
-    const manifest = JSON.parse(readFileSync(built ? join(built, "plugin.json") : join(plugin.dir, "plugin.json"), "utf8"));
-    if (!built) delete manifest.$schema;
+    mkdirSync(join(folder, "dist"), { recursive: true });
+    const manifest = JSON.parse(readFileSync(join(plugin.dir, "plugin.json"), "utf8"));
+    delete manifest.$schema;
     writeFileSync(join(folder, "plugin.json"), `${JSON.stringify(manifest, null, 2)}\n`);
-    const programs = new Set((manifest.contributes?.programs ?? []).map((program) => program.path));
-    if (built) {
-      for (const file of walkFiles(built)) {
-        const to = join(folder, file.rel);
-        mkdirSync(join(to, ".."), { recursive: true });
-        if (file.size > 1024 * 1024) writeFileSync(to, `${file.rel} is ${file.size} bytes in the real folder\n`);
-        else copyFileSync(file.full, to);
-        chmodSync(to, statSync(file.full).mode & 0o777);
-      }
-      const files = walkFiles(built);
-      const unpacked = files.reduce((sum, file) => sum + file.size, 0);
-      for (const path of programs) {
-        const real = join(built, path);
-        if (!existsSync(real) || (statSync(real).mode & 0o100) === 0) throw new Error(`${path} isn't an executable file in ${built}`);
-      }
-      if (unpacked > REGISTRY_LIMITS.unpackedBytes) throw new Error(`${built} unpacks to ${unpacked} bytes, more than the registry's ${REGISTRY_LIMITS.unpackedBytes}`);
-      process.stderr.write(`cli: ${files.length} files, ${unpacked} bytes unpacked (the registry takes up to ${REGISTRY_LIMITS.unpackedBytes}); files over 1 MB are checked as stand-ins\n`);
-    } else {
-      mkdirSync(join(folder, "dist"), { recursive: true });
-      const mainBuilt = join(plugin.dir, "main", "dist", "index.js");
-      writeFileSync(join(folder, manifest.main ?? "dist/index.js"), existsSync(mainBuilt) ? readFileSync(mainBuilt) : "\n");
-      for (const path of programs) {
-        const to = join(folder, path);
-        mkdirSync(join(to, ".."), { recursive: true });
-        writeFileSync(to, "#!/bin/sh\n");
-        chmodSync(to, 0o755);
-      }
-      process.stderr.write("cli: checking plugin.json with stand-ins for its programs; pass --cli-out to check a real build\n");
+    const mainBuilt = join(plugin.dir, "main", "dist", "index.js");
+    writeFileSync(join(folder, manifest.main ?? "dist/index.js"), existsSync(mainBuilt) ? readFileSync(mainBuilt) : "\n");
+    for (const program of manifest.contributes?.programs ?? []) {
+      const to = join(folder, program.path);
+      mkdirSync(join(to, ".."), { recursive: true });
+      writeFileSync(to, "#!/bin/sh\n");
+      chmodSync(to, 0o755);
     }
+    process.stderr.write("cli: checking plugin.json with stand-ins for the programs plugins/cli/build.sh makes; pass --cli-out to check a real build\n");
     run(ARDIA_PLUGIN, ["check", folder], ROOT);
   } finally {
     rmSync(stage, { recursive: true, force: true });
@@ -255,4 +228,4 @@ export function main(argv) {
   }
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = main(process.argv.slice(2));
+if (isMain(import.meta.url)) process.exitCode = main(process.argv.slice(2));
