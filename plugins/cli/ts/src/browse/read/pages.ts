@@ -467,6 +467,10 @@ function thin(got: Record<string, unknown>, selector: string | null): boolean {
   return Boolean(selector && !got["matched"]) || len(String(got["text"] || "").trim()) < MIN_USEFUL;
 }
 
+function moved(page: Page, got: Record<string, unknown>): boolean {
+  return Boolean(got["url"] && page.url && got["url"] !== page.url);
+}
+
 export async function goto(page: Page, url: string, timeout: number, keepPartial = false): Promise<string | null> {
   const deadline = monotonic() + timeout;
   await page.state.reattach(page, url);
@@ -519,16 +523,27 @@ export async function extractFilled(page: Page, selector: string | null, timeout
   let got = record(await page.call(READPAGES_EXTRACT, [selector, nav], { frame: page.mainFrame, read: true }));
   if ((Number(got["status"]) || 0) >= 400 || botCheck(String(got["title"] || ""), String(got["text"] || ""), got["status"], false)) return got;
   let waited = false;
-  while (thin(got, selector) && monotonic() + THIN_POLL < deadline) {
+  let stale = false;
+  let reread = false;
+  while ((stale || thin(got, selector) || moved(page, got)) && monotonic() + THIN_POLL < deadline) {
     waited = true;
+    reread = reread || stale || moved(page, got);
     await sleep(THIN_POLL);
     try {
       got = record(await page.call(READPAGES_EXTRACT, [selector, nav], { frame: page.mainFrame, read: true }));
+      stale = false;
     } catch (error) {
       if (!(error instanceof BrowseError) || !["document_changed", "page_navigated", "frame_gone"].includes(error.code ?? "")) throw error;
+      stale = true;
       await settle(page, Math.min(deadline, monotonic() + SETTLE_LIMIT));
     }
   }
+  if (stale || moved(page, got)) {
+    reread = true;
+    await settle(page, monotonic() + SETTLE_LIMIT);
+    got = record(await page.call(READPAGES_EXTRACT, [selector, nav], { frame: page.mainFrame, read: true }));
+  }
+  if (reread) flag("read_reread_after_navigation", true);
   if (waited) flag("read_waited_for_content", true);
   return got;
 }
@@ -563,7 +578,7 @@ export async function readIn(page: Page, url: string, selector: string | null, t
     out["error"] = (error as BrowseError).text;
     return out;
   }
-  Object.assign(out, { finalUrl: page.url, title: got["title"] || "", status: got["status"] ?? null, readAt: readAt(), text: postProcess(String(got["text"] || ""), options) });
+  Object.assign(out, { finalUrl: got["url"] || page.url, title: got["title"] || "", status: got["status"] ?? null, readAt: readAt(), text: postProcess(String(got["text"] || ""), options) });
   noteNav(got);
   if (got["scope"]) {
     out["scope"] = got["scope"];
