@@ -19,7 +19,7 @@ export const COUNTS = new Set([
   "batch_refs_healed", "form_fields", "query_rows", "read_urls_count", "read_urls_failed", "snapshot_lean_lines",
 ]);
 export const READ_FLAGS = new Set([
-  "read_data", "read_data_shaped", "read_scrolled", "read_matched", "read_virtualized_grid", "read_pdf", "read_waited_for_content", "read_beside_busy",
+  "read_data", "read_data_shaped", "read_scrolled", "read_matched", "read_virtualized_grid", "read_pdf", "read_waited_for_content", "read_reread_after_navigation", "read_beside_busy",
   "read_bot_check", "read_scroll_guessed", "read_scope_shown", "read_scope_empty", "read_waited_for_requests", "read_partial_page", "read_frame_text",
   "read_scroll_waited_at_end", "read_links_from_url", "read_binary_saved", "read_oopif_frames", "snapshot_oopif_frames", "dom_snapshot_used", "dom_snapshot_refused", "selector_in_shadow_root", "oopif_attach_refused", "snapshot_document_changed",
   "read_fast_doc", "read_fast_raw",

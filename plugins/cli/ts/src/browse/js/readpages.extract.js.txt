@@ -15,5 +15,5 @@
   } catch (e) {}
   let scope = "";
   try { scope = ardiaBrowse.scope(); } catch (e) {}
-  return { title: document.title || "", text, matched: roots.length, status, scope, navSections: hidden.sections, navChars: hidden.chars };
+  return { title: document.title || "", text, matched: roots.length, status, scope, navSections: hidden.sections, navChars: hidden.chars, url: location.href };
 }
