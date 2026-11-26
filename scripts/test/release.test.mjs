@@ -6,8 +6,9 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { validateManifestV3 } from "@ardia/plugin-sdk/manifest";
-import { expandAsset, findByTag, isNative, listPlugins, releaseAssets, releaseInfo } from "../lib.mjs";
+import { expandAsset, findByTag, isNative, isSemver, listPlugins, releaseAssets, releaseInfo } from "../lib.mjs";
 import * as sdk from "@ardia/plugin-sdk/registry";
+import * as sdkSemver from "@ardia/plugin-sdk/semver";
 import { OFFICIAL_ARTIFACT_DOMAIN, SIG_SUFFIX, canonicalJson, officialArtifactMessage, signAssets, signOfficial, verifyAssets, verifyKeyFrom, verifyOfficial } from "../official-sig.mjs";
 
 const OFFICIAL = ["ai", "cli", "compact-command-bar", "developer-mode", "1password", "bitwarden", "proton-pass"];
@@ -122,6 +123,20 @@ describe("official native co-signatures", () => {
       assert.equal(verifyOfficial({ ...claim, sha256: "b".repeat(64) }, ours, publicPem).ok, false);
       assert.equal((await sdk.verifyOfficialArtifact({ ...claim, version: "9.9.9" }, ours, { official: publicPem })).ok, false);
     }
+  });
+
+  test("versions follow @ardia/plugin-sdk/semver's numeric cap, so 1000000000.0.0 is refused like the SDK refuses it", async () => {
+    const { privatePem, publicPem } = keys();
+    const big = { ...claims[0], version: "1000000000.0.0" };
+    assert.equal(sdkSemver.isSemver("1000000000.0.0"), false);
+    assert.throws(() => officialArtifactMessage(big), /semver/);
+    assert.throws(() => sdk.officialArtifactMessage(big), /semver/);
+    assert.throws(() => signOfficial(big, privatePem), /semver/);
+    assert.deepEqual(verifyOfficial(big, "A".repeat(86), publicPem), { ok: false, reason: "version must be a semver version" });
+    for (const version of ["999999999.999999999.999999999", "1.0.0-0.rc.999999999", "0.0.0", "1.0.0-x-y.z", "1000000000.0.0", "0.1000000000.0", "0.0.1000000000", "1.0.0-1000000000", "01.0.0", "1.0", `1.0.0-${"a".repeat(260)}`]) {
+      assert.equal(isSemver(version), sdkSemver.isSemver(version), version);
+    }
+    assert.throws(() => findByTag("cli-v1000000000.0.0"), /no plugin's release.tagPrefix matches/);
   });
 
   test("only well-formed @ardia claims are signed", () => {

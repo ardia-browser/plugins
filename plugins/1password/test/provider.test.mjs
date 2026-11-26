@@ -556,66 +556,28 @@ describe("editing a login", () => {
     });
   }
 
-  const replaceLaunch = (cli) => cli.seen.find((entry) => entry.launch.verb === "item.replace")?.launch;
   const secretInArgv = (cli, secret) => cli.seen.some((entry) => entry.launch.argv.some((argument) => argument.includes(secret)));
 
   for (const [name, stored, change, secret] of [
     ["a new password", revealedEntry(), { password: NEW_PASSWORD }, NEW_PASSWORD],
     ["a new password with a new username", revealedEntry(), { username: "new@example.com", password: NEW_PASSWORD }, NEW_PASSWORD],
-    ["a password with spaces, = and a tab", revealedEntry(), { password: "a b=c\td" }, "a b=c\td"],
     ["a new code on a login without one", revealedEntry(), { totp: { set: TOTP_URI } }, TOTP_URI],
     ["a new code over 1Password's own code field", revealedEntry({ otp: { value: "otpauth://totp/Old?secret=GEZDGNBVGY3TQOJQ" } }), { totp: { set: TOTP_URI } }, TOTP_URI],
   ]) {
-    test(`${name} reaches op only on stdin, never in argv`, async () => {
-      const { vault, routes } = opHoldingPasskey(stored, false);
-      const { h, cli } = harness(routes);
-      const answer = await h.call("edit", { id: ITEM_ID, change: change });
-      assert.equal(answer.ok, true, JSON.stringify(answer));
-      const launch = replaceLaunch(cli);
-      assert.deepEqual(launch.argv, ["item", "edit", ITEM_ID, "--format=json", "--account=ACCOUNTUUID1"]);
-      assert.equal(launch.stdin.includes(JSON.stringify(secret).slice(1, -1)), true);
-      assert.equal(secretInArgv(cli, secret), false);
-      assert.equal(Object.values(launch.env).some((value) => value.includes(secret)), false);
-      assert.equal(editLaunch(cli), undefined);
-      assert.equal(JSON.stringify(answer).includes(secret), false);
-      if (change.password !== undefined) assert.equal(vault.item.fields.find((field) => field.purpose === "PASSWORD").value, change.password);
-      if (change.username !== undefined) assert.equal(vault.item.fields.find((field) => field.purpose === "USERNAME").value, change.username);
-      if (change.totp) assert.deepEqual(vault.item.fields.filter((field) => field.type === "OTP").map((field) => [field.label, field.value]), [["one-time password", TOTP_URI]]);
-    });
-
-    test(`${name} on a login with a passkey is refused, since op's template edit would drop the passkey`, async () => {
-      const { vault, routes } = opHoldingPasskey(stored);
-      const { h, cli } = harness(routes);
-      assert.equal(problemOf(await h.call("edit", { id: ITEM_ID, change: change })), "cantPrepare");
-      assert.deepEqual([ranEdit(cli), vault.passkey, secretInArgv(cli, secret)], [false, true, false]);
-    });
-  }
-
-  test("a new code over two code fields named one-time password leaves exactly one", async () => {
-    const { vault, routes } = opHoldingPasskey(revealedEntry({ extraFields: [codeField("one-time password"), codeField("One-Time  Password", { id: "TOTP_second" })] }), false);
-    const { h } = harness(routes);
-    assert.equal((await h.call("edit", { id: ITEM_ID, change: { totp: { set: TOTP_URI } } })).ok, true);
-    assert.deepEqual(vault.item.fields.filter((field) => field.type === "OTP").map((field) => field.value), [TOTP_URI]);
-  });
-
-  test("a new code replaces code fields under other names in the same edit", async () => {
-    const { vault, routes } = opHoldingPasskey(revealedEntry({ extraFields: [codeField("backup code")] }), false);
-    const { h, cli } = harness(routes);
-    assert.equal((await h.call("edit", { id: ITEM_ID, change: { totp: { set: TOTP_URI } } })).ok, true);
-    assert.equal(cli.seen.filter((entry) => entry.launch.verb === "item.replace").length, 1);
-    assert.equal(secretInArgv(cli, TOTP_URI), false);
-    assert.deepEqual(vault.item.fields.filter((field) => field.type === "OTP").map((field) => field.label), ["one-time password"]);
-  });
-
-  for (const [name, extraFields] of [
-    ["a text field already named one-time password", [{ id: "note1", type: "STRING", label: "One-Time Password", value: "x" }]],
-  ]) {
-    test(`a new code isn't added over ${name}`, async () => {
-      const { vault, routes } = opHoldingPasskey(revealedEntry({ extraFields }), false);
-      const { h, cli } = harness(routes);
-      assert.equal(problemOf(await h.call("edit", { id: ITEM_ID, change: { totp: { set: TOTP_URI } } })), "cantPrepare");
-      assert.deepEqual([ranEdit(cli), vault.passkey], [false, false]);
-    });
+    for (const passkey of [true, false]) {
+      test(`${name} on an existing login${passkey ? " with a passkey" : ""} is refused, so neither argv nor a template edit is used`, async () => {
+        const { vault, routes } = opHoldingPasskey(stored, passkey);
+        const before = structuredClone(vault.item);
+        const { h, cli } = harness(routes);
+        const answer = await h.call("edit", { id: ITEM_ID, change });
+        assert.deepEqual(failure(answer), { code: "failed", problem: "cantPrepare", detail: sdk.KEEPS_PASSKEY_DETAIL });
+        assert.match(sdk.KEEPS_PASSKEY_DETAIL, /in 1Password itself/);
+        assert.deepEqual([ranEdit(cli), secretInArgv(cli, secret), vault.passkey], [false, false, passkey]);
+        assert.equal(cli.seen.some((entry) => entry.launch.verb === "item.replace" || entry.launch.stdin.includes(secret)), false);
+        assert.deepEqual(vault.item, before);
+        assert.equal(JSON.stringify(answer).includes(secret), false);
+      });
+    }
   }
 
   for (const [name, change] of [
@@ -633,18 +595,6 @@ describe("editing a login", () => {
       assert.deepEqual([ranEdit(cli), vault.item.fields.find((field) => field.purpose === "PASSWORD").value], [false, PASSWORD]);
     });
   }
-
-  test("a password that comes back unchanged is notTaken", async () => {
-    const { h } = harness(editRoutes(revealedEntry(), revealedEntry()));
-    assert.equal(problemOf(await h.call("edit", { id: ITEM_ID, change: { password: NEW_PASSWORD } })), "notTaken");
-  });
-
-  test("an op error that repeats the new password keeps it out of the error", async () => {
-    const { h } = harness([["item get*", ok(revealedEntry())], ["item edit*", (launch) => fail(`[ERROR] 2026/11/23 10:00:00 couldn't apply ${launch.argv.join(" ")} ${launch.stdin}`)]]);
-    const answer = await h.call("edit", { id: ITEM_ID, change: { password: NEW_PASSWORD } });
-    assert.equal(problemOf(answer), "failed");
-    assert.equal(JSON.stringify(answer).includes(NEW_PASSWORD), false);
-  });
 
   test("an address op can't take is refused before any edit, and http to this Mac is allowed", async () => {
     for (const url of ["http://intranet.example", "ftp://example.com", "https://user:pw@example.com", "https://a b.example", "-https://example.com"]) {
@@ -721,36 +671,20 @@ describe("editing a login", () => {
 });
 
 describe("adding a code", () => {
-  test("a login gains a code field through a template on stdin, with the code never in argv", async () => {
-    const { vault, routes } = opHoldingPasskey(revealedEntry(), false);
-    const { h, cli } = harness(routes);
-    assert.equal((await h.call("addTotp", { id: ITEM_ID, uri: TOTP_URI })).ok, true);
-    const launch = cli.seen.find((entry) => entry.launch.verb === "item.replace").launch;
-    assert.deepEqual(launch.argv, ["item", "edit", ITEM_ID, "--format=json", "--account=ACCOUNTUUID1"]);
-    assert.equal(JSON.parse(launch.stdin).fields.some((field) => field.type === "OTP" && field.value === TOTP_URI), true);
-    assert.equal(cli.seen.some((entry) => entry.launch.argv.some((argument) => argument.includes(TOTP_URI))), false);
-    assert.deepEqual(vault.item.fields.filter((field) => field.type === "OTP").map((field) => field.value), [TOTP_URI]);
-  });
-
-  test("a login with a passkey gets no code, so the passkey stays", async () => {
-    const { vault, routes } = opHoldingPasskey(revealedEntry());
-    const { h, cli } = harness(routes);
-    assert.equal(problemOf(await h.call("addTotp", { id: ITEM_ID, uri: TOTP_URI })), "cantPrepare");
-    assert.deepEqual([cli.lines().some((line) => line.startsWith("item edit")), vault.passkey], [false, true]);
-  });
-
-  for (const [name, readBack] of [
-    ["no code field", revealedEntry()],
-    ["the old code", revealedEntry({ otp: { value: "otpauth://totp/Old?secret=GEZDGNBVGY3TQOJQ" } })],
-    ["a code field that isn't an otpauth address", revealedEntry({ otp: { value: "not a code" } })],
-  ]) {
-    test(`reading back ${name} is notTaken`, async () => {
-      let reads = 0;
-      const before = revealedEntry({ otp: { value: "otpauth://totp/Old?secret=GEZDGNBVGY3TQOJQ" } });
-      const { h } = harness([["item get*", () => ok(reads++ === 0 ? before : readBack)], ["item edit*", ok(readBack)]]);
-      assert.equal(problemOf(await h.call("addTotp", { id: ITEM_ID, uri: TOTP_URI })), "notTaken");
+  for (const passkey of [true, false]) {
+    test(`a code isn't added to an existing login${passkey ? " with a passkey" : ""}, and the seed never reaches op`, async () => {
+      const { vault, routes } = opHoldingPasskey(revealedEntry(), passkey);
+      const { h, cli } = harness(routes);
+      assert.deepEqual(failure(await h.call("addTotp", { id: ITEM_ID, uri: TOTP_URI })), { code: "failed", problem: "cantPrepare", detail: sdk.KEEPS_PASSKEY_DETAIL });
+      assert.deepEqual([cli.lines().some((line) => line.startsWith("item edit")), vault.passkey], [false, passkey]);
+      assert.equal(cli.seen.some((entry) => entry.launch.argv.some((argument) => argument.includes(TOTP_URI)) || entry.launch.stdin.includes(TOTP_URI)), false);
     });
   }
+
+  test("1Password doesn't offer adding a code", () => {
+    assert.equal(sdk.INFO.capabilities.includes("addTotp"), false);
+    assert.ok(sdk.INFO.capabilities.includes("edit"));
+  });
 });
 
 describe("opening a login in 1Password", () => {
@@ -785,9 +719,8 @@ describe("opening a login in 1Password", () => {
   });
 
   for (const [name, error, change] of [
-    ["an op error", fail("[ERROR] 2026/11/23 10:00:00 something went wrong"), { password: NEW_PASSWORD }],
-    ["a change 1Password didn't keep", ok(revealedEntry()), { password: NEW_PASSWORD }],
-    ["a code 1Password didn't keep", ok(revealedEntry()), { totp: { set: TOTP_URI } }],
+    ["an op error", fail("[ERROR] 2026/11/23 10:00:00 something went wrong"), { username: "new@example.com" }],
+    ["a change 1Password didn't keep", ok(revealedEntry()), { url: "https://new.example" }],
   ]) {
     test(`after ${name} the edit fails plainly and the login still opens in 1Password`, async () => {
       const { h } = harness([oneAccount, ["item get*", ok(revealedEntry())], ["item edit*", error]]);

@@ -18,8 +18,11 @@ export function isMain(moduleUrl, argv1 = process.argv[1]) {
 export const PLUGINS_DIR = join(ROOT, "plugins");
 export const PACKAGES_DIR = join(ROOT, "packages");
 export const PLATFORMS = ["universal", "macos-arm64", "macos-x64", "linux-x64", "linux-arm64", "windows-x64"];
-export const SEMVER =
-  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?$/;
+const NUMERIC = "0|[1-9]\\d{0,8}";
+const IDENT = "(?:0|[1-9]\\d{0,8}|\\d*[A-Za-z-][0-9A-Za-z-]*)";
+export const SEMVER = new RegExp(`^(${NUMERIC})\\.(${NUMERIC})\\.(${NUMERIC})(?:-(${IDENT}(?:\\.${IDENT})*))?$`);
+export const SEMVER_MAX_LENGTH = 256;
+export const isSemver = (text) => typeof text === "string" && text.length <= SEMVER_MAX_LENGTH && SEMVER.test(text);
 
 const readJson = (file) => JSON.parse(readFileSync(file, "utf8"));
 const readJsonIfThere = (file) => (existsSync(file) ? readJson(file) : null);
@@ -111,7 +114,7 @@ export function findByTag(tag, plugins = listPlugins()) {
   const matches = plugins
     .filter((plugin) => {
       const prefix = tagPrefix(plugin.manifest);
-      return tag.startsWith(prefix) && SEMVER.test(tag.slice(prefix.length));
+      return tag.startsWith(prefix) && isSemver(tag.slice(prefix.length));
     })
     .sort((a, b) => tagPrefix(b.manifest).length - tagPrefix(a.manifest).length);
   if (!matches.length) throw new Error(`no plugin's release.tagPrefix matches the tag ${tag}`);

@@ -98,6 +98,7 @@ export function verbOutcome(verb: CredentialVerb, outcome: LaunchOutcome, consum
   let overflowed = outcome.overflowed || utf8Length(stdout) > verb.outputLimitBytes;
   let json: unknown = null;
   let lines: string[] = [];
+  let droppedLines = 0;
   let items = 0;
   let lastLine: string | null = null;
   if (!overflowed && launched && !cancelled) {
@@ -106,6 +107,10 @@ export function verbOutcome(verb: CredentialVerb, outcome: LaunchOutcome, consum
     else if (mode === "lines" || mode === "stream") {
       lines = stdout.split("\n").map((line) => redactText(line.replace(/\r$/, ""), secrets));
       if (lines.at(-1) === "") lines.pop();
+      if (lines.length > CREDENTIAL_LIMITS.retainedLines) {
+        droppedLines = lines.length - CREDENTIAL_LIMITS.retainedLines;
+        lines = lines.slice(droppedLines);
+      }
     } else {
       const last = stdout.split("\n").map((line) => line.trim()).filter(Boolean).at(-1) ?? "";
       lastLine = /^\S{16,4096}$/.test(last) ? last : null;
@@ -114,5 +119,5 @@ export function verbOutcome(verb: CredentialVerb, outcome: LaunchOutcome, consum
   const succeeded = launched && !cancelled && !timedOut && !overflowed && status === 0;
   const stderr = redactText(cleanStderr(rawStderr), redactable([...consumed, ...jsonStrings.filter((text) => text.length >= 6)], 3));
   const hints = matchedHints(verb, rawStderr);
-  return { status, launched, timedOut, cancelled, overflowed, succeeded, stderr, hints, json, lines, items, droppedLines: 0, lastLine };
+  return { status, launched, timedOut, cancelled, overflowed, succeeded, stderr, hints, json, lines, items, droppedLines, lastLine };
 }

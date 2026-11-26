@@ -130,7 +130,7 @@ export const INFO: ProviderInfo = {
   accent: "#0572EC",
   readsOffline: true,
   approvalLastsSeconds: 600,
-  capabilities: ["totp", "save", "edit", "addTotp", "touchID"],
+  capabilities: ["totp", "save", "edit", "touchID"],
   passkeys: [{ via: "system" }],
   appLinks: ["https://start.1password.com/open/i?"],
   signIn: { methods: [{ id: "app", title: "1Password App", kind: "desktopApproval", appURL: "onepassword://", appTitle: "1Password" }] },

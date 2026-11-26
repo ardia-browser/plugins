@@ -21,7 +21,7 @@ install it, its id patterns, its environment and its verbs. Each verb is an argv
 `lastLineSecret`, `stream`), and the stderr hints that classify a failure. The checks refuse:
 
 - commands that run other programs, write files, open servers or share data (`op run`, `bw serve`, `pass-cli inject`, …),
-- a secret in argv unless the verb says `argvSecrets` and puts it behind a literal prefix,
+- a secret in argv in any form, bare or prefixed: secrets reach the program only through env or stdin,
 - environment variables Ardia sets or never passes (`PATH`, `HOME`, `DYLD_*`, `NODE_*`, proxies, …),
 - unused or doubly used slots, regular expressions that aren't anchored, and unknown keys.
 

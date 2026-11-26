@@ -2,7 +2,7 @@
 import { createHash, createPrivateKey, createPublicKey, sign, verify } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { PLATFORMS, SEMVER, findByTag, isMain, releaseInfo } from "./lib.mjs";
+import { PLATFORMS, findByTag, isMain, isSemver, releaseInfo } from "./lib.mjs";
 
 export const OFFICIAL_ARTIFACT_DOMAIN = "ardia-official-native-v1\n";
 export const SIG_SUFFIX = ".official-sig";
@@ -62,7 +62,7 @@ export function canonicalJson(value) {
 export function claimProblem(claim) {
   if (typeof claim?.id !== "string" || !ID.test(claim.id)) return "id must be a scoped plugin id like @ardia/cli";
   if (!claim.id.startsWith(OFFICIAL_SCOPE)) return "only @ardia/* plugins carry an official signature";
-  if (typeof claim.version !== "string" || !SEMVER.test(claim.version)) return "version must be a semver version";
+  if (!isSemver(claim.version)) return "version must be a semver version";
   if (!PLATFORMS.includes(claim.platform)) return "platform isn't one Ardia builds for";
   if (typeof claim.sha256 !== "string" || !SHA256.test(claim.sha256)) return "sha256 must be 64 lowercase hex digits";
   return null;
