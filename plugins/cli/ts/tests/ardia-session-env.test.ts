@@ -55,6 +55,7 @@ describe("ARDIA_SESSION environment variable", () => {
   });
 
   test("ARDIA_SESSION disables auto-sessions in browse and MCP", async () => {
+    delete process.env["ARDIA_SESSION"];
     delete process.env["AGENT_BROWSER_SESSION"];
     delete process.env["ARDIA_BROWSE_AUTO_SESSION"];
     delete process.env["ARDIA_BROWSE_FOR_PLUGIN"];
