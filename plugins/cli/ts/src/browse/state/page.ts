@@ -140,6 +140,7 @@ export class Page {
   url = "";
   title = "";
   dragIntercepted: ((data: Json) => void) | null = null;
+  fileChooserOpened: ((params: Json, session: string | null) => void) | null = null;
   crashed = false;
   needsEnable = false;
   awake = false;
@@ -737,6 +738,11 @@ export class Page {
     if (FRAME_EVENTS.has(method)) this.framesChanged();
     oopif.childEvent(this, session, method, params);
     this.runtimeContextEvent(session, method, params);
+    if (method === "Page.fileChooserOpened") {
+      const waiter = this.fileChooserOpened;
+      this.fileChooserOpened = null;
+      waiter?.({ ...params }, session);
+    }
     if (method === "Runtime.bindingCalled") this.state.onPageEvent(this, method, params, session);
   }
 
@@ -806,6 +812,10 @@ export class Page {
       const waiter = this.dragIntercepted;
       this.dragIntercepted = null;
       waiter?.(record(params["data"]));
+    } else if (method === "Page.fileChooserOpened") {
+      const waiter = this.fileChooserOpened;
+      this.fileChooserOpened = null;
+      waiter?.({ ...params }, this.session);
     } else if (method === "Runtime.consoleAPICalled") {
       this.console.add(consoleEntry(params));
     } else if (method === "Runtime.exceptionThrown") {

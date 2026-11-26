@@ -7,6 +7,7 @@ import { joinedWords, pyFloat, pyLen } from "../../pylib/str.ts";
 import { shlexQuote } from "../../pylib/shlex.ts";
 import { click, hover, mouseClickAt, type Position, tap, TOUCH_OFF } from "../act/pointer.ts";
 import { drag, listAfter, listBefore } from "../act/drag.ts";
+import { uploadFiles } from "../act/upload.ts";
 import { hoverResult, markOverlays, revealedAfter } from "../act/reveal.ts";
 import { choose, comboKind, fieldFacts, type Filled, fill, plain, select, settledSuggestions, SUGGESTION_HINT_WAIT, setChecked, type Item, typeText, uniqueMatch, unwatchSuggestions, watchSuggestions } from "../act/fields.ts";
 import { asRecord, expectInput, mouseButton, overFrame, textInserted } from "../act/common.ts";
@@ -526,21 +527,13 @@ function isFile(target: string): boolean {
 }
 
 async function cmdUpload(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [, args] = parse(argv);
+  const [options, args] = parse(argv, { "--no-humanize": "bool", ...WITHIN_FLAG });
   need(args, 2, "upload <selector> <files...>");
   const files = args.slice(1).map((item) => ctx.path(item));
   for (const item of files) if (!isFile(item)) throw new BrowseError(`No such file: ${item}`);
-  const [page, element] = await resolve(ctx, args[0] as string);
-  const run = async () => {
-    try {
-      await page.send("DOM.setFileInputFiles", { files, backendNodeId: element.backendId });
-    } catch (error) {
-      if (error instanceof Gated) throw error.during("upload");
-      throw error;
-    }
-  };
-  const [, report] = await observe(ctx, page, run);
-  return attach(new Result({ uploaded: files }), report);
+  const [page, element] = await resolve(ctx, args[0] as string, false, withinOf(options));
+  const [outcome, report] = await observe(ctx, page, () => uploadFiles(page, element, files, humanizing(ctx, options)));
+  return attach(new Result({ uploaded: files, ...(outcome.via === "chooser" ? { via: "chooser" } : {}) }), report);
 }
 
 async function cmdScroll(ctx: Ctx, argv: string[]): Promise<Result> {

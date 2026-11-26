@@ -69,6 +69,7 @@ export const MUTATING_METHODS: ReadonlySet<string> = new Set([
   "Page.navigate",
   "Page.reload",
   "Page.handleJavaScriptDialog",
+  "Page.setInterceptFileChooserDialog",
   "Page.addScriptToEvaluateOnNewDocument",
   "Page.removeScriptToEvaluateOnNewDocument",
   "Page.bringToFront",
