@@ -26,7 +26,11 @@ function either(value: string | undefined, fallback: string | undefined): string
 
 export function environmentIsText(): boolean {
   return Object.entries(process.env).every(([name, value]) => !(name.startsWith("AGENT_BROWSER_") && (value ?? "").includes(LOSSY)))
-    && ["ARDIA_CDP_URL", "ARDIA_DATA_DIR", "ARDIA_WS", "ARDIA_PORT"].every((name) => !(env(name) ?? "").includes(LOSSY));
+    && ["ARDIA_CDP_URL", "ARDIA_DATA_DIR", "ARDIA_WS", "ARDIA_PORT", "ARDIA_SESSION"].every((name) => !(env(name) ?? "").includes(LOSSY));
+}
+
+export function envSession(environ: NodeJS.ProcessEnv = process.env): string | undefined {
+  return either(environ["ARDIA_SESSION"], environ["AGENT_BROWSER_SESSION"]);
 }
 
 function humanizeDefault(): boolean {
@@ -99,7 +103,7 @@ export function optionsFrom(found: Found): Options {
 }
 
 export function sessionName(found: Found): string {
-  const session = either(found.value("session"), env("AGENT_BROWSER_SESSION")) || "default";
+  const session = either(found.value("session"), envSession()) || "default";
   const refused = checkName("A session name", session);
   if (refused !== undefined) throw new Refused(refused);
   return session;
