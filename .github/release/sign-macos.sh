@@ -1,20 +1,25 @@
 #!/usr/bin/env bash
-# Usage: .github/release/sign-macos.sh <cli folder>
-#        .github/release/sign-macos.sh --check <assets dir> <version>
-#   The first form is plugins/cli/build.sh's ARDIA_SIGN_CMD (sh -c "$ARDIA_SIGN_CMD" ardia-sign <out>/cli): it
-#   Developer ID-signs bin/ardia, bin/ardia-libc.so, libexec/esbuild and any other Mach-O in the folder with one
-#   identity, the hardened runtime, a secure timestamp and no entitlements, sends them to Apple's notary service in one
-#   submission, fails unless it comes back Accepted, then checks each against the Developer ID requirement for
-#   $APPLE_TEAM_ID. build.sh packs both tarballs from the folder afterwards.
-#   The second form checks what build.sh packed: every Mach-O in cli-plugin-<version>-macos-arm64.tar.gz and
-#   ardia-cli-<version>-macos-arm64.tar.gz is signed for $APPLE_TEAM_ID with the hardened runtime, and the packed
-#   ardia says <version>. It fails when the hook didn't run, so an unsigned command is never released.
-#   Signing needs, from the cli-release environment: DEVELOPER_ID_P12_BASE64, DEVELOPER_ID_P12_PASSWORD,
-#   ASC_API_KEY_P8_BASE64, ASC_API_KEY_ID, ASC_API_ISSUER_ID and APPLE_TEAM_ID, and stops before touching anything
-#   when one is missing. --check needs APPLE_TEAM_ID.
 set -euo pipefail
 
-case "${1:-}" in '' | -h | --help) sed -n '2,15s/^# \{0,1\}//p' "$0"; [ -n "${1:-}" ] && exit 0 || exit 64 ;; esac
+usage() {
+  cat <<'USAGE'
+Usage: .github/release/sign-macos.sh <cli folder>
+       .github/release/sign-macos.sh --check <assets dir> <version>
+  The first form is plugins/cli/build.sh's ARDIA_SIGN_CMD (sh -c "$ARDIA_SIGN_CMD" ardia-sign <out>/cli): it
+  Developer ID-signs bin/ardia, bin/ardia-libc.so, libexec/esbuild and any other Mach-O in the folder with one
+  identity, the hardened runtime, a secure timestamp and no entitlements, sends them to Apple's notary service in one
+  submission, fails unless it comes back Accepted, then checks each against the Developer ID requirement for
+  $APPLE_TEAM_ID. build.sh packs both tarballs from the folder afterwards.
+  The second form checks what build.sh packed: every Mach-O in cli-<version>-macos-arm64.tar.gz (the registry asset)
+  and ardia-cli-<version>-macos-arm64.tar.gz is signed for $APPLE_TEAM_ID with the hardened runtime, and the packed
+  ardia says <version>. It fails when the hook didn't run, so an unsigned command is never released.
+  Signing needs, from the cli-release environment: DEVELOPER_ID_P12_BASE64, DEVELOPER_ID_P12_PASSWORD,
+  ASC_API_KEY_P8_BASE64, ASC_API_KEY_ID, ASC_API_ISSUER_ID and APPLE_TEAM_ID, and stops before touching anything
+  when one is missing. --check needs APPLE_TEAM_ID.
+USAGE
+}
+
+case "${1:-}" in '' | -h | --help) usage; [ -n "${1:-}" ] && exit 0 || exit 64 ;; esac
 
 die() { echo "::error::sign-macos: $*" >&2; exit 1; }
 
@@ -66,7 +71,7 @@ check() {
   need APPLE_TEAM_ID
   work=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/sign-check.XXXXXX")
   trap 'rm -rf "'"$work"'"' EXIT
-  for entry in "cli-plugin-$version-macos-arm64.tar.gz:cli" "ardia-cli-$version-macos-arm64.tar.gz:ardia-cli-$version"; do
+  for entry in "cli-$version-macos-arm64.tar.gz:cli" "ardia-cli-$version-macos-arm64.tar.gz:ardia-cli-$version"; do
     name=${entry%%:*}
     top=${entry#*:}
     [ -f "$assets/$name" ] || die "no $name in $assets"

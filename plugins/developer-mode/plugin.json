@@ -1,0 +1,51 @@
+{
+  "$schema": "https://raw.githubusercontent.com/ardia-browser/ardia/main/docs/plugin.v3.schema.json",
+  "manifest": 3,
+  "id": "@ardia/developer-mode",
+  "name": "Developer Mode",
+  "description": "Arc's striped developer bar, with the console, Network and Inspect a click away, on the sites you're building.",
+  "version": "2.0.0",
+  "icon": "hammer",
+  "license": "Apache-2.0",
+  "repository": "https://github.com/ardia-browser/plugins",
+  "homepage": "https://github.com/ardia-browser/plugins/tree/main/plugins/developer-mode",
+  "categories": ["developer-tools"],
+  "keywords": ["developer", "localhost", "console", "network", "inspect", "devtools"],
+  "engines": {
+    "ardia": ">=0.3.0",
+    "sdk": "^3.0.0"
+  },
+  "scope": "profile",
+  "release": {
+    "github": "ardia-browser/plugins",
+    "tagPrefix": "developer-mode-v",
+    "asset": "developer-mode-{version}.tar.gz"
+  },
+  "contributes": {
+    "settings": {
+      "rows": [
+        {
+          "key": "localAddresses",
+          "title": "Turn On for Local Addresses You Type",
+          "type": "toggle",
+          "default": false
+        }
+      ]
+    },
+    "siteSwitches": [
+      {
+        "key": "on",
+        "title": "Developer Mode",
+        "icon": "hammer"
+      }
+    ],
+    "pageBar": {
+      "look": "stripes",
+      "when": {
+        "siteSwitch": "on",
+        "localAddresses": "localAddresses"
+      },
+      "buttons": ["siteControls", "address", "copyLink", "|", "console", "network", "inspect", "|", "extensions", "split"]
+    }
+  }
+}

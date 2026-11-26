@@ -1,0 +1,25 @@
+{
+  "name": "ardia-plugins",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.21.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "packages": "node scripts/ardia-packages.mjs",
+    "list": "node scripts/plugins.mjs list",
+    "check": "node scripts/plugins.mjs check",
+    "build": "node scripts/plugins.mjs build",
+    "typecheck": "node scripts/plugins.mjs typecheck",
+    "test": "node scripts/plugins.mjs test",
+    "pack": "node scripts/plugins.mjs pack",
+    "test:scripts": "node --test scripts/test/*.test.mjs"
+  },
+  "devDependencies": {
+    "@ardia/plugin-cli": "^3.0.0",
+    "@ardia/plugin-sdk": "^3.0.0",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3"
+  }
+}

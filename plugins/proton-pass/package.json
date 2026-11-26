@@ -1,0 +1,24 @@
+{
+  "name": "@ardia-plugins/proton-pass",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node ../../packages/credential-provider/build-sidecar.mjs . && ardia-plugin build",
+    "check": "ardia-plugin check",
+    "pack": "node ../../packages/credential-provider/build-sidecar.mjs . && ardia-plugin pack",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@ardia-plugins/credential-provider": "workspace:*",
+    "@ardia/plugin-sdk": "^3.0.0"
+  },
+  "devDependencies": {
+    "@ardia-plugins/testing": "workspace:*",
+    "@ardia/plugin-cli": "^3.0.0",
+    "@types/node": "24.19.2",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3"
+  }
+}

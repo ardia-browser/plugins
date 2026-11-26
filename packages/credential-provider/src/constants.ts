@@ -1,0 +1,202 @@
+import type { SecretHandle, CredentialCapability, CredentialErrorCode, CredentialHandlerName, CredentialPasskeyVia, DeniedCommand, ProblemCode } from "./types";
+
+export const SECRET_HANDLE_PATTERN = "^(?:session|stored|h[1-9][0-9]{0,15})$";
+export const SNAPSHOT_PATTERN = "^[A-Za-z0-9_-]{1,64}$";
+
+export const CREDENTIAL_LIMITS = {
+  resultBytes: 1048576,
+  pageBytes: 983040,
+  listedItems: 50_000,
+  listPages: 1_000,
+  pageCursorLength: 256,
+  heldSnapshotMs: 60_000,
+  itemIdLength: 512,
+  itemTitleLength: 1024,
+  usernameLength: 1024,
+  passwordLength: 4096,
+  urlLength: 2048,
+  urlsPerItem: 64,
+  vaultNameLength: 256,
+  passkeysPerItem: 16,
+  passkeyNameLength: 256,
+  accountLength: 320,
+  detailLength: 240,
+  choices: 16,
+  choiceTitleLength: 60,
+  waitingCalls: 8,
+  runningVerbs: 4,
+  signInVerbs: 1,
+  verbParams: 16,
+  idSlotLength: 512,
+  enumValueLength: 64,
+  codeSlotPattern: "^[A-Za-z0-9]{1,64}$",
+  emailSlotLength: 320,
+  urlSlotLength: 2048,
+  stdinBytes: 983040,
+  stdinJsonDepth: 32,
+  defaultOutputBytes: 33554432,
+  mostOutputBytes: 167772160,
+  outputItemBytes: 1048576,
+  stderrBytes: 65536,
+  chunkBytes: 262144,
+  streamLineBytes: 16384,
+  retainedLines: 1000,
+  sidecarFrameBytes: 1048576,
+  replyQueue: 64,
+  replyQueueBytes: 201326592,
+  streamLinesPerSecond: 200,
+  handlesPerCall: 16,
+  secretBytes: 4096,
+  typedSecretLaunches: 3,
+  valueKeys: 16,
+  valueBytes: 1024,
+  ownerReasonLength: 60,
+} as const;
+
+export const CREDENTIAL_DEADLINES_MS = {
+  state: 45_000,
+  signIn: 180_000,
+  unlock: 120_000,
+  signOut: 30_000,
+  configure: 60_000,
+  list: 240_000,
+  reveal: 90_000,
+  save: 300_000,
+  edit: 300_000,
+  addTotp: 300_000,
+  "passkeys.list": 120_000,
+  "passkeys.get": 90_000,
+  "passkeys.save": 300_000,
+  link: 30_000,
+} as const;
+
+export const VERB_TIMEOUTS_MS = { default: 30_000, least: 1_000, most: 900_000, killGrace: 2_000, drainGrace: 2_000 } as const;
+
+export const DENIED_ENV_PATTERNS: readonly string[] = ["DYLD_*", "LD_*", "NODE_*", "*_PROXY", "SSL_*", "NODE_TLS_*", "HOME", "PATH", "TMPDIR", "XDG_*", "OP_CONNECT_*", "BITWARDENCLI_*"];
+
+export const HOST_ENV: readonly string[] = ["HOME", "USER", "LOGNAME", "TMPDIR", "PATH", "LANG", "http_proxy", "https_proxy", "no_proxy", "all_proxy", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE"];
+
+export const DENIED_COMMANDS: Readonly<Record<string, readonly DeniedCommand[]>> = {
+  op: [
+    { argv: ["run"] },
+    { argv: ["inject"] },
+    { argv: ["plugin"] },
+    { argv: ["read"], withFlags: ["--out-file", "-o"] },
+    { argv: ["document", "get"], withFlags: ["--out-file", "-o"] },
+    { argv: ["service-account"] },
+    { argv: ["connect"] },
+    { argv: ["events-api"] },
+    { argv: ["item", "share"] },
+    { argv: ["update"], withFlags: ["--directory"] },
+  ],
+  bw: [
+    { argv: ["serve"] },
+    { argv: ["send"] },
+    { argv: ["export"] },
+    { argv: ["encode"] },
+    { argv: ["get", "attachment"] },
+    { argv: ["import"] },
+    { argv: ["create", "attachment"], withFlags: ["--file"] },
+    { argv: ["receive"], withFlags: ["--output"] },
+  ],
+  "pass-cli": [{ argv: ["run"] }, { argv: ["inject"] }, { argv: ["ssh-agent"] }],
+};
+
+export const GLOBAL_FLAGS: Readonly<Record<string, readonly string[]>> = {
+  op: ["--account", "--config", "--encoding", "--format", "--iso-timestamps", "--no-color", "--session", "--cache", "--debug"],
+  bw: ["--nointeraction", "--raw", "--pretty", "--response", "--cleanexit", "--quiet", "--session"],
+  "pass-cli": ["--output", "--quiet", "--verbose"],
+};
+
+export const CREDENTIAL_HANDLERS: readonly CredentialHandlerName[] = ["state", "signIn", "unlock", "signOut", "configure", "list", "reveal", "save", "edit", "addTotp", "passkeys.list", "passkeys.get", "passkeys.save", "link"];
+
+export const REQUIRED_CREDENTIAL_HANDLERS: readonly CredentialHandlerName[] = ["state", "signIn", "unlock", "signOut", "list", "reveal"];
+
+export const CREDENTIAL_CAPABILITIES: readonly CredentialCapability[] = ["totp", "save", "edit", "addTotp", "passkeys", "selfHosted", "masterPassword", "touchID"];
+
+export const CREDENTIAL_PASSKEY_ROUTES: readonly CredentialPasskeyVia[] = ["system", "extension"];
+
+export const CAPABILITY_HANDLERS: Readonly<Record<CredentialCapability, readonly (readonly CredentialHandlerName[])[]>> = {
+  totp: [],
+  save: [["save"]],
+  edit: [["edit"]],
+  addTotp: [["addTotp"], ["edit"]],
+  passkeys: [["passkeys.get", "passkeys.save"]],
+  selfHosted: [["configure"]],
+  masterPassword: [],
+  touchID: [],
+};
+
+export const PROBLEM_CODES: readonly ProblemCode[] = [
+  "wrongPassword",
+  "wrongCredentials",
+  "wrongCode",
+  "badCode",
+  "badServer",
+  "chooseMethod",
+  "codeOrNewDevice",
+  "needsApiKey",
+  "organizationKey",
+  "notAccepted",
+  "unlockNext",
+  "signOutFirst",
+  "signInFirst",
+  "lockedSinceLastUnlock",
+  "stayedLocked",
+  "approvalTimedOut",
+  "appUnreachable",
+  "setupNeeded",
+  "sessionLock",
+  "extraPassword",
+  "finishInBrowser",
+  "didntStart",
+  "premiumNeeded",
+  "noVault",
+  "unknownVault",
+  "cantPrepare",
+  "savedNotReturned",
+  "incomplete",
+  "notTaken",
+  "unreadable",
+  "tooSlow",
+  "notLaunched",
+  "timedOut",
+  "overflowed",
+  "offline",
+  "unreachable",
+  "outdated",
+  "cancelled",
+  "failed",
+];
+
+export const CREDENTIAL_ERROR_CODES: readonly CredentialErrorCode[] = ["locked", "signedOut", "notFound", "unsupported", "failed"];
+
+export const CREDENTIALS_SERVICE = "credentials.provider";
+
+export const CREDENTIALS_CONTRACT = 1;
+
+export const SIDECAR_METHODS = {
+  run: "cli.run",
+  wait: "cli.wait",
+  status: "session.status",
+  restore: "session.restore",
+  offer: "session.offer",
+  adopt: "session.adopt",
+  open: "session.open",
+  drop: "session.drop",
+  cancelSignIn: "signIn.cancel",
+} as const;
+
+export const SESSION_HANDLE: SecretHandle = Object.freeze({ $secret: "session" });
+
+export const STORED_HANDLE: SecretHandle = Object.freeze({ $secret: "stored" });
+
+export const STORED_SESSION_KEY = "credentials.session";
+
+export const PREFERENCES_KEY = "credentials.preferences";
+
+export const SCRATCH_KEY = "credentials.scratch";
+
+export const STREAM_WAIT_MS = 1_000;
+
+export const PROGRAM_FOLDERS: readonly string[] = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"];

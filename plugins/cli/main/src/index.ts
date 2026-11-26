@@ -1,6 +1,4 @@
-import { definePlugin } from "@ardia/plugin-sdk";
-import { CommandLineStatus } from "./status";
+import { ardia, definePlugin } from "@ardia/plugin-sdk";
+import { createPlugin } from "./plugin";
 
-void definePlugin({
-  views: { status: CommandLineStatus },
-});
+void definePlugin(createPlugin(ardia));

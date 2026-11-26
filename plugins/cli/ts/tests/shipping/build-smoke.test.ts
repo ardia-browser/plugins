@@ -65,7 +65,7 @@ describe("plugins/cli/build.sh", () => {
     "ARDIA_SIGN_CMD signs the folder both tarballs are packed from, and a failing one packs nothing",
     () => {
       const platform = process.platform === "darwin" ? "macos-arm64" : "linux-x64";
-      const names = [`ardia-cli-7.7.7-${platform}.tar.gz`, `cli-plugin-7.7.7-${platform}.tar.gz`];
+      const names = [`ardia-cli-7.7.7-${platform}.tar.gz`, `cli-7.7.7-${platform}.tar.gz`];
       const dir = scratch();
       try {
         const sign = path.join(dir, "sign.sh");
@@ -74,8 +74,8 @@ describe("plugins/cli/build.sh", () => {
           [
             "#!/bin/sh",
             "set -eu",
-            '[ -f "$1/plugin.json" ] && [ -f "$1/dist/main.js" ] || { echo "the folder isn\'t complete" >&2; exit 1; }',
-            'for packed in "$(dirname "$1")"/cli-plugin-*; do [ ! -e "$packed" ] || { echo "packed before signing" >&2; exit 1; }; done',
+            '[ -f "$1/plugin.json" ] && [ -f "$1/dist/index.js" ] || { echo "the folder isn\'t complete" >&2; exit 1; }',
+            'for packed in "$(dirname "$1")"/cli-*.tar.gz; do [ ! -e "$packed" ] || { echo "packed before signing" >&2; exit 1; }; done',
             "for macho in bin/ardia bin/ardia-libc.so libexec/esbuild; do printf '%s\\n' \"$macho\" >>\"$(dirname \"$1/$macho\")/signed-by-test\"; done",
             "",
           ].join("\n"),
@@ -126,10 +126,10 @@ describe("plugins/cli/build.sh", () => {
 
 describe("release workflows", () => {
   test("every release job that runs build.sh sets up the pinned bun first", () => {
-    const pinned = /uses: (oven-sh\/setup-bun@[0-9a-f]{40})\n\s+with:\n\s+bun-version: 1\.3\.14\n/.exec(fs.readFileSync(path.join(WORKFLOWS, "cli.yml"), "utf8"));
+    const pinned = /uses: (oven-sh\/setup-bun@[0-9a-f]{40})\n\s+with:\n\s+bun-version: 1\.3\.14\n/.exec(fs.readFileSync(path.join(WORKFLOWS, "ci.yml"), "utf8"));
     expect(pinned).not.toBeNull();
     const action = (pinned as RegExpExecArray)[1] as string;
-    const release = fs.readFileSync(path.join(WORKFLOWS, "cli-release.yml"), "utf8");
+    const release = fs.readFileSync(path.join(WORKFLOWS, "release-plugin.yml"), "utf8");
     const jobs = (release.split("\njobs:\n")[1] ?? "").split(/\n {2}(?=[a-z][a-z-]*:\n)/);
     const building = jobs.filter((job) => job.includes("build.sh"));
     expect(building.length).toBeGreaterThan(0);

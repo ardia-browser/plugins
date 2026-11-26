@@ -2759,10 +2759,11 @@ and must be the host's, since the build runs what it made. It holds three files:
 
 plus an empty `.leases/` for `install.sh`. It needs Bun 1.3.14 and a C compiler (`xcrun clang`, or `cc` on Linux).
 
-`plugins/cli/build.sh <out dir>` builds the plugin folder Ardia bundles (`<out dir>/cli`: the tarball's tree without
-`.leases`, with `plugin.json` and, once `plugins/cli/main` exists, the manifest-v2 `dist/main.js` built from it), checks
-it has no links (Ardia refuses them in a plugin's programs) and that `bin/ardia --version` says the version, and packs
-it as `cli-plugin-<version>-<platform>.tar.gz` beside the tarball, each with its `.sha256`.
+`plugins/cli/build.sh <out dir>` builds the plugin folder (`<out dir>/cli`: the tarball's tree without `.leases`, with
+the manifest 3 `plugin.json` and `dist/index.js` built from `plugins/cli/main` with `@ardia/plugin-sdk` 3), checks it
+has no links (Ardia refuses them in a plugin's programs) and that `bin/ardia --version` says the version, and packs it
+as the registry asset `cli-<version>-<platform>.tar.gz` (`cli/` at its root, checked by `ardia-plugin check` and packed
+deterministically by `ardia-plugin pack`) beside the tarball, each with its `.sha256`.
 
 Sizes for the macOS build (TypeScript entry of 2026-11-20): `bin/ardia` 63.5 MB, `ardia-libc.so` 54 KB, esbuild
 10.6 MB; the folder is 74 MB, the plugin tarball 28.3 MB. 0.4.0 with CPython was 42.6 MB and 15.2 MB: Bun's runtime is
@@ -2777,13 +2778,17 @@ its interpreter, `SharedArrayBuffer` is undefined (the code never uses it or `At
 ID as `bin/ardia`, or library validation refuses it. The macOS tarball for hand installs stays unsigned, as it always
 was (`install.sh` clears its quarantine).
 
-**Releasing** (`.github/workflows/cli-release.yml`): bump `version` in `plugin.json`, merge, and push the tag
-`cli-v<version>` (the workflow refuses a tag that isn't `plugin.json`'s version). It builds with Bun on macOS (arm64)
-and Linux (x86_64), checks each build says its version, carries the addon and esbuild, has no `python/` and no links,
-and publishes the GitHub release `cli-v<version>` with `cli-plugin-<version>-<platform>.tar.gz`,
-`ardia-cli-<version>-<platform>.tar.gz`, `install.sh` and a `.sha256` for each. Every pull request runs the same build
-as a dry run, and `workflow_dispatch` runs it with `dry_run` (default on). It needs no secrets beyond the workflow's own
-token.
+**Releasing** (`.github/workflows/release-plugin.yml`, the repository's one release workflow): bump `version` in
+`plugin.json`, merge, and push the tag `cli-v<version>` (`scripts/release-info.mjs` refuses a tag that isn't
+`plugin.json`'s version). It builds with Bun on macOS (arm64) and Linux (x86_64), checks each build says its version,
+carries the addon and esbuild, has no `python/` and no links, co-signs each archive with
+`ARDIA_OFFICIAL_NATIVE_ED25519_PRIVATE_KEY` (`scripts/official-sig.mjs`; a native plugin isn't released without it),
+and publishes the GitHub release `cli-v<version>` with exactly the archives `plugin.json`'s `release.assets` names,
+`cli-<version>-<platform>.tar.gz`, each with its `.sha256` and `.official-sig`, plus `install.sh`. The registry
+indexes a release only when its `.tar.gz` assets are exactly the declared ones, so the command's own
+`ardia-cli-<version>-<platform>.tar.gz` stays a workflow artifact; `install.sh` downloads the registry asset. Pull
+requests that touch the release scripts run the same build as a dry run, and `workflow_dispatch` runs it with
+`dry_run` (default on).
 
 Then in ardia: `scripts/release/official-plugins.py pin cli <version>` writes the release's SHA-256s into
 `apps/browser/official-plugins.json`, and the next Ardia release bundles it.
@@ -2842,16 +2847,17 @@ at; `ts/tests/oracle-fixtures.ts` loads them): argparse on macOS and Linux, the 
 `read --http`'s charset and network cases, and the rest. `bun run typecheck` and `bun run typecheck:harness` type-check
 the program and the browse harness.
 
-CI (`.github/workflows/cli.yml`) runs on every pull request, where `route` skips the rest when nothing under
-`plugins/cli` changed but its docs and `bench`, and on pushes to `main` that touch `plugins/cli`:
+CI (`.github/workflows/ci.yml`, shared by every plugin) runs on every pull request, where `route`
+(`scripts/plugins.mjs list --changed`) skips the CLI jobs when nothing under `plugins/cli` changed but its docs and
+`bench`, and on pushes to `main`:
 
 | Job | What it runs |
 | --- | --- |
 | `route` | decides which jobs run from the changed paths |
-| `typescript`, macOS 15 and Ubuntu 24.04 | `tsrs` type checks (the program and `tests/m3`), `scripts/build.sh` with the addon checked against Node's headers, the plugin packaged as the release does and checked by `.github/release/check-build.sh`, `ts/dist/ardia-ts plugins check` on `plugin.json`, and `bun run test` |
+| `typescript`, macOS 15 and Ubuntu 24.04 | `tsrs` type checks (the program and `tests/m3`), `scripts/build.sh` with the addon checked against Node's headers, the plugin packaged as the release does and checked by `.github/release/check-build.sh` and `ardia-plugin check` (`scripts/plugins.mjs check cli --cli-out`), and `bun run test` |
 | `parity`, macOS 15 and Ubuntu 24.04 | `scripts/build.sh`, then `bun run test:parity` (once `ts/tests/parity` exists) |
 | `schema` | `ts/assets/plugin.schema.json` against ardia `main`'s `docs/plugin.schema.json` |
-| `main` | once `plugins/cli/main/package.json` exists, `plugins/cli/main` (manifest v2): `npm ci`, typecheck, build and test |
+| `cli-main` | `plugins/cli/main` (manifest 3, `@ardia/plugin-sdk` 3) from the pnpm workspace: typecheck, build, test and `ardia-plugin check` |
 | `done` | fails unless every job that should have run passed and the rest were skipped |
 
 ### Parity

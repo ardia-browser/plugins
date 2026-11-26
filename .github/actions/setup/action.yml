@@ -1,0 +1,50 @@
+name: Set up the plugins workspace
+description: Node, pnpm and the workspace's packages, with @ardia/plugin-sdk and @ardia/plugin-cli from npm or from a GitHub release's tarballs
+
+inputs:
+  ardia-packages:
+    description: A GitHub release as owner/repo@tag whose assets hold ardia-plugin-sdk-*.tgz and ardia-plugin-cli-*.tgz; empty takes them from npm
+    required: false
+    default: ""
+  install:
+    description: Run pnpm install
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24.22.2
+    - name: pnpm, at the version package.json pins
+      shell: bash
+      run: |
+        set -euo pipefail
+        version=$(node -p 'require("./package.json").packageManager.split("@")[1]')
+        npm install --global --no-audit --no-fund "pnpm@$version" >/dev/null
+        pnpm --version
+    - name: Local @ardia packages
+      if: inputs.ardia-packages != ''
+      shell: bash
+      env:
+        RELEASE: ${{ inputs.ardia-packages }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        [[ "$RELEASE" =~ ^[A-Za-z0-9-]+/[A-Za-z0-9._-]+@[A-Za-z0-9._/+-]+$ ]] || { echo "::error::ardia-packages must be owner/repo@tag, got $RELEASE"; exit 1; }
+        dir="$RUNNER_TEMP/ardia-packages"
+        mkdir -p "$dir"
+        gh release download "${RELEASE#*@}" -R "${RELEASE%%@*}" -D "$dir" -p 'ardia-plugin-sdk-*.tgz' -p 'ardia-plugin-cli-*.tgz' --clobber
+        node scripts/ardia-packages.mjs "$dir"
+        echo "- @ardia/plugin-sdk and @ardia/plugin-cli from $RELEASE" >> "$GITHUB_STEP_SUMMARY"
+    - name: pnpm install
+      if: inputs.install == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -f pnpm-lock.yaml ] && [ ! -d .ardia-packages ]; then
+          pnpm install --frozen-lockfile
+        else
+          pnpm install --no-frozen-lockfile --no-prefer-frozen-lockfile
+        fi

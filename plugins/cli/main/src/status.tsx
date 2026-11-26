@@ -1,4 +1,4 @@
-import { Action, ActionPanel, Detail, ardia, useEffect, useState, type DetailMetadata, type ProgramsStatus, type ViewProps } from "@ardia/plugin-sdk";
+import { Action, ActionPanel, Detail, useEffect, useState, type Ardia, type DetailMetadata, type ProgramsStatus, type ViewProps } from "@ardia/plugin-sdk";
 
 export const PROGRAM = "ardia";
 export const EXAMPLE = "ardia tabs";
@@ -53,83 +53,84 @@ export function statusMetadata(status: ProgramsStatus): DetailMetadata[] {
   ];
 }
 
-export function CommandLineStatus(_props: ViewProps) {
-  const [shown, setShown] = useState<Shown>({ kind: "loading" });
-  const [retrying, setRetrying] = useState(false);
-  const [polls, setPolls] = useState(0);
-  const [requests] = useState(() => ({ latest: 0 }));
+export const statusView = (ardia: Ardia) =>
+  function CommandLineStatus(_props: ViewProps) {
+    const [shown, setShown] = useState<Shown>({ kind: "loading" });
+    const [retrying, setRetrying] = useState(false);
+    const [polls, setPolls] = useState(0);
+    const [requests] = useState(() => ({ latest: 0 }));
 
-  const load = async (problem?: string) => {
-    const mine = ++requests.latest;
-    try {
-      const status = await ardia.programs.status();
-      if (mine === requests.latest) setShown({ kind: "status", status, problem });
-    } catch (error) {
-      if (mine === requests.latest) setShown({ kind: "unreachable", problem: messageOf(error) });
+    const load = async (problem?: string) => {
+      const mine = ++requests.latest;
+      try {
+        const status = await ardia.programs.status();
+        if (mine === requests.latest) setShown({ kind: "status", status, problem });
+      } catch (error) {
+        if (mine === requests.latest) setShown({ kind: "unreachable", problem: messageOf(error) });
+      }
+    };
+
+    useEffect(() => {
+      void load();
+    }, []);
+
+    const linking = shown.kind === "status" && shown.status.state === "linking";
+
+    useEffect(() => {
+      if (!linking || polls >= LINKING_POLL_LIMIT) return;
+      const timers = globalThis as HostTimers;
+      if (typeof timers.setTimeout !== "function") return;
+      const timer = timers.setTimeout(() => {
+        void load().finally(() => setPolls((count) => count + 1));
+      }, LINKING_POLL_MS);
+      return () => timers.clearTimeout?.(timer);
+    }, [linking, polls]);
+
+    const tryAgain = async () => {
+      if (retrying) return;
+      setRetrying(true);
+      setPolls(0);
+      try {
+        await ardia.programs.relink();
+        await load();
+      } catch (error) {
+        await load(messageOf(error));
+      } finally {
+        setRetrying(false);
+      }
+    };
+
+    if (shown.kind === "loading") return <Detail isLoading markdown={`# \`${PROGRAM}\``} />;
+
+    if (shown.kind === "unreachable") {
+      return (
+        <Detail
+          markdown={[`# Couldn't ask Ardia about \`${PROGRAM}\``, "", shown.problem].join("\n")}
+          actions={
+            <ActionPanel>
+              <Action title="Check Again" icon="arrow.clockwise" onAction={() => load()} />
+              <Action.CopyToClipboard title="Copy Example" content={EXAMPLE} />
+            </ActionPanel>
+          }
+        />
+      );
     }
-  };
 
-  useEffect(() => {
-    void load();
-  }, []);
-
-  const linking = shown.kind === "status" && shown.status.state === "linking";
-
-  useEffect(() => {
-    if (!linking || polls >= LINKING_POLL_LIMIT) return;
-    const timers = globalThis as HostTimers;
-    if (typeof timers.setTimeout !== "function") return;
-    const timer = timers.setTimeout(() => {
-      void load().finally(() => setPolls((count) => count + 1));
-    }, LINKING_POLL_MS);
-    return () => timers.clearTimeout?.(timer);
-  }, [linking, polls]);
-
-  const tryAgain = async () => {
-    if (retrying) return;
-    setRetrying(true);
-    setPolls(0);
-    try {
-      await ardia.programs.relink();
-      await load();
-    } catch (error) {
-      await load(messageOf(error));
-    } finally {
-      setRetrying(false);
-    }
-  };
-
-  if (shown.kind === "loading") return <Detail isLoading markdown={`# \`${PROGRAM}\``} />;
-
-  if (shown.kind === "unreachable") {
+    const { status, problem } = shown;
+    const path = linkedPath(status);
     return (
       <Detail
-        markdown={[`# Couldn't ask Ardia about \`${PROGRAM}\``, "", shown.problem].join("\n")}
+        isLoading={retrying || linking}
+        markdown={statusMarkdown(status, problem)}
+        metadata={statusMetadata(status)}
         actions={
           <ActionPanel>
-            <Action title="Check Again" icon="arrow.clockwise" onAction={() => load()} />
+            {canRetry(status) ? <Action title="Try Again" icon="arrow.clockwise" onAction={tryAgain} /> : null}
             <Action.CopyToClipboard title="Copy Example" content={EXAMPLE} />
+            {isLinked(status) && path ? <Action.CopyToClipboard title="Copy Location" content={path} /> : null}
+            {canRetry(status) ? null : <Action title="Check Again" icon="arrow.clockwise" onAction={() => load()} />}
           </ActionPanel>
         }
       />
     );
   }
-
-  const { status, problem } = shown;
-  const path = linkedPath(status);
-  return (
-    <Detail
-      isLoading={retrying || linking}
-      markdown={statusMarkdown(status, problem)}
-      metadata={statusMetadata(status)}
-      actions={
-        <ActionPanel>
-          {canRetry(status) ? <Action title="Try Again" icon="arrow.clockwise" onAction={tryAgain} /> : null}
-          <Action.CopyToClipboard title="Copy Example" content={EXAMPLE} />
-          {isLinked(status) && path ? <Action.CopyToClipboard title="Copy Location" content={path} /> : null}
-          {canRetry(status) ? null : <Action title="Check Again" icon="arrow.clockwise" onAction={() => load()} />}
-        </ActionPanel>
-      }
-    />
-  );
-}

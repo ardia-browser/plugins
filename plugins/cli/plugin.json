@@ -1,12 +1,18 @@
 {
-  "$schema": "https://raw.githubusercontent.com/ardia-browser/ardia/main/docs/plugin.schema.json",
-  "manifest": 2,
-  "name": "cli",
-  "title": "Command Line",
+  "$schema": "https://raw.githubusercontent.com/ardia-browser/ardia/main/docs/plugin.v3.schema.json",
+  "manifest": 3,
+  "id": "@ardia/cli",
+  "name": "Command Line",
   "description": "Drive Ardia from your terminal or an agent.",
-  "version": "0.7.0",
-  "requires": "0.2.48",
+  "version": "0.8.0",
   "icon": "terminal.fill",
+  "license": "Apache-2.0",
+  "repository": "https://github.com/ardia-browser/plugins",
+  "homepage": "https://github.com/ardia-browser/plugins/tree/main/plugins/cli",
+  "categories": [
+    "developer-tools",
+    "automation"
+  ],
   "keywords": [
     "command line",
     "terminal",
@@ -19,9 +25,20 @@
     "ardia command",
     "coding agent"
   ],
-  "alwaysOn": true,
-  "official": true,
-  "main": "dist/main.js",
+  "engines": {
+    "ardia": ">=0.3.0",
+    "sdk": "^3.0.0"
+  },
+  "scope": "global",
+  "release": {
+    "github": "ardia-browser/plugins",
+    "tagPrefix": "cli-v",
+    "assets": {
+      "macos-arm64": "cli-{version}-macos-arm64.tar.gz",
+      "linux-x64": "cli-{version}-linux-x64.tar.gz"
+    }
+  },
+  "main": "dist/index.js",
   "permissions": {
     "control": true
   },

@@ -1,13 +1,19 @@
 {
-  "name": "ardia-cli-plugin-main",
+  "name": "@ardia-plugins/cli-main",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "typecheck": "tsc --noEmit",
-    "test": "node --test test/*.test.mjs"
+    "typecheck": "tsc --noEmit -p .",
+    "test": "node build.mjs && node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@ardia/plugin-sdk": "^3.0.0"
   },
   "devDependencies": {
+    "@ardia-plugins/testing": "workspace:*",
+    "@ardia/plugin-cli": "^3.0.0",
     "esbuild": "0.28.2",
     "typescript": "5.9.3"
   }
