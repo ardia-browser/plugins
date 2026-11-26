@@ -6,7 +6,7 @@ import type { EngineResult } from "./engine.ts";
 
 const PER_CASE_MS = 1000;
 const SWITCH_ROWS = new Set(["browse-daemon"]);
-const TYPESCRIPT_ONLY_ROWS = new Set(["skills status"]);
+const TYPESCRIPT_ONLY_ROWS = new Set(["skills status", "triage", "triage file"]);
 const GROUP_ROWS = new Set(["browse"]);
 const ARGPARSE_ROW = "argparse";
 

@@ -44,6 +44,7 @@ const COMMANDS: [string, string][] = [
   ["methods", "list the methods ardia call can send"],
   ["plugins", "install, list and manage plugins"],
   ["feedback", "report a problem or idea to Ardia's developer (agents welcome)"],
+  ["triage", "start your coding agent to look into a problem with Ardia and file the report"],
   ["star", "star the Ardia repo on GitHub, only after the user says yes"],
 ];
 

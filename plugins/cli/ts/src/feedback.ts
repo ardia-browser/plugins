@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { openAsBlob, readSync, realpathSync, statSync } from "node:fs";
+import { openSync, readSync, realpathSync, statSync } from "node:fs";
 import { isatty } from "node:tty";
 import { now } from "./clock.ts";
 import { dataRoot } from "./control.ts";
@@ -49,7 +49,7 @@ const CALLER_FALLBACK = "unknown";
 type Kind = [string, number, string];
 type Attachment = { path: string; name: string; bytes: number; type: string };
 type Outcome = { sent: boolean; reason: string; reference?: string; name?: string; issueUrl?: string };
-export type FeedbackArgs = { text: string[]; title: string | undefined; kind: string; attach: string[]; about: string | undefined; dataDir: string | undefined };
+export type FeedbackArgs = { text: string[]; title: string | undefined; kind: string; attach: string[]; about: string | undefined; dataDir: string | undefined; via?: string; fingerprint?: string };
 
 class Refused extends Error {}
 
@@ -137,6 +137,17 @@ function attachmentKind(path: string, counts: Map<string, number>): Kind {
   const type = Object.hasOwn(OTHER_TYPES, extension) ? OTHER_TYPES[extension] : undefined;
   if (type === undefined) throw new Refused(`${name}: can't attach this kind of file (see ardia feedback --help for the kinds)`);
   return [`attachment-${bump("other")}.${extension}`, OTHER_FILE_BYTES, type];
+}
+
+export const FEEDBACK_DESCRIPTION_LIMIT = MAX_DESCRIPTION;
+export const FEEDBACK_ATTACHMENT_LIMIT = MAX_ATTACHMENTS;
+export const FEEDBACK_FILE_BYTES = OTHER_FILE_BYTES;
+
+export function attachableName(path: string): boolean {
+  const lower = baseName(path).toLowerCase();
+  if (lower.endsWith(".ips")) return true;
+  const extension = lower.includes(".") ? lower.slice(lower.lastIndexOf(".") + 1) : "";
+  return Object.hasOwn(OTHER_TYPES, extension);
 }
 
 function attachments(files: string[]): Attachment[] {
@@ -248,6 +259,7 @@ function body(args: FeedbackArgs, title: string, description: string, truncated:
         ["recent_commands", home !== undefined ? recentCommands(home) : []],
         ["description_truncated", truncated],
         ["environment", environment],
+        ...(args.via === undefined ? [] : ([["via", args.via]] as [string, Value][])),
       ]),
     ],
     ["attachments", found.map((item) => object([["name", item.name], ["bytes", BigInt(item.bytes)], ["type", item.type]]))],
@@ -329,7 +341,15 @@ function postJson(url: string, payload: JsonObject, token?: string): Promise<[nu
 
 async function upload(url: string, item: Attachment, token: string): Promise<[number, string]> {
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": item.type, "Content-Length": String(item.bytes) };
-  const [status, , failure] = await request("PUT", `${url}/files/${encodeURIComponent(item.name)}`, await openAsBlob(item.path), headers, UPLOAD_TIMEOUT_MS);
+  const fd = openSync(item.path, O_RDONLY);
+  let bytes: Buffer;
+  try {
+    bytes = readFd(fd, item.bytes + 1);
+  } finally {
+    close(fd);
+  }
+  if (bytes.length !== item.bytes) return [0, "the file changed while it was being sent"];
+  const [status, , failure] = await request("PUT", `${url}/files/${encodeURIComponent(item.name)}`, bytes, headers, UPLOAD_TIMEOUT_MS);
   return [status, failure];
 }
 
@@ -441,7 +461,12 @@ function utcStamp(): string {
 }
 
 export async function runFeedback(args: FeedbackArgs): Promise<Said> {
-  const text = readText(args.text);
+  return (await sendFeedback(args, readText(args.text))).said;
+}
+
+export type FeedbackSent = { said: Said; reference?: string };
+
+export async function sendFeedback(args: FeedbackArgs, text: string): Promise<FeedbackSent> {
   let title: string;
   let description: string;
   let truncated: boolean;
@@ -451,7 +476,7 @@ export async function runFeedback(args: FeedbackArgs): Promise<Said> {
     [description, truncated] = cleanDescription(text);
     found = attachments(args.attach);
   } catch (error) {
-    if (error instanceof Refused) return { status: 2, out: [], err: [`ardia feedback: ${error.message}`] };
+    if (error instanceof Refused) return { said: { status: 2, out: [], err: [`ardia feedback: ${error.message}`] } };
     throw error;
   }
   const home = recordingHome();
@@ -474,12 +499,12 @@ export async function runFeedback(args: FeedbackArgs): Promise<Said> {
   ]);
   const [base, urlProblem] = feedbackUrl();
   const reason = blockedReason() || urlProblem;
-  if (reason || base === undefined) return keep(home, entry, reason);
-  const digest = createHash("sha256").update(utf8(`${args.kind}\0${title}\0${description}`)).digest("hex").slice(0, 16);
+  if (reason || base === undefined) return { said: keep(home, entry, reason) };
+  const digest = createHash("sha256").update(utf8(`${args.kind}\0${title}\0${description}${args.fingerprint === undefined ? "" : `\0${args.fingerprint}`}`)).digest("hex").slice(0, 16);
   const slot = home !== undefined ? takeFeedbackSlot(home, digest, DAILY_LIMIT, WINDOW_S, now()) : "ok";
-  if (slot === "duplicate") return { status: 0, out: ["Not sent again: the same report already went out in the last day."], err: [] };
-  if (slot === "limited") return keep(home, entry, `${DAILY_LIMIT} reports already went out in the last day`);
-  if (slot !== "ok") return keep(home, entry, "another ardia was updating the report count (try again)");
+  if (slot === "duplicate") return { said: { status: 0, out: ["Not sent again: the same report already went out in the last day."], err: [] } };
+  if (slot === "limited") return { said: keep(home, entry, `${DAILY_LIMIT} reports already went out in the last day`) };
+  if (slot !== "ok") return { said: keep(home, entry, "another ardia was updating the report count (try again)") };
   let outcome: Outcome;
   try {
     outcome = await submit(base, payload, found);
@@ -490,11 +515,12 @@ export async function runFeedback(args: FeedbackArgs): Promise<Said> {
     if (home !== undefined) releaseFeedbackSlot(home, digest);
     const kept = new Map(entry);
     if (outcome.reference) kept.set("reference", outcome.reference);
-    return keep(home, kept, outcome.reason);
+    return { said: keep(home, kept, outcome.reason) };
   }
   const out = [`Sent. Reference ${outcome.reference}.`];
   out.push(outcome.issueUrl ? `Issue: ${outcome.issueUrl}` : "No public issue was opened for it; the developer still has it.");
   if (outcome.name) out.push(`You appear to us as ${outcome.name}${sharedId !== undefined ? "" : " (a one-time id: sharing is off)"}.`);
-  return { status: 0, out, err: [] };
+  const said: Said = { status: 0, out, err: [] };
+  return outcome.reference === undefined ? { said } : { said, reference: outcome.reference };
 }
 

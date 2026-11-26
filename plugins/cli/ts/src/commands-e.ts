@@ -25,6 +25,30 @@ export const FEEDBACK_SPEC: CommandSpec = {
   positional: "text",
 };
 
+export const TRIAGE_SPEC: CommandSpec = {
+  options: [
+    { name: "--agent", dest: "agent", kind: "value" },
+    { name: "--model", dest: "model", kind: "value" },
+    { name: "--yes", dest: "yes", kind: "flag" },
+    { name: "--reset-consent", dest: "reset_consent", kind: "flag" },
+    { name: "--print", dest: "print", kind: "flag" },
+    { name: "--data-dir", dest: "data_dir", kind: "value" },
+  ],
+  positional: "what",
+};
+
+export const TRIAGE_FILE_SPEC: CommandSpec = {
+  options: [
+    { name: "--title", dest: "title", kind: "value" },
+    { name: "--body", dest: "body", kind: "value" },
+    { name: "--post", dest: "post", kind: "value" },
+    { name: "--via", dest: "via", kind: "value" },
+    { name: "--attach-evidence", dest: "attach_evidence", kind: "flag" },
+    { name: "--comment-on", dest: "comment_on", kind: "value" },
+    { name: "--session", dest: "session", kind: "value" },
+  ],
+};
+
 function text(parsed: Parsed, key: string): string | undefined {
   const value = parsed.get(key);
   return typeof value === "string" ? value : undefined;
@@ -40,11 +64,10 @@ function jsonRequested(argv: readonly string[]): boolean {
   return (end < 0 ? argv : argv.slice(0, end)).includes("--json");
 }
 
-type Entry = {
-  path: string[];
-  spec: CommandSpec;
-  run: (parsed: Parsed, call: Call) => Promise<Said>;
-};
+type Entry = { path: string[]; spec: CommandSpec } & (
+  | { run: (parsed: Parsed, call: Call) => Promise<Said> }
+  | { raw: (tokens: string[], call: Call) => Promise<Said> }
+);
 
 const ENTRIES: Entry[] = [
   {
@@ -173,6 +196,19 @@ function browsingEntry(command: "pinned" | "history", spec: CommandSpec): Entry 
 
 ENTRIES.push(browsingEntry("pinned", PINNED_SPEC), browsingEntry("history", HISTORY_SPEC));
 
+ENTRIES.push(
+  {
+    path: ["triage", "file"],
+    spec: TRIAGE_FILE_SPEC,
+    raw: async (tokens, call) => (await import("./triage-cli.ts")).runTriageFileCommand(tokens, call),
+  },
+  {
+    path: ["triage"],
+    spec: TRIAGE_SPEC,
+    raw: async (tokens, call) => (await import("./triage-cli.ts")).runTriageCommand(tokens, call),
+  },
+);
+
 ENTRIES.push({
   path: ["star"],
   spec: { options: [{ name: "--data-dir", dest: "data_dir", kind: "value" }] },
@@ -208,6 +244,10 @@ export function commandRoute(given: readonly string[]): CommandRoute | undefined
     if (arranged.kind === "usage") {
       if (arranged.message.endsWith("needs a value")) return undefined;
       return { ...named, usage: arranged.message };
+    }
+    if ("raw" in entry) {
+      const tokens = [...arranged.hoisted, ...arranged.rest];
+      return { ...named, run: (call: Call) => entry.raw(tokens, call) };
     }
     const parsed = parseStrict([...arranged.hoisted, ...arranged.rest], entry.spec);
     if (parsed === undefined) return undefined;
