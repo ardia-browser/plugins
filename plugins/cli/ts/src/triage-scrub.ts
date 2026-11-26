@@ -11,6 +11,13 @@ const SCHEMELESS_URL = new RegExp(String.raw`(?<![\w:/])//((?:[^\s/?#<>"'` + "`"
 const LONG_RUN = /[A-Za-z0-9._%+~\/=-]{512,}[^\s<>"'`]*/g;
 export const LONG_PLACEHOLDER = "<removed>";
 const REVERSED_NAME = /^(?:com|org|net|io|dev|app|co|me)\./i;
+const WEB_ENDINGS: readonly string[] = [
+  "com", "org", "net", "edu", "gov", "mil", "int", "info", "biz", "name", "dev", "app", "page", "site", "online", "tech", "cloud", "xyz", "top", "shop",
+  "blog", "live", "news", "work", "world", "email", "link", "click", "store", "design", "studio", "agency", "team", "tools", "software", "systems",
+  "network", "digital", "media", "social", "chat", "wiki", "zone", "space", "pro", "mobi", "travel", "health", "bank", "finance", "money", "legal",
+  "care", "clinic", "school", "academy", "games", "video", "music", "photos", "art", "community", "group", "company", "solutions", "services", "support",
+  "help", "docs", "codes", "run", "sh", "test", "example", "local", "internal", "lan", "home", "corp", "localhost",
+];
 const FILE_ENDINGS: readonly string[] = [
   "framework", "dylib", "bundle", "xpc", "json", "jsonl", "tsx", "jsx", "ts", "js", "mjs", "cjs", "cpp", "hpp", "html", "css", "log", "txt", "lock", "yml",
   "yaml", "toml", "plist", "ips", "png", "jpg", "gif", "gz", "tar", "kt", "rb", "go", "php", "swift", "mm",
@@ -71,7 +78,9 @@ export function hostOnlyUrls(text: string): [string, number] {
 function looksLikeFile(host: string, rest: string): boolean {
   if (/:\d+$/.test(host) || rest.includes("?")) return false;
   const name = host.toLowerCase();
-  return REVERSED_NAME.test(name) || FILE_ENDINGS.includes(name.slice(name.lastIndexOf(".") + 1));
+  const ending = name.slice(name.lastIndexOf(".") + 1);
+  if (FILE_ENDINGS.includes(ending)) return true;
+  return REVERSED_NAME.test(name) && ending.length > 2 && !WEB_ENDINGS.includes(ending);
 }
 
 export function bareUrlPaths(text: string): [string, number] {

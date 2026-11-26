@@ -1182,6 +1182,12 @@ test("triage scrub cuts addresses with a port, an IP or no scheme at all, and le
     ["192.0.2.8/private/page", "192.0.2.8/<path>"],
     ["localhost:3000/admin/users", "localhost:3000/<path>"],
     ["com.ardia.browser/AppDelegate.swift:42", "com.ardia.browser/AppDelegate.swift:42"],
+    ["org.chromium.Chromium.helper/Contents/MacOS/helper", "org.chromium.Chromium.helper/Contents/MacOS/helper"],
+    ["app.example.org/inbox/8812", "app.example.org/<path>"],
+    ["app.example.org/inbox/8812?folder=medical", "app.example.org/<path>"],
+    ["dev.example.to/someone/a-private-draft", "dev.example.to/<path>"],
+    ["me.example.health/records/2291", "me.example.health/<path>"],
+    ["io.example.uk/files/tax", "io.example.uk/<path>"],
     ["at ArdiaCore.framework/Versions/A/ArdiaCore + 1234", "at ArdiaCore.framework/Versions/A/ArdiaCore + 1234"],
     ["engine/ardiacore/src/ac_window_host.mm:120 in node_modules/foo/index.js", "engine/ardiacore/src/ac_window_host.mm:120 in node_modules/foo/index.js"],
     ["version 0.2.48-nightly.3 and 3/4", "version 0.2.48-nightly.3 and 3/4"],
@@ -1318,6 +1324,23 @@ test("an address after // loses its login whatever the host, and a long run take
   const counted = triageScrub(`${"=".repeat(600)} heading`).removed;
   assert.equal(counted.get("long unbroken runs"), 1);
   assert.equal(counted.get("secrets"), 0);
+});
+
+test("an agent found through a relative PATH folder is started and printed by its full path", async () => {
+  const box = sandbox();
+  try {
+    standIn(box, "claude");
+    const relative = { PATH: `${path.relative(box.root, box.bin)}:${box.tools}` };
+    const printed = await run(box, ["triage", "--yes", "--print", "--agent", "claude"], relative);
+    assert.equal(printed.status, 0, printed.err);
+    const line = printed.out.split("\n").find((text) => text.includes("ARDIA_TRIAGE=1")) as string;
+    assert.ok(line.includes(` ${box.bin}/claude --permission-mode `), line);
+    const launched = await run(box, ["triage", "--yes", "--agent", "claude"], relative);
+    assert.equal(launched.status, 0, launched.err);
+    assert.equal(fs.readFileSync(path.join(box.record, "claude.0.cwd"), "utf8").trim().startsWith(path.join(box.cli, "triage")), true);
+  } finally {
+    cleanup(box);
+  }
 });
 
 test("the printed command is quoted for a shell and carries the agent's ask-first settings", async () => {

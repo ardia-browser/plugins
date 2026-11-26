@@ -63,16 +63,25 @@ function say(text: string): void {
   writeAll(1, `${text}\n`);
 }
 
-function onPath(program: string): string | undefined {
-  for (const folder of (env("PATH") ?? "").split(":")) {
-    if (folder === "") continue;
-    const candidate = join(folder, program);
+function pathFolders(): string[] {
+  return (env("PATH") ?? "").split(":").filter((folder) => folder !== "");
+}
+
+function onPath(program: string, folders: readonly string[] = pathFolders()): string | undefined {
+  for (const folder of folders) {
+    const candidate = abspath(join(folder, program));
     try {
       accessSync(candidate, fsConstants.X_OK);
       if (statSync(candidate).isFile()) return candidate;
     } catch {}
   }
   return undefined;
+}
+
+function fromAnyFolder(program: string, given: string | undefined): string {
+  const path = given ?? onPath(program);
+  if (path === undefined) return program;
+  return onPath(program, pathFolders().filter((folder) => folder.startsWith("/"))) === path ? program : path;
 }
 
 function interactive(): boolean {
@@ -231,7 +240,7 @@ function sessionEnv(session: Session, args: TriageArgs): Record<string, string> 
 function sessionLines(session: Session, args: TriageArgs, prompt: string, agent: Agent | undefined, path: string | undefined): string[] {
   const variables = Object.entries(sessionEnv(session, args)).map(([name, value]) => `${name}=${shellQuote(value)}`).join(" ");
   const agentCommand =
-    agent === undefined ? "<your agent, in its ask-first mode>" : shellJoin([agent.id, ...launchArgs(agent, path, prompt, args.model, abspath(dataRoot(args.dataDir)), sourceCache(session.home))]);
+    agent === undefined ? "<your agent, in its ask-first mode>" : shellJoin([fromAnyFolder(agent.id, path), ...launchArgs(agent, path, prompt, args.model, abspath(dataRoot(args.dataDir)), sourceCache(session.home))]);
   return [
     `Session folder: ${session.dir}`,
     "  context.md   the facts about this install and the files never to read",
