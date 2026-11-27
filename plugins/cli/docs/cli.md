@@ -2472,9 +2472,9 @@ with `X-Ardia-Key` (the CLI key): `kind`, `title`, `description`, `source: "cli"
 `caller.ts`; `about_command`, scrubbed and capped at 300; `recent_commands`, the last five command names this CLI home
 ran, like `browse click` or `browse fill (exit 1)`, never their arguments; `description_truncated`; `environment`) and
 `attachments`. Then it uploads each file with `PUT <endpoint>/<id>/files/<name>` and the
-`upload_token` as a Bearer token, and calls `POST <endpoint>/<id>/complete`. It prints `Sent. Reference FB-…`, the
-GitHub issue link and "You appear to us as <name>" from the service's answer, and says "Sent" only after a 2xx from
-`complete`.
+`upload_token` as a Bearer token, and calls `POST <endpoint>/<id>/complete`. It says "Sent" only after a 2xx from
+`complete`, and prints `Sent. Reference FB-…`. Then comes the GitHub issue link when the service opened one, else "No
+public issue was opened for it; the developer still has it.", and "You appear to us as <name>" when the answer has a name.
 
 `--attach FILE` (repeatable, 10 at most) takes the contract's kinds: one `.mp4` as `recording.mp4` (100 MB), one
 `.json.gz` as `trace.json.gz` (50 MB), `.ips` crash reports as `crash-<n>.ips`, and `.png`, `.jpg`, `.jpeg`, `.gif`,
@@ -2511,7 +2511,8 @@ counted or saved, and the line says so.
 (an origin alone gets `/api/feedback` added); any other value keeps reports on the Mac. The parity cases (`ts/tests/parity/cases/feedback.json`) and
 `ts/tests/feedback-network.test.ts` run it against stubs of the service.
 
-The owner reads them on dash.ardia.dev › Feedback, and each opens a GitHub issue.
+The owner reads them on dash.ardia.dev › Feedback. The service opens a public GitHub issue for a report only while its
+GitHub integration is on (ardia's `docs/feedback.md`); the sharing setting doesn't change that.
 
 Every command (but `feedback` and `star`) also leaves its name and, when it failed, its exit code in that state's
 `recent` list (five at most), for the next report's `recent_commands`. From a checkout (`0.0.0.dev0`) nothing is recorded
