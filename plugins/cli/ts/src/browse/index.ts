@@ -12,7 +12,7 @@ import { BrowseError, PythonCrash } from "./errors.ts";
 import { Interrupted } from "./exchange.ts";
 import { Printer } from "./output.ts";
 import { checkRequest, CODE, dropCredential, message, pluginMode, PluginRefusal, REFUSED, takeAccess, UNAVAILABLE, UNAVAILABLE_WHY } from "./plugin.ts";
-import type { NotesArgv } from "./route.ts";
+import type { NotesArgv, ReplArgv } from "./route.ts";
 import { answeredHere } from "./local-answer.ts";
 import { PathError } from "./paths.ts";
 import { dumps, object, type Value } from "../json.ts";
@@ -255,6 +255,23 @@ export async function serveNotes(argv: string[], notes: NotesArgv, python: strin
   call.usageWord = commandName([...notes.hoisted, ...notes.rest]);
   call.allowedFlags = allowedFlags(call.usageWord);
   return serveHoisted(["notes", ...notes.hoisted, ...notes.rest], call, false, python);
+}
+
+export async function serveRepl(argv: string[], repl: ReplArgv, python: string | null): Promise<number | undefined> {
+  const call = new Call(argv);
+  call.command = "browse";
+  call.subcommand = "script";
+  call.allowedFlags = allowedFlags("script");
+  const joined = [...repl.hoisted, "repl", ...repl.rest];
+  let endpointPrefix: string[] = [];
+  try {
+    const parsed = splitGlobals(joined);
+    if (!parsed.found.namesEndpoint()) {
+      if (process.env.ARDIA_WS) endpointPrefix = ["--ws", process.env.ARDIA_WS];
+      else if (process.env.ARDIA_PORT) endpointPrefix = ["--port", process.env.ARDIA_PORT];
+    }
+  } catch {}
+  return serveHoisted([...endpointPrefix, ...joined], call, false, python);
 }
 
 async function serveHoisted(browse: string[], call: Call, plugin: boolean, python: string | null): Promise<number | undefined> {

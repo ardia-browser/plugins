@@ -452,20 +452,33 @@ export class Registry {
     });
   }
 
+  private readonly holdCounts = new Map<string, number>();
+
   async holding<T>(instance: Instance, target: string, run: () => Promise<T>): Promise<T> {
     if (this.browseFd === null) return run();
     const hold = `${this.key}${HOLD_MARK}${target}`;
-    this.open(instance, (data) => {
-      const why = this.refusal(data, target);
-      if (why) throw new BrowseError(`That tab can't be used: ${why}`, { targetId: target }, "tab_closing");
-      table(data, "using").set(hold, new Map<string, Value>([["session", this.session], ["target", target]]));
-    });
+    const countKey = `${instance}\0${hold}`;
+    const prev = this.holdCounts.get(countKey) ?? 0;
+    if (prev === 0) {
+      this.open(instance, (data) => {
+        const why = this.refusal(data, target);
+        if (why) throw new BrowseError(`That tab can't be used: ${why}`, { targetId: target }, "tab_closing");
+        table(data, "using").set(hold, new Map<string, Value>([["session", this.session], ["target", target]]));
+      });
+    }
+    this.holdCounts.set(countKey, prev + 1);
     try {
       return await run();
     } finally {
-      this.open(instance, (data) => {
-        table(data, "using").delete(hold);
-      });
+      const next = (this.holdCounts.get(countKey) ?? 1) - 1;
+      if (next <= 0) {
+        this.holdCounts.delete(countKey);
+        this.open(instance, (data) => {
+          table(data, "using").delete(hold);
+        });
+      } else {
+        this.holdCounts.set(countKey, next);
+      }
     }
   }
 

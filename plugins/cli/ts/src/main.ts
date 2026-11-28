@@ -1,6 +1,6 @@
 import { read, write, writeSync } from "node:fs";
 import { catchInterrupts } from "./control.ts";
-import type { NotesArgv } from "./browse/route.ts";
+import type { NotesArgv, ReplArgv } from "./browse/route.ts";
 import { interruptsIgnored, LIBC_UNAVAILABLE, LibcUnavailable, loadLibc, watchLifeline, writeWhole } from "./libc.ts";
 import { FLUSH_ARGUMENT, HISTORY_ARGUMENT, SCRIPT_RUNNER_ARGUMENT } from "./flush-argument.ts";
 import { bundledPython, installRoot } from "./install.ts";
@@ -26,7 +26,7 @@ function asksForVersion(argv: string[]): boolean {
 
 let browseServed = false;
 
-async function serveBrowse(argv: string[], python: string | null, notes?: NotesArgv): Promise<number | undefined> {
+async function serveBrowse(argv: string[], python: string | null, notes?: NotesArgv, repl?: ReplArgv): Promise<number | undefined> {
   const [browse, paths, { consentUnreadable }, { pluginMode }] = await Promise.all([
     import("./browse/index.ts"),
     import("./paths.ts"),
@@ -35,6 +35,7 @@ async function serveBrowse(argv: string[], python: string | null, notes?: NotesA
   ]);
   if (!paths.pathsAreText() || (!pluginMode() && consentUnreadable(argv))) return browse.refuseOrHandBack(argv, python);
   try {
+    if (repl !== undefined) return await browse.serveRepl(argv, repl, python);
     return await (notes === undefined ? browse.serveBrowse(argv, python) : browse.serveNotes(argv, notes, python));
   } catch (error) {
     if (error instanceof paths.NeedsPython) return browse.refuseOrHandBack(argv, python);
@@ -58,10 +59,15 @@ async function serve(argv: string[], python: string | null): Promise<number | un
 }
 
 async function serveOnce(argv: string[], python: string | null): Promise<number | undefined> {
-  const { invokesBrowse, notesArgv, pluginMode } = await import("./browse/route.ts");
+  const { invokesBrowse, notesArgv, pluginMode, replArgv } = await import("./browse/route.ts");
   if (pluginMode() || (invokesBrowse(argv) && servesNatively("browse"))) {
     browseServed = true;
     return serveBrowse(argv, python);
+  }
+  const repl = replArgv(argv);
+  if (repl !== undefined && servesNatively("repl")) {
+    browseServed = true;
+    return serveBrowse(argv, python, undefined, repl);
   }
   const notes = notesArgv(argv);
   if (notes !== undefined && servesNatively("notes")) {

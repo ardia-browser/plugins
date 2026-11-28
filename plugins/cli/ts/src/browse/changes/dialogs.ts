@@ -6,7 +6,7 @@ import { add, flag } from "../metrics.ts";
 import type { Page } from "../state/page.ts";
 import type { Json } from "../state/records.ts";
 import { parseRef } from "../state/refs.ts";
-import type { Listener, State } from "../state/state.ts";
+import { activeTarget, type Listener, type State } from "../state/state.ts";
 import { monotonic } from "../state/wait.ts";
 
 export const AUTO_HANDLED = new Set(["alert", "beforeunload"]);
@@ -73,7 +73,8 @@ export async function refuseIfDialog(page: Page, action: string): Promise<void> 
 
 export function pageForSelector(state: State, selector: string | null): Page | null {
   const id = selector === null ? null : parseRef(selector);
-  const target = id !== null ? (state.refs.get(id)?.target ?? state.current) : state.current;
+  const current = activeTarget(state);
+  const target = id !== null ? (state.refs.get(id)?.target ?? current) : current;
   return target === null ? null : (state.pages.get(target) ?? null);
 }
 

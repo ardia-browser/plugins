@@ -145,6 +145,8 @@ export function checkArdia(words: readonly string[]): string[] {
   if (command === undefined) return [];
   if (placeholder(command)) return [];
   if (command === "browse") return checkBrowse([...words.slice(0, at), ...words.slice(at + 1)]);
+  if (command === "repl") return checkBrowse([...words.slice(0, at), "script", "--repl", ...words.slice(at + 1)]);
+  if (command === "guide") return [];
   if (command === "notes") return checkBrowse(["notes", ...words.slice(at + 1)]);
   const outcome = frontEndOutcome([...words]);
   if (outcome.kind !== "served") return [];

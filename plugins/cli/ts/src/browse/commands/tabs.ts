@@ -30,7 +30,7 @@ export function tabLine(tab: TabRow, _session: string): string {
   return `${tab.active ? "→" : " "} [${tab.tabId}]${app} ${String(tab.title || tab.url)} - ${String(tab.url)}${extra}`;
 }
 
-async function closeTab(ctx: Ctx, which: string | undefined): Promise<Result> {
+export async function closeTab(ctx: Ctx, which: string | undefined, options: { detachBorrowed?: boolean } = {}): Promise<Result> {
   const state = ctx.state;
   await state.refreshTargets();
   const targetId = which !== undefined ? await state.findTab(which) : state.current;
@@ -40,6 +40,13 @@ async function closeTab(ctx: Ctx, which: string | undefined): Promise<Result> {
   }
   if (!state.opened.has(targetId)) await state.readoptOpenedTabs();
   if (!state.opened.has(targetId)) {
+    if (options.detachBorrowed) {
+      const tab = state.tabId(targetId);
+      if (state.current === targetId) state.current = null;
+      if (state.attached === targetId) state.attached = null;
+      flag("script_tab_detached", true);
+      return new Result({ detached: tab, targetId }, `✓ Detached tab [${tab}]`);
+    }
     throw new BrowseError(`Tab [${state.tabId(targetId)}] is one of the user's tabs; ardia browse only closes tabs this session opened`);
   }
   if (!state.registry.reserveClose(state.instance, targetId)) {
@@ -67,7 +74,7 @@ async function closeTab(ctx: Ctx, which: string | undefined): Promise<Result> {
 }
 
 export async function cmdTab(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options, args] = parse(argv, { "--label": "value", "--show": "bool" });
+  const [options, args] = parse(argv, { "--label": "value", "--show": "bool", "--background": "bool" });
   const state = ctx.state;
   await state.connect();
   const action = args[0] ?? "list";
@@ -78,7 +85,7 @@ export async function cmdTab(ctx: Ctx, argv: string[]): Promise<Result> {
   }
   if (action === "new") {
     const label = (options["label"] as string | undefined) ?? null;
-    const page = await newTab(ctx, args[1] ?? null, label, false, wantsShow(ctx, options), abandonedTab(ctx));
+    const page = await newTab(ctx, args[1] ?? null, label, false, wantsShow(ctx, options), abandonedTab(ctx), null, options["background"] !== true);
     return new Result({ tabId: state.tabId(page.targetId), targetId: page.targetId, url: page.url }, page.url || "about:blank");
   }
   if (action === "close") return closeTab(ctx, args[1]);

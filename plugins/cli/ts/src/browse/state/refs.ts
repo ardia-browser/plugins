@@ -238,7 +238,7 @@ export abstract class Refs {
     return id;
   }
 
-  async resolveRef(refId: string): Promise<[Page, Element]> {
+  async resolveRef(refId: string, expectedTarget: string | null = null): Promise<[Page, Element]> {
     const ref = this.refs.get(refId);
     if (ref === undefined) {
       const old = this.navigatedRefs.get(refId);
@@ -248,6 +248,7 @@ export abstract class Refs {
       throw new BrowseError(`Unknown ref: ${refId}`, null, "unknown_ref");
     }
     if (ref.instance !== this.instance) throw new StaleRef(refId, "Ardia restarted since that snapshot");
+    if (expectedTarget !== null && ref.target !== expectedTarget) throw new StaleRef(refId, "it belongs to a different tab than this handle");
     if (!this.targetInfos.has(ref.target) && !this.pages.has(ref.target)) throw new StaleRef(refId, "its tab was closed");
     let page: Page;
     try {

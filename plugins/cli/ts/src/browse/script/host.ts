@@ -9,7 +9,7 @@ import { BrowseError } from "../daemon-errors.ts";
 import type { RunnerInbound, RunnerOutbound } from "./runner.ts";
 
 export const READY_TIMEOUT_MS = 10_000;
-export const SPARE_IDLE_MS = 5 * 60 * 1000;
+export const SPARE_IDLE_MS = 10 * 60 * 1000;
 export const READ_CONCURRENCY = 8;
 export const MEMORY_LIMIT = 1024 * 1024 * 1024;
 export const MEMORY_POLL_MS = 200;
@@ -212,6 +212,10 @@ function keepSpare(): void {
   spareTimer.unref?.();
 }
 
+export function warmSpare(): void {
+  if (spare === null || !spare.alive) keepSpare();
+}
+
 export function takeRunner(): { runner: Runner; warm: boolean } {
   const taken = spare !== null && spare.alive ? spare : null;
   if (spareTimer !== null) clearTimeout(spareTimer);
@@ -275,6 +279,14 @@ export function dropRepl(owner: object): boolean {
 export function replAlive(owner: object): boolean {
   const slot = repls.get(owner);
   return slot !== undefined && slot.runner.alive;
+}
+
+export function notifyReplClosed(owner: object, targets: string[]): void {
+  if (targets.length === 0) return;
+  const slot = repls.get(owner);
+  if (slot !== undefined && slot.runner.alive) {
+    slot.runner.send({ type: "closed", targets });
+  }
 }
 
 export async function whenReady(runner: Runner, timeoutMs = READY_TIMEOUT_MS): Promise<number> {

@@ -6,7 +6,7 @@ import { codePoints } from "../../pystr.ts";
 import { formatG, groupThousands } from "../../pylib/format.ts";
 import { shlexQuote, shlexSplit } from "../../pylib/shlex.ts";
 import { PyException, pyLen } from "../../pylib/str.ts";
-import { Cancelled, currentSignal, later, sleep, untilCancelled, withSignal } from "../cdp/cancel.ts";
+import { Cancelled, currentSignal, later, shield, sleep, untilCancelled, withSignal } from "../cdp/cancel.ts";
 import { Ctx } from "../commands/ctx.ts";
 import { canonical, dispatch, OWNERS, register, SKIPPED } from "../commands/index.ts";
 import { parse } from "../commands/parse.ts";
@@ -19,9 +19,12 @@ import { closeSync, constants as fsConstants, fstatSync, lstatSync, openSync, re
 import { randomBytes } from "node:crypto";
 import nodePath from "node:path";
 import { defaultPath } from "../media/paths.ts";
+import { newTab, pageTitle } from "../commands/core.ts";
+import { closeTab } from "../commands/tabs.ts";
 import { record } from "../state/records.ts";
-import type { State } from "../state/state.ts";
-import { Dropped, dropRepl, Gate, SharedWait, MEMORY_LIMIT, releaseRepl, type Runner, type RunnerEvent, takeRepl, takeRunner, whenReady } from "./host.ts";
+import { type State, withTarget } from "../state/state.ts";
+import * as temptabs from "../state/temptabs.ts";
+import { Dropped, dropRepl, Gate, SharedWait, MEMORY_LIMIT, notifyReplClosed, releaseRepl, type Runner, type RunnerEvent, takeRepl, takeRunner, whenReady } from "./host.ts";
 import { ArgumentsTooDeep, evaluateExpression, frameFunction, framesAnswer, selectorExpression, validEvaluate } from "./page-calls.ts";
 import { renderJson } from "./render.ts";
 import { overBytes, SPILL_CHARS } from "./runner.ts";
@@ -98,7 +101,7 @@ const PAGE_GLOBAL = /\b(document|window|localStorage|sessionStorage|getComputedS
 const PAGE_MISSING = /ReferenceError: ([\p{L}\p{N}_]+) is not defined/u;
 
 type Message = Record<string, unknown>;
-type Answer = { ok: boolean; text?: string | null; data?: unknown; error?: string; code?: string | null; call?: number };
+type Answer = { ok: boolean; text?: string | null; data?: unknown; error?: string; code?: string | null; call?: number; url?: string | null };
 
 export function lineCount(source: string): number {
   return (source.match(/\n/gu)?.length ?? 0) + 1;
@@ -186,6 +189,7 @@ export async function runOne(ctx: Ctx, argv: string[]): Promise<[Result | null, 
   if (argv.length === 0) return [null, new BrowseError("No command given")];
   const name = canonical(argv[0] as string);
   const sub = new Ctx(ctx.state, { ...ctx.options }, ctx.cwd, ctx.env, ctx.stdin, name);
+  sub.boundTarget = ctx.boundTarget;
   try {
     return [await dispatch(sub, name, argv.slice(1)), null];
   } catch (error) {
@@ -261,15 +265,16 @@ export function refusedCall(given: unknown): Answer | null {
   return null;
 }
 
-async function answerCall(ctx: Ctx, argv: string[], index: number, light: boolean, full = false): Promise<Answer> {
+async function answerCall(ctx: Ctx, argv: string[], index: number, light: boolean, full = false, target: string | null = null): Promise<Answer> {
   const name = canonical(argv[0] as string);
   const options: Record<string, unknown> = light ? { ...ctx.options, settle_only: true } : { ...ctx.options };
   if (full) options["full"] = true;
   const sub = new Ctx(ctx.state, options, ctx.cwd, ctx.env, null, name);
+  if (target !== null) sub.boundTarget = target;
   ctx.state.scriptsRunning += 1;
   let ran: Awaited<ReturnType<typeof runOne>>;
   try {
-    ran = await runOne(sub, argv);
+    ran = await withTarget(target, () => runOne(sub, argv));
   } finally {
     ctx.state.scriptsRunning -= 1;
   }
@@ -282,7 +287,9 @@ async function answerCall(ctx: Ctx, argv: string[], index: number, light: boolea
   if (fatal !== undefined) throw new OutcomeUnknown(callLabel(index, argv), String(fatal["error"] || "a command inside it was cut off"));
   if (done.failed && name !== "read") return { ok: false, error: done.text || `${name} failed`, code: "failed" };
   if (name === "screenshot") noteShot(ctx, done.data);
-  return { ok: true, text: done.text, data: jsonCopy(done.data) };
+  const trackedId = target ?? ctx.state.current;
+  const url = trackedId ? (ctx.state.pages.get(trackedId)?.url ?? null) : null;
+  return { ok: true, text: done.text, data: jsonCopy(done.data), ...(url !== null ? { url } : {}) };
 }
 
 function noteShot(ctx: Ctx, data: unknown): void {
@@ -325,8 +332,52 @@ function pageFailure(error: unknown, index: number): Answer {
   return { ok: false, error: error.text, code: error.code ?? null, call: index };
 }
 
+const MAX_RUN_CONCURRENCY = 12;
+
+export class RunSemaphore {
+  private active = 0;
+  private closed = false;
+  private readonly queue: { resolve: () => void; reject: (error: Error) => void }[] = [];
+
+  constructor(private readonly limit = MAX_RUN_CONCURRENCY) {}
+
+  close(): void {
+    this.closed = true;
+    while (this.queue.length > 0) this.queue.shift()?.reject(new Dropped());
+  }
+
+  async run<T>(work: () => Promise<T>): Promise<T> {
+    if (this.closed) throw new Dropped();
+    if (this.active < this.limit) {
+      this.active += 1;
+    } else {
+      await new Promise<void>((resolve, reject) => this.queue.push({ resolve, reject }));
+      if (this.closed) {
+        this.release();
+        throw new Dropped();
+      }
+    }
+    try {
+      return await work();
+    } finally {
+      this.release();
+    }
+  }
+
+  private release(): void {
+    if (!this.closed && this.queue.length > 0) {
+      this.queue.shift()?.resolve();
+      return;
+    }
+    this.active -= 1;
+  }
+}
+
 class ScriptRun {
   readonly gate = new Gate();
+  readonly targetGates = new Map<string, Gate>();
+  readonly runLimit = new RunSemaphore();
+  readonly openedInRun = new Set<string>();
   readonly calls: unknown[][] = [];
   readonly done: string[] = [];
   readonly steps: Step[] = [];
@@ -348,7 +399,7 @@ class ScriptRun {
   signal: AbortSignal | null = null;
   repl = false;
   spill = 0;
-  private readonly reactions = new SharedWait(() => this.signal);
+  private readonly reactionsByTarget = new Map<string, SharedWait>();
   private readonly adopting = new SharedWait(() => this.signal);
 
   constructor(readonly ctx: Ctx, readonly runner: Runner) {}
@@ -366,16 +417,94 @@ class ScriptRun {
     return this.ctx.state.current !== null;
   }
 
+  gateFor(target: string | null): Gate {
+    const key = target ?? this.ctx.state.current;
+    if (key === null) return this.gate;
+    let gate = this.targetGates.get(key);
+    if (gate === undefined) {
+      gate = new Gate();
+      this.targetGates.set(key, gate);
+    }
+    return gate;
+  }
+
+  runGated<T>(target: string | null, exclusive: boolean, work: (resolved: string | null) => Promise<T>): Promise<T> {
+    if (target !== null) {
+      return this.gateFor(target).run(exclusive, () => work(target));
+    }
+    return this.gate.run(exclusive, () => {
+      const resolved = this.ctx.state.current;
+      if (resolved === null) return work(null);
+      return this.gateFor(resolved).run(exclusive, () => work(resolved));
+    });
+  }
+
+  peakConcurrent(): number {
+    let peak = this.gate.peak;
+    for (const gate of this.targetGates.values()) if (gate.peak > peak) peak = gate.peak;
+    return peak;
+  }
+
+  totalDropped(): number {
+    let dropped = this.gate.dropped;
+    for (const gate of this.targetGates.values()) dropped += gate.dropped;
+    return dropped;
+  }
+
+  closeGates(): number {
+    this.runLimit.close();
+    let dropped = this.gate.close();
+    for (const gate of this.targetGates.values()) dropped += gate.close();
+    return dropped;
+  }
+
+  async closeOpenedInRun(): Promise<{ closed: string[]; failed: string[] }> {
+    const targets = [...this.openedInRun];
+    this.openedInRun.clear();
+    if (targets.length === 0) return { closed: [], failed: [] };
+    const state = this.ctx.state;
+    const closed: string[] = [];
+    const failed: string[] = [];
+    await shield(async () => {
+      await Promise.all(
+        targets.map(async (targetId) => {
+          if (!state.opened.has(targetId)) {
+            if (!state.targetInfos.has(targetId) && !state.pages.has(targetId)) closed.push(targetId);
+            return;
+          }
+          if (!state.targetInfos.has(targetId) && !state.pages.has(targetId)) {
+            closed.push(targetId);
+            return;
+          }
+          const app = state.appTabs.get(targetId);
+          const outcome = await temptabs.closeReserved(state, targetId);
+          if (outcome.closed) {
+            state.dropRecorded(app);
+            state.forgetTarget(targetId);
+            closed.push(targetId);
+          } else {
+            temptabs.mustClose(state, targetId, true);
+            failed.push(targetId);
+          }
+        }),
+      );
+    });
+    if (closed.length > 0 && this.runner.alive) {
+      this.runner.send({ type: "closed", targets: closed });
+    }
+    return { closed, failed };
+  }
+
   fail(error: Error): void {
     if (this.error !== null) return;
     this.error = error;
-    this.gate.close();
+    this.closeGates();
     this.stop.abort(new Cancelled());
     this.runner.inject({ type: "fatal", error });
   }
 
   async drain(): Promise<void> {
-    this.gate.close();
+    this.closeGates();
     if (!this.ended && this.running.size > 0) this.stop.abort(new Cancelled());
     await Promise.allSettled([...this.running]);
   }
@@ -391,7 +520,7 @@ class ScriptRun {
 
   stopRunning(): number {
     this.ended = true;
-    this.gate.close();
+    this.closeGates();
     let cut = 0;
     for (const [id, control] of this.controls) {
       if (this.mutating.has(id)) continue;
@@ -421,9 +550,16 @@ class ScriptRun {
     return current;
   }
 
-  async settle(name: string, args: readonly string[]): Promise<void> {
-    if (!this.reactions.active && (!hasPendingReaction(this.ctx.state) || !reactionWaits(name, args))) return;
-    await this.reactions.join(() => settleReaction(this.ctx.state, name, args));
+  async settle(name: string, args: readonly string[], target: string | null = null): Promise<void> {
+    const key = target ?? this.ctx.state.current;
+    if (key === null) return;
+    let waiter = this.reactionsByTarget.get(key);
+    if (!waiter?.active && (!hasPendingReaction(this.ctx.state, key) || !reactionWaits(name, args))) return;
+    if (waiter === undefined) {
+      waiter = new SharedWait(() => this.signal);
+      this.reactionsByTarget.set(key, waiter);
+    }
+    await waiter.join(() => settleReaction(this.ctx.state, name, args, key));
   }
 
   reply(id: number, answer: Answer): void {
@@ -446,6 +582,106 @@ function parseRequest(text: unknown): Request | null {
   return request as Request;
 }
 
+async function withTargetHold<T>(run: ScriptRun, target: string | null, work: () => Promise<T>): Promise<T> {
+  const state = run.ctx.state;
+  if (target === null || target === state.current) return work();
+  return state.registry.holding(state.instance, target, work);
+}
+
+async function serveParallelOpenTab(run: ScriptRun, words: string[], index: number, activateRequested: boolean, keepBackground: boolean): Promise<Answer> {
+  const [options, args] = parse(words.slice(2), { "--label": "value", "--background": "bool" });
+  const label = (options["label"] as string | undefined) ?? null;
+  const url = args[0] ?? null;
+  const background = keepBackground || options["background"] === true;
+  const runOpen = async (activate: boolean): Promise<Answer> => {
+    let createdId: string | null = null;
+    try {
+      const page = await run.runLimit.run(() =>
+        newTab(
+          run.ctx,
+          url,
+          label,
+          false,
+          false,
+          (late) => temptabs.mustClose(run.ctx.state, late, true),
+          (id) => {
+            createdId = id;
+            run.openedInRun.add(id);
+          },
+          activate,
+        ),
+      );
+      const title = await pageTitle(page);
+      const tabId = run.ctx.state.tabId(page.targetId);
+      return { ok: true, text: page.url || "about:blank", data: { tabId, targetId: page.targetId, url: page.url, title, owned: true, openedBySession: true }, url: page.url };
+    } catch (error) {
+      if (createdId !== null) {
+        const targetId = createdId;
+        const state = run.ctx.state;
+        await shield(async () => {
+          const app = state.appTabs.get(targetId);
+          const outcome = await temptabs.closeReserved(state, targetId);
+          if (outcome.closed) {
+            state.dropRecorded(app);
+            state.forgetTarget(targetId);
+            run.openedInRun.delete(targetId);
+          } else {
+            temptabs.mustClose(state, targetId, true);
+          }
+        });
+      }
+      return pageFailure(error, index);
+    }
+  };
+  const wantsActivate = activateRequested || (!background && run.ctx.state.current === null);
+  if (wantsActivate) {
+    return run.gate.run(true, () => runOpen(activateRequested || (!background && run.ctx.state.current === null)));
+  }
+  return runOpen(false);
+}
+
+async function targetIdForClose(run: ScriptRun, which: string | undefined): Promise<string | null> {
+  const state = run.ctx.state;
+  if (which === undefined) return null;
+  if (state.targetInfos.has(which) || state.created.has(which) || run.openedInRun.has(which)) return which;
+  try {
+    return await state.findTab(which);
+  } catch {
+    for (const [id, tab] of state.tabIds) if (tab === which) return id;
+    return state.labels.get(which) ?? null;
+  }
+}
+
+async function serveFastCloseTab(run: ScriptRun, words: string[], index: number): Promise<Answer> {
+  const state = run.ctx.state;
+  const which = words[2];
+  const resolved = await targetIdForClose(run, which);
+  return run.runGated(resolved, true, (activeResolved) =>
+    run.runLimit.run(() =>
+      run.admitted(async (): Promise<Answer> => {
+        try {
+          await state.connect();
+          const id = resolved ?? activeResolved;
+          if (id !== null && !state.targetInfos.has(id) && (state.created.has(id) || run.openedInRun.has(id))) {
+            await state.refreshTargets();
+            if (!state.targetInfos.has(id)) {
+              run.openedInRun.delete(id);
+              state.forgetTarget(id);
+              return { ok: true, text: `✓ Tab [${state.tabId(id)}] already closed`, data: { closed: state.tabId(id), targetId: id, alreadyClosed: true } };
+            }
+          }
+          const done = await closeTab(run.ctx, which, { detachBorrowed: true });
+          const targetId = done.data && typeof done.data === "object" ? (done.data as Record<string, unknown>)["targetId"] : null;
+          if (typeof targetId === "string") run.openedInRun.delete(targetId);
+          return { ok: true, text: done.text, data: jsonCopy(done.data) };
+        } catch (error) {
+          return pageFailure(error, index);
+        }
+      }),
+    ),
+  );
+}
+
 async function serveCall(run: ScriptRun, request: Request): Promise<Answer> {
   const given = request["argv"];
   run.calls.push([commandName(given)]);
@@ -457,6 +693,35 @@ async function serveCall(run: ScriptRun, request: Request): Promise<Answer> {
   const words = argv as string[];
   const name = canonical(words[0] as string);
   if (request["via"] === "page.eval") flag("script_eval_alias", true);
+  const target = typeof request["target"] === "string" && request["target"] ? request["target"] : null;
+  if (name === "tab" && words[1] === "new" && request["parallelTab"] === true) {
+    let ok = false;
+    try {
+      run.started.add(request.id);
+      run.mutating.add(request.id);
+      const answer = await run.admitted(() =>
+        serveParallelOpenTab(run, words, index, request["activate"] === true, request["keepBackground"] === true),
+      );
+      ok = answer.ok;
+      return answer.ok ? answer : { ...answer, call: index };
+    } finally {
+      run.done.push(commandName(given));
+      run.steps.push({ call: index, command: commandName(given), line: request["line"], ok });
+    }
+  }
+  if (name === "tab" && words[1] === "close" && request["detachBorrowed"] === true) {
+    let ok = false;
+    try {
+      run.started.add(request.id);
+      run.mutating.add(request.id);
+      const answer = await serveFastCloseTab(run, words, index);
+      ok = answer.ok;
+      return answer.ok ? answer : { ...answer, call: index };
+    } finally {
+      run.done.push(commandName(given));
+      run.steps.push({ call: index, command: commandName(given), line: request["line"], ok });
+    }
+  }
   const exclusive = !CONCURRENT_CALLS.has(name) || words.some((word) => word === "--scroll" || word.startsWith("--scroll="));
   const light = request["light"] === true && request["receipt"] !== true && LIGHT_CALLS.has(name);
   if (light) run.receiptsSkipped += 1;
@@ -464,20 +729,26 @@ async function serveCall(run: ScriptRun, request: Request): Promise<Answer> {
   const full = extra !== null && typeof extra === "object" && !Array.isArray(extra) && (extra as Record<string, unknown>)["full"] === true;
   let ok = false;
   try {
-    const answer = await run.gate.run(exclusive, () => run.admitted(async () => {
-      run.started.add(request.id);
-      if (exclusive) run.mutating.add(request.id);
-      if (!exclusive) await run.settle(name, words.slice(1));
-      let out = await answerCall(run.ctx, words, index, light, full);
-      if (!out.ok && out.code === "no_session_tab" && name !== "open" && name !== "tab") {
-        try {
-          if (await run.adoptActiveTab()) out = await answerCall(run.ctx, words, index, light, full);
-        } catch (error) {
-          out = pageFailure(error, index);
-        }
-      }
-      return out;
-    }));
+    const answer = await run.runGated(target, exclusive, (resolved) =>
+      run.runLimit.run(() =>
+        run.admitted(async () => {
+          run.started.add(request.id);
+          if (exclusive) run.mutating.add(request.id);
+          if (!exclusive) await run.settle(name, words.slice(1), resolved);
+          return withTargetHold(run, target, async () => {
+            let out = await answerCall(run.ctx, words, index, light, full, target);
+            if (!out.ok && out.code === "no_session_tab" && target === null && name !== "open" && name !== "tab") {
+              try {
+                if (await run.adoptActiveTab()) out = await answerCall(run.ctx, words, index, light, full, null);
+              } catch (error) {
+                out = pageFailure(error, index);
+              }
+            }
+            return out;
+          });
+        }),
+      ),
+    );
     ok = answer.ok;
     return answer.ok ? answer : { ...answer, call: index };
   } finally {
@@ -495,46 +766,53 @@ async function servePage(run: ScriptRun, request: Request): Promise<Answer> {
   if (op === "$eval" || op === "$$eval") flag("script_selector_eval", true);
   if (request["via"] === "page.eval") flag("script_eval_alias", true);
   const frame = typeof request["frame"] === "string" && request["frame"] ? request["frame"] : null;
+  const target = typeof request["target"] === "string" && request["target"] ? request["target"] : null;
   let ok = false;
   try {
-    const answer = await run.gate.run(false, () => run.admitted(async (): Promise<Answer> => {
-      run.started.add(request.id);
-      if (op !== "frames") run.mutating.add(request.id);
-      await run.settle("eval", []);
-      const invalid = op === "frames" ? null : validEvaluate(request);
-      if (invalid !== null) return { ok: false, error: invalid, code: "usage", call: index };
-      try {
-        const pageForCall = async () => {
-          try {
-            return await run.ctx.state.page();
-          } catch (error) {
-            if (error instanceof BrowseError && error.code === "no_session_tab" && (await run.adoptActiveTab())) {
-              return await run.ctx.state.page();
+    const answer = await run.runGated(target, false, (resolved) =>
+      run.runLimit.run(() =>
+        run.admitted(async (): Promise<Answer> => {
+          run.started.add(request.id);
+          if (op !== "frames") run.mutating.add(request.id);
+          await run.settle("eval", [], resolved);
+          const invalid = op === "frames" ? null : validEvaluate(request);
+          if (invalid !== null) return { ok: false, error: invalid, code: "usage", call: index };
+          return withTargetHold(run, target, async () => {
+            try {
+              const pageForCall = async () => {
+                try {
+                  return await run.ctx.state.page(target);
+                } catch (error) {
+                  if (target === null && error instanceof BrowseError && error.code === "no_session_tab" && (await run.adoptActiveTab())) {
+                    return await run.ctx.state.page();
+                  }
+                  throw error;
+                }
+              };
+              if (op === "frames") {
+                flag("script_frames_listed", true);
+                return { ok: true, text: "", data: await framesAnswer(await pageForCall()) };
+              }
+              if (frame !== null) {
+                flag("script_frame_eval", true);
+                const page = await pageForCall();
+                const [declaration, args] = frameFunction(request);
+                return { ok: true, text: "", data: { result: jsonCopy(await page.call(declaration, args, { frame, read: false, timeout: EVAL_TIMEOUT })) }, url: page.url };
+              }
+              const expression = op === "evaluate" ? evaluateExpression(request) : selectorExpression(request);
+              let answer = await answerCall(run.ctx, ["eval", expression], index, false, false, target);
+              if (!answer.ok && answer.code === "no_session_tab" && target === null && (await run.adoptActiveTab())) {
+                answer = await answerCall(run.ctx, ["eval", expression], index, false, false, null);
+              }
+              return answer.ok ? answer : { ...answer, call: index };
+            } catch (error) {
+              if (error instanceof ArgumentsTooDeep) return { ok: false, error: error.message, code: "usage", call: index };
+              return pageFailure(error, index);
             }
-            throw error;
-          }
-        };
-        if (op === "frames") {
-          flag("script_frames_listed", true);
-          return { ok: true, text: "", data: await framesAnswer(await pageForCall()) };
-        }
-        if (frame !== null) {
-          flag("script_frame_eval", true);
-          const page = await pageForCall();
-          const [declaration, args] = frameFunction(request);
-          return { ok: true, text: "", data: { result: jsonCopy(await page.call(declaration, args, { frame, read: false, timeout: EVAL_TIMEOUT })) } };
-        }
-        const expression = op === "evaluate" ? evaluateExpression(request) : selectorExpression(request);
-        let answer = await answerCall(run.ctx, ["eval", expression], index, false);
-        if (!answer.ok && answer.code === "no_session_tab" && (await run.adoptActiveTab())) {
-          answer = await answerCall(run.ctx, ["eval", expression], index, false);
-        }
-        return answer.ok ? answer : { ...answer, call: index };
-      } catch (error) {
-        if (error instanceof ArgumentsTooDeep) return { ok: false, error: error.message, code: "usage", call: index };
-        return pageFailure(error, index);
-      }
-    }));
+          });
+        }),
+      ),
+    );
     ok = answer.ok;
     return answer;
   } finally {
@@ -764,7 +1042,7 @@ async function drive(run: ScriptRun, source: string): Promise<Message> {
     } else if (event.type === "done") {
       const text = typeof event.result === "string" && !overBytes(event.result, RESULT_LIMIT) ? event.result : null;
       const result = text !== null && parseText(text) !== undefined ? (JSON.parse(text) as unknown) : null;
-      const unawaited = run.gate.close();
+      const unawaited = run.closeGates();
       const cut = run.stopRunning();
       if (run.error !== null) throw run.error;
       const message: Message =
@@ -861,12 +1139,18 @@ async function withDeadline<T>(seconds: number, run: () => Promise<T>): Promise<
   }
 }
 
-export type ScriptMode = { repl?: boolean; full?: boolean };
+export type ScriptMode = { repl?: boolean; full?: boolean; autoClose?: boolean };
 export const REPL_LOST_NOTE = "[repl: the earlier scope was gone (its runner stopped after 15 idle minutes, a timeout or a crash), so this ran in a fresh one]";
 export const REPL_TIMEOUT_NOTE = ". The repl scope was lost with it: the next --repl call starts fresh, with only `state` kept";
 
+const forgetWired = new WeakSet<State>();
+
 function replTaken(state: State, repl: boolean): { runner: Runner; warm: boolean; lost: boolean; runs: number } {
   if (!repl) return { ...takeRunner(), lost: false, runs: 0 };
+  if (!forgetWired.has(state)) {
+    forgetWired.add(state);
+    state.onForget.push((targetId) => notifyReplClosed(state, [targetId]));
+  }
   const taken = takeRepl(state);
   if (taken.busy) throw new BrowseError("A --repl script is already running in this session; wait for it to finish, or run this one without --repl", null, "script_failed");
   flag("script_repl", true);
@@ -885,6 +1169,8 @@ export async function run(ctx: Ctx, source: string, seconds: number, mode: Scrip
   let script: ScriptRun | null = null;
   let message: Message;
   let keep = false;
+  let failedAutoClose: string[] = [];
+  let trackCreated: ((targetId: string) => void) | null = null;
   try {
     const confined = await whenReady(runner);
     if (confined < 0) throw new BrowseError("The script didn't run: its runner couldn't sandbox itself", null, "script_failed");
@@ -893,6 +1179,10 @@ export async function run(ctx: Ctx, source: string, seconds: number, mode: Scrip
     started.repl = repl;
     started.spill = repl && !mode.full ? SPILL_CHARS : 0;
     script = started;
+    trackCreated = (targetId: string) => {
+      started.openedInRun.add(targetId);
+    };
+    state.onTabCreated.add(trackCreated);
     activeScriptRuns.add(started);
     let outcome: { value: Message } | { timedOut: true };
     try {
@@ -914,12 +1204,21 @@ export async function run(ctx: Ctx, source: string, seconds: number, mode: Scrip
     message = outcome.value;
     keep = repl;
   } finally {
+    if (trackCreated !== null) state.onTabCreated.delete(trackCreated);
     if (script !== null) activeScriptRuns.delete(script);
     if (!keep) runner.kill();
-    if (script !== null) await (script as ScriptRun).drain();
+    if (script !== null) {
+      await (script as ScriptRun).drain();
+      if (mode.autoClose) {
+        flag("script_repl_autoclose", true);
+        const cleaned = await (script as ScriptRun).closeOpenedInRun();
+        count("script_repl_autoclosed", cleaned.closed.length);
+        failedAutoClose = cleaned.failed;
+      }
+    }
     if (repl) releaseRepl(state, runner, keep && runner.alive && (script === null || (script as ScriptRun).error === null));
     if (script !== null) {
-      count("script_concurrent_peak", script.gate.peak);
+      count("script_concurrent_peak", (script as ScriptRun).peakConcurrent());
       count("script_receipts_skipped", script.receiptsSkipped);
     }
   }
@@ -949,7 +1248,8 @@ export async function run(ctx: Ctx, source: string, seconds: number, mode: Scrip
   if (message["logsDropped"]) logs.push(`[${String(message["logsDropped"])} more log lines dropped past ${Math.floor(LOG_LIMIT / 1024)} KB]`);
   const notes: string[] = [];
   if (lost) notes.push(REPL_LOST_NOTE);
-  const unawaited = script !== null ? script.gate.dropped : Number(message["unawaited"]) || 0;
+  if (failedAutoClose.length > 0) notes.push(`[--close couldn't close ${failedAutoClose.length} tab${failedAutoClose.length !== 1 ? "s" : ""}; queued for cleanup]`);
+  const unawaited = script !== null ? script.totalDropped() : Number(message["unawaited"]) || 0;
   if (unawaited) notes.push(`[${unawaited} command${unawaited !== 1 ? "s" : ""} the script didn't await never ran]`);
   const cut = Number(message["cut"]) || 0;
   if (cut) notes.push(`[${cut} command${cut !== 1 ? "s" : ""} the script didn't await ${cut !== 1 ? "were" : "was"} still running when it ended and ${cut !== 1 ? "were" : "was"} stopped]`);
@@ -989,13 +1289,26 @@ export async function run(ctx: Ctx, source: string, seconds: number, mode: Scrip
   return new Result(data, parts.length > 0 ? parts.join("\n") : "✓ Done", true);
 }
 
-export const SCRIPT_FLAGS = { "--timeout": "value", "--stdin": "bool", "--repl": "bool", "--persist": "bool", "--reset": "bool" } as const;
+export const SCRIPT_FLAGS = {
+  "--timeout": "value",
+  "--stdin": "bool",
+  "--repl": "bool",
+  "--persist": "bool",
+  "--reset": "bool",
+  "--file": "value",
+  "--eval": "value",
+  "--close": "bool",
+  "--ephemeral": "bool",
+  "--cleanup": "bool",
+} as const;
+export const SCRIPT_ALIASES = { "-f": "--file", "-e": "--eval", "-c": "--eval" } as const;
 export const REPL_RESET_TEXT = "✓ REPL scope reset: its variables and $out values are gone, and $out numbering starts again at $out1";
 
 export async function cmdScript(ctx: Ctx, argv: string[]): Promise<Result> {
-  const [options] = parse(argv, SCRIPT_FLAGS);
+  const [options] = parse(argv, SCRIPT_FLAGS, SCRIPT_ALIASES);
   const reset = Boolean(options["reset"] || ctx.options["reset"]);
   const repl = reset || Boolean(options["repl"] || options["persist"] || ctx.options["repl"] || ctx.options["persist"]);
+  const autoClose = Boolean(options["close"] || options["ephemeral"] || options["cleanup"] || ctx.options["ephemeral"]);
   const source = ctx.stdin || "";
   const seconds = parseTimeout(options["timeout"] as string | undefined);
   if (reset) {
@@ -1003,7 +1316,7 @@ export async function cmdScript(ctx: Ctx, argv: string[]): Promise<Result> {
     flag("script_repl_reset", true);
     if (!strip(source, isSpace)) return new Result({ reset: true, had }, had ? REPL_RESET_TEXT : "✓ REPL scope reset (none was open yet)");
   }
-  return run(ctx, source, seconds, { repl, full: Boolean(ctx.options["full"]) });
+  return run(ctx, source, seconds, { repl, full: Boolean(ctx.options["full"]), autoClose });
 }
 
 register("script", cmdScript);

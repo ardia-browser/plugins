@@ -22,7 +22,8 @@ export type StartMessage = { type: "start"; source: string; state: string; readB
 export const SPILL_CHARS = 8192;
 export const SPILL_PREVIEW_CHARS = 2000;
 export type ReplyMessage = { type: "reply"; id: number; answer: string };
-export type RunnerInbound = StartMessage | ReplyMessage;
+export type ClosedMessage = { type: "closed"; targets: string[] };
+export type RunnerInbound = StartMessage | ReplyMessage | ClosedMessage;
 export type RunnerOutbound =
   | { type: "ready"; confined: number }
   | { type: "request"; request: string }
@@ -176,6 +177,14 @@ export function startRunner(link: RunnerLink): void {
   link.onMessage((message) => {
     if (message.type === "reply") {
       if (typeof message.id === "number" && typeof message.answer === "string") deliver("reply", message.id, message.answer);
+      return;
+    }
+    if (message.type === "closed") {
+      if (inbound !== null && Array.isArray(message.targets)) {
+        try {
+          inbound("closed", JSON.stringify(message.targets));
+        } catch {}
+      }
       return;
     }
     if (message.type !== "start") return;

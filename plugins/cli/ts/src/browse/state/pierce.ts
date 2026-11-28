@@ -10,6 +10,7 @@ const FOUND = "(s, roots) => { const seen = new Set(); const out = []; for (cons
 const QUERY_ONE = `(s, ...roots) => { const found = (${FOUND})(s, roots); return found.find((el) => ardiaBrowse.visible(el)) || found[0] || null; }`;
 const QUERY_ALL = `(s, ...roots) => (${FOUND})(s, roots)`;
 const COUNT_ALL = `(s, ...roots) => (${FOUND})(s, roots).length`;
+const TEXTS_ALL = `(s, ...roots) => (${FOUND})(s, roots).slice(0, 1000).map((el) => (el.innerText != null ? el.innerText : el.textContent || '').trim())`;
 const READ_ALL = `(s, ...roots) => { const found = (${FOUND})(s, roots); return {matched: found.length, text: found.map((el) => ardiaBrowse.readable(el)).filter(Boolean).join('\\n\\n')}; }`;
 const DOCUMENT = "() => document";
 
@@ -75,6 +76,13 @@ export async function countAll(page: Page, frame: string, selector: string): Pro
   const count = found === null ? 0 : Number(found) || 0;
   if (count > 0) flag("selector_in_shadow_root", true);
   return count;
+}
+
+export async function textsAll(page: Page, frame: string, selector: string): Promise<string[]> {
+  const found = await inRoots(page, frame, TEXTS_ALL, selector, true);
+  if (!Array.isArray(found) || found.length === 0) return [];
+  flag("selector_in_shadow_root", true);
+  return found.map((item) => String(item ?? ""));
 }
 
 export async function readAll(page: Page, frame: string, selector: string): Promise<{ matched: number; text: string } | null> {

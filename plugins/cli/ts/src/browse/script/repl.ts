@@ -5,7 +5,9 @@ const MISS = "__ardiaMiss__";
 const RESERVED = new Set([REPL_CAPTURE, REPL_INIT, KEPT, MISS, "__proto__", "arguments", "eval"]);
 const PROTECTED_BUILTINS = new Set([
   "page", "browse", "read", "log", "sleep", "console", "state", "setTimeout", "setInterval", "clearTimeout", "clearInterval", "queueMicrotask",
-  "URL", "URLSearchParams", "atob", "btoa", "structuredClone", "openTab", "listTabs", "useTab", "closeTab", "readUrls", "parseReceipt",
+  "URL", "URLSearchParams", "atob", "btoa", "structuredClone", "openTab", "openTabs", "withTab", "withTabs", "listTabs", "listBrowserTabs",
+  "useTab", "closeTab", "closeTabs", "closeAllTabs", "attachTab", "attachBrowserTab", "attachActiveTab", "attachActiveBrowserTab",
+  "getTabByTargetId", "annotatedScreenshot", "readUrls", "parseReceipt",
   "undefined", "NaN", "Infinity", "globalThis", "JSON", "Math", "Reflect", "Atomics", "Intl",
   "Object", "Function", "Boolean", "Symbol", "Error", "AggregateError", "EvalError", "RangeError", "ReferenceError", "SyntaxError", "TypeError", "URIError",
   "Number", "BigInt", "Date", "String", "RegExp", "Array", "Map", "Set", "WeakMap", "WeakSet", "Promise", "Proxy",

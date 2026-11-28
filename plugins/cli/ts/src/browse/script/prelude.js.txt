@@ -60,6 +60,24 @@
   let runLogChars = 0;
   let lastReceipt = null;
   let receiptEpoch = 0;
+  const pageReceipts = new Map();
+  const receiptSlot = (key) => {
+    let slot = pageReceipts.get(key);
+    if (!slot) {
+      slot = { receipt: null, epoch: 0 };
+      pageReceipts.set(key, slot);
+    }
+    return slot;
+  };
+  const bumpReceipt = (targetKey) => {
+    if (!targetKey) {
+      receiptEpoch += 1;
+      lastReceipt = null;
+    }
+    const slot = receiptSlot(targetKey || "__default__");
+    slot.epoch += 1;
+    slot.receipt = null;
+  };
   const internalCodes = new WeakMap();
   const weakGet = WeakMap.prototype.get;
   const weakSet = WeakMap.prototype.set;
@@ -120,17 +138,16 @@
     const origin = new Error();
     const line = lineOf(origin.stack);
     const id = nextId++;
+    const targetKey = typeof payload.target === "string" && payload.target ? payload.target : null;
     if (op === "evaluate" || op === "$eval" || op === "$$eval" || op === "sleep") {
-      receiptEpoch += 1;
-      lastReceipt = null;
+      bumpReceipt(targetKey);
     } else if (op === "call" && Array.isArray(payload.argv) && payload.argv.length > 0) {
       const first = String(payload.argv[0]).trim();
       const parts = first.split(/\s+/);
       const cmd = parts[0].toLowerCase();
       const sub = (parts[1] || (payload.argv.length > 1 ? String(payload.argv[1]) : "")).toLowerCase();
       if (!RECEIPT_READONLY_CMDS.has(cmd) && !(cmd === "tab" && (sub === "list" || sub === ""))) {
-        receiptEpoch += 1;
-        lastReceipt = null;
+        bumpReceipt(targetKey);
       }
     }
     syncState(false);
@@ -172,8 +189,6 @@
 
   const words = (value) => (value == null ? [] : Array.isArray(value) ? value.map(String) : String(value).trim().split(/\s+/).filter(Boolean));
   const plainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
-  const call = (argv, options) => request("call", { argv: argv.flat().map(String), light: true, receipt: Boolean(options && options.receipt) });
-  const callWith = (argv, extra) => request("call", { argv: argv.flat().map(String), ...(extra ? { options: extra } : {}) });
   const browse = (...argv) => request("call", { argv: argv.flat().map(String) });
   const text = (answer) => answer.text;
   const data = (key) => (answer) => (answer.data || {})[key];
@@ -188,23 +203,17 @@
     return out;
   };
   const trailing = (args) => (args.length > 0 && plainObject(args[args.length - 1]) ? [args.slice(0, -1), args[args.length - 1]] : [args, undefined]);
-  const absolute = async (url) => {
+  const absoluteOn = async (url, pBrowse, tracker) => {
     url = String(url);
     if (!/^(\/|\.\.?\/|\?|#)/.test(url)) return url;
-    const base = (await browse("get", "url")).data.url;
+    const base = tracker && typeof tracker.url === "string" && /^https?:\/\//i.test(tracker.url) ? tracker.url : (await pBrowse("get", "url")).data.url;
     return new URL(url, base).href;
   };
+  const absolute = (url) => absoluteOn(url, browse, null);
   const source = (fn, name) => {
     if (typeof fn === "function") return { fn: String(fn), isFunction: true };
     if (typeof fn === "string") return { fn, isFunction: false };
     throw new TypeError(`${name} takes a function or a JavaScript expression`);
-  };
-  const evaluateIn = (frame, via) => (fn, ...args) => request("evaluate", { ...source(fn, "page.evaluate"), args, frame, via }).then(data("result"));
-  const selectIn = (frame, op) => (selector, fn, ...args) => {
-    if (typeof selector !== "string" || !selector) return Promise.reject(new TypeError(`page.${op}() takes a CSS selector first`));
-    const given = source(fn, `page.${op}`);
-    if (!given.isFunction) return Promise.reject(new TypeError(`page.${op}() takes a function, called with the ${op === "$eval" ? "element" : "array of elements"}`));
-    return request(op, { selector, fn: given.fn, args, frame }).then(data("result"));
   };
   const read = async (what, options) => {
     options = options || {};
@@ -219,20 +228,6 @@
     const pages = [];
     for (let i = 0; i < urls.length; i += READ_BATCH) pages.push(...(await browse(["read"].concat(urls.slice(i, i + READ_BATCH), rest))).data.pages);
     return pages;
-  };
-  const frameOf = (info) => Object.freeze({
-    ...info,
-    evaluate: evaluateIn(info.id, "frame.evaluate"),
-    $eval: selectIn(info.id, "$eval"),
-    $$eval: selectIn(info.id, "$$eval"),
-  });
-  const wait = (what, options) => {
-    if (typeof what === "number") return request("sleep", { ms: what }).then(() => undefined);
-    if (plainObject(what)) {
-      options = what;
-      what = undefined;
-    }
-    return browse("wait", ...words(what), ...flags(options, { text: "--text", url: "--url", load: "--load", fn: "--fn", state: "--state", timeout: "--timeout" })).then(text);
   };
   const rowText = (row) => (plainObject(row) ? [row.role, row.name, row.value].filter((part) => part !== undefined && part !== null && part !== "").map(String).join(" ") : "");
   const changesIn = (body) => {
@@ -289,11 +284,6 @@
     if (epoch === receiptEpoch) lastReceipt = null;
     return answer.text;
   };
-  const runAct = (argv, options) => {
-    const pending = call(argv, options);
-    const epoch = receiptEpoch;
-    return pending.then(acted(options, epoch));
-  };
   const coordOf = (value, label) => {
     if (typeof value !== "number" || !Number.isFinite(value)) throw new TypeError(`${label} must be a finite number`);
     return value;
@@ -307,38 +297,6 @@
     return [`--position=${pos.x},${pos.y}`];
   };
   const totpHandles = new WeakMap();
-  const keyboard = (value, options) => runAct(["keyboard", "type", String(value)], options);
-  keyboard.type = keyboard;
-  keyboard.press = (key, options) => runAct(["press", String(key)], options);
-  keyboard.insertText = (value, options) => runAct(["keyboard", "inserttext", String(value)], options);
-  const mouse = Object.freeze({
-    click: (x, y, options) => {
-      const opts = plainObject(options) ? options : {};
-      const argv = ["mouse", "click", String(coordOf(x, "page.mouse.click x")), String(coordOf(y, "page.mouse.click y"))];
-      if (opts.button != null) argv.push("--button", String(opts.button));
-      const count = opts.clickCount ?? opts.count;
-      if (count != null) argv.push("--count", String(count));
-      return runAct(argv, opts);
-    },
-    dblclick: (x, y, options) => {
-      const opts = plainObject(options) ? options : {};
-      const argv = ["mouse", "dblclick", String(coordOf(x, "page.mouse.dblclick x")), String(coordOf(y, "page.mouse.dblclick y"))];
-      if (opts.button != null) argv.push("--button", String(opts.button));
-      return runAct(argv, opts);
-    },
-    move: (x, y, options) => runAct(["mouse", "move", String(coordOf(x, "page.mouse.move x")), String(coordOf(y, "page.mouse.move y"))], options),
-    down: (options) => {
-      const opts = plainObject(options) ? options : {};
-      return runAct(["mouse", "down", ...(opts.button != null ? [String(opts.button)] : [])], opts);
-    },
-    up: (options) => {
-      const opts = plainObject(options) ? options : {};
-      return runAct(["mouse", "up", ...(opts.button != null ? [String(opts.button)] : [])], opts);
-    },
-    wheel: (deltaX, deltaY, options) =>
-      runAct(["mouse", "wheel", String(coordOf(deltaY, "page.mouse.wheel deltaY")), String(coordOf(deltaX, "page.mouse.wheel deltaX"))], options),
-  });
-
   const display = async (input) => {
     let shot = input;
     if (shot && typeof shot.then === "function") shot = await shot;
@@ -346,82 +304,6 @@
     if (!file) throw new TypeError("display() takes the result of await page.screenshot(...), a { path } object or the path it saved");
     const answer = await request("display", { path: file });
     return answer.data;
-  };
-  const api = {
-    here: () => browse("here").then(text),
-    goto: async (url) => (await browse("open", await absolute(url))).data,
-    back: () => browse("back").then(data("url")),
-    forward: () => browse("forward").then(data("url")),
-    reload: () => browse("reload").then(data("url")),
-    fillForm: async (entries) => {
-      const pairs = Array.isArray(entries) ? entries : Object.entries(entries || {});
-      receiptEpoch += 1;
-      lastReceipt = null;
-      for (const [sel, val] of pairs) await call(["fill", sel, String(val)], undefined);
-      return pairs.length;
-    },
-    click: (selector, options) => runAct(["click", selector, ...flags(options, { newTab: "--new-tab", button: "--button", within: "--within" }), ...positionFlag(options)], options),
-    dblclick: (selector, options) => runAct(["dblclick", selector, ...flags(options, { within: "--within" }), ...positionFlag(options)], options),
-    focus: (selector, options) => runAct(["focus", selector], options),
-    fill: (selector, value, options) => runAct(["fill", selector, String(value)], options),
-    type: (selector, value, options) => runAct(["type", selector, String(value)], options),
-    press: (...given) => {
-      const [args, options] = trailing(given);
-      return runAct(["press", ...args.slice(-2)], options);
-    },
-    keyboard,
-    mouse,
-    select: (selector, ...given) => {
-      const [values, options] = trailing(given);
-      return runAct(["select", selector, ...values.flat()], options);
-    },
-    check: (selector, options) => runAct(["check", selector], options),
-    uncheck: (selector, options) => runAct(["uncheck", selector], options),
-    hover: (selector, options) => runAct(["hover", selector, ...flags(options, { within: "--within" }), ...positionFlag(options)], options),
-    drag: (source, target, options) => runAct(["drag", selectorOf(source, "page.drag()"), selectorOf(target, "page.drag()"), ...flags(options, { before: "--before", after: "--after", synthetic: "--synthetic" })], options),
-    editCell: (selector, value, options) => runAct(["edit-cell", selectorOf(selector, "page.editCell()"), String(value), ...flags(options, { commit: "--commit", within: "--within" })], options),
-    fillOtp: (code, options) => {
-      options = plainObject(options) ? options : {};
-      const profile = totpHandles.has(code) ? totpHandles.get(code) : plainObject(code) && typeof code.profile === "string" ? code.profile : null;
-      if (profile !== null) return runAct(["fill-otp", "--profile", profile, ...flags(options, { within: "--within" })], options);
-      return runAct(["fill-otp", String(code === undefined || code === null ? "" : code), ...flags(options, { within: "--within" })], options);
-    },
-    totp: (profile) => {
-      if (typeof profile !== "string" || !profile) throw new TypeError("page.totp() takes the name of a saved auth profile");
-      const handle = Object.freeze({ toString: () => "[one-time code for " + profile + "]", toJSON: () => "[one-time code for " + profile + "]" });
-      totpHandles.set(handle, profile);
-      return handle;
-    },
-    scroll: (direction, pixels, options) => runAct(["scroll", ...words(direction), ...words(pixels)], options),
-    waitForTimeout: (ms) => request("sleep", { ms: Number(ms) || 0 }).then(() => undefined),
-    text: (selector) => (selector == null ? browse("read").then(data("content")) : browse("get", "text", selector).then(data("text"))),
-    value: (selector) => browse("get", "value", selector).then(data("value")),
-    attr: (selector, name) => browse("get", "attr", selector, name).then(data("value")),
-    count: (selector) => browse("get", "count", selector).then(data("count")),
-    visible: (selector) => browse("is", "visible", selector).then(data("visible")),
-    url: () => browse("get", "url").then(data("url")),
-    title: () => browse("get", "title").then(data("title")),
-    snapshot: (options) => browse("snapshot", ...(typeof options === "string" || Array.isArray(options) ? words(options)
-      : flags(options, { interactive: "-i", compact: "-c", depth: "-d", selector: "-s", urls: "-u", diff: "--diff" }))).then(text),
-    links: (pattern) => browse("read", "--links", pattern == null ? "" : String(pattern), "--list").then(data("links"),
-      (error) => { if (error.code === "no_links") return []; throw error; }),
-    wait,
-    evaluate: evaluateIn(null, "page.evaluate"),
-    eval: evaluateIn(null, "page.eval"),
-    $eval: selectIn(null, "$eval"),
-    $$eval: selectIn(null, "$$eval"),
-    frames: () => request("frames", {}).then((answer) => (answer.data.frames || []).map(frameOf)),
-    content: () => evaluateIn(null, "page.content")("document.documentElement ? document.documentElement.outerHTML : ''"),
-    innerText: (selector) => browse("get", "text", selector).then(data("text")),
-    textContent: (selector) => browse("get", "text", selector).then(data("text")),
-    inputValue: (selector) => browse("get", "value", selector).then(data("value")),
-    getAttribute: (selector, name) => browse("get", "attr", selector, name).then(data("value")),
-    isVisible: (selector) => browse("is", "visible", selector).then(data("visible")),
-    goBack: () => browse("back").then(data("url")),
-    goForward: () => browse("forward").then(data("url")),
-    waitForSelector: (selector, options) => browse("wait", String(selector), ...flags(options, { state: "--state", timeout: "--timeout" })).then(text),
-    waitForURL: (url, options) => browse("wait", "--url", String(url), ...flags(options, { timeout: "--timeout" })).then(text),
-    waitForLoadState: (state, options) => browse("wait", "--load", String(state || "load"), ...flags(options, { timeout: "--timeout" })).then(text),
   };
   const norm = (value) => String(value === undefined || value === null ? "" : value).replace(/\s+/g, " ").trim();
   const QUOTE = String.fromCharCode(34);
@@ -479,9 +361,13 @@
   const cssPart = (part) => (/^css=/.test(part) ? part.slice(4) : SPECIAL_PART.test(part) ? null : part);
   const locators = new WeakSet();
   const isLocator = (value) => value !== null && typeof value === "object" && locators.has(value);
+  const normalizeRef = (value) => {
+    const match = /^(?:\[ref=(f\d+e\d+|e\d+)\]|ref=(f\d+e\d+|e\d+))$/.exec(value);
+    return match ? "@" + (match[1] || match[2]) : value;
+  };
   const selectorOf = (given, name) => {
     if (isLocator(given)) return given.selector;
-    if (typeof given === "string" && given.trim()) return given.trim();
+    if (typeof given === "string" && given.trim()) return normalizeRef(given.trim());
     throw new TypeError(`${name} takes a CSS selector, an @ref or a locator`);
   };
   const nthOf = (index, name) => {
@@ -519,79 +405,6 @@
   const missingFalse = (error) => {
     if (error && (error.code === "not_found" || error.code === "failed")) return false;
     throw error;
-  };
-  const makeLocator = (selector) => {
-    const loc = {
-      selector,
-      click: (options) => api.click(selector, options),
-      dblclick: (options) => api.dblclick(selector, options),
-      fill: (value, options) => api.fill(selector, value, options),
-      clear: (options) => api.fill(selector, "", options),
-      type: (value, options) => api.type(selector, value, options),
-      pressSequentially: (value, options) => api.type(selector, value, options),
-      press: (key, options) => (plainObject(options) ? api.press(selector, key, options) : api.press(selector, key)),
-      select: (...values) => api.select(selector, ...values),
-      selectOption: (...values) => api.select(selector, ...values),
-      check: (options) => api.check(selector, options),
-      uncheck: (options) => api.uncheck(selector, options),
-      setChecked: (checked, options) => (checked ? api.check(selector, options) : api.uncheck(selector, options)),
-      hover: (options) => api.hover(selector, options),
-      editCell: (value, options) => api.editCell(selector, value, options),
-      dragTo: (target, options) => api.drag(selector, target, options),
-      fillOtp: (code, options) => api.fillOtp(code, { ...(plainObject(options) ? options : {}), within: selector }),
-      focus: (options) => api.focus(selector, options),
-      scrollIntoView: () => browse("scrollintoview", selector).then(text),
-      scrollIntoViewIfNeeded: () => browse("scrollintoview", selector).then(text),
-      text: () => api.innerText(selector),
-      innerText: () => api.innerText(selector),
-      textContent: () => api.innerText(selector),
-      value: () => api.value(selector),
-      inputValue: () => api.value(selector),
-      attr: (name) => api.attr(selector, name),
-      getAttribute: (name) => api.attr(selector, name),
-      count: () => api.count(selector),
-      visible: () => api.visible(selector).catch(missingFalse),
-      isVisible: () => api.visible(selector).catch(missingFalse),
-      isHidden: () => api.visible(selector).then((shown) => !shown, (error) => !missingFalse(error)),
-      isChecked: () => browse("is", "checked", selector).then(data("checked")),
-      isEnabled: () => browse("is", "enabled", selector).then(data("enabled")),
-      isDisabled: () => browse("is", "disabled", selector).then(data("disabled")),
-      isEditable: () => browse("is", "editable", selector).then(data("editable")),
-      waitFor: (options) => api.waitForSelector(selector, { state: (options && options.state) || undefined, timeout: (options && options.timeout) || undefined }),
-      nth: (index) => makeLocator(chained(selector, nthOf(index, "locator.nth()"))),
-      first: () => makeLocator(chained(selector, "nth=0")),
-      last: () => makeLocator(chained(selector, "nth=-1")),
-      locator: (sub, options) => makeLocator(filtered(chained(selector, selectorOf(sub, "locator.locator()")), options)),
-      filter: (options) => makeLocator(filtered(selector, options)),
-      getByRole: (role, options) => getBy.role(role, { ...(plainObject(options) ? options : {}), within: selector }),
-      getByText: (value, options) => getBy.text(value, { ...(plainObject(options) ? options : {}), within: selector }),
-      getByLabel: (value, options) => getBy.label(value, { ...(plainObject(options) ? options : {}), within: selector }),
-      getByPlaceholder: (value, options) => getBy.placeholder(value, { ...(plainObject(options) ? options : {}), within: selector }),
-      getByTestId: (value, options) => getBy.testid(value, { ...(plainObject(options) ? options : {}), within: selector }),
-      all: async () => {
-        const total = await api.count(selector);
-        return Array.from({ length: Number(total) || 0 }, (_, index) => makeLocator(chained(selector, `nth=${index}`)));
-      },
-      allTexts: async () => {
-        const total = Number(await api.count(selector)) || 0;
-        const out = [];
-        for (let index = 0; index < total; index++) out.push(await api.innerText(chained(selector, `nth=${index}`)));
-        return out;
-      },
-      toString: () => selector,
-      toJSON: () => selector,
-    };
-    loc.allInnerTexts = loc.allTexts;
-    loc.allTextContents = loc.allTexts;
-    Object.freeze(loc);
-    locators.add(loc);
-    return loc;
-  };
-  const scoped = (selector, options) => {
-    const within = options && options.within !== undefined && options.within !== null ? selectorOf(options.within, "within") : null;
-    let out = within ? chained(within, selector) : selector;
-    if (options && options.nth !== undefined && options.nth !== null) out = chained(out, nthOf(options.nth, "nth"));
-    return makeLocator(out);
   };
   const FIELD = "self::input or self::textarea or self::select or self::button or @contenteditable or @role";
   const REGEX_META = new Set([".", "*", "+", "?", "(", ")", "[", "]", "{", "}", "^", "$"]);
@@ -702,108 +515,106 @@
     const tests = pattern.branches.map((branch) => xpathBranch(node, branch, pattern.ignoreCase));
     return tests.length === 1 ? tests[0] : `(${tests.join(" or ")})`;
   };
-  const getBy = {
-    role: (role, options) => {
-      options = plainObject(options) ? options : {};
-      if (typeof role !== "string" || !/^[A-Za-z]+$/.test(role)) throw new TypeError('page.getByRole() takes an ARIA role like "button" or "textbox"');
-      const base = `role=${role.toLowerCase()}`;
-      let selector = base;
-      if (options.name !== undefined && options.name !== null) {
-        const pattern = parsePattern(options.name, options.exact === true);
-        if (pattern.isRegex) {
-          const test = (node) => xpathPattern(node, pattern);
-          const preds = [...["@aria-label", ".", "@title", "@value", "@alt", "@placeholder"].map(test), `(@aria-labelledby and @aria-labelledby = //*[${test(".")}]/@id)`];
-          selector = chained(base, `xpath=self::*[${preds.join(" or ")}]`);
-        } else {
-          const name = pattern.branches[0].text;
-          const exact = options.exact === true;
-          const quoted = bareQuote(name);
-          if (exact || quoted === null) {
-            const test = (node) => (exact ? `normalize-space(${node})=${xpathString(name)}` : xpathText(node, name, false));
-            const preds = [...["@aria-label", ".", "@title", "@value", "@alt", "@placeholder"].map(test), `(@aria-labelledby and @aria-labelledby = //*[${test(".")}]/@id)`];
+  const LEAF_ROLES = new Set(["button", "link", "tab", "menuitem", "option", "switch", "checkbox", "radio"]);
+  const buildGetBy = (makeLocator) => {
+    const scoped = (selector, options) => {
+      const within = options && options.within !== undefined && options.within !== null ? selectorOf(options.within, "within") : null;
+      let out = within ? chained(within, selector) : selector;
+      if (options && options.nth !== undefined && options.nth !== null) out = chained(out, nthOf(options.nth, "nth"));
+      return makeLocator(out);
+    };
+    return {
+      role: (role, options) => {
+        options = plainObject(options) ? options : {};
+        if (typeof role !== "string" || !/^[A-Za-z]+$/.test(role)) throw new TypeError('page.getByRole() takes an ARIA role like "button" or "textbox"');
+        const roleLower = role.toLowerCase();
+        const base = `role=${roleLower}`;
+        let selector = base;
+        if (options.name !== undefined && options.name !== null) {
+          let rawName = options.name;
+          if (typeof rawName === "string" && options.exact !== true && LEAF_ROLES.has(roleLower)) {
+            const stripped = rawName.replace(/^[\u25b8\u25be\u25ba\u25bc\u25b6\u25c0\u2022\u00b7]+\s*/u, "").trim();
+            if (stripped) rawName = stripped;
+          }
+          const pattern = parsePattern(rawName, options.exact === true);
+          if (pattern.isRegex) {
+            const test = (node) => xpathPattern(node, pattern);
+            const preds = [
+              ...["@aria-label", ".", "@title", "@value", "@alt", "@placeholder"].map(test),
+              `(@aria-labelledby and @aria-labelledby = //*[${test(".")}]/@id)`,
+              `(@id and @id = //label[${test(".")}]/@for)`,
+              `ancestor::label[${test(".")}]`,
+            ];
             selector = chained(base, `xpath=self::*[${preds.join(" or ")}]`);
-          } else selector = `${base}[name=${quoted}]`;
+          } else {
+            const name = pattern.branches[0].text;
+            const exact = options.exact === true;
+            const quoted = bareQuote(name);
+            if (exact || quoted === null) {
+              const test = (node) => (exact ? `normalize-space(${node})=${xpathString(name)}` : xpathText(node, name, false));
+              const preds = [
+                ...["@aria-label", ".", "@title", "@value", "@alt", "@placeholder"].map(test),
+                `(@aria-labelledby and @aria-labelledby = //*[${test(".")}]/@id)`,
+                `(@id and @id = //label[${test(".")}]/@for)`,
+                `ancestor::label[${test(".")}]`,
+              ];
+              selector = chained(base, `xpath=self::*[${preds.join(" or ")}]`);
+            } else selector = `${base}[name=${quoted}]`;
+          }
         }
-      }
-      return scoped(selector, options);
-    },
-    text: (value, options) => {
-      options = plainObject(options) ? options : {};
-      const pattern = parsePattern(value, options.exact === true);
-      if (pattern.isRegex) {
-        const test = xpathPattern(".", pattern);
-        return scoped(`xpath=.//*[not(self::script or self::style or self::head or self::title)][${test}][not(.//*[${test}])]`, options);
-      }
-      const wanted = pattern.branches[0].text;
-      if (!wanted) throw new TypeError("page.getByText() takes the text to find");
-      const exact = options.exact === true;
-      const quoted = bareQuote(wanted);
-      if (wanted.includes(">>") || (exact && quoted === null)) {
-        const test = xpathText(".", wanted, exact);
-        return scoped(`xpath=.//*[not(self::script or self::style or self::head or self::title)][${test}][not(.//*[${test}])]`, options);
-      }
-      return scoped(exact ? `text=${quoted}` : `text=${wanted}`, options);
-    },
-    label: (value, options) => {
-      options = plainObject(options) ? options : {};
-      const pattern = parsePattern(value, options.exact === true);
-      if (!pattern.isRegex && !pattern.branches[0].text) throw new TypeError("page.getByLabel() takes the label text");
-      const test = (node) => xpathPattern(node, pattern);
-      const labelled = [
-        `(@id and @id = //label[${test(".")}]/@for)`,
-        `ancestor::label[${test(".")}]`,
-        test("@aria-label"),
-        `(@aria-labelledby and @aria-labelledby = //*[${test(".")}]/@id)`,
-      ].join(" or ");
-      return scoped(`xpath=.//*[${FIELD}][${labelled}]`, options);
-    },
-    placeholder: (value, options) => {
-      options = plainObject(options) ? options : {};
-      if (value instanceof RegExp) return scoped(`xpath=.//*[${xpathPattern("@placeholder", parsePattern(value, false))}]`, options);
-      const wanted = String(value === undefined || value === null ? "" : value);
-      return scoped(options.exact === true ? `[placeholder=${cssString(wanted)}]` : `[placeholder*=${cssString(wanted)} i]`, options);
-    },
-    testid: (value, options) => scoped(`[data-testid=${cssString(String(value))}]`, plainObject(options) ? options : {}),
-    alt: (value, options) => {
-      options = plainObject(options) ? options : {};
-      if (value instanceof RegExp) return scoped(`xpath=.//*[${xpathPattern("@alt", parsePattern(value, false))}]`, options);
-      const wanted = String(value);
-      return scoped(options.exact === true ? `[alt=${cssString(wanted)}]` : `[alt*=${cssString(wanted)} i]`, options);
-    },
-    title: (value, options) => {
-      options = plainObject(options) ? options : {};
-      if (value instanceof RegExp) return scoped(`xpath=.//*[${xpathPattern("@title", parsePattern(value, false))}]`, options);
-      const wanted = String(value);
-      return scoped(options.exact === true ? `[title=${cssString(wanted)}]` : `[title*=${cssString(wanted)} i]`, options);
-    },
+        return scoped(selector, options);
+      },
+      text: (value, options) => {
+        options = plainObject(options) ? options : {};
+        const pattern = parsePattern(value, options.exact === true);
+        if (pattern.isRegex) {
+          const test = xpathPattern(".", pattern);
+          return scoped(`xpath=.//*[not(self::script or self::style or self::head or self::title)][${test}][not(.//*[${test}])]`, options);
+        }
+        const wanted = pattern.branches[0].text;
+        if (!wanted) throw new TypeError("page.getByText() takes the text to find");
+        const exact = options.exact === true;
+        const quoted = bareQuote(wanted);
+        if (wanted.includes(">>") || (exact && quoted === null)) {
+          const test = xpathText(".", wanted, exact);
+          return scoped(`xpath=.//*[not(self::script or self::style or self::head or self::title)][${test}][not(.//*[${test}])]`, options);
+        }
+        return scoped(exact ? `text=${quoted}` : `text=${wanted}`, options);
+      },
+      label: (value, options) => {
+        options = plainObject(options) ? options : {};
+        const pattern = parsePattern(value, options.exact === true);
+        if (!pattern.isRegex && !pattern.branches[0].text) throw new TypeError("page.getByLabel() takes the label text");
+        const test = (node) => xpathPattern(node, pattern);
+        const labelled = [
+          `(@id and @id = //label[${test(".")}]/@for)`,
+          `ancestor::label[${test(".")}]`,
+          test("@aria-label"),
+          `(@aria-labelledby and @aria-labelledby = //*[${test(".")}]/@id)`,
+        ].join(" or ");
+        return scoped(`xpath=.//*[${FIELD}][${labelled}]`, options);
+      },
+      placeholder: (value, options) => {
+        options = plainObject(options) ? options : {};
+        if (value instanceof RegExp) return scoped(`xpath=.//*[${xpathPattern("@placeholder", parsePattern(value, false))}]`, options);
+        const wanted = String(value === undefined || value === null ? "" : value);
+        return scoped(options.exact === true ? `[placeholder=${cssString(wanted)}]` : `[placeholder*=${cssString(wanted)} i]`, options);
+      },
+      testid: (value, options) => scoped(`[data-testid=${cssString(String(value))}]`, plainObject(options) ? options : {}),
+      alt: (value, options) => {
+        options = plainObject(options) ? options : {};
+        if (value instanceof RegExp) return scoped(`xpath=.//*[${xpathPattern("@alt", parsePattern(value, false))}]`, options);
+        const wanted = String(value);
+        return scoped(options.exact === true ? `[alt=${cssString(wanted)}]` : `[alt*=${cssString(wanted)} i]`, options);
+      },
+      title: (value, options) => {
+        options = plainObject(options) ? options : {};
+        if (value instanceof RegExp) return scoped(`xpath=.//*[${xpathPattern("@title", parsePattern(value, false))}]`, options);
+        const wanted = String(value);
+        return scoped(options.exact === true ? `[title=${cssString(wanted)}]` : `[title*=${cssString(wanted)} i]`, options);
+      },
+    };
   };
-  const forced = (options) => ({ ...(plainObject(options) ? options : {}), receipt: true });
-  const act = (action, ...given) => {
-    const method = typeof action === "string" && Object.prototype.hasOwnProperty.call(act, action) ? act[action] : null;
-    if (typeof method !== "function") throw new TypeError(`page.act() takes an action first: ${Object.keys(act).join(", ")}`);
-    return method(...given);
-  };
-  act.click = (selector, options) => api.click(selector, forced(options));
-  act.dblclick = (selector, options) => api.dblclick(selector, forced(options));
-  act.fill = (selector, value, options) => api.fill(selector, value, forced(options));
-  act.type = (selector, value, options) => api.type(selector, value, forced(options));
-  act.press = (...given) => {
-    const [args, options] = trailing(given);
-    return api.press(...args, forced(options));
-  };
-  act.select = (selector, ...given) => {
-    const [values, options] = trailing(given);
-    return api.select(selector, ...values, forced(options));
-  };
-  act.check = (selector, options) => api.check(selector, forced(options));
-  act.uncheck = (selector, options) => api.uncheck(selector, forced(options));
-  act.hover = (selector, options) => api.hover(selector, forced(options));
-  act.drag = (source, target, options) => api.drag(source, target, forced(options));
-  act.editCell = (selector, value, options) => api.editCell(selector, value, forced(options));
-  act.fillOtp = (code, options) => api.fillOtp(code, forced(options));
-  act.focus = (selector, options) => api.focus(selector, forced(options));
-  act.scroll = (direction, pixels, options) => api.scroll(direction, pixels, forced(options));
-  Object.freeze(act);
   const assertionError = (message) => {
     const error = new Error(message);
     error.name = "AssertionError";
@@ -811,171 +622,788 @@
     setInternalCode(error, "assertion");
     return error;
   };
-  const assertText = async (expected, options) => {
-    options = plainObject(options) ? options : {};
-    const wanted = norm(expected);
-    if (!wanted) throw new TypeError("page.assertText() takes the text to look for");
-    const fold = options.ignoreCase === true ? (value) => norm(value).toLowerCase() : norm;
-    const has = (value) => fold(value).includes(fold(wanted));
-    const receipt = lastReceipt;
-    if (!options.selector && receipt && has(receipt.changedText)) return true;
-    const deadline = Date.now() + Math.min(Math.max(Number(options.timeout) || 0, 0), 600000);
-    let seen = "";
-    for (;;) {
-      seen = String((options.selector ? await api.innerText(options.selector) : await browse("get", "text", "body").then(data("text"))) || "");
-      if (has(seen)) return true;
-      if (Date.now() >= deadline) break;
-      await request("sleep", { ms: 250 });
-    }
-    const where = options.selector ? ` in ${String(options.selector)}` : " on the page";
-    const after = receipt ? `; the last receipt's changes: ${receipt.changedText ? JSON.stringify(receipt.changedText.slice(0, 300)) : "none"}` : "";
-    throw assertionError(`expected ${JSON.stringify(wanted)}${where}, but it isn't there${after}; the text starts: ${JSON.stringify(norm(seen).slice(0, 300))}`);
-  };
-  const pageFetch = async (url, options) => {
-    options = plainObject(options) ? options : {};
-    const target = await absolute(url);
-    const limit = Number(options.maxBytes) > 0 ? Math.min(Number(options.maxBytes), 16 * FETCH_LIMIT) : FETCH_LIMIT;
-    const headers = plainObject(options.headers) ? { ...options.headers } : {};
-    let body = options.body;
-    if (body !== undefined && body !== null && typeof body !== "string") {
-      body = JSON.stringify(body);
-      if (!Object.keys(headers).some((name) => name.toLowerCase() === "content-type")) headers["content-type"] = "application/json";
-    }
-    const init = { method: String(options.method || (body !== undefined && body !== null ? "POST" : "GET")).toUpperCase(), headers, credentials: options.credentials || "include", redirect: options.redirect || "follow" };
-    if (body !== undefined && body !== null) init.body = body;
-    const answer = await api.evaluate(async (target, init, limit) => {
-      const response = await fetch(target, init);
-      const contentType = response.headers.get("content-type") || "";
-      const headers = {};
-      response.headers.forEach((value, name) => { headers[name] = value; });
-      let bytes = 0;
-      let truncated = false;
-      const chunks = [];
-      if (response.body && response.body.getReader) {
-        const reader = response.body.getReader();
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const room = limit - bytes;
-          if (value.byteLength > room) {
-            chunks.push(value.subarray(0, Math.max(room, 0)));
-            bytes += Math.max(room, 0);
-            truncated = true;
-            try { await reader.cancel(); } catch (e) {}
-            break;
+  const pageHandles = new WeakSet();
+  const pageTargetIds = new WeakMap();
+  const pageTrackers = new WeakMap();
+  const managedTabs = new Map();
+  const snapshotBaselines = new Map();
+  const isPageHandle = (value) => value !== null && (typeof value === "object" || typeof value === "function") && pageHandles.has(value);
+  const makePageApi = (target, tracker, onClose) => {
+    const targetKey = target || "__default__";
+    const slot = receiptSlot(targetKey);
+    const bind = (payload) => (target ? { ...payload, target } : payload);
+    const track = (answer) => {
+      if (tracker && answer) {
+        if (typeof answer.url === "string" && answer.url) tracker.url = answer.url;
+        else if (plainObject(answer.data) && typeof answer.data.url === "string" && answer.data.url) tracker.url = answer.data.url;
+      }
+      return answer;
+    };
+    const pCall = (argv, options) => request("call", bind({ argv: argv.flat().map(String), light: true, receipt: Boolean(options && options.receipt) })).then(track);
+    const pCallWith = (argv, extra) => request("call", bind({ argv: argv.flat().map(String), ...(extra ? { options: extra } : {}) })).then(track);
+    const pBrowse = (...argv) => request("call", bind({ argv: argv.flat().map(String) })).then(track);
+    const pAbsolute = (url) => absoluteOn(url, pBrowse, tracker);
+    const pEvalIn = (frame, via) => (fn, ...args) => request("evaluate", bind({ ...source(fn, "page.evaluate"), args, frame, via })).then(track).then(data("result"));
+    const pSelectIn = (frame, op) => (selector, fn, ...args) => {
+      const sel = isLocator(selector) ? selector.selector : selector;
+      if (typeof sel !== "string" || !sel) return Promise.reject(new TypeError(`page.${op}() takes a CSS selector first`));
+      const given = source(fn, `page.${op}`);
+      if (!given.isFunction) return Promise.reject(new TypeError(`page.${op}() takes a function, called with the ${op === "$eval" ? "element" : "array of elements"}`));
+      return request(op, bind({ selector: sel, fn: given.fn, args, frame })).then(track).then(data("result"));
+    };
+    const pFrameOf = (info) => Object.freeze({
+      ...info,
+      evaluate: pEvalIn(info.id, "frame.evaluate"),
+      $eval: pSelectIn(info.id, "$eval"),
+      $$eval: pSelectIn(info.id, "$$eval"),
+    });
+    const pWait = (what, options) => {
+      if (typeof what === "number") return request("sleep", { ms: what }).then(() => undefined);
+      if (plainObject(what)) {
+        options = what;
+        what = undefined;
+      }
+      return pBrowse("wait", ...words(what), ...flags(options, { text: "--text", url: "--url", load: "--load", fn: "--fn", state: "--state", timeout: "--timeout" })).then(text);
+    };
+    const runAct = (argv, options) => {
+      const pending = pCall(argv, options);
+      const epoch = slot.epoch;
+      return pending.then((answer) => {
+        if (options && options.receipt === true) {
+          const receipt = parseReceipt(answer.text, answer.data);
+          if (epoch === slot.epoch) {
+            slot.receipt = receipt;
+            if (!target) lastReceipt = receipt;
           }
-          chunks.push(value);
-          bytes += value.byteLength;
+          return receipt;
+        }
+        if (epoch === slot.epoch) {
+          slot.receipt = null;
+          if (!target) lastReceipt = null;
+        }
+        return answer.text;
+      });
+    };
+    const keyboard = (value, options) => runAct(["keyboard", "type", String(value)], options);
+    keyboard.type = keyboard;
+    keyboard.press = (key, options) => runAct(["press", String(key)], options);
+    keyboard.insertText = (value, options) => runAct(["keyboard", "inserttext", String(value)], options);
+    keyboard.down = (key, options) => runAct(["keydown", String(key)], options);
+    keyboard.up = (key, options) => runAct(["keyup", String(key)], options);
+    const mouse = Object.freeze({
+      click: (x, y, options) => {
+        const opts = plainObject(options) ? options : {};
+        const argv = ["mouse", "click", String(coordOf(x, "page.mouse.click x")), String(coordOf(y, "page.mouse.click y"))];
+        if (opts.button != null) argv.push("--button", String(opts.button));
+        const count = opts.clickCount ?? opts.count;
+        if (count != null) argv.push("--count", String(count));
+        return runAct(argv, opts);
+      },
+      dblclick: (x, y, options) => {
+        const opts = plainObject(options) ? options : {};
+        const argv = ["mouse", "dblclick", String(coordOf(x, "page.mouse.dblclick x")), String(coordOf(y, "page.mouse.dblclick y"))];
+        if (opts.button != null) argv.push("--button", String(opts.button));
+        return runAct(argv, opts);
+      },
+      move: (x, y, options) => runAct(["mouse", "move", String(coordOf(x, "page.mouse.move x")), String(coordOf(y, "page.mouse.move y"))], options),
+      down: (options) => {
+        const opts = plainObject(options) ? options : {};
+        return runAct(["mouse", "down", ...(opts.button != null ? [String(opts.button)] : [])], opts);
+      },
+      up: (options) => {
+        const opts = plainObject(options) ? options : {};
+        return runAct(["mouse", "up", ...(opts.button != null ? [String(opts.button)] : [])], opts);
+      },
+      wheel: (deltaX, deltaY, options) =>
+        runAct(["mouse", "wheel", String(coordOf(deltaY, "page.mouse.wheel deltaY")), String(coordOf(deltaX, "page.mouse.wheel deltaX"))], options),
+    });
+    const selStr = (value, label) => (isLocator(value) ? value.selector : typeof value === "string" ? value : selectorOf(value, label));
+    const urlValue = tracker
+      ? Object.assign(() => tracker.url, { toJSON: () => tracker.url, toString: () => tracker.url, valueOf: () => tracker.url })
+      : () => pBrowse("get", "url").then(data("url"));
+    const pApi = {
+      here: () => pBrowse("here").then(text),
+      goto: async (url) => (await pBrowse("open", await pAbsolute(url))).data,
+      back: () => pBrowse("back").then(data("url")),
+      forward: () => pBrowse("forward").then(data("url")),
+      reload: () => pBrowse("reload").then(data("url")),
+      fillForm: async (entries) => {
+        const pairs = Array.isArray(entries) ? entries : Object.entries(entries || {});
+        bumpReceipt(target);
+        for (const [sel, val] of pairs) await pCall(["fill", selStr(sel, "page.fillForm()"), String(val)], undefined);
+        return pairs.length;
+      },
+      click: (selector, options) => runAct(["click", selStr(selector, "page.click()"), ...flags(options, { newTab: "--new-tab", button: "--button", within: "--within" }), ...positionFlag(options)], options),
+      dblclick: (selector, options) => runAct(["dblclick", selStr(selector, "page.dblclick()"), ...flags(options, { within: "--within" }), ...positionFlag(options)], options),
+      focus: (selector, options) => runAct(["focus", selStr(selector, "page.focus()")], options),
+      fill: (selector, value, options) => runAct(["fill", selStr(selector, "page.fill()"), String(value)], options),
+      type: (selector, value, options) => runAct(["type", selStr(selector, "page.type()"), String(value)], options),
+      press: (...given) => {
+        const [args, options] = trailing(given);
+        const cleanArgs = args.slice(-2).map((item, i, all) => (all.length === 2 && i === 0 ? selStr(item, "page.press()") : String(item)));
+        return runAct(["press", ...cleanArgs], options);
+      },
+      keyboard,
+      mouse,
+      select: async (selector, ...given) => {
+        const sel = selStr(selector, "page.select()");
+        const items = given.slice();
+        let options;
+        if (items.length > 0 && plainObject(items[items.length - 1]) && !("label" in items[items.length - 1]) && !("value" in items[items.length - 1]) && !("index" in items[items.length - 1])) {
+          options = items.pop();
+        }
+        const values = [];
+        for (const item of items.flat()) {
+          if (plainObject(item)) {
+            if (item.index !== undefined && item.index !== null) {
+              const idx = Number(item.index);
+              if (!Number.isInteger(idx) || idx < 0) throw new RangeError(`selectOption({ index }) requires a non-negative integer, got ${item.index}`);
+              const picked = await pApi.$eval(sel, (el, i) => {
+                if (!el || !el.options || i < 0 || i >= el.options.length) return null;
+                const opt = el.options[i];
+                return opt.value !== "" ? opt.value : opt.textContent.trim();
+              }, idx);
+              if (picked === null) throw new RangeError(`Option index ${idx} out of range for ${sel}`);
+              values.push(String(picked));
+              continue;
+            }
+            if (item.label !== undefined && item.label !== null) {
+              values.push(String(item.label));
+              continue;
+            }
+            if (item.value !== undefined && item.value !== null) {
+              values.push(String(item.value));
+              continue;
+            }
+          }
+          values.push(String(item));
+        }
+        return runAct(["select", sel, ...values], options);
+      },
+      selectOption: (selector, ...given) => pApi.select(selector, ...given),
+      check: (selector, options) => runAct(["check", selStr(selector, "page.check()")], options),
+      uncheck: (selector, options) => runAct(["uncheck", selStr(selector, "page.uncheck()")], options),
+      hover: (selector, options) => runAct(["hover", selStr(selector, "page.hover()"), ...flags(options, { within: "--within" }), ...positionFlag(options)], options),
+      drag: (source, dst, options) => runAct(["drag", selectorOf(source, "page.drag()"), selectorOf(dst, "page.drag()"), ...flags(options, { before: "--before", after: "--after", synthetic: "--synthetic" })], options),
+      editCell: (selector, value, options) => runAct(["edit-cell", selectorOf(selector, "page.editCell()"), String(value), ...flags(options, { commit: "--commit", within: "--within" })], options),
+      fillOtp: (code, options) => {
+        options = plainObject(options) ? options : {};
+        const profile = totpHandles.has(code) ? totpHandles.get(code) : plainObject(code) && typeof code.profile === "string" ? code.profile : null;
+        if (profile !== null) return runAct(["fill-otp", "--profile", profile, ...flags(options, { within: "--within" })], options);
+        return runAct(["fill-otp", String(code === undefined || code === null ? "" : code), ...flags(options, { within: "--within" })], options);
+      },
+      totp: (profile) => {
+        if (typeof profile !== "string" || !profile) throw new TypeError("page.totp() takes the name of a saved auth profile");
+        const handle = Object.freeze({ toString: () => "[one-time code for " + profile + "]", toJSON: () => "[one-time code for " + profile + "]" });
+        totpHandles.set(handle, profile);
+        return handle;
+      },
+      scroll: (direction, pixels, options) => runAct(["scroll", ...words(direction), ...words(pixels)], options),
+      upload: (selector, files) => pBrowse(["upload", selStr(selector, "page.upload()"), ...(Array.isArray(files) ? files : [files]).map(String)]).then(text),
+      setInputFiles: (selector, files) => pBrowse(["upload", selStr(selector, "page.setInputFiles()"), ...(Array.isArray(files) ? files : [files]).map(String)]).then(text),
+      setViewportSize: (size) => pBrowse("set", "viewport", String(coordOf(size && size.width, "width")), String(coordOf(size && size.height, "height"))).then(text),
+      pdf: (options) => {
+        const opts = typeof options === "string" ? { path: options } : plainObject(options) ? options : {};
+        const argv = ["pdf"];
+        if (opts.path) argv.push(String(opts.path));
+        argv.push(...flags(opts, { format: "--format", landscape: "--landscape" }));
+        return pBrowse(argv).then((answer) => answer.data);
+      },
+      waitForTimeout: (ms) => request("sleep", { ms: Number(ms) || 0 }).then(() => undefined),
+      waitForFunction: (fn, argOrOpts, maybeOpts) => {
+        let expr;
+        let opts;
+        if (typeof fn === "function") {
+          const isOpts = maybeOpts === undefined && plainObject(argOrOpts) && fn.length === 0 && ("timeout" in argOrOpts || "polling" in argOrOpts);
+          opts = isOpts ? argOrOpts : plainObject(maybeOpts) ? maybeOpts : {};
+          const arg = isOpts ? undefined : argOrOpts;
+          expr = arg === undefined ? `(${String(fn)})()` : `(${String(fn)})(${JSON.stringify(arg)})`;
+        } else {
+          expr = String(fn);
+          opts = plainObject(argOrOpts) ? argOrOpts : plainObject(maybeOpts) ? maybeOpts : {};
+        }
+        return pBrowse("wait", "--fn", expr, ...flags(opts, { timeout: "--timeout" })).then(text);
+      },
+      text: (selector) => (selector == null ? pBrowse("read").then(data("content")) : pBrowse("get", "text", selStr(selector, "page.text()")).then(data("text"))),
+      value: (selector) => pBrowse("get", "value", selStr(selector, "page.value()")).then(data("value")),
+      attr: (selector, name) => pBrowse("get", "attr", selStr(selector, "page.attr()"), name).then(data("value")),
+      count: (selector) => pBrowse("get", "count", selStr(selector, "page.count()")).then(data("count")),
+      visible: (selector) => pBrowse("is", "visible", selStr(selector, "page.visible()")).then(data("visible")),
+      box: (selector) => pBrowse("get", "box", selStr(selector, "page.box()")).then(data("box")),
+      boundingBox: (selector) => pBrowse("get", "box", selStr(selector, "page.boundingBox()")).then(data("box")),
+      url: urlValue,
+      title: () => pBrowse("get", "title").then(data("title")),
+      snapshot: (options) => pBrowse("snapshot", ...(typeof options === "string" || Array.isArray(options) ? words(options)
+        : flags(options, { interactive: "-i", compact: "-c", depth: "-d", selector: "-s", urls: "-u", diff: "--diff", all: "--all" }))).then(text),
+      links: (pattern) => pBrowse("read", "--links", pattern == null ? "" : String(pattern), "--list").then(data("links"),
+        (error) => { if (error.code === "no_links") return []; throw error; }),
+      wait: pWait,
+      evaluate: pEvalIn(null, "page.evaluate"),
+      eval: pEvalIn(null, "page.eval"),
+      $eval: pSelectIn(null, "$eval"),
+      $$eval: pSelectIn(null, "$$eval"),
+      frames: () => request("frames", bind({})).then((answer) => (answer.data.frames || []).map(pFrameOf)),
+      content: () => pEvalIn(null, "page.content")("document.documentElement ? document.documentElement.outerHTML : ''"),
+      innerText: (selector) => pBrowse("get", "text", selStr(selector, "page.innerText()")).then(data("text")),
+      textContent: (selector) => pBrowse("get", "text", selStr(selector, "page.textContent()")).then(data("text")),
+      inputValue: (selector) => pBrowse("get", "value", selStr(selector, "page.inputValue()")).then(data("value")),
+      getAttribute: (selector, name) => pBrowse("get", "attr", selStr(selector, "page.getAttribute()"), name).then(data("value")),
+      isVisible: (selector) => pBrowse("is", "visible", selStr(selector, "page.isVisible()")).then(data("visible")),
+      isHidden: (selector) => pBrowse("is", "visible", selStr(selector, "page.isHidden()")).then((answer) => !(answer.data || {}).visible, (error) => !missingFalse(error)),
+      isChecked: (selector) => pBrowse("is", "checked", selStr(selector, "page.isChecked()")).then(data("checked")),
+      isEnabled: (selector) => pBrowse("is", "enabled", selStr(selector, "page.isEnabled()")).then(data("enabled")),
+      isDisabled: (selector) => pBrowse("is", "disabled", selStr(selector, "page.isDisabled()")).then(data("disabled")),
+      isEditable: (selector) => pBrowse("is", "editable", selStr(selector, "page.isEditable()")).then(data("editable")),
+      goBack: () => pBrowse("back").then(data("url")),
+      goForward: () => pBrowse("forward").then(data("url")),
+      waitForSelector: (selector, options) => pBrowse("wait", selStr(selector, "page.waitForSelector()"), ...flags(options, { state: "--state", timeout: "--timeout" })).then(text),
+      waitForURL: (url, options) => pBrowse("wait", "--url", String(url), ...flags(options, { timeout: "--timeout" })).then(text),
+      waitForLoadState: (state, options) => pBrowse("wait", "--load", String(state || "load"), ...flags(options, { timeout: "--timeout" })).then(text),
+    };
+    const makeLocator = (selector) => {
+      const loc = {
+        selector,
+        click: (options) => pApi.click(selector, options),
+        dblclick: (options) => pApi.dblclick(selector, options),
+        fill: (value, options) => pApi.fill(selector, value, options),
+        clear: (options) => pApi.fill(selector, "", options),
+        type: (value, options) => pApi.type(selector, value, options),
+        pressSequentially: (value, options) => pApi.type(selector, value, options),
+        press: (key, options) => (plainObject(options) ? pApi.press(selector, key, options) : pApi.press(selector, key)),
+        select: (...values) => pApi.select(selector, ...values),
+        selectOption: (...values) => pApi.select(selector, ...values),
+        check: (options) => pApi.check(selector, options),
+        uncheck: (options) => pApi.uncheck(selector, options),
+        setChecked: (checked, options) => (checked ? pApi.check(selector, options) : pApi.uncheck(selector, options)),
+        hover: (options) => pApi.hover(selector, options),
+        editCell: (value, options) => pApi.editCell(selector, value, options),
+        dragTo: (dst, options) => pApi.drag(selector, dst, options),
+        fillOtp: (code, options) => pApi.fillOtp(code, { ...(plainObject(options) ? options : {}), within: selector }),
+        focus: (options) => pApi.focus(selector, options),
+        setInputFiles: (files) => pApi.upload(selector, files),
+        upload: (files) => pApi.upload(selector, files),
+        scrollIntoView: () => pBrowse("scrollintoview", selector).then(text),
+        scrollIntoViewIfNeeded: () => pBrowse("scrollintoview", selector).then(text),
+        text: () => pApi.innerText(selector),
+        innerText: () => pApi.innerText(selector),
+        textContent: () => pApi.innerText(selector),
+        innerHTML: () => pBrowse("get", "html", selector).then(data("html")),
+        value: () => pApi.value(selector),
+        inputValue: () => pApi.value(selector),
+        attr: (name) => pApi.attr(selector, name),
+        getAttribute: (name) => pApi.attr(selector, name),
+        boundingBox: () => pApi.box(selector),
+        box: () => pApi.box(selector),
+        count: () => pApi.count(selector),
+        visible: () => pApi.visible(selector).catch(missingFalse),
+        isVisible: () => pApi.visible(selector).catch(missingFalse),
+        isHidden: () => pApi.visible(selector).then((shown) => !shown, (error) => !missingFalse(error)),
+        isChecked: () => pBrowse("is", "checked", selector).then(data("checked")),
+        isEnabled: () => pBrowse("is", "enabled", selector).then(data("enabled")),
+        isDisabled: () => pBrowse("is", "disabled", selector).then(data("disabled")),
+        isEditable: () => pBrowse("is", "editable", selector).then(data("editable")),
+        evaluate: (fn, ...args) => pApi.$eval(selector, fn, ...args),
+        evaluateAll: (fn, ...args) => pApi.$$eval(selector, fn, ...args),
+        screenshot: (options) => pApi.screenshot({ ...(typeof options === "string" ? { out: options } : plainObject(options) ? options : {}), selector }),
+        waitFor: (options) => pApi.waitForSelector(selector, { state: (options && options.state) || undefined, timeout: (options && options.timeout) || undefined }),
+        nth: (index) => makeLocator(chained(selector, nthOf(index, "locator.nth()"))),
+        first: () => makeLocator(chained(selector, "nth=0")),
+        last: () => makeLocator(chained(selector, "nth=-1")),
+        locator: (sub, options) => makeLocator(filtered(chained(selector, selectorOf(sub, "locator.locator()")), options)),
+        filter: (options) => makeLocator(filtered(selector, options)),
+        getByRole: (role, options) => getBy.role(role, { ...(plainObject(options) ? options : {}), within: selector }),
+        getByText: (value, options) => getBy.text(value, { ...(plainObject(options) ? options : {}), within: selector }),
+        getByLabel: (value, options) => getBy.label(value, { ...(plainObject(options) ? options : {}), within: selector }),
+        getByPlaceholder: (value, options) => getBy.placeholder(value, { ...(plainObject(options) ? options : {}), within: selector }),
+        getByTestId: (value, options) => getBy.testid(value, { ...(plainObject(options) ? options : {}), within: selector }),
+        getByAltText: (value, options) => getBy.alt(value, { ...(plainObject(options) ? options : {}), within: selector }),
+        getByTitle: (value, options) => getBy.title(value, { ...(plainObject(options) ? options : {}), within: selector }),
+        all: async () => {
+          const total = await pApi.count(selector);
+          return Array.from({ length: Number(total) || 0 }, (_, index) => makeLocator(chained(selector, `nth=${index}`)));
+        },
+        allTexts: async () => {
+          try {
+            const answer = await pBrowse("get", "texts", selector);
+            if (answer && plainObject(answer.data) && Array.isArray(answer.data.texts)) return answer.data.texts;
+          } catch (e) {}
+          const total = Number(await pApi.count(selector)) || 0;
+          const out = [];
+          for (let index = 0; index < total; index++) out.push(await pApi.innerText(chained(selector, `nth=${index}`)));
+          return out;
+        },
+        toString: () => selector,
+        toJSON: () => selector,
+      };
+      loc.allInnerTexts = loc.allTexts;
+      loc.allTextContents = loc.allTexts;
+      Object.freeze(loc);
+      locators.add(loc);
+      return loc;
+    };
+    const getBy = buildGetBy(makeLocator);
+    const forced = (options) => ({ ...(plainObject(options) ? options : {}), receipt: true });
+    const act = (action, ...given) => {
+      const method = typeof action === "string" && Object.prototype.hasOwnProperty.call(act, action) ? act[action] : null;
+      if (typeof method !== "function") throw new TypeError(`page.act() takes an action first: ${Object.keys(act).join(", ")}`);
+      return method(...given);
+    };
+    act.click = (selector, options) => pApi.click(selector, forced(options));
+    act.dblclick = (selector, options) => pApi.dblclick(selector, forced(options));
+    act.fill = (selector, value, options) => pApi.fill(selector, value, forced(options));
+    act.type = (selector, value, options) => pApi.type(selector, value, forced(options));
+    act.press = (...given) => {
+      const [args, options] = trailing(given);
+      return pApi.press(...args, forced(options));
+    };
+    act.select = (selector, ...given) => {
+      const [values, options] = trailing(given);
+      return pApi.select(selector, ...values, forced(options));
+    };
+    act.check = (selector, options) => pApi.check(selector, forced(options));
+    act.uncheck = (selector, options) => pApi.uncheck(selector, forced(options));
+    act.hover = (selector, options) => pApi.hover(selector, forced(options));
+    act.drag = (source, dst, options) => pApi.drag(source, dst, forced(options));
+    act.editCell = (selector, value, options) => pApi.editCell(selector, value, forced(options));
+    act.fillOtp = (code, options) => pApi.fillOtp(code, forced(options));
+    act.focus = (selector, options) => pApi.focus(selector, forced(options));
+    act.scroll = (direction, pixels, options) => pApi.scroll(direction, pixels, forced(options));
+    Object.freeze(act);
+    const assertText = async (expected, options) => {
+      options = plainObject(options) ? options : {};
+      const wanted = norm(expected);
+      if (!wanted) throw new TypeError("page.assertText() takes the text to look for");
+      const fold = options.ignoreCase === true ? (value) => norm(value).toLowerCase() : norm;
+      const has = (value) => fold(value).includes(fold(wanted));
+      const receipt = slot.receipt;
+      if (!options.selector && receipt && has(receipt.changedText)) return true;
+      const deadline = Date.now() + Math.min(Math.max(Number(options.timeout) || 0, 0), 600000);
+      let seen = "";
+      for (;;) {
+        seen = String((options.selector ? await pApi.innerText(options.selector) : await pBrowse("get", "text", "body").then(data("text"))) || "");
+        if (has(seen)) return true;
+        if (Date.now() >= deadline) break;
+        await request("sleep", { ms: 100 });
+      }
+      const where = options.selector ? ` in ${String(options.selector)}` : " on the page";
+      const after = receipt ? `; the last receipt's changes: ${receipt.changedText ? JSON.stringify(receipt.changedText.slice(0, 300)) : "none"}` : "";
+      throw assertionError(`expected ${JSON.stringify(wanted)}${where}, but it isn't there${after}; the text starts: ${JSON.stringify(norm(seen).slice(0, 300))}`);
+    };
+    const pageFetch = async (url, options) => {
+      options = plainObject(options) ? options : {};
+      const dest = await pAbsolute(url);
+      const limit = Number(options.maxBytes) > 0 ? Math.min(Number(options.maxBytes), 16 * FETCH_LIMIT) : FETCH_LIMIT;
+      const headers = plainObject(options.headers) ? { ...options.headers } : {};
+      let body = options.body;
+      if (body !== undefined && body !== null && typeof body !== "string") {
+        body = JSON.stringify(body);
+        if (!Object.keys(headers).some((name) => name.toLowerCase() === "content-type")) headers["content-type"] = "application/json";
+      }
+      const init = { method: String(options.method || (body !== undefined && body !== null ? "POST" : "GET")).toUpperCase(), headers, credentials: options.credentials || "include", redirect: options.redirect || "follow" };
+      if (body !== undefined && body !== null) init.body = body;
+      const answer = await pApi.evaluate(async (dest, init, limit) => {
+        const response = await fetch(dest, init);
+        const contentType = response.headers.get("content-type") || "";
+        const headers = {};
+        response.headers.forEach((value, name) => { headers[name] = value; });
+        let bytes = 0;
+        let truncated = false;
+        const chunks = [];
+        if (response.body && response.body.getReader) {
+          const reader = response.body.getReader();
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const room = limit - bytes;
+            if (value.byteLength > room) {
+              chunks.push(value.subarray(0, Math.max(room, 0)));
+              bytes += Math.max(room, 0);
+              truncated = true;
+              try { await reader.cancel(); } catch (e) {}
+              break;
+            }
+            chunks.push(value);
+            bytes += value.byteLength;
+          }
+        }
+        const joined = new Uint8Array(bytes);
+        let at = 0;
+        for (const chunk of chunks) { joined.set(chunk, at); at += chunk.byteLength; }
+        const text = new TextDecoder().decode(joined);
+        return { ok: response.ok, status: response.status, statusText: response.statusText, url: response.url, redirected: response.redirected, contentType, headers, bytes, truncated, text };
+      }, dest, init, limit);
+      let json = null;
+      if (answer && /json/i.test(String(answer.contentType || "")) && !answer.truncated) {
+        try {
+          json = JSON.parse(answer.text);
+        } catch (e) {
+          json = null;
         }
       }
-      const joined = new Uint8Array(bytes);
-      let at = 0;
-      for (const chunk of chunks) { joined.set(chunk, at); at += chunk.byteLength; }
-      const text = new TextDecoder().decode(joined);
-      return { ok: response.ok, status: response.status, statusText: response.statusText, url: response.url, redirected: response.redirected, contentType, headers, bytes, truncated, text };
-    }, target, init, limit);
-    let json = null;
-    if (answer && /json/i.test(String(answer.contentType || "")) && !answer.truncated) {
+      return { ...answer, json };
+    };
+    const pReadUrls = async (urls, options) => {
+      options = plainObject(options) ? options : {};
+      const list = [];
+      for (const url of words(urls)) list.push(await pAbsolute(url));
+      if (list.length === 0) throw new TypeError("readUrls() takes one or more URLs");
       try {
-        json = JSON.parse(answer.text);
-      } catch (e) {
-        json = null;
+        const answer = await pBrowse(["read-urls", ...list, ...flags(options, { selector: "-s", concurrency: "--concurrency", timeout: "--timeout", maxChars: "--max-chars" })]);
+        return options.data === true ? answer.data : ((answer.data || {}).results || []);
+      } catch (error) {
+        const code = error && typeof error === "object" ? error.code : null;
+        const msg = String(error && typeof error === "object" && error.message ? error.message : error || "");
+        if (!target && list.every((u) => /^https?:\/\//i.test(u)) && (code === "no_session_tab" || code === "not_web_page" || /isn't on a web page|not on a web page/i.test(msg))) {
+          const pages = await read(list, { selector: options.selector, timeout: options.timeout });
+          const limit = Number(options.maxChars) > 0 ? Number(options.maxChars) : 0;
+          const results = (Array.isArray(pages) ? pages : []).map((entry) => {
+            const raw = String((entry && (entry.text ?? entry.content)) || "");
+            const truncated = limit > 0 && raw.length > limit;
+            const content = truncated ? raw.slice(0, limit) : raw;
+            return {
+              url: String((entry && entry.url) || ""),
+              finalUrl: String((entry && entry.url) || ""),
+              ok: !(entry && entry.error),
+              title: String((entry && entry.title) || ""),
+              content,
+              text: content,
+              chars: raw.length,
+              truncated,
+              error: entry && entry.error ? String(entry.error) : null,
+            };
+          });
+          return options.data === true ? { results } : results;
+        }
+        throw error;
+      }
+    };
+    Object.assign(pApi, {
+      locator: (selector, options) => makeLocator(filtered(selectorOf(selector, "page.locator()"), options)),
+      getByRole: (role, options) => getBy.role(role, options),
+      getByText: (value, options) => getBy.text(value, options),
+      getByLabel: (value, options) => getBy.label(value, options),
+      getByPlaceholder: (value, options) => getBy.placeholder(value, options),
+      getByTestId: (value, options) => getBy.testid(value, options),
+      getByAltText: (value, options) => getBy.alt(value, options),
+      getByTitle: (value, options) => getBy.title(value, options),
+      act,
+      assertText,
+      parseReceipt,
+      fetch: pageFetch,
+      readUrls: pReadUrls,
+      read: async (options) => {
+        options = typeof options === "string" ? { selector: options } : plainObject(options) ? options : {};
+        const argv = ["read", ...flags(options, { selector: "-s", nav: "--nav", raw: "--raw", outline: "--outline", filter: "--filter", limit: "--limit", scroll: "--scroll" })];
+        const answer = await pCallWith(argv, options.full === true ? { full: true } : null);
+        if (options.data === true) return answer.data;
+        return plainObject(answer.data) && typeof answer.data.content === "string" && answer.data.content ? answer.data.content : answer.text;
+      },
+      form: async (options) => {
+        options = typeof options === "string" || isLocator(options) ? { selector: options } : plainObject(options) ? options : {};
+        const answer = await pBrowse("form", ...flags(options, { selector: "-s", all: "--all" }));
+        const facts = plainObject(answer.data) ? answer.data : {};
+        return { text: answer.text, fields: facts.fields || [], submits: facts.submits || [], count: facts.count ?? 0, more: Boolean(facts.more), url: facts.url ?? null };
+      },
+      query: async (selector, options) => {
+        if (plainObject(selector)) {
+          options = selector;
+          selector = options.selector;
+        }
+        options = plainObject(options) ? options : {};
+        const fields = options.fields;
+        const spec = fields === undefined || fields === null ? null
+          : Array.isArray(fields) ? fields.map(String).join(",")
+          : plainObject(fields) ? Object.entries(fields).map(([name, sel]) => `${name}=${String(sel)}`).join(",")
+          : String(fields);
+        const argv = ["query", selectorOf(selector, "page.query()")];
+        if (spec) argv.push("--fields", spec);
+        argv.push(...flags(options, { limit: "--limit", all: "--all" }));
+        const answer = await pBrowse(argv);
+        return options.data === true ? answer.data : ((answer.data || {}).rows || []);
+      },
+      screenshot: async (options) => {
+        options = typeof options === "string" ? { out: options } : plainObject(options) ? options : {};
+        const region = Array.isArray(options.region) ? options.region.join(",") : plainObject(options.region) ? [options.region.x, options.region.y, options.region.width, options.region.height].join(",") : options.region;
+        const given = { ...options, region, out: options.out ?? options.path, full: options.full ?? options.fullPage };
+        const answer = await pBrowse("screenshot", ...flags(given, { selector: "-s", full: "--full", out: "--out", annotate: "--annotate", marks: "--marks", region: "--region", scale: "--scale", withSnapshot: "--with-snapshot" }));
+        if (options.inline === true) await display(answer.data);
+        return answer.data;
+      },
+    });
+    if (tracker) {
+      pApi.tabId = tracker.tabId;
+      pApi.id = tracker.tabId;
+      pApi.targetId = tracker.targetId;
+      pApi.owned = tracker.owned;
+      pApi.close = () => onClose(proxy);
+      pApi.toJSON = () => ({ tabId: tracker.tabId, targetId: tracker.targetId, url: tracker.url, owned: tracker.owned });
+    }
+    Object.defineProperty(pApi, "lastReceipt", { get: () => slot.receipt, enumerable: true });
+    const known = Object.keys(pApi).filter((name) => name !== "eval").sort();
+    const missing = (name) => {
+      const error = new TypeError(
+        `page.${name} isn't part of ardia's script API: read with page.$$eval(sel, els => …) or page.evaluate(fn, ...args), act with page.click(sel), page.fill(sel, value) or page.locator(sel).click(). page has: ${known.join(", ")}`,
+      );
+      error.code = "usage";
+      setInternalCode(error, "usage");
+      return error;
+    };
+    const proxy = new Proxy(Object.freeze(pApi), {
+      get(obj, name) {
+        if (typeof name !== "string" || Object.prototype.hasOwnProperty.call(obj, name)) return obj[name];
+        if (name === "then" || name === "toJSON" || name === "constructor" || name === "valueOf" || name === "toString" || name === "inspect") return obj[name];
+        send("missing", name.length <= 40 && /^[A-Za-z_$][\w$]*$/.test(name) ? name : "");
+        return () => {
+          throw missing(name);
+        };
+      },
+    });
+    pageHandles.add(proxy);
+    pageTargetIds.set(proxy, target || "__default__");
+    if (tracker) pageTrackers.set(proxy, tracker);
+    return proxy;
+  };
+  const sleep = (ms) => request("sleep", { ms: Number(ms) || 0 }).then(() => undefined);
+  const tabIdOf = (tab) => String(plainObject(tab) || isPageHandle(tab) ? tab.tabId ?? tab.id ?? tab.targetId ?? "" : tab);
+  const tabTargetOrId = (tab) => String(plainObject(tab) || isPageHandle(tab) ? tab.targetId ?? tab.tabId ?? tab.id ?? "" : tab);
+  const dropManaged = (tab) => {
+    const targetId = isPageHandle(tab) || plainObject(tab) ? tab.targetId : typeof tab === "string" ? tab : null;
+    const tabId = isPageHandle(tab) || plainObject(tab) ? (tab.tabId ?? tab.id) : typeof tab === "string" ? tab : null;
+    for (const [key, handle] of managedTabs) {
+      if ((targetId && (key === targetId || handle.targetId === targetId)) || (tabId && (key === tabId || handle.tabId === tabId))) {
+        managedTabs.delete(key);
+        const id = handle.targetId || key;
+        pageReceipts.delete(id);
+        for (const baseKey of [...snapshotBaselines.keys()]) {
+          if (baseKey.startsWith(`${id}|`)) snapshotBaselines.delete(baseKey);
+        }
       }
     }
-    return { ...answer, json };
   };
-  Object.assign(api, {
-    locator: (selector, options) => makeLocator(filtered(selectorOf(selector, "page.locator()"), options)),
-    getByRole: (role, options) => getBy.role(role, options),
-    getByText: (value, options) => getBy.text(value, options),
-    getByLabel: (value, options) => getBy.label(value, options),
-    getByPlaceholder: (value, options) => getBy.placeholder(value, options),
-    getByTestId: (value, options) => getBy.testid(value, options),
-    getByAltText: (value, options) => getBy.alt(value, options),
-    getByTitle: (value, options) => getBy.title(value, options),
-    act,
-    assertText,
-    parseReceipt,
-    fetch: pageFetch,
-    read: async (options) => {
-      options = typeof options === "string" ? { selector: options } : plainObject(options) ? options : {};
-      const argv = ["read", ...flags(options, { selector: "-s", nav: "--nav", raw: "--raw", outline: "--outline", filter: "--filter", limit: "--limit", scroll: "--scroll" })];
-      const answer = await callWith(argv, options.full === true ? { full: true } : null);
-      if (options.data === true) return answer.data;
-      return plainObject(answer.data) && typeof answer.data.content === "string" && answer.data.content ? answer.data.content : answer.text;
-    },
-    form: async (options) => {
-      options = typeof options === "string" || isLocator(options) ? { selector: options } : plainObject(options) ? options : {};
-      const answer = await browse("form", ...flags(options, { selector: "-s", all: "--all" }));
-      const facts = plainObject(answer.data) ? answer.data : {};
-      return { text: answer.text, fields: facts.fields || [], submits: facts.submits || [], count: facts.count ?? 0, more: Boolean(facts.more), url: facts.url ?? null };
-    },
-    query: async (selector, options) => {
-      if (plainObject(selector)) {
-        options = selector;
-        selector = options.selector;
-      }
-      options = plainObject(options) ? options : {};
-      const fields = options.fields;
-      const spec = fields === undefined || fields === null ? null
-        : Array.isArray(fields) ? fields.map(String).join(",")
-        : plainObject(fields) ? Object.entries(fields).map(([name, sel]) => `${name}=${String(sel)}`).join(",")
-        : String(fields);
-      const argv = ["query", selectorOf(selector, "page.query()")];
-      if (spec) argv.push("--fields", spec);
-      argv.push(...flags(options, { limit: "--limit", all: "--all" }));
-      const answer = await browse(argv);
-      return options.data === true ? answer.data : ((answer.data || {}).rows || []);
-    },
-    screenshot: async (options) => {
-      options = typeof options === "string" ? { out: options } : plainObject(options) ? options : {};
-      const region = Array.isArray(options.region) ? options.region.join(",") : plainObject(options.region) ? [options.region.x, options.region.y, options.region.width, options.region.height].join(",") : options.region;
-      const given = { ...options, region, out: options.out ?? options.path, full: options.full ?? options.fullPage };
-      const answer = await browse("screenshot", ...flags(given, { selector: "-s", full: "--full", out: "--out", annotate: "--annotate", marks: "--marks", region: "--region", scale: "--scale", withSnapshot: "--with-snapshot" }));
-      if (options.inline === true) await display(answer.data);
-      return answer.data;
-    },
-  });
-  Object.defineProperty(api, "lastReceipt", { get: () => lastReceipt, enumerable: true });
-  const known = Object.keys(api).filter((name) => name !== "eval").sort();
-  const missing = (name) => {
-    const error = new TypeError(
-      `page.${name} isn't part of ardia's script API: read with page.$$eval(sel, els => …) or page.evaluate(fn, ...args), act with page.click(sel), page.fill(sel, value) or page.locator(sel).click(). page has: ${known.join(", ")}`,
-    );
-    error.code = "usage";
-    setInternalCode(error, "usage");
-    return error;
+  const closeTab = async (tab) => {
+    const argv = tab === undefined || tab === null ? ["tab", "close"] : ["tab", "close", tabTargetOrId(tab)];
+    const answer = await request("call", { argv, detachBorrowed: true });
+    if (tab !== undefined && tab !== null) dropManaged(tab);
+    return answer.data;
   };
-  const page = new Proxy(Object.freeze(api), {
-    get(target, name) {
-      if (typeof name !== "string" || Object.prototype.hasOwnProperty.call(target, name)) return target[name];
-      if (name === "then" || name === "toJSON" || name === "constructor" || name === "valueOf" || name === "toString" || name === "inspect") return target[name];
-      send("missing", name.length <= 40 && /^[A-Za-z_$][\w$]*$/.test(name) ? name : "");
-      return () => {
-        throw missing(name);
-      };
-    },
-  });
-
-  const sleep = (ms) => request("sleep", { ms: Number(ms) || 0 }).then(() => undefined);
-  const tabIdOf = (tab) => String(plainObject(tab) ? tab.tabId ?? tab.id ?? "" : tab);
+  const closeTabs = async (list) => {
+    const targets = Array.isArray(list) ? list : [...managedTabs.values()];
+    if (targets.length === 0) return [];
+    const settled = await Promise.allSettled(targets.map((tab) => closeTab(tab)));
+    return settled.map((item) => (item.status === "fulfilled" ? item.value : { error: String(item.reason && item.reason.message ? item.reason.message : item.reason) }));
+  };
+  const makePageHandle = (info, ownedDefault) => {
+    const facts = plainObject(info) ? info : {};
+    const targetId = typeof facts.targetId === "string" && facts.targetId ? facts.targetId : null;
+    const tabId = typeof facts.tabId === "string" && facts.tabId ? facts.tabId : typeof facts.id === "string" && facts.id ? facts.id : null;
+    const url = typeof facts.url === "string" ? facts.url : "";
+    const owned = typeof facts.openedBySession === "boolean" ? facts.openedBySession : typeof facts.owned === "boolean" ? facts.owned : Boolean(ownedDefault);
+    if (targetId && managedTabs.has(targetId)) {
+      const existing = managedTabs.get(targetId);
+      const existingTracker = pageTrackers.get(existing);
+      if (existingTracker && url) existingTracker.url = url;
+      return existing;
+    }
+    const tracker = { tabId, targetId, url, owned };
+    const handle = makePageApi(targetId, tracker, closeTab);
+    if (targetId || tabId) managedTabs.set(targetId || tabId, handle);
+    return handle;
+  };
+  const page = makePageApi(null, null, closeTab);
   const openTab = async (url, options) => {
+    const opts = plainObject(options) ? options : {};
     const argv = ["tab", "new"];
     if (url !== undefined && url !== null && url !== "") argv.push(await absolute(url));
-    if (plainObject(options) && options.label) argv.push("--label", String(options.label));
-    return (await browse(argv)).data;
+    if (opts.label) argv.push("--label", String(opts.label));
+    if (opts.background === true) argv.push("--background");
+    const req = { argv, parallelTab: true };
+    if (opts.activate === true) req.activate = true;
+    if (opts.keepBackground === true) req.keepBackground = true;
+    const answer = await request("call", req);
+    return makePageHandle(answer.data, true);
+  };
+  const OPEN_TABS_CONCURRENCY = 6;
+  const openTabsTracked = async (urls, options, openedOut) => {
+    const list = words(urls);
+    const opts = { ...(plainObject(options) ? options : {}), background: true };
+    const results = new Array(list.length);
+    const errors = [];
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < list.length) {
+        const index = cursor++;
+        try {
+          const handle = await openTab(list[index], opts);
+          results[index] = handle;
+          openedOut.push(handle);
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+    };
+    const width = Math.min(OPEN_TABS_CONCURRENCY, list.length);
+    await Promise.all(Array.from({ length: width }, worker));
+    if (errors.length > 0) throw errors[0];
+    return results;
+  };
+  const openTabs = async (urls, options) => {
+    const opened = [];
+    try {
+      return await openTabsTracked(urls, options, opened);
+    } catch (error) {
+      if (opened.length > 0) await closeTabs(opened);
+      throw error;
+    }
+  };
+  const withTab = async (url, fn, options) => {
+    if (typeof fn !== "function") throw new TypeError("withTab(url, fn) takes a function");
+    const opts = plainObject(options) ? options : {};
+    const tab = await openTab(url, { ...opts, keepBackground: opts.activate !== true });
+    let primaryError = null;
+    let out;
+    try {
+      out = await fn(tab);
+    } catch (error) {
+      primaryError = error;
+    }
+    try {
+      await closeTab(tab);
+    } catch (closeError) {
+      if (primaryError === null) throw closeError;
+    }
+    if (primaryError !== null) throw primaryError;
+    return out;
+  };
+  const withTabs = async (urls, fn, options) => {
+    if (typeof fn !== "function") throw new TypeError("withTabs(urls, fn) takes a function");
+    const opened = [];
+    let primaryError = null;
+    let out;
+    try {
+      const pages = await openTabsTracked(urls, options, opened);
+      out = await fn(pages);
+    } catch (error) {
+      primaryError = error;
+    } finally {
+      if (opened.length > 0) await closeTabs(opened);
+    }
+    if (primaryError !== null) throw primaryError;
+    return out;
   };
   const listTabs = async () => ((await browse("tab", "list")).data || {}).tabs || [];
   const useTab = async (tab) => (await browse("tab", tabIdOf(tab))).data;
-  const closeTab = async (tab) => (await browse(tab === undefined || tab === null ? ["tab", "close"] : ["tab", "close", tabIdOf(tab)])).data;
-  const readUrls = async (urls, options) => {
-    options = plainObject(options) ? options : {};
-    const list = [];
-    for (const url of words(urls)) list.push(await absolute(url));
-    if (list.length === 0) throw new TypeError("readUrls() takes one or more URLs");
-    const answer = await browse(["read-urls", ...list, ...flags(options, { selector: "-s", concurrency: "--concurrency", timeout: "--timeout", maxChars: "--max-chars" })]);
-    return options.data === true ? answer.data : ((answer.data || {}).results || []);
+  const attachTab = async (ref) => {
+    const needle = String(ref == null ? "" : ref).trim();
+    if (!needle) throw new TypeError("attachTab(ref) requires a non-empty tabId, targetId, label, URL, or title");
+    const all = await listTabs();
+    const exact = all.find((t) => t.targetId === needle || t.tabId === needle || t.id === needle || t.label === needle);
+    if (exact) return makePageHandle(exact, Boolean(exact.openedBySession ?? exact.owned));
+    const needleLower = needle.toLowerCase();
+    const matches = all.filter((t) => String(t.url || "").toLowerCase().includes(needleLower) || String(t.title || "").toLowerCase().includes(needleLower));
+    if (matches.length === 0) throw new Error(`No tab matched ${JSON.stringify(needle)}`);
+    if (matches.length > 1) {
+      const choices = matches.slice(0, 5).map((t) => `[${t.tabId || t.targetId}] ${t.title || t.url}`).join(", ");
+      throw new Error(`Multiple tabs matched ${JSON.stringify(needle)}: ${choices}; pass a tabId or targetId`);
+    }
+    const found = matches[0];
+    return makePageHandle(found, Boolean(found.openedBySession ?? found.owned));
   };
+  const attachActiveTab = async () => {
+    const answer = await browse("tab", "active");
+    const facts = plainObject(answer.data) ? answer.data : {};
+    if (facts.targetId) return makePageHandle(facts, Boolean(facts.openedBySession ?? facts.owned));
+    const all = await listTabs();
+    const active = all.find((t) => t.active || t.current) || all[0];
+    if (!active) throw new Error("No active browser tab found");
+    return makePageHandle(active, Boolean(active.openedBySession ?? active.owned));
+  };
+  const getTabByTargetId = async (targetId) => {
+    const id = String(targetId || "");
+    if (managedTabs.has(id)) return managedTabs.get(id);
+    return attachTab(id);
+  };
+  const diffLines = (prevText, nextText) => {
+    if (prevText === nextText) return "(no changes)";
+    const a = prevText.split("\n");
+    const b = nextText.split("\n");
+    if (a.length * b.length <= 250000) {
+      const m = a.length;
+      const n = b.length;
+      const dp = new Int32Array((m + 1) * (n + 1));
+      for (let i = m - 1; i >= 0; i--) {
+        const row = i * (n + 1);
+        const nextRow = (i + 1) * (n + 1);
+        for (let j = n - 1; j >= 0; j--) {
+          dp[row + j] = a[i] === b[j] ? dp[nextRow + j + 1] + 1 : Math.max(dp[nextRow + j], dp[row + j + 1]);
+        }
+      }
+      const out = [];
+      let i = 0;
+      let j = 0;
+      while (i < m && j < n) {
+        if (a[i] === b[j]) { i++; j++; }
+        else if (dp[(i + 1) * (n + 1) + j] >= dp[i * (n + 1) + (j + 1)]) { out.push("- " + a[i]); i++; }
+        else { out.push("+ " + b[j]); j++; }
+      }
+      while (i < m) { out.push("- " + a[i]); i++; }
+      while (j < n) { out.push("+ " + b[j]); j++; }
+      return out.join("\n") || "(no changes)";
+    }
+    const counts = new Map();
+    for (const line of a) counts.set(line, (counts.get(line) || 0) + 1);
+    const out = [];
+    for (const line of b) {
+      const left = counts.get(line) || 0;
+      if (left > 0) counts.set(line, left - 1);
+      else out.push("+ " + line);
+    }
+    for (const [line, left] of counts) {
+      for (let k = 0; k < left; k++) out.push("- " + line);
+    }
+    return out.join("\n") || "(no changes)";
+  };
+  const snapshot = async (targetOrOpts, maybeOpts) => {
+    let targetPage = page;
+    let opts = targetOrOpts;
+    if (isPageHandle(targetOrOpts)) {
+      targetPage = targetOrOpts;
+      opts = maybeOpts;
+    }
+    const given = plainObject(opts) ? opts : typeof opts === "string" ? { rawFlags: opts } : {};
+    const snapArg = given.rawFlags !== undefined ? given.rawFlags : {
+      interactive: given.interactive,
+      compact: given.compact,
+      depth: given.depth,
+      selector: given.selector,
+      urls: given.urls,
+      all: given.all,
+    };
+    const tree = await targetPage.snapshot(snapArg);
+    const key = `${pageTargetIds.get(targetPage) || "__default__"}|${JSON.stringify(snapArg)}`;
+    const prev = snapshotBaselines.get(key);
+    snapshotBaselines.set(key, tree);
+    let diff = null;
+    if (given.diff !== false && typeof prev === "string") {
+      const computed = diffLines(prev, tree);
+      if (computed === "(no changes)" || computed.length < tree.length * 0.85) diff = computed;
+    }
+    const body = diff !== null ? diff : tree;
+    const out = { tree, diff, text: body };
+    Object.defineProperty(out, "toJSON", { value: () => body, enumerable: false });
+    Object.defineProperty(out, "toString", { value: () => body, enumerable: false });
+    return out;
+  };
+  const annotatedScreenshot = async (targetOrOpts, maybeOpts) => {
+    let targetPage = page;
+    let opts = targetOrOpts;
+    if (isPageHandle(targetOrOpts)) {
+      targetPage = targetOrOpts;
+      opts = maybeOpts;
+    }
+    const given = typeof opts === "string" ? { out: opts } : plainObject(opts) ? opts : {};
+    return targetPage.screenshot({ ...given, annotate: true, withSnapshot: given.withSnapshot !== false });
+  };
+  const readUrls = async (urls, options) => page.readUrls(urls, options);
   const setTimer = (repeat) => (fn, ms, ...args) => {
     if (typeof fn !== "function") throw new TypeError("setTimeout takes a function");
     const id = nextTimer++;
@@ -1238,18 +1666,36 @@
   define("btoa", (value) => base64("btoa", value));
   define("structuredClone", (value) => structuredCloneValue(value));
   define("openTab", openTab);
+  define("openTabs", openTabs);
+  define("withTab", withTab);
+  define("withTabs", withTabs);
   define("listTabs", listTabs);
+  define("listBrowserTabs", listTabs);
   define("useTab", useTab);
   define("closeTab", closeTab);
+  define("closeTabs", closeTabs);
+  define("closeAllTabs", closeTabs);
+  define("attachTab", attachTab);
+  define("attachBrowserTab", attachTab);
+  define("attachActiveTab", attachActiveTab);
+  define("attachActiveBrowserTab", attachActiveTab);
+  define("getTabByTargetId", getTabByTargetId);
+  define("annotatedScreenshot", annotatedScreenshot);
   define("readUrls", readUrls);
   define("parseReceipt", parseReceipt);
-  define("display", display);
   if (REPL) {
     define("__ardiaReplCapture__", (fn) => { replCapture = typeof fn === "function" ? fn : null; });
     define("__ardiaReplInit__", (names) => {
       if (!Array.isArray(names)) return;
       for (const name of names) {
         if (BUILTIN.has(name) && !replNames.has(name)) continue;
+        if (SHADOWABLE.has(name)) {
+          if (!replNames.has(name)) {
+            try { Object.defineProperty(globalThis, name, { value: undefined, writable: true, configurable: true, enumerable: true }); } catch (e) {}
+          }
+          replNames.add(name);
+          continue;
+        }
         if (!Object.prototype.hasOwnProperty.call(globalThis, name)) {
           try { globalThis[name] = undefined; } catch (e) {}
         }
@@ -1259,6 +1705,10 @@
   }
   Object.defineProperty(globalThis, "state", { value: JSON.parse(config.state), writable: true, configurable: false, enumerable: false });
   const BUILTIN = new Set(Reflect.ownKeys(globalThis));
+  const SHADOWABLE = new Set(["snapshot", "display", "tabs"]);
+  Object.defineProperty(globalThis, "snapshot", { value: snapshot, writable: true, configurable: true, enumerable: false });
+  Object.defineProperty(globalThis, "display", { value: display, writable: true, configurable: true, enumerable: false });
+  Object.defineProperty(globalThis, "tabs", { get: () => [...managedTabs.values()], configurable: true, enumerable: false });
 
   const clean = (value) => {
     if (value === undefined) return { undefined: true };
@@ -1364,7 +1814,11 @@
         continue;
       }
       try {
-        globalThis[name] = values[name];
+        if (SHADOWABLE.has(name)) {
+          Object.defineProperty(globalThis, name, { value: values[name], writable: true, configurable: true, enumerable: true });
+        } else {
+          globalThis[name] = values[name];
+        }
         replNames.add(name);
         kept.push(name);
       } catch (e) {}
@@ -1385,6 +1839,10 @@
     replCapture = null;
     receiptEpoch += 1;
     lastReceipt = null;
+    for (const slot of pageReceipts.values()) {
+      slot.epoch += 1;
+      slot.receipt = null;
+    }
     stateCheckedAt = 0;
     waiting.clear();
     timers.clear();
@@ -1435,6 +1893,11 @@
         answer = { ok: false, error: "the daemon's answer couldn't be read" };
       }
       settle(first, answer);
+    } else if (kind === "closed") {
+      try {
+        const list = JSON.parse(first);
+        if (Array.isArray(list)) for (const id of list) dropManaged(id);
+      } catch (e) {}
     } else if (kind === "timer") fire(first);
     else if (kind === "run") run(first, second);
   };

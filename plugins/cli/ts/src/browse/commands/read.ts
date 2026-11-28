@@ -81,6 +81,14 @@ export async function cmdGet(ctx: Ctx, argv: string[]): Promise<Result> {
     if (count === 0) count = await pierce.countAll(page, frame, args[1] as string);
     return new Result({ count, selector: args[1] }, String(count));
   }
+  if (what === "texts") {
+    need(args, 2, "get texts <selector>");
+    const frame = frameOrMain(ctx, page);
+    const raw = await page.call("(s) => ardiaBrowse.queryAll(s).slice(0, 1000).map((el) => (el.innerText != null ? el.innerText : el.textContent || '').trim())", [args[1]], { frame, read: true });
+    let texts = Array.isArray(raw) ? raw.map((item) => String(item ?? "")) : [];
+    if (texts.length === 0) texts = await pierce.textsAll(page, frame, args[1] as string);
+    return new Result({ texts, selector: args[1] }, texts.join("\n"), true);
+  }
   need(args, 2, `get ${what} <selector>`);
   let element: Element;
   [page, element] = await resolve(ctx, args[1] as string);

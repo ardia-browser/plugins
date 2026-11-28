@@ -9,13 +9,13 @@ import { envelopeGone } from "../cdp/raw.ts";
 import { Result } from "../daemon/render.ts";
 import { flag } from "../metrics.ts";
 import { detachedError, type Page, quiet } from "../state/page.ts";
-import { type State } from "../state/state.ts";
+import { type State, targetScope } from "../state/state.ts";
 import { monotonic, waitUntil } from "../state/wait.ts";
 import { afterSameDocument, beforeNavigating } from "../read/settle.ts";
 import { arrival, attach, settled } from "../changes/observe.ts";
 import { type Ctx } from "./ctx.ts";
 import { register } from "./index.ts";
-import { OPEN_FLAGS, openTarget, tracksBorrowedNav } from "./borrowed.ts";
+import { OPEN_FLAGS, openTarget, refuseOnBorrowed, tracksBorrowedNav } from "./borrowed.ts";
 import { cmdRead } from "./read-page.ts";
 import { type Flags, need, normalizeUrl, type Parsed, parse } from "./parse.ts";
 import { applyOpenOptions, takeOpenOptions } from "./setup.ts";
@@ -246,6 +246,7 @@ export async function newTab(
   show = false,
   abandoned: ((targetId: string) => void) | null = null,
   created: ((targetId: string) => void) | null = null,
+  activate = true,
 ): Promise<Page> {
   const state = ctx.state;
   await state.connect();
@@ -276,6 +277,7 @@ export async function newTab(
   }
   const targetId = String(result["targetId"]);
   created?.(targetId);
+  state.noteTabCreated(targetId);
   state.opened.add(targetId);
   state.created.add(targetId);
   state.registry.noteOpened(state.instance, targetId);
@@ -286,8 +288,10 @@ export async function newTab(
     if (state.labels.has(label)) throw new BrowseError(`The label ${label} is already used by another tab`);
     state.labels.set(label, targetId);
   }
-  state.current = targetId;
-  if (state.pinTab) state.pinnedTarget = targetId;
+  if (activate) {
+    state.current = targetId;
+    if (state.pinTab) state.pinnedTarget = targetId;
+  }
   let page = await state.page(targetId);
   await applyOpenOptions(ctx, page);
   if (url) await navigate(ctx, page, normalizeUrl(url));
@@ -435,6 +439,16 @@ export const OPEN_HERE_OFFSCREEN = "open --here --show would take the tab you pi
 
 export async function cmdOpen(ctx: Ctx, argv: string[]): Promise<Result> {
   const [options, args] = parse(argv, OPEN_FLAGS);
+  const scoped = targetScope.getStore() ?? null;
+  if (scoped !== null && !options["here"]) {
+    const state = ctx.state;
+    await state.connect();
+    if (args.length > 0 && (scoped === state.attached || !state.opened.has(scoped))) {
+      const page = await state.page(scoped);
+      refuseOnBorrowed(ctx, page, "navigate");
+    }
+    return openTab(ctx, options, args, null, scoped);
+  }
   if (!options["here"]) return openTab(ctx, options, args, null);
   const setup = [options["enable"], options["init_script"], ctx.options["enable"], ctx.options["init_script"], ctx.options["init_scripts"]];
   if (setup.some((value) => (Array.isArray(value) ? value.length > 0 : Boolean(value)))) throw new Usage(OPEN_HERE_SETUP);
@@ -447,7 +461,7 @@ export async function cmdOpen(ctx: Ctx, argv: string[]): Promise<Result> {
   return openTab(ctx, options, args, target);
 }
 
-async function openTab(ctx: Ctx, options: Parsed, args: string[], here: string | null): Promise<Result> {
+async function openTab(ctx: Ctx, options: Parsed, args: string[], here: string | null, scoped: string | null = null): Promise<Result> {
   if (options["headers"]) throw new Usage("ardia browse can't scope headers to an origin at launch; run `ardia browse set headers <json>` before `open`");
   takeOpenOptions(ctx, options);
   const state = ctx.state;
@@ -459,14 +473,21 @@ async function openTab(ctx: Ctx, options: Parsed, args: string[], here: string |
     if (!state.targetInfos.has(here)) throw new Usage(OPEN_HERE_WITHOUT_TAB);
     flag("open_here", true);
   }
-  const borrowed = here === null && state.current && state.current === state.attached ? state.attached : null;
-  const freshTab = here === null && !(state.current && state.targetInfos.has(state.current) && !borrowed);
+  const active = scoped ?? state.current;
+  const borrowed = here === null && active && active === state.attached ? state.attached : null;
+  const freshTab = here === null && scoped === null && !(state.current && state.targetInfos.has(state.current) && !borrowed);
   let cameFrom = "about:blank";
   let replacedFrom: [Set<string>, string] | null = null;
   let page: Page;
   if (freshTab) page = await newTab(ctx, reporting ? null : url, (options["label"] as string | undefined) ?? null, false, show && !reporting);
   else {
-    page = here !== null ? await state.page(here) : await state.page();
+    const targetId = here ?? scoped;
+    page = targetId !== null ? await state.page(targetId) : await state.page();
+    if (scoped !== null && options["label"]) {
+      const label = String(options["label"]);
+      if (state.labels.has(label) && state.labels.get(label) !== page.targetId) throw new BrowseError(`The label ${label} is already used by another tab`);
+      state.labels.set(label, page.targetId);
+    }
     cameFrom = page.url;
     if (url) replacedFrom = [state.documentsOf(page), knownTitle(state, page) || page.url];
     if (page.crashed && url) {

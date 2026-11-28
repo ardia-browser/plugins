@@ -338,7 +338,12 @@ export async function roundTrip(found: Found, rest: string[], secrets: Secrets, 
   for (const secret of urlsWithSecrets(endpoint.ws)) secrets.add(secret);
   const root = rootOf(endpoint);
   const keySource = endpointKey(endpoint, root);
+  const rawCommand = rest[0] as string;
+  if (rawCommand === "repl") rest = ["script", "--repl", ...rest.slice(1)];
   const command = rest[0] as string;
+  if (command === "script" && rest.slice(1).some((arg) => arg === "--repl" || arg === "--persist") && found.flag("content_boundaries") !== true) {
+    options.set("compact_boundaries", true);
+  }
   const auto = autoSessionsOn(found) && (command === "session" || !servesHere(command, rest.slice(1))) ? await autoSession(root, namespace, keySource, timeout, call) : null;
   if (auto !== null) session = auto.session;
   options.set("_session", session);

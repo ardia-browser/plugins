@@ -171,28 +171,59 @@ function inlineCode(text: string): boolean {
 }
 
 export function scriptSource(args: string[], cwd: string, expand: (path: string) => string): string {
-  const [options, positional] = parse(args, { "--timeout": "value", "--stdin": "bool", "--repl": "bool", "--persist": "bool", "--reset": "bool" });
-  if (positional.length > 1) throw new Usage("Usage: ardia browse script [file.js] [--timeout 90s] [--repl] [--reset]; quote the script in a heredoc on stdin, or put it in a file");
+  const [options, positional] = parse(
+    args,
+    {
+      "--timeout": "value",
+      "--stdin": "bool",
+      "--repl": "bool",
+      "--persist": "bool",
+      "--reset": "bool",
+      "--file": "value",
+      "-f": "value",
+      "--eval": "value",
+      "-e": "value",
+      "-c": "value",
+      "--close": "bool",
+      "--ephemeral": "bool",
+      "--cleanup": "bool",
+    },
+    { "-f": "--file", "-e": "--eval", "-c": "--eval", "--persist": "--repl", "--ephemeral": "--close", "--cleanup": "--close" },
+  );
+  if (positional.length > 1) throw new Usage("Usage: ardia repl [file.js | '<code>'] [--file path] [--eval code] [--timeout 90s] [--close] [--reset]");
   let source: string;
+  const evalCode = options["eval"] as string | undefined;
+  const fileArg = options["file"] as string | undefined;
   const first = positional[0];
-  if (first !== undefined && first !== "-") {
+  const readFilePath = (pathArg: string): string => {
+    const fd = openSync(expand(pathArg), "r");
     try {
-      const fd = openSync(expand(first), "r");
-      try {
-        const buffer = Buffer.alloc(MAX_SCRIPT_SOURCE * 4 + 4);
-        let length = 0;
-        for (let read = 1; read > 0 && length < buffer.length; length += read) read = readSync(fd, buffer, length, buffer.length - length, null);
-        source = [...buffer.subarray(0, length).toString("utf8")].slice(0, MAX_SCRIPT_SOURCE + 1).join("");
-      } finally {
-        closeSync(fd);
-      }
+      const buffer = Buffer.alloc(MAX_SCRIPT_SOURCE * 4 + 4);
+      let length = 0;
+      for (let read = 1; read > 0 && length < buffer.length; length += read) read = readSync(fd, buffer, length, buffer.length - length, null);
+      return [...buffer.subarray(0, length).toString("utf8")].slice(0, MAX_SCRIPT_SOURCE + 1).join("");
+    } finally {
+      closeSync(fd);
+    }
+  };
+  if (evalCode !== undefined) {
+    source = evalCode;
+  } else if (fileArg !== undefined) {
+    try {
+      source = readFilePath(fileArg);
+    } catch (error) {
+      throw new Usage(`Can't read ${fileArg}: ${strerror(error)}`);
+    }
+  } else if (first !== undefined && first !== "-") {
+    try {
+      source = readFilePath(first);
     } catch (error) {
       if (!inlineCode(first)) throw new Usage(`Can't read ${first}: ${strerror(error)}`);
       source = first;
     }
   } else if (first !== undefined || options["stdin"] || !isatty(0)) source = readStdin(MAX_SCRIPT_SOURCE + 1);
   else if (options["reset"]) source = "";
-  else throw new Usage("ardia browse script reads the script from a file or stdin: ardia browse script <<'EOF' … EOF");
+  else throw new Usage("ardia repl reads JavaScript from a file, inline code or stdin: ardia repl <<'EOF' ... EOF");
   if (codePointLength(source) > MAX_SCRIPT_SOURCE) throw new Usage(`The script is over ${MAX_SCRIPT_SOURCE / 1024} KB`);
   void cwd;
   return source;

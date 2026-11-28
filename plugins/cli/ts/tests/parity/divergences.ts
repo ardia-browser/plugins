@@ -30,15 +30,25 @@ type Swap = { now: string; then: string };
 
 let swaps: Swap[] | undefined;
 
+function skillDescription(text: string): string | null {
+  return /^description:\s*(.+)$/mu.exec(text)?.[1] ?? null;
+}
+
 function frozenSwaps(): Swap[] {
   if (swaps !== undefined) return swaps;
   const shipped = new Map(SKILL_FILES);
   const help = JSON.parse(readFileSync(join(FROZEN, "browse-help.json"), "utf8")) as { overview: string; commands: Record<string, string> };
+  const skillNow = shipped.get("SKILL.md") as string;
+  const skillThen = readFileSync(join(FROZEN, "SKILL.md"), "utf8");
   const found: Swap[] = [
-    { now: shipped.get("SKILL.md") as string, then: readFileSync(join(FROZEN, "SKILL.md"), "utf8") },
+    { now: skillNow, then: skillThen },
+    { now: shipped.get("references/script.md") as string, then: readFileSync(join(FROZEN, "script.md"), "utf8") },
     { now: shipped.get("references/troubleshooting.md") as string, then: readFileSync(join(FROZEN, "troubleshooting.md"), "utf8") },
     { now: OVERVIEW, then: help.overview },
   ];
+  const descNow = skillDescription(skillNow);
+  const descThen = skillDescription(skillThen);
+  if (descNow !== null && descThen !== null && descNow !== descThen) found.push({ now: descNow, then: descThen });
   for (const [name, then] of Object.entries(help.commands)) {
     const now = COMMANDS[name];
     if (now !== undefined && now !== then) found.push({ now, then });

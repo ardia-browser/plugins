@@ -1,6 +1,6 @@
 export const PLACED_VALUE_FLAGS: readonly string[] = ["--port", "--session"];
 const SHARED_VALUE_FLAGS: readonly string[] = ["--port", "--ws", "--data-dir", "--timeout", "--session"];
-const BROWSE_LIKE = new Set(["browse", "notes"]);
+const BROWSE_LIKE = new Set(["browse", "notes", "repl"]);
 const UNTOUCHED = new Set(["computer"]);
 const KEEPS_PORT = new Set(["scripts"]);
 

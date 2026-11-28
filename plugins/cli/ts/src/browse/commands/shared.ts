@@ -1,13 +1,14 @@
 import { BrowseError } from "../daemon-errors.ts";
 export { pyError, pyIntArg } from "../pyerror.ts";
 import type { Element, Page } from "../state/page.ts";
-import type { State } from "../state/state.ts";
+import { activeTarget, type State } from "../state/state.ts";
 import { newTab } from "./core.ts";
 import type { Ctx } from "./ctx.ts";
 
 export function borrowedTab(state: State): string | null {
   const attached = state.attached;
-  return state.current && state.current === attached ? attached : null;
+  const target = activeTarget(state);
+  return target !== null && target === attached ? attached : null;
 }
 
 export function noteOwnTab(state: State, page: Page, borrowed: string): void {
@@ -21,14 +22,15 @@ export async function currentOrNew(ctx: Ctx): Promise<Page> {
   const state = ctx.state;
   await state.connect();
   const borrowed = borrowedTab(state);
-  if (state.current && state.targetInfos.has(state.current) && !borrowed) return state.page();
+  const target = activeTarget(state);
+  if (target && state.targetInfos.has(target) && !borrowed) return state.page();
   const page = await newTab(ctx, null);
   if (borrowed) noteOwnTab(state, page, borrowed);
   return page;
 }
 
 export function refuseOnBorrowed(ctx: Ctx, page: Page, what: string): void {
-  const borrowed = borrowedTab(ctx.state);
+  const borrowed = borrowedTab(ctx.state) ?? (ctx.state.attached !== null && ctx.state.attached === page.targetId ? ctx.state.attached : null);
   if (borrowed && borrowed === page.targetId) {
     const tab = ctx.state.tabId(borrowed);
     throw new BrowseError(

@@ -12,7 +12,7 @@ import { BrowseError, ConnectionLost } from "../daemon-errors.ts";
 import { FAILED_WITHOUT_CODE, flag, rendered } from "../metrics.ts";
 import { closeFd, entryInfo, listNames, unlinkQuietly, wellFormed, writeAllFd } from "../paths.ts";
 import { MUTATING } from "./names.ts";
-import { cleanValue, neutralize, safeCutIndex, stripLoneSurrogates, wrapUntrusted } from "../untrusted.ts";
+import { cleanValue, neutralize, safeCutIndex, stripLoneSurrogates, wrapCompactUntrusted, wrapUntrusted } from "../untrusted.ts";
 import { safeCode } from "../codes.ts";
 
 export const MAX_REQUEST = 16 * 1024 * 1024;
@@ -113,7 +113,9 @@ export function renderPlain(options: Options, result: Result | null, error: Brow
   const capped = text !== plainText ? capNotice(text) : "";
   if (capped) text = text.slice(0, text.length - capped.length).replace(/\n$/u, "");
   const notice = [done.notice, capped].filter((part) => part).join("\n");
-  if (done.pageContent && options["content_boundaries"] && !options["out_only"]) text = boundary(text);
+  if (done.pageContent && options["content_boundaries"] && !options["out_only"]) {
+    text = options["compact_boundaries"] ? wrapCompactUntrusted(text) : boundary(text);
+  }
   return [code, `${inert(text)}\n`, notice ? `${inert(notice)}\n` : ""];
 }
 
