@@ -387,7 +387,9 @@ function absolute(path: string): string {
   return normalized(isAbsolute(path) ? path : join(process.cwd(), path));
 }
 
-export async function install(targets: string[], project: boolean, computerUse = true, replace = false): Promise<Lines> {
+export type ComputerUse = boolean | "unless-opted-out";
+
+export async function install(targets: string[], project: boolean, computerUse: ComputerUse = true, replace = false): Promise<Lines> {
   const written = new Map<string, string[]>();
   for (const target of new Set(targets)) {
     const folder = destination(target, project);
@@ -400,7 +402,7 @@ export async function install(targets: string[], project: boolean, computerUse =
     const label = names.join(", ");
     await stepBoundary();
     try {
-      installInto(folder, computerUse ? undefined : [], true, replace);
+      installInto(folder, computerUse === false ? [] : undefined, true, replace);
     } catch (error) {
       if (!(error instanceof SkillError) && !errnoOf(error)) throw error;
       out.push(`${label}: error ${osError(error)}`);
@@ -409,13 +411,17 @@ export async function install(targets: string[], project: boolean, computerUse =
     }
     installed.push(absolute(folder));
     out.push(`${label}: ${folder}`);
-    if (computerUse) {
+    const companions = computerUse === "unless-opted-out" ? readMarker(folder)?.get("companions") ?? undefined : undefined;
+    if (computerUse === true || (computerUse === "unless-opted-out" && wantsCompanion(folder, companions))) {
       await stepBoundary();
       const [line, failed] = await companionLine(companionFolder(folder));
       out.push(`${label}: ${line}`);
       await stepBoundary();
       if (failed) status = 1;
       else noteCompanions(folder, [...COMPANIONS]);
+    } else if (computerUse === "unless-opted-out" && companions === undefined) {
+      await stepBoundary();
+      noteCompanions(folder, [...COMPANIONS]);
     }
   }
   await stepBoundary();
@@ -450,7 +456,7 @@ export async function installDetected(computerUse = true): Promise<Lines> {
     ["skills_skipped", detectedTargets().length - targets.length],
   ];
   if (targets.length === 0) return { status: 0, out, counts };
-  const done = await install(targets, false, computerUse);
+  const done = await install(targets, false, computerUse ? "unless-opted-out" : false);
   return { status: done.status, out: [...out, ...done.out], counts };
 }
 
@@ -461,18 +467,26 @@ function mentions(companions: Value, name: string): boolean {
   throw new TypeError("argument of this type is not iterable");
 }
 
+function wantsCompanion(folder: string, companions: Value | undefined): boolean {
+  const cua = companionFolder(folder);
+  const ours = !isLink(cua) && markedFiles(cua, CUA_SKILL) !== undefined;
+  return (companions === undefined && !present(cua)) || (ours && (companions === undefined || mentions(companions, CUA_SKILL)));
+}
+
 export async function refresh(): Promise<Lines> {
   const userFolders = Object.keys(TARGETS).map((target) => destination(target, false));
   let status = 0;
-  const kept: string[] = [];
+  const recorded = recordedFolders();
+  const userLevel = new Set(userFolders.map(absolute));
+  const remembered = recorded.filter((folder) => userLevel.has(folder));
   const out: string[] = [];
-  for (const folder of new Set([...recordedFolders(), ...userFolders])) {
+  for (const folder of new Set([...recorded, ...userFolders])) {
     if (!present(folder)) continue;
     if (ownedFiles(folder) === undefined) {
       out.push(`skipped ${folder}: not installed by ardia skills install (no ${MARKER} marker)`);
       continue;
     }
-    kept.push(folder);
+    remembered.push(folder);
     await stepBoundary();
     try {
       installInto(folder, undefined);
@@ -485,8 +499,7 @@ export async function refresh(): Promise<Lines> {
     out.push(`refreshed ${folder}`);
     const companions = readMarker(folder)?.get("companions") ?? undefined;
     const cua = companionFolder(folder);
-    const ours = markedFiles(cua, CUA_SKILL) !== undefined && !isLink(cua);
-    if ((companions === undefined && !present(cua)) || (ours && (companions === undefined || mentions(companions, CUA_SKILL)))) {
+    if (wantsCompanion(folder, companions)) {
       await stepBoundary();
       const [line, failed] = await companionLine(cua);
       out.push(line.startsWith("error") ? line : `refreshed ${cua}`);
@@ -499,7 +512,7 @@ export async function refresh(): Promise<Lines> {
     if (companions === undefined) noteCompanions(folder, [...COMPANIONS]);
   }
   await stepBoundary();
-  saveRecord(kept);
+  saveRecord(remembered);
   return { status, out };
 }
 
