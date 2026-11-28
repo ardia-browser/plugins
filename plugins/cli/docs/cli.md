@@ -72,9 +72,12 @@ that is CPython 3.13 behaviour the program reproduces on purpose (`ts/src/pylib`
   included, is refused with the folder's path; `--replace` removes that one folder (a link itself, never its target)
   and installs fresh. Each folder it wrote goes into `$ARDIA_CLI_HOME/skills.json`. `ardia skills refresh` never
   adopts: it rewrites every marked folder in that list and every marked user-level folder above, prints
-  `skipped <folder>` for the rest, refuses a linked subfolder, and keeps only our folders in the list. `install.sh` runs it after
-  each upgrade, so installed copies follow the CLI. Both also install cua-driver's skill next to ours (see Computer
-  use); `--no-cua` skips it.
+  `skipped <folder>` for the rest, refuses a linked subfolder, and keeps our folders and the ones the user removed in the
+  list, so `install --auto` keeps skipping a removed copy after later updates. `install.sh` runs it after each upgrade,
+  so installed copies follow the CLI. Both also install cua-driver's skill next to ours (see Computer use); `--no-cua`
+  skips it and records `"companions": []` in the marker. `refresh` and `install --auto` keep to that: they put
+  cua-driver's skill back only where the marker still names it and ardia's copy is still there, so `--no-cua` once, or
+  deleting the `cua-driver` folder, keeps it out across updates. A plain `install` without `--no-cua` brings it back.
 - `ardia skills status` says, for every recorded and user- or project-level copy, whether it is `current` (its stamp
   is this CLI's skill and its files still hash to it), `stale` (an older CLI wrote it, or a copy from before the stamp),
   `edited` (its files no longer match its own stamp) or `foreign` (not ardia's), and ends with the shipped version and
