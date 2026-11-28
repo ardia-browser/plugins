@@ -411,13 +411,17 @@ export async function install(targets: string[], project: boolean, computerUse: 
     }
     installed.push(absolute(folder));
     out.push(`${label}: ${folder}`);
-    if (computerUse === true || (computerUse === "unless-opted-out" && wantsCompanion(folder))) {
+    const companions = computerUse === "unless-opted-out" ? readMarker(folder)?.get("companions") ?? undefined : undefined;
+    if (computerUse === true || (computerUse === "unless-opted-out" && wantsCompanion(folder, companions))) {
       await stepBoundary();
       const [line, failed] = await companionLine(companionFolder(folder));
       out.push(`${label}: ${line}`);
       await stepBoundary();
       if (failed) status = 1;
       else noteCompanions(folder, [...COMPANIONS]);
+    } else if (computerUse === "unless-opted-out" && companions === undefined) {
+      await stepBoundary();
+      noteCompanions(folder, [...COMPANIONS]);
     }
   }
   await stepBoundary();
@@ -463,10 +467,9 @@ function mentions(companions: Value, name: string): boolean {
   throw new TypeError("argument of this type is not iterable");
 }
 
-function wantsCompanion(folder: string): boolean {
-  const companions = readMarker(folder)?.get("companions") ?? undefined;
+function wantsCompanion(folder: string, companions: Value | undefined): boolean {
   const cua = companionFolder(folder);
-  const ours = markedFiles(cua, CUA_SKILL) !== undefined && !isLink(cua);
+  const ours = !isLink(cua) && markedFiles(cua, CUA_SKILL) !== undefined;
   return (companions === undefined && !present(cua)) || (ours && (companions === undefined || mentions(companions, CUA_SKILL)));
 }
 
@@ -474,18 +477,15 @@ export async function refresh(): Promise<Lines> {
   const userFolders = Object.keys(TARGETS).map((target) => destination(target, false));
   let status = 0;
   const recorded = recordedFolders();
-  const kept: string[] = [];
+  const remembered: string[] = [...recorded];
   const out: string[] = [];
   for (const folder of new Set([...recorded, ...userFolders])) {
-    if (!present(folder)) {
-      if (recorded.includes(folder)) kept.push(folder);
-      continue;
-    }
+    if (!present(folder)) continue;
     if (ownedFiles(folder) === undefined) {
       out.push(`skipped ${folder}: not installed by ardia skills install (no ${MARKER} marker)`);
       continue;
     }
-    kept.push(folder);
+    remembered.push(folder);
     await stepBoundary();
     try {
       installInto(folder, undefined);
@@ -498,7 +498,7 @@ export async function refresh(): Promise<Lines> {
     out.push(`refreshed ${folder}`);
     const companions = readMarker(folder)?.get("companions") ?? undefined;
     const cua = companionFolder(folder);
-    if (wantsCompanion(folder)) {
+    if (wantsCompanion(folder, companions)) {
       await stepBoundary();
       const [line, failed] = await companionLine(cua);
       out.push(line.startsWith("error") ? line : `refreshed ${cua}`);
@@ -511,7 +511,7 @@ export async function refresh(): Promise<Lines> {
     if (companions === undefined) noteCompanions(folder, [...COMPANIONS]);
   }
   await stepBoundary();
-  saveRecord(kept);
+  saveRecord(remembered);
   return { status, out };
 }
 
