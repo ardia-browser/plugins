@@ -477,7 +477,8 @@ export async function refresh(): Promise<Lines> {
   const userFolders = Object.keys(TARGETS).map((target) => destination(target, false));
   let status = 0;
   const recorded = recordedFolders();
-  const remembered: string[] = [...recorded];
+  const userLevel = new Set(userFolders.map(absolute));
+  const remembered = recorded.filter((folder) => userLevel.has(folder));
   const out: string[] = [];
   for (const folder of new Set([...recorded, ...userFolders])) {
     if (!present(folder)) continue;

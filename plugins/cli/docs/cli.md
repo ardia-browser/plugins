@@ -72,10 +72,10 @@ that is CPython 3.13 behaviour the program reproduces on purpose (`ts/src/pylib`
   included, is refused with the folder's path; `--replace` removes that one folder (a link itself, never its target)
   and installs fresh. Each folder it wrote goes into `$ARDIA_CLI_HOME/skills.json`. `ardia skills refresh` never
   adopts: it rewrites every marked folder in that list and every marked user-level folder above, prints
-  `skipped <folder>` for the rest, refuses a linked subfolder, and never drops a folder from the list, so `install --auto`
-  keeps skipping a copy the user removed, or took over by deleting its marker, after later updates. `install.sh` runs
-  it after each upgrade, so installed copies follow the CLI. Both also install cua-driver's skill next to ours (see
-  Computer use); `--no-cua` skips it and records `"companions": []` in the marker. `refresh` and `install --auto` keep
+  `skipped <folder>` for the rest, refuses a linked subfolder, and keeps our folders in the list plus every user-level one it
+  recorded, so `install --auto` keeps skipping a copy the user removed, or took over by deleting its marker, after later
+  updates. `install.sh` runs it after each upgrade, so installed copies follow the CLI. Both also install cua-driver's
+  skill next to ours (see Computer use); `--no-cua` skips it and records `"companions": []` in the marker. `refresh` and `install --auto` keep
   to that: next to an existing copy they put cua-driver's skill back only where ardia's cua-driver copy is still there
   and the marker names it (or predates the `companions` field, which also brings back a missing one), and a fresh
   folder gets it unless another cua-driver skill is already there. Either way the marker then records the choice, so
