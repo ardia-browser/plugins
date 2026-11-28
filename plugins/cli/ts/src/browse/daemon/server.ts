@@ -29,6 +29,7 @@ import { redact } from "../../redact.ts";
 import { parseText } from "../../json.ts";
 import { dispatch, hooks } from "../commands/all.ts";
 import { Ctx } from "../commands/ctx.ts";
+import { warmSpare } from "../script/host.ts";
 import { State } from "../state/state.ts";
 import { appCall, appTabMap } from "../state/apptabs.ts";
 import { heldAppTabs, recentlyUsed, shouldScan, TabHolds } from "./holds.ts";
@@ -244,6 +245,7 @@ export class Daemon {
     this.enterFolder();
     if (socketIsOurs(this.sock, this.dirFd)) unlinkQuietly(this.sock, this.dirFd);
     this.server = await this.listen();
+    warmSpare();
     writePrivateJson(
       `${this.key}.json`,
       this.dirFd,

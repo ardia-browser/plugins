@@ -179,6 +179,17 @@ ENTRIES.push({
   run: async (parsed) => (await import("./star.ts")).runStar(text(parsed, "data_dir")),
 });
 
+ENTRIES.push({
+  path: ["guide"],
+  spec: { options: [], positional: "topic" },
+  run: async (parsed, call) => {
+    const topics = list(parsed, "topic");
+    const printed = (await import("./skills.ts")).printGuide(topics[0]);
+    const said = skillsSaid(printed, call);
+    return printed.raw === undefined ? said : { ...said, raw: printed.raw };
+  },
+});
+
 function withSkillFlag(argv: readonly string[]): readonly string[] {
   let index = 0;
   while (index < argv.length) {

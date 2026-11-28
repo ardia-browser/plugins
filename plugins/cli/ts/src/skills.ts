@@ -141,6 +141,23 @@ export function printSkill(full: boolean): Lines & { raw: string } {
   return { status: 0, out: [], raw: text, outputChars: codePoints(text).length };
 }
 
+export function printGuide(topic: string | undefined): Lines & { raw?: string } {
+  const clean = (topic ?? "").trim().toLowerCase();
+  if (clean === "" || clean === "overview" || clean === "main") {
+    const text = shippedText("SKILL.md");
+    return { status: 0, out: [], raw: text, outputChars: codePoints(text).length };
+  }
+  const mapped = clean === "repl" ? "script" : clean;
+  const target = `references/${mapped}.md`;
+  const entry = SKILL_FILES.find(([file]) => file === target);
+  if (entry !== undefined) {
+    const text = entry[1];
+    return { status: 0, out: [], raw: text, outputChars: codePoints(text).length };
+  }
+  const topics = ["repl", ...SKILL_FILES.map(([file]) => file).filter((file) => file.startsWith("references/") && file.endsWith(".md") && file !== "references/script.md").map((file) => file.slice("references/".length, -3))];
+  return { status: 1, out: [`Unknown guide topic: ${topic}. Available topics: ${[...new Set(topics)].join(", ")}`] };
+}
+
 export function listSkills(): Lines {
   const fields = frontMatter(shippedText("SKILL.md"));
   return { status: 0, out: [`${fields.get("name") ?? SKILL_NAME}\t${fields.get("description") ?? ""}`] };

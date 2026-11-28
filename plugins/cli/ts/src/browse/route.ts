@@ -24,6 +24,7 @@ export function invokesBrowse(argv: readonly string[]): boolean {
 }
 
 export type NotesArgv = { hoisted: string[]; rest: string[] };
+export type ReplArgv = { hoisted: string[]; rest: string[] };
 
 export function notesArgv(argv: readonly string[]): NotesArgv | undefined {
   const hoisted: string[] = [];
@@ -50,4 +51,33 @@ export function notesArgv(argv: readonly string[]): NotesArgv | undefined {
     break;
   }
   return argv[index] === "notes" ? { hoisted, rest: argv.slice(index + 1) } : undefined;
+}
+
+export function replArgv(argv: readonly string[]): ReplArgv | undefined {
+  const hoisted: string[] = [];
+  const forwarded: string[] = [];
+  let index = 0;
+  while (index < argv.length) {
+    const token = argv[index] as string;
+    const name = token.split("=")[0] as string;
+    if (SHARED_VALUE_FLAGS.includes(name)) {
+      const target = name === "--timeout" ? forwarded : hoisted;
+      if (token.includes("=")) {
+        target.push(token);
+        index += 1;
+        continue;
+      }
+      if (index + 1 >= argv.length) return undefined;
+      target.push(token, argv[index + 1] as string);
+      index += 2;
+      continue;
+    }
+    if (token === "--json") {
+      hoisted.push(token);
+      index += 1;
+      continue;
+    }
+    break;
+  }
+  return argv[index] === "repl" ? { hoisted, rest: [...forwarded, ...argv.slice(index + 1)] } : undefined;
 }

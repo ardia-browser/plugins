@@ -6,18 +6,18 @@ import type { EngineResult } from "./engine.ts";
 
 const PER_CASE_MS = 1000;
 const SWITCH_ROWS = new Set(["browse-daemon"]);
-const TYPESCRIPT_ONLY_ROWS = new Set(["skills status"]);
+const TYPESCRIPT_ONLY_ROWS = new Set(["skills status", "guide", "repl"]);
 const GROUP_ROWS = new Set(["browse"]);
 const ARGPARSE_ROW = "argparse";
 
 async function servedByArgparse(kase: Case): Promise<boolean> {
   if (kase.env.get("ARDIA_BROWSE_FOR_PLUGIN")) return false;
-  const [{ invokesBrowse, notesArgv }, { route, withArgparse }, { parseCommand }] = await Promise.all([
+  const [{ invokesBrowse, notesArgv, replArgv }, { route, withArgparse }, { parseCommand }] = await Promise.all([
     import("../../src/browse/route.ts"),
     import("../../src/route.ts"),
     import("../../src/commands.ts"),
   ]);
-  if (invokesBrowse(kase.argv) || notesArgv(kase.argv) !== undefined) return false;
+  if (invokesBrowse(kase.argv) || notesArgv(kase.argv) !== undefined || replArgv(kase.argv) !== undefined) return false;
   return (await withArgparse(route(kase.argv, undefined, parseCommand), kase.argv)).kind === "argparse";
 }
 

@@ -242,8 +242,8 @@ const SELECTOR_PREFIX = "--selector=";
 const SELECTOR_FLAGS = new Set(["-s", "--selector"]);
 export const VALUE_FLAGS_TAKEN: ReadonlySet<string> = new Set([
   "--baseline", "--block", "--body", "--button", "--capability", "--categories", "--column", "--commit", "--concurrency", "--condition", "--content", "--content-type", "--count",
-  "--credential-provider", "--curl", "--delay", "--depth", "--description", "--domain", "--duration", "--enable", "--expires", "--field",
-  "--fields", "--filter", "--fixture", "--fn", "--format", "--from", "--headers", "--idle", "--init-script", "--item", "--kind", "--label", "--limit",
+  "--credential-provider", "--curl", "--delay", "--depth", "--description", "--domain", "--duration", "--enable", "--eval", "--expires", "--field",
+  "--fields", "--file", "--filter", "--fixture", "--fn", "--format", "--from", "--headers", "--idle", "--init-script", "--item", "--kind", "--label", "--limit",
   "--links", "--llms", "--load", "--match", "--max-chars", "--method", "--name", "--nth", "--origin", "--out", "--output", "--param", "--params",
   "--password", "--password-selector", "--patch", "--path", "--payload", "--port", "--position", "--prefix", "--profile", "--property", "--region", "--resource-type", "--role",
   "--save", "--scale", "--scope", "--screenshot-dir", "--screenshot-format", "--screenshot-quality", "--site", "--state", "--status", "--step",   "--submit-selector", "--tags", "--target", "--text", "--threshold", "--timeout", "--to", "--trace", "--type", "--url", "--username",
@@ -253,6 +253,8 @@ export const SHORT_VALUE_FLAGS: Readonly<Record<string, readonly string[]>> = {
   snapshot: ["-d"],
   diff: ["-b", "-d", "-o", "-t"],
   wait: ["-t", "-u", "-l", "-f"],
+  script: ["-c", "-e", "-f"],
+  repl: ["-c", "-e", "-f"],
 };
 
 function takesValue(command: string, word: string): boolean {

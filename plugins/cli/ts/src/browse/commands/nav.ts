@@ -1,6 +1,7 @@
 import { BrowseError, ConnectionLost } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
 import { type Page } from "../state/page.ts";
+import { activeTarget } from "../state/state.ts";
 import { waitUntil } from "../state/wait.ts";
 import { type Ctx } from "./ctx.ts";
 import { register } from "./index.ts";
@@ -9,11 +10,12 @@ import { borrowedAhead, borrowedDepth, borrowedStepAllowed, historyFrom, noteBor
 
 export function borrowedTab(ctx: Ctx): string | null {
   const state = ctx.state;
-  return state.current && state.current === state.attached ? state.attached : null;
+  const target = activeTarget(state);
+  return target !== null && target === state.attached ? state.attached : null;
 }
 
 export function refuseOnBorrowed(ctx: Ctx, page: Page, what: string): void {
-  const borrowed = borrowedTab(ctx);
+  const borrowed = borrowedTab(ctx) ?? (ctx.state.attached !== null && ctx.state.attached === page.targetId ? ctx.state.attached : null);
   if (borrowed && borrowed === page.targetId) {
     const tab = ctx.state.tabId(borrowed);
     throw new BrowseError(

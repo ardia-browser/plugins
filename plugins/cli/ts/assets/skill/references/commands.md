@@ -59,8 +59,9 @@ entry. Generated from that help and the command table by `bun src/skill-gen.ts -
 - **record**: `ardia browse record start <path.webm> [url] | stop | restart <path.webm> [url]`
 - **reload** (also refresh): `ardia browse reload`
 - **removeinitscript**: `ardia browse removeinitscript <id>`
+- **repl**: `ardia repl [file.js | '<code>'] [-e '<code>'] [-f file.js] [--close] [--reset] [--timeout 90s] [--out <file>]`
 - **screenshot** (also shot): `ardia browse screenshot [sel] [path | --out path] [--full] [--annotate] [--screenshot-format png|jpeg] [--screenshot-quality n] [--if-changed [--threshold pct]] [--with-snapshot]`
-- **script**: `ardia browse script [file.js | '<code>'] [--timeout 90s] [--out <file>]   (or the script on stdin)`
+- **script**: `ardia browse script [file.js | '<code>'] [-e '<code>'] [-f file.js] [--repl] [--close] [--reset] [--timeout 90s] [--out <file>]`
 - **scroll**: `ardia browse scroll [up|down|left|right] [px] [-s <sel>] [--no-humanize]`
 - **scrollintoview** (also scrollinto): `ardia browse scrollintoview <sel> [--humanize]`
 - **select**: `ardia browse select <sel> <value...> [--humanize] [--no-changes]`

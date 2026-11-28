@@ -65,6 +65,8 @@ scripts install ts
 scripts uninstall ts
 scripts list ts
 feedback ts
+guide ts
+repl ts
 star ts
 notes ts
 pinned ts

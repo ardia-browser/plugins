@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { spawnSync } from "node:child_process";
 import http from "node:http";
 import { formatG } from "../../pylib/format.ts";
@@ -22,6 +23,13 @@ import { monotonic } from "./wait.ts";
 export { parseRef, type Ref } from "./refs.ts";
 
 export const PAGE_SCHEMES = ["http:", "https:", "about:", "data:", "blob:", "file:", "chrome:", "chrome-extension:", "chrome-untrusted:", "devtools:", "view-source:"];
+export const targetScope = new AsyncLocalStorage<string>();
+export function withTarget<T>(targetId: string | null | undefined, fn: () => Promise<T>): Promise<T> {
+  return targetId ? targetScope.run(targetId, fn) : fn();
+}
+export function activeTarget(state: State): string | null {
+  return targetScope.getStore() ?? state.current;
+}
 export const ACTIVE_TIMEOUT = 3.0;
 export const APPEAR_POLL = 0.15;
 export const PROBE_TIMEOUT = 3.0;
@@ -183,8 +191,13 @@ export class State extends Refs implements temptabs.TempTabState {
   readonly appTabs = new Map<string, string>();
   readonly usedAt = new Map<string, number>();
   readonly appGenerations = new Map<string, unknown>();
+  readonly onTabCreated = new Set<(targetId: string) => void>();
   readonly opened = new Set<string>();
   readonly created = new Set<string>();
+
+  noteTabCreated(targetId: string): void {
+    for (const listener of [...this.onTabCreated]) listener(targetId);
+  }
   readonly persisted = new Set<string>();
   readonly frames = new Map<string, string>();
   readonly leases = new Set<string>();
@@ -631,8 +644,9 @@ export class State extends Refs implements temptabs.TempTabState {
   async page(target: string | null = null): Promise<Page> {
     await this.connect();
     const started = clock();
-    const explicit = target !== null;
-    let targetId = target ?? this.current;
+    const scoped = target ?? targetScope.getStore() ?? null;
+    const explicit = scoped !== null;
+    let targetId = scoped ?? this.current;
     if (targetId === null) {
       if (this.pinTab && this.pinnedTarget) {
         throw new BrowseError(
@@ -872,9 +886,9 @@ export class State extends Refs implements temptabs.TempTabState {
     return frame ?? null;
   }
 
-  async resolveBareRef(ref: string): Promise<[Page, Element]> {
+  async resolveBareRef(ref: string, expectedTarget: string | null = null): Promise<[Page, Element]> {
     try {
-      return await this.resolveRef(ref);
+      return await this.resolveRef(ref, expectedTarget);
     } catch (error) {
       if (!(error instanceof BrowseError) || error.code !== "unknown_ref") throw error;
       throw new BrowseError(
@@ -887,7 +901,8 @@ export class State extends Refs implements temptabs.TempTabState {
 
   async locate(selector: string, page: Page | null = null, wait = 0): Promise<[Page, Element]> {
     const ref = parseRef(selector);
-    if (ref) return isBareRef(selector) ? this.resolveBareRef(ref) : this.resolveRef(ref);
+    const expectedTarget = targetScope.getStore() ?? null;
+    if (ref) return isBareRef(selector) ? this.resolveBareRef(ref, expectedTarget) : this.resolveRef(ref, expectedTarget);
     const here = page ?? (await this.page());
     if (NTH_SUFFIX.test(selector)) flag("selector_nth", true);
     const deadline = monotonic() + wait;

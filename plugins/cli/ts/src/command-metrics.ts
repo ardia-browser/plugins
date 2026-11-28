@@ -36,6 +36,7 @@ export const TS_ONLY_FLAGS: readonly string[] = [
   "script_missing_api",
   "script_repl",
   "script_repl_auto_tab",
+  "script_repl_autoclose",
   "script_repl_logs_spilled",
   "script_repl_lost",
   "script_repl_reset",
@@ -46,6 +47,7 @@ export const TS_ONLY_FLAGS: readonly string[] = [
   "script_sandbox_hint",
   "script_selector_eval",
   "script_steps_shown",
+  "script_tab_detached",
   "select_retyped",
   "select_word_match",
   "selector_in_shadow_root",
@@ -78,7 +80,7 @@ export const TS_ONLY_FLAGS: readonly string[] = [
   "snapshot_child_frames",
 ];
 
-export const TS_ONLY_COUNTS: readonly string[] = ["batch_refs_healed", "failed_step_index", "form_fields", "query_rows", "read_urls_count", "read_urls_failed", "fill_otp_boxes", "hover_revealed_items", "script_calls", "script_concurrent_peak", "script_display_images", "snapshot_child_frame_count", "script_receipts_skipped", "script_repl_runs", "snapshot_find_matches", "snapshot_lean_lines", "snapshot_lines_dropped", "snapshot_new_lines", "snapshot_oopif_count"];
+export const TS_ONLY_COUNTS: readonly string[] = ["batch_refs_healed", "failed_step_index", "form_fields", "query_rows", "read_urls_count", "read_urls_failed", "fill_otp_boxes", "hover_revealed_items", "script_calls", "script_concurrent_peak", "script_display_images", "snapshot_child_frame_count", "script_receipts_skipped", "script_repl_autoclosed", "script_repl_runs", "snapshot_find_matches", "snapshot_lean_lines", "snapshot_lines_dropped", "snapshot_new_lines", "snapshot_oopif_count"];
 
 const FLAGS = new Set([...METRIC_FLAGS, ...TS_ONLY_FLAGS, ...PRECISION_FLAGS, ...SAFETY_FLAGS]);
 const DURATIONS = new Set(METRIC_DURATIONS);

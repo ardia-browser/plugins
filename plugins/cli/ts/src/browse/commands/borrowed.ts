@@ -2,17 +2,23 @@ import { BrowseError } from "../daemon-errors.ts";
 import { Result } from "../daemon/render.ts";
 import { flag } from "../metrics.ts";
 import type { Page } from "../state/page.ts";
-import type { State } from "../state/state.ts";
+import { activeTarget, type State, targetScope } from "../state/state.ts";
 import type { Ctx, Handler } from "./ctx.ts";
 import { type Flags, parse } from "./parse.ts";
 
 export function borrowedTab(state: State): string | null {
   const attached = state.attached;
-  return state.current && state.current === attached ? attached : null;
+  const target = activeTarget(state);
+  return target !== null && target === attached ? attached : null;
 }
 
 export function refuseOnBorrowed(ctx: Ctx, page: Page, what: string): void {
-  const borrowed = borrowedTab(ctx.state);
+  const attached = ctx.state.attached;
+  const scoped = targetScope.getStore() ?? null;
+  const borrowed =
+    borrowedTab(ctx.state) ??
+    (attached !== null && attached === page.targetId ? attached : null) ??
+    (scoped !== null && scoped === page.targetId && !ctx.state.opened.has(scoped) ? scoped : null);
   if (borrowed && borrowed === page.targetId) {
     const tab = ctx.state.tabId(borrowed);
     throw new BrowseError(

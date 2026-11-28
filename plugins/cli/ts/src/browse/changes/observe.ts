@@ -15,7 +15,7 @@ import { type Node, walk } from "../snapshot/tree.ts";
 import { Element, type Page } from "../state/page.ts";
 import type { Json } from "../state/records.ts";
 import { Refs } from "../state/refs.ts";
-import type { Listener, State } from "../state/state.ts";
+import { activeTarget, type Listener, type State } from "../state/state.ts";
 import { monotonic } from "../state/wait.ts";
 import { tokenHex } from "../tokens.ts";
 import { backendsOf } from "../snapshot/collect.ts";
@@ -283,12 +283,15 @@ export class NetworkWatch {
     return true;
   }
 
-  async settle(pageBusy: (() => Promise<boolean>) | null = null): Promise<boolean> {
+  async settle(pageBusy: (() => Promise<boolean>) | null = null, fast = false): Promise<boolean> {
     const started = monotonic();
     const deadline = started + this.limit;
+    const firstQuiet = fast ? 0.025 : FIRST_QUIET;
+    const waitQuiet = fast ? 0.08 : QUIET;
+    const step = fast ? 0.015 : POLL;
     for (;;) {
       const now = monotonic();
-      const quiet = this.foreground() || this.ignored > 0 ? QUIET : FIRST_QUIET;
+      const quiet = this.foreground() || this.ignored > 0 ? waitQuiet : firstQuiet;
       let waiting = this.watching && (this.busy() || now - Math.max(this.lastEvent, started) < quiet);
       if (!waiting && pageBusy !== null) waiting = await pageBusy();
       if (!waiting) {
@@ -296,7 +299,7 @@ export class NetworkWatch {
         return true;
       }
       if (now >= deadline) return false;
-      await sleep(POLL);
+      await sleep(step);
     }
   }
 
@@ -354,7 +357,16 @@ export async function navigationBusy(page: Page, navigations: number): Promise<b
 
 export type Reaction = [Element | null, string | null];
 type Pending = { page: Page; frame: string; id: string };
-const pendingReactions = new WeakMap<State, Pending>();
+const pendingReactions = new WeakMap<State, Map<string, Pending>>();
+
+function reactionsOf(state: State): Map<string, Pending> {
+  let map = pendingReactions.get(state);
+  if (map === undefined) {
+    map = new Map();
+    pendingReactions.set(state, map);
+  }
+  return map;
+}
 
 async function reactionCall(page: Page, expression: string, args: unknown[], frame: string | null, timeout: number): Promise<unknown> {
   return within(page.call(expression, args, { frame, read: true, timeout }), timeout);
@@ -378,7 +390,7 @@ export async function watchReaction(state: State, page: Page, react: Reaction): 
     if (error instanceof BrowseError || error instanceof TimedOut) return;
     throw error;
   }
-  if (started) pendingReactions.set(state, { page, frame: (frame || page.mainFrame) as string, id: watchId });
+  if (started) reactionsOf(state).set(page.targetId, { page, frame: (frame || page.mainFrame) as string, id: watchId });
 }
 
 export function reactionWaits(name: string | null, argv: readonly string[]): boolean {
@@ -393,14 +405,17 @@ export function reactionWaits(name: string | null, argv: readonly string[]): boo
   }
 }
 
-export function hasPendingReaction(state: State): boolean {
-  return pendingReactions.has(state);
+export function hasPendingReaction(state: State, target: string | null = null): boolean {
+  const key = target ?? activeTarget(state);
+  return key !== null && Boolean(pendingReactions.get(state)?.has(key));
 }
 
-export async function settleReaction(state: State, name: string | null = null, argv: readonly string[] = []): Promise<void> {
-  const pending = pendingReactions.get(state);
+export async function settleReaction(state: State, name: string | null = null, argv: readonly string[] = [], target: string | null = null): Promise<void> {
+  const key = target ?? activeTarget(state);
+  const map = key === null ? undefined : pendingReactions.get(state);
+  const pending = key === null ? undefined : map?.get(key);
   if (pending === undefined || !reactionWaits(name, argv)) return;
-  pendingReactions.delete(state);
+  map?.delete(key as string);
   const { page, frame, id } = pending;
   const limit = budget(page, REACTION_LIMIT);
   const deadline = monotonic() + limit + REACTION_CALL_TIMEOUT;
@@ -652,7 +667,7 @@ export async function observe<T>(ctx: Ctx, page: Page, run: () => Promise<T>, re
       return value;
     };
     try {
-      return [await raceDialog(page, () => settled(page, work), actionName(ctx)), null];
+      return [await raceDialog(page, () => settled(page, work, Boolean(ctx.options["settle_only"])), actionName(ctx)), null];
     } catch (error) {
       const why = dialogAfterwards(error);
       const done = landed as { value: T } | null;
@@ -718,14 +733,14 @@ export async function observe<T>(ctx: Ctx, page: Page, run: () => Promise<T>, re
   }
 }
 
-export async function settled<T>(page: Page, run: () => Promise<T>): Promise<T> {
+export async function settled<T>(page: Page, run: () => Promise<T>, fast = false): Promise<T> {
   const watch = new NetworkWatch(page);
   const navigations = page.navigations;
   try {
     await watch.start();
     const value = await run();
     const settling = clock();
-    await watch.settle(() => navigationBusy(page, navigations));
+    await watch.settle(() => navigationBusy(page, navigations), fast);
     spent("settle_ms", settling);
     await observeHooks.capture(page, watch);
     return value;
