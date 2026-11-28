@@ -395,7 +395,14 @@ export class State extends Refs implements temptabs.TempTabState {
     const takenAt = wallSeconds();
     const raw = (await (this.browser as Browser).send("Target.getTargets"))["targetInfos"];
     const infos = (Array.isArray(raw) ? raw : []).map(record);
-    const pages = infos.filter(isPageInfo);
+    const known = this.targetInfos;
+    const pages = infos.flatMap((info) => {
+      if (isPageInfo(info)) return [info];
+      const before = info["type"] === "page" && info["url"] === "" ? known.get(String(info["targetId"])) : undefined;
+      if (before === undefined) return [];
+      flag("tab_blank_url_kept", true);
+      return [{ ...info, url: before["url"], title: info["title"] || before["title"] }];
+    });
     this.targetInfos = new Map(pages.map((info) => [String(info["targetId"]), info]));
     for (const targetId of [...this.pages.keys(), ...(this.current ? [this.current] : [])]) {
       if (!this.targetInfos.has(targetId)) this.forgetTarget(targetId);

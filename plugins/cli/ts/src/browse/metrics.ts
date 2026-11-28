@@ -46,7 +46,7 @@ export const FLAGS = new Set([
   "script_eval_alias", "script_command_line_split", "script_page_world_hint", "attach_refused", "open_read", "covered_close_ref",
   "script_timeout_state_shown", "download_fetched_again", "page_busy_fast_fail", "session_busy_on_stuck_tab", "navigation_site_silent", "tab_kept_awake",
   "viewport_set", "crashed_reloaded", "network_disable_unconfirmed", "reattached_after_detach", "earlier_requests_ignored", "renderer_exit_kept_session",
-  "setup_restored", "setup_restore_failed", "offscreen_handoff_rolled_back", "setup_session_dropped", "tab_close_interrupted", "tab_readopted_after_restart", "dialog_dismissed_after_failure", "selector_nth", "output_saved", "waited_for_element", "saved_to_file", "batch_line_saved",
+  "setup_restored", "setup_restore_failed", "offscreen_handoff_rolled_back", "setup_session_dropped", "tab_close_interrupted", "tab_readopted_after_restart", "tab_blank_url_kept", "dialog_dismissed_after_failure", "selector_nth", "output_saved", "waited_for_element", "saved_to_file", "batch_line_saved",
   "script_state_kept", "saved_as_csv", "script_timeout_read_hint", "click_scroll_locked", "open_still_loading", "focused_inner_field",
   "stale_ref_after_navigation", "clicked_label_of_hidden_input", "waited_for_box_to_settle", "frame_cross_process_box", "screenshot_unchanged", "route_enable_undone",
   "script_queued_behind_busy", "navigation_dropped_hint", "navigation_https_only_hint", "eval_timed_out", "read_queued_beside",

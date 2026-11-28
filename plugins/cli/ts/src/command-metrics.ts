@@ -66,6 +66,7 @@ export const TS_ONLY_FLAGS: readonly string[] = [
   "stale_ref_after_open",
   "tab_close_interrupted",
   "tab_readopted_after_restart",
+  "tab_blank_url_kept",
   "drag_interception_unavailable",
   "drag_synthetic",
   "edit_cell",

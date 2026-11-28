@@ -251,6 +251,38 @@ describe("tabs this session opens are closed through the registry", () => {
   });
 });
 
+describe("a tab Ardia lists without an address while it navigates", () => {
+  function listing(url: () => string, extra: Record<string, unknown>[] = []): FakeBrowser {
+    return new FakeBrowser((method) =>
+      method === "Target.getTargets" ? { targetInfos: [{ targetId: "TARGET", type: "page", url: url(), title: "" }, ...extra] } : undefined,
+    );
+  }
+
+  test("a pinned session still finds its own tab by target id, and keeps it", async () => {
+    let url = "";
+    const state = stateWith(listing(() => url));
+    state.pinTab = true;
+    state.pinnedTarget = "TARGET";
+    state.current = "TARGET";
+    state.opened.add("TARGET");
+    state.created.add("TARGET");
+    await state.page("TARGET");
+    const result = await dispatch(ctxOf(state, "tab"), "tab", ["TARGET"]);
+    expect((result.data as Record<string, unknown>)["targetId"]).toBe("TARGET");
+    expect(state.opened.has("TARGET")).toBe(true);
+    expect(state.describeTabs()).toMatchObject([{ targetId: "TARGET", url: "http://127.0.0.1/page.html", openedBySession: true, openedBy: "s" }]);
+    url = "https://example.com/";
+    await state.refreshTargets();
+    expect(state.describeTabs()).toMatchObject([{ targetId: "TARGET", url: "https://example.com/", openedBySession: true, openedBy: "s" }]);
+  });
+
+  test("a page first seen without an address is still left out", async () => {
+    const state = stateWith(listing(() => "https://example.com/", [{ targetId: "NEW", type: "page", url: "", title: "" }]));
+    await state.refreshTargets();
+    expect([...state.targetInfos.keys()]).toEqual(["TARGET"]);
+  });
+});
+
 describe("navigation", () => {
   for (const [command, argv, what] of [
     ["back", [], "go back in"],
